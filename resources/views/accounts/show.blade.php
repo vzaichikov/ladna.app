@@ -78,12 +78,13 @@
         </div>
     </x-ui.panel>
 
-    <section class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+    <section class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-7">
         <x-ui.metric :label="__('app.locations')" :value="$account->locations_count" icon="locations" :href="route('dashboard.accounts.locations.index', $account)" />
         <x-ui.metric :label="__('app.rooms')" :value="$account->rooms_count" icon="rooms" accent="brand" :href="route('dashboard.accounts.rooms.index', $account)" />
         <x-ui.metric :label="__('app.activity_directions')" :value="$account->activity_directions_count" icon="directions" :href="route('dashboard.accounts.activity-directions.index', $account)" />
         <x-ui.metric :label="__('app.class_types')" :value="$account->class_types_count" icon="class-types" accent="brand" :href="route('dashboard.accounts.class-types.index', $account)" />
-        <x-ui.metric :label="__('app.instructors')" :value="$account->instructors_count" icon="instructors" :href="route('dashboard.accounts.instructors.index', $account)" />
+        <x-ui.metric :label="__('app.trainers')" :value="$account->trainers_count" icon="trainers" :href="route('dashboard.accounts.trainers.index', $account)" />
+        <x-ui.metric :label="__('app.customers')" :value="$account->customers_count" icon="accounts" :href="route('dashboard.accounts.customers.index', $account)" />
         <x-ui.metric :label="__('app.generated_classes')" :value="$account->scheduled_classes_count" icon="generated-classes" accent="emerald" :href="route('dashboard.accounts.scheduled-classes.index', $account)" />
     </section>
 
@@ -157,7 +158,7 @@
 
     <x-ui.panel class="mt-6">
         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.quick_actions') }}</h2>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <x-ui.button :href="route('dashboard.accounts.locations.create', $account)" variant="secondary">
                 <x-ui.icon name="locations" class="h-4 w-4 text-brand-600" />
                 {{ __('app.create_location') }}
@@ -170,9 +171,13 @@
                 <x-ui.icon name="directions" class="h-4 w-4 text-brand-600" />
                 {{ __('app.activity_directions') }}
             </x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.instructors.index', $account)" variant="secondary">
-                <x-ui.icon name="instructors" class="h-4 w-4 text-brand-600" />
-                {{ __('app.instructors') }}
+            <x-ui.button :href="route('dashboard.accounts.trainers.index', $account)" variant="secondary">
+                <x-ui.icon name="trainers" class="h-4 w-4 text-brand-600" />
+                {{ __('app.trainers') }}
+            </x-ui.button>
+            <x-ui.button :href="route('dashboard.accounts.customers.index', $account)" variant="secondary">
+                <x-ui.icon name="accounts" class="h-4 w-4 text-brand-600" />
+                {{ __('app.customers') }}
             </x-ui.button>
             <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">
                 <x-ui.icon name="schedule" class="h-4 w-4 text-brand-600" />

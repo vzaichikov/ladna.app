@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Location;
+use App\Models\Room;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use App\Models\Location;
-use App\Models\Room;
 
 class StoreRoomRequest extends FormRequest
 {
@@ -15,7 +15,7 @@ class StoreRoomRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('account')) ?? false;
+        return $this->user()?->can('manageStudioSettings', $this->route('account')) ?? false;
     }
 
     /**

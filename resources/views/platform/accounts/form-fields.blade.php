@@ -31,3 +31,26 @@
     </select>
     @error('subscription_status') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
+
+@unless ($account->exists)
+    <section class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div class="text-sm font-semibold text-slate-950">{{ __('app.initial_owner') }}</div>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <label class="block">
+                <span class="crm-label">{{ __('app.name') }}</span>
+                <input name="owner_name" value="{{ old('owner_name') }}" required class="crm-field">
+                @error('owner_name') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            <label class="block">
+                <span class="crm-label">{{ __('app.email') }}</span>
+                <input name="owner_email" type="email" value="{{ old('owner_email') }}" required class="crm-field">
+                @error('owner_email') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+        </div>
+        <label class="mt-4 block">
+            <span class="crm-label">{{ __('app.password') }}</span>
+            <input name="owner_password" type="password" required class="crm-field">
+            @error('owner_password') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+    </section>
+@endunless

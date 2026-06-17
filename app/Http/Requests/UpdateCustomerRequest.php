@@ -1,0 +1,39 @@
+<?php
+
+namespace App\Http\Requests;
+
+use App\Models\Customer;
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
+
+class UpdateCustomerRequest extends FormRequest
+{
+    /**
+     * Determine if the user is authorized to make this request.
+     */
+    public function authorize(): bool
+    {
+        return $this->user()?->can('manageClients', $this->route('account')) ?? false;
+    }
+
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        $account = $this->route('account');
+        $customer = $this->route('customer');
+
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique((new Customer)->getTable(), 'email')->where('account_id', $account?->id)->ignore($customer)],
+            'phone' => ['nullable', 'string', 'max:255', Rule::unique((new Customer)->getTable(), 'phone')->where('account_id', $account?->id)->ignore($customer)],
+            'password' => ['nullable', Password::defaults()],
+            'default_language' => ['nullable', Rule::in(array_keys(config('charm.locales')))],
+        ];
+    }
+}

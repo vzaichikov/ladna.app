@@ -1,0 +1,41 @@
+@extends('layouts.app')
+
+@section('title', __('app.subscription_plans').' - '.__('app.platform'))
+
+@section('content')
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <div class="crm-page-kicker">{{ __('app.platform') }}</div>
+            <h1 class="crm-page-title">{{ __('app.subscription_plans') }}</h1>
+        </div>
+        <x-ui.button :href="route('platform.subscription-plans.create')">
+            <x-ui.icon name="plus" class="h-4 w-4" />
+            {{ __('app.create_subscription_plan') }}
+        </x-ui.button>
+    </div>
+
+    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+        @forelse ($plans as $plan)
+            <div class="crm-row lg:grid-cols-[1fr_160px_120px_auto] lg:items-center">
+                <div>
+                    <h2 class="font-semibold text-slate-950">{{ $plan->name }}</h2>
+                    <p class="mt-1 text-sm text-slate-500">{{ $plan->slug }}</p>
+                </div>
+                <div class="text-sm font-semibold text-slate-700">{{ number_format($plan->price_cents / 100, 2) }} {{ $plan->currency }}</div>
+                <span class="{{ $plan->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
+                    {{ $plan->is_active ? __('app.active') : __('app.inactive') }}
+                </span>
+                <div class="flex flex-wrap gap-2 lg:justify-end">
+                    <x-ui.button :href="route('platform.subscription-plans.edit', $plan)" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <form method="POST" action="{{ route('platform.subscription-plans.destroy', $plan) }}" data-confirm-delete>
+                        @csrf
+                        @method('DELETE')
+                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                    </form>
+                </div>
+            </div>
+        @empty
+            <x-ui.empty-state :title="__('app.no_subscription_plans')" icon="platform" class="m-5" />
+        @endforelse
+    </x-ui.panel>
+@endsection

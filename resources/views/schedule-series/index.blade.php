@@ -23,7 +23,7 @@
                 </div>
                 <div class="text-sm text-slate-500">{{ $weekdays[$scheduleSeries->weekday] }} · {{ substr((string) $scheduleSeries->start_time, 0, 5) }}</div>
                 <div class="text-sm text-slate-500">{{ $scheduleSeries->location->name }} · {{ $scheduleSeries->room->name }}</div>
-                <div class="text-sm text-slate-500">{{ $scheduleSeries->instructor?->name ?? 'TBA' }}</div>
+                <div class="text-sm text-slate-500">{{ $scheduleSeries->trainer?->name ?? 'TBA' }}</div>
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="text-sm font-semibold">{{ __('app.'.$scheduleSeries->status->value) }}</span>
                     <a href="{{ route('dashboard.accounts.schedule-series.edit', [$account, $scheduleSeries]) }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-xs transition hover:border-slate-300 hover:bg-slate-50">{{ __('app.edit') }}</a>

@@ -4,10 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\ClassType;
-use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\Trainer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -23,20 +23,20 @@ class PublicScheduleTest extends TestCase
         $room = Room::factory()->for($account)->for($location)->create(['name' => 'Big Hall']);
         $otherRoom = Room::factory()->for($account)->for($otherLocation)->create();
         $classType = ClassType::factory()->for($account)->create(['schedule_kind' => 'group_class']);
-        $instructor = Instructor::factory()->for($account)->create(['name' => 'Nastya']);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Nastya']);
 
-        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($instructor)->create([
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
             'title' => 'Pole Beginner',
             'starts_at' => now()->addDay(),
             'ends_at' => now()->addDay()->addHour(),
         ]);
-        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($instructor)->create([
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
             'title' => 'Private Staff Class',
             'starts_at' => now()->addDay(),
             'ends_at' => now()->addDay()->addHour(),
             'is_public' => false,
         ]);
-        ScheduledClass::factory()->for($account)->for($otherLocation)->for($otherRoom)->for($classType)->for($instructor)->create([
+        ScheduledClass::factory()->for($account)->for($otherLocation)->for($otherRoom)->for($classType)->for($trainer)->create([
             'title' => 'Other Location Class',
             'starts_at' => now()->addDay(),
             'ends_at' => now()->addDay()->addHour(),

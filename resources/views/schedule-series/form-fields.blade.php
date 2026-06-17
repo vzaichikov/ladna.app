@@ -30,14 +30,14 @@
         @error('class_type_id') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="block">
-        <span class="crm-label">{{ __('app.instructor') }}</span>
-        <select name="instructor_id" class="crm-field">
+        <span class="crm-label">{{ __('app.trainer') }}</span>
+        <select name="trainer_id" class="crm-field">
             <option value="">TBA</option>
-            @foreach ($instructors as $instructor)
-                <option value="{{ $instructor->id }}" @selected((int) old('instructor_id', $scheduleSeries->instructor_id) === $instructor->id)>{{ $instructor->name }}</option>
+            @foreach ($trainers as $trainer)
+                <option value="{{ $trainer->id }}" @selected((int) old('trainer_id', $scheduleSeries->trainer_id) === $trainer->id)>{{ $trainer->name }}</option>
             @endforeach
         </select>
-        @error('instructor_id') <span class="crm-help">{{ $message }}</span> @enderror
+        @error('trainer_id') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 </div>
 

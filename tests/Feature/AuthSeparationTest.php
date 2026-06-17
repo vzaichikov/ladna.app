@@ -11,16 +11,18 @@ class AuthSeparationTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_internal_registration_creates_user_not_customer(): void
+    public function test_internal_registration_is_disabled(): void
     {
+        $this->get('/register')->assertNotFound();
+
         $this->post('/register', [
             'name' => 'Internal User',
             'email' => 'internal@example.com',
             'password' => 'password',
             'password_confirmation' => 'password',
-        ])->assertRedirect(route('dashboard.accounts.create'));
+        ])->assertNotFound();
 
-        $this->assertTrue(User::where('email', 'internal@example.com')->exists());
+        $this->assertFalse(User::where('email', 'internal@example.com')->exists());
         $this->assertFalse(Customer::where('email', 'internal@example.com')->exists());
     }
 

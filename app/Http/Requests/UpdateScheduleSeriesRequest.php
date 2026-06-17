@@ -4,9 +4,9 @@ namespace App\Http\Requests;
 
 use App\Enums\ScheduleSeriesStatus;
 use App\Models\ClassType;
-use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Room;
+use App\Models\Trainer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -18,7 +18,7 @@ class UpdateScheduleSeriesRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('account')) ?? false;
+        return $this->user()?->can('manageSchedule', $this->route('account')) ?? false;
     }
 
     /**
@@ -34,7 +34,7 @@ class UpdateScheduleSeriesRequest extends FormRequest
             'location_id' => ['required', Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id)],
             'room_id' => ['required', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account?->id)],
             'class_type_id' => ['required', Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account?->id)],
-            'instructor_id' => ['nullable', Rule::exists((new Instructor)->getTable(), 'id')->where('account_id', $account?->id)],
+            'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account?->id)],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'weekday' => ['required', 'integer', 'min:1', 'max:7'],

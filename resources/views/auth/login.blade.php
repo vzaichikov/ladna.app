@@ -49,7 +49,6 @@
                     <x-ui.button type="submit" class="w-full">{{ __('app.login') }}</x-ui.button>
                 </form>
 
-                <a href="{{ route('register') }}" class="mt-5 block text-center text-sm font-semibold text-violet-crm-600 hover:text-violet-crm-700">{{ __('app.register') }}</a>
             </div>
         </section>
     </main>

@@ -24,6 +24,7 @@ class AccountMembershipFactory extends Factory
             'account_id' => Account::factory(),
             'user_id' => User::factory(),
             'role' => AccountRole::Owner->value,
+            'permissions' => null,
         ];
     }
 }

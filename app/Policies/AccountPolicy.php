@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\User;
 
@@ -28,7 +29,7 @@ class AccountPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        return $user->isPlatformAdmin();
     }
 
     /**
@@ -36,7 +37,7 @@ class AccountPolicy
      */
     public function update(User $user, Account $account): bool
     {
-        return $account->isAccessibleBy($user);
+        return $account->userCan($user, StudioPermission::ManageStudioSettings);
     }
 
     /**
@@ -44,7 +45,7 @@ class AccountPolicy
      */
     public function delete(User $user, Account $account): bool
     {
-        return $account->isAccessibleBy($user);
+        return $account->userCan($user, StudioPermission::ManageStudioSettings);
     }
 
     /**

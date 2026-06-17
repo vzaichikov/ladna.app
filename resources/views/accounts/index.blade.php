@@ -8,10 +8,12 @@
             <div class="crm-page-kicker">{{ __('app.workspace') }}</div>
             <h1 class="crm-page-title">{{ __('app.accounts') }}</h1>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.create')">
-            <x-ui.icon name="plus" class="h-4 w-4" />
-            {{ __('app.create_account') }}
-        </x-ui.button>
+        @can('create', \App\Models\Account::class)
+            <x-ui.button :href="route('dashboard.accounts.create')">
+                <x-ui.icon name="plus" class="h-4 w-4" />
+                {{ __('app.create_account') }}
+            </x-ui.button>
+        @endcan
     </div>
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">

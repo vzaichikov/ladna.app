@@ -1,0 +1,71 @@
+<?php
+
+namespace App\Http\Requests;
+
+use App\Enums\AccountRole;
+use App\Enums\StudioPermission;
+use App\Models\Trainer;
+use App\Models\User;
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
+use Illuminate\Validation\Rules\Password;
+
+class UpdateTrainerRequest extends FormRequest
+{
+    /**
+     * Determine if the user is authorized to make this request.
+     */
+    public function authorize(): bool
+    {
+        return $this->user()?->can('manageTrainers', $this->route('account')) ?? false;
+    }
+
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        $account = $this->route('account');
+        $trainer = $this->route('trainer');
+        $userId = $trainer?->user_id;
+
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => [
+                'nullable',
+                'alpha_dash:ascii',
+                'max:255',
+                Rule::unique((new Trainer)->getTable(), 'slug')->where('account_id', $account?->id)->ignore($trainer),
+            ],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'bio' => ['nullable', 'string', 'max:2000'],
+            'photo' => ['nullable', File::image()->max('4mb')],
+            'is_active' => ['nullable', 'boolean'],
+            'create_login' => ['nullable', 'boolean'],
+            'user_email' => [
+                Rule::requiredIf($this->boolean('create_login')),
+                'nullable',
+                'email',
+                'max:255',
+                Rule::unique((new User)->getTable(), 'email')->ignore($userId),
+            ],
+            'user_password' => ['nullable', Password::defaults()],
+            'role' => [
+                Rule::requiredIf($this->boolean('create_login')),
+                Rule::in([
+                    AccountRole::Admin->value,
+                    AccountRole::Manager->value,
+                    AccountRole::Trainer->value,
+                    AccountRole::Receptionist->value,
+                ]),
+            ],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => [Rule::in(array_map(fn (StudioPermission $permission): string => $permission->value, StudioPermission::cases()))],
+        ];
+    }
+}

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\Location;
+use App\Models\ScheduledClass;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -40,7 +41,7 @@ class PublicScheduleController extends Controller
     }
 
     /**
-     * @return array{0: Account, 1: Location, 2: Collection<int, \App\Models\ScheduledClass>}
+     * @return array{0: Account, 1: Location, 2: Collection<int, ScheduledClass>}
      */
     private function scheduleFor(Request $request, string $accountSlug, string $locationSlug): array
     {
@@ -55,7 +56,7 @@ class PublicScheduleController extends Controller
         $classes = $location->scheduledClasses()
             ->publicUpcoming()
             ->when($request->query('room'), fn ($query, $roomSlug) => $query->whereHas('room', fn ($query) => $query->where('slug', $roomSlug)))
-            ->with(['account', 'location', 'room', 'classType.activityDirection', 'instructor'])
+            ->with(['account', 'location', 'room', 'classType.activityDirection', 'trainer'])
             ->limit(30)
             ->get();
 

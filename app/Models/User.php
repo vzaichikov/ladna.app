@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\StudioPermission;
 use App\Enums\SystemRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -48,7 +49,12 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Account::class, 'account_memberships')
             ->using(AccountMembership::class)
-            ->withPivot('role')
+            ->withPivot(['role', 'permissions'])
             ->withTimestamps();
+    }
+
+    public function canManage(Account $account, StudioPermission|string $permission): bool
+    {
+        return $account->userCan($this, $permission);
     }
 }

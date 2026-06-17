@@ -22,7 +22,7 @@ class GenerateSchedule extends Command
         $seriesId = $this->option('series');
 
         $query = ScheduleSeries::query()
-            ->with(['account', 'location', 'room', 'classType', 'instructor'])
+            ->with(['account', 'location', 'room', 'classType', 'trainer'])
             ->where('status', ScheduleSeriesStatus::Active->value)
             ->whereHas('account', fn ($query) => $query->where('status', AccountStatus::Active->value));
 

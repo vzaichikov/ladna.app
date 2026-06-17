@@ -5,10 +5,10 @@ namespace Tests\Feature;
 use App\Actions\GenerateScheduleOccurrences;
 use App\Models\Account;
 use App\Models\ClassType;
-use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduleSeries;
+use App\Models\Trainer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -28,8 +28,8 @@ class ScheduleSeriesGenerationTest extends TestCase
             'booking_cutoff_minutes' => 180,
             'default_capacity' => 10,
         ]);
-        $instructor = Instructor::factory()->for($account)->create();
-        $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->for($instructor)->create([
+        $trainer = Trainer::factory()->for($account)->create();
+        $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
             'weekday' => now('Europe/Kyiv')->isoWeekday(),
             'start_time' => '14:00',
             'start_date' => now('Europe/Kyiv')->toDateString(),
@@ -43,7 +43,7 @@ class ScheduleSeriesGenerationTest extends TestCase
         $firstClass = $series->scheduledClasses()->orderBy('starts_at')->firstOrFail();
         $this->assertSame($room->id, $firstClass->room_id);
         $this->assertSame($classType->id, $firstClass->class_type_id);
-        $this->assertSame($instructor->id, $firstClass->instructor_id);
+        $this->assertSame($trainer->id, $firstClass->trainer_id);
         $this->assertSame(90, $firstClass->durationMinutes());
         $this->assertSame(60, $firstClass->booking_cutoff_minutes);
         $this->assertSame(10, $firstClass->capacity);

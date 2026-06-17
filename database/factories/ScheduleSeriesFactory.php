@@ -5,10 +5,10 @@ namespace Database\Factories;
 use App\Enums\ScheduleSeriesStatus;
 use App\Models\Account;
 use App\Models\ClassType;
-use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduleSeries;
+use App\Models\Trainer;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -28,7 +28,7 @@ class ScheduleSeriesFactory extends Factory
             'location_id' => Location::factory(),
             'room_id' => Room::factory(),
             'class_type_id' => ClassType::factory(),
-            'instructor_id' => Instructor::factory(),
+            'trainer_id' => Trainer::factory(),
             'title' => null,
             'description' => null,
             'weekday' => fake()->numberBetween(1, 7),

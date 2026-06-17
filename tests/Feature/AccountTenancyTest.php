@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\Location;
 use App\Models\User;
@@ -13,25 +12,22 @@ class AccountTenancyTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_user_can_create_account_and_becomes_owner(): void
+    public function test_normal_user_cannot_create_account(): void
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->post('/dashboard/accounts', [
+        $this->actingAs($user)
+            ->get(route('dashboard.accounts.create'))
+            ->assertForbidden();
+
+        $this->actingAs($user)->post('/dashboard/accounts', [
             'name' => 'Studio Test',
             'default_language' => 'uk',
             'default_currency' => 'UAH',
             'timezone' => 'Europe/Kyiv',
-        ]);
+        ])->assertForbidden();
 
-        $account = Account::where('slug', 'studio-test')->firstOrFail();
-
-        $response->assertRedirect(route('dashboard.accounts.show', $account));
-        $this->assertTrue($account->isAccessibleBy($user));
-        $this->assertTrue($account->memberships()
-            ->whereBelongsTo($user)
-            ->where('role', AccountRole::Owner->value)
-            ->exists());
+        $this->assertFalse(Account::where('slug', 'studio-test')->exists());
     }
 
     public function test_internal_user_cannot_view_unrelated_account(): void

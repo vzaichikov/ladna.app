@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\Location;
 use App\Policies\AccountPolicy;
@@ -32,11 +33,17 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::policy(Account::class, AccountPolicy::class);
         Gate::policy(Location::class, LocationPolicy::class);
+        Gate::before(fn ($user): ?bool => $user->isPlatformAdmin() ? true : null);
         Gate::define('accessPlatform', fn ($user): bool => $user->isPlatformAdmin());
+        Gate::define('manageSchedule', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageSchedule));
+        Gate::define('manageClients', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageClients));
+        Gate::define('manageBookings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageBookings));
+        Gate::define('markAttendance', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::MarkAttendance));
+        Gate::define('manageTrainers', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageTrainers));
+        Gate::define('manageStudioSettings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageStudioSettings));
 
         RateLimiter::for('login', function (Request $request): Limit {
             return Limit::perMinute(5)->by($request->string('email')->lower().'|'.$request->ip());
         });
-
     }
 }

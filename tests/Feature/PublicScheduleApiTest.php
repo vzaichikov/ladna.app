@@ -4,10 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\ClassType;
-use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\Trainer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -21,16 +21,16 @@ class PublicScheduleApiTest extends TestCase
         $location = Location::factory()->for($account)->create(['slug' => 'test-location-1', 'name' => 'Location 1']);
         $room = Room::factory()->for($account)->for($location)->create(['slug' => 'big-hall', 'name' => 'Big Hall']);
         $classType = ClassType::factory()->for($account)->create(['name' => 'Pole Beginner', 'slug' => 'pole-beginner', 'schedule_kind' => 'group_class']);
-        $instructor = Instructor::factory()->for($account)->create(['name' => 'Nastya']);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Nastya']);
 
-        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($instructor)->create([
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
             'title' => 'Pole Beginner',
             'description' => 'Introductory pole class',
             'starts_at' => now()->addDay()->setTime(15, 0),
             'ends_at' => now()->addDay()->setTime(16, 0),
             'capacity' => 12,
         ]);
-        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($instructor)->create([
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
             'title' => 'Hidden Class',
             'starts_at' => now()->addDay(),
             'ends_at' => now()->addDay()->addHour(),
@@ -46,7 +46,7 @@ class PublicScheduleApiTest extends TestCase
             ->assertJsonPath('data.0.room.slug', 'big-hall')
             ->assertJsonPath('data.0.class_type.slug', 'pole-beginner')
             ->assertJsonPath('data.0.schedule_kind', 'group_class')
-            ->assertJsonPath('data.0.instructor.name', 'Nastya')
+            ->assertJsonPath('data.0.trainer.name', 'Nastya')
             ->assertJsonPath('data.0.capacity', 12)
             ->assertJsonPath('data.0.available_spots', null)
             ->assertJsonMissing(['title' => 'Hidden Class']);

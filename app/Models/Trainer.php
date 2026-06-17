@@ -2,17 +2,19 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
+use Database\Factories\TrainerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['account_id', 'name', 'slug', 'email', 'phone', 'bio', 'is_active'])]
-class Instructor extends Model
+#[Fillable(['account_id', 'user_id', 'name', 'slug', 'email', 'phone', 'bio', 'photo_path', 'is_active'])]
+class Trainer extends Model
 {
-    /** @use HasFactory<\Database\Factories\InstructorFactory> */
+    /** @use HasFactory<TrainerFactory> */
     use HasFactory;
 
     protected $attributes = [
@@ -39,6 +41,11 @@ class Instructor extends Model
         return $this->belongsTo(Account::class);
     }
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function scheduledClasses(): HasMany
     {
         return $this->hasMany(ScheduledClass::class);
@@ -47,5 +54,10 @@ class Instructor extends Model
     public function scheduleSeries(): HasMany
     {
         return $this->hasMany(ScheduleSeries::class);
+    }
+
+    public function photoUrl(): ?string
+    {
+        return $this->photo_path ? Storage::disk('public')->url($this->photo_path) : null;
     }
 }

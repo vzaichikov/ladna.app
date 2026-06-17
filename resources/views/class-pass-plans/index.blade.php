@@ -1,0 +1,69 @@
+@extends('layouts.app')
+
+@section('title', __('app.class_pass_plans').' - '.$account->name)
+
+@section('content')
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="crm-page-title">{{ __('app.class_pass_plans') }}</h1>
+            <p class="crm-page-copy">{{ $account->name }}</p>
+        </div>
+        <x-ui.button :href="route('dashboard.accounts.class-pass-plans.create', $account)">
+            <x-ui.icon name="plus" class="h-4 w-4" />
+            {{ __('app.create_class_pass_plan') }}
+        </x-ui.button>
+    </div>
+
+    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+        @forelse ($classPassPlans as $classPassPlan)
+            @php
+                $fromTime = $classPassPlan->available_from_time ? substr((string) $classPassPlan->available_from_time, 0, 5) : null;
+                $untilTime = $classPassPlan->available_until_time ? substr((string) $classPassPlan->available_until_time, 0, 5) : null;
+            @endphp
+            <div class="crm-row xl:grid-cols-[1.2fr_0.8fr_1fr_1.3fr_auto] xl:items-center">
+                <div>
+                    <h2 class="font-semibold text-slate-950">{{ $classPassPlan->name }}</h2>
+                    <p class="mt-1 text-sm text-slate-500">{{ $classPassPlan->slug }}</p>
+                </div>
+                <div class="text-sm text-slate-600">
+                    <div class="font-semibold text-slate-950">{{ number_format($classPassPlan->price_cents / 100, 0, '.', ' ') }} {{ $classPassPlan->currency }}</div>
+                    <div class="mt-1">{{ $classPassPlan->sessions_count }} {{ __('app.classes_count') }}</div>
+                </div>
+                <div class="text-sm text-slate-600">
+                    <div>{{ $classPassPlan->validity_days }} {{ __('app.days') }}</div>
+                    <div class="mt-1">
+                        @if ($fromTime && $untilTime)
+                            {{ $fromTime }}-{{ $untilTime }}
+                        @elseif ($fromTime)
+                            {{ __('app.from_time', ['time' => $fromTime]) }}
+                        @elseif ($untilTime)
+                            {{ __('app.until_time', ['time' => $untilTime]) }}
+                        @else
+                            {{ __('app.full_day') }}
+                        @endif
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    @forelse ($classPassPlan->activityDirections as $activityDirection)
+                        <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ $activityDirection->name }}</span>
+                    @empty
+                        <span class="text-sm text-slate-500">{{ __('app.not_set') }}</span>
+                    @endforelse
+                </div>
+                <div class="flex flex-wrap gap-2 xl:justify-end">
+                    <span class="{{ $classPassPlan->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
+                        {{ $classPassPlan->is_active ? __('app.active') : __('app.inactive') }}
+                    </span>
+                    <x-ui.button :href="route('dashboard.accounts.class-pass-plans.edit', [$account, $classPassPlan])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.destroy', [$account, $classPassPlan]) }}" data-confirm-delete>
+                        @csrf
+                        @method('DELETE')
+                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                    </form>
+                </div>
+            </div>
+        @empty
+            <x-ui.empty-state :title="__('app.no_class_pass_plans')" icon="class-pass-plans" class="m-5" />
+        @endforelse
+    </x-ui.panel>
+@endsection

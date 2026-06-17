@@ -5,10 +5,10 @@ namespace Database\Factories;
 use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Models\ClassType;
-use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\Trainer;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -30,7 +30,7 @@ class ScheduledClassFactory extends Factory
             'location_id' => Location::factory(),
             'room_id' => Room::factory(),
             'class_type_id' => ClassType::factory(),
-            'instructor_id' => Instructor::factory(),
+            'trainer_id' => Trainer::factory(),
             'schedule_series_id' => null,
             'title' => fake()->randomElement(['Pole Beginner', 'Pole Choreo', 'Stretching', 'Exotic Flow', 'Strength & Conditioning']),
             'description' => fake()->sentence(),

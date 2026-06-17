@@ -20,7 +20,7 @@ class ScheduleSeriesController extends Controller
         return view('schedule-series.index', [
             'account' => $account,
             'series' => $account->scheduleSeries()
-                ->with(['location', 'room', 'classType.activityDirection', 'instructor'])
+                ->with(['location', 'room', 'classType.activityDirection', 'trainer'])
                 ->orderBy('weekday')
                 ->orderBy('start_time')
                 ->get(),
@@ -30,7 +30,7 @@ class ScheduleSeriesController extends Controller
 
     public function create(Account $account): View
     {
-        $this->authorize('update', $account);
+        $this->authorize('manageSchedule', $account);
 
         return view('schedule-series.create', $this->formData($account, new ScheduleSeries([
             'weekday' => now()->isoWeekday(),
@@ -60,7 +60,7 @@ class ScheduleSeriesController extends Controller
     public function edit(Account $account, ScheduleSeries $scheduleSeries): View
     {
         $this->ensureBelongsToAccount($account, $scheduleSeries);
-        $this->authorize('update', $account);
+        $this->authorize('manageSchedule', $account);
 
         return view('schedule-series.edit', $this->formData($account, $scheduleSeries));
     }
@@ -82,7 +82,7 @@ class ScheduleSeriesController extends Controller
     public function destroy(Account $account, ScheduleSeries $scheduleSeries): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $scheduleSeries);
-        $this->authorize('update', $account);
+        $this->authorize('manageSchedule', $account);
 
         $scheduleSeries->scheduledClasses()->delete();
         $scheduleSeries->delete();
@@ -102,7 +102,7 @@ class ScheduleSeriesController extends Controller
             'locations' => $account->locations()->active()->orderBy('name')->get(),
             'rooms' => $account->rooms()->active()->with('location')->orderBy('name')->get(),
             'classTypes' => $account->classTypes()->active()->with('activityDirection')->orderBy('name')->get(),
-            'instructors' => $account->instructors()->active()->orderBy('name')->get(),
+            'trainers' => $account->trainers()->active()->orderBy('name')->get(),
             'statuses' => ScheduleSeriesStatus::cases(),
             'weekdays' => $this->weekdays(),
         ];

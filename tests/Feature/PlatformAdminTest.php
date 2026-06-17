@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\SubscriptionPlan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -54,5 +55,38 @@ class PlatformAdminTest extends TestCase
         $account->refresh();
         $this->assertSame('suspended', $account->status->value);
         $this->assertModelExists($account);
+    }
+
+    public function test_platform_admin_creates_studio_account_with_initial_owner(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $plan = SubscriptionPlan::factory()->create();
+
+        $this->actingAs($platformAdmin)
+            ->post(route('platform.accounts.store'), [
+                'name' => 'Charmpole',
+                'slug' => 'charmpole-test',
+                'status' => 'active',
+                'default_language' => 'uk',
+                'default_currency' => 'UAH',
+                'brand_color' => '#d80a7d',
+                'timezone' => 'Europe/Kyiv',
+                'subscription_plan_id' => $plan->id,
+                'subscription_status' => 'active',
+                'owner_name' => 'Настя',
+                'owner_email' => 'nastya-owner@example.com',
+                'owner_password' => 'password',
+            ])
+            ->assertRedirect();
+
+        $account = Account::where('slug', 'charmpole-test')->firstOrFail();
+        $owner = User::where('email', 'nastya-owner@example.com')->firstOrFail();
+
+        $this->assertTrue($account->isAccessibleBy($owner));
+        $this->assertTrue($account->memberships()
+            ->whereBelongsTo($owner)
+            ->where('role', 'owner')
+            ->exists());
+        $this->assertSame($plan->id, $account->subscription?->subscription_plan_id);
     }
 }

@@ -6,11 +6,12 @@ use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'google_id', 'default_language'])]
+#[Fillable(['account_id', 'name', 'email', 'phone', 'password', 'google_id', 'default_language'])]
 #[Hidden(['password', 'remember_token', 'google_id'])]
 class Customer extends Authenticatable
 {
@@ -29,8 +30,13 @@ class Customer extends Authenticatable
         ];
     }
 
-    public function accounts(): BelongsToMany
+    public function account(): BelongsTo
     {
-        return $this->belongsToMany(Account::class, 'customer_account')->withTimestamps();
+        return $this->belongsTo(Account::class);
+    }
+
+    public function classBookings(): HasMany
+    {
+        return $this->hasMany(ClassBooking::class);
     }
 }

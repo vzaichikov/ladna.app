@@ -73,8 +73,13 @@
 
                         <dl class="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                             <div class="rounded-lg bg-slate-50 p-3">
-                                <dt class="text-slate-500">{{ __('app.instructor') }}</dt>
-                                <dd class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->instructor?->name ?? 'TBA' }}</dd>
+                                <dt class="text-slate-500">{{ __('app.trainer') }}</dt>
+                                <dd class="mt-1 flex items-center gap-2 font-semibold text-slate-950">
+                                    @if ($scheduledClass->trainer?->photoUrl())
+                                        <img src="{{ $scheduledClass->trainer->photoUrl() }}" alt="" class="h-7 w-7 rounded-full object-cover">
+                                    @endif
+                                    <span>{{ $scheduledClass->trainer?->name ?? 'TBA' }}</span>
+                                </dd>
                             </div>
                             <div class="rounded-lg bg-slate-50 p-3">
                                 <dt class="text-slate-500">{{ __('app.room') }}</dt>

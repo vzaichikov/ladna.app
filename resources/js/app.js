@@ -34,6 +34,19 @@ document.addEventListener('DOMContentLoaded', () => {
     closeSidebarButton?.addEventListener('click', closeSidebar);
     sidebarBackdrop?.addEventListener('click', closeSidebar);
 
+    document.addEventListener('click', (event) => {
+        const selectAllButton = event.target.closest('[data-select-all-directions]');
+
+        if (!selectAllButton) {
+            return;
+        }
+
+        const group = selectAllButton.closest('[data-activity-direction-group]');
+        group?.querySelectorAll('[data-activity-direction-checkbox]').forEach((checkbox) => {
+            checkbox.checked = true;
+        });
+    });
+
     const modal = document.getElementById('delete-confirmation-modal');
     const cancelButton = document.querySelector('[data-confirm-cancel]');
     const acceptButton = document.querySelector('[data-confirm-accept]');

@@ -14,7 +14,7 @@ class UpdateActivityDirectionRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('account')) ?? false;
+        return $this->user()?->can('manageStudioSettings', $this->route('account')) ?? false;
     }
 
     /**

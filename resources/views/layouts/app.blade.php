@@ -45,11 +45,23 @@
             'href' => route('dashboard.accounts.class-types.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.class-types.*'),
         ],
+        ...($activeAccount->isOwnedBy(auth()->user()) ? [[
+            'label' => __('app.class_pass_plans'),
+            'icon' => 'class-pass-plans',
+            'href' => route('dashboard.accounts.class-pass-plans.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.class-pass-plans.*'),
+        ]] : []),
         [
-            'label' => __('app.instructors'),
-            'icon' => 'instructors',
-            'href' => route('dashboard.accounts.instructors.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.instructors.*'),
+            'label' => __('app.trainers'),
+            'icon' => 'trainers',
+            'href' => route('dashboard.accounts.trainers.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.trainers.*'),
+        ],
+        [
+            'label' => __('app.customers'),
+            'icon' => 'accounts',
+            'href' => route('dashboard.accounts.customers.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.customers.*'),
         ],
         [
             'label' => __('app.schedule_series'),

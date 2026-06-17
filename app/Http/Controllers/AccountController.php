@@ -27,6 +27,8 @@ class AccountController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', Account::class);
+
         return view('accounts.create', [
             'account' => new Account([
                 'default_language' => 'uk',
@@ -38,6 +40,8 @@ class AccountController extends Controller
 
     public function store(StoreAccountRequest $request): RedirectResponse
     {
+        $this->authorize('create', Account::class);
+
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name']);
 
@@ -58,7 +62,7 @@ class AccountController extends Controller
 
         $account->load([
             'locations' => fn ($query) => $query->orderBy('name'),
-        ])->loadCount(['locations', 'rooms', 'activityDirections', 'classTypes', 'instructors', 'scheduleSeries', 'scheduledClasses']);
+        ])->loadCount(['locations', 'rooms', 'activityDirections', 'classTypes', 'trainers', 'customers', 'scheduleSeries', 'scheduledClasses', 'classBookings']);
 
         return view('accounts.show', [
             'account' => $account,

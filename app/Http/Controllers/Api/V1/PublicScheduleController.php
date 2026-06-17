@@ -24,7 +24,7 @@ class PublicScheduleController extends Controller
 
         $classes = $location->scheduledClasses()
             ->publicUpcoming()
-            ->with(['account', 'location', 'room', 'classType.activityDirection', 'instructor'])
+            ->with(['account', 'location', 'room', 'classType.activityDirection', 'trainer'])
             ->limit(30)
             ->get();
 

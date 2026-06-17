@@ -27,7 +27,6 @@
                         <x-ui.button :href="route('dashboard.index')" size="lg">{{ __('app.dashboard') }}</x-ui.button>
                     @else
                         <x-ui.button :href="route('login')" size="lg">{{ __('app.login') }}</x-ui.button>
-                        <x-ui.button :href="route('register')" variant="secondary" size="lg">{{ __('app.register') }}</x-ui.button>
                     @endauth
                 </div>
             </div>

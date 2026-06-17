@@ -4,8 +4,10 @@ namespace App\Models;
 
 use App\Enums\AccountRole;
 use App\Enums\AccountStatus;
-use Illuminate\Database\Eloquent\Builder;
+use App\Enums\StudioPermission;
+use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -15,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Fillable(['name', 'slug', 'status', 'default_language', 'default_currency', 'logo_path', 'brand_color', 'timezone'])]
 class Account extends Model
 {
-    /** @use HasFactory<\Database\Factories\AccountFactory> */
+    /** @use HasFactory<AccountFactory> */
     use HasFactory;
 
     protected $attributes = [
@@ -58,13 +60,13 @@ class Account extends Model
     {
         return $this->belongsToMany(User::class, 'account_memberships')
             ->using(AccountMembership::class)
-            ->withPivot('role')
+            ->withPivot(['role', 'permissions'])
             ->withTimestamps();
     }
 
-    public function customers(): BelongsToMany
+    public function customers(): HasMany
     {
-        return $this->belongsToMany(Customer::class, 'customer_account')->withTimestamps();
+        return $this->hasMany(Customer::class);
     }
 
     public function classTypes(): HasMany
@@ -72,14 +74,24 @@ class Account extends Model
         return $this->hasMany(ClassType::class);
     }
 
+    public function classPassPlans(): HasMany
+    {
+        return $this->hasMany(ClassPassPlan::class);
+    }
+
     public function activityDirections(): HasMany
     {
         return $this->hasMany(ActivityDirection::class);
     }
 
-    public function instructors(): HasMany
+    public function trainers(): HasMany
     {
-        return $this->hasMany(Instructor::class);
+        return $this->hasMany(Trainer::class);
+    }
+
+    public function classBookings(): HasMany
+    {
+        return $this->hasMany(ClassBooking::class);
     }
 
     public function scheduleSeries(): HasMany
@@ -99,7 +111,7 @@ class Account extends Model
 
     public function isAccessibleBy(User $user): bool
     {
-        return $this->users()->whereKey($user->getKey())->exists();
+        return $user->isPlatformAdmin() || $this->users()->whereKey($user->getKey())->exists();
     }
 
     public function addOwner(User $user): void
@@ -107,5 +119,33 @@ class Account extends Model
         $this->users()->syncWithoutDetaching([
             $user->getKey() => ['role' => AccountRole::Owner->value],
         ]);
+    }
+
+    public function membershipFor(User $user): ?AccountMembership
+    {
+        return $this->memberships()
+            ->whereBelongsTo($user)
+            ->first();
+    }
+
+    public function isOwnedBy(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $this->memberships()
+            ->whereBelongsTo($user)
+            ->where('role', AccountRole::Owner->value)
+            ->exists();
+    }
+
+    public function userCan(User $user, StudioPermission|string $permission): bool
+    {
+        if ($user->isPlatformAdmin()) {
+            return true;
+        }
+
+        return $this->membershipFor($user)?->allows($permission) ?? false;
     }
 }

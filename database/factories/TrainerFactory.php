@@ -3,14 +3,14 @@
 namespace Database\Factories;
 
 use App\Models\Account;
-use App\Models\Instructor;
+use App\Models\Trainer;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
- * @extends Factory<Instructor>
+ * @extends Factory<Trainer>
  */
-class InstructorFactory extends Factory
+class TrainerFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -23,11 +23,13 @@ class InstructorFactory extends Factory
 
         return [
             'account_id' => Account::factory(),
+            'user_id' => null,
             'name' => $name,
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 9999),
             'email' => fake()->safeEmail(),
             'phone' => fake()->phoneNumber(),
             'bio' => fake()->sentence(),
+            'photo_path' => null,
             'is_active' => true,
         ];
     }

@@ -9,7 +9,9 @@ use App\Http\Requests\StorePlatformAccountRequest;
 use App\Http\Requests\UpdatePlatformAccountRequest;
 use App\Models\Account;
 use App\Models\SubscriptionPlan;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -40,8 +42,27 @@ class PlatformAccountController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name']);
 
-        $account = Account::create(collect($validated)->except(['subscription_plan_id', 'subscription_status'])->all());
-        $this->syncSubscription($account, $validated);
+        $account = DB::transaction(function () use ($validated): Account {
+            $account = Account::create(collect($validated)->except([
+                'subscription_plan_id',
+                'subscription_status',
+                'owner_name',
+                'owner_email',
+                'owner_password',
+            ])->all());
+
+            $owner = User::create([
+                'name' => $validated['owner_name'],
+                'email' => $validated['owner_email'],
+                'password' => $validated['owner_password'],
+                'email_verified_at' => now(),
+            ]);
+
+            $account->addOwner($owner);
+            $this->syncSubscription($account, $validated);
+
+            return $account;
+        });
 
         return redirect()->route('platform.accounts.show', $account)
             ->with('status', __('app.account_created'));

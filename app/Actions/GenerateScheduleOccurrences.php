@@ -2,11 +2,11 @@
 
 namespace App\Actions;
 
+use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
-use App\Enums\ScheduledClassStatus;
-use App\Models\ScheduleSeries;
 use App\Models\ScheduledClass;
+use App\Models\ScheduleSeries;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +14,7 @@ class GenerateScheduleOccurrences
 {
     public function execute(ScheduleSeries $series): int
     {
-        $series->loadMissing(['account', 'location', 'room', 'classType', 'instructor']);
+        $series->loadMissing(['account', 'location', 'room', 'classType', 'trainer']);
 
         return DB::transaction(function () use ($series): int {
             $timezone = $series->location->timezone
@@ -61,7 +61,7 @@ class GenerateScheduleOccurrences
                     'location_id' => $series->location_id,
                     'room_id' => $series->room_id,
                     'class_type_id' => $series->class_type_id,
-                    'instructor_id' => $series->instructor_id,
+                    'trainer_id' => $series->trainer_id,
                     'schedule_series_id' => $series->id,
                     'title' => $series->effectiveTitle(),
                     'description' => $series->effectiveDescription(),

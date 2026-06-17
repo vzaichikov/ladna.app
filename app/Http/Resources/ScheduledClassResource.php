@@ -43,9 +43,10 @@ class ScheduledClassResource extends JsonResource
                 'slug' => $this->classType->activityDirection->slug,
             ] : null,
             'schedule_kind' => $this->classType?->schedule_kind?->value,
-            'instructor' => $this->instructor ? [
-                'id' => $this->instructor->id,
-                'name' => $this->instructor->name,
+            'trainer' => $this->trainer ? [
+                'id' => $this->trainer->id,
+                'name' => $this->trainer->name,
+                'photo_url' => $this->trainer->photoUrl(),
             ] : null,
             'capacity' => $this->capacity,
             'available_spots' => null,

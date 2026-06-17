@@ -8,7 +8,10 @@
             <h1 class="crm-page-title">{{ __('app.platform') }}</h1>
             <p class="crm-page-copy">{{ __('app.platform_admin') }}</p>
         </div>
-        <a href="{{ route('platform.accounts.index') }}" class="inline-flex items-center justify-center rounded-lg bg-violet-crm-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-crm-700">{{ __('app.accounts') }}</a>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ route('platform.subscription-plans.index') }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition hover:border-slate-300 hover:bg-slate-50">{{ __('app.subscription_plans') }}</a>
+            <a href="{{ route('platform.accounts.index') }}" class="inline-flex items-center justify-center rounded-lg bg-violet-crm-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-crm-700">{{ __('app.accounts') }}</a>
+        </div>
     </div>
 
     <section class="mt-8 grid gap-4 md:grid-cols-2">

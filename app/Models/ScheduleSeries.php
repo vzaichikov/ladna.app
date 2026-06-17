@@ -3,16 +3,17 @@
 namespace App\Models;
 
 use App\Enums\ScheduleSeriesStatus;
+use Database\Factories\ScheduleSeriesFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'instructor_id', 'title', 'description', 'weekday', 'start_time', 'start_date', 'end_date', 'capacity', 'duration_minutes', 'booking_cutoff_minutes', 'status', 'generated_until', 'generated_at'])]
+#[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'title', 'description', 'weekday', 'start_time', 'start_date', 'end_date', 'capacity', 'duration_minutes', 'booking_cutoff_minutes', 'status', 'generated_until', 'generated_at'])]
 class ScheduleSeries extends Model
 {
-    /** @use HasFactory<\Database\Factories\ScheduleSeriesFactory> */
+    /** @use HasFactory<ScheduleSeriesFactory> */
     use HasFactory;
 
     protected $attributes = [
@@ -53,9 +54,9 @@ class ScheduleSeries extends Model
         return $this->belongsTo(ClassType::class);
     }
 
-    public function instructor(): BelongsTo
+    public function trainer(): BelongsTo
     {
-        return $this->belongsTo(Instructor::class);
+        return $this->belongsTo(Trainer::class);
     }
 
     public function scheduledClasses(): HasMany

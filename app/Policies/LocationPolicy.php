@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\StudioPermission;
 use App\Models\Location;
 use App\Models\User;
 
@@ -36,7 +37,7 @@ class LocationPolicy
      */
     public function update(User $user, Location $location): bool
     {
-        return $location->account->isAccessibleBy($user);
+        return $location->account->userCan($user, StudioPermission::ManageStudioSettings);
     }
 
     /**
@@ -44,7 +45,7 @@ class LocationPolicy
      */
     public function delete(User $user, Location $location): bool
     {
-        return $location->account->isAccessibleBy($user);
+        return $location->account->userCan($user, StudioPermission::ManageStudioSettings);
     }
 
     /**

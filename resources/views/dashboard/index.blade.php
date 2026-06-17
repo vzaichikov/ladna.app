@@ -9,10 +9,12 @@
             <h1 class="crm-page-title">{{ __('app.dashboard') }}</h1>
             <p class="crm-page-copy">Tenant access follows account membership.</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.create')">
-            <x-ui.icon name="plus" class="h-4 w-4" />
-            {{ __('app.create_account') }}
-        </x-ui.button>
+        @can('create', \App\Models\Account::class)
+            <x-ui.button :href="route('dashboard.accounts.create')">
+                <x-ui.icon name="plus" class="h-4 w-4" />
+                {{ __('app.create_account') }}
+            </x-ui.button>
+        @endcan
     </div>
 
     <section class="mt-6 grid gap-4 md:grid-cols-3">
@@ -49,10 +51,12 @@
             </a>
         @empty
             <x-ui.empty-state :title="__('app.no_accounts')" icon="accounts" class="xl:col-span-2">
-                <x-ui.button :href="route('dashboard.accounts.create')" class="mt-5">
-                    <x-ui.icon name="plus" class="h-4 w-4" />
-                    {{ __('app.create_account') }}
-                </x-ui.button>
+                @can('create', \App\Models\Account::class)
+                    <x-ui.button :href="route('dashboard.accounts.create')" class="mt-5">
+                        <x-ui.icon name="plus" class="h-4 w-4" />
+                        {{ __('app.create_account') }}
+                    </x-ui.button>
+                @endcan
             </x-ui.empty-state>
         @endforelse
     </section>
