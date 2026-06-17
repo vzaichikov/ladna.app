@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\ClassBookingController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
 use App\Http\Controllers\Platform\PlatformAccountController;
 use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
@@ -44,6 +46,8 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
     ->name('platform.')
     ->group(function (): void {
         Route::get('/', PlatformController::class)->name('index');
+        Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
+        Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::resource('accounts', PlatformAccountController::class);
         Route::resource('subscription-plans', SubscriptionPlanController::class)->except(['show']);
     });
@@ -78,6 +82,10 @@ Route::middleware('auth:web')
         Route::resource('accounts.schedule-series', ScheduleSeriesController::class)
             ->except(['show'])
             ->scoped();
+        Route::get('accounts/{account}/integrations', [AccountIntegrationController::class, 'index'])
+            ->name('accounts.integrations.index');
+        Route::put('accounts/{account}/integrations/{provider}', [AccountIntegrationController::class, 'update'])
+            ->name('accounts.integrations.update');
         Route::get('accounts/{account}/scheduled-classes', ScheduledClassController::class)
             ->name('accounts.scheduled-classes.index');
         Route::post('accounts/{account}/scheduled-classes/{scheduledClass}/bookings', [ClassBookingController::class, 'store'])
