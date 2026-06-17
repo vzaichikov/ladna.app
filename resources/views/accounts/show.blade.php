@@ -183,6 +183,12 @@
                 <x-ui.icon name="schedule" class="h-4 w-4 text-brand-600" />
                 {{ __('app.schedule_series') }}
             </x-ui.button>
+            @if ($account->isOwnedBy(auth()->user()))
+                <x-ui.button :href="route('dashboard.accounts.integrations.index', $account)" variant="secondary">
+                    <x-ui.icon name="integrations" class="h-4 w-4 text-brand-600" />
+                    {{ __('app.integrations') }}
+                </x-ui.button>
+            @endif
         </div>
     </x-ui.panel>
 @endsection

@@ -75,14 +75,28 @@
             'href' => route('dashboard.accounts.scheduled-classes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.scheduled-classes.*'),
         ],
+        ...($activeAccount->isOwnedBy(auth()->user()) ? [[
+            'label' => __('app.integrations'),
+            'icon' => 'integrations',
+            'href' => route('dashboard.accounts.integrations.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.integrations.*'),
+        ]] : []),
     ] : [];
 
-    $platformNav = auth()->user()?->isPlatformAdmin() ? [[
-        'label' => __('app.platform'),
-        'icon' => 'platform',
-        'href' => route('platform.index'),
-        'active' => request()->routeIs('platform.*'),
-    ]] : [];
+    $platformNav = auth()->user()?->isPlatformAdmin() ? [
+        [
+            'label' => __('app.platform'),
+            'icon' => 'platform',
+            'href' => route('platform.index'),
+            'active' => request()->routeIs('platform.index'),
+        ],
+        [
+            'label' => __('app.integrations'),
+            'icon' => 'integrations',
+            'href' => route('platform.integrations.index'),
+            'active' => request()->routeIs('platform.integrations.*'),
+        ],
+    ] : [];
 
     $userInitial = mb_substr(auth()->user()?->name ?? __('app.app_name'), 0, 1);
 @endphp
