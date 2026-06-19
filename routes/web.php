@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountIntegrationController;
+use App\Http\Controllers\AccountOwnerProfileController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\ClassBookingController;
@@ -63,6 +64,8 @@ Route::middleware('auth:web')
     ->group(function (): void {
         Route::get('/', DashboardController::class)->name('index');
         Route::resource('accounts', AccountController::class);
+        Route::put('accounts/{account}/owner-profile', [AccountOwnerProfileController::class, 'update'])
+            ->name('accounts.owner-profile.update');
         Route::resource('accounts.locations', LocationController::class)
             ->except(['show'])
             ->scoped();

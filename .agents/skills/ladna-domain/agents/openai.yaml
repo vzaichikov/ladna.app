@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Domain"
+  short_description: "Ladna roles and tenant rules"
+  default_prompt: "Use $ladna-domain before changing Ladna roles, tenancy, subscriptions, class passes, schedules, trainers, customers, or demo data."
