@@ -91,6 +91,6 @@ abstract class UpdateIntegrationRequest extends FormRequest
      */
     private function existingCredentials(): array
     {
-        return $this->existingSetting()?->credentials ?? [];
+        return $this->existingSetting()?->readableCredentials() ?? [];
     }
 }

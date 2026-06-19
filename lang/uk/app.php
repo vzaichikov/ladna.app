@@ -277,6 +277,7 @@ return [
     'configured' => 'Налаштовано',
     'secret_configured' => 'Секрет збережено',
     'leave_blank_to_keep_secret' => 'Залиште порожнім, щоб не змінювати',
+    'integration_credentials_unreadable' => 'Збережені облікові дані неможливо прочитати. Введіть їх заново та збережіть інтеграцію.',
     'integration_updated' => 'Налаштування інтеграції оновлено.',
     'integration_field_required' => ':field обовʼязкове, коли інтеграцію увімкнено.',
     'integration_field_api_token' => 'API токен',

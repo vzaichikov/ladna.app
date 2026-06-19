@@ -29,7 +29,9 @@
         @foreach ($providers as $providerKey => $provider)
             @php
                 $setting = $settings->get($providerKey);
-                $credentials = \App\Support\IntegrationCatalog::displayCredentials($providerKey, $setting?->credentials ?? []);
+                $hasUnreadableCredentials = $setting?->hasUnreadableCredentials() ?? false;
+                $storedCredentials = $setting?->readableCredentials() ?? [];
+                $credentials = \App\Support\IntegrationCatalog::displayCredentials($providerKey, $storedCredentials);
                 $isEnabled = (bool) old('is_enabled', $setting?->is_enabled ?? false);
                 $updateParameters = array_merge($updateRouteParameters, [$providerKey]);
             @endphp
@@ -47,7 +49,7 @@
                             @else
                                 <span class="crm-status-muted">{{ __('app.disabled') }}</span>
                             @endif
-                            @if ($setting && filled($setting->credentials))
+                            @if (! $hasUnreadableCredentials && filled($storedCredentials))
                                 <span class="crm-status-muted">{{ __('app.configured') }}</span>
                             @endif
                         </div>
@@ -59,6 +61,12 @@
                         {{ __('app.enabled') }}
                     </label>
                 </div>
+
+                @if ($hasUnreadableCredentials)
+                    <div class="mx-5 mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                        {{ __('app.integration_credentials_unreadable') }}
+                    </div>
+                @endif
 
                 <div class="grid gap-4 p-5 sm:grid-cols-2">
                     @foreach ($provider['fields'] as $fieldKey => $field)

@@ -182,4 +182,48 @@ class IntegrationSettingsTest extends TestCase
         $this->assertStringNotContainsString('private-secret', $rawCredentials);
         $this->assertSame('private-secret', $setting->credentials['private_key']);
     }
+
+    public function test_integration_page_allows_replacing_credentials_encrypted_with_an_old_key(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $setting = IntegrationSetting::factory()
+            ->forAccountScope($account)
+            ->create([
+                'provider' => 'monopay',
+                'category' => 'payment',
+                'is_enabled' => false,
+                'credentials' => [
+                    'api_token' => 'old-secret',
+                ],
+            ]);
+
+        DB::table((new IntegrationSetting)->getTable())
+            ->where('id', $setting->id)
+            ->update(['credentials' => 'encrypted-with-another-app-key']);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.integrations.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.integration_credentials_unreadable'));
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.integrations.update', [$account, 'monopay']), [
+                'is_enabled' => '1',
+                'credentials' => [
+                    'api_token' => 'new-secret',
+                    'payment_type' => 'hold',
+                    'invoice_validity_seconds' => 3600,
+                ],
+            ])
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'payment']));
+
+        $setting->refresh();
+
+        $this->assertSame('new-secret', $setting->credentials['api_token']);
+        $this->assertSame('hold', $setting->credentials['payment_type']);
+        $this->assertSame(3600, $setting->credentials['invoice_validity_seconds']);
+    }
 }

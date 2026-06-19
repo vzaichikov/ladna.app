@@ -6,6 +6,7 @@ use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
 use Database\Factories\IntegrationSettingFactory;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
@@ -53,6 +54,40 @@ class IntegrationSetting extends Model
             ->where('scope_type', IntegrationScope::Account->value)
             ->where('scope_id', $account->id)
             ->whereBelongsTo($account);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function readableCredentials(): array
+    {
+        try {
+            $credentials = $this->credentials;
+        } catch (DecryptException) {
+            return [];
+        }
+
+        return is_array($credentials) ? $credentials : [];
+    }
+
+    public function hasUnreadableCredentials(): bool
+    {
+        try {
+            $this->credentials;
+        } catch (DecryptException) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function originalIsEquivalent($key): bool
+    {
+        try {
+            return parent::originalIsEquivalent($key);
+        } catch (DecryptException) {
+            return $key !== 'credentials';
+        }
     }
 
     public function account(): BelongsTo

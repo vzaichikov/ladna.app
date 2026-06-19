@@ -277,6 +277,7 @@ return [
     'configured' => 'Configured',
     'secret_configured' => 'Secret configured',
     'leave_blank_to_keep_secret' => 'Leave blank to keep saved value',
+    'integration_credentials_unreadable' => 'Saved credentials cannot be read. Re-enter and save this integration.',
     'integration_updated' => 'Integration settings updated.',
     'integration_field_required' => ':field is required when this integration is enabled.',
     'integration_field_api_token' => 'API token',
