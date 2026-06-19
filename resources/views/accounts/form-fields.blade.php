@@ -10,6 +10,22 @@
     @error('slug') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
 
+<div class="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
+    <div class="flex h-20 w-20 items-center justify-center rounded-xl border border-stone-200 bg-brand-50">
+        @if ($account->exists || $account->logo_path)
+            <img src="{{ $account->logoUrl() }}" alt="" class="max-h-14 max-w-14 object-contain">
+        @else
+            <x-ui.icon name="accounts" class="h-7 w-7 text-brand-600" />
+        @endif
+    </div>
+    <label class="block">
+        <span class="crm-label">{{ __('app.studio_logo') }}</span>
+        <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" class="crm-field">
+        <span class="mt-1 block text-xs font-medium text-slate-500">{{ __('app.logo_help') }}</span>
+        @error('logo') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+</div>
+
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.default_language') }}</span>
@@ -35,7 +51,7 @@
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.brand_color') }}</span>
-        <input name="brand_color" value="{{ old('brand_color', $account->brand_color) }}" placeholder="#e11d48" class="crm-field">
+        <input name="brand_color" value="{{ old('brand_color', $account->brand_color) }}" placeholder="#3B223F" class="crm-field">
         @error('brand_color') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 

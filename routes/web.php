@@ -16,11 +16,14 @@ use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationCo
 use App\Http\Controllers\Platform\PlatformAccountController;
 use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
+use App\Http\Controllers\Platform\SystemSettingsController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\ScheduledClassController;
 use App\Http\Controllers\ScheduleSeriesController;
+use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\TrainerTypeController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -46,6 +49,8 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
     ->name('platform.')
     ->group(function (): void {
         Route::get('/', PlatformController::class)->name('index');
+        Route::get('settings', [SystemSettingsController::class, 'edit'])->name('settings.edit');
+        Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::resource('accounts', PlatformAccountController::class);
@@ -75,6 +80,11 @@ Route::middleware('auth:web')
             ->scoped();
         Route::resource('accounts.trainers', TrainerController::class)
             ->except(['show'])
+            ->scoped();
+        Route::get('accounts/{account}/studio-settings', [StudioSettingsController::class, 'index'])
+            ->name('accounts.studio-settings.index');
+        Route::resource('accounts.trainer-types', TrainerTypeController::class)
+            ->only(['store', 'update', 'destroy'])
             ->scoped();
         Route::resource('accounts.customers', CustomerController::class)
             ->except(['show'])

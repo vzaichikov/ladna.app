@@ -7,18 +7,23 @@ use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AccountController extends Controller
 {
-    public function index(): View
+    public function index(): View|RedirectResponse
     {
         $accounts = request()->user()
             ->accounts()
             ->withCount('locations')
             ->orderBy('name')
             ->get();
+
+        if (! request()->user()->isPlatformAdmin() && $accounts->count() === 1) {
+            return redirect()->route('dashboard.accounts.show', $accounts->first());
+        }
 
         return view('accounts.index', [
             'accounts' => $accounts,
@@ -46,7 +51,9 @@ class AccountController extends Controller
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name']);
 
         $account = DB::transaction(function () use ($request, $validated): Account {
-            $account = Account::create($validated);
+            $account = Account::create(collect($validated)->except('logo')->all());
+            $this->storeLogo($request, $account);
+            $account->ensureDefaultTrainerType();
             $account->addOwner($request->user());
 
             return $account;
@@ -83,7 +90,8 @@ class AccountController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
-        $account->update($validated);
+        $account->update(collect($validated)->except('logo')->all());
+        $this->storeLogo($request, $account);
 
         return redirect()->route('dashboard.accounts.show', $account)
             ->with('status', __('app.account_updated'));
@@ -113,5 +121,20 @@ class AccountController extends Controller
         }
 
         return $candidate;
+    }
+
+    private function storeLogo(StoreAccountRequest|UpdateAccountRequest $request, Account $account): void
+    {
+        if (! $request->hasFile('logo')) {
+            return;
+        }
+
+        if ($account->logo_path && ! str_starts_with($account->logo_path, 'brand/')) {
+            Storage::disk('public')->delete($account->logo_path);
+        }
+
+        $account->forceFill([
+            'logo_path' => $request->file('logo')->store('account-logos/'.$account->id, 'public'),
+        ])->save();
     }
 }

@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\Rules\Password;
 
 class StorePlatformAccountRequest extends FormRequest
@@ -36,6 +37,7 @@ class StorePlatformAccountRequest extends FormRequest
             'default_language' => ['required', Rule::in(array_keys(config('charm.locales')))],
             'default_currency' => ['required', Rule::in(config('charm.currencies'))],
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
             'timezone' => ['nullable', 'timezone'],
             'subscription_plan_id' => ['nullable', Rule::exists((new SubscriptionPlan)->getTable(), 'id')],
             'subscription_status' => ['required', Rule::enum(SubscriptionStatus::class)],

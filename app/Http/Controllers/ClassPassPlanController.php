@@ -20,7 +20,7 @@ class ClassPassPlanController extends Controller
         return view('class-pass-plans.index', [
             'account' => $account,
             'classPassPlans' => $account->classPassPlans()
-                ->with('activityDirections')
+                ->with(['activityDirections', 'trainerTypes'])
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
@@ -50,6 +50,7 @@ class ClassPassPlanController extends Controller
 
         $classPassPlan = $account->classPassPlans()->create($this->classPassPlanAttributes($validated));
         $classPassPlan->activityDirections()->sync($validated['activity_direction_ids']);
+        $classPassPlan->trainerTypes()->sync($validated['trainer_type_ids']);
 
         return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
             ->with('status', __('app.class_pass_plan_created'));
@@ -64,7 +65,7 @@ class ClassPassPlanController extends Controller
     {
         $this->ensureBelongsToAccount($account, $classPassPlan);
         $this->ensureCurrentUserOwns($account);
-        $classPassPlan->loadMissing('activityDirections');
+        $classPassPlan->loadMissing(['activityDirections', 'trainerTypes']);
 
         return view('class-pass-plans.edit', [
             'account' => $account,
@@ -83,6 +84,7 @@ class ClassPassPlanController extends Controller
 
         $classPassPlan->update($this->classPassPlanAttributes($validated));
         $classPassPlan->activityDirections()->sync($validated['activity_direction_ids']);
+        $classPassPlan->trainerTypes()->sync($validated['trainer_type_ids']);
 
         return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
             ->with('status', __('app.class_pass_plan_updated'));
@@ -152,8 +154,11 @@ class ClassPassPlanController extends Controller
      */
     private function formData(Account $account): array
     {
+        $account->ensureDefaultTrainerType();
+
         return [
             'activityDirections' => $account->activityDirections()->orderBy('name')->get(),
+            'trainerTypes' => $account->trainerTypes()->ordered()->get(),
             'currencies' => config('charm.currencies'),
         ];
     }

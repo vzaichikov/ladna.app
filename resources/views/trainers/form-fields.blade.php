@@ -1,6 +1,6 @@
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
-        <span class="crm-label">{{ __('app.name') }}</span>
+        <span class="crm-label">{{ __('app.person_name') }}</span>
         <input name="name" value="{{ old('name', $trainer->name) }}" required class="crm-field">
         @error('name') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
@@ -10,6 +10,17 @@
         @error('slug') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 </div>
+<label class="block">
+    <span class="crm-label">{{ __('app.trainer_type') }}</span>
+    <select name="trainer_type_id" class="crm-field">
+        @foreach ($trainerTypes as $trainerType)
+            <option value="{{ $trainerType->id }}" @selected((int) old('trainer_type_id', $trainer->trainer_type_id) === $trainerType->id)>
+                {{ $trainerType->name }}
+            </option>
+        @endforeach
+    </select>
+    @error('trainer_type_id') <span class="crm-help">{{ $message }}</span> @enderror
+</label>
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.email') }}</span>
@@ -23,7 +34,7 @@
     </label>
 </div>
 <label class="block">
-    <span class="crm-label">Bio</span>
+    <span class="crm-label">{{ __('app.bio') }}</span>
     <textarea name="bio" rows="3" class="crm-field">{{ old('bio', $trainer->bio) }}</textarea>
     @error('bio') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
@@ -66,16 +77,6 @@
             @error('user_password') <span class="crm-help">{{ $message }}</span> @enderror
         </label>
     </div>
-
-    <label class="mt-4 block">
-        <span class="crm-label">{{ __('app.role') }}</span>
-        <select name="role" class="crm-field">
-            @foreach ($accountRoles as $accountRole)
-                <option value="{{ $accountRole->value }}" @selected(old('role', $selectedRole->value) === $accountRole->value)>{{ __($accountRole->labelKey()) }}</option>
-            @endforeach
-        </select>
-        @error('role') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
 
     <div class="mt-4">
         <div class="crm-label">{{ __('app.permissions') }}</div>

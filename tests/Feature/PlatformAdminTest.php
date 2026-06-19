@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\SubscriptionPlan;
+use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\SystemAppearance;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -32,6 +34,24 @@ class PlatformAdminTest extends TestCase
         $this->actingAs($owner)
             ->get(route('platform.index'))
             ->assertForbidden();
+    }
+
+    public function test_platform_admin_can_update_system_font(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.settings.edit'))
+            ->assertOk()
+            ->assertSee('Manrope');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.settings.update'), [
+                'font_family' => 'rubik',
+            ])
+            ->assertRedirect(route('platform.settings.edit'));
+
+        $this->assertSame('rubik', SystemSetting::stringValue(SystemAppearance::FontSettingKey));
     }
 
     public function test_platform_admin_can_suspend_account_without_deleting_tenant_data(): void

@@ -1,6 +1,6 @@
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
-        <span class="crm-label">{{ __('app.locations') }}</span>
+        <span class="crm-label">{{ __('app.location') }}</span>
         <select name="location_id" required class="crm-field">
             @foreach ($locations as $location)
                 <option value="{{ $location->id }}" @selected((int) old('location_id', $scheduleSeries->location_id) === $location->id)>{{ $location->name }}</option>

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AccountRole;
 use App\Enums\StudioPermission;
 use App\Models\Account;
+use App\Models\TrainerType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
@@ -21,10 +22,12 @@ class TrainerManagementTest extends TestCase
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
+        $trainerType = TrainerType::factory()->for($account)->default()->create();
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.trainers.store', $account), [
                 'name' => 'Катя',
+                'trainer_type_id' => $trainerType->id,
                 'email' => 'katya.profile@example.com',
                 'phone' => '+380501112233',
                 'bio' => 'Trainer profile.',
@@ -33,7 +36,6 @@ class TrainerManagementTest extends TestCase
                 'create_login' => '1',
                 'user_email' => 'katya.login@example.com',
                 'user_password' => 'password',
-                'role' => AccountRole::Trainer->value,
                 'permissions' => [
                     StudioPermission::ManageSchedule->value,
                     StudioPermission::MarkAttendance->value,
@@ -45,11 +47,17 @@ class TrainerManagementTest extends TestCase
         $loginUser = User::where('email', 'katya.login@example.com')->firstOrFail();
 
         $this->assertSame($loginUser->id, $trainer->user_id);
+        $this->assertSame($trainerType->id, $trainer->trainer_type_id);
         Storage::disk('public')->assertExists($trainer->photo_path);
         $this->assertTrue($account->memberships()
             ->whereBelongsTo($loginUser)
             ->where('role', AccountRole::Trainer->value)
             ->exists());
         $this->assertTrue($account->userCan($loginUser, StudioPermission::MarkAttendance));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.trainers.index', $account))
+            ->assertOk()
+            ->assertSee($trainerType->name);
     }
 }

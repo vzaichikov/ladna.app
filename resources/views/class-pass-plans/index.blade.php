@@ -6,7 +6,7 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.class_pass_plans') }}</h1>
-            <p class="crm-page-copy">{{ $account->name }}</p>
+            <p class="crm-page-copy">{{ __('app.class_pass_plans_copy') }}</p>
         </div>
         <x-ui.button :href="route('dashboard.accounts.class-pass-plans.create', $account)">
             <x-ui.icon name="plus" class="h-4 w-4" />
@@ -20,7 +20,7 @@
                 $fromTime = $classPassPlan->available_from_time ? substr((string) $classPassPlan->available_from_time, 0, 5) : null;
                 $untilTime = $classPassPlan->available_until_time ? substr((string) $classPassPlan->available_until_time, 0, 5) : null;
             @endphp
-            <div class="crm-row xl:grid-cols-[1.2fr_0.8fr_1fr_1.3fr_auto] xl:items-center">
+            <div class="crm-row xl:grid-cols-[1.1fr_0.7fr_0.8fr_1.1fr_1.1fr_auto] xl:items-center">
                 <div>
                     <h2 class="font-semibold text-slate-950">{{ $classPassPlan->name }}</h2>
                     <p class="mt-1 text-sm text-slate-500">{{ $classPassPlan->slug }}</p>
@@ -46,6 +46,13 @@
                 <div class="flex flex-wrap gap-2">
                     @forelse ($classPassPlan->activityDirections as $activityDirection)
                         <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ $activityDirection->name }}</span>
+                    @empty
+                        <span class="text-sm text-slate-500">{{ __('app.not_set') }}</span>
+                    @endforelse
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    @forelse ($classPassPlan->trainerTypes as $trainerType)
+                        <x-ui.trainer-type-badge :trainer-type="$trainerType" />
                     @empty
                         <span class="text-sm text-slate-500">{{ __('app.not_set') }}</span>
                     @endforelse

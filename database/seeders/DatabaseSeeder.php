@@ -16,6 +16,7 @@ use App\Models\Room;
 use App\Models\ScheduleSeries;
 use App\Models\SubscriptionPlan;
 use App\Models\Trainer;
+use App\Models\TrainerType;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -55,6 +56,7 @@ class DatabaseSeeder extends Seeder
             'status' => 'active',
             'default_language' => 'uk',
             'default_currency' => 'UAH',
+            'logo_path' => 'brand/charmpole-icon.svg',
             'brand_color' => '#d80a7d',
             'timezone' => 'Europe/Kyiv',
         ]);
@@ -65,9 +67,9 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $plan = SubscriptionPlan::create([
-            'name' => 'Studio CRM',
-            'slug' => 'studio-crm',
-            'description' => 'SaaS-підписка для студії з розкладом, клієнтами та записами.',
+            'name' => 'Ladna Studio',
+            'slug' => 'ladna-studio',
+            'description' => 'Підписка для студії з розкладом, клієнтами та заняттями.',
             'price_cents' => 490000,
             'currency' => 'UAH',
             'billing_interval' => 'monthly',
@@ -112,8 +114,9 @@ class DatabaseSeeder extends Seeder
 
         $directions = $this->directions($account);
         $classTypes = $this->classTypes($account, $directions);
+        $trainerTypes = $this->trainerTypes($account);
         $this->call(ClassPassPlanSeeder::class);
-        $trainers = $this->trainers($account);
+        $trainers = $this->trainers($account, $trainerTypes);
 
         $this->schedule($account, $location, $bigHall, $classTypes, $trainers);
 
@@ -128,6 +131,7 @@ class DatabaseSeeder extends Seeder
             'class_bookings',
             'scheduled_classes',
             'schedule_series',
+            'class_pass_plan_trainer_type',
             'class_pass_plan_activity_direction',
             'class_pass_plans',
             'rooms',
@@ -135,6 +139,7 @@ class DatabaseSeeder extends Seeder
             'class_types',
             'activity_directions',
             'trainers',
+            'trainer_types',
             'account_subscriptions',
             'account_memberships',
             'customers',
@@ -209,9 +214,33 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
+     * @return array<string, TrainerType>
+     */
+    private function trainerTypes(Account $account): array
+    {
+        return [
+            'trainer' => $account->trainerTypes()->create([
+                'name' => 'Trainer',
+                'icon' => 'user-round',
+                'color' => '#3B223F',
+                'is_default' => true,
+                'sort_order' => 10,
+            ]),
+            'top' => $account->trainerTypes()->create([
+                'name' => 'TOP-trainer',
+                'icon' => 'crown',
+                'color' => '#D80A7D',
+                'is_default' => false,
+                'sort_order' => 20,
+            ]),
+        ];
+    }
+
+    /**
+     * @param  array<string, TrainerType>  $trainerTypes
      * @return array<string, Trainer>
      */
-    private function trainers(Account $account): array
+    private function trainers(Account $account, array $trainerTypes): array
     {
         $avatars = [
             'Настя' => 'avatar-nastya.png',
@@ -223,9 +252,10 @@ class DatabaseSeeder extends Seeder
             '_loco_man' => 'avatar-loco-man.png',
         ];
 
-        return collect($avatars)->mapWithKeys(function (string $avatar, string $name) use ($account): array {
+        return collect($avatars)->mapWithKeys(function (string $avatar, string $name) use ($account, $trainerTypes): array {
             return [$name => Trainer::create([
                 'account_id' => $account->id,
+                'trainer_type_id' => $name === 'Настя' ? $trainerTypes['top']->id : $trainerTypes['trainer']->id,
                 'name' => $name,
                 'slug' => Str::slug($name) ?: Str::slug(str_replace('_', ' ', $name)),
                 'email' => null,

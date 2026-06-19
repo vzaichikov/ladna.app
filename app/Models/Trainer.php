@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['account_id', 'user_id', 'name', 'slug', 'email', 'phone', 'bio', 'photo_path', 'is_active'])]
+#[Fillable(['account_id', 'user_id', 'trainer_type_id', 'name', 'slug', 'email', 'phone', 'bio', 'photo_path', 'is_active'])]
 class Trainer extends Model
 {
     /** @use HasFactory<TrainerFactory> */
@@ -44,6 +44,11 @@ class Trainer extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function trainerType(): BelongsTo
+    {
+        return $this->belongsTo(TrainerType::class);
     }
 
     public function scheduledClasses(): HasMany

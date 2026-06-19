@@ -12,6 +12,7 @@ use App\Models\SubscriptionPlan;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -42,14 +43,18 @@ class PlatformAccountController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name']);
 
-        $account = DB::transaction(function () use ($validated): Account {
+        $account = DB::transaction(function () use ($request, $validated): Account {
             $account = Account::create(collect($validated)->except([
+                'logo',
                 'subscription_plan_id',
                 'subscription_status',
                 'owner_name',
                 'owner_email',
                 'owner_password',
             ])->all());
+
+            $this->storeLogo($request, $account);
+            $account->ensureDefaultTrainerType();
 
             $owner = User::create([
                 'name' => $validated['owner_name'],
@@ -90,7 +95,8 @@ class PlatformAccountController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
-        $account->update(collect($validated)->except(['subscription_plan_id', 'subscription_status'])->all());
+        $account->update(collect($validated)->except(['logo', 'subscription_plan_id', 'subscription_status'])->all());
+        $this->storeLogo($request, $account);
         $this->syncSubscription($account, $validated);
 
         return redirect()->route('platform.accounts.show', $account)
@@ -147,5 +153,20 @@ class PlatformAccountController extends Controller
         }
 
         return $candidate;
+    }
+
+    private function storeLogo(StorePlatformAccountRequest|UpdatePlatformAccountRequest $request, Account $account): void
+    {
+        if (! $request->hasFile('logo')) {
+            return;
+        }
+
+        if ($account->logo_path && ! str_starts_with($account->logo_path, 'brand/')) {
+            Storage::disk('public')->delete($account->logo_path);
+        }
+
+        $account->forceFill([
+            'logo_path' => $request->file('logo')->store('account-logos/'.$account->id, 'public'),
+        ])->save();
     }
 }

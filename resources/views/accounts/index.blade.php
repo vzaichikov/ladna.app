@@ -7,6 +7,7 @@
         <div>
             <div class="crm-page-kicker">{{ __('app.workspace') }}</div>
             <h1 class="crm-page-title">{{ __('app.accounts') }}</h1>
+            <p class="crm-page-copy">{{ __('app.accounts_copy') }}</p>
         </div>
         @can('create', \App\Models\Account::class)
             <x-ui.button :href="route('dashboard.accounts.create')">
@@ -20,8 +21,8 @@
         @forelse ($accounts as $account)
             <a href="{{ route('dashboard.accounts.show', $account) }}" class="crm-row transition hover:bg-violet-crm-50/50 sm:grid-cols-[1fr_180px_auto] sm:items-center">
                 <div class="flex items-center gap-4">
-                    <span class="flex h-11 w-11 items-center justify-center rounded-lg bg-ink-950">
-                        <img src="{{ asset('brand/charmpole-icon.svg') }}" alt="" class="h-7 w-7">
+                    <span class="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-50">
+                        <img src="{{ $account->logoUrl() }}" alt="" class="max-h-7 max-w-7 object-contain">
                     </span>
                     <div>
                         <div class="font-semibold text-slate-950">{{ $account->name }}</div>

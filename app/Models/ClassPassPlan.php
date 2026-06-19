@@ -49,16 +49,28 @@ class ClassPassPlan extends Model
             ->withTimestamps();
     }
 
+    public function trainerTypes(): BelongsToMany
+    {
+        return $this->belongsToMany(TrainerType::class, 'class_pass_plan_trainer_type')
+            ->withTimestamps();
+    }
+
     public function isAvailableFor(ScheduledClass $scheduledClass): bool
     {
         if (! $this->is_active || $scheduledClass->account_id !== $this->account_id) {
             return false;
         }
 
-        $scheduledClass->loadMissing('classType');
+        $scheduledClass->loadMissing(['classType', 'trainer']);
         $activityDirectionId = $scheduledClass->classType?->activity_direction_id;
 
         if (! $activityDirectionId || ! $this->activityDirections()->whereKey($activityDirectionId)->exists()) {
+            return false;
+        }
+
+        $trainerTypeId = $scheduledClass->trainer?->trainer_type_id;
+
+        if (! $trainerTypeId || ! $this->trainerTypes()->whereKey($trainerTypeId)->exists()) {
             return false;
         }
 

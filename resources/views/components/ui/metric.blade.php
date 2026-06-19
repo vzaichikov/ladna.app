@@ -9,12 +9,12 @@
 
 @php
     $accents = [
-        'violet' => 'bg-violet-crm-100 text-violet-crm-700',
+        'violet' => 'bg-violet-crm-100 text-brand-700',
         'brand' => 'bg-brand-100 text-brand-700',
         'emerald' => 'bg-emerald-50 text-emerald-700',
         'slate' => 'bg-slate-100 text-slate-700',
     ];
-    $wrapper = 'group block rounded-xl border border-slate-200 bg-white p-4 shadow-crm transition hover:-translate-y-0.5 hover:border-violet-crm-200 hover:shadow-lg';
+    $wrapper = 'group block rounded-xl border border-stone-200 bg-white p-4 shadow-crm transition hover:-translate-y-0.5 hover:border-violet-crm-100 hover:shadow-lg';
 @endphp
 
 @php ob_start(); @endphp
@@ -32,7 +32,7 @@
             </div>
         </div>
         @if ($href)
-            <x-ui.icon name="chevron-right" class="mt-2 h-4 w-4 text-slate-300 transition group-hover:text-violet-crm-500" />
+            <x-ui.icon name="chevron-right" class="mt-2 h-4 w-4 text-slate-300 transition group-hover:text-brand-500" />
         @endif
     </div>
 @php $content = ob_get_clean(); @endphp

@@ -9,31 +9,38 @@
             <p class="crm-page-copy">{{ __('app.platform_admin') }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
-            <a href="{{ route('platform.integrations.index') }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition hover:border-slate-300 hover:bg-slate-50">{{ __('app.integrations') }}</a>
-            <a href="{{ route('platform.subscription-plans.index') }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition hover:border-slate-300 hover:bg-slate-50">{{ __('app.subscription_plans') }}</a>
-            <a href="{{ route('platform.accounts.index') }}" class="inline-flex items-center justify-center rounded-lg bg-violet-crm-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-crm-700">{{ __('app.accounts') }}</a>
+            <x-ui.button :href="route('platform.integrations.index')" variant="secondary">{{ __('app.integrations') }}</x-ui.button>
+            <x-ui.button :href="route('platform.subscription-plans.index')" variant="secondary">{{ __('app.subscription_plans') }}</x-ui.button>
+            <x-ui.button :href="route('platform.accounts.index')">{{ __('app.accounts') }}</x-ui.button>
         </div>
     </div>
 
     <section class="mt-8 grid gap-4 md:grid-cols-2">
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-crm">
+        <div class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm">
             <div class="text-sm text-slate-500">{{ __('app.accounts') }}</div>
             <div class="mt-2 text-3xl font-semibold">{{ $accountsCount }}</div>
         </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-crm">
+        <div class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm">
             <div class="text-sm text-slate-500">{{ __('app.active') }}</div>
             <div class="mt-2 text-3xl font-semibold">{{ $activeAccountsCount }}</div>
         </div>
     </section>
 
-    <section class="mt-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-crm">
+    <section class="mt-8 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-crm">
         @foreach ($recentAccounts as $account)
-            <a href="{{ route('platform.accounts.show', $account) }}" class="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 last:border-b-0">
+            @php
+                $statusClass = match ($account->status->value) {
+                    'active' => 'crm-status-active',
+                    'trialing' => 'crm-status-scheduled',
+                    default => 'crm-status-muted',
+                };
+            @endphp
+            <a href="{{ route('platform.accounts.show', $account) }}" class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4 last:border-b-0">
                 <div>
                     <div class="font-semibold">{{ $account->name }}</div>
                     <div class="mt-1 text-sm text-slate-500">{{ $account->subscription?->plan?->name ?? __('app.subscription_plan') }}</div>
                 </div>
-                <span class="text-sm font-semibold">{{ __('app.'.$account->status->value) }}</span>
+                <span class="{{ $statusClass }}">{{ __('app.'.$account->status->value) }}</span>
             </a>
         @endforeach
     </section>

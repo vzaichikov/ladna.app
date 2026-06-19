@@ -39,6 +39,23 @@ class ClassPassPlanSeeder extends Seeder
             )->id;
         })->all();
 
+        $trainerTypeIds = collect([
+            ['Trainer', 'user-round', '#3B223F', true, 10],
+            ['TOP-trainer', 'crown', '#D80A7D', false, 20],
+        ])->map(function (array $trainerType) use ($account): int {
+            [$name, $icon, $color, $isDefault, $sortOrder] = $trainerType;
+
+            return $account->trainerTypes()->firstOrCreate(
+                ['name' => $name],
+                [
+                    'icon' => $icon,
+                    'color' => $color,
+                    'is_default' => $isDefault,
+                    'sort_order' => $sortOrder,
+                ],
+            )->id;
+        })->all();
+
         foreach ($this->plans() as $plan) {
             $classPassPlan = ClassPassPlan::updateOrCreate(
                 [
@@ -60,6 +77,7 @@ class ClassPassPlanSeeder extends Seeder
             );
 
             $classPassPlan->activityDirections()->sync($directionIds);
+            $classPassPlan->trainerTypes()->sync($trainerTypeIds);
         }
     }
 

@@ -17,6 +17,28 @@ class CustomerBookingTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_owner_can_view_scheduled_classes_index(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create(['title' => 'Pole Beginner']);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee('Pole Beginner');
+    }
+
     public function test_owner_can_create_customer_book_class_and_mark_attendance(): void
     {
         $owner = User::factory()->create();

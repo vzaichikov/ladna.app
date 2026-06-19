@@ -10,6 +10,8 @@ use App\Models\ClassType;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\Trainer;
+use App\Models\TrainerType;
 use App\Models\User;
 use Database\Seeders\ClassPassPlanSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -40,6 +42,7 @@ class ClassPassPlanTest extends TestCase
         $this->assertNotNull($classPassPlan);
         $this->assertModelExists($classPassPlan);
         $this->assertTrue($classPassPlan->activityDirections()->whereKey($direction)->exists());
+        $this->assertTrue($classPassPlan->trainerTypes()->whereKey($direction->account->defaultTrainerType()?->id)->exists());
     }
 
     public function test_owner_can_update_and_delete_class_pass_plan(): void
@@ -48,8 +51,10 @@ class ClassPassPlanTest extends TestCase
         $account = Account::factory()->create(['default_currency' => 'UAH']);
         $account->addOwner($owner);
         $direction = ActivityDirection::factory()->for($account)->create();
+        $trainerType = $account->ensureDefaultTrainerType();
         $classPassPlan = ClassPassPlan::factory()->for($account)->create(['name' => 'START', 'slug' => 'start']);
         $classPassPlan->activityDirections()->sync([$direction->id]);
+        $classPassPlan->trainerTypes()->sync([$trainerType->id]);
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.class-pass-plans.update', [$account, $classPassPlan]), $this->validPayload($direction, [
@@ -75,14 +80,17 @@ class ClassPassPlanTest extends TestCase
         $account = Account::factory()->create(['default_currency' => 'UAH']);
         $account->addOwner($owner);
         $direction = ActivityDirection::factory()->for($account)->create(['name' => 'Pole Dance']);
+        $trainerType = $account->ensureDefaultTrainerType();
         $classPassPlan = ClassPassPlan::factory()->for($account)->create(['name' => 'START']);
         $classPassPlan->activityDirections()->sync([$direction->id]);
+        $classPassPlan->trainerTypes()->sync([$trainerType->id]);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.class-pass-plans.index', $account))
             ->assertOk()
             ->assertSee('START')
-            ->assertSee('Pole Dance');
+            ->assertSee('Pole Dance')
+            ->assertSee($trainerType->name);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.class-pass-plans.create', $account))
@@ -157,6 +165,10 @@ class ClassPassPlanTest extends TestCase
         $stretchingDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Stretching']);
         $poleType = ClassType::factory()->for($account)->for($poleDirection, 'activityDirection')->create();
         $stretchingType = ClassType::factory()->for($account)->for($stretchingDirection, 'activityDirection')->create();
+        $trainerType = TrainerType::factory()->for($account)->default()->create(['name' => 'Trainer']);
+        $topTrainerType = TrainerType::factory()->for($account)->create(['name' => 'TOP-trainer']);
+        $trainer = Trainer::factory()->for($account)->create(['trainer_type_id' => $trainerType->id]);
+        $topTrainer = Trainer::factory()->for($account)->create(['trainer_type_id' => $topTrainerType->id]);
 
         $fullDay = ClassPassPlan::factory()->for($account)->create([
             'available_from_time' => null,
@@ -164,6 +176,7 @@ class ClassPassPlanTest extends TestCase
             'is_active' => true,
         ]);
         $fullDay->activityDirections()->sync([$poleDirection->id]);
+        $fullDay->trainerTypes()->sync([$trainerType->id]);
 
         $morning = ClassPassPlan::factory()->for($account)->create([
             'available_from_time' => null,
@@ -171,13 +184,15 @@ class ClassPassPlanTest extends TestCase
             'is_active' => true,
         ]);
         $morning->activityDirections()->sync([$poleDirection->id]);
+        $morning->trainerTypes()->sync([$trainerType->id]);
 
-        $this->assertTrue($fullDay->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, '2026-06-18 16:00:00')));
-        $this->assertTrue($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, '2026-06-18 09:00:00')));
-        $this->assertTrue($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, '2026-06-18 11:00:00')));
-        $this->assertFalse($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, '2026-06-18 12:00:00')));
-        $this->assertFalse($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, '2026-06-18 16:00:00')));
-        $this->assertFalse($fullDay->isAvailableFor($this->scheduledClass($account, $location, $room, $stretchingType, '2026-06-18 09:00:00')));
+        $this->assertTrue($fullDay->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, $trainer, '2026-06-18 16:00:00')));
+        $this->assertTrue($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, $trainer, '2026-06-18 09:00:00')));
+        $this->assertTrue($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, $trainer, '2026-06-18 11:00:00')));
+        $this->assertFalse($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, $trainer, '2026-06-18 12:00:00')));
+        $this->assertFalse($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, $trainer, '2026-06-18 16:00:00')));
+        $this->assertFalse($fullDay->isAvailableFor($this->scheduledClass($account, $location, $room, $stretchingType, $trainer, '2026-06-18 09:00:00')));
+        $this->assertFalse($fullDay->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, $topTrainer, '2026-06-18 09:00:00')));
     }
 
     public function test_demo_class_pass_plan_seeder_is_idempotent(): void
@@ -220,6 +235,8 @@ class ClassPassPlanTest extends TestCase
      */
     private function validPayload(ActivityDirection $activityDirection, array $overrides = []): array
     {
+        $trainerType = $activityDirection->account->ensureDefaultTrainerType();
+
         return [
             'name' => 'START',
             'slug' => 'start',
@@ -231,6 +248,7 @@ class ClassPassPlanTest extends TestCase
             'available_from_time' => null,
             'available_until_time' => null,
             'activity_direction_ids' => [$activityDirection->id],
+            'trainer_type_ids' => [$trainerType->id],
             'is_active' => '1',
             'sort_order' => 10,
             ...$overrides,
@@ -242,6 +260,7 @@ class ClassPassPlanTest extends TestCase
         Location $location,
         Room $room,
         ClassType $classType,
+        Trainer $trainer,
         string $startsAt,
     ): ScheduledClass {
         return ScheduledClass::factory()
@@ -249,6 +268,7 @@ class ClassPassPlanTest extends TestCase
             ->for($location)
             ->for($room)
             ->for($classType)
+            ->for($trainer)
             ->create([
                 'starts_at' => Carbon::parse($startsAt),
                 'ends_at' => Carbon::parse($startsAt)->addHour(),
