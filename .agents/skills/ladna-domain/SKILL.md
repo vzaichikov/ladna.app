@@ -1,9 +1,9 @@
 ---
-name: charm-crm-domain
-description: Use for Charm CRM SaaS domain work involving platform/studio/customer roles, account tenancy, access permissions, subscriptions, class passes, schedules, trainers, customers, bookings, Charmpole demo data, or business-process decisions in this Laravel CRM.
+name: ladna-domain
+description: Use for Ladna SaaS domain work involving platform/studio/customer roles, account tenancy, access permissions, subscriptions, class passes, schedules, trainers, customers, bookings, Charmpole demo data, or business-process decisions in this Laravel app.
 ---
 
-# Charm CRM Domain
+# Ladna Domain
 
 ## Workflow
 

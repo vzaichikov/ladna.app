@@ -6,6 +6,7 @@ use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -76,12 +77,15 @@ class AccountController extends Controller
         ]);
     }
 
-    public function edit(Account $account): View
+    public function edit(Request $request, Account $account): View
     {
         $this->authorize('update', $account);
+        $activeTab = $request->query('tab') === 'business' ? 'business' : 'account';
 
         return view('accounts.edit', [
             'account' => $account,
+            'activeTab' => $activeTab,
+            'profileUser' => $request->user(),
         ]);
     }
 

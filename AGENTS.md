@@ -9,7 +9,7 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
-- Local development URL: `local-app-url/`
+- Local development URL: `https://ladna.local/`
 
 - php - 8.4
 - laravel/framework (LARAVEL) - v13
@@ -25,7 +25,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 
 This project has domain-specific skills available in `**/skills/**`. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
 
-- Activate `charm-crm-domain` for Charm CRM business-domain work: SaaS/studio/customer roles, tenancy, permissions, subscriptions, class passes, schedules, trainers, customers, bookings, or Charmpole demo data.
+- Activate `ladna-domain` for Ladna business-domain work: SaaS/studio/customer roles, tenancy, permissions, subscriptions, class passes, schedules, trainers, customers, bookings, or Charmpole demo data.
 
 ## Conventions
 

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Charm CRM Domain"
-  short_description: "Charm CRM roles and tenant rules"
-  default_prompt: "Use $charm-crm-domain before changing CRM roles, tenancy, subscriptions, class passes, schedules, trainers, customers, or demo data."

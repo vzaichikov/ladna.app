@@ -93,7 +93,7 @@
             [
                 'label' => __('app.branding'),
                 'icon' => 'sparkles',
-                'href' => route('dashboard.accounts.edit', $activeAccount),
+                'href' => route('dashboard.accounts.edit', [$activeAccount, 'tab' => 'business']),
                 'active' => request()->routeIs('dashboard.accounts.edit'),
             ],
         ] : []),
@@ -122,7 +122,8 @@
         ],
     ] : [];
 
-    $userInitial = mb_substr(auth()->user()?->name ?? __('app.app_name'), 0, 1);
+    $authUser = auth()->user();
+    $userInitial = mb_substr($authUser?->name ?? __('app.app_name'), 0, 1);
     $systemAppearance = $systemAppearance ?? \App\Support\SystemAppearance::current();
 @endphp
 
@@ -258,10 +259,14 @@
                                 </button>
                             </form>
                             <div class="flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-xs">
-                                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">{{ $userInitial }}</span>
+                                @if ($authUser?->avatarUrl())
+                                    <img src="{{ $authUser->avatarUrl() }}" alt="" class="h-8 w-8 rounded-full object-cover">
+                                @else
+                                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">{{ $userInitial }}</span>
+                                @endif
                                 <div class="hidden text-sm sm:block">
-                                    <div class="font-semibold text-slate-950">{{ auth()->user()?->name }}</div>
-                                    <div class="text-xs text-slate-500">{{ auth()->user()?->isPlatformAdmin() ? __('app.platform_admin') : __('app.owner') }}</div>
+                                    <div class="font-semibold text-slate-950">{{ $authUser?->name }}</div>
+                                    <div class="text-xs text-slate-500">{{ $authUser?->isPlatformAdmin() ? __('app.platform_admin') : __('app.owner') }}</div>
                                 </div>
                             </div>
                         </div>

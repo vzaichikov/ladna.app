@@ -7,6 +7,7 @@ use App\Models\Location;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -86,6 +87,46 @@ class AccountTenancyTest extends TestCase
 
         $this->assertNotNull($account->logo_path);
         Storage::disk('public')->assertExists($account->logo_path);
+    }
+
+    public function test_studio_owner_can_update_own_account_profile_from_account_edit(): void
+    {
+        Storage::fake('public');
+
+        $owner = User::factory()->create([
+            'name' => 'Old Owner',
+            'email' => 'old-owner@example.com',
+            'phone' => null,
+        ]);
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.edit', [$account, 'tab' => 'account']))
+            ->assertOk()
+            ->assertSee('Мій аккаунт')
+            ->assertSee('Мій бізнес')
+            ->assertSee('old-owner@example.com');
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.owner-profile.update', $account), [
+                'name' => 'Настя Owner',
+                'email' => 'nastya-owner-updated@example.com',
+                'phone' => '+380501234567',
+                'password' => 'new-password',
+                'password_confirmation' => 'new-password',
+                'avatar' => UploadedFile::fake()->image('avatar.png', 256, 256),
+            ])
+            ->assertRedirect(route('dashboard.accounts.edit', [$account, 'tab' => 'account']));
+
+        $owner->refresh();
+
+        $this->assertSame('Настя Owner', $owner->name);
+        $this->assertSame('nastya-owner-updated@example.com', $owner->email);
+        $this->assertSame('+380501234567', $owner->phone);
+        $this->assertTrue(Hash::check('new-password', $owner->password));
+        $this->assertNotNull($owner->avatar_path);
+        Storage::disk('public')->assertExists($owner->avatar_path);
     }
 
     public function test_locations_are_scoped_to_their_parent_account(): void

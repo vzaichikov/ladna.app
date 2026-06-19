@@ -1,11 +1,11 @@
-# Charm CRM SaaS Structure
+# Ladna SaaS Structure
 
 ## Core Account Levels
 
-- Platform owner: CRM product owner and super admin. In code, this is `User.system_role = platform_admin`. Platform admins manage SaaS customer accounts and `SubscriptionPlan` records.
-- Studio owner: SaaS customer who pays for CRM access. In code, this is an `AccountMembership` with role `owner` for a specific `Account`. Studio owners manage only their own studio account.
-- Studio staff: CRM users working inside one studio account. In code, these are `AccountRole` values `admin`, `manager`, `trainer`, and `receptionist`, controlled by `StudioPermission`.
-- Studio customer: person attending classes. In code, this is `Customer`, scoped to one `Account`, and separate from CRM `User`.
+- Platform owner: Ladna product owner and super admin. In code, this is `User.system_role = platform_admin`. Platform admins manage SaaS customer accounts and `SubscriptionPlan` records.
+- Studio owner: SaaS customer who pays for Ladna access. In code, this is an `AccountMembership` with role `owner` for a specific `Account`. Studio owners manage only their own studio account.
+- Studio staff: Ladna users working inside one studio account. In code, these are `AccountRole` values `admin`, `manager`, `trainer`, and `receptionist`, controlled by `StudioPermission`.
+- Studio customer: person attending classes. In code, this is `Customer`, scoped to one `Account`, and separate from Ladna `User`.
 
 ## Tenant Model
 
@@ -13,7 +13,7 @@
 - `Location` belongs to an account and represents a studio/location.
 - `Room` belongs to an account and location.
 - `ActivityDirection`, `ClassType`, `ScheduleSeries`, `ScheduledClass`, and `ClassBooking` belong to the account.
-- `Trainer` belongs to the account and may optionally link to a CRM `User` through staff login.
+- `Trainer` belongs to the account and may optionally link to a Ladna `User` through staff login.
 - Studio customer data must not cross accounts.
 
 ## Access Rules

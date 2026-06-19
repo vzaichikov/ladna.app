@@ -13,8 +13,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'email', 'password', 'system_role'])]
+#[Fillable(['name', 'email', 'phone', 'avatar_path', 'password', 'system_role'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -38,6 +39,15 @@ class User extends Authenticatable
     public function isPlatformAdmin(): bool
     {
         return $this->system_role === SystemRole::PlatformAdmin;
+    }
+
+    public function avatarUrl(): ?string
+    {
+        if (! $this->avatar_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->avatar_path);
     }
 
     public function accountMemberships(): HasMany
