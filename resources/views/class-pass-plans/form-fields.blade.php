@@ -16,6 +16,22 @@
 
     $selectedActivityDirectionIds = collect($selectedActivityDirectionIds)->map(fn ($id) => (int) $id)->all();
     $selectedTrainerTypeIds = collect($selectedTrainerTypeIds)->map(fn ($id) => (int) $id)->all();
+    $formatMoneyInput = static function (?int $priceCents): string {
+        if ($priceCents === null) {
+            return '';
+        }
+
+        $whole = intdiv($priceCents, 100);
+        $fraction = $priceCents % 100;
+
+        return $fraction === 0
+            ? (string) $whole
+            : number_format($priceCents / 100, 2, '.', '');
+    };
+    $selectedCurrency = old('currency', $classPassPlan->currency);
+    $price = old('price', $formatMoneyInput($classPassPlan->price_cents ?? 0));
+    $allowsAnyTime = (bool) old('allows_any_time', $classPassPlan->allows_any_time ?? false);
+    $anyTimeAddonPrice = old('any_time_addon_price', $formatMoneyInput($classPassPlan->any_time_addon_price_cents));
     $availableFromTime = old('available_from_time', $classPassPlan->available_from_time ? substr((string) $classPassPlan->available_from_time, 0, 5) : null);
     $availableUntilTime = old('available_until_time', $classPassPlan->available_until_time ? substr((string) $classPassPlan->available_until_time, 0, 5) : null);
 @endphp
@@ -62,16 +78,15 @@
 
 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
     <label class="block">
-        <span class="crm-label">{{ __('app.price_cents') }}</span>
-        <input name="price_cents" type="number" min="0" value="{{ old('price_cents', $classPassPlan->price_cents ?? 0) }}" required class="crm-field">
-        <span class="mt-1 block text-xs font-medium text-slate-500">{{ __('app.price_cents_hint') }}</span>
-        @error('price_cents') <span class="crm-help">{{ $message }}</span> @enderror
+        <span class="crm-label">{{ __('app.price') }}</span>
+        <input name="price" type="number" min="0" step="0.01" value="{{ $price }}" required class="crm-field">
+        @error('price') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="block">
         <span class="crm-label">{{ __('app.currency') }}</span>
-        <select name="currency" class="crm-field">
+        <select name="currency" class="crm-field" data-class-pass-currency>
             @foreach ($currencies as $currency)
-                <option value="{{ $currency }}" @selected(old('currency', $classPassPlan->currency) === $currency)>{{ $currency }}</option>
+                <option value="{{ $currency }}" @selected($selectedCurrency === $currency)>{{ $currency }}</option>
             @endforeach
         </select>
         @error('currency') <span class="crm-help">{{ $message }}</span> @enderror
@@ -86,6 +101,24 @@
         <input name="validity_days" type="number" min="1" value="{{ old('validity_days', $classPassPlan->validity_days ?? 30) }}" required class="crm-field">
         @error('validity_days') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
+</div>
+
+<div class="grid gap-4 sm:grid-cols-2" data-any-time-addon>
+    <label class="flex items-center gap-3 text-sm font-medium text-slate-700">
+        <input type="hidden" name="allows_any_time" value="0">
+        <input name="allows_any_time" type="checkbox" value="1" @checked($allowsAnyTime) class="crm-checkbox" data-any-time-toggle>
+        {{ __('app.allows_any_time') }}
+    </label>
+    <label class="{{ $allowsAnyTime ? 'block' : 'hidden' }}" data-any-time-addon-fields>
+        <span class="crm-label">{{ __('app.any_time_addon_price') }}</span>
+        <span class="mt-2 flex items-center gap-2">
+            <span class="text-base font-semibold text-slate-500">+</span>
+            <input name="any_time_addon_price" type="number" min="0" step="0.01" value="{{ $anyTimeAddonPrice }}" class="crm-field mt-0" data-any-time-addon-price @required($allowsAnyTime)>
+            <span class="min-w-12 text-sm font-semibold text-slate-600" data-any-time-currency>{{ $selectedCurrency }}</span>
+        </span>
+        @error('any_time_addon_price') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+    @error('allows_any_time') <span class="crm-help">{{ $message }}</span> @enderror
 </div>
 
 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

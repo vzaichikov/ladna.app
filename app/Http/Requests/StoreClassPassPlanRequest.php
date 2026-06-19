@@ -13,6 +13,13 @@ use Illuminate\Validation\Validator;
 
 class StoreClassPassPlanRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (! $this->boolean('allows_any_time')) {
+            $this->merge(['any_time_addon_price' => null]);
+        }
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -41,12 +48,21 @@ class StoreClassPassPlanRequest extends FormRequest
                 Rule::unique((new ClassPassPlan)->getTable(), 'slug')->where('account_id', $account?->id),
             ],
             'description' => ['nullable', 'string', 'max:2000'],
-            'price_cents' => ['required', 'integer', 'min:0', 'max:99999999'],
+            'price' => ['required', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'currency' => ['required', Rule::in(config('charm.currencies'))],
             'sessions_count' => ['required', 'integer', 'min:1', 'max:999'],
             'validity_days' => ['required', 'integer', 'min:1', 'max:3650'],
             'available_from_time' => ['nullable', 'date_format:H:i'],
             'available_until_time' => ['nullable', 'date_format:H:i'],
+            'allows_any_time' => ['nullable', 'boolean'],
+            'any_time_addon_price' => [
+                Rule::requiredIf($this->boolean('allows_any_time')),
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:999999.99',
+                'regex:/^\d+(\.\d{1,2})?$/',
+            ],
             'activity_direction_ids' => ['required', 'array', 'min:1'],
             'activity_direction_ids.*' => [
                 'integer',

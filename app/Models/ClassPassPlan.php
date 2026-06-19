@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-#[Fillable(['account_id', 'name', 'slug', 'description', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'available_from_time', 'available_until_time', 'is_active', 'sort_order'])]
+#[Fillable(['account_id', 'name', 'slug', 'description', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'is_active', 'sort_order'])]
 class ClassPassPlan extends Model
 {
     /** @use HasFactory<ClassPassPlanFactory> */
@@ -19,6 +19,7 @@ class ClassPassPlan extends Model
     protected $attributes = [
         'currency' => 'UAH',
         'validity_days' => 30,
+        'allows_any_time' => false,
         'is_active' => true,
         'sort_order' => 0,
     ];
@@ -29,6 +30,7 @@ class ClassPassPlan extends Model
     protected function casts(): array
     {
         return [
+            'allows_any_time' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

@@ -44,7 +44,7 @@ class ClassPassPlanController extends Controller
 
     public function store(StoreClassPassPlanRequest $request, Account $account): RedirectResponse
     {
-        $validated = $request->validated();
+        $validated = $this->withPricingAttributes($request->validated(), $request->boolean('allows_any_time'));
         $validated['slug'] = $this->uniqueSlug($account, ($validated['slug'] ?? null) ?: $validated['name']);
         $validated['is_active'] = $request->boolean('is_active', true);
 
@@ -78,7 +78,7 @@ class ClassPassPlanController extends Controller
     {
         $this->ensureBelongsToAccount($account, $classPassPlan);
 
-        $validated = $request->validated();
+        $validated = $this->withPricingAttributes($request->validated(), $request->boolean('allows_any_time'));
         $validated['slug'] = $this->uniqueSlug($account, ($validated['slug'] ?? null) ?: $validated['name'], $classPassPlan);
         $validated['is_active'] = $request->boolean('is_active');
 
@@ -144,9 +144,34 @@ class ClassPassPlanController extends Controller
             'validity_days',
             'available_from_time',
             'available_until_time',
+            'allows_any_time',
+            'any_time_addon_price_cents',
             'is_active',
             'sort_order',
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function withPricingAttributes(array $validated, bool $allowsAnyTime): array
+    {
+        $validated['price_cents'] = $this->moneyToCents($validated['price']);
+        $validated['allows_any_time'] = $allowsAnyTime;
+        $validated['any_time_addon_price_cents'] = $allowsAnyTime
+            ? $this->moneyToCents($validated['any_time_addon_price'])
+            : null;
+
+        return $validated;
+    }
+
+    private function moneyToCents(mixed $amount): int
+    {
+        $amount = trim((string) $amount);
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '');
+
+        return ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
     }
 
     /**

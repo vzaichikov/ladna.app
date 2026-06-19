@@ -32,6 +32,8 @@ class ClassPassPlanFactory extends Factory
             'validity_days' => 30,
             'available_from_time' => null,
             'available_until_time' => null,
+            'allows_any_time' => false,
+            'any_time_addon_price_cents' => null,
             'is_active' => true,
             'sort_order' => 0,
         ];

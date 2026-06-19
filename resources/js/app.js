@@ -8,6 +8,34 @@ function closeDeleteConfirmation(modal) {
     pendingDeleteForm = null;
 }
 
+function updateAnyTimeAddon(container) {
+    const toggle = container?.querySelector('[data-any-time-toggle]');
+    const fields = container?.querySelector('[data-any-time-addon-fields]');
+    const priceInput = container?.querySelector('[data-any-time-addon-price]');
+
+    if (!toggle || !fields) {
+        return;
+    }
+
+    fields.classList.toggle('hidden', !toggle.checked);
+
+    if (priceInput) {
+        priceInput.required = toggle.checked;
+    }
+}
+
+function updateAnyTimeCurrencies(form) {
+    const currency = form?.querySelector('[data-class-pass-currency]');
+
+    if (!currency) {
+        return;
+    }
+
+    form.querySelectorAll('[data-any-time-currency]').forEach((label) => {
+        label.textContent = currency.value;
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
 
@@ -38,6 +66,11 @@ document.addEventListener('DOMContentLoaded', () => {
     closeSidebarButton?.addEventListener('click', closeSidebar);
     sidebarBackdrop?.addEventListener('click', closeSidebar);
 
+    document.querySelectorAll('[data-any-time-addon]').forEach((container) => {
+        updateAnyTimeAddon(container);
+        updateAnyTimeCurrencies(container.closest('form'));
+    });
+
     document.addEventListener('click', (event) => {
         const selectAllButton = event.target.closest('[data-select-all-directions]');
 
@@ -62,6 +95,20 @@ document.addEventListener('DOMContentLoaded', () => {
         group?.querySelectorAll('[data-trainer-type-checkbox]').forEach((checkbox) => {
             checkbox.checked = true;
         });
+    });
+
+    document.addEventListener('change', (event) => {
+        const anyTimeToggle = event.target.closest('[data-any-time-toggle]');
+
+        if (anyTimeToggle) {
+            updateAnyTimeAddon(anyTimeToggle.closest('[data-any-time-addon]'));
+        }
+
+        const currencySelect = event.target.closest('[data-class-pass-currency]');
+
+        if (currencySelect) {
+            updateAnyTimeCurrencies(currencySelect.closest('form'));
+        }
     });
 
     const modal = document.getElementById('delete-confirmation-modal');
