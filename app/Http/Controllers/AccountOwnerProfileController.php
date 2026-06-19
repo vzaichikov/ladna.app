@@ -2,33 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\UpdateUserProfile;
 use App\Http\Requests\UpdateAccountOwnerProfileRequest;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Storage;
 
 class AccountOwnerProfileController extends Controller
 {
-    public function update(UpdateAccountOwnerProfileRequest $request, Account $account): RedirectResponse
+    public function update(UpdateAccountOwnerProfileRequest $request, Account $account, UpdateUserProfile $updateUserProfile): RedirectResponse
     {
-        $validated = $request->validated();
-        $user = $request->user();
-
-        $user->fill(collect($validated)->except(['avatar', 'password', 'password_confirmation'])->all());
-
-        if (filled($validated['password'] ?? null)) {
-            $user->password = $validated['password'];
-        }
-
-        if ($request->hasFile('avatar')) {
-            if ($user->avatar_path) {
-                Storage::disk('public')->delete($user->avatar_path);
-            }
-
-            $user->avatar_path = $request->file('avatar')->store('user-avatars/'.$user->id, 'public');
-        }
-
-        $user->save();
+        $updateUserProfile->execute($request->user(), $request->validated(), $request->file('avatar'));
 
         return redirect()
             ->route('dashboard.accounts.edit', [$account, 'tab' => 'account'])
