@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\AccountRole;
 use App\Enums\StudioPermission;
 use App\Models\Trainer;
+use App\Models\TrainerType;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,6 +40,11 @@ class StoreTrainerRequest extends FormRequest
                 Rule::unique((new Trainer)->getTable(), 'slug')->where('account_id', $account?->id),
             ],
             'email' => ['nullable', 'email', 'max:255'],
+            'trainer_type_id' => [
+                'required',
+                'integer',
+                Rule::exists((new TrainerType)->getTable(), 'id')->where('account_id', $account?->id),
+            ],
             'phone' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:2000'],
             'photo' => ['nullable', File::image()->max('4mb')],
@@ -56,15 +61,6 @@ class StoreTrainerRequest extends FormRequest
                 Rule::requiredIf($this->boolean('create_login')),
                 'nullable',
                 Password::defaults(),
-            ],
-            'role' => [
-                Rule::requiredIf($this->boolean('create_login')),
-                Rule::in([
-                    AccountRole::Admin->value,
-                    AccountRole::Manager->value,
-                    AccountRole::Trainer->value,
-                    AccountRole::Receptionist->value,
-                ]),
             ],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => [Rule::in(array_map(fn (StudioPermission $permission): string => $permission->value, StudioPermission::cases()))],

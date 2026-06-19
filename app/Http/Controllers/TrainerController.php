@@ -23,17 +23,24 @@ class TrainerController extends Controller
 
         return view('trainers.index', [
             'account' => $account,
-            'trainers' => $account->trainers()->orderBy('name')->get(),
+            'trainers' => $account->trainers()
+                ->with('trainerType')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
     public function create(Account $account): View
     {
         $this->authorize('manageTrainers', $account);
+        $defaultTrainerType = $account->ensureDefaultTrainerType();
 
         return view('trainers.create', [
             'account' => $account,
-            'trainer' => new Trainer(['is_active' => true]),
+            'trainer' => new Trainer([
+                'trainer_type_id' => $defaultTrainerType->id,
+                'is_active' => true,
+            ]),
             ...$this->staffFormData($account),
         ]);
     }
@@ -64,7 +71,8 @@ class TrainerController extends Controller
     {
         $this->ensureBelongsToAccount($account, $trainer);
         $this->authorize('manageTrainers', $account);
-        $trainer->loadMissing('user');
+        $account->ensureDefaultTrainerType();
+        $trainer->loadMissing(['user', 'trainerType']);
 
         return view('trainers.edit', [
             'account' => $account,
@@ -149,6 +157,7 @@ class TrainerController extends Controller
             'email',
             'phone',
             'bio',
+            'trainer_type_id',
             'photo_path',
             'is_active',
         ]);
@@ -182,13 +191,12 @@ class TrainerController extends Controller
 
         $user->save();
 
-        $role = $validated['role'] ?? AccountRole::Trainer->value;
         $permissions = array_values($validated['permissions'] ?? []);
 
         $account->memberships()->updateOrCreate(
             ['user_id' => $user->id],
             [
-                'role' => $role,
+                'role' => AccountRole::Trainer->value,
                 'permissions' => $permissions,
             ],
         );
@@ -211,15 +219,9 @@ class TrainerController extends Controller
         );
 
         return [
-            'accountRoles' => [
-                AccountRole::Admin,
-                AccountRole::Manager,
-                AccountRole::Trainer,
-                AccountRole::Receptionist,
-            ],
             'studioPermissions' => StudioPermission::cases(),
-            'selectedRole' => $role,
             'selectedPermissions' => $selectedPermissions,
+            'trainerTypes' => $account->trainerTypes()->ordered()->get(),
         ];
     }
 }

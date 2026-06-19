@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 190 225">
+  <defs>
+    <linearGradient id="g-dark" x1="29" y1="29" x2="70" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B223F"/>
+      <stop offset="0.55" stop-color="#38203D"/>
+      <stop offset="1" stop-color="#2B1731"/>
+    </linearGradient>
+    <linearGradient id="g-lavender" x1="74" y1="107" x2="156" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A78AB9"/>
+      <stop offset="0.55" stop-color="#B79CCA"/>
+      <stop offset="1" stop-color="#C7B4D3"/>
+    </linearGradient>
+    <linearGradient id="g-bottom" x1="29" y1="122" x2="156" y2="194" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E7DDC9"/>
+      <stop offset="0.42" stop-color="#DCCDD0"/>
+      <stop offset="0.72" stop-color="#C6ADD0"/>
+      <stop offset="1" stop-color="#A78AB9"/>
+    </linearGradient>
+  </defs>
+
+  <path fill="url(#g-dark)"
+        d="M29 29
+           C50 29 68 45 68 64
+           L68 140
+           C58 139 48 134 39 125
+           C33 119 29 107 29 96
+           Z"/>
+
+  <path fill="url(#g-lavender)"
+        d="M74 107
+           L119 107
+           C139 107 153 123 156 144
+           L93 144
+           C83 144 74 136 74 126
+           Z"/>
+
+  <path fill="url(#g-bottom)"
+        d="M29 122
+           C32 138 45 149 62 149
+           L115 149
+           C137 149 154 166 156 194
+           L76 194
+           C50 194 30 174 29 141
+           Z"/>
+</svg>

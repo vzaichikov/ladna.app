@@ -1,5 +1,5 @@
 <label class="block">
-    <span class="crm-label">{{ __('app.locations') }}</span>
+    <span class="crm-label">{{ __('app.location') }}</span>
     <select name="location_id" required class="crm-field">
         @foreach ($locations as $location)
             <option value="{{ $location->id }}" @selected((int) old('location_id', $room->location_id) === $location->id)>{{ $location->name }}</option>

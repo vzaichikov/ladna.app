@@ -6,8 +6,8 @@
     <x-ui.panel padding="lg">
         <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div class="flex items-center gap-4">
-                <span class="flex h-16 w-16 items-center justify-center rounded-xl bg-ink-950">
-                    <img src="{{ asset('brand/charmpole-icon.svg') }}" alt="" class="h-11 w-11">
+                <span class="flex h-16 w-16 items-center justify-center rounded-xl bg-brand-50">
+                    <img src="{{ $account->logoUrl() }}" alt="" class="max-h-11 max-w-11 object-contain">
                 </span>
                 <div>
                     <div class="crm-page-kicker">{{ __('app.platform') }}</div>

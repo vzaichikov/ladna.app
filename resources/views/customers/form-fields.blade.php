@@ -1,5 +1,5 @@
 <label class="block">
-    <span class="crm-label">{{ __('app.name') }}</span>
+    <span class="crm-label">{{ __('app.person_name') }}</span>
     <input name="name" value="{{ old('name', $customer->name) }}" required class="crm-field">
     @error('name') <span class="crm-help">{{ $message }}</span> @enderror
 </label>

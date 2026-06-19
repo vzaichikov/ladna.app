@@ -1,3 +1,5 @@
+import { createIcons, icons } from 'lucide';
+
 let pendingDeleteForm = null;
 
 function closeDeleteConfirmation(modal) {
@@ -7,6 +9,8 @@ function closeDeleteConfirmation(modal) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    createIcons({ icons });
+
     const sidebar = document.querySelector('[data-sidebar]');
     const sidebarBackdrop = document.querySelector('[data-sidebar-backdrop]');
     const openSidebarButton = document.querySelector('[data-sidebar-open]');
@@ -43,6 +47,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const group = selectAllButton.closest('[data-activity-direction-group]');
         group?.querySelectorAll('[data-activity-direction-checkbox]').forEach((checkbox) => {
+            checkbox.checked = true;
+        });
+    });
+
+    document.addEventListener('click', (event) => {
+        const selectAllButton = event.target.closest('[data-select-all-trainer-types]');
+
+        if (!selectAllButton) {
+            return;
+        }
+
+        const group = selectAllButton.closest('[data-trainer-type-group]');
+        group?.querySelectorAll('[data-trainer-type-checkbox]').forEach((checkbox) => {
             checkbox.checked = true;
         });
     });

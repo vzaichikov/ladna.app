@@ -6,19 +6,16 @@
     <main class="min-h-screen bg-canvas text-slate-950">
         <section class="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-12 px-5 py-10 sm:px-8 lg:grid lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div class="space-y-7">
-                <a href="{{ route('home') }}" class="inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-xs">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-950">
-                        <img src="{{ asset('brand/charmpole-icon.svg') }}" alt="" class="h-7 w-7">
-                    </span>
-                    {{ __('app.app_name') }}
+                <a href="{{ route('home') }}" class="inline-flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-xs">
+                    <x-ui.app-logo mark-class="h-9 w-9" />
                 </a>
 
                 <div class="space-y-5">
                     <h1 class="max-w-2xl text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">
-                        Studio operations, schedules, and customer access in one tenant-safe CRM.
+                        {{ __('app.app_tagline') }}
                     </h1>
                     <p class="max-w-xl text-lg leading-8 text-slate-500">
-                        A SaaS-ready foundation for pole dance and fitness studios with clean account separation from day one.
+                        {{ __('app.auth_intro') }}
                     </p>
                 </div>
 

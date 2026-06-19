@@ -7,7 +7,7 @@
         <div>
             <div class="crm-page-kicker">{{ __('app.workspace') }}</div>
             <h1 class="crm-page-title">{{ __('app.dashboard') }}</h1>
-            <p class="crm-page-copy">Tenant access follows account membership.</p>
+            <p class="crm-page-copy">{{ __('app.accounts_copy') }}</p>
         </div>
         @can('create', \App\Models\Account::class)
             <x-ui.button :href="route('dashboard.accounts.create')">
@@ -25,18 +25,18 @@
 
     <section class="mt-6 grid gap-4 xl:grid-cols-2">
         @forelse ($accounts as $account)
-            <a href="{{ route('dashboard.accounts.show', $account) }}" class="group rounded-xl border border-slate-200 bg-white p-5 shadow-crm transition hover:-translate-y-0.5 hover:border-violet-crm-200 hover:shadow-lg">
+            <a href="{{ route('dashboard.accounts.show', $account) }}" class="group rounded-xl border border-stone-200 bg-white p-5 shadow-crm transition hover:-translate-y-0.5 hover:border-violet-crm-100 hover:shadow-lg">
                 <div class="flex items-start justify-between gap-4">
                     <div class="flex items-center gap-4">
-                        <span class="flex h-14 w-14 items-center justify-center rounded-xl bg-ink-950 ring-1 ring-slate-200">
-                            <img src="{{ asset('brand/charmpole-icon.svg') }}" alt="" class="h-9 w-9">
+                        <span class="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-50 ring-1 ring-stone-200">
+                            <img src="{{ $account->logoUrl() }}" alt="" class="max-h-9 max-w-9 object-contain">
                         </span>
                         <div>
                             <h2 class="text-xl font-semibold text-slate-950">{{ $account->name }}</h2>
                             <p class="mt-1 text-sm text-slate-500">{{ $account->slug }}</p>
                         </div>
                     </div>
-                    <x-ui.icon name="chevron-right" class="mt-4 h-4 w-4 text-slate-300 transition group-hover:text-violet-crm-500" />
+                    <x-ui.icon name="chevron-right" class="mt-4 h-4 w-4 text-slate-300 transition group-hover:text-brand-500" />
                 </div>
                 <dl class="mt-6 grid grid-cols-2 gap-3 text-sm">
                     <div class="rounded-lg bg-slate-50 p-3">

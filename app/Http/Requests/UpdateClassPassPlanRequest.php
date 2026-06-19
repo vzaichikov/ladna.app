@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\Account;
 use App\Models\ActivityDirection;
 use App\Models\ClassPassPlan;
+use App\Models\TrainerType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -51,6 +52,11 @@ class UpdateClassPassPlanRequest extends FormRequest
             'activity_direction_ids.*' => [
                 'integer',
                 Rule::exists((new ActivityDirection)->getTable(), 'id')->where('account_id', $account?->id),
+            ],
+            'trainer_type_ids' => ['required', 'array', 'min:1'],
+            'trainer_type_ids.*' => [
+                'integer',
+                Rule::exists((new TrainerType)->getTable(), 'id')->where('account_id', $account?->id),
             ],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:32767'],

@@ -18,7 +18,7 @@
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.color') }}</span>
-        <input name="color" value="{{ old('color', $activityDirection->color) }}" placeholder="#e11d48" class="crm-field">
+        <input name="color" value="{{ old('color', $activityDirection->color) }}" placeholder="#A78AB9" class="crm-field">
         @error('color') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="flex items-center gap-3 pt-8 text-sm font-medium text-slate-700">

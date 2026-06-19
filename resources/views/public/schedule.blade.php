@@ -7,14 +7,11 @@
         <section class="mx-auto max-w-6xl px-5 sm:px-8 {{ $isEmbed ? 'py-5' : 'py-10' }}">
             @unless ($isEmbed)
                 <a href="{{ route('home') }}" class="inline-flex items-center gap-3 text-sm font-semibold text-slate-600 hover:text-slate-950">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-950">
-                        <img src="{{ asset('brand/charmpole-icon.svg') }}" alt="" class="h-7 w-7">
-                    </span>
-                    {{ __('app.app_name') }}
+                    <x-ui.app-logo mark-class="h-9 w-9" />
                 </a>
             @endunless
 
-            <header class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-crm">
+            <header class="mt-6 rounded-2xl border border-stone-200 bg-white p-6 shadow-crm">
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <div class="text-sm font-semibold uppercase text-brand-600">{{ $account->name }}</div>

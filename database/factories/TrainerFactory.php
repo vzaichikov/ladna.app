@@ -24,6 +24,7 @@ class TrainerFactory extends Factory
         return [
             'account_id' => Account::factory(),
             'user_id' => null,
+            'trainer_type_id' => null,
             'name' => $name,
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 9999),
             'email' => fake()->safeEmail(),

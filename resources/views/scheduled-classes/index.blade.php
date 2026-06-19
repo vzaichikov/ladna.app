@@ -6,12 +6,12 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.generated_classes') }}</h1>
-            <p class="crm-page-copy">{{ $account->name }}</p>
+            <p class="crm-page-copy">{{ __('app.generated_classes_copy') }}</p>
         </div>
-        <a href="{{ route('dashboard.accounts.schedule-series.index', $account) }}" class="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition hover:border-slate-300 hover:bg-slate-50">{{ __('app.schedule_series') }}</a>
+        <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
     </div>
 
-    <div class="mt-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-crm">
+    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($scheduledClasses as $scheduledClass)
             @php
                 $timezone = $scheduledClass->displayTimezone();
@@ -26,7 +26,7 @@
                     <div class="text-sm text-slate-500">{{ $startsAt->format('Y-m-d H:i') }}</div>
                     <div class="text-sm text-slate-500">{{ $scheduledClass->location->name }} · {{ $scheduledClass->room?->name ?? __('app.room') }}</div>
                     <div class="text-sm text-slate-500">{{ $scheduledClass->trainer?->name ?? 'TBA' }}</div>
-                    <span class="text-sm font-semibold">{{ $scheduledClass->durationMinutes() }} {{ __('app.minutes') }}</span>
+                    <span class="{{ $scheduledClass->status->value === 'cancelled' ? 'crm-status-danger' : ($scheduledClass->status->value === 'draft' ? 'crm-status-muted' : 'crm-status-scheduled') }}">{{ __('app.'.$scheduledClass->status->value) }}</span>
                 </div>
 
                 @can('manageBookings', $account)
@@ -38,19 +38,26 @@
                             @endforeach
                         </select>
                         <input name="notes" class="crm-field" placeholder="{{ __('app.notes') }}">
-                        <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-violet-crm-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-crm-700" @disabled($customers->isEmpty())>{{ __('app.add_booking') }}</button>
+                        <x-ui.button type="submit" :disabled="$customers->isEmpty()">{{ __('app.add_booking') }}</x-ui.button>
                     </form>
                 @endcan
 
                 @if ($scheduledClass->classBookings->isNotEmpty())
                     <div class="mt-4 space-y-2">
                         @foreach ($scheduledClass->classBookings as $booking)
+                            @php
+                                $bookingStatusClass = match ($booking->status->value) {
+                                    'attended' => 'crm-status-active',
+                                    'cancelled', 'no_show' => 'crm-status-danger',
+                                    default => 'crm-status-scheduled',
+                                };
+                            @endphp
                             <div class="grid gap-3 rounded-lg border border-slate-200 p-3 text-sm lg:grid-cols-[1fr_180px_auto] lg:items-center">
                                 <div>
                                     <div class="font-semibold text-slate-950">{{ $booking->customer->name }}</div>
                                     <div class="text-slate-500">{{ $booking->customer->phone ?? $booking->customer->email ?? __('app.no_contact') }}</div>
                                 </div>
-                                <span class="font-semibold text-slate-600">{{ __('app.'.$booking->status->value) }}</span>
+                                <span class="{{ $bookingStatusClass }}">{{ __('app.'.$booking->status->value) }}</span>
                                 <div class="flex flex-wrap gap-2 lg:justify-end">
                                     @can('markAttendance', $account)
                                         <form method="POST" action="{{ route('dashboard.accounts.bookings.update', [$account, $booking]) }}" class="flex gap-2">
@@ -61,14 +68,14 @@
                                                     <option value="{{ $status->value }}" @selected($booking->status === $status)>{{ __('app.'.$status->value) }}</option>
                                                 @endforeach
                                             </select>
-                                            <button type="submit" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50">{{ __('app.save') }}</button>
+                                            <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.save') }}</x-ui.button>
                                         </form>
                                     @endcan
                                     @can('manageBookings', $account)
                                         <form method="POST" action="{{ route('dashboard.accounts.bookings.destroy', [$account, $booking]) }}" data-confirm-delete>
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">{{ __('app.delete') }}</button>
+                                            <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
                                         </form>
                                     @endcan
                                 </div>
@@ -78,7 +85,7 @@
                 @endif
             </div>
         @empty
-            <div class="p-8 text-center text-slate-500">{{ __('app.no_public_classes') }}</div>
+            <x-ui.empty-state :title="__('app.no_public_classes')" icon="calendar" class="m-5" />
         @endforelse
-    </div>
+    </x-ui.panel>
 @endsection

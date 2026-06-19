@@ -11,6 +11,6 @@
     ];
 @endphp
 
-<section {{ $attributes->merge(['class' => 'rounded-xl border border-slate-200 bg-white shadow-crm '.($paddings[$padding] ?? $paddings['md'])]) }}>
+<section {{ $attributes->merge(['class' => 'rounded-xl border border-stone-200 bg-white shadow-crm '.($paddings[$padding] ?? $paddings['md'])]) }}>
     {{ $slot }}
 </section>

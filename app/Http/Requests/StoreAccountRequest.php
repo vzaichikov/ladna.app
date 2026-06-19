@@ -6,6 +6,7 @@ use App\Models\Account;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 
 class StoreAccountRequest extends FormRequest
 {
@@ -30,6 +31,7 @@ class StoreAccountRequest extends FormRequest
             'default_language' => ['required', Rule::in(['uk', 'en'])],
             'default_currency' => ['required', Rule::in(['UAH', 'USD', 'EUR'])],
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
             'timezone' => ['nullable', 'timezone'],
         ];
     }

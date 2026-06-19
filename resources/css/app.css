@@ -6,23 +6,23 @@
 @source '../../storage/framework/views/*.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --font-sans: var(--app-font-family, 'Manrope'), ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
-    --color-brand-50: #fdf2f8;
-    --color-brand-100: #fce7f3;
-    --color-brand-500: #e91e63;
-    --color-brand-600: #d81b60;
-    --color-brand-700: #be185d;
-    --color-violet-crm-50: #f5f3ff;
-    --color-violet-crm-100: #ede9fe;
-    --color-violet-crm-500: #7c3aed;
-    --color-violet-crm-600: #6d28d9;
-    --color-violet-crm-700: #5b21b6;
-    --color-ink-950: #050a18;
-    --color-ink-900: #0b1220;
-    --color-ink-800: #111827;
-    --color-canvas: #f7f8fb;
-    --shadow-crm: 0 12px 40px rgb(15 23 42 / 0.08);
+    --color-brand-50: #faf8f5;
+    --color-brand-100: #e7ddc9;
+    --color-brand-500: #a78ab9;
+    --color-brand-600: #3b223f;
+    --color-brand-700: #2b1731;
+    --color-violet-crm-50: #faf8f5;
+    --color-violet-crm-100: #dccff0;
+    --color-violet-crm-500: #a78ab9;
+    --color-violet-crm-600: #3b223f;
+    --color-violet-crm-700: #2b1731;
+    --color-ink-950: #2b2b2f;
+    --color-ink-900: #3b223f;
+    --color-ink-800: #4d3152;
+    --color-canvas: #faf8f5;
+    --shadow-crm: 0 16px 44px rgb(59 34 63 / 0.09);
 }
 
 @layer base {
@@ -31,17 +31,19 @@
     }
 
     body {
+        font-family: var(--app-font-family, 'Manrope'), ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+            'Segoe UI Symbol', 'Noto Color Emoji';
         font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     }
 }
 
 @layer components {
     .crm-focus {
-        @apply outline-none focus-visible:ring-2 focus-visible:ring-violet-crm-500 focus-visible:ring-offset-2;
+        @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
     }
 
     .crm-field {
-        @apply mt-2 w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs outline-none transition placeholder:text-slate-400 focus:border-violet-crm-500 focus:ring-3 focus:ring-violet-crm-100;
+        @apply mt-2 w-full rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-3 focus:ring-violet-crm-100;
     }
 
     .crm-label {
@@ -53,7 +55,7 @@
     }
 
     .crm-checkbox {
-        @apply h-4 w-4 rounded border-slate-300 text-violet-crm-600 focus:ring-violet-crm-500;
+        @apply h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500;
     }
 
     .crm-page-kicker {
@@ -69,14 +71,37 @@
     }
 
     .crm-row {
-        @apply grid gap-3 border-b border-slate-100 px-5 py-4 last:border-b-0;
+        @apply grid gap-3 border-b border-stone-100 px-5 py-4 last:border-b-0;
+    }
+
+    .crm-studio-card {
+        @apply overflow-hidden rounded-xl border border-white/10 bg-white/10 shadow-[0_18px_44px_rgba(20,10,24,0.24)];
+    }
+
+    .crm-studio-logo-panel {
+        background: linear-gradient(135deg, rgb(220 207 240 / 0.18), rgb(231 221 201 / 0.14)), #3b223f;
+    }
+
+    .crm-status-active,
+    .crm-status-muted,
+    .crm-status-scheduled,
+    .crm-status-danger {
+        @apply inline-flex h-6 w-fit shrink-0 items-center justify-center self-center justify-self-start whitespace-nowrap rounded-md border px-2 text-[11px] font-semibold leading-none;
     }
 
     .crm-status-active {
-        @apply rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700;
+        @apply border-emerald-200 bg-emerald-50 text-emerald-700;
     }
 
     .crm-status-muted {
-        @apply rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500;
+        @apply border-stone-200 bg-stone-50 text-slate-500;
+    }
+
+    .crm-status-scheduled {
+        @apply border-violet-crm-100 bg-violet-crm-50 text-brand-700;
+    }
+
+    .crm-status-danger {
+        @apply border-rose-200 bg-rose-50 text-rose-700;
     }
 }

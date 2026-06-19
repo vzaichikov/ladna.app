@@ -4,12 +4,9 @@
 
 @section('content')
     <main class="flex min-h-screen items-center justify-center bg-canvas px-5 py-10">
-        <section class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-crm sm:p-8">
+        <section class="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-crm sm:p-8">
             <a href="{{ route('home') }}" class="flex items-center gap-3">
-                <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-ink-950">
-                    <img src="{{ asset('brand/charmpole-icon.svg') }}" alt="" class="h-8 w-8">
-                </span>
-                <span class="text-lg font-semibold text-slate-950">{{ $account->name ?? __('app.app_name') }}</span>
+                <x-ui.app-logo />
             </a>
             <h1 class="mt-8 text-2xl font-semibold text-slate-950">{{ __('app.customer_login') }}</h1>
             <p class="mt-3 text-sm leading-6 text-slate-500">{{ __('app.customer_login_stub') }}</p>

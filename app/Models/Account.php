@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Storage;
 
 #[Fillable(['name', 'slug', 'status', 'default_language', 'default_currency', 'logo_path', 'brand_color', 'timezone'])]
 class Account extends Model
@@ -39,6 +40,23 @@ class Account extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', AccountStatus::Active->value);
+    }
+
+    public function logoUrl(): string
+    {
+        if ($this->logo_path) {
+            if (str_starts_with($this->logo_path, 'brand/')) {
+                return asset($this->logo_path);
+            }
+
+            return Storage::disk('public')->url($this->logo_path);
+        }
+
+        if ($this->slug === 'charmpole') {
+            return asset('brand/charmpole-icon.svg');
+        }
+
+        return asset('brand/ladna-mark.svg');
     }
 
     public function locations(): HasMany
@@ -87,6 +105,44 @@ class Account extends Model
     public function trainers(): HasMany
     {
         return $this->hasMany(Trainer::class);
+    }
+
+    public function trainerTypes(): HasMany
+    {
+        return $this->hasMany(TrainerType::class);
+    }
+
+    public function defaultTrainerType(): ?TrainerType
+    {
+        return $this->trainerTypes()
+            ->where('is_default', true)
+            ->ordered()
+            ->first();
+    }
+
+    public function ensureDefaultTrainerType(): TrainerType
+    {
+        $defaultTrainerType = $this->defaultTrainerType();
+
+        if ($defaultTrainerType) {
+            return $defaultTrainerType;
+        }
+
+        $firstTrainerType = $this->trainerTypes()->ordered()->first();
+
+        if ($firstTrainerType) {
+            $firstTrainerType->forceFill(['is_default' => true])->save();
+
+            return $firstTrainerType;
+        }
+
+        return $this->trainerTypes()->create([
+            'name' => 'Trainer',
+            'icon' => 'user-round',
+            'color' => '#3B223F',
+            'is_default' => true,
+            'sort_order' => 10,
+        ]);
     }
 
     public function classBookings(): HasMany

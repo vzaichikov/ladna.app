@@ -6,7 +6,7 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.customers') }}</h1>
-            <p class="crm-page-copy">{{ $account->name }}</p>
+            <p class="crm-page-copy">{{ __('app.customers_copy') }}</p>
         </div>
         <x-ui.button :href="route('dashboard.accounts.customers.create', $account)">
             <x-ui.icon name="plus" class="h-4 w-4" />

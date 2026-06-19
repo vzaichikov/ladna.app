@@ -97,6 +97,6 @@ class PublicScheduleTest extends TestCase
 
         $this->get('/test-english-studio/main/schedule')
             ->assertOk()
-            ->assertSee('No public classes are scheduled yet.');
+            ->assertSee('No classes yet.');
     }
 }

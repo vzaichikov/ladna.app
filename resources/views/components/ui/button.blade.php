@@ -13,10 +13,10 @@
         'lg' => 'px-5 py-3 text-sm',
     ];
     $variants = [
-        'primary' => 'bg-violet-crm-600 text-white shadow-sm shadow-violet-crm-600/20 hover:bg-violet-crm-700',
-        'brand' => 'bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700',
-        'secondary' => 'border border-slate-200 bg-white text-slate-800 shadow-xs hover:border-slate-300 hover:bg-slate-50',
-        'ghost' => 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
+        'primary' => 'bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700',
+        'brand' => 'bg-violet-crm-500 text-white shadow-sm shadow-violet-crm-500/20 hover:bg-brand-600',
+        'secondary' => 'border border-stone-200 bg-white text-slate-800 shadow-xs hover:border-brand-100 hover:bg-brand-50',
+        'ghost' => 'text-slate-600 hover:bg-brand-50 hover:text-slate-950',
         'danger' => 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
         'sidebar' => 'bg-white/10 text-white hover:bg-white/15',
     ];

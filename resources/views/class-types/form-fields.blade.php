@@ -40,7 +40,7 @@
     </label>
     <label class="block">
         <span class="crm-label">{{ __('app.color') }}</span>
-        <input name="color" value="{{ old('color', $classType->color) }}" placeholder="#e11d48" class="crm-field">
+        <input name="color" value="{{ old('color', $classType->color) }}" placeholder="#A78AB9" class="crm-field">
         @error('color') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 </div>

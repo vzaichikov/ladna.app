@@ -5,18 +5,23 @@
 @section('content')
     @php
         $firstLocation = $account->locations->first();
+        $accountStatusClass = match ($account->status->value) {
+            'active' => 'crm-status-active',
+            'trialing' => 'crm-status-scheduled',
+            default => 'crm-status-muted',
+        };
     @endphp
 
     <x-ui.panel padding="lg">
         <div class="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div class="flex flex-col gap-5 sm:flex-row sm:items-start">
-                <div class="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl bg-ink-950 shadow-crm ring-1 ring-slate-200">
-                    <img src="{{ asset('brand/charmpole-icon.svg') }}" alt="" class="h-20 w-20">
+                <div class="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl bg-brand-50 shadow-crm ring-1 ring-stone-200">
+                    <img src="{{ $account->logoUrl() }}" alt="" class="max-h-20 max-w-20 object-contain">
                 </div>
                 <div>
                     <div class="flex flex-wrap items-center gap-3">
                         <h1 class="text-3xl font-semibold text-slate-950">{{ $account->name }}</h1>
-                        <span class="crm-status-active">{{ __('app.active') }}</span>
+                        <span class="{{ $accountStatusClass }}">{{ __('app.'.$account->status->value) }}</span>
                     </div>
                     <dl class="mt-5 grid gap-x-10 gap-y-4 text-sm sm:grid-cols-3">
                         <div>
@@ -38,8 +43,8 @@
                         <div>
                             <dt class="font-medium text-slate-500">{{ __('app.brand_color') }}</dt>
                             <dd class="mt-1 flex items-center gap-2 font-semibold text-slate-950">
-                                <span class="h-8 w-8 rounded-lg border border-slate-200" style="background-color: {{ $account->brand_color ?? '#e91e63' }}"></span>
-                                {{ $account->brand_color ?? '#e91e63' }}
+                                <span class="h-8 w-8 rounded-lg border border-stone-200" style="background-color: {{ $account->brand_color ?? '#3B223F' }}"></span>
+                                {{ $account->brand_color ?? '#3B223F' }}
                             </dd>
                         </div>
                         @if ($firstLocation)
