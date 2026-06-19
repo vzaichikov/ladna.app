@@ -16,6 +16,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
 use App\Http\Controllers\Platform\PlatformAccountController;
 use App\Http\Controllers\Platform\PlatformController;
+use App\Http\Controllers\Platform\ProfileController as PlatformProfileController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SystemSettingsController;
 use App\Http\Controllers\PublicScheduleController;
@@ -50,6 +51,8 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
     ->name('platform.')
     ->group(function (): void {
         Route::get('/', PlatformController::class)->name('index');
+        Route::get('account', [PlatformProfileController::class, 'edit'])->name('account.edit');
+        Route::put('account', [PlatformProfileController::class, 'update'])->name('account.update');
         Route::get('settings', [SystemSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');

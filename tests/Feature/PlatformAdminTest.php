@@ -8,6 +8,9 @@ use App\Models\SystemSetting;
 use App\Models\User;
 use App\Support\SystemAppearance;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class PlatformAdminTest extends TestCase
@@ -34,6 +37,47 @@ class PlatformAdminTest extends TestCase
         $this->actingAs($owner)
             ->get(route('platform.index'))
             ->assertForbidden();
+
+        $this->actingAs($owner)
+            ->get(route('platform.account.edit'))
+            ->assertForbidden();
+    }
+
+    public function test_platform_admin_can_update_own_account_profile(): void
+    {
+        Storage::fake('public');
+
+        $platformAdmin = User::factory()->platformAdmin()->create([
+            'name' => 'Old Admin',
+            'email' => 'old-platform@example.com',
+            'phone' => null,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.account.edit'))
+            ->assertOk()
+            ->assertSee(__('app.account'))
+            ->assertSee('old-platform@example.com');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.account.update'), [
+                'name' => 'Product Owner',
+                'email' => 'product-owner@example.com',
+                'phone' => '+380671112244',
+                'password' => 'new-password',
+                'password_confirmation' => 'new-password',
+                'avatar' => UploadedFile::fake()->image('platform-avatar.png', 256, 256),
+            ])
+            ->assertRedirect(route('platform.account.edit'));
+
+        $platformAdmin->refresh();
+
+        $this->assertSame('Product Owner', $platformAdmin->name);
+        $this->assertSame('product-owner@example.com', $platformAdmin->email);
+        $this->assertSame('+380671112244', $platformAdmin->phone);
+        $this->assertTrue(Hash::check('new-password', $platformAdmin->password));
+        $this->assertNotNull($platformAdmin->avatar_path);
+        Storage::disk('public')->assertExists($platformAdmin->avatar_path);
     }
 
     public function test_platform_admin_can_update_system_font(): void

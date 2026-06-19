@@ -14,6 +14,12 @@
             'active' => request()->routeIs('platform.index'),
         ],
         [
+            'label' => __('app.account'),
+            'icon' => 'user',
+            'href' => route('platform.account.edit'),
+            'active' => request()->routeIs('platform.account.*'),
+        ],
+        [
             'label' => __('app.accounts'),
             'icon' => 'accounts',
             'href' => route('platform.accounts.index'),
