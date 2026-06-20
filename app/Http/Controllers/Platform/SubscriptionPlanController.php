@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSubscriptionPlanRequest;
 use App\Http\Requests\UpdateSubscriptionPlanRequest;
 use App\Models\SubscriptionPlan;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class SubscriptionPlanController extends Controller
@@ -78,17 +78,8 @@ class SubscriptionPlanController extends Controller
      */
     private function slug(array $validated, ?SubscriptionPlan $ignore = null): string
     {
-        $slug = Str::slug($validated['slug'] ?: $validated['name']) ?: 'subscription-plan';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while (SubscriptionPlan::where('slug', $candidate)
+        return SlugGenerator::unique($validated['slug'] ?: $validated['name'], 'subscription-plan', fn (string $candidate): bool => SubscriptionPlan::where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 }

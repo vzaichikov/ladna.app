@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Account;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -25,11 +24,9 @@ class UpdateAccountRequest extends FormRequest
      */
     public function rules(): array
     {
-        $account = $this->route('account');
-
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'alpha_dash:ascii', 'max:255', Rule::unique((new Account)->getTable(), 'slug')->ignore($account)],
+            'slug' => ['nullable', 'string', 'max:255'],
             'default_language' => ['required', Rule::in(['uk', 'en'])],
             'default_currency' => ['required', Rule::in(['UAH', 'USD', 'EUR'])],
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],

@@ -9,6 +9,7 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class PublicScheduleTest extends TestCase
@@ -98,5 +99,33 @@ class PublicScheduleTest extends TestCase
         $this->get('/test-english-studio/main/schedule')
             ->assertOk()
             ->assertSee('No classes yet.');
+    }
+
+    public function test_ukrainian_public_schedule_uses_localized_day_names(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-ukrainian-studio',
+            'default_language' => 'uk',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => 'group_class']);
+        $trainer = Trainer::factory()->for($account)->create();
+
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
+            'title' => 'Pole Ukrainian Date',
+            'starts_at' => Carbon::parse('2026-06-17 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
+        ]);
+
+        $this->get('/test-ukrainian-studio/main/schedule')
+            ->assertOk()
+            ->assertSee('ср, 17 чер')
+            ->assertDontSee('Wed');
+
+        Carbon::setTestNow();
     }
 }

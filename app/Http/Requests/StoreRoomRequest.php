@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Models\Location;
-use App\Models\Room;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -26,17 +25,11 @@ class StoreRoomRequest extends FormRequest
     public function rules(): array
     {
         $account = $this->route('account');
-        $locationId = $this->input('location_id');
 
         return [
             'location_id' => ['required', Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id)],
             'name' => ['required', 'string', 'max:255'],
-            'slug' => [
-                'nullable',
-                'alpha_dash:ascii',
-                'max:255',
-                Rule::unique((new Room)->getTable(), 'slug')->where('location_id', $locationId),
-            ],
+            'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'capacity' => ['nullable', 'integer', 'min:1', 'max:999'],
             'is_active' => ['nullable', 'boolean'],

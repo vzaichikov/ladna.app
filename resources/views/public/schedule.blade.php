@@ -56,7 +56,7 @@
                     <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-crm">
                         <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                                <div class="text-sm font-semibold text-brand-600">{{ $startsAt->format('D, M j') }}</div>
+                                <div class="text-sm font-semibold text-brand-600">{{ $startsAt->translatedFormat('D, j M') }}</div>
                                 <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ $scheduledClass->title }}</h2>
                                 @if ($scheduledClass->description)
                                     <p class="mt-3 text-sm leading-6 text-slate-500">{{ $scheduledClass->description }}</p>
@@ -75,7 +75,7 @@
                                     @if ($scheduledClass->trainer?->photoUrl())
                                         <img src="{{ $scheduledClass->trainer->photoUrl() }}" alt="" class="h-7 w-7 rounded-full object-cover">
                                     @endif
-                                    <span>{{ $scheduledClass->trainer?->name ?? 'TBA' }}</span>
+                                    <span>{{ $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned') }}</span>
                                 </dd>
                             </div>
                             <div class="rounded-lg bg-slate-50 p-3">
@@ -88,7 +88,7 @@
                             </div>
                             <div class="rounded-lg bg-slate-50 p-3">
                                 <dt class="text-slate-500">{{ __('app.capacity') }}</dt>
-                                <dd class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->capacity ?? 'TBA' }}</dd>
+                                <dd class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->capacity ?? __('app.capacity_not_set') }}</dd>
                             </div>
                         </dl>
 

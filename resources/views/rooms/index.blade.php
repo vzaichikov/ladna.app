@@ -29,7 +29,7 @@
                 <span class="{{ $room->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
                     {{ $room->is_active ? __('app.active') : __('app.inactive') }}
                 </span>
-                <div class="text-sm font-medium text-slate-500">{{ __('app.capacity') }}: {{ $room->capacity ?? 'TBA' }}</div>
+                <div class="text-sm font-medium text-slate-500">{{ __('app.capacity') }}: {{ $room->capacity ?? __('app.capacity_not_set') }}</div>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
                     <x-ui.button :href="route('dashboard.accounts.rooms.edit', [$account, $room])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
                     <form method="POST" action="{{ route('dashboard.accounts.rooms.destroy', [$account, $room]) }}" data-confirm-delete>

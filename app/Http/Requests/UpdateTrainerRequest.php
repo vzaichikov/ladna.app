@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Enums\StudioPermission;
-use App\Models\Trainer;
 use App\Models\TrainerType;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -30,17 +29,11 @@ class UpdateTrainerRequest extends FormRequest
     public function rules(): array
     {
         $account = $this->route('account');
-        $trainer = $this->route('trainer');
-        $userId = $trainer?->user_id;
+        $userId = $this->route('trainer')?->user_id;
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => [
-                'nullable',
-                'alpha_dash:ascii',
-                'max:255',
-                Rule::unique((new Trainer)->getTable(), 'slug')->where('account_id', $account?->id)->ignore($trainer),
-            ],
+            'slug' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'trainer_type_id' => [
                 'required',

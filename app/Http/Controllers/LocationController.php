@@ -6,8 +6,8 @@ use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\UpdateLocationRequest;
 use App\Models\Account;
 use App\Models\Location;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class LocationController extends Controller
@@ -99,18 +99,9 @@ class LocationController extends Controller
 
     private function uniqueSlug(Account $account, string $source, ?Location $ignore = null): string
     {
-        $slug = Str::slug($source) ?: 'location';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while ($account->locations()
+        return SlugGenerator::unique($source, 'location', fn (string $candidate): bool => $account->locations()
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 }

@@ -26,7 +26,7 @@
                 </div>
                 <div class="text-sm text-slate-500">{{ $weekdays[$scheduleSeries->weekday] }} · {{ substr((string) $scheduleSeries->start_time, 0, 5) }}</div>
                 <div class="text-sm text-slate-500">{{ $scheduleSeries->location->name }} · {{ $scheduleSeries->room->name }}</div>
-                <div class="text-sm text-slate-500">{{ $scheduleSeries->trainer?->name ?? 'TBA' }}</div>
+                <div class="text-sm text-slate-500">{{ $scheduleSeries->trainer?->name ?? __('app.trainer_not_assigned') }}</div>
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="{{ $scheduleSeries->status->value === 'active' ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$scheduleSeries->status->value) }}</span>
                     <x-ui.button :href="route('dashboard.accounts.schedule-series.edit', [$account, $scheduleSeries])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassType;
 use App\Models\Location;
 use App\Models\Room;
@@ -98,5 +99,33 @@ class StudioConfigurationTest extends TestCase
 
         $this->assertModelMissing($classType);
         $this->assertModelMissing($scheduledClass);
+    }
+
+    public function test_cyrillic_slugs_are_normalized_and_suffixed_within_account(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.activity-directions.store', $account), [
+                'name' => 'Силова група',
+                'slug' => 'Танці для початківців',
+                'color' => '#A78AB9',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.activity-directions.index', $account));
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.activity-directions.store', $account), [
+                'name' => 'Силова група друга',
+                'slug' => 'Танці для початківців',
+                'color' => '#A78AB9',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.activity-directions.index', $account));
+
+        $this->assertTrue(ActivityDirection::whereBelongsTo($account)->where('slug', 'tantsi-dlya-pochatkivtsiv')->exists());
+        $this->assertTrue(ActivityDirection::whereBelongsTo($account)->where('slug', 'tantsi-dlya-pochatkivtsiv-2')->exists());
     }
 }

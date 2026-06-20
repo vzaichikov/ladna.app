@@ -10,10 +10,10 @@ use App\Http\Requests\UpdatePlatformAccountRequest;
 use App\Models\Account;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class PlatformAccountController extends Controller
@@ -141,18 +141,9 @@ class PlatformAccountController extends Controller
 
     private function uniqueSlug(string $source, ?Account $ignore = null): string
     {
-        $slug = Str::slug($source) ?: 'account';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while (Account::where('slug', $candidate)
+        return SlugGenerator::unique($source, 'account', fn (string $candidate): bool => Account::where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 
     private function storeLogo(StorePlatformAccountRequest|UpdatePlatformAccountRequest $request, Account $account): void

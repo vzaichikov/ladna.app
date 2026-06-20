@@ -7,6 +7,7 @@ use App\Models\Location;
 use App\Models\ScheduledClass;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
 use Illuminate\View\View;
 
@@ -67,6 +68,7 @@ class PublicScheduleController extends Controller
     {
         if (! session()->has('locale')) {
             App::setLocale($account->default_language);
+            Carbon::setLocale($account->default_language);
         }
     }
 }

@@ -22,7 +22,7 @@
                     <div class="mt-1 text-sm text-slate-500">{{ $classType->activityDirection?->name ?? __('app.direction') }}</div>
                 </div>
                 <div class="text-sm text-slate-500">{{ __('app.'.$classType->schedule_kind->value) }}</div>
-                <div class="text-sm text-slate-500">{{ $classType->default_duration_minutes }} {{ __('app.minutes') }} · {{ __('app.capacity') }} {{ $classType->default_capacity ?? 'TBA' }}</div>
+                <div class="text-sm text-slate-500">{{ $classType->default_duration_minutes }} {{ __('app.minutes') }} · {{ __('app.capacity') }} {{ $classType->default_capacity ?? __('app.capacity_not_set') }}</div>
                 <div class="flex flex-wrap gap-2 md:justify-end">
                     <x-ui.button :href="route('dashboard.accounts.class-types.edit', [$account, $classType])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
                     <form method="POST" action="{{ route('dashboard.accounts.class-types.destroy', [$account, $classType]) }}" data-confirm-delete>

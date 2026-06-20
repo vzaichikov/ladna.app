@@ -31,7 +31,7 @@
             <x-ui.panel class="grid gap-4 sm:grid-cols-2">
                 @foreach (['Pole Beginner', 'Stretching', 'Exotic Flow', 'Strength'] as $index => $title)
                     <div class="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                        <div class="text-sm font-medium text-slate-500">{{ now()->addDays($index + 1)->format('D, M j') }}</div>
+                        <div class="text-sm font-medium text-slate-500">{{ now()->addDays($index + 1)->translatedFormat('D, j M') }}</div>
                         <div class="mt-3 text-xl font-semibold text-slate-950">{{ $title }}</div>
                         <div class="mt-4 flex items-center justify-between text-sm text-slate-500">
                             <span>{{ 18 + $index }}:00</span>

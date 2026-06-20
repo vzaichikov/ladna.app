@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Models\ActivityDirection;
-use App\Models\ClassPassPlan;
 use App\Models\TrainerType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -41,12 +40,7 @@ class StoreClassPassPlanRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => [
-                'nullable',
-                'alpha_dash:ascii',
-                'max:255',
-                Rule::unique((new ClassPassPlan)->getTable(), 'slug')->where('account_id', $account?->id),
-            ],
+            'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'price' => ['required', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'currency' => ['required', Rule::in(config('charm.currencies'))],

@@ -2,10 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Location;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateLocationRequest extends FormRequest
 {
@@ -24,19 +22,9 @@ class UpdateLocationRequest extends FormRequest
      */
     public function rules(): array
     {
-        $account = $this->route('account');
-        $location = $this->route('location');
-
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => [
-                'nullable',
-                'alpha_dash:ascii',
-                'max:255',
-                Rule::unique((new Location)->getTable(), 'slug')
-                    ->where('account_id', $account?->id)
-                    ->ignore($location),
-            ],
+            'slug' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:2000'],
             'phone' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],

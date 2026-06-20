@@ -11,6 +11,7 @@ use App\Support\SystemAppearance;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
@@ -31,6 +32,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Carbon::setLocale(app()->getLocale());
+
         Model::preventLazyLoading(! app()->isProduction());
 
         Gate::policy(Account::class, AccountPolicy::class);

@@ -32,7 +32,7 @@
     <label class="block">
         <span class="crm-label">{{ __('app.trainer') }}</span>
         <select name="trainer_id" class="crm-field">
-            <option value="">TBA</option>
+            <option value="">{{ __('app.trainer_not_assigned') }}</option>
             @foreach ($trainers as $trainer)
                 <option value="{{ $trainer->id }}" @selected((int) old('trainer_id', $scheduleSeries->trainer_id) === $trainer->id)>{{ $trainer->name }}</option>
             @endforeach

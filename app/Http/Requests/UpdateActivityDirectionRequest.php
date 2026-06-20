@@ -2,10 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Models\ActivityDirection;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateActivityDirectionRequest extends FormRequest
 {
@@ -24,17 +22,9 @@ class UpdateActivityDirectionRequest extends FormRequest
      */
     public function rules(): array
     {
-        $account = $this->route('account');
-        $activityDirection = $this->route('activity_direction');
-
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => [
-                'nullable',
-                'alpha_dash:ascii',
-                'max:255',
-                Rule::unique((new ActivityDirection)->getTable(), 'slug')->where('account_id', $account?->id)->ignore($activityDirection),
-            ],
+            'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'is_active' => ['nullable', 'boolean'],

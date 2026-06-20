@@ -6,9 +6,9 @@ use App\Http\Requests\StoreClassPassPlanRequest;
 use App\Http\Requests\UpdateClassPassPlanRequest;
 use App\Models\Account;
 use App\Models\ClassPassPlan;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ClassPassPlanController extends Controller
@@ -113,19 +113,10 @@ class ClassPassPlanController extends Controller
 
     private function uniqueSlug(Account $account, string $source, ?ClassPassPlan $ignore = null): string
     {
-        $slug = Str::slug($source) ?: 'class-pass';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while ($account->classPassPlans()
+        return SlugGenerator::unique($source, 'class-pass', fn (string $candidate): bool => $account->classPassPlans()
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 
     /**

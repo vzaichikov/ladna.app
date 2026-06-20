@@ -7,8 +7,8 @@ use App\Http\Requests\StoreClassTypeRequest;
 use App\Http\Requests\UpdateClassTypeRequest;
 use App\Models\Account;
 use App\Models\ClassType;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ClassTypeController extends Controller
@@ -104,18 +104,9 @@ class ClassTypeController extends Controller
 
     private function uniqueSlug(Account $account, string $source, ?ClassType $ignore = null): string
     {
-        $slug = Str::slug($source) ?: 'class-type';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while ($account->classTypes()
+        return SlugGenerator::unique($source, 'class-type', fn (string $candidate): bool => $account->classTypes()
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 }

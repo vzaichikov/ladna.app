@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Enums\AccountStatus;
 use App\Enums\SubscriptionStatus;
-use App\Models\Account;
 use App\Models\SubscriptionPlan;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,11 +27,9 @@ class UpdatePlatformAccountRequest extends FormRequest
      */
     public function rules(): array
     {
-        $account = $this->route('account');
-
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'alpha_dash:ascii', 'max:255', Rule::unique((new Account)->getTable(), 'slug')->ignore($account)],
+            'slug' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::enum(AccountStatus::class)],
             'default_language' => ['required', Rule::in(array_keys(config('charm.locales')))],
             'default_currency' => ['required', Rule::in(config('charm.currencies'))],

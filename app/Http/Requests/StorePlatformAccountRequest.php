@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Enums\AccountStatus;
 use App\Enums\SubscriptionStatus;
-use App\Models\Account;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -32,7 +31,7 @@ class StorePlatformAccountRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'alpha_dash:ascii', 'max:255', Rule::unique((new Account)->getTable(), 'slug')],
+            'slug' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::enum(AccountStatus::class)],
             'default_language' => ['required', Rule::in(array_keys(config('charm.locales')))],
             'default_currency' => ['required', Rule::in(config('charm.currencies'))],

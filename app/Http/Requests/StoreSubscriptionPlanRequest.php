@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Models\SubscriptionPlan;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -26,7 +25,7 @@ class StoreSubscriptionPlanRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'alpha_dash:ascii', 'max:255', Rule::unique((new SubscriptionPlan)->getTable(), 'slug')],
+            'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'price_cents' => ['required', 'integer', 'min:0', 'max:99999999'],
             'currency' => ['required', Rule::in(config('charm.currencies'))],

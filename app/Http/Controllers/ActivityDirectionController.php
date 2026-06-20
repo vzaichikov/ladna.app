@@ -6,8 +6,8 @@ use App\Http\Requests\StoreActivityDirectionRequest;
 use App\Http\Requests\UpdateActivityDirectionRequest;
 use App\Models\Account;
 use App\Models\ActivityDirection;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ActivityDirectionController extends Controller
@@ -92,18 +92,9 @@ class ActivityDirectionController extends Controller
 
     private function uniqueSlug(Account $account, string $source, ?ActivityDirection $ignore = null): string
     {
-        $slug = Str::slug($source) ?: 'direction';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while ($account->activityDirections()
+        return SlugGenerator::unique($source, 'direction', fn (string $candidate): bool => $account->activityDirections()
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 }

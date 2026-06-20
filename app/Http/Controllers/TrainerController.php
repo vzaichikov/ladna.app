@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateTrainerRequest;
 use App\Models\Account;
 use App\Models\Trainer;
 use App\Models\User;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
@@ -130,19 +131,10 @@ class TrainerController extends Controller
 
     private function uniqueSlug(Account $account, string $source, ?Trainer $ignore = null): string
     {
-        $slug = Str::slug($source) ?: 'trainer';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while ($account->trainers()
+        return SlugGenerator::unique($source, 'trainer', fn (string $candidate): bool => $account->trainers()
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 
     /**

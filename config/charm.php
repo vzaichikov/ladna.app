@@ -12,5 +12,5 @@ return [
         'EUR',
     ],
 
-    'schedule_generation_weeks' => 8,
+    'schedule_generation_weeks' => 2,
 ];

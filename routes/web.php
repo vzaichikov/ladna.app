@@ -10,6 +10,7 @@ use App\Http\Controllers\ClassPassPlanController;
 use App\Http\Controllers\ClassTypeController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
@@ -99,6 +100,8 @@ Route::middleware('auth:web')
         Route::resource('accounts.customers', CustomerController::class)
             ->except(['show'])
             ->scoped();
+        Route::get('accounts/{account}/customers/search', CustomerSearchController::class)
+            ->name('accounts.customers.search');
         Route::resource('accounts.schedule-series', ScheduleSeriesController::class)
             ->except(['show'])
             ->scoped();

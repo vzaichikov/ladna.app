@@ -5,11 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AccountController extends Controller
@@ -121,18 +121,9 @@ class AccountController extends Controller
 
     private function uniqueSlug(string $source, ?Account $ignore = null): string
     {
-        $slug = Str::slug($source) ?: 'account';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while (Account::where('slug', $candidate)
+        return SlugGenerator::unique($source, 'account', fn (string $candidate): bool => Account::where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 
     private function storeLogo(StoreAccountRequest|UpdateAccountRequest $request, Account $account): void

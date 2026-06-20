@@ -6,8 +6,8 @@ use App\Http\Requests\StoreRoomRequest;
 use App\Http\Requests\UpdateRoomRequest;
 use App\Models\Account;
 use App\Models\Room;
+use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class RoomController extends Controller
@@ -95,18 +95,9 @@ class RoomController extends Controller
 
     private function uniqueSlug(int $locationId, string $source, ?Room $ignore = null): string
     {
-        $slug = Str::slug($source) ?: 'room';
-        $candidate = $slug;
-        $suffix = 2;
-
-        while (Room::where('location_id', $locationId)
+        return SlugGenerator::unique($source, 'room', fn (string $candidate): bool => Room::where('location_id', $locationId)
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists()) {
-            $candidate = $slug.'-'.$suffix;
-            $suffix++;
-        }
-
-        return $candidate;
+            ->exists());
     }
 }

@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Enums\ScheduleKind;
 use App\Models\ActivityDirection;
-use App\Models\ClassType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -31,12 +30,7 @@ class StoreClassTypeRequest extends FormRequest
         return [
             'activity_direction_id' => ['nullable', Rule::exists((new ActivityDirection)->getTable(), 'id')->where('account_id', $account?->id)],
             'name' => ['required', 'string', 'max:255'],
-            'slug' => [
-                'nullable',
-                'alpha_dash:ascii',
-                'max:255',
-                Rule::unique((new ClassType)->getTable(), 'slug')->where('account_id', $account?->id),
-            ],
+            'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'schedule_kind' => ['required', Rule::enum(ScheduleKind::class)],
