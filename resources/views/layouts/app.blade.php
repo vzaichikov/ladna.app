@@ -27,7 +27,38 @@
         ],
     ] : [];
 
+    $canManageStudioSettings = $showAccountNav
+        && auth()->user()
+        && $activeAccount->userCan(auth()->user(), \App\Enums\StudioPermission::ManageStudioSettings);
+
     $studioNav = $showAccountNav ? [
+        [
+            'label' => __('app.current'),
+            'icon' => 'dashboard',
+            'href' => route('dashboard.accounts.show', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.show'),
+        ],
+        [
+            'label' => __('app.generated_classes'),
+            'icon' => 'generated-classes',
+            'href' => route('dashboard.accounts.scheduled-classes.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.scheduled-classes.*'),
+        ],
+        [
+            'label' => __('app.customers'),
+            'icon' => 'accounts',
+            'href' => route('dashboard.accounts.customers.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.customers.*'),
+        ],
+        [
+            'label' => __('app.schedule_series'),
+            'icon' => 'schedule',
+            'href' => route('dashboard.accounts.schedule-series.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.schedule-series.*'),
+        ],
+    ] : [];
+
+    $studioSettingsNav = $showAccountNav ? [
         [
             'label' => __('app.locations'),
             'icon' => 'locations',
@@ -64,43 +95,12 @@
             'href' => route('dashboard.accounts.trainers.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.trainers.*'),
         ],
-        [
-            'label' => __('app.customers'),
-            'icon' => 'accounts',
-            'href' => route('dashboard.accounts.customers.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.customers.*'),
-        ],
-        [
-            'label' => __('app.schedule_series'),
-            'icon' => 'schedule',
-            'href' => route('dashboard.accounts.schedule-series.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.schedule-series.*'),
-        ],
-        [
-            'label' => __('app.generated_classes'),
-            'icon' => 'generated-classes',
-            'href' => route('dashboard.accounts.scheduled-classes.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.scheduled-classes.*'),
-        ],
-    ] : [];
-
-    $canManageStudioSettings = $showAccountNav
-        && auth()->user()
-        && $activeAccount->userCan(auth()->user(), \App\Enums\StudioPermission::ManageStudioSettings);
-
-    $settingsNav = $showAccountNav ? [
         ...($canManageStudioSettings ? [
             [
-                'label' => __('app.my_studio'),
+                'label' => __('app.trainer_types'),
                 'icon' => 'settings',
-                'href' => route('dashboard.accounts.studio-settings.index', $activeAccount),
-                'active' => request()->routeIs('dashboard.accounts.studio-settings.*') || request()->routeIs('dashboard.accounts.trainer-types.*'),
-            ],
-            [
-                'label' => __('app.branding'),
-                'icon' => 'sparkles',
-                'href' => route('dashboard.accounts.edit', [$activeAccount, 'tab' => 'business']),
-                'active' => request()->routeIs('dashboard.accounts.edit'),
+                'href' => route('dashboard.accounts.trainer-types.index', $activeAccount),
+                'active' => request()->routeIs('dashboard.accounts.trainer-types.*'),
             ],
         ] : []),
         ...($activeAccount->isOwnedBy(auth()->user()) ? [
@@ -111,6 +111,21 @@
                 'active' => request()->routeIs('dashboard.accounts.integrations.*'),
             ],
         ] : []),
+    ] : [];
+
+    $accountSettingsNav = $showAccountNav && $canManageStudioSettings ? [
+        [
+            'label' => __('app.my_brand'),
+            'icon' => 'sparkles',
+            'href' => route('dashboard.accounts.brand.edit', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.brand.*'),
+        ],
+        [
+            'label' => __('app.my_account'),
+            'icon' => 'user',
+            'href' => route('dashboard.accounts.owner-profile.edit', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.owner-profile.*'),
+        ],
     ] : [];
 
     $platformSettingsNav = $isPlatformAdmin ? [
@@ -184,9 +199,37 @@
 
                     @if ($studioNav)
                         <div>
-                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.workspace') }}</div>
+                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.my_studio') }}</div>
                             <div class="mt-3 space-y-1">
                                 @foreach ($studioNav as $item)
+                                    <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
+                                        <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
+                                        <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($studioSettingsNav)
+                        <div>
+                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.studio_settings') }}</div>
+                            <div class="mt-3 space-y-1">
+                                @foreach ($studioSettingsNav as $item)
+                                    <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
+                                        <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
+                                        <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($accountSettingsNav)
+                        <div>
+                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.account_settings') }}</div>
+                            <div class="mt-3 space-y-1">
+                                @foreach ($accountSettingsNav as $item)
                                     <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
                                         <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
                                         <span>{{ $item['label'] }}</span>
@@ -198,11 +241,11 @@
                 </nav>
 
                 <div class="mt-auto space-y-3 pt-8">
-                    @if ($settingsNav || $platformSettingsNav)
+                    @if ($platformSettingsNav)
                         <div>
                             <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.configuration') }}</div>
                             <div class="mt-3 space-y-1">
-                                @foreach ([...$settingsNav, ...$platformSettingsNav] as $item)
+                                @foreach ($platformSettingsNav as $item)
                                     <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
                                         <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
                                         <span>{{ $item['label'] }}</span>

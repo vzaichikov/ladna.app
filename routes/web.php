@@ -67,6 +67,10 @@ Route::middleware('auth:web')
     ->group(function (): void {
         Route::get('/', DashboardController::class)->name('index');
         Route::resource('accounts', AccountController::class);
+        Route::get('accounts/{account}/brand', [AccountController::class, 'editBrand'])
+            ->name('accounts.brand.edit');
+        Route::get('accounts/{account}/owner-profile', [AccountOwnerProfileController::class, 'edit'])
+            ->name('accounts.owner-profile.edit');
         Route::put('accounts/{account}/owner-profile', [AccountOwnerProfileController::class, 'update'])
             ->name('accounts.owner-profile.update');
         Route::resource('accounts.locations', LocationController::class)
@@ -90,7 +94,7 @@ Route::middleware('auth:web')
         Route::get('accounts/{account}/studio-settings', [StudioSettingsController::class, 'index'])
             ->name('accounts.studio-settings.index');
         Route::resource('accounts.trainer-types', TrainerTypeController::class)
-            ->only(['store', 'update', 'destroy'])
+            ->only(['index', 'store', 'update', 'destroy'])
             ->scoped();
         Route::resource('accounts.customers', CustomerController::class)
             ->except(['show'])

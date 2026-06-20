@@ -63,7 +63,7 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
-                <x-ui.button :href="route('dashboard.accounts.edit', $account)" variant="secondary">
+                <x-ui.button :href="route('dashboard.accounts.brand.edit', $account)" variant="secondary">
                     <x-ui.icon name="edit" class="h-4 w-4" />
                     {{ __('app.edit') }}
                 </x-ui.button>

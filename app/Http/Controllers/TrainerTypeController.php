@@ -9,9 +9,22 @@ use App\Models\TrainerType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
 
 class TrainerTypeController extends Controller
 {
+    public function index(Account $account): View
+    {
+        $this->authorize('update', $account);
+        $account->ensureDefaultTrainerType();
+
+        return view('trainer-types.index', [
+            'account' => $account,
+            'iconOptions' => config('icons.trainer_types'),
+            'trainerTypes' => $account->trainerTypes()->ordered()->get(),
+        ]);
+    }
+
     public function store(StoreTrainerTypeRequest $request, Account $account): RedirectResponse
     {
         $validated = $request->validated();
@@ -27,7 +40,7 @@ class TrainerTypeController extends Controller
         });
 
         return redirect()
-            ->route('dashboard.accounts.studio-settings.index', [$account, 'tab' => 'trainer-types'])
+            ->route('dashboard.accounts.trainer-types.index', $account)
             ->with('status', __('app.trainer_type_created'));
     }
 
@@ -50,7 +63,7 @@ class TrainerTypeController extends Controller
         });
 
         return redirect()
-            ->route('dashboard.accounts.studio-settings.index', [$account, 'tab' => 'trainer-types'])
+            ->route('dashboard.accounts.trainer-types.index', $account)
             ->with('status', __('app.trainer_type_updated'));
     }
 
@@ -61,7 +74,7 @@ class TrainerTypeController extends Controller
 
         if ($trainerType->is_default || $account->trainerTypes()->count() <= 1) {
             return redirect()
-                ->route('dashboard.accounts.studio-settings.index', [$account, 'tab' => 'trainer-types'])
+                ->route('dashboard.accounts.trainer-types.index', $account)
                 ->withErrors(['trainer_type' => __('app.trainer_type_cannot_delete_default')]);
         }
 
@@ -82,7 +95,7 @@ class TrainerTypeController extends Controller
         });
 
         return redirect()
-            ->route('dashboard.accounts.studio-settings.index', [$account, 'tab' => 'trainer-types'])
+            ->route('dashboard.accounts.trainer-types.index', $account)
             ->with('status', __('app.trainer_type_deleted'));
     }
 

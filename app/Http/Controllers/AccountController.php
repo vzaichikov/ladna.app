@@ -77,15 +77,23 @@ class AccountController extends Controller
         ]);
     }
 
-    public function edit(Request $request, Account $account): View
+    public function edit(Request $request, Account $account): RedirectResponse
     {
         $this->authorize('update', $account);
-        $activeTab = $request->query('tab') === 'business' ? 'business' : 'account';
 
-        return view('accounts.edit', [
+        if ($request->query('tab') === 'business') {
+            return redirect()->route('dashboard.accounts.brand.edit', $account);
+        }
+
+        return redirect()->route('dashboard.accounts.owner-profile.edit', $account);
+    }
+
+    public function editBrand(Account $account): View
+    {
+        $this->authorize('update', $account);
+
+        return view('accounts.brand-edit', [
             'account' => $account,
-            'activeTab' => $activeTab,
-            'profileUser' => $request->user(),
         ]);
     }
 
@@ -97,7 +105,7 @@ class AccountController extends Controller
         $account->update(collect($validated)->except('logo')->all());
         $this->storeLogo($request, $account);
 
-        return redirect()->route('dashboard.accounts.show', $account)
+        return redirect()->route('dashboard.accounts.brand.edit', $account)
             ->with('status', __('app.account_updated'));
     }
 

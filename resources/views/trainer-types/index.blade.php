@@ -1,23 +1,14 @@
 @extends('layouts.app')
 
-@section('title', __('app.my_studio').' - '.$account->name)
+@section('title', __('app.trainer_types').' - '.$account->name)
 
 @section('content')
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <h1 class="crm-page-title">{{ __('app.my_studio') }}</h1>
-            <p class="crm-page-copy">{{ __('app.my_studio_copy') }}</p>
+            <h1 class="crm-page-title">{{ __('app.trainer_types') }}</h1>
+            <p class="crm-page-copy">{{ __('app.trainer_types_copy') }}</p>
         </div>
     </div>
-
-    <nav class="mt-6 flex gap-2 overflow-x-auto border-b border-slate-200" aria-label="{{ __('app.my_studio_tabs') }}">
-        <a
-            href="{{ route('dashboard.accounts.studio-settings.index', [$account, 'tab' => 'trainer-types']) }}"
-            class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'trainer-types' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
-        >
-            {{ __('app.trainer_types') }}
-        </a>
-    </nav>
 
     @error('trainer_type')
         <div class="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
