@@ -8,11 +8,14 @@ use App\Http\Requests\UpdateClassBookingStatusRequest;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class ClassBookingController extends Controller
 {
-    public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass): RedirectResponse
+    public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass): RedirectResponse|JsonResponse
     {
         $this->ensureClassBelongsToAccount($account, $scheduledClass);
 
@@ -29,11 +32,15 @@ class ClassBookingController extends Controller
             ],
         );
 
+        if ($request->expectsJson()) {
+            return $this->bookingJsonResponse($account, $scheduledClass, __('app.booking_created'), Response::HTTP_CREATED);
+        }
+
         return redirect()->route('dashboard.accounts.scheduled-classes.index', $account)
             ->with('status', __('app.booking_created'));
     }
 
-    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking): RedirectResponse
+    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking): RedirectResponse|JsonResponse
     {
         $this->ensureBookingBelongsToAccount($account, $classBooking);
 
@@ -44,16 +51,25 @@ class ClassBookingController extends Controller
             'notes' => $request->validated('notes', $classBooking->notes),
         ]);
 
+        if ($request->expectsJson()) {
+            return $this->bookingJsonResponse($account, $classBooking->scheduledClass, __('app.booking_updated'));
+        }
+
         return redirect()->route('dashboard.accounts.scheduled-classes.index', $account)
             ->with('status', __('app.booking_updated'));
     }
 
-    public function destroy(Account $account, ClassBooking $classBooking): RedirectResponse
+    public function destroy(Request $request, Account $account, ClassBooking $classBooking): RedirectResponse|JsonResponse
     {
         $this->authorize('manageBookings', $account);
         $this->ensureBookingBelongsToAccount($account, $classBooking);
 
+        $scheduledClass = $classBooking->scheduledClass;
         $classBooking->delete();
+
+        if ($request->expectsJson()) {
+            return $this->bookingJsonResponse($account, $scheduledClass, __('app.booking_deleted'));
+        }
 
         return redirect()->route('dashboard.accounts.scheduled-classes.index', $account)
             ->with('status', __('app.booking_deleted'));
@@ -67,5 +83,28 @@ class ClassBookingController extends Controller
     private function ensureBookingBelongsToAccount(Account $account, ClassBooking $classBooking): void
     {
         abort_unless($classBooking->account_id === $account->id, 404);
+    }
+
+    private function bookingJsonResponse(Account $account, ScheduledClass $scheduledClass, string $message, int $status = Response::HTTP_OK): JsonResponse
+    {
+        $scheduledClass->load([
+            'location',
+            'room',
+            'classType.activityDirection',
+            'trainer',
+            'scheduleSeries',
+            'classBookings.customer',
+        ]);
+
+        return response()->json([
+            'message' => $message,
+            'scheduled_class_id' => $scheduledClass->id,
+            'card_html' => view('scheduled-classes._card', [
+                'account' => $account,
+                'scheduledClass' => $scheduledClass,
+                'customerSearchUrl' => route('dashboard.accounts.customers.search', $account),
+                'bookingStatuses' => ClassBookingStatus::cases(),
+            ])->render(),
+        ], $status);
     }
 }

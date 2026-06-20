@@ -22,6 +22,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.13.0',
+                'date' => '2026-06-20',
+                'title' => 'Async scheduled class booking management',
+                'items' => ['Made scheduled class booking create, status update, and delete actions save without a full page reload, moved older same-day classes behind a collapsible history block, and added a reusable ajaxable-forms skill for future opt-in form work.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.12.0',
                 'date' => '2026-06-20',
                 'title' => 'Versioning and changelog foundation',
@@ -128,6 +135,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.13.0',
+                'date' => '2026-06-20',
+                'title' => 'Асинхронне керування записами на заняття',
+                'items' => ['Зроблено додавання, зміну статусу й видалення записів у керуванні заняттями без повного перезавантаження сторінки, перенесено старі заняття поточного дня в згортуваний блок історії та додано reusable ajaxable-forms skill для майбутніх форм.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.12.0',
                 'date' => '2026-06-20',
