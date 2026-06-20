@@ -71,193 +71,40 @@
         </div>
     </form>
 
-    <section class="mt-6 space-y-8">
-        @forelse ($scheduledClassDays as $date => $classes)
-            @php
-                $firstClass = $classes->first();
-                $day = \Illuminate\Support\Carbon::parse($date, $firstClass?->displayTimezone() ?? config('app.timezone'));
-                $timelineStartHour = max(0, $classes->map(fn ($scheduledClass) => $scheduledClass->starts_at->copy()->timezone($scheduledClass->displayTimezone())->hour)->min() - 1);
-                $timelineEndHour = min(24, $classes->map(function ($scheduledClass): int {
-                    $endsAt = $scheduledClass->ends_at->copy()->timezone($scheduledClass->displayTimezone());
+    <section class="mt-6 space-y-8" data-scheduled-class-current>
+        @foreach ($scheduledClassDays as $date => $classes)
+            @include('scheduled-classes._day', [
+                'account' => $account,
+                'date' => $date,
+                'classes' => $classes,
+                'customerSearchUrl' => $customerSearchUrl,
+                'bookingStatuses' => $bookingStatuses,
+            ])
+        @endforeach
 
-                    return $endsAt->minute > 0 || $endsAt->second > 0 ? $endsAt->hour + 1 : $endsAt->hour;
-                })->max() + 1);
+        @if ($scheduledClassDays->isEmpty() && $pastScheduledClassDays->isEmpty())
+            <x-ui.empty-state :title="__('app.no_public_classes')" icon="calendar" />
+        @endif
 
-                if ($timelineEndHour <= $timelineStartHour) {
-                    $timelineEndHour = min(24, $timelineStartHour + 2);
-                }
-
-                $timelineHours = range($timelineStartHour, $timelineEndHour);
-                $timelineTotalMinutes = max(60, ($timelineEndHour - $timelineStartHour) * 60);
-            @endphp
-
-            <section>
-                <div class="mb-4 flex flex-wrap items-center gap-2">
-                    <h2 class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800">
-                        {{ $day->translatedFormat('l, j F') }}
-                    </h2>
-                    <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                        {{ $classes->count() }}
-                    </span>
-                </div>
-
-                <div class="mb-5 overflow-x-auto rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
-                    <div class="min-w-[720px]">
-                        <div class="flex justify-between text-[11px] font-semibold text-slate-500">
-                            @foreach ($timelineHours as $hour)
-                                <span>{{ sprintf('%02d:00', $hour) }}</span>
-                            @endforeach
-                        </div>
-                        <div class="relative mt-2 h-24 rounded-lg border border-stone-200 bg-slate-50">
-                            <div class="absolute left-0 right-0 top-1/2 h-px bg-stone-300"></div>
-                            @foreach ($timelineHours as $hour)
-                                @php
-                                    $tickLeft = (($hour - $timelineStartHour) * 60 / $timelineTotalMinutes) * 100;
-                                @endphp
-                                <span class="absolute inset-y-0 w-px bg-stone-200" style="left: {{ number_format($tickLeft, 4, '.', '') }}%"></span>
-                            @endforeach
-
-                            @foreach ($classes as $scheduledClass)
-                                @php
-                                    $timelineTimezone = $scheduledClass->displayTimezone();
-                                    $timelineStartsAt = \Illuminate\Support\Carbon::parse($date, $timelineTimezone)->setTime($timelineStartHour, 0);
-                                    $startsAt = $scheduledClass->starts_at->copy()->timezone($timelineTimezone);
-                                    $endsAt = $scheduledClass->ends_at->copy()->timezone($timelineTimezone);
-                                    $offsetMinutes = max(0, (int) round(($startsAt->getTimestamp() - $timelineStartsAt->getTimestamp()) / 60));
-                                    $durationMinutes = max(15, (int) $startsAt->diffInMinutes($endsAt));
-                                    $leftPercent = min(100, max(0, ($offsetMinutes / $timelineTotalMinutes) * 100));
-                                    $widthPercent = min(100 - $leftPercent, max(6, ($durationMinutes / $timelineTotalMinutes) * 100));
-                                    $timelineTop = 14 + ($loop->index % 2) * 34;
-                                    $activityDirection = $scheduledClass->classType?->activityDirection;
-                                    $timelineColor = $activityDirection?->colorAccent() ?? '#3B223F';
-                                    $timelineTextColor = $activityDirection?->colorText() ?? '#FFFFFF';
-                                @endphp
-                                <a
-                                    href="#scheduled-class-{{ $scheduledClass->id }}"
-                                    class="absolute flex h-8 items-center gap-2 overflow-hidden rounded-lg border px-2 text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-                                    style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; color: {{ $timelineTextColor }};"
-                                    title="{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }} · {{ $scheduledClass->title }}"
-                                >
-                                    <span class="shrink-0">{{ $startsAt->format('H:i') }}</span>
-                                    <span class="truncate">{{ $scheduledClass->title }}</span>
-                                </a>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    @foreach ($classes as $scheduledClass)
-                        @php
-                            $timezone = $scheduledClass->displayTimezone();
-                            $startsAt = $scheduledClass->starts_at->copy()->timezone($timezone);
-                            $endsAt = $scheduledClass->ends_at->copy()->timezone($timezone);
-                            $statusClass = match ($scheduledClass->status->value) {
-                                'cancelled' => 'crm-status-danger',
-                                'draft' => 'crm-status-muted',
-                                default => 'crm-status-scheduled',
-                            };
-                        @endphp
-
-                        <article id="scheduled-class-{{ $scheduledClass->id }}" class="scroll-mt-24 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <div class="text-sm font-semibold text-brand-600">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
-                                    <h3 class="mt-2 text-lg font-semibold leading-tight text-slate-950">{{ $scheduledClass->title }}</h3>
-                                    <p class="mt-1 text-sm text-slate-500">{{ $scheduledClass->classType?->name ?? __('app.class_type') }}</p>
-                                </div>
-                                <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>
-                            </div>
-
-                            <dl class="mt-4 grid gap-3 text-sm">
-                                <div>
-                                    <dt class="text-slate-500">{{ __('app.location') }}</dt>
-                                    <dd class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->location->name }} · {{ $scheduledClass->room?->name ?? __('app.room') }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-slate-500">{{ __('app.trainer') }}</dt>
-                                    <dd class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned') }}</dd>
-                                </div>
-                            </dl>
-
-                            @can('manageBookings', $account)
-                                <form method="POST" action="{{ route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]) }}" class="mt-4 space-y-3 rounded-lg bg-slate-50 p-3">
-                                    @csrf
-                                    <div
-                                        class="relative"
-                                        data-customer-autocomplete
-                                        data-search-url="{{ $customerSearchUrl }}"
-                                        data-no-results="{{ __('app.no_customers_found') }}"
-                                    >
-                                        <label class="block">
-                                            <span class="crm-label">{{ __('app.search_customer') }}</span>
-                                            <input
-                                                type="text"
-                                                class="crm-field"
-                                                autocomplete="off"
-                                                placeholder="{{ __('app.customer_search_placeholder') }}"
-                                                data-customer-autocomplete-input
-                                            >
-                                        </label>
-                                        <input type="hidden" name="customer_id" data-customer-autocomplete-id>
-                                        <div class="absolute z-20 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-lg border border-stone-200 bg-white py-1 shadow-lg" data-customer-autocomplete-results></div>
-                                    </div>
-
-                                    <input name="notes" class="crm-field" placeholder="{{ __('app.notes') }}">
-                                    <x-ui.button type="submit" class="w-full">{{ __('app.add_booking') }}</x-ui.button>
-                                </form>
-                            @endcan
-
-                            @if ($scheduledClass->classBookings->isNotEmpty())
-                                <div class="mt-4 space-y-2">
-                                    @foreach ($scheduledClass->classBookings as $booking)
-                                        @php
-                                            $bookingStatusClass = match ($booking->status->value) {
-                                                'attended' => 'crm-status-active',
-                                                'cancelled', 'no_show' => 'crm-status-danger',
-                                                default => 'crm-status-scheduled',
-                                            };
-                                        @endphp
-                                        <div class="rounded-lg border border-slate-200 p-3 text-sm">
-                                            <div class="flex items-start justify-between gap-3">
-                                                <div class="min-w-0">
-                                                    <div class="font-semibold text-slate-950">{{ $booking->customer->name }}</div>
-                                                    <div class="mt-1 text-slate-500">{{ $booking->customer->phone ?? $booking->customer->email ?? __('app.no_contact') }}</div>
-                                                </div>
-                                                <span class="{{ $bookingStatusClass }}">{{ __('app.'.$booking->status->value) }}</span>
-                                            </div>
-                                            <div class="mt-3 flex flex-wrap gap-2">
-                                                @can('markAttendance', $account)
-                                                    <form method="POST" action="{{ route('dashboard.accounts.bookings.update', [$account, $booking]) }}" class="flex grow gap-2">
-                                                        @csrf
-                                                        @method('PATCH')
-                                                        <select name="status" class="crm-field mt-0 min-w-36">
-                                                            @foreach ($bookingStatuses as $status)
-                                                                <option value="{{ $status->value }}" @selected($booking->status === $status)>{{ __('app.'.$status->value) }}</option>
-                                                            @endforeach
-                                                        </select>
-                                                        <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.save') }}</x-ui.button>
-                                                    </form>
-                                                @endcan
-                                                @can('manageBookings', $account)
-                                                    <form method="POST" action="{{ route('dashboard.accounts.bookings.destroy', [$account, $booking]) }}" data-confirm-delete>
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
-                                                    </form>
-                                                @endcan
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </article>
+        @if ($pastScheduledClassDays->isNotEmpty())
+            <details class="rounded-xl border border-stone-200 bg-white p-4 shadow-xs" data-scheduled-class-history>
+                <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 rounded-lg px-2 py-1 text-sm font-semibold text-slate-800 marker:hidden">
+                    <span>{{ __('app.older_today_classes') }}</span>
+                    <span class="crm-status-muted">{{ __('app.older_today_classes_count', ['count' => $pastScheduledClassesCount]) }}</span>
+                </summary>
+                <div class="mt-5 space-y-8 border-t border-stone-100 pt-5">
+                    @foreach ($pastScheduledClassDays as $date => $classes)
+                        @include('scheduled-classes._day', [
+                            'account' => $account,
+                            'date' => $date,
+                            'classes' => $classes,
+                            'customerSearchUrl' => $customerSearchUrl,
+                            'bookingStatuses' => $bookingStatuses,
+                        ])
                     @endforeach
                 </div>
-            </section>
-        @empty
-            <x-ui.empty-state :title="__('app.no_public_classes')" icon="calendar" />
-        @endforelse
+            </details>
+        @endif
     </section>
 
     <div

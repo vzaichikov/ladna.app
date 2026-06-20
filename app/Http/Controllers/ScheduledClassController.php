@@ -7,6 +7,7 @@ use App\Models\Account;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class ScheduledClassController extends Controller
@@ -42,13 +43,15 @@ class ScheduledClassController extends Controller
             ->orderBy('starts_at')
             ->get();
 
+        [$visibleScheduledClasses, $pastScheduledClasses] = $this->splitScheduledClasses($scheduledClasses, $activeTab, $timezone);
+
         return view('scheduled-classes.index', [
             'account' => $account,
             'activeTab' => $activeTab,
             'tabs' => $this->tabs(),
-            'scheduledClassDays' => $scheduledClasses->groupBy(fn ($scheduledClass): string => $scheduledClass->starts_at->copy()
-                ->timezone($scheduledClass->displayTimezone())
-                ->toDateString()),
+            'scheduledClassDays' => $this->groupByDisplayDate($visibleScheduledClasses),
+            'pastScheduledClassDays' => $this->groupByDisplayDate($pastScheduledClasses),
+            'pastScheduledClassesCount' => $pastScheduledClasses->count(),
             'filterLocations' => $filterLocations,
             'filterRooms' => $filterRooms,
             'selectedLocationIds' => $selectedLocationIds,
@@ -109,5 +112,36 @@ class ScheduledClassController extends Controller
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $scheduledClasses
+     * @return array{0: Collection<int, mixed>, 1: Collection<int, mixed>}
+     */
+    private function splitScheduledClasses(Collection $scheduledClasses, string $activeTab, string $timezone): array
+    {
+        if ($activeTab !== 'today') {
+            return [$scheduledClasses, collect()];
+        }
+
+        $pastCutoff = CarbonImmutable::now($timezone)
+            ->subHour()
+            ->timezone(config('app.timezone'));
+
+        [$visibleScheduledClasses, $pastScheduledClasses] = $scheduledClasses
+            ->partition(fn ($scheduledClass): bool => $scheduledClass->ends_at->greaterThanOrEqualTo($pastCutoff));
+
+        return [$visibleScheduledClasses, $pastScheduledClasses];
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $scheduledClasses
+     * @return Collection<string, Collection<int, mixed>>
+     */
+    private function groupByDisplayDate(Collection $scheduledClasses): Collection
+    {
+        return $scheduledClasses->groupBy(fn ($scheduledClass): string => $scheduledClass->starts_at->copy()
+            ->timezone($scheduledClass->displayTimezone())
+            ->toDateString());
     }
 }

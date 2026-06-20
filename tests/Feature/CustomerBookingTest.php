@@ -96,6 +96,100 @@ class CustomerBookingTest extends TestCase
         $this->assertNotNull($booking->attended_at);
     }
 
+    public function test_owner_can_create_booking_with_json_response(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Pole Beginner',
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Олена Коваль']);
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]), [
+                'customer_id' => $customer->id,
+                'notes' => 'First visit',
+            ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('message', __('app.booking_created'))
+            ->assertJsonPath('scheduled_class_id', $scheduledClass->id);
+
+        $this->assertStringContainsString('data-scheduled-class-card', $response->json('card_html'));
+        $this->assertStringContainsString('Олена Коваль', $response->json('card_html'));
+
+        $booking = ClassBooking::whereBelongsTo($account)->whereBelongsTo($customer)->firstOrFail();
+        $this->assertSame('First visit', $booking->notes);
+    }
+
+    public function test_owner_can_update_booking_status_with_json_response(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create();
+        $customer = Customer::factory()->for($account)->create(['name' => 'Марія Шевченко']);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create(['status' => 'booked', 'attended_at' => null]);
+
+        $response = $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.bookings.update', [$account, $booking]), [
+                'status' => 'attended',
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', __('app.booking_updated'))
+            ->assertJsonPath('scheduled_class_id', $scheduledClass->id);
+
+        $this->assertStringContainsString('Марія Шевченко', $response->json('card_html'));
+        $this->assertStringContainsString(__('app.attended'), $response->json('card_html'));
+
+        $booking->refresh();
+        $this->assertSame('attended', $booking->status->value);
+        $this->assertNotNull($booking->attended_at);
+    }
+
+    public function test_owner_can_delete_booking_with_json_response(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create();
+        $customer = Customer::factory()->for($account)->create(['name' => 'Ірина Мельник']);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create();
+
+        $response = $this->actingAs($owner)
+            ->deleteJson(route('dashboard.accounts.bookings.destroy', [$account, $booking]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', __('app.booking_deleted'))
+            ->assertJsonPath('scheduled_class_id', $scheduledClass->id);
+
+        $this->assertModelMissing($booking);
+        $this->assertStringContainsString('data-scheduled-class-card', $response->json('card_html'));
+        $this->assertStringNotContainsString('Ірина Мельник', $response->json('card_html'));
+    }
+
     public function test_booking_rejects_customer_from_another_account(): void
     {
         $owner = User::factory()->create();
@@ -113,6 +207,32 @@ class CustomerBookingTest extends TestCase
                 'customer_id' => $otherCustomer->id,
             ])
             ->assertInvalid('customer_id');
+    }
+
+    public function test_json_booking_rejects_customer_from_another_account(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $otherAccount = Account::factory()->create();
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create();
+        $otherCustomer = Customer::factory()->for($otherAccount)->create();
+
+        $response = $this->actingAs($owner)
+            ->withHeaders([
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+            ->post(route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]), [
+                'customer_id' => $otherCustomer->id,
+            ]);
+
+        $this->assertSame(422, $response->getStatusCode(), $response->getContent());
+        $payload = json_decode($response->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('customer_id', $payload['errors']);
     }
 
     public function test_scheduled_class_tabs_filter_by_account_and_date_range(): void
@@ -211,6 +331,45 @@ class CustomerBookingTest extends TestCase
             ->assertSee('Second Room Class')
             ->assertDontSee('First Location Class')
             ->assertDontSee('Other Account Class');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_today_tab_collapses_classes_ended_more_than_one_hour_ago(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+
+        $this->scheduledClass($account, $location, $room, $classType, 'Old Hidden Class', '2026-06-17 09:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Cutoff Visible Class', '2026-06-17 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Future Visible Class', '2026-06-17 11:15:00');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee('data-scheduled-class-history', false)
+            ->assertSeeInOrder([
+                'Cutoff Visible Class',
+                'Future Visible Class',
+                __('app.older_today_classes'),
+                'Old Hidden Class',
+            ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'this_week']))
+            ->assertOk()
+            ->assertDontSee('data-scheduled-class-history', false)
+            ->assertSeeInOrder([
+                'Old Hidden Class',
+                'Cutoff Visible Class',
+                'Future Visible Class',
+            ]);
 
         Carbon::setTestNow();
     }

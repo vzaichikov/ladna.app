@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ajaxable Forms"
+  short_description: "Make Blade forms save without reload"
+  default_prompt: "Use $ajaxable-forms to make this Ladna Blade form save asynchronously without a full page reload."

@@ -329,6 +329,13 @@
                         </div>
                     @endif
 
+                    <div
+                        data-async-status
+                        data-error-message="{{ __('app.async_request_failed') }}"
+                        data-validation-message="{{ __('app.async_validation_failed') }}"
+                        class="mb-6 hidden rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 shadow-xs"
+                    ></div>
+
                     @yield('content')
                 </main>
 
