@@ -331,6 +331,8 @@
 
                     @yield('content')
                 </main>
+
+                <x-ui.app-footer :version="$applicationVersion" />
             </div>
         </div>
 

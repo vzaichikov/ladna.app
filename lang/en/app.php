@@ -177,6 +177,8 @@ return [
     'quick_actions' => 'Quick actions',
     'open' => 'Open',
     'view_all' => 'View all',
+    'version' => 'Version',
+    'whats_new' => "What's new",
     'locations_copy' => 'Places where your studio classes happen.',
     'rooms_copy' => 'Rooms inside locations used in the schedule.',
     'activity_directions_copy' => 'The main directions your studio teaches.',

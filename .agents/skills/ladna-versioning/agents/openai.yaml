@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Versioning"
+  short_description: "VERSION and changelog discipline"
+  default_prompt: "Use $ladna-versioning before every commit or push in the Ladna app."
