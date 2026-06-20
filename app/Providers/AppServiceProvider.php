@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\Location;
 use App\Policies\AccountPolicy;
 use App\Policies\LocationPolicy;
+use App\Support\ApplicationVersion;
 use App\Support\SystemAppearance;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\View\View as ViewInstance;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -47,8 +49,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manageTrainers', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageTrainers));
         Gate::define('manageStudioSettings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageStudioSettings));
 
-        View::composer(['layouts.app', 'layouts.public'], function ($view): void {
-            $view->with('systemAppearance', SystemAppearance::current());
+        View::composer(['layouts.app', 'layouts.public'], function (ViewInstance $view): void {
+            $view
+                ->with('systemAppearance', SystemAppearance::current())
+                ->with('applicationVersion', ApplicationVersion::current());
         });
 
         RateLimiter::for('login', function (Request $request): Limit {

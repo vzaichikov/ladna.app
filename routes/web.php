@@ -5,6 +5,7 @@ use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountOwnerProfileController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ClassBookingController;
 use App\Http\Controllers\ClassPassPlanController;
 use App\Http\Controllers\ClassTypeController;
@@ -32,6 +33,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 })->name('home');
+
+Route::get('/changelog.en.html', [ChangelogController::class, 'english'])->name('changelog.en');
+Route::get('/changelog.ua.html', [ChangelogController::class, 'ukrainian'])->name('changelog.ua');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');

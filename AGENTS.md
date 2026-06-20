@@ -26,6 +26,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 This project has domain-specific skills available in `**/skills/**`. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
 
 - Activate `ladna-domain` for Ladna business-domain work: SaaS/studio/customer roles, tenancy, permissions, subscriptions, class passes, schedules, trainers, customers, bookings, or Charmpole demo data.
+- Activate `ladna-versioning` before every commit or push: update `VERSION` and `config/changelog.php` with the correct semantic version bump and release note for `/changelog.en.html` and `/changelog.ua.html`.
 
 ## Conventions
 

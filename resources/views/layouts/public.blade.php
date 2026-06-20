@@ -17,5 +17,9 @@
     </head>
     <body class="antialiased" style="--app-font-family: '{{ $systemAppearance['css_family'] }}';">
         @yield('content')
+
+        @unless (($hideAppFooter ?? false) || ($isEmbed ?? false))
+            <x-ui.app-footer :version="$applicationVersion" />
+        @endunless
     </body>
 </html>
