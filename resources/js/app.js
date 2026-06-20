@@ -122,6 +122,33 @@ function initSlugAutofill() {
     });
 }
 
+function initColorPickers() {
+    document.querySelectorAll('[data-color-picker]').forEach((picker) => {
+        const container = picker.closest('label') ?? picker.parentElement;
+        const input = container?.querySelector('[data-color-value]');
+
+        if (!input) {
+            return;
+        }
+
+        const validHex = (value) => /^#[0-9A-Fa-f]{6}$/.test(value);
+
+        picker.addEventListener('input', () => {
+            input.value = picker.value.toUpperCase();
+        });
+
+        input.addEventListener('input', () => {
+            if (validHex(input.value)) {
+                picker.value = input.value;
+            }
+        });
+
+        if (validHex(input.value)) {
+            picker.value = input.value;
+        }
+    });
+}
+
 function initCustomerAutocomplete() {
     document.querySelectorAll('[data-customer-autocomplete]').forEach((container) => {
         const input = container.querySelector('[data-customer-autocomplete-input]');
@@ -244,6 +271,7 @@ function initClassRecordMock() {
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
     initSlugAutofill();
+    initColorPickers();
     initCustomerAutocomplete();
     initClassRecordMock();
 

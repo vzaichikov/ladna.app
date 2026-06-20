@@ -18,7 +18,7 @@
         @forelse ($activityDirections as $activityDirection)
             <div class="crm-row lg:grid-cols-[1fr_150px_auto] lg:items-center">
                 <div class="flex items-center gap-4">
-                    <span class="h-11 w-11 rounded-lg border border-slate-200" style="background-color: {{ $activityDirection->color ?? '#f5f5f5' }}"></span>
+                    <span class="h-11 w-11 rounded-lg border border-slate-200" style="background-color: {{ $activityDirection->colorAccent('#f5f5f5') }}"></span>
                     <div>
                         <h2 class="font-semibold text-slate-950">{{ $activityDirection->name }}</h2>
                         <p class="mt-1 text-sm text-slate-500">{{ $activityDirection->slug }}</p>

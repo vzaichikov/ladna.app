@@ -16,9 +16,27 @@
     @error('description') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
 <div class="grid gap-4 sm:grid-cols-2">
+    @php
+        $colorValue = old('color', $activityDirection->color);
+        $colorPickerValue = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $colorValue) ? $colorValue : '#A78AB9';
+    @endphp
     <label class="block">
         <span class="crm-label">{{ __('app.color') }}</span>
-        <input name="color" value="{{ old('color', $activityDirection->color) }}" placeholder="#A78AB9" class="crm-field">
+        <span class="mt-2 flex items-center gap-3">
+            <input
+                type="color"
+                value="{{ $colorPickerValue }}"
+                class="h-11 w-14 cursor-pointer rounded-lg border border-stone-200 bg-white p-1"
+                data-color-picker
+            >
+            <input
+                name="color"
+                value="{{ $colorValue }}"
+                placeholder="#A78AB9"
+                class="crm-field mt-0"
+                data-color-value
+            >
+        </span>
         @error('color') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="flex items-center gap-3 pt-8 text-sm font-medium text-slate-700">

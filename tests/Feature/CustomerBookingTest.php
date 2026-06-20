@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
 use App\Models\ClassType;
 use App\Models\Customer;
@@ -27,7 +28,11 @@ class CustomerBookingTest extends TestCase
         $account->addOwner($owner);
         $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
-        $classType = ClassType::factory()->for($account)->create();
+        $activityDirection = ActivityDirection::factory()->for($account)->create(['color' => '#C7F000']);
+        $classType = ClassType::factory()
+            ->for($account)
+            ->for($activityDirection)
+            ->create();
 
         ScheduledClass::factory()
             ->for($account)
@@ -43,7 +48,9 @@ class CustomerBookingTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.scheduled-classes.index', $account))
             ->assertOk()
-            ->assertSee('Pole Beginner');
+            ->assertSee('Pole Beginner')
+            ->assertSee('background-color: #C7F000;', false)
+            ->assertSee('color: #1E293B;', false);
 
         Carbon::setTestNow();
     }

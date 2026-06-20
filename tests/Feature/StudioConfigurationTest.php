@@ -128,4 +128,34 @@ class StudioConfigurationTest extends TestCase
         $this->assertTrue(ActivityDirection::whereBelongsTo($account)->where('slug', 'tantsi-dlya-pochatkivtsiv')->exists());
         $this->assertTrue(ActivityDirection::whereBelongsTo($account)->where('slug', 'tantsi-dlya-pochatkivtsiv-2')->exists());
     }
+
+    public function test_activity_direction_color_picker_and_color_helpers(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.activity-directions.create', $account))
+            ->assertOk()
+            ->assertSee('data-color-picker', false)
+            ->assertSee('data-color-value', false);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.activity-directions.store', $account), [
+                'name' => 'Bright Direction',
+                'slug' => 'bright-direction',
+                'color' => '#C7F000',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.activity-directions.index', $account));
+
+        $activityDirection = ActivityDirection::whereBelongsTo($account)
+            ->where('slug', 'bright-direction')
+            ->firstOrFail();
+
+        $this->assertSame('#C7F000', $activityDirection->colorAccent());
+        $this->assertSame('#1E293B', $activityDirection->colorText());
+        $this->assertSame('#3B223F', (new ActivityDirection)->colorAccent());
+    }
 }

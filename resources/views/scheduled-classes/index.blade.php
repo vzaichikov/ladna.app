@@ -128,11 +128,14 @@
                                     $leftPercent = min(100, max(0, ($offsetMinutes / $timelineTotalMinutes) * 100));
                                     $widthPercent = min(100 - $leftPercent, max(6, ($durationMinutes / $timelineTotalMinutes) * 100));
                                     $timelineTop = 14 + ($loop->index % 2) * 34;
+                                    $activityDirection = $scheduledClass->classType?->activityDirection;
+                                    $timelineColor = $activityDirection?->colorAccent() ?? '#3B223F';
+                                    $timelineTextColor = $activityDirection?->colorText() ?? '#FFFFFF';
                                 @endphp
                                 <a
                                     href="#scheduled-class-{{ $scheduledClass->id }}"
-                                    class="absolute flex h-8 items-center gap-2 overflow-hidden rounded-lg bg-brand-600 px-2 text-xs font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-                                    style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px;"
+                                    class="absolute flex h-8 items-center gap-2 overflow-hidden rounded-lg border px-2 text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                                    style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; color: {{ $timelineTextColor }};"
                                     title="{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }} · {{ $scheduledClass->title }}"
                                 >
                                     <span class="shrink-0">{{ $startsAt->format('H:i') }}</span>
