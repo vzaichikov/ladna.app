@@ -18,6 +18,18 @@ class ScheduledClassController extends Controller
         $timezone = $account->timezone ?? config('app.timezone');
         $activeTab = $this->activeTab((string) $request->query('tab', 'today'));
         [$startsAt, $endsAt] = $this->tabRange($activeTab, $timezone);
+        $filterLocations = $account->locations()
+            ->active()
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        $filterRooms = $account->rooms()
+            ->active()
+            ->with('location:id,name')
+            ->orderBy('location_id')
+            ->orderBy('name')
+            ->get(['id', 'location_id', 'name']);
+        $selectedLocationIds = $this->selectedIds($request, 'locations', $filterLocations->pluck('id')->all());
+        $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
 
         $scheduledClasses = $account->scheduledClasses()
             ->with(['location', 'room', 'classType.activityDirection', 'trainer', 'scheduleSeries', 'classBookings.customer'])
@@ -25,6 +37,8 @@ class ScheduledClassController extends Controller
                 $startsAt->timezone(config('app.timezone')),
                 $endsAt->timezone(config('app.timezone')),
             ])
+            ->when($selectedLocationIds !== [], fn ($query) => $query->whereIn('location_id', $selectedLocationIds))
+            ->when($selectedRoomIds !== [], fn ($query) => $query->whereIn('room_id', $selectedRoomIds))
             ->orderBy('starts_at')
             ->get();
 
@@ -35,6 +49,10 @@ class ScheduledClassController extends Controller
             'scheduledClassDays' => $scheduledClasses->groupBy(fn ($scheduledClass): string => $scheduledClass->starts_at->copy()
                 ->timezone($scheduledClass->displayTimezone())
                 ->toDateString()),
+            'filterLocations' => $filterLocations,
+            'filterRooms' => $filterRooms,
+            'selectedLocationIds' => $selectedLocationIds,
+            'selectedRoomIds' => $selectedRoomIds,
             'customerSearchUrl' => route('dashboard.accounts.customers.search', $account),
             'bookingStatuses' => ClassBookingStatus::cases(),
         ]);
@@ -71,5 +89,25 @@ class ScheduledClassController extends Controller
             'next_week' => [$today->addWeek()->startOfWeek(CarbonInterface::MONDAY), $today->addWeek()->endOfWeek(CarbonInterface::SUNDAY)],
             default => [$today, $today->endOfDay()],
         };
+    }
+
+    /**
+     * @param  array<int, int>  $allowedIds
+     * @return array<int, int>
+     */
+    private function selectedIds(Request $request, string $key, array $allowedIds): array
+    {
+        $selectedIds = $request->query($key, []);
+
+        if (! is_array($selectedIds)) {
+            $selectedIds = [$selectedIds];
+        }
+
+        return collect($selectedIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => in_array($id, $allowedIds, true))
+            ->unique()
+            ->values()
+            ->all();
     }
 }

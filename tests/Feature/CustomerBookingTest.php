@@ -155,6 +155,59 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_scheduled_classes_can_be_filtered_by_locations_and_rooms(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $otherAccount = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $firstLocation = Location::factory()->for($account)->create(['name' => 'First Studio', 'timezone' => 'UTC']);
+        $secondLocation = Location::factory()->for($account)->create(['name' => 'Second Studio', 'timezone' => 'UTC']);
+        $firstRoom = Room::factory()->for($account)->for($firstLocation)->create(['name' => 'Blue Room']);
+        $secondRoom = Room::factory()->for($account)->for($secondLocation)->create(['name' => 'Pink Room']);
+        $classType = ClassType::factory()->for($account)->create();
+        $otherLocation = Location::factory()->for($otherAccount)->create(['timezone' => 'UTC']);
+        $otherRoom = Room::factory()->for($otherAccount)->for($otherLocation)->create();
+        $otherClassType = ClassType::factory()->for($otherAccount)->create();
+        $firstClass = $this->scheduledClass($account, $firstLocation, $firstRoom, $classType, 'First Location Class', '2026-06-17 10:00:00');
+        $this->scheduledClass($account, $secondLocation, $secondRoom, $classType, 'Second Room Class', '2026-06-17 11:00:00');
+        $this->scheduledClass($otherAccount, $otherLocation, $otherRoom, $otherClassType, 'Other Account Class', '2026-06-17 12:00:00');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'this_week']))
+            ->assertOk()
+            ->assertSee('First Location Class')
+            ->assertSee('Second Room Class')
+            ->assertSee('href="#scheduled-class-'.$firstClass->id.'"', false)
+            ->assertDontSee('Other Account Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'locations' => [$firstLocation->id],
+            ]))
+            ->assertOk()
+            ->assertSee('First Location Class')
+            ->assertDontSee('Second Room Class')
+            ->assertDontSee('Other Account Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'rooms' => [$secondRoom->id],
+            ]))
+            ->assertOk()
+            ->assertSee('Second Room Class')
+            ->assertDontSee('First Location Class')
+            ->assertDontSee('Other Account Class');
+
+        Carbon::setTestNow();
+    }
+
     public function test_customer_search_matches_same_account_customer_fields(): void
     {
         $owner = User::factory()->create();
