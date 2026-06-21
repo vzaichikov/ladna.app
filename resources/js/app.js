@@ -388,6 +388,14 @@ async function submitAsyncForm(form) {
         const payload = await response.json().catch(() => ({}));
 
         if (response.ok) {
+            if (form.matches('[data-confirm-delete]')) {
+                const modal = document.getElementById('delete-confirmation-modal');
+
+                if (modal) {
+                    closeDeleteConfirmation(modal);
+                }
+            }
+
             replaceScheduledClassCard(payload.card_html ?? '', fallbackCard);
             setAsyncStatus(payload.message);
             return;
