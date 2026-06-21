@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.16.0',
+                'date' => '2026-06-21',
+                'title' => 'Public legal pages',
+                'items' => ['Added public Terms of Service and Privacy Policy pages in English and Ukrainian, with localized footer links for Google Developer Console readiness.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.15.0',
                 'date' => '2026-06-21',
                 'title' => 'Production deployment workflow',
@@ -149,6 +156,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.16.0',
+                'date' => '2026-06-21',
+                'title' => 'Публічні юридичні сторінки',
+                'items' => ['Додано публічні сторінки Угоди користувача та Політики конфіденційності українською й англійською мовами, а також локалізовані посилання у футері для підготовки Google Developer Console.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.15.0',
                 'date' => '2026-06-21',

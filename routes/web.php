@@ -14,6 +14,7 @@ use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
@@ -38,6 +39,10 @@ Route::get('/', function () {
 
 Route::get('/changelog.en.html', [ChangelogController::class, 'english'])->name('changelog.en');
 Route::get('/changelog.ua.html', [ChangelogController::class, 'ukrainian'])->name('changelog.ua');
+Route::get('/terms.en.html', [LegalPageController::class, 'termsEnglish'])->name('terms.en');
+Route::get('/terms.ua.html', [LegalPageController::class, 'termsUkrainian'])->name('terms.ua');
+Route::get('/privacy.en.html', [LegalPageController::class, 'privacyEnglish'])->name('privacy.en');
+Route::get('/privacy.ua.html', [LegalPageController::class, 'privacyUkrainian'])->name('privacy.ua');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
