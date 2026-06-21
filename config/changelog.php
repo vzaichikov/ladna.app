@@ -6,7 +6,6 @@ return [
             'title' => 'Ladna changelog',
             'current_version' => 'Current version :version',
             'heading' => "What's new in Ladna",
-            'intro' => 'The changelog started at 0.0.0 and was rebuilt from the repository history. Feature-level work increments the middle number while fixes and maintenance increment the rightmost number until the app reaches a stable 1.0.0 release.',
             'language_label' => 'Language',
             'history_label' => 'Release history',
         ],
@@ -14,13 +13,19 @@ return [
             'title' => 'Журнал змін Ladna',
             'current_version' => 'Поточна версія :version',
             'heading' => 'Що нового в Ladna',
-            'intro' => 'Журнал змін стартує з 0.0.0 і відновлений з історії репозиторію. Функціональні зміни підвищують середнє число, а виправлення й технічне обслуговування підвищують праве число, доки застосунок не дійде до стабільного релізу 1.0.0.',
             'language_label' => 'Мова',
             'history_label' => 'Історія релізів',
         ],
     ],
     'releases' => [
         'en' => [
+            [
+                'version' => '0.15.0',
+                'date' => '2026-06-21',
+                'title' => 'Production deployment workflow',
+                'items' => ['Added a guarded Ladna production deploy skill with dry-run checks, production SSH handoff, locked dependency install, Vite build, forced migrations without seeders, cache optimization, queue restart, and maintenance-mode cleanup.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.14.0',
                 'date' => '2026-06-21',
@@ -144,6 +149,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.15.0',
+                'date' => '2026-06-21',
+                'title' => 'Production deployment workflow',
+                'items' => ['Додано guarded skill для production deploy Ladna з dry-run перевірками, production SSH handoff, встановленням locked залежностей, Vite build, forced migrations без seeders, оптимізацією кешів, restart queue та cleanup maintenance mode.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.14.0',
                 'date' => '2026-06-21',

@@ -21,7 +21,9 @@
                     {{ str_replace(':version', $currentVersion, $copy['current_version']) }}
                 </div>
                 <h1 class="max-w-3xl text-5xl font-semibold leading-none text-slate-950 sm:text-7xl">{{ $copy['heading'] }}</h1>
-                <p class="max-w-3xl text-lg leading-8 text-slate-500">{{ $copy['intro'] }}</p>
+                @if (filled($copy['intro'] ?? null))
+                    <p class="max-w-3xl text-lg leading-8 text-slate-500">{{ $copy['intro'] }}</p>
+                @endif
             </header>
 
             <section class="mt-10 grid gap-4" aria-label="{{ $copy['history_label'] }}">

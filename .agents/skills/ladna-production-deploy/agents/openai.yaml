@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Production Deploy"
+  short_description: "Safely deploy the Ladna Laravel app to production."
+  default_prompt: "Deploy the current pushed Ladna build to production using the guarded Laravel deployment workflow."
