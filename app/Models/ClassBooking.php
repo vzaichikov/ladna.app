@@ -7,6 +7,7 @@ use Database\Factories\ClassBookingFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ClassBooking extends Model
 {
@@ -56,5 +57,10 @@ class ClassBooking extends Model
     public function bookedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'booked_by_user_id');
+    }
+
+    public function classPassReservation(): HasOne
+    {
+        return $this->hasOne(CustomerClassPassReservation::class);
     }
 }

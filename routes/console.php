@@ -11,3 +11,7 @@ Artisan::command('inspire', function () {
 Schedule::command('schedule:generate')
     ->daily()
     ->withoutOverlapping();
+
+Schedule::command('class-passes:normalize')
+    ->daily()
+    ->withoutOverlapping();

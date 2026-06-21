@@ -33,7 +33,15 @@ class ScheduledClassController extends Controller
         $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
 
         $scheduledClasses = $account->scheduledClasses()
-            ->with(['location', 'room', 'classType.activityDirection', 'trainer', 'scheduleSeries', 'classBookings.customer'])
+            ->with([
+                'location',
+                'room',
+                'classType.activityDirection',
+                'trainer',
+                'scheduleSeries',
+                'classBookings.customer',
+                'classBookings.classPassReservation.customerClassPass.classPassPlan',
+            ])
             ->whereBetween('starts_at', [
                 $startsAt->timezone(config('app.timezone')),
                 $endsAt->timezone(config('app.timezone')),

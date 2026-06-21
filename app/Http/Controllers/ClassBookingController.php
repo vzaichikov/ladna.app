@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\NormalizeCustomerClassPasses;
+use App\Actions\ReconcileCustomerClassPassForBooking;
+use App\Actions\ReserveCustomerClassPassForBooking;
 use App\Enums\ClassBookingStatus;
 use App\Http\Requests\StoreClassBookingRequest;
 use App\Http\Requests\UpdateClassBookingStatusRequest;
@@ -15,13 +18,13 @@ use Illuminate\Http\Response;
 
 class ClassBookingController extends Controller
 {
-    public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass): RedirectResponse|JsonResponse
+    public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass, ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking): RedirectResponse|JsonResponse
     {
         $this->ensureClassBelongsToAccount($account, $scheduledClass);
 
         $customer = $account->customers()->whereKey($request->validated('customer_id'))->firstOrFail();
 
-        $scheduledClass->classBookings()->updateOrCreate(
+        $classBooking = $scheduledClass->classBookings()->updateOrCreate(
             ['customer_id' => $customer->id],
             [
                 'account_id' => $account->id,
@@ -31,6 +34,7 @@ class ClassBookingController extends Controller
                 'notes' => $request->validated('notes'),
             ],
         );
+        $reserveCustomerClassPassForBooking->execute($classBooking);
 
         if ($request->expectsJson()) {
             return $this->bookingJsonResponse($account, $scheduledClass, __('app.booking_created'), Response::HTTP_CREATED);
@@ -40,7 +44,7 @@ class ClassBookingController extends Controller
             ->with('status', __('app.booking_created'));
     }
 
-    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking): RedirectResponse|JsonResponse
+    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking, ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking): RedirectResponse|JsonResponse
     {
         $this->ensureBookingBelongsToAccount($account, $classBooking);
 
@@ -50,6 +54,7 @@ class ClassBookingController extends Controller
             'attended_at' => $status === ClassBookingStatus::Attended ? now() : null,
             'notes' => $request->validated('notes', $classBooking->notes),
         ]);
+        $reconcileCustomerClassPassForBooking->execute($classBooking);
 
         if ($request->expectsJson()) {
             return $this->bookingJsonResponse($account, $classBooking->scheduledClass, __('app.booking_updated'));
@@ -59,13 +64,19 @@ class ClassBookingController extends Controller
             ->with('status', __('app.booking_updated'));
     }
 
-    public function destroy(Request $request, Account $account, ClassBooking $classBooking): RedirectResponse|JsonResponse
+    public function destroy(Request $request, Account $account, ClassBooking $classBooking, NormalizeCustomerClassPasses $normalizeCustomerClassPasses): RedirectResponse|JsonResponse
     {
         $this->authorize('manageBookings', $account);
         $this->ensureBookingBelongsToAccount($account, $classBooking);
 
         $scheduledClass = $classBooking->scheduledClass;
+        $classBooking->loadMissing('classPassReservation.customerClassPass');
+        $customerClassPass = $classBooking->classPassReservation?->customerClassPass;
         $classBooking->delete();
+
+        if ($customerClassPass) {
+            $normalizeCustomerClassPasses->forPass($customerClassPass);
+        }
 
         if ($request->expectsJson()) {
             return $this->bookingJsonResponse($account, $scheduledClass, __('app.booking_deleted'));
@@ -94,6 +105,7 @@ class ClassBookingController extends Controller
             'trainer',
             'scheduleSeries',
             'classBookings.customer',
+            'classBookings.classPassReservation.customerClassPass.classPassPlan',
         ]);
 
         return response()->json([

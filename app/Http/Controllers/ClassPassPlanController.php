@@ -20,7 +20,7 @@ class ClassPassPlanController extends Controller
         return view('class-pass-plans.index', [
             'account' => $account,
             'classPassPlans' => $account->classPassPlans()
-                ->with(['activityDirections', 'trainerTypes'])
+                ->with(['classTypes', 'trainerTypes', 'rooms'])
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
@@ -49,8 +49,9 @@ class ClassPassPlanController extends Controller
         $validated['is_active'] = $request->boolean('is_active', true);
 
         $classPassPlan = $account->classPassPlans()->create($this->classPassPlanAttributes($validated));
-        $classPassPlan->activityDirections()->sync($validated['activity_direction_ids']);
-        $classPassPlan->trainerTypes()->sync($validated['trainer_type_ids']);
+        $classPassPlan->classTypes()->sync($validated['class_type_ids']);
+        $classPassPlan->trainerTypes()->sync($validated['trainer_type_ids'] ?? []);
+        $classPassPlan->rooms()->sync($validated['room_ids'] ?? []);
 
         return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
             ->with('status', __('app.class_pass_plan_created'));
@@ -65,7 +66,7 @@ class ClassPassPlanController extends Controller
     {
         $this->ensureBelongsToAccount($account, $classPassPlan);
         $this->ensureCurrentUserOwns($account);
-        $classPassPlan->loadMissing(['activityDirections', 'trainerTypes']);
+        $classPassPlan->loadMissing(['classTypes', 'trainerTypes', 'rooms']);
 
         return view('class-pass-plans.edit', [
             'account' => $account,
@@ -83,8 +84,9 @@ class ClassPassPlanController extends Controller
         $validated['is_active'] = $request->boolean('is_active');
 
         $classPassPlan->update($this->classPassPlanAttributes($validated));
-        $classPassPlan->activityDirections()->sync($validated['activity_direction_ids']);
-        $classPassPlan->trainerTypes()->sync($validated['trainer_type_ids']);
+        $classPassPlan->classTypes()->sync($validated['class_type_ids']);
+        $classPassPlan->trainerTypes()->sync($validated['trainer_type_ids'] ?? []);
+        $classPassPlan->rooms()->sync($validated['room_ids'] ?? []);
 
         return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
             ->with('status', __('app.class_pass_plan_updated'));
@@ -137,6 +139,7 @@ class ClassPassPlanController extends Controller
             'available_until_time',
             'allows_any_time',
             'any_time_addon_price_cents',
+            'is_trial',
             'is_active',
             'sort_order',
         ]);
@@ -153,6 +156,7 @@ class ClassPassPlanController extends Controller
         $validated['any_time_addon_price_cents'] = $allowsAnyTime
             ? $this->moneyToCents($validated['any_time_addon_price'])
             : null;
+        $validated['is_trial'] = (bool) ($validated['is_trial'] ?? false);
 
         return $validated;
     }
@@ -173,8 +177,9 @@ class ClassPassPlanController extends Controller
         $account->ensureDefaultTrainerType();
 
         return [
-            'activityDirections' => $account->activityDirections()->orderBy('name')->get(),
+            'classTypes' => $account->classTypes()->orderBy('schedule_kind')->orderBy('name')->get(),
             'trainerTypes' => $account->trainerTypes()->ordered()->get(),
+            'rooms' => $account->rooms()->with('location:id,name')->orderBy('location_id')->orderBy('name')->get(),
             'currencies' => config('charm.currencies'),
         ];
     }

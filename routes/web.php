@@ -10,6 +10,7 @@ use App\Http\Controllers\ClassBookingController;
 use App\Http\Controllers\ClassPassPlanController;
 use App\Http\Controllers\ClassTypeController;
 use App\Http\Controllers\CustomerAuthController;
+use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\ProfileController as PlatformProfileController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SystemSettingsController;
+use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\ScheduledClassController;
@@ -93,6 +95,12 @@ Route::middleware('auth:web')
         Route::resource('accounts.class-pass-plans', ClassPassPlanController::class)
             ->except(['show'])
             ->scoped();
+        Route::get('accounts/{account}/customer-class-passes', [CustomerClassPassController::class, 'index'])
+            ->name('accounts.customer-class-passes.index');
+        Route::get('accounts/{account}/customer-class-passes/{customerClassPass}/edit', [CustomerClassPassController::class, 'edit'])
+            ->name('accounts.customer-class-passes.edit');
+        Route::put('accounts/{account}/customer-class-passes/{customerClassPass}', [CustomerClassPassController::class, 'update'])
+            ->name('accounts.customer-class-passes.update');
         Route::resource('accounts.trainers', TrainerController::class)
             ->except(['show'])
             ->scoped();
@@ -104,6 +112,8 @@ Route::middleware('auth:web')
         Route::resource('accounts.customers', CustomerController::class)
             ->except(['show'])
             ->scoped();
+        Route::post('accounts/{account}/customers/{customer}/class-passes', [CustomerClassPassController::class, 'store'])
+            ->name('accounts.customers.class-passes.store');
         Route::get('accounts/{account}/customers/search', CustomerSearchController::class)
             ->name('accounts.customers.search');
         Route::resource('accounts.schedule-series', ScheduleSeriesController::class)
@@ -127,3 +137,7 @@ Route::get('/{accountSlug}/{locationSlug}/schedule', [PublicScheduleController::
     ->name('public.schedule');
 Route::get('/{accountSlug}/{locationSlug}/schedule/embed', [PublicScheduleController::class, 'embed'])
     ->name('public.schedule.embed');
+Route::get('/{accountSlug}/{locationSlug}/price', [PublicPriceController::class, 'show'])
+    ->name('public.price');
+Route::get('/{accountSlug}/{locationSlug}/price/embed', [PublicPriceController::class, 'embed'])
+    ->name('public.price.embed');

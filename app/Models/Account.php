@@ -97,6 +97,16 @@ class Account extends Model
         return $this->hasMany(ClassPassPlan::class);
     }
 
+    public function customerClassPasses(): HasMany
+    {
+        return $this->hasMany(CustomerClassPass::class);
+    }
+
+    public function customerClassPassReservations(): HasMany
+    {
+        return $this->hasMany(CustomerClassPassReservation::class);
+    }
+
     public function activityDirections(): HasMany
     {
         return $this->hasMany(ActivityDirection::class);

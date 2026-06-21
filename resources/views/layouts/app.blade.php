@@ -33,6 +33,12 @@
 
     $studioNav = $showAccountNav ? [
         [
+            'label' => __('app.customer_class_passes'),
+            'icon' => 'class-pass-plans',
+            'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.customer-class-passes.*'),
+        ],
+        [
             'label' => __('app.current'),
             'icon' => 'dashboard',
             'href' => route('dashboard.accounts.show', $activeAccount),

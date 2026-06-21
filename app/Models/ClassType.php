@@ -3,17 +3,19 @@
 namespace App\Models;
 
 use App\Enums\ScheduleKind;
-use Illuminate\Database\Eloquent\Builder;
+use Database\Factories\ClassTypeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['account_id', 'activity_direction_id', 'name', 'slug', 'description', 'color', 'schedule_kind', 'default_duration_minutes', 'booking_cutoff_minutes', 'default_capacity', 'is_active'])]
 class ClassType extends Model
 {
-    /** @use HasFactory<\Database\Factories\ClassTypeFactory> */
+    /** @use HasFactory<ClassTypeFactory> */
     use HasFactory;
 
     protected $attributes = [
@@ -51,6 +53,12 @@ class ClassType extends Model
     public function activityDirection(): BelongsTo
     {
         return $this->belongsTo(ActivityDirection::class);
+    }
+
+    public function classPassPlans(): BelongsToMany
+    {
+        return $this->belongsToMany(ClassPassPlan::class, 'class_pass_plan_class_type')
+            ->withTimestamps();
     }
 
     public function scheduleSeries(): HasMany

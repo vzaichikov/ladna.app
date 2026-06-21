@@ -22,6 +22,15 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.14.0',
+                'date' => '2026-06-21',
+                'title' => 'Studio class pass lifecycle',
+                'items' => [
+                    'Added purchased customer class passes with unique codes, reservation and attendance ledger, manual issue flow, active pass management, customer pass history, booking pass alerts, normalization command, public price page, embeddable price API, and Charmpole demo pricing for group classes, private lessons, rentals, and trial passes.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.13.0',
                 'date' => '2026-06-20',
                 'title' => 'Async scheduled class booking management',
@@ -135,6 +144,15 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.14.0',
+                'date' => '2026-06-21',
+                'title' => 'Життєвий цикл студійних абонементів',
+                'items' => [
+                    'Додано куплені клієнтські абонементи з унікальними кодами, ledger резервів і відвідувань, ручну видачу, керування активними абонементами, історію в картці клієнта, попередження в записах без відповідного абонемента, команду нормалізації, публічну сторінку цін, embeddable price API та demo-ціни Charmpole для групових занять, індивідуальних занять, оренди й пробних занять.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.13.0',
                 'date' => '2026-06-20',

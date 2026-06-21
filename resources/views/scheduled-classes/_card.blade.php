@@ -73,6 +73,20 @@
                         <div class="min-w-0">
                             <div class="font-semibold text-slate-950">{{ $booking->customer->name }}</div>
                             <div class="mt-1 text-slate-500">{{ $booking->customer->phone ?? $booking->customer->email ?? __('app.no_contact') }}</div>
+                            @if ($booking->classPassReservation?->customerClassPass && $booking->classPassReservation->status->value !== 'released')
+                                @php
+                                    $reservedPass = $booking->classPassReservation->customerClassPass;
+                                @endphp
+                                <div class="mt-2 inline-flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+                                    <span>{{ $reservedPass->code }}</span>
+                                    <span>{{ $reservedPass->remainingSessionsCount() }} {{ __('app.remaining_sessions_short') }}</span>
+                                    <span>{{ __('app.'.$booking->classPassReservation->status->value) }}</span>
+                                </div>
+                            @elseif (in_array($booking->status->value, ['booked', 'attended'], true))
+                                <div class="mt-2 inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
+                                    {{ __('app.no_matching_class_pass_alert') }}
+                                </div>
+                            @endif
                         </div>
                         <span class="{{ $bookingStatusClass }}">{{ __('app.'.$booking->status->value) }}</span>
                     </div>

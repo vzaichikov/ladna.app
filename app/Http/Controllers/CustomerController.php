@@ -7,20 +7,36 @@ use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Account;
 use App\Models\Customer;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class CustomerController extends Controller
 {
-    public function index(Account $account): View
+    public function index(Request $request, Account $account): View
     {
         $this->authorize('manageClients', $account);
+
+        $term = trim((string) $request->query('q', ''));
 
         return view('customers.index', [
             'account' => $account,
             'customers' => $account->customers()
-                ->withCount('classBookings')
+                ->withCount([
+                    'classBookings',
+                    'customerClassPasses as active_class_passes_count' => fn ($query) => $query->active(),
+                ])
+                ->when($term !== '', function ($query) use ($term): void {
+                    $query->where(function ($query) use ($term): void {
+                        $query->where('name', 'like', "%{$term}%")
+                            ->orWhere('phone', 'like', "%{$term}%")
+                            ->orWhere('email', 'like', "%{$term}%")
+                            ->orWhereHas('customerClassPasses', fn ($query) => $query->where('code', 'like', "%{$term}%"));
+                    });
+                })
                 ->orderBy('name')
-                ->get(),
+                ->paginate(20)
+                ->withQueryString(),
+            'searchTerm' => $term,
         ]);
     }
 
@@ -56,7 +72,20 @@ class CustomerController extends Controller
 
         return view('customers.edit', [
             'account' => $account,
-            'customer' => $customer,
+            'customer' => $customer->load([
+                'customerClassPasses.classPassPlan.classTypes',
+                'customerClassPasses.classPassPlan.trainerTypes',
+                'customerClassPasses.classPassPlan.rooms',
+                'customerClassPasses.reservations.classBooking.scheduledClass.classType',
+                'classBookings.scheduledClass.classType',
+                'classBookings.classPassReservation.customerClassPass',
+            ]),
+            'classPassPlans' => $account->classPassPlans()
+                ->active()
+                ->with(['classTypes', 'trainerTypes', 'rooms'])
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 

@@ -34,6 +34,7 @@ class ClassPassPlanFactory extends Factory
             'available_until_time' => null,
             'allows_any_time' => false,
             'any_time_addon_price_cents' => null,
+            'is_trial' => false,
             'is_active' => true,
             'sort_order' => 0,
         ];

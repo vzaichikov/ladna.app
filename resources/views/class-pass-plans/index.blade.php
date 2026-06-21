@@ -30,10 +30,15 @@
                 $fromTime = $classPassPlan->available_from_time ? substr((string) $classPassPlan->available_from_time, 0, 5) : null;
                 $untilTime = $classPassPlan->available_until_time ? substr((string) $classPassPlan->available_until_time, 0, 5) : null;
             @endphp
-            <div class="crm-row xl:grid-cols-[1.1fr_0.7fr_0.8fr_1.1fr_1.1fr_auto] xl:items-center">
+            <div class="crm-row xl:grid-cols-[1.1fr_0.7fr_0.8fr_1.1fr_1.1fr_1fr_auto] xl:items-center">
                 <div>
                     <h2 class="font-semibold text-slate-950">{{ $classPassPlan->name }}</h2>
-                    <p class="mt-1 text-sm text-slate-500">{{ $classPassPlan->slug }}</p>
+                    <div class="mt-1 flex flex-wrap gap-2 text-sm text-slate-500">
+                        <span>{{ $classPassPlan->slug }}</span>
+                        @if ($classPassPlan->is_trial)
+                            <span class="crm-status-scheduled">{{ __('app.trial_class_pass_short') }}</span>
+                        @endif
+                    </div>
                 </div>
                 <div class="text-sm text-slate-600">
                     <div class="font-semibold text-slate-950">{{ $formatMoney($classPassPlan->price_cents) }} {{ $classPassPlan->currency }}</div>
@@ -57,8 +62,8 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    @forelse ($classPassPlan->activityDirections as $activityDirection)
-                        <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ $activityDirection->name }}</span>
+                    @forelse ($classPassPlan->classTypes as $classType)
+                        <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ $classType->name }}</span>
                     @empty
                         <span class="text-sm text-slate-500">{{ __('app.not_set') }}</span>
                     @endforelse
@@ -68,6 +73,13 @@
                         <x-ui.trainer-type-badge :trainer-type="$trainerType" />
                     @empty
                         <span class="text-sm text-slate-500">{{ __('app.not_set') }}</span>
+                    @endforelse
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    @forelse ($classPassPlan->rooms as $room)
+                        <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ $room->name }}</span>
+                    @empty
+                        <span class="text-sm text-slate-500">{{ __('app.all_rooms') }}</span>
                     @endforelse
                 </div>
                 <div class="flex flex-wrap gap-2 xl:justify-end">

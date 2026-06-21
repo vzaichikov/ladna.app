@@ -20,7 +20,8 @@ class CustomerSearchController extends Controller
                 $query->where(function ($query) use ($term): void {
                     $query->where('name', 'like', "%{$term}%")
                         ->orWhere('phone', 'like', "%{$term}%")
-                        ->orWhere('email', 'like', "%{$term}%");
+                        ->orWhere('email', 'like', "%{$term}%")
+                        ->orWhereHas('customerClassPasses', fn ($query) => $query->where('code', 'like', "%{$term}%"));
                 });
             })
             ->orderBy('name')

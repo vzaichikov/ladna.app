@@ -14,14 +14,26 @@
         </x-ui.button>
     </div>
 
+    <form method="GET" action="{{ route('dashboard.accounts.customers.index', $account) }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
+        <div class="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+            <label class="block">
+                <span class="crm-label">{{ __('app.search_customer') }}</span>
+                <input name="q" value="{{ $searchTerm }}" class="crm-field" placeholder="{{ __('app.customer_search_with_pass_placeholder') }}">
+            </label>
+            <x-ui.button type="submit">{{ __('app.apply_filters') }}</x-ui.button>
+            <x-ui.button :href="route('dashboard.accounts.customers.index', $account)" variant="secondary">{{ __('app.reset_filters') }}</x-ui.button>
+        </div>
+    </form>
+
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($customers as $customer)
-            <div class="crm-row lg:grid-cols-[1fr_150px_auto] lg:items-center">
+            <div class="crm-row lg:grid-cols-[1fr_150px_170px_auto] lg:items-center">
                 <div>
                     <h2 class="font-semibold text-slate-950">{{ $customer->name }}</h2>
                     <p class="mt-1 text-sm text-slate-500">{{ $customer->phone ?? $customer->email ?? __('app.no_contact') }}</p>
                 </div>
                 <div class="text-sm font-medium text-slate-500">{{ $customer->class_bookings_count }} {{ __('app.bookings') }}</div>
+                <div class="text-sm font-medium text-slate-500">{{ $customer->active_class_passes_count }} {{ __('app.active_class_passes_short') }}</div>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
                     <x-ui.button :href="route('dashboard.accounts.customers.edit', [$account, $customer])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
                     <form method="POST" action="{{ route('dashboard.accounts.customers.destroy', [$account, $customer]) }}" data-confirm-delete>
@@ -35,4 +47,8 @@
             <x-ui.empty-state :title="__('app.no_customers')" icon="accounts" class="m-5" />
         @endforelse
     </x-ui.panel>
+
+    <div class="mt-6">
+        {{ $customers->links() }}
+    </div>
 @endsection

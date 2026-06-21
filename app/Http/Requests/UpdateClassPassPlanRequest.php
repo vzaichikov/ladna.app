@@ -3,7 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Models\Account;
-use App\Models\ActivityDirection;
+use App\Models\ClassType;
+use App\Models\Room;
 use App\Models\TrainerType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -17,6 +18,11 @@ class UpdateClassPassPlanRequest extends FormRequest
         if (! $this->boolean('allows_any_time')) {
             $this->merge(['any_time_addon_price' => null]);
         }
+
+        $this->merge([
+            'trainer_type_ids' => $this->input('trainer_type_ids', []),
+            'room_ids' => $this->input('room_ids', []),
+        ]);
     }
 
     /**
@@ -57,16 +63,22 @@ class UpdateClassPassPlanRequest extends FormRequest
                 'max:999999.99',
                 'regex:/^\d+(\.\d{1,2})?$/',
             ],
-            'activity_direction_ids' => ['required', 'array', 'min:1'],
-            'activity_direction_ids.*' => [
+            'class_type_ids' => ['required', 'array', 'min:1'],
+            'class_type_ids.*' => [
                 'integer',
-                Rule::exists((new ActivityDirection)->getTable(), 'id')->where('account_id', $account?->id),
+                Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account?->id),
             ],
-            'trainer_type_ids' => ['required', 'array', 'min:1'],
+            'trainer_type_ids' => ['nullable', 'array'],
             'trainer_type_ids.*' => [
                 'integer',
                 Rule::exists((new TrainerType)->getTable(), 'id')->where('account_id', $account?->id),
             ],
+            'room_ids' => ['nullable', 'array'],
+            'room_ids.*' => [
+                'integer',
+                Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account?->id),
+            ],
+            'is_trial' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:32767'],
         ];

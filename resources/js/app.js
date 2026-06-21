@@ -450,14 +450,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.addEventListener('click', (event) => {
-        const selectAllButton = event.target.closest('[data-select-all-directions]');
+        const selectAllButton = event.target.closest('[data-select-all-class-types]');
 
         if (!selectAllButton) {
             return;
         }
 
-        const group = selectAllButton.closest('[data-activity-direction-group]');
-        group?.querySelectorAll('[data-activity-direction-checkbox]').forEach((checkbox) => {
+        const group = selectAllButton.closest('[data-class-type-group]');
+        group?.querySelectorAll('[data-class-type-checkbox]').forEach((checkbox) => {
             checkbox.checked = true;
         });
     });

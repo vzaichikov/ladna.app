@@ -39,4 +39,9 @@ class Customer extends Authenticatable
     {
         return $this->hasMany(ClassBooking::class);
     }
+
+    public function customerClassPasses(): HasMany
+    {
+        return $this->hasMany(CustomerClassPass::class);
+    }
 }

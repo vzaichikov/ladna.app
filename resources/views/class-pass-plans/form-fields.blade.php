@@ -1,10 +1,11 @@
 @php
-    $selectedActivityDirectionIds = old('activity_direction_ids');
+    $selectedClassTypeIds = old('class_type_ids');
     $selectedTrainerTypeIds = old('trainer_type_ids');
+    $selectedRoomIds = old('room_ids');
 
-    if ($selectedActivityDirectionIds === null) {
-        $selectedActivityDirectionIds = $classPassPlan->relationLoaded('activityDirections')
-            ? $classPassPlan->activityDirections->pluck('id')->all()
+    if ($selectedClassTypeIds === null) {
+        $selectedClassTypeIds = $classPassPlan->relationLoaded('classTypes')
+            ? $classPassPlan->classTypes->pluck('id')->all()
             : [];
     }
 
@@ -14,8 +15,15 @@
             : $trainerTypes->pluck('id')->all();
     }
 
-    $selectedActivityDirectionIds = collect($selectedActivityDirectionIds)->map(fn ($id) => (int) $id)->all();
+    if ($selectedRoomIds === null) {
+        $selectedRoomIds = $classPassPlan->relationLoaded('rooms')
+            ? $classPassPlan->rooms->pluck('id')->all()
+            : [];
+    }
+
+    $selectedClassTypeIds = collect($selectedClassTypeIds)->map(fn ($id) => (int) $id)->all();
     $selectedTrainerTypeIds = collect($selectedTrainerTypeIds)->map(fn ($id) => (int) $id)->all();
+    $selectedRoomIds = collect($selectedRoomIds)->map(fn ($id) => (int) $id)->all();
     $formatMoneyInput = static function (?int $priceCents): string {
         if ($priceCents === null) {
             return '';
@@ -31,6 +39,7 @@
     $selectedCurrency = old('currency', $classPassPlan->currency);
     $price = old('price', $formatMoneyInput($classPassPlan->price_cents ?? 0));
     $allowsAnyTime = (bool) old('allows_any_time', $classPassPlan->allows_any_time ?? false);
+    $isTrial = (bool) old('is_trial', $classPassPlan->is_trial ?? false);
     $anyTimeAddonPrice = old('any_time_addon_price', $formatMoneyInput($classPassPlan->any_time_addon_price_cents));
     $availableFromTime = old('available_from_time', $classPassPlan->available_from_time ? substr((string) $classPassPlan->available_from_time, 0, 5) : null);
     $availableUntilTime = old('available_until_time', $classPassPlan->available_until_time ? substr((string) $classPassPlan->available_until_time, 0, 5) : null);
@@ -49,9 +58,33 @@
     </label>
 </div>
 
+<div data-class-type-group>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span class="crm-label">{{ __('app.class_types') }}</span>
+        <x-ui.button type="button" variant="secondary" size="sm" data-select-all-class-types>
+            {{ __('app.select_all') }}
+        </x-ui.button>
+    </div>
+    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        @forelse ($classTypes as $classType)
+            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700">
+                <input name="class_type_ids[]" type="checkbox" value="{{ $classType->id }}" @checked(in_array($classType->id, $selectedClassTypeIds, true)) class="crm-checkbox" data-class-type-checkbox>
+                <span class="min-w-0">
+                    <span class="block truncate text-slate-950">{{ $classType->name }}</span>
+                    <span class="mt-0.5 block text-xs text-slate-500">{{ __('app.'.$classType->schedule_kind->value) }}</span>
+                </span>
+            </label>
+        @empty
+            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">{{ __('app.no_class_types') }}</div>
+        @endforelse
+    </div>
+    @error('class_type_ids') <span class="crm-help">{{ $message }}</span> @enderror
+    @error('class_type_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
+</div>
+
 <div data-trainer-type-group>
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span class="crm-label">{{ __('app.trainer_types') }}</span>
+        <span class="crm-label">{{ __('app.trainer_types_optional') }}</span>
         <x-ui.button type="button" variant="secondary" size="sm" data-select-all-trainer-types>
             {{ __('app.select_all') }}
         </x-ui.button>
@@ -66,8 +99,26 @@
             <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">{{ __('app.no_trainer_types') }}</div>
         @endforelse
     </div>
+    <p class="mt-2 text-xs text-slate-500">{{ __('app.trainer_types_optional_help') }}</p>
     @error('trainer_type_ids') <span class="crm-help">{{ $message }}</span> @enderror
     @error('trainer_type_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
+</div>
+
+<div data-room-group>
+    <span class="crm-label">{{ __('app.rooms_optional') }}</span>
+    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        @forelse ($rooms as $room)
+            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700">
+                <input name="room_ids[]" type="checkbox" value="{{ $room->id }}" @checked(in_array($room->id, $selectedRoomIds, true)) class="crm-checkbox">
+                <span>{{ $room->location?->name }} · {{ $room->name }}</span>
+            </label>
+        @empty
+            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">{{ __('app.no_rooms') }}</div>
+        @endforelse
+    </div>
+    <p class="mt-2 text-xs text-slate-500">{{ __('app.rooms_optional_help') }}</p>
+    @error('room_ids') <span class="crm-help">{{ $message }}</span> @enderror
+    @error('room_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
 </div>
 
 <label class="block">
@@ -109,6 +160,11 @@
         <input name="allows_any_time" type="checkbox" value="1" @checked($allowsAnyTime) class="crm-checkbox" data-any-time-toggle>
         {{ __('app.allows_any_time') }}
     </label>
+    <label class="flex items-center gap-3 text-sm font-medium text-slate-700">
+        <input type="hidden" name="is_trial" value="0">
+        <input name="is_trial" type="checkbox" value="1" @checked($isTrial) class="crm-checkbox">
+        {{ __('app.trial_class_pass') }}
+    </label>
     <label class="{{ $allowsAnyTime ? 'block' : 'hidden' }}" data-any-time-addon-fields>
         <span class="crm-label">{{ __('app.any_time_addon_price') }}</span>
         <span class="mt-2 flex items-center gap-2">
@@ -119,6 +175,7 @@
         @error('any_time_addon_price') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     @error('allows_any_time') <span class="crm-help">{{ $message }}</span> @enderror
+    @error('is_trial') <span class="crm-help">{{ $message }}</span> @enderror
 </div>
 
 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -142,25 +199,4 @@
         <input name="is_active" type="checkbox" value="1" @checked(old('is_active', $classPassPlan->is_active)) class="crm-checkbox">
         {{ __('app.active') }}
     </label>
-</div>
-
-<div data-activity-direction-group>
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span class="crm-label">{{ __('app.activity_directions') }}</span>
-        <x-ui.button type="button" variant="secondary" size="sm" data-select-all-directions>
-            {{ __('app.select_all') }}
-        </x-ui.button>
-    </div>
-    <div class="mt-3 grid gap-3 sm:grid-cols-2">
-        @forelse ($activityDirections as $activityDirection)
-            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700">
-                <input name="activity_direction_ids[]" type="checkbox" value="{{ $activityDirection->id }}" @checked(in_array($activityDirection->id, $selectedActivityDirectionIds, true)) class="crm-checkbox" data-activity-direction-checkbox>
-                <span>{{ $activityDirection->name }}</span>
-            </label>
-        @empty
-            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">{{ __('app.no_activity_directions') }}</div>
-        @endforelse
-    </div>
-    @error('activity_direction_ids') <span class="crm-help">{{ $message }}</span> @enderror
-    @error('activity_direction_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
 </div>
