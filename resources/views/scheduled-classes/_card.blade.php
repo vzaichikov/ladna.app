@@ -7,14 +7,23 @@
         'draft' => 'crm-status-muted',
         default => 'crm-status-scheduled',
     };
+    $scheduleKind = $scheduledClass->classType?->schedule_kind;
+    $directionColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
+    $formatColor = $account->scheduleKindColor($scheduleKind);
+    $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
 @endphp
 
-<article id="scheduled-class-{{ $scheduledClass->id }}" data-scheduled-class-card data-scheduled-class-id="{{ $scheduledClass->id }}" class="scroll-mt-24 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
+<article id="scheduled-class-{{ $scheduledClass->id }}" data-scheduled-class-card data-scheduled-class-id="{{ $scheduledClass->id }}" class="scroll-mt-24 rounded-xl border border-stone-200 bg-white p-4 shadow-xs" style="border-top-color: {{ $directionColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;">
     <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
             <div class="text-sm font-semibold text-brand-600">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
             <h3 class="mt-2 text-lg font-semibold leading-tight text-slate-950">{{ $scheduledClass->title }}</h3>
             <p class="mt-1 text-sm text-slate-500">{{ $scheduledClass->classType?->name ?? __('app.class_type') }}</p>
+            @if ($scheduleKind)
+                <span class="mt-2 inline-flex rounded-md px-2 py-1 text-xs font-semibold" style="background-color: {{ $formatColor }}; color: {{ $formatTextColor }};">
+                    {{ __('app.'.$scheduleKind->value) }}
+                </span>
+            @endif
         </div>
         <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>
     </div>

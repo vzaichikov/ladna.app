@@ -99,7 +99,7 @@ class AccountController extends Controller
 
         return view('accounts.brand-edit', [
             'account' => $account,
-            'activeTab' => $request->query('tab') === 'qr' ? 'qr' : 'business',
+            'activeTab' => in_array($request->query('tab'), ['formats', 'qr'], true) ? $request->query('tab') : 'business',
             'customerLoginUrl' => $customerLoginUrl,
             'customerLoginQrSvg' => $this->qrCodeSvg($customerLoginUrl),
         ]);
@@ -110,10 +110,14 @@ class AccountController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
-        $account->update(collect($validated)->except('logo')->all());
+        $account->update(collect($validated)->except(['brand_tab', 'logo', 'enabled_schedule_kinds_present', 'schedule_kind_colors_present'])->all());
         $this->storeLogo($request, $account);
 
-        return redirect()->route('dashboard.accounts.brand.edit', $account)
+        $routeParameters = $request->input('brand_tab') === 'formats'
+            ? [$account, 'tab' => 'formats']
+            : [$account];
+
+        return redirect()->route('dashboard.accounts.brand.edit', $routeParameters)
             ->with('status', __('app.account_updated'));
     }
 

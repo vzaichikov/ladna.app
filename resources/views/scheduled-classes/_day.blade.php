@@ -53,18 +53,22 @@
                         $leftPercent = min(100, max(0, ($offsetMinutes / $timelineTotalMinutes) * 100));
                         $widthPercent = min(100 - $leftPercent, max(6, ($durationMinutes / $timelineTotalMinutes) * 100));
                         $timelineTop = 14 + ($loop->index % 2) * 34;
-                        $activityDirection = $scheduledClass->classType?->activityDirection;
-                        $timelineColor = $activityDirection?->colorAccent() ?? '#3B223F';
-                        $timelineTextColor = $activityDirection?->colorText() ?? '#FFFFFF';
+                        $scheduleKind = $scheduledClass->classType?->schedule_kind;
+                        $timelineColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
+                        $timelineTextColor = $scheduledClass->classType?->activityDirection?->colorText('#3B223F') ?? '#FFFFFF';
+                        $timelineKindColor = $account->scheduleKindColor($scheduleKind);
                     @endphp
                     <a
                         href="#scheduled-class-{{ $scheduledClass->id }}"
                         class="absolute flex h-8 items-center gap-2 overflow-hidden rounded-lg border px-2 text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-                        style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; color: {{ $timelineTextColor }};"
+                        style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; border-right-color: {{ $timelineKindColor }}; border-right-width: 5px; color: {{ $timelineTextColor }};"
                         title="{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }} · {{ $scheduledClass->title }}"
                     >
                         <span class="shrink-0">{{ $startsAt->format('H:i') }}</span>
                         <span class="truncate">{{ $scheduledClass->title }}</span>
+                        @if ($scheduleKind)
+                            <span class="ml-auto shrink-0 opacity-80">{{ __('app.'.$scheduledClass->classType->schedule_kind->value) }}</span>
+                        @endif
                     </a>
                 @endforeach
             </div>

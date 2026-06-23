@@ -33,7 +33,7 @@ class StoreClassTypeRequest extends FormRequest
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'schedule_kind' => ['required', Rule::enum(ScheduleKind::class)],
+            'schedule_kind' => ['nullable', Rule::enum(ScheduleKind::class)],
             'default_duration_minutes' => ['required', 'integer', 'min:15', 'max:480'],
             'booking_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
             'default_capacity' => ['nullable', 'integer', 'min:1', 'max:999'],

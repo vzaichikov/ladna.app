@@ -4,7 +4,9 @@ namespace App\Models;
 
 use App\Enums\AccountRole;
 use App\Enums\AccountStatus;
+use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
+use App\Support\ScheduleKindRegistry;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone', 'enabled_schedule_kinds', 'schedule_kind_colors'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -35,6 +37,8 @@ class Account extends Model
     {
         return [
             'status' => AccountStatus::class,
+            'enabled_schedule_kinds' => 'array',
+            'schedule_kind_colors' => 'array',
         ];
     }
 
@@ -96,6 +100,68 @@ class Account extends Model
     public function classTypes(): HasMany
     {
         return $this->hasMany(ClassType::class);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function enabledScheduleKindValues(): array
+    {
+        $enabledScheduleKinds = $this->enabled_schedule_kinds;
+
+        if (! is_array($enabledScheduleKinds) || $enabledScheduleKinds === []) {
+            return ScheduleKindRegistry::defaultEnabledValues();
+        }
+
+        return ScheduleKindRegistry::validValues($enabledScheduleKinds)
+            ?: ScheduleKindRegistry::defaultEnabledValues();
+    }
+
+    public function hasScheduleKindEnabled(ScheduleKind|string $scheduleKind): bool
+    {
+        $value = $scheduleKind instanceof ScheduleKind ? $scheduleKind->value : $scheduleKind;
+
+        return in_array($value, $this->enabledScheduleKindValues(), true);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function scheduleKindColors(): array
+    {
+        $colors = ScheduleKindRegistry::defaultColors();
+
+        if (is_array($this->schedule_kind_colors)) {
+            foreach ($this->schedule_kind_colors as $value => $color) {
+                if (array_key_exists($value, $colors) && is_string($color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) {
+                    $colors[$value] = strtoupper($color);
+                }
+            }
+        }
+
+        return $colors;
+    }
+
+    public function scheduleKindColor(ScheduleKind|string|null $scheduleKind, string $fallback = '#3B223F'): string
+    {
+        $value = $scheduleKind instanceof ScheduleKind ? $scheduleKind->value : $scheduleKind;
+
+        if (! is_string($value)) {
+            return $fallback;
+        }
+
+        return $this->scheduleKindColors()[$value] ?? $fallback;
+    }
+
+    public function scheduleKindTextColor(ScheduleKind|string|null $scheduleKind, string $fallback = '#3B223F'): string
+    {
+        $color = ltrim($this->scheduleKindColor($scheduleKind, $fallback), '#');
+        $red = hexdec(substr($color, 0, 2));
+        $green = hexdec(substr($color, 2, 2));
+        $blue = hexdec(substr($color, 4, 2));
+        $luminance = (($red * 299) + ($green * 587) + ($blue * 114)) / 1000;
+
+        return $luminance > 150 ? '#1E293B' : '#FFFFFF';
     }
 
     public function classPassPlans(): HasMany

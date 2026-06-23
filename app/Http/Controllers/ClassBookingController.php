@@ -6,6 +6,7 @@ use App\Actions\NormalizeCustomerClassPasses;
 use App\Actions\ReconcileCustomerClassPassForBooking;
 use App\Actions\ReserveCustomerClassPassForBooking;
 use App\Enums\ClassBookingStatus;
+use App\Enums\ScheduleKind;
 use App\Http\Requests\StoreClassBookingRequest;
 use App\Http\Requests\UpdateClassBookingStatusRequest;
 use App\Models\Account;
@@ -21,8 +22,23 @@ class ClassBookingController extends Controller
     public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass, ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking): RedirectResponse|JsonResponse
     {
         $this->ensureClassBelongsToAccount($account, $scheduledClass);
+        $scheduledClass->loadMissing('classType');
 
         $customer = $account->customers()->whereKey($request->validated('customer_id'))->firstOrFail();
+        $exclusiveBookingError = $this->exclusiveBookingError($scheduledClass, $customer->id);
+
+        if ($exclusiveBookingError) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $exclusiveBookingError,
+                    'errors' => [
+                        'customer_id' => [$exclusiveBookingError],
+                    ],
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+
+            return back()->withErrors(['customer_id' => $exclusiveBookingError])->withInput();
+        }
 
         $classBooking = $scheduledClass->classBookings()->updateOrCreate(
             ['customer_id' => $customer->id],
@@ -94,6 +110,23 @@ class ClassBookingController extends Controller
     private function ensureBookingBelongsToAccount(Account $account, ClassBooking $classBooking): void
     {
         abort_unless($classBooking->account_id === $account->id, 404);
+    }
+
+    private function exclusiveBookingError(ScheduledClass $scheduledClass, int $customerId): ?string
+    {
+        if (! in_array($scheduledClass->classType?->schedule_kind, [ScheduleKind::PrivateLesson, ScheduleKind::RoomRental], true)) {
+            return null;
+        }
+
+        $hasAnotherActiveBooking = $scheduledClass->classBookings()
+            ->where('customer_id', '!=', $customerId)
+            ->whereIn('status', [
+                ClassBookingStatus::Booked->value,
+                ClassBookingStatus::Attended->value,
+            ])
+            ->exists();
+
+        return $hasAnotherActiveBooking ? __('app.manual_class_already_booked') : null;
     }
 
     private function bookingJsonResponse(Account $account, ScheduledClass $scheduledClass, string $message, int $status = Response::HTTP_OK): JsonResponse

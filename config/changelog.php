@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.20.0',
+                'date' => '2026-06-23',
+                'title' => 'Class format architecture',
+                'items' => ['Separated group classes, private lessons, and room rentals into clearer studio workflows with format tabs, configurable format colors, combined calendar color accents, class-pass pricing tabs, manual calendar slots for non-recurring services, and refreshed Charmpole demo catalog content.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.19.0',
                 'date' => '2026-06-23',
                 'title' => 'Compact list actions',
@@ -177,6 +184,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.20.0',
+                'date' => '2026-06-23',
+                'title' => 'Архітектура форматів занять',
+                'items' => ['Розділено групові заняття, індивідуальні заняття та оренду на зрозуміліші студійні сценарії з вкладками форматів, налаштуванням кольорів форматів, комбінованими кольоровими акцентами в календарі, вкладками для абонементів і цін, ручними слотами календаря для нерегулярних послуг та оновленим demo-каталогом Charmpole.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.19.0',
                 'date' => '2026-06-23',

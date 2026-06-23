@@ -151,8 +151,10 @@ class AccountTenancyTest extends TestCase
                 'Локації',
                 'Зали',
                 'Напрями',
-                'Формати занять',
-                'Абонементи',
+                'Групові заняття',
+                'Індивідуальні заняття',
+                'Оренда',
+                'Абонементи і ціни',
                 'Тренери',
                 'Рівні тренерів',
                 'Інтеграції',
@@ -199,6 +201,9 @@ class AccountTenancyTest extends TestCase
             ->assertDontSee(route('dashboard.accounts.rooms.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.activity-directions.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.class-types.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.group-classes.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.private-lessons.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.room-rentals.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.class-pass-plans.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.trainers.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.trainer-types.index', $account), false)

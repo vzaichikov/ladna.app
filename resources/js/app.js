@@ -425,32 +425,51 @@ function initPrintButtons() {
     });
 }
 
-function initClassRecordMock() {
-    const modal = document.querySelector('[data-class-record-mock-modal]');
-    const openButton = document.querySelector('[data-class-record-mock-open]');
-    const closeButton = document.querySelector('[data-class-record-mock-close]');
+function closeManualClassModal(modal) {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
 
-    if (!modal || !openButton || !closeButton) {
-        return;
-    }
+function initManualClassModals() {
+    document.querySelectorAll('[data-manual-class-modal]').forEach((modal) => {
+        if (modal.dataset.manualClassReady === 'true') {
+            return;
+        }
 
-    const closeModal = () => {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    };
-
-    openButton.addEventListener('click', () => {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        closeButton.focus();
+        modal.dataset.manualClassReady = 'true';
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeManualClassModal(modal);
+            }
+        });
     });
 
-    closeButton.addEventListener('click', closeModal);
-
-    modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            closeModal();
+    document.querySelectorAll('[data-manual-class-open]').forEach((button) => {
+        if (button.dataset.manualClassOpenReady === 'true') {
+            return;
         }
+
+        button.dataset.manualClassOpenReady = 'true';
+        button.addEventListener('click', () => {
+            const modal = document.querySelector(`[data-manual-class-modal="${button.dataset.manualClassOpen}"]`);
+
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.querySelector('[data-manual-class-close]')?.focus();
+        });
+    });
+
+    document.querySelectorAll('[data-manual-class-close]').forEach((button) => {
+        if (button.dataset.manualClassCloseReady === 'true') {
+            return;
+        }
+
+        button.dataset.manualClassCloseReady = 'true';
+        button.addEventListener('click', () => closeManualClassModal(button.closest('[data-manual-class-modal]')));
     });
 }
 
@@ -608,7 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPhoneMasks();
     initOtpCountdowns();
     initPrintButtons();
-    initClassRecordMock();
+    initManualClassModals();
 
     const sidebar = document.querySelector('[data-sidebar]');
     const sidebarBackdrop = document.querySelector('[data-sidebar-backdrop]');
@@ -727,9 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (event.key === 'Escape') {
-            const classRecordMockModal = document.querySelector('[data-class-record-mock-modal]:not(.hidden)');
-            classRecordMockModal?.classList.add('hidden');
-            classRecordMockModal?.classList.remove('flex');
+            closeManualClassModal(document.querySelector('[data-manual-class-modal]:not(.hidden)'));
         }
 
         if (event.key === 'Escape' && pendingDeleteForm) {
