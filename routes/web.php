@@ -127,12 +127,18 @@ Route::middleware('auth:web')
         Route::resource('accounts.rooms', RoomController::class)
             ->except(['show'])
             ->scoped();
+        Route::post('accounts/{account}/activity-directions/{activity_direction}/copy', [ActivityDirectionController::class, 'copy'])
+            ->name('accounts.activity-directions.copy');
         Route::resource('accounts.activity-directions', ActivityDirectionController::class)
             ->except(['show'])
             ->scoped();
+        Route::post('accounts/{account}/class-types/{class_type}/copy', [ClassTypeController::class, 'copy'])
+            ->name('accounts.class-types.copy');
         Route::resource('accounts.class-types', ClassTypeController::class)
             ->except(['show'])
             ->scoped();
+        Route::post('accounts/{account}/class-pass-plans/{class_pass_plan}/copy', [ClassPassPlanController::class, 'copy'])
+            ->name('accounts.class-pass-plans.copy');
         Route::resource('accounts.class-pass-plans', ClassPassPlanController::class)
             ->except(['show'])
             ->scoped();

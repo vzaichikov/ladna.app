@@ -83,6 +83,21 @@ class ClassTypeController extends Controller
             ->with('status', __('app.class_type_updated'));
     }
 
+    public function copy(Account $account, ClassType $classType): RedirectResponse
+    {
+        $this->ensureBelongsToAccount($account, $classType);
+        $this->authorize('update', $account);
+
+        $copyName = $this->copyName($classType->name);
+        $copy = $classType->replicate(['slug']);
+        $copy->name = $copyName;
+        $copy->slug = $this->uniqueSlug($account, $copyName);
+        $copy->save();
+
+        return redirect()->route('dashboard.accounts.class-types.index', $account)
+            ->with('status', __('app.class_type_copied'));
+    }
+
     public function destroy(Account $account, ClassType $classType): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $classType);
@@ -108,5 +123,10 @@ class ClassTypeController extends Controller
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
             ->exists());
+    }
+
+    private function copyName(string $name): string
+    {
+        return __('app.copy_prefix').' '.$name;
     }
 }

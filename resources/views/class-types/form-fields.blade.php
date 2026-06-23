@@ -40,7 +40,25 @@
     </label>
     <label class="block">
         <span class="crm-label">{{ __('app.color') }}</span>
-        <input name="color" value="{{ old('color', $classType->color) }}" placeholder="#A78AB9" class="crm-field">
+        @php
+            $colorValue = old('color', $classType->color);
+            $colorPickerValue = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $colorValue) ? $colorValue : '#A78AB9';
+        @endphp
+        <span class="mt-2 flex items-center gap-3">
+            <input
+                type="color"
+                value="{{ $colorPickerValue }}"
+                class="h-11 w-14 cursor-pointer rounded-lg border border-stone-200 bg-white p-1"
+                data-color-picker
+            >
+            <input
+                name="color"
+                value="{{ $colorValue }}"
+                placeholder="#A78AB9"
+                class="crm-field mt-0"
+                data-color-value
+            >
+        </span>
         @error('color') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 </div>

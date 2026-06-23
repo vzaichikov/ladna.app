@@ -218,6 +218,68 @@ class ClassPassPlanTest extends TestCase
             ->assertSee('START');
     }
 
+    public function test_owner_can_copy_class_pass_plan_with_relationships(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['default_currency' => 'UAH']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()->for($account)->for($location)->create();
+        $direction = ActivityDirection::factory()->for($account)->create(['name' => 'Pole Dance']);
+        $classType = ClassType::factory()
+            ->for($account)
+            ->for($direction, 'activityDirection')
+            ->create(['name' => 'Pole Beginner']);
+        $trainerType = TrainerType::factory()->for($account)->default()->create();
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create([
+            'name' => 'START',
+            'slug' => 'start',
+            'description' => 'Original plan.',
+            'price_cents' => 150000,
+            'currency' => 'UAH',
+            'sessions_count' => 4,
+            'validity_days' => 30,
+            'available_from_time' => '09:00',
+            'available_until_time' => '12:00',
+            'allows_any_time' => true,
+            'any_time_addon_price_cents' => 5000,
+            'is_trial' => true,
+            'is_active' => false,
+            'sort_order' => 15,
+        ]);
+        $classPassPlan->activityDirections()->sync([$direction->id]);
+        $classPassPlan->classTypes()->sync([$classType->id]);
+        $classPassPlan->trainerTypes()->sync([$trainerType->id]);
+        $classPassPlan->rooms()->sync([$room->id]);
+
+        $this->actingAs($owner)
+            ->withSession(['locale' => 'en'])
+            ->post(route('dashboard.accounts.class-pass-plans.copy', [$account, $classPassPlan]))
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', $account));
+
+        $copy = ClassPassPlan::whereBelongsTo($account)
+            ->where('slug', 'copy-start')
+            ->firstOrFail();
+
+        $this->assertSame('COPY START', $copy->name);
+        $this->assertSame('Original plan.', $copy->description);
+        $this->assertSame(150000, $copy->price_cents);
+        $this->assertSame('UAH', $copy->currency);
+        $this->assertSame(4, $copy->sessions_count);
+        $this->assertSame(30, $copy->validity_days);
+        $this->assertSame('09:00:00', $copy->available_from_time);
+        $this->assertSame('12:00:00', $copy->available_until_time);
+        $this->assertTrue($copy->allows_any_time);
+        $this->assertSame(5000, $copy->any_time_addon_price_cents);
+        $this->assertTrue($copy->is_trial);
+        $this->assertFalse($copy->is_active);
+        $this->assertSame(15, $copy->sort_order);
+        $this->assertTrue($copy->activityDirections()->whereKey($direction->getKey())->exists());
+        $this->assertTrue($copy->classTypes()->whereKey($classType->getKey())->exists());
+        $this->assertTrue($copy->trainerTypes()->whereKey($trainerType->getKey())->exists());
+        $this->assertTrue($copy->rooms()->whereKey($room->getKey())->exists());
+    }
+
     public function test_platform_admin_cannot_manage_studio_class_pass_plans(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
@@ -232,6 +294,7 @@ class ClassPassPlanTest extends TestCase
     {
         $manager = User::factory()->create();
         $account = Account::factory()->create();
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create();
 
         $account->users()->attach($manager->id, [
             'role' => AccountRole::Manager->value,
@@ -240,6 +303,10 @@ class ClassPassPlanTest extends TestCase
 
         $this->actingAs($manager)
             ->get(route('dashboard.accounts.class-pass-plans.index', $account))
+            ->assertForbidden();
+
+        $this->actingAs($manager)
+            ->post(route('dashboard.accounts.class-pass-plans.copy', [$account, $classPassPlan]))
             ->assertForbidden();
     }
 

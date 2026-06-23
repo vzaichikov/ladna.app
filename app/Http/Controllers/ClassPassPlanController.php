@@ -9,6 +9,7 @@ use App\Models\ClassPassPlan;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ClassPassPlanController extends Controller
@@ -92,6 +93,30 @@ class ClassPassPlanController extends Controller
             ->with('status', __('app.class_pass_plan_updated'));
     }
 
+    public function copy(Account $account, ClassPassPlan $classPassPlan): RedirectResponse
+    {
+        $this->ensureBelongsToAccount($account, $classPassPlan);
+        $this->ensureCurrentUserOwns($account);
+
+        $classPassPlan->loadMissing(['activityDirections', 'classTypes', 'trainerTypes', 'rooms']);
+
+        DB::transaction(function () use ($account, $classPassPlan): void {
+            $copyName = $this->copyName($classPassPlan->name);
+            $copy = $classPassPlan->replicate(['slug']);
+            $copy->name = $copyName;
+            $copy->slug = $this->uniqueSlug($account, $copyName);
+            $copy->save();
+
+            $copy->activityDirections()->sync($classPassPlan->activityDirections->modelKeys());
+            $copy->classTypes()->sync($classPassPlan->classTypes->modelKeys());
+            $copy->trainerTypes()->sync($classPassPlan->trainerTypes->modelKeys());
+            $copy->rooms()->sync($classPassPlan->rooms->modelKeys());
+        });
+
+        return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
+            ->with('status', __('app.class_pass_plan_copied'));
+    }
+
     public function destroy(Account $account, ClassPassPlan $classPassPlan): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $classPassPlan);
@@ -119,6 +144,11 @@ class ClassPassPlanController extends Controller
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
             ->exists());
+    }
+
+    private function copyName(string $name): string
+    {
+        return __('app.copy_prefix').' '.$name;
     }
 
     /**

@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\Location;
+use App\Models\Trainer;
+use App\Models\TrainerType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
@@ -165,6 +168,41 @@ class AccountTenancyTest extends TestCase
             ->assertSee(route('dashboard.accounts.owner-profile.edit', $account), false)
             ->assertDontSee('tab=business', false)
             ->assertDontSee('tab=account', false);
+    }
+
+    public function test_trainer_sidebar_only_shows_authorized_items_and_header_trainer_level(): void
+    {
+        $trainerUser = User::factory()->create(['name' => 'Trainer User']);
+        $account = Account::factory()->create();
+        $trainerType = TrainerType::factory()->for($account)->create(['name' => 'ТОП-тренер']);
+        $account->users()->attach($trainerUser->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => null,
+        ]);
+        Trainer::factory()
+            ->for($account)
+            ->for($trainerUser, 'user')
+            ->for($trainerType, 'trainerType')
+            ->create(['name' => 'Trainer User']);
+
+        $this->actingAs($trainerUser)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee('ТОП-тренер')
+            ->assertDontSee('Власник студії')
+            ->assertSee(route('dashboard.accounts.show', $account), false)
+            ->assertSee(route('dashboard.accounts.scheduled-classes.index', $account), false)
+            ->assertSee(route('dashboard.accounts.schedule-series.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.customers.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.customer-class-passes.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.locations.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.rooms.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.activity-directions.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.class-types.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.class-pass-plans.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.trainers.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.trainer-types.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.integrations.index', $account), false);
     }
 
     public function test_legacy_account_edit_route_redirects_to_separate_pages(): void

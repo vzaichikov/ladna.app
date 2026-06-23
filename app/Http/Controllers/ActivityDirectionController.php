@@ -74,6 +74,21 @@ class ActivityDirectionController extends Controller
             ->with('status', __('app.activity_direction_updated'));
     }
 
+    public function copy(Account $account, ActivityDirection $activityDirection): RedirectResponse
+    {
+        $this->ensureBelongsToAccount($account, $activityDirection);
+        $this->authorize('update', $account);
+
+        $copyName = $this->copyName($activityDirection->name);
+        $copy = $activityDirection->replicate(['slug']);
+        $copy->name = $copyName;
+        $copy->slug = $this->uniqueSlug($account, $copyName);
+        $copy->save();
+
+        return redirect()->route('dashboard.accounts.activity-directions.index', $account)
+            ->with('status', __('app.activity_direction_copied'));
+    }
+
     public function destroy(Account $account, ActivityDirection $activityDirection): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $activityDirection);
@@ -96,5 +111,10 @@ class ActivityDirectionController extends Controller
             ->where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
             ->exists());
+    }
+
+    private function copyName(string $name): string
+    {
+        return __('app.copy_prefix').' '.$name;
     }
 }
