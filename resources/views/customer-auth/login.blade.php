@@ -3,6 +3,10 @@
 @section('title', __('app.customer_login').' - '.$account->name)
 
 @push('head')
+    @if ($methods->google)
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@500&amp;display=swap">
+    @endif
+
     @if ($methods->otp && $mode !== 'otp_code')
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     @endif
@@ -80,62 +84,139 @@
                     </div>
                     <div class="mt-3 text-sm text-slate-500" data-otp-countdown-label></div>
                 @else
+                    @php
+                        $credentialLoginMethods = [];
+
+                        if ($methods->otp) {
+                            $credentialLoginMethods['phone'] = __('app.phone_login');
+                        }
+
+                        if ($methods->emailPassword) {
+                            $credentialLoginMethods['email'] = __('app.email_login');
+                        }
+
+                        $activeLoginMethod = old('customer_auth_method', $methods->otp ? 'phone' : 'email');
+
+                        if (! array_key_exists($activeLoginMethod, $credentialLoginMethods)) {
+                            $activeLoginMethod = array_key_first($credentialLoginMethods) ?? 'google';
+                        }
+
+                        $hasCredentialLogin = count($credentialLoginMethods) > 0;
+                        $hasTabbedLogin = count($credentialLoginMethods) > 1;
+                    @endphp
+
                     <div>
                         <h2 class="text-xl font-semibold text-slate-950">{{ __('app.login_or_register') }}</h2>
                         <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.login_or_register_copy') }}</p>
                     </div>
 
                     <div class="mt-6 space-y-5">
-                        @if ($methods->otp)
-                            <form method="POST" action="{{ route('customer.otp.send', $account->slug) }}" class="space-y-4">
-                                @csrf
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.phone') }}</span>
-                                    <input
-                                        name="phone"
-                                        type="tel"
-                                        value="{{ old('phone') }}"
-                                        required
-                                        class="crm-field"
-                                        data-phone-mask
-                                        data-country-code="{{ $account->country_code ?? 'UA' }}"
-                                    >
-                                    @error('phone') <span class="crm-help">{{ $message }}</span> @enderror
-                                </label>
-                                <div class="cf-turnstile" data-sitekey="{{ $methods->turnstileSiteKey }}"></div>
-                                @error('cf-turnstile-response') <span class="crm-help">{{ $message }}</span> @enderror
-                                <x-ui.button type="submit" class="w-full justify-center">
-                                    {{ __('app.login') }}
-                                </x-ui.button>
-                            </form>
-                        @endif
+                        @if ($hasCredentialLogin)
+                            <div
+                                class="space-y-5"
+                                @if ($hasTabbedLogin)
+                                    data-customer-auth-tabs
+                                    data-active-method="{{ $activeLoginMethod }}"
+                                @endif
+                            >
+                                @if ($hasTabbedLogin)
+                                    <div class="grid grid-cols-2 gap-1 rounded-lg bg-stone-100 p-1" role="tablist" aria-label="{{ __('app.customer_login_method') }}">
+                                        @foreach ($credentialLoginMethods as $method => $label)
+                                            <button
+                                                type="button"
+                                                id="customer-auth-tab-{{ $method }}"
+                                                class="customer-auth-tab"
+                                                role="tab"
+                                                data-customer-auth-tab="{{ $method }}"
+                                                aria-controls="customer-auth-panel-{{ $method }}"
+                                                aria-selected="{{ $activeLoginMethod === $method ? 'true' : 'false' }}"
+                                                tabindex="{{ $activeLoginMethod === $method ? '0' : '-1' }}"
+                                            >
+                                                {{ $label }}
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
 
-                        @if ($methods->emailPassword)
-                            <form method="POST" action="{{ route('customer.email.login', $account->slug) }}" class="space-y-4 border-t border-stone-100 pt-5">
-                                @csrf
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.email') }}</span>
-                                    <input name="email" type="email" value="{{ old('email') }}" required autocomplete="email" class="crm-field">
-                                    @error('email') <span class="crm-help">{{ $message }}</span> @enderror
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.password') }}</span>
-                                    <input name="password" type="password" required autocomplete="current-password" class="crm-field">
-                                    <span class="mt-1.5 block text-sm text-slate-500">{{ __('app.customer_password_help') }}</span>
-                                    @error('password') <span class="crm-help">{{ $message }}</span> @enderror
-                                </label>
-                                <x-ui.button type="submit" variant="{{ $methods->otp ? 'secondary' : 'primary' }}" class="w-full justify-center">
-                                    {{ __('app.login') }}
-                                </x-ui.button>
-                            </form>
+                                @if ($methods->otp)
+                                    <section
+                                        id="customer-auth-panel-phone"
+                                        data-customer-auth-panel="phone"
+                                        @if ($hasTabbedLogin)
+                                            role="tabpanel"
+                                            aria-labelledby="customer-auth-tab-phone"
+                                        @endif
+                                        @class(['hidden' => $hasTabbedLogin && $activeLoginMethod !== 'phone'])
+                                    >
+                                        <form method="POST" action="{{ route('customer.otp.send', $account->slug) }}" class="space-y-4">
+                                            @csrf
+                                            <input type="hidden" name="customer_auth_method" value="phone">
+                                            <label class="block">
+                                                <span class="crm-label">{{ __('app.phone') }}</span>
+                                                <input
+                                                    name="phone"
+                                                    type="tel"
+                                                    value="{{ old('phone') }}"
+                                                    required
+                                                    class="crm-field"
+                                                    data-phone-mask
+                                                    data-country-code="{{ $account->country_code ?? 'UA' }}"
+                                                >
+                                                @error('phone') <span class="crm-help">{{ $message }}</span> @enderror
+                                            </label>
+                                            <div class="cf-turnstile" data-sitekey="{{ $methods->turnstileSiteKey }}"></div>
+                                            @error('cf-turnstile-response') <span class="crm-help">{{ $message }}</span> @enderror
+                                            <x-ui.button type="submit" class="w-full justify-center">
+                                                {{ __('app.login') }}
+                                            </x-ui.button>
+                                        </form>
+                                    </section>
+                                @endif
+
+                                @if ($methods->emailPassword)
+                                    <section
+                                        id="customer-auth-panel-email"
+                                        data-customer-auth-panel="email"
+                                        @if ($hasTabbedLogin)
+                                            role="tabpanel"
+                                            aria-labelledby="customer-auth-tab-email"
+                                        @endif
+                                        @class(['hidden' => $hasTabbedLogin && $activeLoginMethod !== 'email'])
+                                    >
+                                        <form method="POST" action="{{ route('customer.email.login', $account->slug) }}" class="space-y-4">
+                                            @csrf
+                                            <input type="hidden" name="customer_auth_method" value="email">
+                                            <label class="block">
+                                                <span class="crm-label">{{ __('app.email') }}</span>
+                                                <input name="email" type="email" value="{{ old('email') }}" required autocomplete="email" class="crm-field">
+                                                @error('email') <span class="crm-help">{{ $message }}</span> @enderror
+                                            </label>
+                                            <label class="block">
+                                                <span class="crm-label">{{ __('app.password') }}</span>
+                                                <input name="password" type="password" required autocomplete="current-password" class="crm-field">
+                                                <span class="mt-1.5 block text-sm text-slate-500">{{ __('app.customer_password_help') }}</span>
+                                                @error('password') <span class="crm-help">{{ $message }}</span> @enderror
+                                            </label>
+                                            <x-ui.button type="submit" class="w-full justify-center">
+                                                {{ __('app.login') }}
+                                            </x-ui.button>
+                                        </form>
+                                    </section>
+                                @endif
+                            </div>
                         @endif
 
                         @if ($methods->google)
-                            <div class="border-t border-stone-100 pt-5">
-                                <x-ui.button :href="route('customer.google.redirect', $account->slug)" variant="secondary" class="w-full justify-center">
-                                    <x-ui.icon name="globe" class="h-4 w-4" />
-                                    {{ __('app.google_login') }}
-                                </x-ui.button>
+                            <div @class(['border-t border-stone-100 pt-5' => $hasCredentialLogin])>
+                                <a
+                                    href="{{ route('customer.google.redirect', $account->slug) }}"
+                                    class="inline-flex min-h-10 w-full items-center justify-center gap-2.5 rounded border border-[#747775] bg-white px-3 py-2 text-sm font-medium leading-5 text-[#1f1f1f] shadow-none transition hover:bg-[#f8fafd] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] focus-visible:ring-offset-2 active:bg-[#f1f3f4]"
+                                    style="font-family: Roboto, Arial, sans-serif;"
+                                    aria-label="{{ __('app.google_sign_in') }}"
+                                >
+                                    <x-ui.google-g class="h-[18px] w-[18px] shrink-0" />
+                                    <span>{{ __('app.google_sign_in') }}</span>
+                                </a>
                             </div>
                         @endif
                     </div>

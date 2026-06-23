@@ -15,7 +15,8 @@ class IntegrationController extends Controller
 {
     public function index(Request $request): View
     {
-        $activeCategory = IntegrationCatalog::activeCategory($request->query('tab'));
+        $categories = IntegrationCatalog::categories(IntegrationScope::Platform);
+        $activeCategory = IntegrationCatalog::activeCategory($request->query('tab'), IntegrationScope::Platform);
         $settings = IntegrationSetting::platform()
             ->orderBy('provider')
             ->get()
@@ -25,7 +26,7 @@ class IntegrationController extends Controller
             'title' => __('app.integrations'),
             'heading' => __('app.product_owner_integrations'),
             'copy' => __('app.product_owner_integrations_copy'),
-            'categories' => IntegrationCatalog::categories(),
+            'categories' => $categories,
             'activeCategory' => $activeCategory,
             'providers' => IntegrationCatalog::providersForCategory($activeCategory, IntegrationScope::Platform),
             'settings' => $settings,

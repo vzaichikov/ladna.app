@@ -252,6 +252,10 @@ function initPhoneMasks(root = document) {
             return;
         }
 
+        if (input.closest('[data-customer-auth-panel].hidden')) {
+            return;
+        }
+
         if (!input.id) {
             input.id = `phone-mask-${Date.now()}-${index}`;
         }
@@ -328,6 +332,85 @@ function initOtpCountdowns() {
         };
 
         render();
+    });
+}
+
+function initCustomerAuthTabs(root = document) {
+    root.querySelectorAll('[data-customer-auth-tabs]').forEach((container) => {
+        if (container.dataset.customerAuthTabsReady === 'true') {
+            return;
+        }
+
+        const tabs = Array.from(container.querySelectorAll('[data-customer-auth-tab]'));
+        const panels = Array.from(container.querySelectorAll('[data-customer-auth-panel]'));
+
+        if (!tabs.length || !panels.length) {
+            return;
+        }
+
+        container.dataset.customerAuthTabsReady = 'true';
+
+        const activate = (method, focusTab = false) => {
+            tabs.forEach((tab) => {
+                const selected = tab.dataset.customerAuthTab === method;
+                tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+                tab.tabIndex = selected ? 0 : -1;
+
+                if (selected && focusTab) {
+                    tab.focus();
+                }
+            });
+
+            panels.forEach((panel) => {
+                const selected = panel.dataset.customerAuthPanel === method;
+                panel.classList.toggle('hidden', !selected);
+
+                if (selected) {
+                    initPhoneMasks(panel);
+                }
+            });
+        };
+
+        tabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => {
+                if (tab.dataset.customerAuthTab) {
+                    activate(tab.dataset.customerAuthTab);
+                }
+            });
+
+            tab.addEventListener('keydown', (event) => {
+                const lastIndex = tabs.length - 1;
+                let nextIndex = index;
+
+                if (event.key === 'ArrowRight') {
+                    nextIndex = index === lastIndex ? 0 : index + 1;
+                } else if (event.key === 'ArrowLeft') {
+                    nextIndex = index === 0 ? lastIndex : index - 1;
+                } else if (event.key === 'Home') {
+                    nextIndex = 0;
+                } else if (event.key === 'End') {
+                    nextIndex = lastIndex;
+                } else {
+                    return;
+                }
+
+                event.preventDefault();
+
+                const method = tabs[nextIndex]?.dataset.customerAuthTab;
+
+                if (method) {
+                    activate(method, true);
+                }
+            });
+        });
+
+        const initialMethod = tabs.some((tab) => tab.dataset.customerAuthTab === container.dataset.activeMethod)
+            ? container.dataset.activeMethod
+            : tabs[0]?.dataset.customerAuthTab;
+
+        if (initialMethod) {
+            activate(initialMethod);
+        }
     });
 }
 
@@ -521,6 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSlugAutofill();
     initColorPickers();
     initCustomerAutocomplete();
+    initCustomerAuthTabs();
     initPhoneMasks();
     initOtpCountdowns();
     initPrintButtons();

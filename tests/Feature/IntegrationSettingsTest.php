@@ -21,6 +21,7 @@ class IntegrationSettingsTest extends TestCase
         $this->actingAs($platformAdmin)
             ->get(route('platform.integrations.index'))
             ->assertOk()
+            ->assertSee(__('app.integration_category_authentication'), false)
             ->assertSee('Monopay')
             ->assertSee('LiqPay');
 
@@ -63,6 +64,7 @@ class IntegrationSettingsTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
             ->assertOk()
+            ->assertDontSee(__('app.integration_category_authentication'), false)
             ->assertSee('TurboSMS')
             ->assertSee('SendPulse');
 
@@ -84,6 +86,21 @@ class IntegrationSettingsTest extends TestCase
         $this->assertSame($account->id, $setting->account_id);
         $this->assertSame('turbo-secret', $setting->credentials['api_token']);
         $this->assertSame('CharmCRM', $setting->credentials['sms_sender']);
+    }
+
+    public function test_account_integrations_do_not_show_empty_authentication_category(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'authentication']))
+            ->assertOk()
+            ->assertDontSee(__('app.integration_category_authentication'), false)
+            ->assertDontSee('Google OAuth')
+            ->assertDontSee('Cloudflare Turnstile')
+            ->assertSee('Monopay');
     }
 
     public function test_account_owner_cannot_access_another_accounts_integrations(): void

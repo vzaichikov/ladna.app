@@ -12,9 +12,15 @@ class IntegrationCatalog
     /**
      * @return array<string, array<string, mixed>>
      */
-    public static function categories(): array
+    public static function categories(?IntegrationScope $scope = null): array
     {
-        return config('integrations.categories', []);
+        $categories = config('integrations.categories', []);
+
+        if (! $scope) {
+            return $categories;
+        }
+
+        return Arr::where($categories, fn (array $category, string $key): bool => self::providersForCategory($key, $scope) !== []);
     }
 
     /**
@@ -70,13 +76,15 @@ class IntegrationCatalog
         });
     }
 
-    public static function activeCategory(mixed $category): IntegrationCategory
+    public static function activeCategory(mixed $category, ?IntegrationScope $scope = null): IntegrationCategory
     {
-        if (is_string($category) && array_key_exists($category, self::categories())) {
+        $categories = self::categories($scope);
+
+        if (is_string($category) && array_key_exists($category, $categories)) {
             return IntegrationCategory::from($category);
         }
 
-        return IntegrationCategory::Payment;
+        return IntegrationCategory::from(array_key_first($categories) ?? IntegrationCategory::Payment->value);
     }
 
     /**

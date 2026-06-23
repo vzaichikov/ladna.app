@@ -39,7 +39,9 @@ class CustomerAuthFlowTest extends TestCase
         $this->get(route('customer.studio.login', $account->slug))
             ->assertOk()
             ->assertSee('Email', false)
-            ->assertSee('Google login', false)
+            ->assertSee('Sign in with Google', false)
+            ->assertDontSee('role="tablist"', false)
+            ->assertDontSee('data-customer-auth-tab="phone"', false)
             ->assertDontSee('name="phone"', false);
     }
 
@@ -57,7 +59,7 @@ class CustomerAuthFlowTest extends TestCase
         $this->get(route('customer.studio.login', $account->slug))
             ->assertOk()
             ->assertSee('Email', false)
-            ->assertDontSee('Google login', false);
+            ->assertDontSee('Sign in with Google', false);
 
         $this->get(route('customer.google.redirect', $account->slug))
             ->assertNotFound();
@@ -374,6 +376,92 @@ class CustomerAuthFlowTest extends TestCase
             ->assertOk()
             ->assertSee('name="phone"', false)
             ->assertSee('cf-turnstile', false);
+    }
+
+    public function test_customer_login_tabs_phone_and_email_with_google_below_tabs(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'country_code' => 'UA',
+            'slug' => 'tabbed-login-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+
+        CustomerAuthSetting::create([
+            'account_id' => $account->id,
+            'allow_otp' => true,
+            'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
+            'otp_provider' => 'smsclub',
+        ]);
+
+        $this->platformIntegration('google_oauth', IntegrationCategory::Authentication->value, [
+            'client_id' => 'google-client',
+            'client_secret' => 'google-secret',
+        ]);
+
+        $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
+            'site_key' => 'test-site-key',
+            'secret_key' => 'test-secret-key',
+        ]);
+
+        $this->accountIntegration($account, 'smsclub', IntegrationCategory::Messaging->value, [
+            'bearer_token' => 'smsclub-token',
+            'src_addr' => 'Studio',
+        ]);
+
+        $this->get(route('customer.studio.login', $account->slug))
+            ->assertOk()
+            ->assertSee('role="tablist"', false)
+            ->assertSee('data-active-method="phone"', false)
+            ->assertSeeInOrder([
+                'data-customer-auth-tab="phone"',
+                'data-customer-auth-tab="email"',
+                'data-customer-auth-panel="phone"',
+                'Sign in with Google',
+            ], false)
+            ->assertSee('name="phone"', false)
+            ->assertSee('name="email"', false)
+            ->assertSee('cf-turnstile', false);
+    }
+
+    public function test_customer_login_returns_to_email_tab_after_email_validation_error(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'country_code' => 'UA',
+            'slug' => 'tabbed-login-error-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+
+        CustomerAuthSetting::create([
+            'account_id' => $account->id,
+            'allow_otp' => true,
+            'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
+            'otp_provider' => 'smsclub',
+        ]);
+
+        $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
+            'site_key' => 'test-site-key',
+            'secret_key' => 'test-secret-key',
+        ]);
+
+        $this->accountIntegration($account, 'smsclub', IntegrationCategory::Messaging->value, [
+            'bearer_token' => 'smsclub-token',
+            'src_addr' => 'Studio',
+        ]);
+
+        $this->from(route('customer.studio.login', $account->slug))
+            ->post(route('customer.email.login', $account->slug), [
+                'customer_auth_method' => 'email',
+                'email' => 'not-an-email',
+                'password' => 'secret',
+            ])
+            ->assertRedirect(route('customer.studio.login', $account->slug))
+            ->assertSessionHasErrors('email');
+
+        $this->get(route('customer.studio.login', $account->slug))
+            ->assertOk()
+            ->assertSee('data-active-method="email"', false)
+            ->assertSee('id="customer-auth-panel-email"', false)
+            ->assertSee('id="customer-auth-tab-email"', false);
     }
 
     public function test_email_login_does_not_allow_claiming_customer_with_blank_password(): void

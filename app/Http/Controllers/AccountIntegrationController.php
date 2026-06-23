@@ -17,7 +17,8 @@ class AccountIntegrationController extends Controller
     {
         abort_unless($account->isOwnedBy($request->user()), 403);
 
-        $activeCategory = IntegrationCatalog::activeCategory($request->query('tab'));
+        $categories = IntegrationCatalog::categories(IntegrationScope::Account);
+        $activeCategory = IntegrationCatalog::activeCategory($request->query('tab'), IntegrationScope::Account);
         $settings = IntegrationSetting::forAccount($account)
             ->orderBy('provider')
             ->get()
@@ -28,7 +29,7 @@ class AccountIntegrationController extends Controller
             'title' => __('app.integrations'),
             'heading' => __('app.studio_owner_integrations'),
             'copy' => __('app.studio_owner_integrations_copy'),
-            'categories' => IntegrationCatalog::categories(),
+            'categories' => $categories,
             'activeCategory' => $activeCategory,
             'providers' => IntegrationCatalog::providersForCategory($activeCategory, IntegrationScope::Account),
             'settings' => $settings,
