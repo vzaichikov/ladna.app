@@ -4,7 +4,18 @@
     $activeAccount = $candidateAccount instanceof \App\Models\Account && $candidateAccount->exists ? $candidateAccount : null;
     $showAccountNav = $activeAccount && str_starts_with($routeName, 'dashboard.accounts.');
     $sidebarAccount = $showAccountNav ? $activeAccount : null;
-    $isPlatformAdmin = auth()->user()?->isPlatformAdmin() ?? false;
+    $authUser = auth()->user();
+    $isPlatformAdmin = $authUser?->isPlatformAdmin() ?? false;
+    $accountMembership = $showAccountNav && $authUser ? $activeAccount->membershipFor($authUser) : null;
+    $trainerProfile = $accountMembership?->role === \App\Enums\AccountRole::Trainer
+        ? $activeAccount->trainers()->with('trainerType')->whereBelongsTo($authUser, 'user')->first()
+        : null;
+    $userRoleLabel = match (true) {
+        $isPlatformAdmin => __('app.platform_admin'),
+        $trainerProfile?->trainerType !== null => $trainerProfile->trainerType->name,
+        $accountMembership?->role !== null => __($accountMembership->role->labelKey()),
+        default => __('app.owner'),
+    };
 
     $primaryNav = $isPlatformAdmin ? [
         [
@@ -27,9 +38,13 @@
         ],
     ] : [];
 
-    $canManageStudioSettings = $showAccountNav
-        && auth()->user()
-        && $activeAccount->userCan(auth()->user(), \App\Enums\StudioPermission::ManageStudioSettings);
+    $canManageSchedule = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageSchedule);
+    $canManageClients = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageClients);
+    $canManageBookings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageBookings);
+    $canMarkAttendance = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::MarkAttendance);
+    $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
+    $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
+    $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
 
     $studioNav = $showAccountNav ? [
         [
@@ -38,69 +53,71 @@
             'href' => route('dashboard.accounts.show', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.show'),
         ],
-        [
+        ...($canManageSchedule || $canManageBookings || $canMarkAttendance ? [[
             'label' => __('app.generated_classes'),
             'icon' => 'generated-classes',
             'href' => route('dashboard.accounts.scheduled-classes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.scheduled-classes.*'),
-        ],
-        [
+        ]] : []),
+        ...($canManageClients ? [[
             'label' => __('app.customers'),
             'icon' => 'accounts',
             'href' => route('dashboard.accounts.customers.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customers.*'),
-        ],
-                [
+        ]] : []),
+        ...($canManageClassPassPlans ? [[
             'label' => __('app.customer_class_passes'),
             'icon' => 'class-pass-plans',
             'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customer-class-passes.*'),
-        ],
-        [
+        ]] : []),
+        ...($canManageSchedule ? [[
             'label' => __('app.schedule_series'),
             'icon' => 'schedule',
             'href' => route('dashboard.accounts.schedule-series.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.schedule-series.*'),
-        ],
+        ]] : []),
     ] : [];
 
     $studioSettingsNav = $showAccountNav ? [
-        [
-            'label' => __('app.locations'),
-            'icon' => 'locations',
-            'href' => route('dashboard.accounts.locations.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.locations.*'),
-        ],
-        [
-            'label' => __('app.rooms'),
-            'icon' => 'rooms',
-            'href' => route('dashboard.accounts.rooms.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.rooms.*'),
-        ],
-        [
-            'label' => __('app.activity_directions'),
-            'icon' => 'directions',
-            'href' => route('dashboard.accounts.activity-directions.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.activity-directions.*'),
-        ],
-        [
-            'label' => __('app.class_types'),
-            'icon' => 'class-types',
-            'href' => route('dashboard.accounts.class-types.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.class-types.*'),
-        ],
-        ...($activeAccount->isOwnedBy(auth()->user()) ? [[
+        ...($canManageStudioSettings ? [
+            [
+                'label' => __('app.locations'),
+                'icon' => 'locations',
+                'href' => route('dashboard.accounts.locations.index', $activeAccount),
+                'active' => request()->routeIs('dashboard.accounts.locations.*'),
+            ],
+            [
+                'label' => __('app.rooms'),
+                'icon' => 'rooms',
+                'href' => route('dashboard.accounts.rooms.index', $activeAccount),
+                'active' => request()->routeIs('dashboard.accounts.rooms.*'),
+            ],
+            [
+                'label' => __('app.activity_directions'),
+                'icon' => 'directions',
+                'href' => route('dashboard.accounts.activity-directions.index', $activeAccount),
+                'active' => request()->routeIs('dashboard.accounts.activity-directions.*'),
+            ],
+            [
+                'label' => __('app.class_types'),
+                'icon' => 'class-types',
+                'href' => route('dashboard.accounts.class-types.index', $activeAccount),
+                'active' => request()->routeIs('dashboard.accounts.class-types.*'),
+            ],
+        ] : []),
+        ...($canManageClassPassPlans ? [[
             'label' => __('app.class_pass_plans'),
             'icon' => 'class-pass-plans',
             'href' => route('dashboard.accounts.class-pass-plans.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.class-pass-plans.*'),
         ]] : []),
-        [
+        ...($canManageTrainers ? [[
             'label' => __('app.trainers'),
             'icon' => 'trainers',
             'href' => route('dashboard.accounts.trainers.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.trainers.*'),
-        ],
+        ]] : []),
         ...($canManageStudioSettings ? [
             [
                 'label' => __('app.trainer_types'),
@@ -109,7 +126,7 @@
                 'active' => request()->routeIs('dashboard.accounts.trainer-types.*'),
             ],
         ] : []),
-        ...($activeAccount->isOwnedBy(auth()->user()) ? [
+        ...($canManageClassPassPlans ? [
             [
                 'label' => __('app.integrations'),
                 'icon' => 'integrations',
@@ -149,7 +166,6 @@
         ],
     ] : [];
 
-    $authUser = auth()->user();
     $userInitial = mb_substr($authUser?->name ?? __('app.app_name'), 0, 1);
     $systemAppearance = $systemAppearance ?? \App\Support\SystemAppearance::current();
 @endphp
@@ -328,7 +344,7 @@
                                 @endif
                                 <div class="hidden text-sm sm:block">
                                     <div class="font-semibold text-slate-950">{{ $authUser?->name }}</div>
-                                    <div class="text-xs text-slate-500">{{ $authUser?->isPlatformAdmin() ? __('app.platform_admin') : __('app.owner') }}</div>
+                                    <div class="text-xs text-slate-500">{{ $userRoleLabel }}</div>
                                 </div>
                             </div>
                         </div>

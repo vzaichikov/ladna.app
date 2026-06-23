@@ -158,4 +158,95 @@ class StudioConfigurationTest extends TestCase
         $this->assertSame('#1E293B', $activityDirection->colorText());
         $this->assertSame('#3B223F', (new ActivityDirection)->colorAccent());
     }
+
+    public function test_class_type_color_picker_is_available_and_persists_color(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $activityDirection = ActivityDirection::factory()->for($account)->create();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.class-types.create', $account))
+            ->assertOk()
+            ->assertSee('data-color-picker', false)
+            ->assertSee('data-color-value', false);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.class-types.store', $account), [
+                'activity_direction_id' => $activityDirection->id,
+                'name' => 'Bright Format',
+                'slug' => 'bright-format',
+                'color' => '#123ABC',
+                'schedule_kind' => 'group_class',
+                'default_duration_minutes' => 60,
+                'booking_cutoff_minutes' => 120,
+                'default_capacity' => 12,
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.class-types.index', $account));
+
+        $classType = ClassType::whereBelongsTo($account)
+            ->where('slug', 'bright-format')
+            ->firstOrFail();
+
+        $this->assertSame('#123ABC', $classType->color);
+    }
+
+    public function test_configuration_entities_can_be_copied_with_localized_prefix(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $activityDirection = ActivityDirection::factory()->for($account)->create([
+            'name' => 'Pole',
+            'slug' => 'pole',
+            'description' => 'Direction description.',
+            'color' => '#A78AB9',
+            'is_active' => true,
+        ]);
+        $classType = ClassType::factory()
+            ->for($account)
+            ->for($activityDirection, 'activityDirection')
+            ->create([
+                'name' => 'Beginner',
+                'slug' => 'beginner',
+                'color' => '#123ABC',
+                'default_duration_minutes' => 75,
+                'booking_cutoff_minutes' => 60,
+                'default_capacity' => 8,
+                'is_active' => false,
+            ]);
+
+        $this->actingAs($owner)
+            ->withSession(['locale' => 'uk'])
+            ->post(route('dashboard.accounts.activity-directions.copy', [$account, $activityDirection]))
+            ->assertRedirect(route('dashboard.accounts.activity-directions.index', $account));
+
+        $copiedDirection = ActivityDirection::whereBelongsTo($account)
+            ->where('slug', 'kopiya-pole')
+            ->firstOrFail();
+
+        $this->assertSame('Копія Pole', $copiedDirection->name);
+        $this->assertSame('Direction description.', $copiedDirection->description);
+        $this->assertSame('#A78AB9', $copiedDirection->color);
+        $this->assertTrue($copiedDirection->is_active);
+
+        $this->actingAs($owner)
+            ->withSession(['locale' => 'uk'])
+            ->post(route('dashboard.accounts.class-types.copy', [$account, $classType]))
+            ->assertRedirect(route('dashboard.accounts.class-types.index', $account));
+
+        $copiedClassType = ClassType::whereBelongsTo($account)
+            ->where('slug', 'kopiya-beginner')
+            ->firstOrFail();
+
+        $this->assertSame('Копія Beginner', $copiedClassType->name);
+        $this->assertSame($activityDirection->id, $copiedClassType->activity_direction_id);
+        $this->assertSame('#123ABC', $copiedClassType->color);
+        $this->assertSame(75, $copiedClassType->default_duration_minutes);
+        $this->assertSame(60, $copiedClassType->booking_cutoff_minutes);
+        $this->assertSame(8, $copiedClassType->default_capacity);
+        $this->assertFalse($copiedClassType->is_active);
+    }
 }

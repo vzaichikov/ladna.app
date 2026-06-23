@@ -86,6 +86,13 @@
                     <span class="{{ $classPassPlan->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
                         {{ $classPassPlan->is_active ? __('app.active') : __('app.inactive') }}
                     </span>
+                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.copy', [$account, $classPassPlan]) }}">
+                        @csrf
+                        <x-ui.button type="submit" variant="secondary" size="sm">
+                            <x-ui.icon name="copy" class="h-4 w-4" />
+                            {{ __('app.copy') }}
+                        </x-ui.button>
+                    </form>
                     <x-ui.button :href="route('dashboard.accounts.class-pass-plans.edit', [$account, $classPassPlan])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
                     <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.destroy', [$account, $classPassPlan]) }}" data-confirm-delete>
                         @csrf

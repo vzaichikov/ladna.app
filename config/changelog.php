@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.18.0',
+                'date' => '2026-06-23',
+                'title' => 'Trainer workspace and faster setup',
+                'items' => ['Hid unavailable trainer menu items, showed trainer levels in the account header, added a color picker to class format editing, and added copy actions for directions, class formats, and class passes.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.17.0',
                 'date' => '2026-06-23',
                 'title' => 'Customer login and portal',
@@ -163,6 +170,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.18.0',
+                'date' => '2026-06-23',
+                'title' => 'Робочий простір тренера і швидше налаштування',
+                'items' => ['Приховано недоступні пункти меню для тренера, показано рівень тренера у верхньому блоці акаунта, додано вибір кольору в редагуванні форматів занять і копіювання для напрямів, форматів занять та абонементів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.17.0',
                 'date' => '2026-06-23',
