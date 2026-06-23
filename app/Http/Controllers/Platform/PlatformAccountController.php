@@ -10,6 +10,7 @@ use App\Http\Requests\UpdatePlatformAccountRequest;
 use App\Models\Account;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -18,13 +19,18 @@ use Illuminate\View\View;
 
 class PlatformAccountController extends Controller
 {
-    public function index(): View
+    public function index(CustomerAuthAvailability $customerAuthAvailability): View
     {
+        $accounts = Account::with(['subscription.plan', 'customerAuthSetting'])
+            ->withCount(['locations', 'users'])
+            ->orderBy('name')
+            ->get();
+
         return view('platform.accounts.index', [
-            'accounts' => Account::with(['subscription.plan'])
-                ->withCount(['locations', 'users'])
-                ->orderBy('name')
-                ->get(),
+            'accounts' => $accounts,
+            'customerAuthReadiness' => $accounts->mapWithKeys(fn (Account $account): array => [
+                $account->getKey() => $customerAuthAvailability->readinessFor($account),
+            ]),
         ]);
     }
 

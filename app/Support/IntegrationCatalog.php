@@ -194,6 +194,14 @@ class IntegrationCatalog
     }
 
     /**
+     * @param  array<string, mixed>  $credentials
+     */
+    public static function hasRequiredCredentials(string $provider, array $credentials): bool
+    {
+        return self::missingRequiredFields($provider, $credentials, $credentials) === [];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private static function defaults(string $provider): array

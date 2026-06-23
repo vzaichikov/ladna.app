@@ -24,25 +24,72 @@ class CustomerAuthFlowTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_customer_login_only_shows_configured_methods(): void
+    public function test_global_google_enabled_shows_google_without_studio_auth_settings(): void
     {
         $account = Account::factory()->create([
             'default_language' => 'en',
-            'slug' => 'customer-auth-methods-'.fake()->unique()->numberBetween(1000, 9999),
+            'slug' => 'global-google-'.fake()->unique()->numberBetween(1000, 9999),
         ]);
 
-        CustomerAuthSetting::create([
-            'account_id' => $account->id,
-            'allow_email_password' => true,
-            'allow_otp' => true,
-            'allow_google' => true,
+        $this->platformIntegration('google_oauth', IntegrationCategory::Authentication->value, [
+            'client_id' => 'google-client',
+            'client_secret' => 'google-secret',
         ]);
 
         $this->get(route('customer.studio.login', $account->slug))
             ->assertOk()
             ->assertSee('Email', false)
-            ->assertDontSee('Google login')
-            ->assertDontSee('Phone + OTP');
+            ->assertSee('Google login', false)
+            ->assertDontSee('name="phone"', false);
+    }
+
+    public function test_google_login_requires_configured_platform_integration(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'slug' => 'incomplete-google-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+
+        $this->platformIntegration('google_oauth', IntegrationCategory::Authentication->value, [
+            'client_id' => 'google-client',
+        ]);
+
+        $this->get(route('customer.studio.login', $account->slug))
+            ->assertOk()
+            ->assertSee('Email', false)
+            ->assertDontSee('Google login', false);
+
+        $this->get(route('customer.google.redirect', $account->slug))
+            ->assertNotFound();
+    }
+
+    public function test_otp_stays_hidden_without_studio_tariff_even_when_platform_services_are_ready(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'slug' => 'otp-tariff-off-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+
+        $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
+            'site_key' => 'turnstile-site',
+            'secret_key' => 'turnstile-secret',
+        ]);
+
+        $this->platformIntegration('smsclub', IntegrationCategory::Messaging->value, [
+            'bearer_token' => 'smsclub-token',
+            'src_addr' => 'Ladna',
+        ]);
+
+        $this->get(route('customer.studio.login', $account->slug))
+            ->assertOk()
+            ->assertSee('Email', false)
+            ->assertDontSee('cf-turnstile', false)
+            ->assertDontSee('name="phone"', false);
+
+        $this->post(route('customer.otp.send', $account->slug), [
+            'phone' => '0501112233',
+            'cf-turnstile-response' => 'turnstile-token',
+        ])->assertNotFound();
     }
 
     public function test_customer_login_shows_ukrainian_password_help(): void
@@ -54,9 +101,7 @@ class CustomerAuthFlowTest extends TestCase
 
         CustomerAuthSetting::create([
             'account_id' => $account->id,
-            'allow_email_password' => true,
             'allow_otp' => false,
-            'allow_google' => false,
         ]);
 
         $this->get(route('customer.studio.login', $account->slug))
@@ -73,9 +118,7 @@ class CustomerAuthFlowTest extends TestCase
 
         CustomerAuthSetting::create([
             'account_id' => $account->id,
-            'allow_email_password' => true,
             'allow_otp' => false,
-            'allow_google' => false,
         ]);
 
         $this->withSession(['locale' => 'uk'])
@@ -221,9 +264,7 @@ class CustomerAuthFlowTest extends TestCase
 
         $this->actingAs($platformAdmin)
             ->put(route('platform.accounts.customer-auth.update', $account), [
-                'allow_email_password' => '1',
                 'allow_otp' => '1',
-                'allow_google' => '0',
                 'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
                 'otp_provider' => 'smsclub',
             ])
@@ -233,6 +274,19 @@ class CustomerAuthFlowTest extends TestCase
         $this->assertTrue($setting->allow_otp);
         $this->assertSame(CustomerOtpSenderScope::Account, $setting->otp_sender_scope);
         $this->assertSame('smsclub', $setting->otp_provider);
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.accounts.customer-auth.edit', $account))
+            ->assertOk()
+            ->assertSee(__('app.customer_otp_tariff_settings'), false)
+            ->assertSee(__('app.cloudflare_turnstile'), false)
+            ->assertDontSee('name="allow_google"', false)
+            ->assertDontSee('name="allow_email_password"', false);
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.accounts.index'))
+            ->assertOk()
+            ->assertSee(__('app.customer_otp_tariff_short'), false);
 
         $this->actingAs($owner)
             ->get(route('platform.accounts.customer-auth.edit', $account))
@@ -249,9 +303,7 @@ class CustomerAuthFlowTest extends TestCase
 
         CustomerAuthSetting::create([
             'account_id' => $account->id,
-            'allow_email_password' => false,
             'allow_otp' => true,
-            'allow_google' => false,
             'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
             'otp_provider' => 'turbosms',
         ]);
@@ -271,6 +323,11 @@ class CustomerAuthFlowTest extends TestCase
             'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'otp-1']]]),
         ]);
 
+        $this->get(route('customer.studio.login', $account->slug))
+            ->assertOk()
+            ->assertSee('name="phone"', false)
+            ->assertSee('cf-turnstile', false);
+
         $this->post(route('customer.otp.send', $account->slug), [
             'phone' => '0501112233',
             'cf-turnstile-response' => 'turnstile-token',
@@ -288,6 +345,37 @@ class CustomerAuthFlowTest extends TestCase
         $this->assertTrue(CustomerRememberToken::whereBelongsTo($customer)->exists());
     }
 
+    public function test_customer_login_shows_otp_when_studio_tariff_uses_account_sms(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'country_code' => 'UA',
+            'slug' => 'otp-account-sms-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+
+        CustomerAuthSetting::create([
+            'account_id' => $account->id,
+            'allow_otp' => true,
+            'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
+            'otp_provider' => 'smsclub',
+        ]);
+
+        $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
+            'site_key' => 'test-site-key',
+            'secret_key' => 'test-secret-key',
+        ]);
+
+        $this->accountIntegration($account, 'smsclub', IntegrationCategory::Messaging->value, [
+            'bearer_token' => 'smsclub-token',
+            'src_addr' => 'Studio',
+        ]);
+
+        $this->get(route('customer.studio.login', $account->slug))
+            ->assertOk()
+            ->assertSee('name="phone"', false)
+            ->assertSee('cf-turnstile', false);
+    }
+
     public function test_email_login_does_not_allow_claiming_customer_with_blank_password(): void
     {
         $account = Account::factory()->create([
@@ -297,7 +385,6 @@ class CustomerAuthFlowTest extends TestCase
 
         CustomerAuthSetting::create([
             'account_id' => $account->id,
-            'allow_email_password' => true,
         ]);
 
         Customer::factory()->for($account)->create([
@@ -318,12 +405,6 @@ class CustomerAuthFlowTest extends TestCase
         $account = Account::factory()->create([
             'default_language' => 'en',
             'slug' => 'google-merge-'.fake()->unique()->numberBetween(1000, 9999),
-        ]);
-
-        CustomerAuthSetting::create([
-            'account_id' => $account->id,
-            'allow_email_password' => false,
-            'allow_google' => true,
         ]);
 
         $customer = Customer::factory()->for($account)->create([
@@ -404,6 +485,22 @@ class CustomerAuthFlowTest extends TestCase
         return IntegrationSetting::create([
             'scope_type' => IntegrationScope::Platform->value,
             'scope_id' => 0,
+            'provider' => $provider,
+            'category' => $category,
+            'is_enabled' => true,
+            'credentials' => $credentials,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     */
+    private function accountIntegration(Account $account, string $provider, string $category, array $credentials): IntegrationSetting
+    {
+        return IntegrationSetting::create([
+            'scope_type' => IntegrationScope::Account->value,
+            'scope_id' => $account->id,
+            'account_id' => $account->id,
             'provider' => $provider,
             'category' => $category,
             'is_enabled' => true,

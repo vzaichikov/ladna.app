@@ -133,7 +133,7 @@
                         @if ($methods->google)
                             <div class="border-t border-stone-100 pt-5">
                                 <x-ui.button :href="route('customer.google.redirect', $account->slug)" variant="secondary" class="w-full justify-center">
-                                    <x-ui.icon name="chrome" class="h-4 w-4" />
+                                    <x-ui.icon name="globe" class="h-4 w-4" />
                                     {{ __('app.google_login') }}
                                 </x-ui.button>
                             </div>
