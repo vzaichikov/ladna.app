@@ -44,9 +44,9 @@
 - Private lesson and room rental scheduled slots allow only one active booking from one customer at a time. A second customer must not be able to book the same slot just because the people count is greater than one.
 - Studio calendar blocks should combine colors: the main block/background comes from the `ActivityDirection`, while the small terminal border/badge comes from `Account.schedule_kind_colors` for the class type's `schedule_kind`.
 - The public schedule shows only enabled group classes. Private lessons and room rental may appear in public pricing, but they need separate public purchase/booking interfaces before being exposed as schedule CTA flows.
-- `ClassPassPlan` is the studio-scoped sellable pass template. It binds to eligible `ClassType` records, optional `TrainerType` records, optional `Room` records, session count, validity after first use, time restrictions, price, currency, and the `is_trial` marker.
-- Group passes usually bind to many group class types; private lesson passes usually bind to private class types plus trainer types; rental passes bind to rental class types plus rooms.
-- The studio UI labels the pass catalog as "Class passes & prices" / "Абонементи і ціни" and separates the index into tabs by `ScheduleKind`. A plan attached to class types from several formats may appear in several tabs.
+- `ClassPassPlan` is the studio-scoped sellable pass or price template. It has its own explicit `schedule_kind` and binds to eligible `ClassType` records of that same schedule kind, optional `TrainerType` records, optional `Room` records, session count, validity after first use, time restrictions, price, currency, and the `is_trial` marker.
+- One `ClassPassPlan` belongs to exactly one `ScheduleKind`. Group passes may bind to many group class types; private lesson and rental plans must bind to exactly one matching class type.
+- The studio UI labels the pass catalog as "Class passes & prices" / "Абонементи і ціни" and separates the index into tabs by `ClassPassPlan.schedule_kind`.
 - Trial passes are ordinary `ClassPassPlan` records with `is_trial = true`; they may be issued only once to customers with no previous booking in the same studio account.
 - A purchased pass is `CustomerClassPass`, scoped to one `Account` and one `Customer`. It has a globally unique human code such as `XTY2-GFTR`, purchase date, separate opening date, expiry date, snapshot price/name/session fields, status, and active marker. One customer may have many active purchased passes.
 - A purchased pass does not open at purchase time. Opening happens on first used attendance, and expiry is calculated from `opened_at + validity_days`. Unopened passes do not expire automatically.
@@ -54,7 +54,7 @@
 - Remaining sessions are derived as total sessions minus used sessions; reserved sessions are tracked separately so overbooking is visible before attendance. Counters are normalized from ledger rows by the `class-passes:normalize` command and nightly scheduler.
 - Booking may proceed without a suitable active pass. Studio UI must show an alert on the booking row so staff can charge the customer at visit time.
 - When a booking needs a pass, use the suitable active purchased pass with the earliest `purchased_at`, then lowest id. Suitability is checked against the scheduled class account, class type, optional room, optional trainer type, remaining unreserved sessions, and expiry.
-- Public price output is built from active `ClassPassPlan` records for one account/location and is exposed as both HTML (`/{accountSlug}/{locationSlug}/price`) and JSON API (`/api/v1/public/{accountSlug}/{locationSlug}/price`), grouped by `ClassType.schedule_kind`.
+- Public price output is built from active `ClassPassPlan` records for one account/location and is exposed as both HTML (`/{accountSlug}/{locationSlug}/price`) and JSON API (`/api/v1/public/{accountSlug}/{locationSlug}/price`), grouped by `ClassPassPlan.schedule_kind`.
 
 ## Demo Defaults
 

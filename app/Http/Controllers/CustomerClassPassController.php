@@ -39,7 +39,7 @@ class CustomerClassPassController extends Controller
             ->when($state === 'active', fn ($query) => $query->where('is_active', true))
             ->when($state === 'inactive', fn ($query) => $query->where('is_active', false))
             ->when($scheduleKind !== '', function ($query) use ($scheduleKind): void {
-                $query->whereHas('classPassPlan.classTypes', fn ($query) => $query->where('schedule_kind', $scheduleKind));
+                $query->whereHas('classPassPlan', fn ($query) => $query->where('schedule_kind', $scheduleKind));
             })
             ->orderByRaw('CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END')
             ->orderByDesc('opened_at')

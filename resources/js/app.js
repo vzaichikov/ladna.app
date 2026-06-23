@@ -77,6 +77,23 @@ function updateAnyTimeCurrencies(form) {
     });
 }
 
+function updateClassPassScheduleKind(form) {
+    const select = form?.querySelector('[data-class-pass-schedule-kind]');
+
+    if (!select) {
+        return;
+    }
+
+    form.querySelectorAll('[data-class-type-options]').forEach((group) => {
+        const isActive = group.dataset.classTypeOptions === select.value;
+
+        group.classList.toggle('hidden', !isActive);
+        group.querySelectorAll('input[name="class_type_ids[]"]').forEach((input) => {
+            input.disabled = !isActive;
+        });
+    });
+}
+
 function slugify(value) {
     return value
         .trim()
@@ -661,6 +678,10 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAnyTimeCurrencies(container.closest('form'));
     });
 
+    document.querySelectorAll('form').forEach((form) => {
+        updateClassPassScheduleKind(form);
+    });
+
     document.addEventListener('click', (event) => {
         const selectAllButton = event.target.closest('[data-select-all-class-types]');
 
@@ -669,7 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const group = selectAllButton.closest('[data-class-type-group]');
-        group?.querySelectorAll('[data-class-type-checkbox]').forEach((checkbox) => {
+        group?.querySelectorAll('[data-class-type-checkbox]:not(:disabled)').forEach((checkbox) => {
             checkbox.checked = true;
         });
     });
@@ -698,6 +719,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (currencySelect) {
             updateAnyTimeCurrencies(currencySelect.closest('form'));
+        }
+
+        const scheduleKindSelect = event.target.closest('[data-class-pass-schedule-kind]');
+
+        if (scheduleKindSelect) {
+            updateClassPassScheduleKind(scheduleKindSelect.closest('form'));
         }
     });
 

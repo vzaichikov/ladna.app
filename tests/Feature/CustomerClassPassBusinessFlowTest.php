@@ -187,8 +187,12 @@ class CustomerClassPassBusinessFlowTest extends TestCase
      */
     private function plan(array $context, int $sessions, ?ClassType $classType = null, ?TrainerType $trainerType = null, ?Room $room = null): ClassPassPlan
     {
-        $plan = ClassPassPlan::factory()->for($context['account'])->create(['sessions_count' => $sessions]);
-        $plan->classTypes()->sync([($classType ?? $context['classType'])->id]);
+        $targetClassType = $classType ?? $context['classType'];
+        $plan = ClassPassPlan::factory()->for($context['account'])->create([
+            'sessions_count' => $sessions,
+            'schedule_kind' => $targetClassType->schedule_kind->value,
+        ]);
+        $plan->classTypes()->sync([$targetClassType->id]);
         $plan->trainerTypes()->sync($trainerType === null ? ($classType?->schedule_kind?->value === 'room_rental' ? [] : [$context['trainerType']->id]) : [$trainerType->id]);
         $plan->rooms()->sync($room ? [$room->id] : []);
 

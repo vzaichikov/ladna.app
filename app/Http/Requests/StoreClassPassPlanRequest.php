@@ -13,6 +13,8 @@ use Illuminate\Validation\Validator;
 
 class StoreClassPassPlanRequest extends FormRequest
 {
+    use ValidatesClassPassPlanScheduleKind;
+
     protected function prepareForValidation(): void
     {
         if (! $this->boolean('allows_any_time')) {
@@ -47,6 +49,7 @@ class StoreClassPassPlanRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
+            'schedule_kind' => $this->scheduleKindRules($account instanceof Account ? $account : null),
             'description' => ['nullable', 'string', 'max:2000'],
             'price' => ['required', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'currency' => ['required', Rule::in(config('charm.currencies'))],
@@ -96,6 +99,8 @@ class StoreClassPassPlanRequest extends FormRequest
                     && $this->input('available_from_time') >= $this->input('available_until_time')) {
                     $validator->errors()->add('available_until_time', __('app.class_pass_plan_time_window_invalid'));
                 }
+
+                $this->validateScheduleKindClassTypes($validator);
             },
         ];
     }

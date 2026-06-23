@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ScheduleKind;
 use Database\Factories\ClassPassPlanFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -11,13 +12,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'name', 'slug', 'description', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'is_trial', 'is_active', 'sort_order'])]
+#[Fillable(['account_id', 'schedule_kind', 'name', 'slug', 'description', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'is_trial', 'is_active', 'sort_order'])]
 class ClassPassPlan extends Model
 {
     /** @use HasFactory<ClassPassPlanFactory> */
     use HasFactory;
 
     protected $attributes = [
+        'schedule_kind' => 'group_class',
         'currency' => 'UAH',
         'validity_days' => 30,
         'allows_any_time' => false,
@@ -32,6 +34,7 @@ class ClassPassPlan extends Model
     protected function casts(): array
     {
         return [
+            'schedule_kind' => ScheduleKind::class,
             'allows_any_time' => 'boolean',
             'is_trial' => 'boolean',
             'is_active' => 'boolean',
@@ -88,6 +91,10 @@ class ClassPassPlan extends Model
         $classTypeId = $scheduledClass->class_type_id;
 
         if (! $classTypeId || ! $this->classTypes->contains('id', $classTypeId)) {
+            return false;
+        }
+
+        if ($scheduledClass->classType && $this->schedule_kind !== $scheduledClass->classType->schedule_kind) {
             return false;
         }
 

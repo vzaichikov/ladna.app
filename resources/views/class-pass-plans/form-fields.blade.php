@@ -24,6 +24,10 @@
     $selectedClassTypeIds = collect($selectedClassTypeIds)->map(fn ($id) => (int) $id)->all();
     $selectedTrainerTypeIds = collect($selectedTrainerTypeIds)->map(fn ($id) => (int) $id)->all();
     $selectedRoomIds = collect($selectedRoomIds)->map(fn ($id) => (int) $id)->all();
+    $rawScheduleKind = $classPassPlan->schedule_kind;
+    $classPassPlanScheduleKindValue = $rawScheduleKind instanceof \App\Enums\ScheduleKind ? $rawScheduleKind->value : (string) $rawScheduleKind;
+    $selectedScheduleKind = old('schedule_kind', $classPassPlanScheduleKindValue ?: array_key_first($scheduleKindTabs));
+    $classTypesByScheduleKind = $classTypes->groupBy(fn ($classType) => $classType->schedule_kind->value);
     $formatMoneyInput = static function (?int $priceCents): string {
         if ($priceCents === null) {
             return '';
@@ -58,26 +62,55 @@
     </label>
 </div>
 
+<label class="block">
+    <span class="crm-label">{{ __('app.schedule_kind') }}</span>
+    <select name="schedule_kind" required class="crm-field" data-class-pass-schedule-kind>
+        @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
+            <option value="{{ $scheduleKindValue }}" @selected($selectedScheduleKind === $scheduleKindValue)>{{ __('app.'.$scheduleKindDefinition['title_key']) }}</option>
+        @endforeach
+    </select>
+    @error('schedule_kind') <span class="crm-help">{{ $message }}</span> @enderror
+</label>
+
 <div data-class-type-group>
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span class="crm-label">{{ __('app.class_types') }}</span>
-        <x-ui.button type="button" variant="secondary" size="sm" data-select-all-class-types>
-            {{ __('app.select_all') }}
-        </x-ui.button>
-    </div>
-    <div class="mt-3 grid gap-3 sm:grid-cols-2">
-        @forelse ($classTypes as $classType)
-            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700">
-                <input name="class_type_ids[]" type="checkbox" value="{{ $classType->id }}" @checked(in_array($classType->id, $selectedClassTypeIds, true)) class="crm-checkbox" data-class-type-checkbox>
-                <span class="min-w-0">
-                    <span class="block truncate text-slate-950">{{ $classType->name }}</span>
-                    <span class="mt-0.5 block text-xs text-slate-500">{{ __('app.'.$classType->schedule_kind->value) }}</span>
-                </span>
-            </label>
-        @empty
-            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">{{ __('app.no_class_types') }}</div>
-        @endforelse
-    </div>
+    @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
+        @php
+            $scheduleKindClassTypes = $classTypesByScheduleKind->get($scheduleKindValue, collect());
+            $isActiveClassTypeGroup = $selectedScheduleKind === $scheduleKindValue;
+            $isGroupClass = $scheduleKindValue === \App\Enums\ScheduleKind::GroupClass->value;
+        @endphp
+        <div class="{{ $isActiveClassTypeGroup ? '' : 'hidden' }}" data-class-type-options="{{ $scheduleKindValue }}">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span class="crm-label">{{ __('app.class_types') }}</span>
+                @if ($isGroupClass)
+                    <x-ui.button type="button" variant="secondary" size="sm" data-select-all-class-types>
+                        {{ __('app.select_all') }}
+                    </x-ui.button>
+                @endif
+            </div>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                @forelse ($scheduleKindClassTypes as $classType)
+                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700">
+                        <input
+                            name="class_type_ids[]"
+                            type="{{ $isGroupClass ? 'checkbox' : 'radio' }}"
+                            value="{{ $classType->id }}"
+                            @checked(in_array($classType->id, $selectedClassTypeIds, true))
+                            @disabled(! $isActiveClassTypeGroup)
+                            class="{{ $isGroupClass ? 'crm-checkbox' : 'h-4 w-4 border-stone-300 text-brand-600 focus:ring-brand-500' }}"
+                            data-class-type-checkbox
+                        >
+                        <span class="min-w-0">
+                            <span class="block truncate text-slate-950">{{ $classType->name }}</span>
+                            <span class="mt-0.5 block text-xs text-slate-500">{{ __('app.'.$scheduleKindDefinition['title_key']) }}</span>
+                        </span>
+                    </label>
+                @empty
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">{{ __('app.no_class_types') }}</div>
+                @endforelse
+            </div>
+        </div>
+    @endforeach
     @error('class_type_ids') <span class="crm-help">{{ $message }}</span> @enderror
     @error('class_type_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
 </div>

@@ -25,6 +25,7 @@ class ClassPassPlanFactory extends Factory
             'account_id' => Account::factory(),
             'name' => $name,
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 9999),
+            'schedule_kind' => 'group_class',
             'description' => fake()->sentence(),
             'price_cents' => fake()->numberBetween(120000, 500000),
             'currency' => 'UAH',

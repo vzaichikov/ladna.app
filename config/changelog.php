@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.21.0',
+                'date' => '2026-06-23',
+                'title' => 'Class pass format binding',
+                'items' => ['Added an explicit class format to class passes and prices, filtered available class formats in the form by that selection, and made pricing tabs use the pass format directly.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.20.0',
                 'date' => '2026-06-23',
                 'title' => 'Class format architecture',
@@ -184,6 +191,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.21.0',
+                'date' => '2026-06-23',
+                'title' => 'Прив’язка формату до абонементу',
+                'items' => ['Додано явний формат до абонементів і цін, відфільтровано доступні формати занять у формі за вибором та переведено вкладки прайсу на формат самого абонемента.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.20.0',
                 'date' => '2026-06-23',

@@ -18,7 +18,7 @@
             <h1 class="crm-page-title">{{ __('app.class_pass_plans') }}</h1>
             <p class="crm-page-copy">{{ __('app.class_pass_plans_copy') }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.class-pass-plans.create', $account)">
+        <x-ui.button :href="route('dashboard.accounts.class-pass-plans.create', [$account, 'tab' => $activeScheduleKindValue])">
             <x-ui.icon name="plus" class="h-4 w-4" />
             {{ __('app.create_class_pass_plan') }}
         </x-ui.button>

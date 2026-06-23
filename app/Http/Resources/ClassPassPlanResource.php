@@ -18,6 +18,7 @@ class ClassPassPlanResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'slug' => $this->slug,
+            'schedule_kind' => $this->schedule_kind->value,
             'description' => $this->description,
             'price_cents' => $this->price_cents,
             'currency' => $this->currency,

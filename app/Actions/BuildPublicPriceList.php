@@ -41,8 +41,7 @@ class BuildPublicPriceList
      */
     private function group(Collection $plans, ScheduleKind $scheduleKind, string $titleKey): array
     {
-        $groupPlans = $plans->filter(fn (ClassPassPlan $plan): bool => $plan->classTypes
-            ->contains(fn ($classType): bool => $classType->schedule_kind === $scheduleKind));
+        $groupPlans = $plans->filter(fn (ClassPassPlan $plan): bool => $plan->schedule_kind === $scheduleKind);
 
         return [
             'key' => $scheduleKind->value,
