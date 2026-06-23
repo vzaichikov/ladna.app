@@ -26,16 +26,13 @@
                 <div class="flex flex-wrap gap-2 md:justify-end">
                     <form method="POST" action="{{ route('dashboard.accounts.class-types.copy', [$account, $classType]) }}">
                         @csrf
-                        <x-ui.button type="submit" variant="secondary" size="sm">
-                            <x-ui.icon name="copy" class="h-4 w-4" />
-                            {{ __('app.copy') }}
-                        </x-ui.button>
+                        <x-ui.action-button type="submit" icon="copy" :label="__('app.copy')" />
                     </form>
-                    <x-ui.button :href="route('dashboard.accounts.class-types.edit', [$account, $classType])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <x-ui.action-button :href="route('dashboard.accounts.class-types.edit', [$account, $classType])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.class-types.destroy', [$account, $classType]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
-                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                     </form>
                 </div>
             </div>

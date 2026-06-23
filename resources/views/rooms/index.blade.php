@@ -31,11 +31,11 @@
                 </span>
                 <div class="text-sm font-medium text-slate-500">{{ __('app.capacity') }}: {{ $room->capacity ?? __('app.capacity_not_set') }}</div>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
-                    <x-ui.button :href="route('dashboard.accounts.rooms.edit', [$account, $room])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <x-ui.action-button :href="route('dashboard.accounts.rooms.edit', [$account, $room])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.rooms.destroy', [$account, $room]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
-                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                     </form>
                 </div>
             </div>

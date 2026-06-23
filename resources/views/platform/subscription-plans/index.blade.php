@@ -26,11 +26,11 @@
                     {{ $plan->is_active ? __('app.active') : __('app.inactive') }}
                 </span>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
-                    <x-ui.button :href="route('platform.subscription-plans.edit', $plan)" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <x-ui.action-button :href="route('platform.subscription-plans.edit', $plan)" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('platform.subscription-plans.destroy', $plan) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
-                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                     </form>
                 </div>
             </div>

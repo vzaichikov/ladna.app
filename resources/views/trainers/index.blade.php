@@ -35,11 +35,11 @@
                     {{ $trainer->is_active ? __('app.active') : __('app.inactive') }}
                 </span>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
-                    <x-ui.button :href="route('dashboard.accounts.trainers.edit', [$account, $trainer])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <x-ui.action-button :href="route('dashboard.accounts.trainers.edit', [$account, $trainer])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.trainers.destroy', [$account, $trainer]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
-                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                     </form>
                 </div>
             </div>

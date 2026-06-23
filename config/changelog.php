@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.19.0',
+                'date' => '2026-06-23',
+                'title' => 'Compact list actions',
+                'items' => ['Replaced wide row action buttons in entity lists with compact icon-only controls for copy, edit, delete, schedule, embed, and related quick actions while keeping hover titles and accessible labels.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.18.0',
                 'date' => '2026-06-23',
                 'title' => 'Trainer workspace and faster setup',
@@ -170,6 +177,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.19.0',
+                'date' => '2026-06-23',
+                'title' => 'Компактні дії у списках',
+                'items' => ['Замінено широкі кнопки дій у списках сутностей на компактні іконки для копіювання, редагування, видалення, розкладу, embed та повʼязаних швидких дій зі збереженням підказок і доступних підписів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.18.0',
                 'date' => '2026-06-23',

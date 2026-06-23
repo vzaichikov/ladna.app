@@ -75,7 +75,7 @@
                             <span>{{ __('app.expires_at') }}: {{ $customerClassPass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
                         </div>
                         <div class="mt-3">
-                            <x-ui.button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                            <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
                         </div>
                     </div>
                 @empty

@@ -112,17 +112,12 @@
                         <p class="mt-1 text-sm text-slate-500">{{ $location->address ?: $location->slug }}</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <x-ui.button :href="route('public.schedule', [$account->slug, $location->slug])" variant="secondary" size="sm">
-                            {{ __('app.schedule') }}
-                            <x-ui.icon name="external" class="h-3.5 w-3.5" />
-                        </x-ui.button>
-                        <x-ui.button :href="route('dashboard.accounts.locations.edit', [$account, $location])" variant="secondary" size="sm">
-                            {{ __('app.edit') }}
-                        </x-ui.button>
+                        <x-ui.action-button :href="route('public.schedule', [$account->slug, $location->slug])" icon="calendar" :label="__('app.schedule')" />
+                        <x-ui.action-button :href="route('dashboard.accounts.locations.edit', [$account, $location])" icon="edit" :label="__('app.edit')" />
                         <form method="POST" action="{{ route('dashboard.accounts.locations.destroy', [$account, $location]) }}" data-confirm-delete>
                             @csrf
                             @method('DELETE')
-                            <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                            <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                         </form>
                     </div>
                 </div>

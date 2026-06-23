@@ -3,15 +3,22 @@
     'type' => 'button',
     'variant' => 'primary',
     'size' => 'md',
+    'iconOnly' => false,
 ])
 
 @php
     $base = 'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition crm-focus disabled:pointer-events-none disabled:opacity-50';
-    $sizes = [
+    $defaultSizes = [
         'sm' => 'px-3 py-2 text-xs',
         'md' => 'px-4 py-2.5 text-sm',
         'lg' => 'px-5 py-3 text-sm',
     ];
+    $iconOnlySizes = [
+        'sm' => 'h-9 w-9 p-0 text-xs',
+        'md' => 'h-10 w-10 p-0 text-sm',
+        'lg' => 'h-11 w-11 p-0 text-sm',
+    ];
+    $sizes = $iconOnly ? $iconOnlySizes : $defaultSizes;
     $variants = [
         'primary' => 'bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700',
         'brand' => 'bg-violet-crm-500 text-white shadow-sm shadow-violet-crm-500/20 hover:bg-brand-600',

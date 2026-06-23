@@ -73,7 +73,7 @@
                 </div>
                 <div class="flex flex-wrap gap-2 xl:justify-end">
                     <span class="{{ $customerClassPass->is_active ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
-                    <x-ui.button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
                 </div>
             </div>
         @empty

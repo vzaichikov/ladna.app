@@ -30,13 +30,13 @@
                     {{ $location->is_active ? __('app.active') : __('app.inactive') }}
                 </span>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
-                    <x-ui.button :href="route('dashboard.accounts.locations.edit', [$account, $location])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
-                    <x-ui.button :href="route('public.schedule', [$account->slug, $location->slug])" variant="secondary" size="sm">{{ __('app.schedule') }}</x-ui.button>
-                    <x-ui.button :href="route('public.schedule.embed', [$account->slug, $location->slug])" variant="secondary" size="sm">{{ __('app.embed') }}</x-ui.button>
+                    <x-ui.action-button :href="route('dashboard.accounts.locations.edit', [$account, $location])" icon="edit" :label="__('app.edit')" />
+                    <x-ui.action-button :href="route('public.schedule', [$account->slug, $location->slug])" icon="calendar" :label="__('app.schedule')" />
+                    <x-ui.action-button :href="route('public.schedule.embed', [$account->slug, $location->slug])" icon="code-xml" :label="__('app.embed')" />
                     <form method="POST" action="{{ route('dashboard.accounts.locations.destroy', [$account, $location]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
-                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                     </form>
                 </div>
             </div>

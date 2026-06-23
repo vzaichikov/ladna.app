@@ -122,9 +122,7 @@
                         @csrf
                         @method('DELETE')
 
-                        <x-ui.button type="submit" variant="danger" size="sm" :disabled="$trainerType->is_default || $trainerTypes->count() <= 1">
-                            {{ __('app.delete') }}
-                        </x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" :disabled="$trainerType->is_default || $trainerTypes->count() <= 1" />
                     </form>
                 </div>
             @empty

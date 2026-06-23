@@ -41,10 +41,7 @@
                         {{ $otpReady ? __('app.otp_ready') : ($otpEnabled ? __('app.otp_needs_setup') : __('app.otp_off')) }}
                     </span>
                 </div>
-                <x-ui.button :href="route('platform.accounts.customer-auth.edit', $account)" variant="secondary" size="sm">
-                    <x-ui.icon name="key-round" class="h-4 w-4" />
-                    {{ __('app.customer_otp_tariff_short') }}
-                </x-ui.button>
+                <x-ui.action-button :href="route('platform.accounts.customer-auth.edit', $account)" icon="key-round" :label="__('app.customer_otp_tariff_short')" />
             </div>
         @empty
             <x-ui.empty-state :title="__('app.no_accounts')" icon="accounts" class="m-5" />

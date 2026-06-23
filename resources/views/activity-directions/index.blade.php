@@ -30,16 +30,13 @@
                 <div class="flex flex-wrap gap-2 lg:justify-end">
                     <form method="POST" action="{{ route('dashboard.accounts.activity-directions.copy', [$account, $activityDirection]) }}">
                         @csrf
-                        <x-ui.button type="submit" variant="secondary" size="sm">
-                            <x-ui.icon name="copy" class="h-4 w-4" />
-                            {{ __('app.copy') }}
-                        </x-ui.button>
+                        <x-ui.action-button type="submit" icon="copy" :label="__('app.copy')" />
                     </form>
-                    <x-ui.button :href="route('dashboard.accounts.activity-directions.edit', [$account, $activityDirection])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <x-ui.action-button :href="route('dashboard.accounts.activity-directions.edit', [$account, $activityDirection])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.activity-directions.destroy', [$account, $activityDirection]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
-                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                     </form>
                 </div>
             </div>

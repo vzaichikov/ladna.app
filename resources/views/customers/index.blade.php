@@ -35,11 +35,11 @@
                 <div class="text-sm font-medium text-slate-500">{{ $customer->class_bookings_count }} {{ __('app.bookings') }}</div>
                 <div class="text-sm font-medium text-slate-500">{{ $customer->active_class_passes_count }} {{ __('app.active_class_passes_short') }}</div>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
-                    <x-ui.button :href="route('dashboard.accounts.customers.edit', [$account, $customer])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <x-ui.action-button :href="route('dashboard.accounts.customers.edit', [$account, $customer])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.customers.destroy', [$account, $customer]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
-                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                     </form>
                 </div>
             </div>

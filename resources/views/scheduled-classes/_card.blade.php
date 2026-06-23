@@ -107,7 +107,7 @@
                             <form method="POST" action="{{ route('dashboard.accounts.bookings.destroy', [$account, $booking]) }}" data-async-form data-confirm-delete>
                                 @csrf
                                 @method('DELETE')
-                                <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                                <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                             </form>
                         @endcan
                     </div>

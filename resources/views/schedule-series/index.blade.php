@@ -29,11 +29,11 @@
                 <div class="text-sm text-slate-500">{{ $scheduleSeries->trainer?->name ?? __('app.trainer_not_assigned') }}</div>
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="{{ $scheduleSeries->status->value === 'active' ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$scheduleSeries->status->value) }}</span>
-                    <x-ui.button :href="route('dashboard.accounts.schedule-series.edit', [$account, $scheduleSeries])" variant="secondary" size="sm">{{ __('app.edit') }}</x-ui.button>
+                    <x-ui.action-button :href="route('dashboard.accounts.schedule-series.edit', [$account, $scheduleSeries])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.schedule-series.destroy', [$account, $scheduleSeries]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
-                        <x-ui.button type="submit" variant="danger" size="sm">{{ __('app.delete') }}</x-ui.button>
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                     </form>
                 </div>
             </div>
