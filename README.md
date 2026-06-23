@@ -16,7 +16,7 @@ Ladna is a Laravel-based SaaS CRM for studios that sell scheduled classes, class
 
 - PHP 8.4 locally, Laravel 13, PHPUnit 12.
 - Tailwind CSS 4, Vite 8, Lucide icons.
-- SQLite by default for local development; Laravel-supported databases can be configured through environment settings.
+- MySQL or MariaDB for local development and production schema dumps.
 
 ## Local Setup
 
@@ -24,7 +24,7 @@ Ladna is a Laravel-based SaaS CRM for studios that sell scheduled classes, class
 composer install
 cp .env.example .env
 php artisan key:generate
-touch database/database.sqlite
+mysql -u root -e "CREATE DATABASE ladna CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 php artisan migrate --seed
 npm install --ignore-scripts
 npm run build

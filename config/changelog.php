@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.21.1',
+                'date' => '2026-06-23',
+                'title' => 'Migration schema baseline',
+                'items' => ['Squashed the applied migration history into a committed MySQL schema dump, removed historical data/backfill migrations from new-environment setup, and aligned local bootstrap documentation with the schema dump workflow.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.21.0',
                 'date' => '2026-06-23',
                 'title' => 'Class pass format binding',
@@ -191,6 +198,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.21.1',
+                'date' => '2026-06-23',
+                'title' => 'Базова схема міграцій',
+                'items' => ['Згорнуто застосовану історію міграцій у закомічений MySQL schema dump, прибрано історичні data/backfill міграції з налаштування нових середовищ та узгоджено локальний bootstrap з роботою через schema dump.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.21.0',
                 'date' => '2026-06-23',
