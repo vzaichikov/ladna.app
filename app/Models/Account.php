@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'default_currency', 'logo_path', 'brand_color', 'timezone'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -24,6 +24,7 @@ class Account extends Model
     protected $attributes = [
         'status' => 'active',
         'default_language' => 'uk',
+        'country_code' => 'UA',
         'default_currency' => 'UAH',
     ];
 
@@ -85,6 +86,11 @@ class Account extends Model
     public function customers(): HasMany
     {
         return $this->hasMany(Customer::class);
+    }
+
+    public function customerAuthSetting(): HasOne
+    {
+        return $this->hasOne(CustomerAuthSetting::class);
     }
 
     public function classTypes(): HasMany

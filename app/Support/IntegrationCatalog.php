@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\IntegrationCategory;
+use App\Enums\IntegrationScope;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
@@ -52,11 +53,21 @@ class IntegrationCatalog
     /**
      * @return array<string, array<string, mixed>>
      */
-    public static function providersForCategory(string|IntegrationCategory $category): array
+    public static function providersForCategory(string|IntegrationCategory $category, ?IntegrationScope $scope = null): array
     {
         $categoryValue = $category instanceof IntegrationCategory ? $category->value : $category;
 
-        return Arr::where(self::providers(), fn (array $provider): bool => $provider['category'] === $categoryValue);
+        return Arr::where(self::providers(), function (array $provider) use ($categoryValue, $scope): bool {
+            if ($provider['category'] !== $categoryValue) {
+                return false;
+            }
+
+            if (! $scope) {
+                return true;
+            }
+
+            return in_array($scope->value, $provider['scopes'] ?? [IntegrationScope::Platform->value, IntegrationScope::Account->value], true);
+        });
     }
 
     public static function activeCategory(mixed $category): IntegrationCategory
@@ -133,6 +144,9 @@ class IntegrationCatalog
             } elseif (($definition['type'] ?? 'text') === 'email') {
                 $fieldRules[] = 'email';
                 $fieldRules[] = 'max:'.($definition['max'] ?? 255);
+            } elseif (($definition['type'] ?? 'text') === 'textarea') {
+                $fieldRules[] = 'string';
+                $fieldRules[] = 'max:'.($definition['max'] ?? 8192);
             } elseif (($definition['type'] ?? 'text') === 'select') {
                 $fieldRules[] = Rule::in(array_keys($definition['options'] ?? []));
             } else {

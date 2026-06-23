@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.17.0',
+                'date' => '2026-06-23',
+                'title' => 'Customer login and portal',
+                'items' => ['Added branded studio customer login pages, email/password, OTP, and Google OAuth configuration, Turnstile protection, 90-day customer sessions, phone masks, customer profile completion, password changes, QR login links, and the first customer portal views for passes, visits, and profile management.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.16.0',
                 'date' => '2026-06-21',
                 'title' => 'Public legal pages',
@@ -156,6 +163,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.17.0',
+                'date' => '2026-06-23',
+                'title' => 'Клієнтський вхід і кабінет',
+                'items' => ['Додано брендовані сторінки клієнтського входу для студій, налаштування email/password, OTP і Google OAuth, захист Turnstile, 90-денні клієнтські сесії, маски телефону, обовʼязкове доповнення профілю, зміну пароля, QR-посилання для входу та перші екрани клієнтського кабінету з абонементами, відвідуваннями й профілем.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.16.0',
                 'date' => '2026-06-21',

@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View as ViewInstance;
 
 class AppServiceProvider extends ServiceProvider
@@ -49,6 +50,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manageTrainers', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageTrainers));
         Gate::define('manageStudioSettings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageStudioSettings));
 
+        Password::defaults(fn (): Password => Password::min(6));
+
         View::composer(['layouts.app', 'layouts.public'], function (ViewInstance $view): void {
             $view
                 ->with('systemAppearance', SystemAppearance::current())
@@ -57,6 +60,14 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('login', function (Request $request): Limit {
             return Limit::perMinute(5)->by($request->string('email')->lower().'|'.$request->ip());
+        });
+
+        RateLimiter::for('customer-login', function (Request $request): Limit {
+            return Limit::perMinute(5)->by($request->string('email')->lower().$request->string('phone').'|'.$request->ip());
+        });
+
+        RateLimiter::for('customer-otp', function (Request $request): Limit {
+            return Limit::perMinute(3)->by($request->string('phone').'|'.$request->ip());
         });
     }
 }

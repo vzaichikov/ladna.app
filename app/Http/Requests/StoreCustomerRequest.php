@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Customer;
+use App\Support\PhoneNumberNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -34,5 +35,15 @@ class StoreCustomerRequest extends FormRequest
             'password' => ['nullable', Password::defaults()],
             'default_language' => ['nullable', Rule::in(array_keys(config('charm.locales')))],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $countryCode = $this->route('account')?->country_code ?? 'UA';
+
+        $this->merge([
+            'phone' => app(PhoneNumberNormalizer::class)->normalize($this->input('phone'), $countryCode),
+            'email' => blank($this->input('email')) ? null : mb_strtolower(trim((string) $this->input('email'))),
+        ]);
     }
 }

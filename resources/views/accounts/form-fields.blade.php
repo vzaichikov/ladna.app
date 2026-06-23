@@ -38,6 +38,18 @@
     </label>
 
     <label class="block">
+        <span class="crm-label">{{ __('app.country') }}</span>
+        <select name="country_code" class="crm-field">
+            @foreach (config('charm.countries') as $value => $label)
+                <option value="{{ $value }}" @selected(old('country_code', $account->country_code ?? 'UA') === $value)>{{ $label }}</option>
+            @endforeach
+        </select>
+        @error('country_code') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+</div>
+
+<div class="grid gap-4 sm:grid-cols-2">
+    <label class="block">
         <span class="crm-label">{{ __('app.currency') }}</span>
         <select name="default_currency" class="crm-field">
             @foreach (config('charm.currencies') as $currency)

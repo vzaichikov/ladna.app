@@ -1,4 +1,5 @@
 import { createIcons, icons } from 'lucide';
+import SimplePhoneMask from 'simple-phone-mask';
 
 let pendingDeleteForm = null;
 
@@ -245,6 +246,102 @@ function initCustomerAutocomplete(root = document) {
     });
 }
 
+function initPhoneMasks(root = document) {
+    root.querySelectorAll('[data-phone-mask]').forEach((input, index) => {
+        if (input.dataset.phoneMaskReady === 'true') {
+            return;
+        }
+
+        if (!input.id) {
+            input.id = `phone-mask-${Date.now()}-${index}`;
+        }
+
+        const initialValue = input.value;
+        const messageSource = input.closest('[data-phone-mask-error]') ?? document.body;
+        input.dataset.phoneMaskReady = 'true';
+
+        new SimplePhoneMask(`#${input.id}`, {
+            countryCode: input.dataset.countryCode || 'UA',
+            showFlag: true,
+            allowCountrySelect: true,
+            detectIP: false,
+            showSearch: true,
+            validate: input.dataset.phoneMaskValidate !== 'false',
+            preferredCountries: ['UA', 'PL', 'US', 'GB', 'DE', 'FR'],
+            errorMessage: input.dataset.phoneMaskError || messageSource?.dataset.phoneMaskError || 'Enter a complete phone number.',
+            successMessage: input.dataset.phoneMaskSuccess || messageSource?.dataset.phoneMaskSuccess || 'Phone number looks good.',
+        });
+
+        const wrapper = input.closest('.spm-wrapper');
+        const searchInput = wrapper?.querySelector('.spm-search-input');
+        const noResults = wrapper?.querySelector('.spm-no-results');
+
+        if (searchInput) {
+            searchInput.placeholder = input.dataset.phoneMaskSearch || messageSource?.dataset.phoneMaskSearch || 'Search country...';
+        }
+
+        if (noResults) {
+            noResults.textContent = input.dataset.phoneMaskNoResults || messageSource?.dataset.phoneMaskNoResults || 'No countries found.';
+        }
+
+        if (initialValue.trim() !== '') {
+            input.value = initialValue;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    });
+}
+
+function initOtpCountdowns() {
+    document.querySelectorAll('[data-otp-resend-button]').forEach((button) => {
+        if (button.dataset.otpCountdownReady === 'true') {
+            return;
+        }
+
+        button.dataset.otpCountdownReady = 'true';
+
+        let seconds = Number.parseInt(button.dataset.otpCountdown || '0', 10);
+        const label = document.querySelector('[data-otp-countdown-label]');
+        const originalText = button.textContent.trim();
+        const countdownMessage = button.dataset.otpCountdownMessage || 'You can request a new code in :seconds seconds.';
+
+        const render = () => {
+            if (seconds <= 0) {
+                button.disabled = false;
+                button.textContent = originalText;
+
+                if (label) {
+                    label.textContent = '';
+                }
+
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = `${originalText} (${seconds})`;
+
+            if (label) {
+                label.textContent = countdownMessage.replace(':seconds', seconds);
+            }
+
+            seconds -= 1;
+            window.setTimeout(render, 1000);
+        };
+
+        render();
+    });
+}
+
+function initPrintButtons() {
+    document.querySelectorAll('[data-print-button]').forEach((button) => {
+        if (button.dataset.printReady === 'true') {
+            return;
+        }
+
+        button.dataset.printReady = 'true';
+        button.addEventListener('click', () => window.print());
+    });
+}
+
 function initClassRecordMock() {
     const modal = document.querySelector('[data-class-record-mock-modal]');
     const openButton = document.querySelector('[data-class-record-mock-open]');
@@ -364,6 +461,7 @@ function replaceScheduledClassCard(cardHtml, fallbackCard) {
     const target = document.getElementById(replacement.id) ?? fallbackCard;
     target?.replaceWith(replacement);
     initCustomerAutocomplete(replacement);
+    initPhoneMasks(replacement);
     createIcons({ icons });
 }
 
@@ -423,6 +521,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initSlugAutofill();
     initColorPickers();
     initCustomerAutocomplete();
+    initPhoneMasks();
+    initOtpCountdowns();
+    initPrintButtons();
     initClassRecordMock();
 
     const sidebar = document.querySelector('[data-sidebar]');

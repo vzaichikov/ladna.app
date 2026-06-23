@@ -32,6 +32,7 @@ class UpdatePlatformAccountRequest extends FormRequest
             'slug' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::enum(AccountStatus::class)],
             'default_language' => ['required', Rule::in(array_keys(config('charm.locales')))],
+            'country_code' => ['required', Rule::in(array_keys(config('charm.countries')))],
             'default_currency' => ['required', Rule::in(config('charm.currencies'))],
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
@@ -39,5 +40,12 @@ class UpdatePlatformAccountRequest extends FormRequest
             'subscription_plan_id' => ['nullable', Rule::exists((new SubscriptionPlan)->getTable(), 'id')],
             'subscription_status' => ['required', Rule::enum(SubscriptionStatus::class)],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'country_code' => $this->input('country_code') ?: ($this->route('account')?->country_code ?? 'UA'),
+        ]);
     }
 }

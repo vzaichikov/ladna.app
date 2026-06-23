@@ -167,7 +167,14 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @stack('head')
     </head>
-    <body class="min-h-screen bg-canvas text-slate-950 antialiased" style="--app-font-family: '{{ $systemAppearance['css_family'] }}';">
+    <body
+        class="min-h-screen bg-canvas text-slate-950 antialiased"
+        data-phone-mask-error="{{ __('app.phone_mask_error') }}"
+        data-phone-mask-no-results="{{ __('app.phone_mask_no_results') }}"
+        data-phone-mask-search="{{ __('app.phone_mask_search') }}"
+        data-phone-mask-success="{{ __('app.phone_mask_success') }}"
+        style="--app-font-family: '{{ $systemAppearance['css_family'] }}';"
+    >
         <div class="min-h-screen lg:flex">
             <div data-sidebar-backdrop class="fixed inset-0 z-30 hidden bg-slate-950/50 backdrop-blur-sm lg:hidden"></div>
 

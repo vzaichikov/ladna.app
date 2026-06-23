@@ -15,7 +15,14 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @stack('head')
     </head>
-    <body class="antialiased" style="--app-font-family: '{{ $systemAppearance['css_family'] }}';">
+    <body
+        class="antialiased"
+        data-phone-mask-error="{{ __('app.phone_mask_error') }}"
+        data-phone-mask-no-results="{{ __('app.phone_mask_no_results') }}"
+        data-phone-mask-search="{{ __('app.phone_mask_search') }}"
+        data-phone-mask-success="{{ __('app.phone_mask_success') }}"
+        style="--app-font-family: '{{ $systemAppearance['css_family'] }}';"
+    >
         @yield('content')
 
         @unless (($hideAppFooter ?? false) || ($isEmbed ?? false))

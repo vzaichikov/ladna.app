@@ -25,6 +25,7 @@ class AccountFactory extends Factory
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 9999),
             'status' => 'active',
             'default_language' => fake()->randomElement(['uk', 'en']),
+            'country_code' => 'UA',
             'default_currency' => fake()->randomElement(['UAH', 'USD', 'EUR']),
             'brand_color' => fake()->hexColor(),
             'timezone' => 'Europe/Kyiv',
