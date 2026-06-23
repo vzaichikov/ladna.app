@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
 use App\Models\ClassType;
 use App\Models\Location;
@@ -33,7 +34,9 @@ class UpdateScheduleSeriesRequest extends FormRequest
         return [
             'location_id' => ['required', Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id)],
             'room_id' => ['required', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account?->id)],
-            'class_type_id' => ['required', Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account?->id)],
+            'class_type_id' => ['required', Rule::exists((new ClassType)->getTable(), 'id')
+                ->where('account_id', $account?->id)
+                ->where('schedule_kind', ScheduleKind::GroupClass->value)],
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account?->id)],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],

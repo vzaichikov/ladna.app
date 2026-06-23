@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\GenerateScheduleOccurrences;
+use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
 use App\Http\Requests\StoreScheduleSeriesRequest;
 use App\Http\Requests\UpdateScheduleSeriesRequest;
@@ -16,6 +17,7 @@ class ScheduleSeriesController extends Controller
     public function index(Account $account): View
     {
         $this->authorize('view', $account);
+        $this->ensureGroupClassesEnabled($account);
 
         return view('schedule-series.index', [
             'account' => $account,
@@ -31,6 +33,7 @@ class ScheduleSeriesController extends Controller
     public function create(Account $account): View
     {
         $this->authorize('manageSchedule', $account);
+        $this->ensureGroupClassesEnabled($account);
 
         return view('schedule-series.create', $this->formData($account, new ScheduleSeries([
             'weekday' => now()->isoWeekday(),
@@ -43,6 +46,7 @@ class ScheduleSeriesController extends Controller
     public function store(StoreScheduleSeriesRequest $request, Account $account, GenerateScheduleOccurrences $generateScheduleOccurrences): RedirectResponse
     {
         $validated = $request->validated();
+        $this->ensureGroupClassesEnabled($account);
         $this->ensureRoomBelongsToLocation($account, (int) $validated['location_id'], (int) $validated['room_id']);
 
         $series = $account->scheduleSeries()->create($validated);
@@ -61,6 +65,7 @@ class ScheduleSeriesController extends Controller
     {
         $this->ensureBelongsToAccount($account, $scheduleSeries);
         $this->authorize('manageSchedule', $account);
+        $this->ensureGroupClassesEnabled($account);
 
         return view('schedule-series.edit', $this->formData($account, $scheduleSeries));
     }
@@ -68,6 +73,7 @@ class ScheduleSeriesController extends Controller
     public function update(UpdateScheduleSeriesRequest $request, Account $account, ScheduleSeries $scheduleSeries, GenerateScheduleOccurrences $generateScheduleOccurrences): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $scheduleSeries);
+        $this->ensureGroupClassesEnabled($account);
 
         $validated = $request->validated();
         $this->ensureRoomBelongsToLocation($account, (int) $validated['location_id'], (int) $validated['room_id']);
@@ -83,6 +89,7 @@ class ScheduleSeriesController extends Controller
     {
         $this->ensureBelongsToAccount($account, $scheduleSeries);
         $this->authorize('manageSchedule', $account);
+        $this->ensureGroupClassesEnabled($account);
 
         $scheduleSeries->scheduledClasses()->delete();
         $scheduleSeries->delete();
@@ -101,7 +108,12 @@ class ScheduleSeriesController extends Controller
             'scheduleSeries' => $scheduleSeries,
             'locations' => $account->locations()->active()->orderBy('name')->get(),
             'rooms' => $account->rooms()->active()->with('location')->orderBy('name')->get(),
-            'classTypes' => $account->classTypes()->active()->with('activityDirection')->orderBy('name')->get(),
+            'classTypes' => $account->classTypes()
+                ->active()
+                ->with('activityDirection')
+                ->where('schedule_kind', ScheduleKind::GroupClass->value)
+                ->orderBy('name')
+                ->get(),
             'trainers' => $account->trainers()->active()->orderBy('name')->get(),
             'statuses' => ScheduleSeriesStatus::cases(),
             'weekdays' => $this->weekdays(),
@@ -111,6 +123,11 @@ class ScheduleSeriesController extends Controller
     private function ensureBelongsToAccount(Account $account, ScheduleSeries $scheduleSeries): void
     {
         abort_unless($scheduleSeries->account_id === $account->id, 404);
+    }
+
+    private function ensureGroupClassesEnabled(Account $account): void
+    {
+        abort_unless($account->hasScheduleKindEnabled(ScheduleKind::GroupClass), 404);
     }
 
     private function ensureRoomBelongsToLocation(Account $account, int $locationId, int $roomId): void

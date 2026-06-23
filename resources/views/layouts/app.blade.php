@@ -45,6 +45,25 @@
     $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
+    $classFormatNav = [];
+
+    if ($showAccountNav && $canManageStudioSettings) {
+        foreach (\App\Support\ScheduleKindRegistry::all() as $scheduleKindValue => $scheduleKindDefinition) {
+            if (! $activeAccount->hasScheduleKindEnabled($scheduleKindValue)) {
+                continue;
+            }
+
+            $routeName = 'dashboard.accounts.'.$scheduleKindDefinition['route_name'].'.index';
+            $activeRoutePattern = 'dashboard.accounts.'.$scheduleKindDefinition['route_name'].'.*';
+            $classFormatNav[] = [
+                'label' => __('app.'.$scheduleKindDefinition['title_key']),
+                'icon' => $scheduleKindDefinition['icon'],
+                'href' => route($routeName, $activeAccount),
+                'active' => request()->routeIs($activeRoutePattern)
+                    || ($scheduleKindValue === \App\Enums\ScheduleKind::GroupClass->value && request()->routeIs('dashboard.accounts.class-types.*')),
+            ];
+        }
+    }
 
     $studioNav = $showAccountNav ? [
         [
@@ -71,7 +90,7 @@
             'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customer-class-passes.*'),
         ]] : []),
-        ...($canManageSchedule ? [[
+        ...($canManageSchedule && $activeAccount->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass) ? [[
             'label' => __('app.schedule_series'),
             'icon' => 'schedule',
             'href' => route('dashboard.accounts.schedule-series.index', $activeAccount),
@@ -99,12 +118,7 @@
                 'href' => route('dashboard.accounts.activity-directions.index', $activeAccount),
                 'active' => request()->routeIs('dashboard.accounts.activity-directions.*'),
             ],
-            [
-                'label' => __('app.class_types'),
-                'icon' => 'class-types',
-                'href' => route('dashboard.accounts.class-types.index', $activeAccount),
-                'active' => request()->routeIs('dashboard.accounts.class-types.*'),
-            ],
+            ...$classFormatNav,
         ] : []),
         ...($canManageClassPassPlans ? [[
             'label' => __('app.class_pass_plans'),

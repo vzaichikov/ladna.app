@@ -9,11 +9,15 @@
             <p class="crm-page-copy">{{ __('app.generated_classes_copy') }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
-            <x-ui.button type="button" data-class-record-mock-open>
-                <x-ui.icon name="plus" class="h-4 w-4" />
-                {{ __('app.add_class_record') }}
-            </x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
+            @foreach ($manualClassOptions as $manualClassOption)
+                <x-ui.button type="button" data-manual-class-open="{{ $manualClassOption['kind']->value }}">
+                    <x-ui.icon name="plus" class="h-4 w-4" />
+                    {{ __('app.add_'.$manualClassOption['kind']->value.'_record') }}
+                </x-ui.button>
+            @endforeach
+            @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass))
+                <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
+            @endif
         </div>
     </div>
 
@@ -107,26 +111,143 @@
         @endif
     </section>
 
-    <div
-        class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="class-record-mock-title"
-        data-class-record-mock-modal
-    >
-        <div class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <div class="flex items-start gap-4">
-                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-violet-crm-100 text-brand-700">
-                    <x-ui.icon name="calendar-plus" class="h-5 w-5" />
+    @foreach ($manualClassOptions as $manualClassOption)
+        @php
+            $manualKind = $manualClassOption['kind'];
+            $manualDefinition = $manualClassOption['definition'];
+            $manualTimezone = $account->timezone ?? config('app.timezone');
+            $defaultStartsAt = now($manualTimezone)->addHour()->minute(0)->second(0)->format('Y-m-d\TH:i');
+        @endphp
+        <div
+            class="fixed inset-0 z-50 hidden items-center justify-center overflow-y-auto bg-slate-950/55 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-class-title-{{ $manualKind->value }}"
+            data-manual-class-modal="{{ $manualKind->value }}"
+        >
+            <div class="my-8 w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-start gap-4">
+                        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-violet-crm-100 text-brand-700">
+                            <x-ui.icon :name="$manualDefinition['icon']" class="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h2 id="manual-class-title-{{ $manualKind->value }}" class="text-lg font-semibold text-slate-950">{{ __('app.add_'.$manualKind->value.'_record') }}</h2>
+                            <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.manual_class_record_copy') }}</p>
+                        </div>
+                    </div>
+                    <x-ui.action-button type="button" icon="close" :label="__('app.cancel')" data-manual-class-close />
                 </div>
-                <div>
-                    <h2 id="class-record-mock-title" class="text-lg font-semibold text-slate-950">{{ __('app.class_record_mock_title') }}</h2>
-                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.class_record_mock_body') }}</p>
-                </div>
-            </div>
-            <div class="mt-6 flex justify-end">
-                <x-ui.button type="button" variant="secondary" data-class-record-mock-close>{{ __('app.cancel') }}</x-ui.button>
+
+                @if ($manualClassOption['classTypes']->isEmpty())
+                    <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                        {{ __('app.'.$manualDefinition['empty_key']) }}
+                    </div>
+                    <div class="mt-6 flex justify-end gap-2">
+                        <x-ui.button type="button" variant="secondary" data-manual-class-close>{{ __('app.cancel') }}</x-ui.button>
+                        @can('manageStudioSettings', $account)
+                            <x-ui.button :href="route(\App\Support\ScheduleKindRegistry::routeName($manualKind, 'create'), $account)">
+                                <x-ui.icon name="plus" class="h-4 w-4" />
+                                {{ __('app.'.$manualDefinition['create_key']) }}
+                            </x-ui.button>
+                        @endcan
+                    </div>
+                @else
+                    <form method="POST" action="{{ route('dashboard.accounts.scheduled-classes.manual.store', [$account, $manualKind->value]) }}" class="mt-6 space-y-5">
+                        @csrf
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.location') }}</span>
+                                <select name="location_id" required class="crm-field">
+                                    @foreach ($filterLocations as $location)
+                                        <option value="{{ $location->id }}" @selected((int) old('location_id') === $location->id)>{{ $location->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.room') }}</span>
+                                <select name="room_id" required class="crm-field">
+                                    @foreach ($filterRooms as $room)
+                                        <option value="{{ $room->id }}" @selected((int) old('room_id') === $room->id)>{{ $room->location?->name }} · {{ $room->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('room_id') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                        </div>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.class_type') }}</span>
+                                <select name="class_type_id" required class="crm-field">
+                                    @foreach ($manualClassOption['classTypes'] as $classType)
+                                        <option value="{{ $classType->id }}" @selected((int) old('class_type_id') === $classType->id)>{{ $classType->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('class_type_id') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                            @if ($manualKind === \App\Enums\ScheduleKind::PrivateLesson)
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.trainer') }}</span>
+                                    <select name="trainer_id" required class="crm-field">
+                                        <option value="">{{ __('app.trainer_not_assigned') }}</option>
+                                        @foreach ($manualTrainers as $trainer)
+                                            <option value="{{ $trainer->id }}" @selected((int) old('trainer_id') === $trainer->id)>{{ $trainer->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('trainer_id') <span class="crm-help">{{ $message }}</span> @enderror
+                                </label>
+                            @endif
+                        </div>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.name') }}</span>
+                                <input name="title" value="{{ old('title') }}" class="crm-field">
+                                @error('title') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.start_time') }}</span>
+                                <input name="starts_at" type="datetime-local" value="{{ old('starts_at', $defaultStartsAt) }}" required class="crm-field">
+                                @error('starts_at') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                        </div>
+
+                        <div class="grid gap-4 sm:grid-cols-3">
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.duration') }}</span>
+                                <input name="duration_minutes" type="number" min="15" max="480" value="{{ old('duration_minutes') }}" class="crm-field">
+                                @error('duration_minutes') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.'.$manualDefinition['capacity_label_key']) }}</span>
+                                <input name="capacity" type="number" min="1" max="999" value="{{ old('capacity') }}" class="crm-field">
+                                @error('capacity') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.booking_cutoff') }}</span>
+                                <input name="booking_cutoff_minutes" type="number" min="0" max="10080" value="{{ old('booking_cutoff_minutes') }}" class="crm-field">
+                                @error('booking_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                        </div>
+
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.description') }}</span>
+                            <textarea name="description" rows="3" class="crm-field">{{ old('description') }}</textarea>
+                            @error('description') <span class="crm-help">{{ $message }}</span> @enderror
+                        </label>
+
+                        <div class="flex justify-end gap-2">
+                            <x-ui.button type="button" variant="secondary" data-manual-class-close>{{ __('app.cancel') }}</x-ui.button>
+                            <x-ui.button type="submit">
+                                <x-ui.icon name="plus" class="h-4 w-4" />
+                                {{ __('app.add_class_record') }}
+                            </x-ui.button>
+                        </div>
+                    </form>
+                @endif
             </div>
         </div>
-    </div>
+    @endforeach
 @endsection

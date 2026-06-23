@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\Trainer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
@@ -24,7 +25,14 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
 
         $owner = User::factory()->create();
-        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'schedule_kind_colors' => [
+                'group_class' => '#FF00AA',
+                'private_lesson' => '#A78AB9',
+                'room_rental' => '#38BDF8',
+            ],
+        ]);
         $account->addOwner($owner);
         $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
@@ -32,7 +40,7 @@ class CustomerBookingTest extends TestCase
         $classType = ClassType::factory()
             ->for($account)
             ->for($activityDirection)
-            ->create();
+            ->create(['color' => '#C7F000']);
 
         ScheduledClass::factory()
             ->for($account)
@@ -50,6 +58,7 @@ class CustomerBookingTest extends TestCase
             ->assertOk()
             ->assertSee('Pole Beginner')
             ->assertSee('background-color: #C7F000;', false)
+            ->assertSee('border-right-color: #FF00AA;', false)
             ->assertSee('color: #1E293B;', false);
 
         Carbon::setTestNow();
@@ -125,6 +134,74 @@ class CustomerBookingTest extends TestCase
 
         $booking = ClassBooking::whereBelongsTo($account)->whereBelongsTo($customer)->firstOrFail();
         $this->assertSame('First visit', $booking->notes);
+    }
+
+    public function test_owner_can_create_manual_private_lesson_record(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['capacity' => 6]);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Private 60',
+            'schedule_kind' => 'private_lesson',
+            'default_duration_minutes' => 60,
+            'default_capacity' => 2,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.scheduled-classes.manual.store', [$account, 'private_lesson']), [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'starts_at' => '2026-06-17T15:00',
+                'capacity' => 2,
+            ])
+            ->assertRedirect(route('dashboard.accounts.scheduled-classes.index', $account));
+
+        $scheduledClass = ScheduledClass::whereBelongsTo($account)->where('title', 'Private 60')->firstOrFail();
+
+        $this->assertFalse($scheduledClass->is_generated);
+        $this->assertFalse($scheduledClass->is_public);
+        $this->assertNull($scheduledClass->schedule_series_id);
+        $this->assertSame($trainer->id, $scheduledClass->trainer_id);
+        $this->assertSame(2, $scheduledClass->capacity);
+        $this->assertSame('private_lesson', $scheduledClass->metadata['schedule_kind']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_private_lesson_booking_allows_only_one_active_customer(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => 'private_lesson']);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create(['capacity' => 2]);
+        $firstCustomer = Customer::factory()->for($account)->create();
+        $secondCustomer = Customer::factory()->for($account)->create();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]), [
+                'customer_id' => $firstCustomer->id,
+            ])
+            ->assertCreated();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]), [
+                'customer_id' => $secondCustomer->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.customer_id.0', __('app.manual_class_already_booked'));
+
+        $this->assertSame(1, $scheduledClass->classBookings()->count());
     }
 
     public function test_owner_can_update_booking_status_with_json_response(): void

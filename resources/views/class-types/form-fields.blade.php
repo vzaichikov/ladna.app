@@ -30,15 +30,6 @@
 
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
-        <span class="crm-label">{{ __('app.schedule_kind') }}</span>
-        <select name="schedule_kind" class="crm-field">
-            @foreach ($scheduleKinds as $scheduleKind)
-                <option value="{{ $scheduleKind->value }}" @selected(old('schedule_kind', $classType->schedule_kind?->value ?? $classType->schedule_kind) === $scheduleKind->value)>{{ __('app.'.$scheduleKind->value) }}</option>
-            @endforeach
-        </select>
-        @error('schedule_kind') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
-    <label class="block">
         <span class="crm-label">{{ __('app.color') }}</span>
         @php
             $colorValue = old('color', $classType->color);
@@ -75,7 +66,7 @@
         @error('booking_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="block">
-        <span class="crm-label">{{ __('app.default_capacity') }}</span>
+        <span class="crm-label">{{ __('app.'.$scheduleKindDefinition['capacity_label_key']) }}</span>
         <input name="default_capacity" type="number" min="1" value="{{ old('default_capacity', $classType->default_capacity) }}" class="crm-field">
         @error('default_capacity') <span class="crm-help">{{ $message }}</span> @enderror
     </label>

@@ -24,6 +24,17 @@
         </x-ui.button>
     </div>
 
+    <nav class="mt-6 flex gap-2 overflow-x-auto border-b border-slate-200" aria-label="{{ __('app.class_pass_plans') }}">
+        @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
+            <a
+                href="{{ route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $scheduleKindValue]) }}"
+                class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeScheduleKindValue === $scheduleKindValue ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
+            >
+                {{ __('app.'.$scheduleKindDefinition['title_key']) }}
+            </a>
+        @endforeach
+    </nav>
+
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($classPassPlans as $classPassPlan)
             @php
@@ -86,12 +97,12 @@
                     <span class="{{ $classPassPlan->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
                         {{ $classPassPlan->is_active ? __('app.active') : __('app.inactive') }}
                     </span>
-                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.copy', [$account, $classPassPlan]) }}">
+                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.copy', [$account, $classPassPlan, 'tab' => $activeScheduleKindValue]) }}">
                         @csrf
                         <x-ui.action-button type="submit" icon="copy" :label="__('app.copy')" />
                     </form>
                     <x-ui.action-button :href="route('dashboard.accounts.class-pass-plans.edit', [$account, $classPassPlan])" icon="edit" :label="__('app.edit')" />
-                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.destroy', [$account, $classPassPlan]) }}" data-confirm-delete>
+                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.destroy', [$account, $classPassPlan, 'tab' => $activeScheduleKindValue]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
                         <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />

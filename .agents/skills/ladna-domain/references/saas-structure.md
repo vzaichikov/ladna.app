@@ -34,8 +34,19 @@
 - Weekly recurring schedule lives in `ScheduleSeries`.
 - Generated concrete classes live in `ScheduledClass`.
 - Attendance and booking state live in `ClassBooking`.
+- `ClassType` is the studio-scoped catalog item for one concrete sellable/service format. Keep it as one table with `schedule_kind`; do not split group classes, private lessons, and room rental into separate physical tables unless the product explicitly approves a larger migration.
+- `ScheduleKindRegistry` is the code-facing behavior registry for schedule formats. It defines the route namespace, UI label keys, capacity/person-count label, recurring/manual behavior, public schedule behavior, and default visibility for each `ScheduleKind`. Add future formats there first.
+- `Account.enabled_schedule_kinds` controls which schedule formats are visible for a studio. Existing or unset accounts should behave as if group classes, private lessons, and room rental are all enabled.
+- `Account.schedule_kind_colors` stores studio-specific visual colors for schedule formats. These colors are account-level settings, not per-`ClassType` business data; missing values fall back to `ScheduleKindRegistry` defaults.
+- Group classes (`group_class`) are recurring formats managed through `ScheduleSeries`; generated occurrences are public schedule candidates.
+- Private lessons (`private_lesson`) and room rental (`room_rental`) are manual one-off `ScheduledClass` records with `schedule_series_id = null` and `is_generated = false`. Do not put them into weekly recurring schedule flows by default.
+- For group classes, `capacity` means maximum attendance. For private lessons and room rental, `capacity` is displayed as people count inside one purchase/booking, not as remaining saleable seats.
+- Private lesson and room rental scheduled slots allow only one active booking from one customer at a time. A second customer must not be able to book the same slot just because the people count is greater than one.
+- Studio calendar blocks should combine colors: the main block/background comes from the `ActivityDirection`, while the small terminal border/badge comes from `Account.schedule_kind_colors` for the class type's `schedule_kind`.
+- The public schedule shows only enabled group classes. Private lessons and room rental may appear in public pricing, but they need separate public purchase/booking interfaces before being exposed as schedule CTA flows.
 - `ClassPassPlan` is the studio-scoped sellable pass template. It binds to eligible `ClassType` records, optional `TrainerType` records, optional `Room` records, session count, validity after first use, time restrictions, price, currency, and the `is_trial` marker.
-- `ClassType.schedule_kind` determines whether a pass is sold as group classes, private lessons, or room rental. Group passes usually bind to many class types; private lesson passes usually bind to private class types plus trainer types; rental passes bind to rental class types plus rooms.
+- Group passes usually bind to many group class types; private lesson passes usually bind to private class types plus trainer types; rental passes bind to rental class types plus rooms.
+- The studio UI labels the pass catalog as "Class passes & prices" / "Абонементи і ціни" and separates the index into tabs by `ScheduleKind`. A plan attached to class types from several formats may appear in several tabs.
 - Trial passes are ordinary `ClassPassPlan` records with `is_trial = true`; they may be issued only once to customers with no previous booking in the same studio account.
 - A purchased pass is `CustomerClassPass`, scoped to one `Account` and one `Customer`. It has a globally unique human code such as `XTY2-GFTR`, purchase date, separate opening date, expiry date, snapshot price/name/session fields, status, and active marker. One customer may have many active purchased passes.
 - A purchased pass does not open at purchase time. Opening happens on first used attendance, and expiry is calculated from `opened_at + validity_days`. Unopened passes do not expire automatically.
@@ -52,3 +63,5 @@
 - Demo account/location: `Charmpole`.
 - Demo rooms: `Великий зал` and `Малий зал`.
 - Demo data should model the real Charmpole studio, not generic placeholder fitness data. Charmpole demo class-pass plans include group classes, private lessons, room rental, and one trial pass.
+- `App\Support\CharmpoleDemoCatalog` is the code source of truth for Charmpole demo directions, rooms, trainer type defaults, class types, pass plans, weekly schedule rows, customers, and demo customer passes. Update it first when changing demo catalog content, then let seeders consume it.
+- `php artisan ladna:sync-charmpole-catalog` is a guarded catalog-only sync for existing Charmpole accounts. It dry-runs by default and only applies changes with `--execute`. It must not replace accounts, users, customers, trainers, trainer types, brand settings, SMS settings, or integration settings; it is for directions, class types, class-pass plans, and their pivots only.

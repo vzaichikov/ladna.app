@@ -35,7 +35,7 @@ class ClassPassPlanTest extends TestCase
                 'slug' => 'start-morning',
                 'available_until_time' => '12:00',
             ]))
-            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', $account));
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'group_class']));
 
         $classPassPlan = ClassPassPlan::whereBelongsTo($account)->where('slug', 'start-morning')->first();
 
@@ -62,7 +62,7 @@ class ClassPassPlanTest extends TestCase
                 'price' => '9.99',
                 'currency' => 'EUR',
             ]))
-            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', $account));
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'group_class']));
 
         $classPassPlan = ClassPassPlan::whereBelongsTo($account)->where('slug', 'trial')->firstOrFail();
 
@@ -85,7 +85,7 @@ class ClassPassPlanTest extends TestCase
                 'allows_any_time' => '1',
                 'any_time_addon_price' => '75.50',
             ]))
-            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', $account));
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'group_class']));
 
         $classPassPlan = ClassPassPlan::whereBelongsTo($account)->where('slug', 'morning')->firstOrFail();
 
@@ -131,7 +131,7 @@ class ClassPassPlanTest extends TestCase
                 'allows_any_time' => '0',
                 'any_time_addon_price' => 'invalid stale value',
             ]))
-            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', $account));
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'group_class']));
 
         $classPassPlan->refresh();
 
@@ -177,14 +177,14 @@ class ClassPassPlanTest extends TestCase
                 'slug' => 'base',
                 'sessions_count' => 8,
             ]))
-            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', $account));
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'group_class']));
 
         $this->assertSame('BASE', $classPassPlan->fresh()->name);
         $this->assertSame(8, $classPassPlan->fresh()->sessions_count);
 
         $this->actingAs($owner)
             ->delete(route('dashboard.accounts.class-pass-plans.destroy', [$account, $classPassPlan]))
-            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', $account));
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'group_class']));
 
         $this->assertModelMissing($classPassPlan);
     }
@@ -216,6 +216,49 @@ class ClassPassPlanTest extends TestCase
             ->get(route('dashboard.accounts.class-pass-plans.edit', [$account, $classPassPlan]))
             ->assertOk()
             ->assertSee('START');
+    }
+
+    public function test_class_pass_plan_index_tabs_filter_by_schedule_kind(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['default_currency' => 'UAH']);
+        $account->addOwner($owner);
+
+        $groupType = ClassType::factory()->for($account)->create(['name' => 'Group Pole', 'schedule_kind' => 'group_class']);
+        $privateType = ClassType::factory()->for($account)->create(['name' => 'Private Pole', 'schedule_kind' => 'private_lesson']);
+        $rentalType = ClassType::factory()->for($account)->create(['name' => 'Rental 60', 'schedule_kind' => 'room_rental']);
+
+        $groupPlan = ClassPassPlan::factory()->for($account)->create(['name' => 'Group pass']);
+        $privatePlan = ClassPassPlan::factory()->for($account)->create(['name' => 'Private pass']);
+        $rentalPlan = ClassPassPlan::factory()->for($account)->create(['name' => 'Rental pass']);
+
+        $groupPlan->classTypes()->sync([$groupType->id]);
+        $privatePlan->classTypes()->sync([$privateType->id]);
+        $rentalPlan->classTypes()->sync([$rentalType->id]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.class-pass-plans.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.group_classes'))
+            ->assertSee(__('app.private_lessons'))
+            ->assertSee(__('app.room_rentals'))
+            ->assertSee('Group pass')
+            ->assertDontSee('Private pass')
+            ->assertDontSee('Rental pass');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'private_lesson']))
+            ->assertOk()
+            ->assertSee('Private pass')
+            ->assertDontSee('Group pass')
+            ->assertDontSee('Rental pass');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'room_rental']))
+            ->assertOk()
+            ->assertSee('Rental pass')
+            ->assertDontSee('Group pass')
+            ->assertDontSee('Private pass');
     }
 
     public function test_owner_can_copy_class_pass_plan_with_relationships(): void
@@ -255,7 +298,7 @@ class ClassPassPlanTest extends TestCase
         $this->actingAs($owner)
             ->withSession(['locale' => 'en'])
             ->post(route('dashboard.accounts.class-pass-plans.copy', [$account, $classPassPlan]))
-            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', $account));
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'group_class']));
 
         $copy = ClassPassPlan::whereBelongsTo($account)
             ->where('slug', 'copy-start')

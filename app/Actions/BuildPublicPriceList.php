@@ -30,7 +30,9 @@ class BuildPublicPriceList
             $this->group($plans, ScheduleKind::GroupClass, 'group_classes_price'),
             $this->group($plans, ScheduleKind::PrivateLesson, 'private_lessons_price'),
             $this->group($plans, ScheduleKind::RoomRental, 'room_rental_price'),
-        ])->filter(fn (array $group): bool => $group['sections']->isNotEmpty())->values();
+        ])
+            ->filter(fn (array $group): bool => $account->hasScheduleKindEnabled($group['key']) && $group['sections']->isNotEmpty())
+            ->values();
     }
 
     /**

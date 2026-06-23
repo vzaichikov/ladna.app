@@ -45,6 +45,26 @@ class ClassType extends Model
         return $query->where('schedule_kind', ScheduleKind::GroupClass->value);
     }
 
+    public function colorAccent(string $fallback = '#3B223F'): string
+    {
+        if (is_string($this->color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $this->color)) {
+            return strtoupper($this->color);
+        }
+
+        return $this->activityDirection?->colorAccent($fallback) ?? $fallback;
+    }
+
+    public function colorText(string $fallback = '#3B223F'): string
+    {
+        $color = ltrim($this->colorAccent($fallback), '#');
+        $red = hexdec(substr($color, 0, 2));
+        $green = hexdec(substr($color, 2, 2));
+        $blue = hexdec(substr($color, 4, 2));
+        $luminance = (($red * 299) + ($green * 587) + ($blue * 114)) / 1000;
+
+        return $luminance > 150 ? '#1E293B' : '#FFFFFF';
+    }
+
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);

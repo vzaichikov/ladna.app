@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ScheduleKind;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountOwnerProfileController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\ManualScheduledClassController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
 use App\Http\Controllers\Platform\PlatformAccountController;
@@ -34,6 +36,7 @@ use App\Http\Controllers\TrainerController;
 use App\Http\Controllers\TrainerTypeController;
 use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
+use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
 
@@ -132,11 +135,54 @@ Route::middleware('auth:web')
         Route::resource('accounts.activity-directions', ActivityDirectionController::class)
             ->except(['show'])
             ->scoped();
+
+        foreach ([
+            ['group-classes', 'group-classes', ScheduleKind::GroupClass],
+            ['private-lessons', 'private-lessons', ScheduleKind::PrivateLesson],
+            ['room-rentals', 'room-rentals', ScheduleKind::RoomRental],
+        ] as [$uri, $name, $scheduleKind]) {
+            Route::get("accounts/{account}/{$uri}", [ClassTypeController::class, 'index'])
+                ->defaults('schedule_kind', $scheduleKind->value)
+                ->name("accounts.{$name}.index");
+            Route::get("accounts/{account}/{$uri}/create", [ClassTypeController::class, 'create'])
+                ->defaults('schedule_kind', $scheduleKind->value)
+                ->name("accounts.{$name}.create");
+            Route::post("accounts/{account}/{$uri}", [ClassTypeController::class, 'store'])
+                ->defaults('schedule_kind', $scheduleKind->value)
+                ->name("accounts.{$name}.store");
+            Route::post("accounts/{account}/{$uri}/{class_type}/copy", [ClassTypeController::class, 'copy'])
+                ->defaults('schedule_kind', $scheduleKind->value)
+                ->name("accounts.{$name}.copy");
+            Route::get("accounts/{account}/{$uri}/{class_type}/edit", [ClassTypeController::class, 'edit'])
+                ->defaults('schedule_kind', $scheduleKind->value)
+                ->name("accounts.{$name}.edit");
+            Route::match(['put', 'patch'], "accounts/{account}/{$uri}/{class_type}", [ClassTypeController::class, 'update'])
+                ->defaults('schedule_kind', $scheduleKind->value)
+                ->name("accounts.{$name}.update");
+            Route::delete("accounts/{account}/{$uri}/{class_type}", [ClassTypeController::class, 'destroy'])
+                ->defaults('schedule_kind', $scheduleKind->value)
+                ->name("accounts.{$name}.destroy");
+        }
+
+        Route::get('accounts/{account}/class-types', fn (Account $account): RedirectResponse => redirect()->route('dashboard.accounts.group-classes.index', $account))
+            ->name('accounts.class-types.index');
+        Route::get('accounts/{account}/class-types/create', fn (Account $account): RedirectResponse => redirect()->route('dashboard.accounts.group-classes.create', $account))
+            ->name('accounts.class-types.create');
+        Route::get('accounts/{account}/class-types/{class_type}/edit', fn (Account $account, int $class_type): RedirectResponse => redirect()->route('dashboard.accounts.group-classes.edit', [$account, $class_type]))
+            ->name('accounts.class-types.edit');
         Route::post('accounts/{account}/class-types/{class_type}/copy', [ClassTypeController::class, 'copy'])
+            ->defaults('schedule_kind', ScheduleKind::GroupClass->value)
             ->name('accounts.class-types.copy');
-        Route::resource('accounts.class-types', ClassTypeController::class)
-            ->except(['show'])
-            ->scoped();
+        Route::post('accounts/{account}/class-types', [ClassTypeController::class, 'store'])
+            ->defaults('schedule_kind', ScheduleKind::GroupClass->value)
+            ->name('accounts.class-types.store');
+        Route::match(['put', 'patch'], 'accounts/{account}/class-types/{class_type}', [ClassTypeController::class, 'update'])
+            ->defaults('schedule_kind', ScheduleKind::GroupClass->value)
+            ->name('accounts.class-types.update');
+        Route::delete('accounts/{account}/class-types/{class_type}', [ClassTypeController::class, 'destroy'])
+            ->defaults('schedule_kind', ScheduleKind::GroupClass->value)
+            ->name('accounts.class-types.destroy');
+
         Route::post('accounts/{account}/class-pass-plans/{class_pass_plan}/copy', [ClassPassPlanController::class, 'copy'])
             ->name('accounts.class-pass-plans.copy');
         Route::resource('accounts.class-pass-plans', ClassPassPlanController::class)
@@ -172,6 +218,8 @@ Route::middleware('auth:web')
             ->name('accounts.integrations.update');
         Route::get('accounts/{account}/scheduled-classes', ScheduledClassController::class)
             ->name('accounts.scheduled-classes.index');
+        Route::post('accounts/{account}/scheduled-classes/manual/{scheduleKind}', [ManualScheduledClassController::class, 'store'])
+            ->name('accounts.scheduled-classes.manual.store');
         Route::post('accounts/{account}/scheduled-classes/{scheduledClass}/bookings', [ClassBookingController::class, 'store'])
             ->name('accounts.scheduled-classes.bookings.store');
         Route::patch('accounts/{account}/bookings/{classBooking}', [ClassBookingController::class, 'update'])

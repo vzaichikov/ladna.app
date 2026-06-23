@@ -84,7 +84,12 @@ class ScheduledClass extends Model
             ->where('is_public', true)
             ->where('status', ScheduledClassStatus::Scheduled->value)
             ->where('starts_at', '>=', now())
-            ->whereHas('account', fn (Builder $query) => $query->where('status', AccountStatus::Active->value))
+            ->whereHas('account', fn (Builder $query) => $query
+                ->where('status', AccountStatus::Active->value)
+                ->where(function (Builder $query): void {
+                    $query->whereNull('enabled_schedule_kinds')
+                        ->orWhereJsonContains('enabled_schedule_kinds', ScheduleKind::GroupClass->value);
+                }))
             ->whereHas('location', fn (Builder $query) => $query->where('is_active', true))
             ->whereHas('room', fn (Builder $query) => $query
                 ->where('is_active', true)

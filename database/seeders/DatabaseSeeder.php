@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Actions\GenerateScheduleOccurrences;
 use App\Enums\AccountRole;
-use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SystemRole;
@@ -20,6 +19,7 @@ use App\Models\SubscriptionPlan;
 use App\Models\Trainer;
 use App\Models\TrainerType;
 use App\Models\User;
+use App\Support\CharmpoleDemoCatalog;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -61,6 +61,8 @@ class DatabaseSeeder extends Seeder
             'logo_path' => 'brand/charmpole-icon.svg',
             'brand_color' => '#d80a7d',
             'timezone' => 'Europe/Kyiv',
+            'enabled_schedule_kinds' => CharmpoleDemoCatalog::enabledScheduleKinds(),
+            'schedule_kind_colors' => CharmpoleDemoCatalog::scheduleKindColors(),
         ]);
 
         $account->users()->attach($owner->id, [
@@ -96,23 +98,7 @@ class DatabaseSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        $bigHall = Room::create([
-            'account_id' => $account->id,
-            'location_id' => $location->id,
-            'name' => 'Великий зал',
-            'slug' => 'big-hall',
-            'capacity' => 12,
-            'is_active' => true,
-        ]);
-
-        Room::create([
-            'account_id' => $account->id,
-            'location_id' => $location->id,
-            'name' => 'Малий зал',
-            'slug' => 'small-hall',
-            'capacity' => 6,
-            'is_active' => true,
-        ]);
+        $rooms = $this->rooms($account, $location);
 
         $directions = $this->directions($account);
         $classTypes = $this->classTypes($account, $directions);
@@ -121,7 +107,7 @@ class DatabaseSeeder extends Seeder
         $trainers = $this->trainers($account, $trainerTypes);
         $this->customers($account);
 
-        $this->schedule($account, $location, $bigHall, $classTypes, $trainers);
+        $this->schedule($account, $location, $rooms['big-hall'], $classTypes, $trainers);
         $this->customerClassPasses($account);
 
         unset($platformUser);
@@ -163,28 +149,37 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
+     * @return array<string, Room>
+     */
+    private function rooms(Account $account, Location $location): array
+    {
+        return collect(CharmpoleDemoCatalog::rooms())
+            ->mapWithKeys(fn (array $room, string $slug): array => [$slug => Room::create([
+                'account_id' => $account->id,
+                'location_id' => $location->id,
+                'name' => $room['name'],
+                'slug' => $slug,
+                'capacity' => $room['capacity'],
+                'is_active' => $room['is_active'],
+            ])])
+            ->all();
+    }
+
+    /**
      * @return array<string, ActivityDirection>
      */
     private function directions(Account $account): array
     {
-        return collect([
-            ['Pole Dance', 'Техніка, сила та танцювальні комбінації на пілоні.', '#c7f000'],
-            ['Exotic', 'Exotic pole, флоу, музикальність та хореографія.', '#ff008c'],
-            ['Stretching', 'Гнучкість, мобільність та відновлення.', '#ff2b2b'],
-            ['Kids', 'Дитячі групи Pole Kids.', '#ffffff'],
-            ['Acro', 'Акробатика та трюкова підготовка.', '#ffffff'],
-        ])->mapWithKeys(function (array $direction) use ($account): array {
-            [$name, $description, $color] = $direction;
-
-            return [$name => ActivityDirection::create([
+        return collect(CharmpoleDemoCatalog::directions())
+            ->mapWithKeys(fn (array $direction, string $slug): array => [$slug => ActivityDirection::create([
                 'account_id' => $account->id,
-                'name' => $name,
-                'slug' => Str::slug($name),
-                'description' => $description,
-                'color' => $color,
-                'is_active' => true,
-            ])];
-        })->all();
+                'name' => $direction['name'],
+                'slug' => $slug,
+                'description' => $direction['description'],
+                'color' => $direction['color'],
+                'is_active' => $direction['is_active'],
+            ])])
+            ->all();
     }
 
     /**
@@ -193,30 +188,21 @@ class DatabaseSeeder extends Seeder
      */
     private function classTypes(Account $account, array $directions): array
     {
-        return collect([
-            ['Pole Dance', 'Pole Dance', '#c7f000', 60, 12],
-            ['Pole Kids', 'Kids', '#ffffff', 60, 8],
-            ['Exot Easy', 'Exotic', '#c7f000', 60, 10],
-            ['Exot', 'Exotic', '#ff008c', 60, 10],
-            ['Exot Middle', 'Exotic', '#ffad00', 60, 10],
-            ['Stretching', 'Stretching', '#ff2b2b', 60, 12],
-            ['Tricks', 'Acro', '#ff008c', 60, 10],
-            ['Acro class*', 'Acro', '#ffffff', 60, 12],
-        ])->mapWithKeys(function (array $classType) use ($account, $directions): array {
-            [$name, $direction, $color, $duration, $capacity] = $classType;
+        return collect(CharmpoleDemoCatalog::classTypes())->mapWithKeys(function (array $classType, string $slug) use ($account, $directions): array {
+            $directionSlug = $classType['direction_slug'];
 
-            return [$name => ClassType::create([
+            return [$slug => ClassType::create([
                 'account_id' => $account->id,
-                'activity_direction_id' => $directions[$direction]->id,
-                'name' => $name,
-                'slug' => Str::slug($name),
-                'description' => null,
-                'color' => $color,
-                'schedule_kind' => ScheduleKind::GroupClass->value,
-                'default_duration_minutes' => $duration,
-                'booking_cutoff_minutes' => 60,
-                'default_capacity' => $capacity,
-                'is_active' => true,
+                'activity_direction_id' => is_string($directionSlug) ? $directions[$directionSlug]->id : null,
+                'name' => $classType['name'],
+                'slug' => $slug,
+                'description' => $classType['description'],
+                'color' => $classType['color'],
+                'schedule_kind' => $classType['schedule_kind'],
+                'default_duration_minutes' => $classType['default_duration_minutes'],
+                'booking_cutoff_minutes' => $classType['booking_cutoff_minutes'],
+                'default_capacity' => $classType['default_capacity'],
+                'is_active' => $classType['is_active'],
             ])];
         })->all();
     }
@@ -226,22 +212,9 @@ class DatabaseSeeder extends Seeder
      */
     private function trainerTypes(Account $account): array
     {
-        return [
-            'trainer' => $account->trainerTypes()->create([
-                'name' => 'Тренер',
-                'icon' => 'user-round',
-                'color' => '#3B223F',
-                'is_default' => true,
-                'sort_order' => 10,
-            ]),
-            'top' => $account->trainerTypes()->create([
-                'name' => 'ТОП-тренер',
-                'icon' => 'crown',
-                'color' => '#D80A7D',
-                'is_default' => false,
-                'sort_order' => 20,
-            ]),
-        ];
+        return collect(CharmpoleDemoCatalog::trainerTypes())
+            ->mapWithKeys(fn (array $trainerType, string $key): array => [$key => $account->trainerTypes()->create($trainerType)])
+            ->all();
     }
 
     /**
@@ -291,25 +264,12 @@ class DatabaseSeeder extends Seeder
 
     private function customers(Account $account): void
     {
-        collect([
-            ['Олена Коваль', '+380671112233', 'olena.koval@example.com'],
-            ['Марія Шевченко', '+380501234567', 'maria.shevchenko@example.com'],
-            ['Анна Мельник', '+380931234567', 'anna.melnyk@example.com'],
-            ['Катерина Бондар', '+380681234567', 'kateryna.bondar@example.com'],
-            ['Юлія Мороз', '+380661234567', 'yuliia.moroz@example.com'],
-            ['Ірина Савчук', '+380991234567', 'iryna.savchuk@example.com'],
-            ['Наталія Ткаченко', '+380631234567', 'nataliia.tkachenko@example.com'],
-            ['Дарина Лисенко', '+380731234567', 'daryna.lysenko@example.com'],
-            ['Sofia Parker', '+380971234567', 'sofia.parker@example.com'],
-            ['Alina Dance', '+380951234567', 'alina.dance@example.com'],
-        ])->each(function (array $customer) use ($account): void {
-            [$name, $phone, $email] = $customer;
-
+        collect(CharmpoleDemoCatalog::customers())->each(function (array $customer) use ($account): void {
             Customer::create([
                 'account_id' => $account->id,
-                'name' => $name,
-                'phone' => $phone,
-                'email' => $email,
+                'name' => $customer['name'],
+                'phone' => $customer['phone'],
+                'email' => $customer['email'],
                 'password' => Hash::make('password'),
                 'default_language' => $account->default_language,
                 'email_verified_at' => now(),
@@ -323,65 +283,20 @@ class DatabaseSeeder extends Seeder
      */
     private function schedule(Account $account, Location $location, Room $room, array $classTypes, array $trainers): void
     {
-        $rows = [
-            [1, '09:00', 'Exot Easy', 'Настя'],
-            [1, '10:00', 'Pole Dance', 'Настя'],
-            [1, '11:00', 'Stretching', 'Настя'],
-            [1, '16:00', 'Pole Dance', 'Настя'],
-            [1, '17:00', 'Exot Easy', 'Настя'],
-            [1, '18:00', 'Pole Dance', 'Катя'],
-            [1, '19:00', 'Exot Middle', 'Катя'],
-            [1, '20:00', 'Pole Dance', 'Катя'],
-            [2, '09:00', 'Tricks', 'Slastya'],
-            [2, '10:00', 'Exot', 'Slastya'],
-            [2, '16:00', 'Pole Kids', 'Ліза'],
-            [2, '17:00', 'Pole Kids', 'Ліза'],
-            [2, '18:00', 'Pole Dance', 'Ліза'],
-            [2, '19:00', 'Pole Dance', 'Аліна'],
-            [2, '20:00', 'Exot Easy', 'Аліна'],
-            [3, '09:00', 'Exot Easy', 'Настя'],
-            [3, '10:00', 'Pole Dance', 'Настя'],
-            [3, '11:00', 'Stretching', 'Настя'],
-            [3, '16:00', 'Pole Dance', 'Настя'],
-            [3, '17:00', 'Exot Easy', 'Настя'],
-            [3, '18:00', 'Pole Dance', 'Катя'],
-            [3, '19:00', 'Exot Middle', 'Катя'],
-            [3, '20:00', 'Pole Dance', 'Катя'],
-            [4, '09:00', 'Stretching', 'Slastya'],
-            [4, '10:00', 'Exot', 'Slastya'],
-            [4, '16:00', 'Pole Kids', 'Ліза'],
-            [4, '17:00', 'Stretching', 'Женя'],
-            [4, '18:00', 'Pole Dance', 'Женя'],
-            [4, '19:00', 'Pole Dance', 'Женя'],
-            [4, '20:00', 'Exot Easy', 'Аліна'],
-            [5, '18:00', 'Pole Dance', 'Катя'],
-            [5, '19:00', 'Exot Middle', 'Катя'],
-            [6, '09:00', 'Acro class*', '_loco_man'],
-            [6, '11:00', 'Exot Easy', 'Настя'],
-            [6, '12:00', 'Stretching', 'Настя'],
-            [6, '13:00', 'Pole Dance', 'Настя'],
-            [7, '10:00', 'Pole Dance', 'Женя'],
-            [7, '11:00', 'Pole Dance', 'Женя'],
-            [7, '12:00', 'Stretching', 'Женя'],
-            [7, '13:00', 'Exot Easy', 'Аліна'],
-        ];
-
         $generator = app(GenerateScheduleOccurrences::class);
         $startDate = Carbon::now('Europe/Kyiv')->startOfWeek()->toDateString();
 
-        foreach ($rows as $row) {
-            [$weekday, $time, $classType, $trainer] = $row;
-
+        foreach (CharmpoleDemoCatalog::scheduleRows() as $row) {
             $series = ScheduleSeries::create([
                 'account_id' => $account->id,
                 'location_id' => $location->id,
                 'room_id' => $room->id,
-                'class_type_id' => $classTypes[$classType]->id,
-                'trainer_id' => $trainers[$trainer]->id,
+                'class_type_id' => $classTypes[$row['class_type_slug']]->id,
+                'trainer_id' => $trainers[$row['trainer_name']]->id,
                 'title' => null,
                 'description' => null,
-                'weekday' => $weekday,
-                'start_time' => $time,
+                'weekday' => $row['weekday'],
+                'start_time' => $row['start_time'],
                 'start_date' => $startDate,
                 'end_date' => null,
                 'capacity' => null,
@@ -396,23 +311,16 @@ class DatabaseSeeder extends Seeder
 
     private function customerClassPasses(Account $account): void
     {
-        $passes = [
-            ['olena.koval@example.com', 'full-day-start', 'LDNA-1001'],
-            ['maria.shevchenko@example.com', 'morning-start', 'LDNA-1002'],
-            ['anna.melnyk@example.com', 'private-top-60', 'LDNA-1003'],
-        ];
-
-        foreach ($passes as $pass) {
-            [$email, $planSlug, $code] = $pass;
-            $customer = $account->customers()->where('email', $email)->first();
-            $classPassPlan = $account->classPassPlans()->where('slug', $planSlug)->first();
+        foreach (CharmpoleDemoCatalog::customerClassPasses() as $pass) {
+            $customer = $account->customers()->where('email', $pass['customer_email'])->first();
+            $classPassPlan = $account->classPassPlans()->where('slug', $pass['plan_slug'])->first();
 
             if (! $customer || ! $classPassPlan) {
                 continue;
             }
 
             CustomerClassPass::updateOrCreate(
-                ['code' => $code],
+                ['code' => $pass['code']],
                 [
                     'account_id' => $account->id,
                     'customer_id' => $customer->id,

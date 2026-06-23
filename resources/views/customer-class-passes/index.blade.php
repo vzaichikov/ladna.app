@@ -38,8 +38,8 @@
                 <span class="crm-label">{{ __('app.schedule_kind') }}</span>
                 <select name="schedule_kind" class="crm-field">
                     <option value="">{{ __('app.all_formats') }}</option>
-                    @foreach (\App\Enums\ScheduleKind::cases() as $kind)
-                        <option value="{{ $kind->value }}" @selected($scheduleKind === $kind->value)>{{ __('app.'.$kind->value) }}</option>
+                    @foreach ($enabledScheduleKinds as $kind)
+                        <option value="{{ $kind }}" @selected($scheduleKind === $kind)>{{ __('app.'.$kind) }}</option>
                     @endforeach
                 </select>
             </label>

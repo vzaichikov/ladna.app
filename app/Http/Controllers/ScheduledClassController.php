@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ClassBookingStatus;
 use App\Models\Account;
+use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
@@ -29,6 +30,22 @@ class ScheduledClassController extends Controller
             ->orderBy('location_id')
             ->orderBy('name')
             ->get(['id', 'location_id', 'name']);
+        $manualTrainers = $account->trainers()
+            ->active()
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        $manualClassOptions = collect(ScheduleKindRegistry::manualKinds())
+            ->filter(fn ($scheduleKind): bool => $account->hasScheduleKindEnabled($scheduleKind))
+            ->map(fn ($scheduleKind): array => [
+                'kind' => $scheduleKind,
+                'definition' => ScheduleKindRegistry::get($scheduleKind),
+                'classTypes' => $account->classTypes()
+                    ->active()
+                    ->where('schedule_kind', $scheduleKind->value)
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'default_duration_minutes', 'default_capacity']),
+            ])
+            ->values();
         $selectedLocationIds = $this->selectedIds($request, 'locations', $filterLocations->pluck('id')->all());
         $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
 
@@ -62,6 +79,8 @@ class ScheduledClassController extends Controller
             'pastScheduledClassesCount' => $pastScheduledClasses->count(),
             'filterLocations' => $filterLocations,
             'filterRooms' => $filterRooms,
+            'manualClassOptions' => $manualClassOptions,
+            'manualTrainers' => $manualTrainers,
             'selectedLocationIds' => $selectedLocationIds,
             'selectedRoomIds' => $selectedRoomIds,
             'customerSearchUrl' => route('dashboard.accounts.customers.search', $account),

@@ -94,8 +94,8 @@ class StudioConfigurationTest extends TestCase
         $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create();
 
         $this->actingAs($owner)
-            ->delete(route('dashboard.accounts.class-types.destroy', [$account, $classType]))
-            ->assertRedirect(route('dashboard.accounts.class-types.index', $account));
+            ->delete(route('dashboard.accounts.group-classes.destroy', [$account, $classType]))
+            ->assertRedirect(route('dashboard.accounts.group-classes.index', $account));
 
         $this->assertModelMissing($classType);
         $this->assertModelMissing($scheduledClass);
@@ -167,30 +167,106 @@ class StudioConfigurationTest extends TestCase
         $activityDirection = ActivityDirection::factory()->for($account)->create();
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.class-types.create', $account))
+            ->get(route('dashboard.accounts.group-classes.create', $account))
             ->assertOk()
             ->assertSee('data-color-picker', false)
             ->assertSee('data-color-value', false);
 
         $this->actingAs($owner)
-            ->post(route('dashboard.accounts.class-types.store', $account), [
+            ->post(route('dashboard.accounts.group-classes.store', $account), [
                 'activity_direction_id' => $activityDirection->id,
                 'name' => 'Bright Format',
                 'slug' => 'bright-format',
                 'color' => '#123ABC',
-                'schedule_kind' => 'group_class',
+                'schedule_kind' => 'private_lesson',
                 'default_duration_minutes' => 60,
                 'booking_cutoff_minutes' => 120,
                 'default_capacity' => 12,
                 'is_active' => '1',
             ])
-            ->assertRedirect(route('dashboard.accounts.class-types.index', $account));
+            ->assertRedirect(route('dashboard.accounts.group-classes.index', $account));
 
         $classType = ClassType::whereBelongsTo($account)
             ->where('slug', 'bright-format')
             ->firstOrFail();
 
         $this->assertSame('#123ABC', $classType->color);
+        $this->assertSame('group_class', $classType->schedule_kind->value);
+    }
+
+    public function test_class_type_sections_are_split_by_schedule_kind(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $groupType = ClassType::factory()->for($account)->create(['name' => 'Group Pole', 'schedule_kind' => 'group_class']);
+        $privateType = ClassType::factory()->for($account)->create(['name' => 'Private Pole', 'schedule_kind' => 'private_lesson']);
+        $rentalType = ClassType::factory()->for($account)->create(['name' => 'Rental 60', 'schedule_kind' => 'room_rental']);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.group-classes.index', $account))
+            ->assertOk()
+            ->assertSee($groupType->name)
+            ->assertDontSee($privateType->name)
+            ->assertDontSee($rentalType->name);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.private-lessons.index', $account))
+            ->assertOk()
+            ->assertSee($privateType->name)
+            ->assertDontSee($groupType->name)
+            ->assertDontSee($rentalType->name);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.room-rentals.index', $account))
+            ->assertOk()
+            ->assertSee($rentalType->name)
+            ->assertDontSee($groupType->name)
+            ->assertDontSee($privateType->name);
+    }
+
+    public function test_brand_settings_persist_enabled_schedule_kinds(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'formats']))
+            ->assertOk()
+            ->assertSee(__('app.studio_class_formats'))
+            ->assertSee(__('app.schedule_format_color'))
+            ->assertSee('data-color-picker', false)
+            ->assertSee('data-color-value', false);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'formats',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+                'enabled_schedule_kinds_present' => '1',
+                'enabled_schedule_kinds' => ['group_class', 'private_lesson'],
+                'schedule_kind_colors_present' => '1',
+                'schedule_kind_colors' => [
+                    'group_class' => '#FF00AA',
+                    'private_lesson' => '#00AAFF',
+                    'room_rental' => '#AAFF00',
+                ],
+            ])
+            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'formats']));
+
+        $account->refresh();
+
+        $this->assertSame(['group_class', 'private_lesson'], $account->enabledScheduleKindValues());
+        $this->assertSame('#FF00AA', $account->scheduleKindColor('group_class'));
+        $this->assertSame('#00AAFF', $account->scheduleKindColor('private_lesson'));
+        $this->assertSame('#AAFF00', $account->scheduleKindColor('room_rental'));
     }
 
     public function test_configuration_entities_can_be_copied_with_localized_prefix(): void
@@ -234,8 +310,8 @@ class StudioConfigurationTest extends TestCase
 
         $this->actingAs($owner)
             ->withSession(['locale' => 'uk'])
-            ->post(route('dashboard.accounts.class-types.copy', [$account, $classType]))
-            ->assertRedirect(route('dashboard.accounts.class-types.index', $account));
+            ->post(route('dashboard.accounts.group-classes.copy', [$account, $classType]))
+            ->assertRedirect(route('dashboard.accounts.group-classes.index', $account));
 
         $copiedClassType = ClassType::whereBelongsTo($account)
             ->where('slug', 'kopiya-beginner')

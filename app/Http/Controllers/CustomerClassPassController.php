@@ -20,7 +20,9 @@ class CustomerClassPassController extends Controller
 
         $term = trim((string) $request->query('q', ''));
         $state = (string) $request->query('state', 'active');
-        $scheduleKind = (string) $request->query('schedule_kind', '');
+        $enabledScheduleKinds = $account->enabledScheduleKindValues();
+        $requestedScheduleKind = (string) $request->query('schedule_kind', '');
+        $scheduleKind = in_array($requestedScheduleKind, $enabledScheduleKinds, true) ? $requestedScheduleKind : '';
 
         $customerClassPasses = $account->customerClassPasses()
             ->with(['customer', 'classPassPlan.classTypes', 'classPassPlan.trainerTypes', 'classPassPlan.rooms'])
@@ -50,6 +52,7 @@ class CustomerClassPassController extends Controller
             'customerClassPasses' => $customerClassPasses,
             'state' => $state,
             'scheduleKind' => $scheduleKind,
+            'enabledScheduleKinds' => $enabledScheduleKinds,
         ]);
     }
 

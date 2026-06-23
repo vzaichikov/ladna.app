@@ -6,22 +6,30 @@ use App\Http\Requests\StoreClassPassPlanRequest;
 use App\Http\Requests\UpdateClassPassPlanRequest;
 use App\Models\Account;
 use App\Models\ClassPassPlan;
+use App\Support\ScheduleKindRegistry;
 use App\Support\SlugGenerator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ClassPassPlanController extends Controller
 {
-    public function index(Account $account): View
+    public function index(Request $request, Account $account): View
     {
         $this->ensureCurrentUserOwns($account);
+        $scheduleKindTabs = $this->scheduleKindTabs($account);
+        $activeScheduleKindValue = $this->activeScheduleKindValue($account, $request->query('tab'));
 
         return view('class-pass-plans.index', [
             'account' => $account,
+            'scheduleKindTabs' => $scheduleKindTabs,
+            'activeScheduleKindValue' => $activeScheduleKindValue,
             'classPassPlans' => $account->classPassPlans()
                 ->with(['classTypes', 'trainerTypes', 'rooms'])
+                ->whereHas('classTypes', fn (Builder $query) => $query->where('schedule_kind', $activeScheduleKindValue))
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
@@ -54,7 +62,7 @@ class ClassPassPlanController extends Controller
         $classPassPlan->trainerTypes()->sync($validated['trainer_type_ids'] ?? []);
         $classPassPlan->rooms()->sync($validated['room_ids'] ?? []);
 
-        return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
+        return redirect()->route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $this->scheduleKindValueForClassTypeIds($account, $validated['class_type_ids'])])
             ->with('status', __('app.class_pass_plan_created'));
     }
 
@@ -89,7 +97,7 @@ class ClassPassPlanController extends Controller
         $classPassPlan->trainerTypes()->sync($validated['trainer_type_ids'] ?? []);
         $classPassPlan->rooms()->sync($validated['room_ids'] ?? []);
 
-        return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
+        return redirect()->route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $this->scheduleKindValueForClassTypeIds($account, $validated['class_type_ids'])])
             ->with('status', __('app.class_pass_plan_updated'));
     }
 
@@ -113,7 +121,7 @@ class ClassPassPlanController extends Controller
             $copy->rooms()->sync($classPassPlan->rooms->modelKeys());
         });
 
-        return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
+        return redirect()->route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $this->activeScheduleKindValue($account, request()->query('tab'))])
             ->with('status', __('app.class_pass_plan_copied'));
     }
 
@@ -124,7 +132,7 @@ class ClassPassPlanController extends Controller
 
         $classPassPlan->delete();
 
-        return redirect()->route('dashboard.accounts.class-pass-plans.index', $account)
+        return redirect()->route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $this->activeScheduleKindValue($account, request()->query('tab'))])
             ->with('status', __('app.class_pass_plan_deleted'));
     }
 
@@ -149,6 +157,43 @@ class ClassPassPlanController extends Controller
     private function copyName(string $name): string
     {
         return __('app.copy_prefix').' '.$name;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function scheduleKindTabs(Account $account): array
+    {
+        return collect(ScheduleKindRegistry::all())
+            ->filter(fn (array $definition, string $value): bool => $account->hasScheduleKindEnabled($value))
+            ->all();
+    }
+
+    private function activeScheduleKindValue(Account $account, mixed $requestedValue): string
+    {
+        $tabs = $this->scheduleKindTabs($account);
+        $value = is_string($requestedValue) ? $requestedValue : null;
+
+        if ($value && array_key_exists($value, $tabs)) {
+            return $value;
+        }
+
+        return array_key_first($tabs) ?? ScheduleKindRegistry::defaultEnabledValues()[0];
+    }
+
+    /**
+     * @param  array<int, mixed>  $classTypeIds
+     */
+    private function scheduleKindValueForClassTypeIds(Account $account, array $classTypeIds): string
+    {
+        $scheduleKindValues = $account->classTypes()
+            ->whereKey($classTypeIds)
+            ->pluck('schedule_kind')
+            ->all();
+
+        return collect(ScheduleKindRegistry::defaultEnabledValues())
+            ->first(fn (string $value): bool => in_array($value, $scheduleKindValues, true))
+            ?? $this->activeScheduleKindValue($account, null);
     }
 
     /**
@@ -207,7 +252,11 @@ class ClassPassPlanController extends Controller
         $account->ensureDefaultTrainerType();
 
         return [
-            'classTypes' => $account->classTypes()->orderBy('schedule_kind')->orderBy('name')->get(),
+            'classTypes' => $account->classTypes()
+                ->whereIn('schedule_kind', $account->enabledScheduleKindValues())
+                ->orderBy('schedule_kind')
+                ->orderBy('name')
+                ->get(),
             'trainerTypes' => $account->trainerTypes()->ordered()->get(),
             'rooms' => $account->rooms()->with('location:id,name')->orderBy('location_id')->orderBy('name')->get(),
             'currencies' => config('charm.currencies'),
