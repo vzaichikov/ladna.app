@@ -34,6 +34,7 @@ class StorePlatformAccountRequest extends FormRequest
             'slug' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::enum(AccountStatus::class)],
             'default_language' => ['required', Rule::in(array_keys(config('charm.locales')))],
+            'country_code' => ['required', Rule::in(array_keys(config('charm.countries')))],
             'default_currency' => ['required', Rule::in(config('charm.currencies'))],
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
@@ -44,5 +45,12 @@ class StorePlatformAccountRequest extends FormRequest
             'owner_email' => ['required', 'email', 'max:255', Rule::unique((new User)->getTable(), 'email')],
             'owner_password' => ['required', Password::defaults()],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'country_code' => $this->input('country_code') ?: 'UA',
+        ]);
     }
 }

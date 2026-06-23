@@ -91,6 +91,14 @@
                                         </option>
                                     @endforeach
                                 </select>
+                            @elseif ($fieldType === 'textarea')
+                                <textarea
+                                    id="{{ $fieldId }}"
+                                    name="{{ $fieldName }}"
+                                    rows="{{ $field['rows'] ?? 5 }}"
+                                    @if ($isSensitive) autocomplete="new-password" placeholder="{{ $hasSecretValue ? __('app.leave_blank_to_keep_secret') : '' }}" @endif
+                                    class="crm-field"
+                                >{{ $isSensitive ? '' : $fieldValue }}</textarea>
                             @else
                                 <input
                                     id="{{ $fieldId }}"

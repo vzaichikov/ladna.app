@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\User;
+use App\Support\PhoneNumberNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -33,5 +34,13 @@ class UpdatePlatformProfileRequest extends FormRequest
             'avatar' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
             'password' => ['nullable', 'confirmed', Password::defaults()],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'phone' => app(PhoneNumberNormalizer::class)->normalize($this->input('phone')),
+            'email' => mb_strtolower(trim((string) $this->input('email'))),
+        ]);
     }
 }

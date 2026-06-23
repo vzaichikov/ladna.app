@@ -11,4 +11,6 @@ enum IntegrationProvider: string
     case Turbosms = 'turbosms';
     case Smsclub = 'smsclub';
     case Sendpulse = 'sendpulse';
+    case GoogleOauth = 'google_oauth';
+    case CloudflareTurnstile = 'cloudflare_turnstile';
 }

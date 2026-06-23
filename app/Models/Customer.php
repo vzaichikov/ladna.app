@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['account_id', 'name', 'email', 'phone', 'password', 'google_id', 'default_language'])]
+#[Fillable(['account_id', 'name', 'email', 'phone', 'password', 'google_id', 'default_language', 'email_verified_at', 'phone_verified_at'])]
 #[Hidden(['password', 'remember_token', 'google_id'])]
 class Customer extends Authenticatable
 {
@@ -43,5 +43,15 @@ class Customer extends Authenticatable
     public function customerClassPasses(): HasMany
     {
         return $this->hasMany(CustomerClassPass::class);
+    }
+
+    public function rememberTokens(): HasMany
+    {
+        return $this->hasMany(CustomerRememberToken::class);
+    }
+
+    public function profileIsComplete(): bool
+    {
+        return filled($this->name) && filled($this->phone);
     }
 }

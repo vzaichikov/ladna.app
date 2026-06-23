@@ -19,7 +19,7 @@
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.phone') }}</span>
-        <input name="phone" value="{{ old('phone', $location->phone) }}" class="crm-field">
+        <input name="phone" type="tel" value="{{ old('phone', $location->phone) }}" class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}">
         @error('phone') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 

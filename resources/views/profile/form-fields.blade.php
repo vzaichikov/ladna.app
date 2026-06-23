@@ -38,7 +38,7 @@
 
     <label class="block">
         <span class="crm-label">{{ __('app.phone') }}</span>
-        <input name="phone" value="{{ old('phone', $profileUser?->phone) }}" class="crm-field">
+        <input name="phone" type="tel" value="{{ old('phone', $profileUser?->phone) }}" class="crm-field" data-phone-mask data-country-code="UA">
         @error('phone') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 </div>

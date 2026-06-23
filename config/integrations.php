@@ -11,6 +11,9 @@ return [
         'messaging' => [
             'label_key' => 'app.integration_category_messaging',
         ],
+        'authentication' => [
+            'label_key' => 'app.integration_category_authentication',
+        ],
     ],
 
     'providers' => [
@@ -104,6 +107,25 @@ return [
                 'sms_sender' => ['label_key' => 'app.integration_field_sms_sender', 'type' => 'text', 'max' => 255],
                 'sms_address_book_id' => ['label_key' => 'app.integration_field_sms_address_book_id', 'type' => 'integer', 'min' => 1],
                 'sms_route' => ['label_key' => 'app.integration_field_sms_route', 'type' => 'text', 'max' => 255],
+            ],
+        ],
+        'google_oauth' => [
+            'label' => 'Google OAuth',
+            'category' => 'authentication',
+            'scopes' => ['platform'],
+            'fields' => [
+                'client_id' => ['label_key' => 'app.integration_field_google_client_id', 'type' => 'text', 'required_when_enabled' => true, 'max' => 1024],
+                'client_secret' => ['label_key' => 'app.integration_field_google_client_secret', 'type' => 'password', 'sensitive' => true, 'required_when_enabled' => true, 'max' => 2048],
+                'credentials_json' => ['label_key' => 'app.integration_field_google_credentials_json', 'type' => 'textarea', 'sensitive' => true, 'max' => 8192, 'rows' => 6],
+            ],
+        ],
+        'cloudflare_turnstile' => [
+            'label' => 'Cloudflare Turnstile',
+            'category' => 'authentication',
+            'scopes' => ['platform'],
+            'fields' => [
+                'site_key' => ['label_key' => 'app.integration_field_turnstile_site_key', 'type' => 'text', 'required_when_enabled' => true, 'max' => 255],
+                'secret_key' => ['label_key' => 'app.integration_field_turnstile_secret_key', 'type' => 'password', 'sensitive' => true, 'required_when_enabled' => true, 'max' => 2048],
             ],
         ],
     ],

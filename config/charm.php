@@ -12,5 +12,14 @@ return [
         'EUR',
     ],
 
+    'countries' => [
+        'UA' => 'Ukraine',
+        'PL' => 'Poland',
+        'US' => 'United States',
+        'GB' => 'United Kingdom',
+        'DE' => 'Germany',
+        'FR' => 'France',
+    ],
+
     'schedule_generation_weeks' => 2,
 ];

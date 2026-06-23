@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\PhoneNumberNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -31,5 +32,15 @@ class UpdateLocationRequest extends FormRequest
             'timezone' => ['nullable', 'timezone'],
             'is_active' => ['nullable', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $countryCode = $this->route('account')?->country_code ?? 'UA';
+
+        $this->merge([
+            'phone' => app(PhoneNumberNormalizer::class)->normalize($this->input('phone'), $countryCode),
+            'email' => blank($this->input('email')) ? null : mb_strtolower(trim((string) $this->input('email'))),
+        ]);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\StudioPermission;
 use App\Models\TrainerType;
 use App\Models\User;
+use App\Support\PhoneNumberNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -56,5 +57,16 @@ class UpdateTrainerRequest extends FormRequest
             'permissions' => ['nullable', 'array'],
             'permissions.*' => [Rule::in(array_map(fn (StudioPermission $permission): string => $permission->value, StudioPermission::cases()))],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $countryCode = $this->route('account')?->country_code ?? 'UA';
+
+        $this->merge([
+            'phone' => app(PhoneNumberNormalizer::class)->normalize($this->input('phone'), $countryCode),
+            'email' => blank($this->input('email')) ? null : mb_strtolower(trim((string) $this->input('email'))),
+            'user_email' => blank($this->input('user_email')) ? null : mb_strtolower(trim((string) $this->input('user_email'))),
+        ]);
     }
 }

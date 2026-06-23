@@ -27,7 +27,7 @@ class IntegrationController extends Controller
             'copy' => __('app.product_owner_integrations_copy'),
             'categories' => IntegrationCatalog::categories(),
             'activeCategory' => $activeCategory,
-            'providers' => IntegrationCatalog::providersForCategory($activeCategory),
+            'providers' => IntegrationCatalog::providersForCategory($activeCategory, IntegrationScope::Platform),
             'settings' => $settings,
             'tabRoute' => 'platform.integrations.index',
             'tabRouteParameters' => [],

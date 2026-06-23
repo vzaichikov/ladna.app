@@ -17,6 +17,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
 use App\Http\Controllers\Platform\PlatformAccountController;
 use App\Http\Controllers\Platform\PlatformController;
@@ -31,6 +32,9 @@ use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
 use App\Http\Controllers\TrainerTypeController;
+use App\Http\Middleware\EnsureCustomerIsAuthenticated;
+use App\Http\Middleware\EnsureCustomerProfileIsComplete;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -55,8 +59,36 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 
 Route::post('/locale', LocaleController::class)->name('locale.update');
 Route::get('/customer/login', [CustomerAuthController::class, 'create'])->name('customer.login');
-Route::get('/{accountSlug}/client/login', [CustomerAuthController::class, 'studioLogin'])->name('customer.studio.login');
-Route::get('/{accountSlug}/client', [CustomerAuthController::class, 'studioDashboard'])->name('customer.studio.dashboard');
+Route::get('/customer/auth/google/callback', [CustomerAuthController::class, 'googleCallback'])->name('customer.google.callback');
+
+Route::prefix('{accountSlug}/customer')
+    ->name('customer.')
+    ->group(function (): void {
+        Route::get('login', [CustomerAuthController::class, 'studioLogin'])->name('studio.login');
+        Route::post('login/email', [CustomerAuthController::class, 'emailLogin'])->middleware('throttle:customer-login')->name('email.login');
+        Route::post('login/otp', [CustomerAuthController::class, 'sendOtp'])->middleware('throttle:customer-otp')->name('otp.send');
+        Route::get('login/otp', [CustomerAuthController::class, 'otpChallenge'])->name('otp.challenge');
+        Route::post('login/otp/resend', [CustomerAuthController::class, 'resendOtp'])->middleware('throttle:customer-otp')->name('otp.resend');
+        Route::post('login/otp/change-phone', [CustomerAuthController::class, 'changeOtpPhone'])->name('otp.change-phone');
+        Route::post('login/otp/verify', [CustomerAuthController::class, 'verifyOtp'])->middleware('throttle:customer-login')->name('otp.verify');
+        Route::get('auth/google', [CustomerAuthController::class, 'googleRedirect'])->name('google.redirect');
+
+        Route::middleware(EnsureCustomerIsAuthenticated::class)->group(function (): void {
+            Route::get('profile/complete', [CustomerAuthController::class, 'editProfile'])->name('profile.complete');
+            Route::put('profile', [CustomerAuthController::class, 'updateProfile'])->name('profile.update');
+            Route::post('logout', [CustomerAuthController::class, 'logout'])->name('logout');
+
+            Route::middleware(EnsureCustomerProfileIsComplete::class)->group(function (): void {
+                Route::get('/', [CustomerAuthController::class, 'studioDashboard'])->name('dashboard');
+                Route::get('profile', [CustomerAuthController::class, 'editProfile'])->name('profile.edit');
+            });
+        });
+    });
+
+Route::get('/{accountSlug}/client/login', fn (string $accountSlug): RedirectResponse => redirect()->route('customer.studio.login', $accountSlug))
+    ->name('customer.legacy.login');
+Route::get('/{accountSlug}/client', fn (string $accountSlug): RedirectResponse => redirect()->route('customer.dashboard', $accountSlug))
+    ->name('customer.studio.dashboard');
 
 Route::middleware(['auth:web', 'can:accessPlatform'])
     ->prefix('platform')
@@ -70,6 +102,10 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::resource('accounts', PlatformAccountController::class);
+        Route::get('accounts/{account}/customer-auth', [PlatformCustomerAuthSettingsController::class, 'edit'])
+            ->name('accounts.customer-auth.edit');
+        Route::put('accounts/{account}/customer-auth', [PlatformCustomerAuthSettingsController::class, 'update'])
+            ->name('accounts.customer-auth.update');
         Route::resource('subscription-plans', SubscriptionPlanController::class)->except(['show']);
     });
 

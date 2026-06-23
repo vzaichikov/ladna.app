@@ -28,10 +28,18 @@ class StoreAccountRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'default_language' => ['required', Rule::in(['uk', 'en'])],
+            'country_code' => ['required', Rule::in(array_keys(config('charm.countries')))],
             'default_currency' => ['required', Rule::in(['UAH', 'USD', 'EUR'])],
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
             'timezone' => ['nullable', 'timezone'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'country_code' => $this->input('country_code') ?: 'UA',
+        ]);
     }
 }

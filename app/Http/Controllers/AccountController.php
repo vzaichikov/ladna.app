@@ -6,6 +6,10 @@ use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
 use App\Support\SlugGenerator;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -88,12 +92,16 @@ class AccountController extends Controller
         return redirect()->route('dashboard.accounts.owner-profile.edit', $account);
     }
 
-    public function editBrand(Account $account): View
+    public function editBrand(Request $request, Account $account): View
     {
         $this->authorize('update', $account);
+        $customerLoginUrl = route('customer.studio.login', $account->slug);
 
         return view('accounts.brand-edit', [
             'account' => $account,
+            'activeTab' => $request->query('tab') === 'qr' ? 'qr' : 'business',
+            'customerLoginUrl' => $customerLoginUrl,
+            'customerLoginQrSvg' => $this->qrCodeSvg($customerLoginUrl),
         ]);
     }
 
@@ -139,5 +147,15 @@ class AccountController extends Controller
         $account->forceFill([
             'logo_path' => $request->file('logo')->store('account-logos/'.$account->id, 'public'),
         ])->save();
+    }
+
+    private function qrCodeSvg(string $url): string
+    {
+        $renderer = new ImageRenderer(
+            new RendererStyle(320),
+            new SvgImageBackEnd,
+        );
+
+        return (new Writer($renderer))->writeString($url);
     }
 }

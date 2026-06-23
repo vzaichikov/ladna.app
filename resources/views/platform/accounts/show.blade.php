@@ -20,6 +20,10 @@
                     <x-ui.icon name="edit" class="h-4 w-4" />
                     {{ __('app.edit') }}
                 </x-ui.button>
+                <x-ui.button :href="route('platform.accounts.customer-auth.edit', $account)" variant="secondary">
+                    <x-ui.icon name="key-round" class="h-4 w-4" />
+                    {{ __('app.customer_auth_settings') }}
+                </x-ui.button>
                 <form method="POST" action="{{ route('platform.accounts.destroy', $account) }}" data-confirm-delete>
                     @csrf
                     @method('DELETE')
