@@ -22,7 +22,7 @@
                 </x-ui.button>
                 <x-ui.button :href="route('platform.accounts.customer-auth.edit', $account)" variant="secondary">
                     <x-ui.icon name="key-round" class="h-4 w-4" />
-                    {{ __('app.customer_auth_settings') }}
+                    {{ __('app.customer_otp_tariff_settings') }}
                 </x-ui.button>
                 <form method="POST" action="{{ route('platform.accounts.destroy', $account) }}" data-confirm-delete>
                     @csrf

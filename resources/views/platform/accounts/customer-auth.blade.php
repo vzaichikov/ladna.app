@@ -1,38 +1,46 @@
 @extends('layouts.app')
 
-@section('title', __('app.customer_auth_settings').' - '.$account->name)
+@section('title', __('app.customer_otp_tariff_settings').' - '.$account->name)
 
 @section('content')
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
             <div class="crm-page-kicker">{{ __('app.platform') }}</div>
-            <h1 class="crm-page-title">{{ __('app.customer_auth_settings') }}</h1>
-            <p class="crm-page-copy">{{ $account->name }} · {{ __('app.customer_auth_settings_copy') }}</p>
+            <h1 class="crm-page-title">{{ __('app.customer_otp_tariff_settings') }}</h1>
+            <p class="crm-page-copy">{{ $account->name }} · {{ __('app.customer_otp_tariff_settings_copy') }}</p>
         </div>
         <x-ui.button :href="route('platform.accounts.show', $account)" variant="secondary">
             {{ __('app.account') }}
         </x-ui.button>
     </div>
 
+    <section class="mt-6 grid gap-3 md:grid-cols-4">
+        @foreach ([
+            ['label' => __('app.google_login'), 'ready' => $readiness['google']],
+            ['label' => __('app.cloudflare_turnstile'), 'ready' => $readiness['turnstile']],
+            ['label' => __('app.platform_sms'), 'ready' => $readiness['platform_sms']],
+            ['label' => __('app.studio_sms'), 'ready' => $readiness['account_sms']],
+        ] as $item)
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
+                <div class="text-sm font-semibold text-slate-950">{{ $item['label'] }}</div>
+                <div class="mt-2">
+                    <span class="{{ $item['ready'] ? 'crm-status-active' : 'crm-status-muted' }}">
+                        {{ $item['ready'] ? __('app.available') : __('app.not_configured') }}
+                    </span>
+                </div>
+            </div>
+        @endforeach
+    </section>
+
     <form method="POST" action="{{ route('platform.accounts.customer-auth.update', $account) }}" class="mt-6 max-w-3xl space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
         @csrf
         @method('PUT')
 
-        <div class="grid gap-3 sm:grid-cols-3">
-            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
-                <input type="hidden" name="allow_email_password" value="0">
-                <input name="allow_email_password" type="checkbox" value="1" @checked(old('allow_email_password', $settings->allow_email_password)) class="crm-checkbox">
-                {{ __('app.email_password_login') }}
-            </label>
+        <div class="grid gap-3">
             <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
                 <input type="hidden" name="allow_otp" value="0">
                 <input name="allow_otp" type="checkbox" value="1" @checked(old('allow_otp', $settings->allow_otp)) class="crm-checkbox">
-                {{ __('app.phone_otp_login') }}
-            </label>
-            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
-                <input type="hidden" name="allow_google" value="0">
-                <input name="allow_google" type="checkbox" value="1" @checked(old('allow_google', $settings->allow_google)) class="crm-checkbox">
-                {{ __('app.google_login') }}
+                {{ __('app.enable_customer_otp_tariff') }}
             </label>
         </div>
 
@@ -64,7 +72,7 @@
         </div>
 
         <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-            {{ __('app.customer_auth_settings_hint') }}
+            {{ __('app.customer_otp_tariff_settings_hint') }}
         </div>
 
         <x-ui.button type="submit">

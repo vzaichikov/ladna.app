@@ -18,6 +18,7 @@ class CustomerAuthSettingsController extends Controller
         return view('platform.accounts.customer-auth', [
             'account' => $account,
             'settings' => $availability->settingsFor($account),
+            'readiness' => $availability->readinessFor($account),
             'senderScopes' => CustomerOtpSenderScope::cases(),
             'smsProviders' => [
                 IntegrationProvider::Turbosms,
