@@ -25,11 +25,22 @@ class StartCustomerPurchaseRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'studio_rules_accepted' => ['accepted'],
             'provider' => ['required', Rule::in([
                 IntegrationProvider::Monopay->value,
                 IntegrationProvider::Liqpay->value,
                 IntegrationProvider::Wayforpay->value,
             ])],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'studio_rules_accepted.accepted' => __('app.studio_rules_accepted'),
         ];
     }
 }

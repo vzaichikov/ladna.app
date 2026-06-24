@@ -26,6 +26,9 @@
                     </div>
                 </div>
                 <p class="max-w-xl text-base leading-7 text-slate-600">{{ __('app.customer_login_copy') }}</p>
+                <a href="{{ route('public.studio-rules', $account->slug) }}" target="_blank" rel="noopener" class="inline-flex text-sm font-semibold text-brand-700 transition hover:text-brand-600">
+                    {{ __('app.studio_rules') }}
+                </a>
             </div>
 
             <div class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-7">

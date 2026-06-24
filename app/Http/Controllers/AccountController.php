@@ -96,7 +96,7 @@ class AccountController extends Controller
     {
         $this->authorize('update', $account);
         $customerLoginUrl = route('customer.studio.login', $account->slug);
-        $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'qr', 'api'], true) ? $request->query('tab') : 'business';
+        $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'rules', 'qr', 'api'], true) ? $request->query('tab') : 'business';
 
         return view('accounts.brand-edit', [
             'account' => $account,
@@ -123,6 +123,7 @@ class AccountController extends Controller
         $routeParameters = match ($request->input('brand_tab')) {
             'formats' => [$account, 'tab' => 'formats'],
             'opening_hours' => [$account, 'tab' => 'opening_hours'],
+            'rules' => [$account, 'tab' => 'rules'],
             default => [$account],
         };
 

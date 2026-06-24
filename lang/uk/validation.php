@@ -2,6 +2,7 @@
 
 return [
     'required' => 'Поле :attribute є обовʼязковим.',
+    'accepted' => 'Поле :attribute має бути прийняте.',
     'confirmed' => 'Підтвердження поля :attribute не збігається.',
     'email' => 'Поле :attribute має бути коректною email-адресою.',
     'string' => 'Поле :attribute має бути текстом.',
@@ -21,6 +22,9 @@ return [
         'owner_password' => [
             'min' => 'Пароль має містити щонайменше :min символів.',
         ],
+        'studio_rules_accepted' => [
+            'accepted' => 'Погодьтеся з правилами студії, щоб продовжити.',
+        ],
         'user_password' => [
             'min' => 'Пароль має містити щонайменше :min символів.',
         ],
@@ -34,6 +38,7 @@ return [
         'password' => 'пароль',
         'password_confirmation' => 'підтвердження пароля',
         'owner_password' => 'пароль власника',
+        'studio_rules_accepted' => 'правила студії',
         'user_password' => 'пароль користувача',
     ],
 ];

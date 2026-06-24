@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */

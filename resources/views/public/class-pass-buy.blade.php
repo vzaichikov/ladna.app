@@ -90,6 +90,9 @@
                             <form method="POST" action="{{ route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $classPassPlan->slug]) }}">
                                 @csrf
                                 <input type="hidden" name="provider" value="{{ $provider }}">
+                                <div class="mb-3">
+                                    @include('public._studio-rules-agreement')
+                                </div>
                                 <x-ui.button type="submit" variant="secondary" size="lg" class="w-full justify-start px-3">
                                     <x-ui.payment-brand :provider="$provider" :label="$label" class="w-full" />
                                 </x-ui.button>

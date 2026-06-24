@@ -125,6 +125,60 @@
     .crm-status-danger {
         @apply border-rose-200 bg-rose-50 text-rose-700;
     }
+
+    .studio-rules-content {
+        @apply text-base leading-8 text-slate-700;
+    }
+
+    .studio-rules-content h1,
+    .studio-rules-content h2,
+    .studio-rules-content h3,
+    .studio-rules-content h4 {
+        @apply mt-8 font-semibold leading-tight text-slate-950 first:mt-0;
+    }
+
+    .studio-rules-content h1 {
+        @apply text-3xl;
+    }
+
+    .studio-rules-content h2 {
+        @apply text-2xl;
+    }
+
+    .studio-rules-content h3 {
+        @apply text-xl;
+    }
+
+    .studio-rules-content h4 {
+        @apply text-lg;
+    }
+
+    .studio-rules-content p,
+    .studio-rules-content ul,
+    .studio-rules-content ol,
+    .studio-rules-content blockquote {
+        @apply mt-4 first:mt-0;
+    }
+
+    .studio-rules-content ul {
+        @apply list-disc pl-6;
+    }
+
+    .studio-rules-content ol {
+        @apply list-decimal pl-6;
+    }
+
+    .studio-rules-content a {
+        @apply font-semibold text-brand-700 underline underline-offset-4 transition hover:text-brand-600;
+    }
+
+    .studio-rules-content blockquote {
+        @apply border-l-4 border-brand-100 bg-brand-50 px-4 py-3 text-slate-700;
+    }
+
+    .note-editor.note-frame {
+        @apply mt-2 overflow-hidden rounded-lg border-stone-200 shadow-xs;
+    }
 }
 
 @media print {

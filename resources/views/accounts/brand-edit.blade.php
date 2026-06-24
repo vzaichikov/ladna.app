@@ -30,6 +30,12 @@
             {{ __('app.opening_hours') }}
         </a>
         <a
+            href="{{ route('dashboard.accounts.brand.edit', [$account, 'tab' => 'rules']) }}"
+            class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'rules' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
+        >
+            {{ __('app.studio_rules') }}
+        </a>
+        <a
             href="{{ route('dashboard.accounts.brand.edit', [$account, 'tab' => 'qr']) }}"
             class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'qr' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
         >
@@ -103,6 +109,16 @@
                     <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.public_links_copy') }}</p>
                 </div>
 
+                <div class="mt-5 rounded-lg border border-stone-200 bg-slate-50 p-4">
+                    <div class="text-sm font-semibold text-slate-950">{{ __('app.studio_rules') }}</div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <x-ui.button :href="route('public.studio-rules', $account->slug)" variant="secondary" size="sm" target="_blank" rel="noopener">
+                            <x-ui.icon name="external" class="h-4 w-4" />
+                            {{ __('app.open_public_studio_rules') }}
+                        </x-ui.button>
+                    </div>
+                </div>
+
                 @forelse ($publicLinkLocations as $publicLinkLocation)
                     <div class="mt-5 border-t border-stone-100 pt-5 first:border-t-0 first:pt-0">
                         <div class="flex flex-col gap-1">
@@ -159,6 +175,18 @@
             @method('PUT')
 
             @include('accounts.opening-hours-fields')
+
+            <x-ui.button type="submit">
+                <x-ui.icon name="edit" class="h-4 w-4" />
+                {{ __('app.save') }}
+            </x-ui.button>
+        </form>
+    @elseif ($activeTab === 'rules')
+        <form method="POST" action="{{ route('dashboard.accounts.update', [$account, 'tab' => 'rules']) }}" class="mt-6 max-w-4xl space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
+            @csrf
+            @method('PUT')
+
+            @include('accounts.studio-rules-fields')
 
             <x-ui.button type="submit">
                 <x-ui.icon name="edit" class="h-4 w-4" />

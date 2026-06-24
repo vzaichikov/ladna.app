@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.28.0',
+                'date' => '2026-06-24',
+                'title' => 'Studio rules and purchase agreement',
+                'items' => ['Added a Studio rules tab with a rich HTML editor, a branded public rules page for each studio, class-pass checkout agreement validation, public rules links, and updated owner help documentation.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.27.0',
                 'date' => '2026-06-24',
                 'title' => 'Public studio owner help',
@@ -275,6 +282,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.28.0',
+                'date' => '2026-06-24',
+                'title' => 'Правила студії та згода під час купівлі',
+                'items' => ['Додано вкладку Правила студії з HTML-редактором, брендовану публічну сторінку правил для кожної студії, перевірку згоди під час купівлі абонемента, посилання на правила на публічних сторінках і оновлену допомогу для власниць.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.27.0',
                 'date' => '2026-06-24',

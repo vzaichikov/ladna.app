@@ -32,6 +32,9 @@
                         <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
                             {{ $location->timezone ?? $account->timezone ?? config('app.timezone') }}
                         </div>
+                        <a href="{{ route('public.studio-rules', $account->slug) }}" class="text-sm font-semibold text-brand-700 transition hover:text-brand-600">
+                            {{ __('app.studio_rules') }}
+                        </a>
                     </div>
                 </div>
             </header>

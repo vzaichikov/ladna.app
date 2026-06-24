@@ -1,5 +1,6 @@
 import { createIcons, icons } from 'lucide';
 import SimplePhoneMask from 'simple-phone-mask';
+import 'summernote/dist/summernote-lite.css';
 
 let pendingDeleteForm = null;
 
@@ -164,6 +165,41 @@ function initColorPickers() {
         if (validHex(input.value)) {
             picker.value = input.value;
         }
+    });
+}
+
+function initStudioRulesEditors() {
+    const editors = document.querySelectorAll('[data-studio-rules-editor]');
+
+    if (editors.length === 0) {
+        return;
+    }
+
+    import('jquery').then(({ default: $ }) => {
+        window.$ = $;
+        window.jQuery = $;
+
+        return import('summernote/dist/summernote-lite.js').then(() => $);
+    }).then(($) => {
+        editors.forEach((editor) => {
+            if (editor.dataset.studioRulesEditorReady === 'true') {
+                return;
+            }
+
+            editor.dataset.studioRulesEditorReady = 'true';
+
+            $(editor).summernote({
+                height: 420,
+                placeholder: editor.dataset.placeholder || '',
+                toolbar: [
+                    ['style', ['style']],
+                    ['font', ['bold', 'italic', 'underline', 'strikethrough', 'clear']],
+                    ['para', ['ul', 'ol', 'paragraph']],
+                    ['insert', ['link']],
+                    ['history', ['undo', 'redo']],
+                ],
+            });
+        });
     });
 }
 
@@ -1046,6 +1082,7 @@ document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
     initSlugAutofill();
     initColorPickers();
+    initStudioRulesEditors();
     initCustomerAutocomplete();
     initCustomerAuthTabs();
     initPhoneMasks();

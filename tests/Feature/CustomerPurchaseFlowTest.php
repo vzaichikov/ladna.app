@@ -57,7 +57,28 @@ class CustomerPurchaseFlowTest extends TestCase
             ->assertSee('LiqPay')
             ->assertDontSee('We will create a payment attempt before sending you to the provider.')
             ->assertSee('name="provider"', false)
+            ->assertSee('name="studio_rules_accepted"', false)
+            ->assertSee(route('public.studio-rules', $account->slug), false)
             ->assertSee(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), false);
+    }
+
+    public function test_purchase_requires_studio_rules_acceptance(): void
+    {
+        [$account, $location, $plan, $customer] = $this->purchaseContext();
+        $this->accountIntegration($account, IntegrationProvider::Liqpay, [
+            'public_key' => 'public-key',
+            'private_key' => 'private-key',
+        ]);
+
+        $this->actingAs($customer, 'customer')
+            ->from(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]))
+            ->post(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), [
+                'provider' => IntegrationProvider::Liqpay->value,
+            ])
+            ->assertRedirect(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]))
+            ->assertSessionHasErrors('studio_rules_accepted');
+
+        $this->assertSame(0, $customer->purchases()->count());
     }
 
     public function test_liqpay_purchase_creates_payment_attempt_before_form_redirect(): void
@@ -70,6 +91,7 @@ class CustomerPurchaseFlowTest extends TestCase
 
         $this->actingAs($customer, 'customer')
             ->post(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), [
+                'studio_rules_accepted' => '1',
                 'provider' => IntegrationProvider::Liqpay->value,
             ])
             ->assertOk()
@@ -106,6 +128,7 @@ class CustomerPurchaseFlowTest extends TestCase
 
         $this->actingAs($customer, 'customer')
             ->post(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), [
+                'studio_rules_accepted' => '1',
                 'provider' => IntegrationProvider::Monopay->value,
             ])
             ->assertRedirect('https://pay.monobank.ua/invoice/mono-invoice-1');

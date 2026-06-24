@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Support\ScheduleKindRegistry;
+use App\Support\StudioRulesHtmlSanitizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,7 +29,7 @@ class UpdateAccountRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'brand_tab' => ['nullable', Rule::in(['business', 'formats', 'opening_hours'])],
+            'brand_tab' => ['nullable', Rule::in(['business', 'formats', 'opening_hours', 'rules'])],
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'default_language' => ['required', Rule::in(['uk', 'en'])],
@@ -49,6 +50,7 @@ class UpdateAccountRequest extends FormRequest
             'opening_hours.*.enabled' => ['nullable', 'boolean'],
             'opening_hours.*.opens_at' => ['nullable', 'date_format:H:i'],
             'opening_hours.*.closes_at' => ['nullable', 'date_format:H:i'],
+            'studio_rules_html' => ['nullable', 'string', 'max:50000'],
         ];
     }
 
@@ -111,6 +113,12 @@ class UpdateAccountRequest extends FormRequest
         if (! $this->has('opening_hours_present') && ! $this->has('opening_hours')) {
             $this->merge([
                 'opening_hours' => $account?->openingHours() ?? Account::defaultOpeningHours(),
+            ]);
+        }
+
+        if ($this->input('brand_tab') === 'rules') {
+            $this->merge([
+                'studio_rules_html' => app(StudioRulesHtmlSanitizer::class)->sanitize($this->input('studio_rules_html')),
             ]);
         }
     }

@@ -14,7 +14,9 @@
         "vite": "^8.0.0"
     },
     "dependencies": {
+        "jquery": "^3.7.1",
         "lucide": "^1.21.0",
-        "simple-phone-mask": "^1.0.5"
+        "simple-phone-mask": "^1.0.5",
+        "summernote": "^0.9.1"
     }
 }

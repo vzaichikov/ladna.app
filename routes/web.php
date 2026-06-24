@@ -33,6 +33,7 @@ use App\Http\Controllers\Platform\SystemSettingsController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
+use App\Http\Controllers\PublicStudioRulesController;
 use App\Http\Controllers\QuickBookingController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\ScheduledClassController;
@@ -262,6 +263,8 @@ Route::middleware('auth:web')
             ->name('accounts.bookings.destroy');
     });
 
+Route::get('/{accountSlug}/rules', PublicStudioRulesController::class)
+    ->name('public.studio-rules');
 Route::get('/{accountSlug}/{locationSlug}/schedule', [PublicScheduleController::class, 'show'])
     ->name('public.schedule');
 Route::get('/{accountSlug}/{locationSlug}/schedule/embed', [PublicScheduleController::class, 'embed'])
