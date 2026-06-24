@@ -128,8 +128,16 @@
 }
 
 @media print {
+    @page {
+        margin: 16mm;
+    }
+
     body * {
         visibility: hidden;
+    }
+
+    body {
+        background: #fff !important;
     }
 
     [data-print-section],
@@ -141,12 +149,37 @@
         border: 0 !important;
         box-shadow: none !important;
         left: 0;
+        min-height: calc(100vh - 32mm);
+        padding: 0 !important;
         position: absolute;
         top: 0;
         width: 100%;
     }
 
+    [data-print-screen-only],
+    [data-qr-screen-content],
     [data-print-button] {
         display: none !important;
+    }
+
+    [data-qr-print-poster] {
+        display: flex !important;
+        min-height: calc(100vh - 32mm);
+        width: 100%;
+        flex-direction: column;
+    }
+
+    [data-qr-print-code] {
+        height: 120mm;
+        width: 120mm;
+    }
+
+    [data-qr-print-code] svg {
+        height: 100%;
+        width: 100%;
+    }
+
+    [data-qr-print-url] {
+        max-width: 150mm;
     }
 }

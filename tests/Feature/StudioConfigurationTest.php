@@ -314,6 +314,43 @@ class StudioConfigurationTest extends TestCase
         $this->assertFalse($account->openingHours()[7]['enabled']);
     }
 
+    public function test_qr_tab_lists_public_links_for_active_locations(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['slug' => 'qr-links-studio']);
+        $account->addOwner($owner);
+        $firstLocation = Location::factory()->for($account)->create([
+            'name' => 'Downtown studio',
+            'slug' => 'downtown',
+            'address' => 'Main street 1',
+        ]);
+        $secondLocation = Location::factory()->for($account)->create([
+            'name' => 'Riverside studio',
+            'slug' => 'riverside',
+        ]);
+        $inactiveLocation = Location::factory()->for($account)->create([
+            'name' => 'Closed studio',
+            'slug' => 'closed',
+            'is_active' => false,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'qr']))
+            ->assertOk()
+            ->assertSee(__('app.login_qr_codes_and_links'))
+            ->assertSee(__('app.public_links'))
+            ->assertSee($firstLocation->name)
+            ->assertSee($secondLocation->name)
+            ->assertSee(route('public.schedule', [$account->slug, $firstLocation->slug]), false)
+            ->assertSee(route('public.schedule.embed', [$account->slug, $firstLocation->slug]), false)
+            ->assertSee(route('public.price', [$account->slug, $secondLocation->slug]), false)
+            ->assertSee(route('public.price.embed', [$account->slug, $secondLocation->slug]), false)
+            ->assertSee('data-qr-print-poster', false)
+            ->assertSee(__('app.powered_by_ladna'))
+            ->assertDontSee($inactiveLocation->name)
+            ->assertDontSee(route('public.schedule', [$account->slug, $inactiveLocation->slug]), false);
+    }
+
     public function test_brand_settings_reject_invalid_opening_hours(): void
     {
         $owner = User::factory()->create();

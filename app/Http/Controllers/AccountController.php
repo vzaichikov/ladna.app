@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
+use App\Models\Location;
 use App\Support\SlugGenerator;
 use App\Support\StudioDashboardData;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -13,6 +14,7 @@ use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -101,6 +103,9 @@ class AccountController extends Controller
             'activeTab' => $activeTab,
             'customerLoginUrl' => $customerLoginUrl,
             'customerLoginQrSvg' => $this->qrCodeSvg($customerLoginUrl),
+            'publicLinkLocations' => $activeTab === 'qr'
+                ? $this->publicLinkLocations($account)
+                : collect(),
             'apiTokens' => $activeTab === 'api'
                 ? $account->apiTokens()->latest()->get()
                 : collect(),
@@ -165,5 +170,23 @@ class AccountController extends Controller
         );
 
         return (new Writer($renderer))->writeString($url);
+    }
+
+    /**
+     * @return Collection<int, array{location: Location, schedule_url: string, schedule_embed_url: string, price_url: string, price_embed_url: string}>
+     */
+    private function publicLinkLocations(Account $account): Collection
+    {
+        return $account->locations()
+            ->active()
+            ->orderBy('name')
+            ->get(['id', 'account_id', 'name', 'slug', 'address'])
+            ->map(fn ($location): array => [
+                'location' => $location,
+                'schedule_url' => route('public.schedule', [$account->slug, $location->slug]),
+                'schedule_embed_url' => route('public.schedule.embed', [$account->slug, $location->slug]),
+                'price_url' => route('public.price', [$account->slug, $location->slug]),
+                'price_embed_url' => route('public.price.embed', [$account->slug, $location->slug]),
+            ]);
     }
 }

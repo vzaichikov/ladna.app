@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.25.0',
+                'date' => '2026-06-24',
+                'title' => 'QR links and print poster',
+                'items' => ['Renamed the QR tab to QR codes and links, added public schedule, price, and embed links for active studio locations, and redesigned QR printing into a centered branded poster.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.24.0',
                 'date' => '2026-06-24',
                 'title' => 'Role-focused studio dashboards',
@@ -254,6 +261,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.25.0',
+                'date' => '2026-06-24',
+                'title' => 'QR-посилання та постер для друку',
+                'items' => ['Перейменовано вкладку QR на QR-коди та посилання, додано публічні посилання на розклад, прайс і embed для активних локацій студії та перероблено друк QR у центрований брендований постер.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.24.0',
                 'date' => '2026-06-24',
