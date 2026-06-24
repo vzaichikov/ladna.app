@@ -41,6 +41,7 @@
     $canManageSchedule = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageSchedule);
     $canManageClients = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageClients);
     $canManageBookings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageBookings);
+    $canManageWebsiteLeads = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageWebsiteLeads);
     $canMarkAttendance = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::MarkAttendance);
     $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
@@ -84,17 +85,17 @@
             'href' => route('dashboard.accounts.customers.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customers.*'),
         ]] : []),
+        ...($canManageWebsiteLeads ? [[
+            'label' => __('app.website_leads'),
+            'icon' => 'website-leads',
+            'href' => route('dashboard.accounts.website-leads.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.website-leads.*'),
+        ]] : []),
         ...($canManageClassPassPlans ? [[
             'label' => __('app.customer_class_passes'),
             'icon' => 'class-pass-plans',
             'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customer-class-passes.*'),
-        ]] : []),
-        ...($canManageSchedule && $activeAccount->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass) ? [[
-            'label' => __('app.schedule_series'),
-            'icon' => 'schedule',
-            'href' => route('dashboard.accounts.schedule-series.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.schedule-series.*'),
         ]] : []),
     ] : [];
 
@@ -120,6 +121,12 @@
             ],
             ...$classFormatNav,
         ] : []),
+        ...($canManageSchedule && $activeAccount->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass) ? [[
+            'label' => __('app.schedule_series'),
+            'icon' => 'schedule',
+            'href' => route('dashboard.accounts.schedule-series.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.schedule-series.*'),
+        ]] : []),
         ...($canManageClassPassPlans ? [[
             'label' => __('app.class_pass_plans'),
             'icon' => 'class-pass-plans',

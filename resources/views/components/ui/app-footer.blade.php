@@ -25,6 +25,9 @@
             <a href="{{ route($changelogRoute) }}" class="text-brand-600 transition hover:text-brand-700">
                 {{ __('app.whats_new') }}
             </a>
+            <a href="{{ route('api-docs.show') }}" class="text-brand-600 transition hover:text-brand-700">
+                {{ __('app.api_documentation') }}
+            </a>
         </nav>
     </div>
 </footer>

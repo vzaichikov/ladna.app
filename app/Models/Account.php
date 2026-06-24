@@ -97,6 +97,16 @@ class Account extends Model
         return $this->hasOne(CustomerAuthSetting::class);
     }
 
+    public function websiteLeads(): HasMany
+    {
+        return $this->hasMany(WebsiteLead::class);
+    }
+
+    public function apiTokens(): HasMany
+    {
+        return $this->hasMany(AccountApiToken::class);
+    }
+
     public function classTypes(): HasMany
     {
         return $this->hasMany(ClassType::class);

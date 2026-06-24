@@ -96,12 +96,16 @@ class AccountController extends Controller
     {
         $this->authorize('update', $account);
         $customerLoginUrl = route('customer.studio.login', $account->slug);
+        $activeTab = in_array($request->query('tab'), ['formats', 'qr', 'api'], true) ? $request->query('tab') : 'business';
 
         return view('accounts.brand-edit', [
             'account' => $account,
-            'activeTab' => in_array($request->query('tab'), ['formats', 'qr'], true) ? $request->query('tab') : 'business',
+            'activeTab' => $activeTab,
             'customerLoginUrl' => $customerLoginUrl,
             'customerLoginQrSvg' => $this->qrCodeSvg($customerLoginUrl),
+            'apiTokens' => $activeTab === 'api'
+                ? $account->apiTokens()->latest()->get()
+                : collect(),
         ]);
     }
 

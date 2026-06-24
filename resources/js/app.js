@@ -211,9 +211,22 @@ function initCustomerAutocomplete(root = document) {
                 button.className = 'block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-brand-50 hover:text-slate-950';
                 button.textContent = customer.label;
                 button.addEventListener('click', () => {
+                    const scope = container.closest('form') ?? document;
+                    const nameTarget = input.dataset.nameTarget ? scope.querySelector(input.dataset.nameTarget) : null;
+                    const phoneTarget = input.dataset.phoneTarget ? scope.querySelector(input.dataset.phoneTarget) : null;
+
                     selectedLabel = customer.label;
                     input.value = customer.label;
                     hiddenInput.value = customer.id;
+
+                    if (nameTarget && customer.name) {
+                        nameTarget.value = customer.name;
+                    }
+
+                    if (phoneTarget && customer.phone) {
+                        setPhoneMaskValue(phoneTarget, customer.phone);
+                    }
+
                     hideResults();
                 });
                 results.append(button);
@@ -263,13 +276,26 @@ function initCustomerAutocomplete(root = document) {
     });
 }
 
+function setPhoneMaskValue(input, value) {
+    if (!input) {
+        return;
+    }
+
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function initPhoneMasks(root = document) {
     root.querySelectorAll('[data-phone-mask]').forEach((input, index) => {
         if (input.dataset.phoneMaskReady === 'true') {
             return;
         }
 
-        if (input.closest('[data-customer-auth-panel].hidden')) {
+        if (
+            input.closest('[data-customer-auth-panel].hidden')
+            || input.closest('[data-quick-booking-modal].hidden')
+            || input.closest('[data-manual-class-modal].hidden')
+        ) {
             return;
         }
 
@@ -447,6 +473,149 @@ function closeManualClassModal(modal) {
     modal?.classList.remove('flex');
 }
 
+function closeQuickBookingModal(modal) {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+function fillQuickBookingForm(modal, button) {
+    const form = modal?.querySelector('form');
+
+    if (!form) {
+        return;
+    }
+
+    const leadInput = form.querySelector('[data-quick-booking-lead-id]');
+    const customerIdInput = form.querySelector('[data-customer-autocomplete-id]');
+    const customerSearchInput = form.querySelector('[data-customer-autocomplete-input]');
+    const nameInput = form.querySelector('[data-quick-booking-customer-name]');
+    const phoneInput = form.querySelector('[data-quick-booking-customer-phone]');
+
+    if (leadInput) {
+        leadInput.value = button?.dataset.quickBookingPrefillLead ?? '';
+    }
+
+    if (customerIdInput) {
+        customerIdInput.value = '';
+    }
+
+    if (customerSearchInput) {
+        customerSearchInput.value = '';
+    }
+
+    if (nameInput) {
+        nameInput.value = button?.dataset.quickBookingPrefillName ?? '';
+    }
+
+    if (phoneInput) {
+        setPhoneMaskValue(phoneInput, button?.dataset.quickBookingPrefillPhone ?? '');
+    }
+
+    updateQuickBookingRooms(form);
+}
+
+function renderGroupClassResults(container, classes) {
+    container.innerHTML = '';
+
+    if (!classes.length) {
+        const empty = document.createElement('p');
+        empty.className = 'px-2 py-3 text-sm text-slate-500';
+        empty.textContent = container.dataset.empty || 'No classes found.';
+        container.append(empty);
+        return;
+    }
+
+    classes.forEach((scheduledClass) => {
+        const label = document.createElement('label');
+        label.className = 'flex cursor-pointer items-start gap-3 rounded-lg border border-stone-200 bg-white p-3 text-sm transition hover:border-brand-100 hover:bg-brand-50';
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'scheduled_class_id';
+        radio.value = scheduledClass.id;
+        radio.required = true;
+        radio.className = 'mt-1 size-4 border-stone-300 text-brand-600 focus:ring-brand-500';
+
+        const body = document.createElement('span');
+        body.className = 'min-w-0';
+
+        const title = document.createElement('span');
+        title.className = 'block font-semibold text-slate-950';
+        title.textContent = `${scheduledClass.time} · ${scheduledClass.title}`;
+
+        const meta = document.createElement('span');
+        meta.className = 'mt-1 block text-slate-500';
+        meta.textContent = `${scheduledClass.trainer} · ${scheduledClass.available_spots}/${scheduledClass.capacity}`;
+
+        body.append(title, meta);
+        label.append(radio, body);
+        container.append(label);
+    });
+}
+
+function loadGroupClassAvailability(input) {
+    const form = input.closest('form');
+    const results = form?.querySelector('[data-group-class-results]');
+    const availabilityUrl = input.dataset.availabilityUrl;
+
+    if (!results || !availabilityUrl) {
+        return;
+    }
+
+    if (!input.value) {
+        results.innerHTML = `<p class="px-2 py-3 text-sm text-slate-500">${input.dataset.empty || 'No classes found.'}</p>`;
+        return;
+    }
+
+    results.dataset.empty = input.dataset.empty || '';
+    results.innerHTML = `<p class="px-2 py-3 text-sm text-slate-500">${input.dataset.loading || 'Loading...'}</p>`;
+
+    const url = new URL(availabilityUrl, window.location.origin);
+    url.searchParams.set('date', input.value);
+
+    fetch(url, {
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+    })
+        .then((response) => (response.ok ? response.json() : { data: [] }))
+        .then((payload) => renderGroupClassResults(results, payload.data ?? []))
+        .catch(() => renderGroupClassResults(results, []));
+}
+
+function updateQuickBookingRooms(form) {
+    const locationInput = form?.querySelector('[data-quick-booking-location]');
+    const roomSelect = form?.querySelector('[data-quick-booking-room]');
+
+    if (!locationInput || !roomSelect) {
+        return;
+    }
+
+    const locationId = locationInput.value;
+    let selectedOptionAllowed = false;
+
+    Array.from(roomSelect.options).forEach((option) => {
+        const isAllowed = !option.dataset.locationId || option.dataset.locationId === locationId;
+
+        option.disabled = !isAllowed;
+        option.hidden = !isAllowed;
+
+        if (option.selected && isAllowed) {
+            selectedOptionAllowed = true;
+        }
+    });
+
+    if (!selectedOptionAllowed) {
+        const firstAllowedOption = Array.from(roomSelect.options).find((option) => !option.disabled);
+
+        if (firstAllowedOption) {
+            roomSelect.value = firstAllowedOption.value;
+        }
+    }
+}
+
 function initManualClassModals() {
     document.querySelectorAll('[data-manual-class-modal]').forEach((modal) => {
         if (modal.dataset.manualClassReady === 'true') {
@@ -487,6 +656,97 @@ function initManualClassModals() {
 
         button.dataset.manualClassCloseReady = 'true';
         button.addEventListener('click', () => closeManualClassModal(button.closest('[data-manual-class-modal]')));
+    });
+}
+
+function initQuickBookingModals() {
+    document.querySelectorAll('[data-quick-booking-modal]').forEach((modal) => {
+        if (modal.dataset.quickBookingReady === 'true') {
+            return;
+        }
+
+        modal.dataset.quickBookingReady = 'true';
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeQuickBookingModal(modal);
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-quick-booking-open]').forEach((button) => {
+        if (button.dataset.quickBookingOpenReady === 'true') {
+            return;
+        }
+
+        button.dataset.quickBookingOpenReady = 'true';
+        button.addEventListener('click', () => {
+            const modal = document.querySelector(`[data-quick-booking-modal="${button.dataset.quickBookingOpen}"]`);
+
+            if (!modal) {
+                return;
+            }
+
+            fillQuickBookingForm(modal, button);
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            initPhoneMasks(modal);
+            modal.querySelector('[data-group-class-date]')?.dispatchEvent(new Event('change', { bubbles: true }));
+            modal.querySelector('[data-quick-booking-close]')?.focus();
+        });
+    });
+
+    document.querySelectorAll('[data-quick-booking-close]').forEach((button) => {
+        if (button.dataset.quickBookingCloseReady === 'true') {
+            return;
+        }
+
+        button.dataset.quickBookingCloseReady = 'true';
+        button.addEventListener('click', () => closeQuickBookingModal(button.closest('[data-quick-booking-modal]')));
+    });
+
+    document.querySelectorAll('[data-group-class-date]').forEach((input) => {
+        if (input.dataset.groupDateReady === 'true') {
+            return;
+        }
+
+        input.dataset.groupDateReady = 'true';
+        input.addEventListener('change', () => loadGroupClassAvailability(input));
+    });
+
+    document.querySelectorAll('[data-quick-booking-location]').forEach((input) => {
+        if (input.dataset.quickBookingLocationReady === 'true') {
+            return;
+        }
+
+        input.dataset.quickBookingLocationReady = 'true';
+        input.addEventListener('change', () => updateQuickBookingRooms(input.closest('form')));
+        updateQuickBookingRooms(input.closest('form'));
+    });
+}
+
+function initCopyButtons() {
+    document.querySelectorAll('[data-copy-token]').forEach((button) => {
+        if (button.dataset.copyReady === 'true') {
+            return;
+        }
+
+        button.dataset.copyReady = 'true';
+        button.addEventListener('click', () => {
+            const input = button.closest('article')?.querySelector('[data-copy-source]');
+
+            if (!input) {
+                return;
+            }
+
+            input.select();
+
+            if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
+                return;
+            }
+
+            document.execCommand('copy');
+        });
     });
 }
 
@@ -645,6 +905,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initOtpCountdowns();
     initPrintButtons();
     initManualClassModals();
+    initQuickBookingModals();
+    initCopyButtons();
 
     const sidebar = document.querySelector('[data-sidebar]');
     const sidebarBackdrop = document.querySelector('[data-sidebar-backdrop]');
@@ -774,6 +1036,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (event.key === 'Escape') {
             closeManualClassModal(document.querySelector('[data-manual-class-modal]:not(.hidden)'));
+        }
+
+        if (event.key === 'Escape') {
+            closeQuickBookingModal(document.querySelector('[data-quick-booking-modal]:not(.hidden)'));
         }
 
         if (event.key === 'Escape' && pendingDeleteForm) {
