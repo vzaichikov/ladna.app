@@ -72,6 +72,36 @@ class WebsiteLeadTest extends TestCase
         $this->assertSame('Call after 18:00', $websiteLead->notes);
     }
 
+    public function test_owner_can_delete_own_website_lead(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $websiteLead = WebsiteLead::factory()->for($account)->create();
+
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.website-leads.destroy', [$account, $websiteLead]))
+            ->assertRedirect()
+            ->assertSessionHas('status', __('app.website_lead_deleted'));
+
+        $this->assertModelMissing($websiteLead);
+    }
+
+    public function test_owner_cannot_delete_website_lead_from_another_account(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $otherAccount = Account::factory()->create();
+        $account->addOwner($owner);
+        $websiteLead = WebsiteLead::factory()->for($otherAccount)->create();
+
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.website-leads.destroy', [$account, $websiteLead]))
+            ->assertNotFound();
+
+        $this->assertModelExists($websiteLead);
+    }
+
     public function test_trainer_without_permission_cannot_view_website_leads(): void
     {
         $trainer = User::factory()->create();
@@ -84,5 +114,22 @@ class WebsiteLeadTest extends TestCase
         $this->actingAs($trainer)
             ->get(route('dashboard.accounts.website-leads.index', $account))
             ->assertForbidden();
+    }
+
+    public function test_trainer_without_permission_cannot_delete_website_lead(): void
+    {
+        $trainer = User::factory()->create();
+        $account = Account::factory()->create();
+        $websiteLead = WebsiteLead::factory()->for($account)->create();
+        AccountMembership::factory()
+            ->for($account)
+            ->for($trainer, 'user')
+            ->create(['role' => AccountRole::Trainer->value, 'permissions' => null]);
+
+        $this->actingAs($trainer)
+            ->delete(route('dashboard.accounts.website-leads.destroy', [$account, $websiteLead]))
+            ->assertForbidden();
+
+        $this->assertModelExists($websiteLead);
     }
 }

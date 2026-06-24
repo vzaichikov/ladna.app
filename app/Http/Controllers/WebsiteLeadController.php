@@ -64,6 +64,15 @@ class WebsiteLeadController extends Controller
         return back()->with('status', __('app.website_lead_updated'));
     }
 
+    public function destroy(Account $account, WebsiteLead $websiteLead): RedirectResponse
+    {
+        $this->authorize('manageWebsiteLeads', $account);
+        $this->ensureBelongsToAccount($account, $websiteLead);
+        $websiteLead->delete();
+
+        return back()->with('status', __('app.website_lead_deleted'));
+    }
+
     private function ensureBelongsToAccount(Account $account, WebsiteLead $websiteLead): void
     {
         abort_unless($websiteLead->account_id === $account->id, 404);
