@@ -118,6 +118,7 @@
         'quickBookingRooms' => $quickBookingRooms,
         'quickBookingTrainers' => $quickBookingTrainers,
         'groupAvailabilityUrl' => $groupAvailabilityUrl,
+        'manualAvailabilityUrl' => $manualAvailabilityUrl,
         'customerSearchUrl' => $customerSearchUrl,
     ])
 @endsection

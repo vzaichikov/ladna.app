@@ -24,6 +24,12 @@
             {{ __('app.studio_class_formats') }}
         </a>
         <a
+            href="{{ route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']) }}"
+            class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'opening_hours' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
+        >
+            {{ __('app.opening_hours') }}
+        </a>
+        <a
             href="{{ route('dashboard.accounts.brand.edit', [$account, 'tab' => 'qr']) }}"
             class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'qr' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
         >
@@ -75,6 +81,18 @@
             @method('PUT')
 
             @include('accounts.schedule-format-fields')
+
+            <x-ui.button type="submit">
+                <x-ui.icon name="edit" class="h-4 w-4" />
+                {{ __('app.save') }}
+            </x-ui.button>
+        </form>
+    @elseif ($activeTab === 'opening_hours')
+        <form method="POST" action="{{ route('dashboard.accounts.update', [$account, 'tab' => 'opening_hours']) }}" class="mt-6 max-w-3xl space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
+            @csrf
+            @method('PUT')
+
+            @include('accounts.opening-hours-fields')
 
             <x-ui.button type="submit">
                 <x-ui.icon name="edit" class="h-4 w-4" />

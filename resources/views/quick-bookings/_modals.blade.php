@@ -1,7 +1,6 @@
 @php
     $quickBookingPrefill = $quickBookingPrefill ?? [];
     $defaultTimezone = $account->timezone ?? config('app.timezone');
-    $defaultStartsAt = now($defaultTimezone)->addHour()->minute(0)->second(0)->format('Y-m-d\TH:i');
     $defaultDate = now($defaultTimezone)->toDateString();
     $singleLocation = $quickBookingLocations->count() === 1 ? $quickBookingLocations->first() : null;
 @endphp
@@ -55,6 +54,9 @@
                     @csrf
                     <input type="hidden" name="schedule_kind" value="{{ $quickBookingKind->value }}">
                     <input type="hidden" name="website_lead_id" value="{{ $quickBookingPrefill['website_lead_id'] ?? '' }}" data-quick-booking-lead-id>
+                    @unless ($isGroupQuickBooking)
+                        <input type="hidden" name="starts_at" value="" data-manual-booking-starts-at>
+                    @endunless
 
                     <div class="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
                         <section class="rounded-lg border border-stone-200 bg-white p-4">
@@ -106,7 +108,7 @@
                                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                                     <label class="block">
                                         <span class="crm-label">{{ __('app.class_type') }}</span>
-                                        <select name="class_type_id" required class="crm-field">
+                                        <select name="class_type_id" required class="crm-field" data-manual-booking-class-type>
                                             @foreach ($quickBookingOption['classTypes'] as $classType)
                                                 <option value="{{ $classType->id }}">{{ $classType->name }}</option>
                                             @endforeach
@@ -115,7 +117,7 @@
                                     @if ($quickBookingKind === \App\Enums\ScheduleKind::PrivateLesson)
                                         <label class="block">
                                             <span class="crm-label">{{ __('app.trainer') }}</span>
-                                            <select name="trainer_id" required class="crm-field">
+                                            <select name="trainer_id" required class="crm-field" data-manual-booking-trainer>
                                                 <option value="">{{ __('app.trainer_not_assigned') }}</option>
                                                 @foreach ($quickBookingTrainers as $trainer)
                                                     <option value="{{ $trainer->id }}">{{ $trainer->name }}</option>
@@ -125,10 +127,31 @@
                                     @endif
                                 </div>
 
-                                <label class="mt-4 block">
-                                    <span class="crm-label">{{ __('app.start_time') }}</span>
-                                    <input name="starts_at" type="datetime-local" value="{{ $defaultStartsAt }}" required class="crm-field">
-                                </label>
+                                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                                    <label class="block">
+                                        <span class="crm-label">{{ __('app.date') }}</span>
+                                        <input
+                                            type="date"
+                                            value="{{ old('manual_date', $defaultDate) }}"
+                                            required
+                                            class="crm-field"
+                                            data-manual-booking-date
+                                            data-availability-url="{{ $manualAvailabilityUrl }}"
+                                            data-loading="{{ __('app.loading') }}"
+                                            data-empty="{{ __('app.no_available_manual_slots') }}"
+                                            data-closed="{{ __('app.studio_closed_on_date') }}"
+                                        >
+                                    </label>
+                                    <label class="block">
+                                        <span class="crm-label">{{ __('app.start_time') }}</span>
+                                        <input type="time" required class="crm-field" data-manual-booking-time>
+                                    </label>
+                                </div>
+
+                                <div class="mt-4 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-slate-50 p-2" data-manual-booking-results data-empty="{{ __('app.no_available_manual_slots') }}" data-closed="{{ __('app.studio_closed_on_date') }}">
+                                    <p class="px-2 py-3 text-sm text-slate-500">{{ __('app.choose_date_for_manual_slots') }}</p>
+                                </div>
+                                @error('starts_at') <span class="crm-help">{{ $message }}</span> @enderror
                             @endif
                         </section>
 

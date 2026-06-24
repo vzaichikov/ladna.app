@@ -146,7 +146,6 @@ class AccountTenancyTest extends TestCase
                 'Актуальне',
                 'Заняття',
                 'Клієнти',
-                'Тижневий розклад',
                 'Налаштування студії',
                 'Локації',
                 'Зали',
@@ -154,6 +153,7 @@ class AccountTenancyTest extends TestCase
                 'Групові заняття',
                 'Індивідуальні заняття',
                 'Оренда',
+                'Тижневий розклад',
                 'Абонементи і ціни',
                 'Тренери',
                 'Рівні тренерів',
@@ -195,7 +195,7 @@ class AccountTenancyTest extends TestCase
             ->assertSee(route('dashboard.accounts.show', $account), false)
             ->assertSee(route('dashboard.accounts.scheduled-classes.index', $account), false)
             ->assertSee(route('dashboard.accounts.schedule-series.index', $account), false)
-            ->assertDontSee(route('dashboard.accounts.customers.index', $account), false)
+            ->assertDontSee('href="'.route('dashboard.accounts.customers.index', $account).'"', false)
             ->assertDontSee(route('dashboard.accounts.customer-class-passes.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.locations.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.rooms.index', $account), false)

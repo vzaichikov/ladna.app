@@ -8,10 +8,17 @@ use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Http\Requests\StoreQuickBookingRequest;
 use App\Models\Account;
+use App\Models\ClassType;
+use App\Models\Location;
+use App\Models\Room;
+use App\Models\Trainer;
+use App\Support\ManualQuickBookingAvailability;
+use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class QuickBookingController extends Controller
 {
@@ -74,6 +81,41 @@ class QuickBookingController extends Controller
             ->values();
 
         return response()->json(['data' => $classes]);
+    }
+
+    public function manualAvailability(Request $request, Account $account, ManualQuickBookingAvailability $availability): JsonResponse
+    {
+        $this->authorize('manageBookings', $account);
+
+        $manualKinds = collect(ScheduleKindRegistry::manualKinds())
+            ->map(fn (ScheduleKind $scheduleKind): string => $scheduleKind->value)
+            ->all();
+        $validated = $request->validate([
+            'schedule_kind' => ['required', Rule::in($manualKinds)],
+            'date' => ['required', 'date_format:Y-m-d'],
+            'location_id' => ['required', Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account->id)],
+            'room_id' => ['required', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account->id)],
+            'class_type_id' => ['required', Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account->id)],
+            'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account->id)],
+        ]);
+        $scheduleKind = ScheduleKind::from($validated['schedule_kind']);
+
+        abort_unless($account->hasScheduleKindEnabled($scheduleKind), 404);
+
+        $result = $availability->for($account, $scheduleKind, [
+            'date' => $validated['date'],
+            'location_id' => (int) $validated['location_id'],
+            'room_id' => (int) $validated['room_id'],
+            'class_type_id' => (int) $validated['class_type_id'],
+            'trainer_id' => filled($validated['trainer_id'] ?? null) ? (int) $validated['trainer_id'] : null,
+        ]);
+
+        return response()->json([
+            'data' => $result['slots'],
+            'closed' => $result['closed'],
+            'timezone' => $result['timezone'],
+            'date' => $result['date'],
+        ]);
     }
 
     private function availableSpots(mixed $scheduledClass): int
