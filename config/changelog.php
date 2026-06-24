@@ -20,11 +20,18 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.22.1',
+                'date' => '2026-06-24',
+                'title' => 'Release metadata cleanup',
+                'items' => ['Recorded the 0.22.0 release commit in the public changelog and added coverage for the internal login remember-me cookie lifetime.'],
+                'meta' => 'Release maintenance commit.',
+            ],
+            [
                 'version' => '0.22.0',
                 'date' => '2026-06-24',
                 'title' => 'Quick bookings and website leads',
                 'items' => ['Added shared quick booking flows for group classes, private lessons, and room rentals, introduced website lead intake with account bearer tokens, lead status management, OpenAPI documentation, and responsive admin modal improvements.'],
-                'meta' => 'Pending release commit.',
+                'meta' => 'Commit 60b3513.',
             ],
             [
                 'version' => '0.21.1',
@@ -206,11 +213,18 @@ return [
         ],
         'uk' => [
             [
+                'version' => '0.22.1',
+                'date' => '2026-06-24',
+                'title' => 'Очищення метаданих релізу',
+                'items' => ['Записано коміт релізу 0.22.0 у публічному changelog та додано покриття для lifetime remember-me cookie внутрішнього входу.'],
+                'meta' => 'Maintenance-коміт релізу.',
+            ],
+            [
                 'version' => '0.22.0',
                 'date' => '2026-06-24',
                 'title' => 'Швидкі записи і заявки з сайту',
                 'items' => ['Додано спільні сценарії швидкого запису на групові заняття, індивідуальні заняття та оренду, заявки з сайту з bearer tokens акаунта, керування статусами заявок, OpenAPI-документацію та покращені responsive модальні вікна в адмінці.'],
-                'meta' => 'Очікує релізного коміту.',
+                'meta' => 'Коміт 60b3513.',
             ],
             [
                 'version' => '0.21.1',
