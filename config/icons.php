@@ -12,6 +12,7 @@ return [
         'class-pass-plans' => 'ticket',
         'class-types' => 'circle-dot',
         'close' => 'x',
+        'copy' => 'copy',
         'dashboard' => 'layout-dashboard',
         'directions' => 'waypoints',
         'edit' => 'square-pen',
@@ -19,6 +20,7 @@ return [
         'generated-classes' => 'clipboard-list',
         'globe' => 'globe',
         'integrations' => 'settings',
+        'key' => 'key-round',
         'locations' => 'map-pin',
         'logout' => 'log-out',
         'map-pin' => 'map-pin',
@@ -32,6 +34,7 @@ return [
         'trash' => 'trash-2',
         'trainers' => 'user-round',
         'user' => 'user-round',
+        'website-leads' => 'inbox',
     ],
 
     'trainer_types' => [

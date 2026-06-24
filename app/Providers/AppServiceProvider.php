@@ -46,6 +46,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manageSchedule', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageSchedule));
         Gate::define('manageClients', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageClients));
         Gate::define('manageBookings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageBookings));
+        Gate::define('manageWebsiteLeads', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageWebsiteLeads));
         Gate::define('markAttendance', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::MarkAttendance));
         Gate::define('manageTrainers', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageTrainers));
         Gate::define('manageStudioSettings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageStudioSettings));
@@ -68,6 +69,10 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('customer-otp', function (Request $request): Limit {
             return Limit::perMinute(3)->by($request->string('phone').'|'.$request->ip());
+        });
+
+        RateLimiter::for('website-leads', function (Request $request): Limit {
+            return Limit::perMinute(30)->by($request->bearerToken() ? hash('sha256', $request->bearerToken()) : $request->ip());
         });
     }
 }

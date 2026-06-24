@@ -21,6 +21,7 @@ enum AccountRole: string
                 StudioPermission::ManageSchedule,
                 StudioPermission::ManageClients,
                 StudioPermission::ManageBookings,
+                StudioPermission::ManageWebsiteLeads,
                 StudioPermission::MarkAttendance,
                 StudioPermission::ManageTrainers,
             ],
@@ -32,6 +33,7 @@ enum AccountRole: string
             self::Receptionist => [
                 StudioPermission::ManageClients,
                 StudioPermission::ManageBookings,
+                StudioPermission::ManageWebsiteLeads,
                 StudioPermission::MarkAttendance,
             ],
         };

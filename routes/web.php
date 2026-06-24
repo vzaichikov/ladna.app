@@ -1,10 +1,12 @@
 <?php
 
 use App\Enums\ScheduleKind;
+use App\Http\Controllers\AccountApiTokenController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountOwnerProfileController;
 use App\Http\Controllers\ActivityDirectionController;
+use App\Http\Controllers\ApiDocumentationController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ClassBookingController;
@@ -28,12 +30,14 @@ use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SystemSettingsController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
+use App\Http\Controllers\QuickBookingController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\ScheduledClassController;
 use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
 use App\Http\Controllers\TrainerTypeController;
+use App\Http\Controllers\WebsiteLeadController;
 use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
 use App\Models\Account;
@@ -50,6 +54,8 @@ Route::get('/terms.en.html', [LegalPageController::class, 'termsEnglish'])->name
 Route::get('/terms.ua.html', [LegalPageController::class, 'termsUkrainian'])->name('terms.ua');
 Route::get('/privacy.en.html', [LegalPageController::class, 'privacyEnglish'])->name('privacy.en');
 Route::get('/privacy.ua.html', [LegalPageController::class, 'privacyUkrainian'])->name('privacy.ua');
+Route::get('/api-docs', [ApiDocumentationController::class, 'show'])->name('api-docs.show');
+Route::get('/api-docs/openapi.json', [ApiDocumentationController::class, 'openApi'])->name('api-docs.openapi');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
@@ -124,6 +130,12 @@ Route::middleware('auth:web')
             ->name('accounts.owner-profile.edit');
         Route::put('accounts/{account}/owner-profile', [AccountOwnerProfileController::class, 'update'])
             ->name('accounts.owner-profile.update');
+        Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])
+            ->name('accounts.api-tokens.store');
+        Route::post('accounts/{account}/api-tokens/{accountApiToken}/regenerate', [AccountApiTokenController::class, 'regenerate'])
+            ->name('accounts.api-tokens.regenerate');
+        Route::delete('accounts/{account}/api-tokens/{accountApiToken}', [AccountApiTokenController::class, 'destroy'])
+            ->name('accounts.api-tokens.destroy');
         Route::resource('accounts.locations', LocationController::class)
             ->except(['show'])
             ->scoped();
@@ -205,6 +217,12 @@ Route::middleware('auth:web')
         Route::resource('accounts.customers', CustomerController::class)
             ->except(['show'])
             ->scoped();
+        Route::get('accounts/{account}/website-leads', [WebsiteLeadController::class, 'index'])
+            ->name('accounts.website-leads.index');
+        Route::post('accounts/{account}/website-leads', [WebsiteLeadController::class, 'store'])
+            ->name('accounts.website-leads.store');
+        Route::patch('accounts/{account}/website-leads/{websiteLead}', [WebsiteLeadController::class, 'update'])
+            ->name('accounts.website-leads.update');
         Route::post('accounts/{account}/customers/{customer}/class-passes', [CustomerClassPassController::class, 'store'])
             ->name('accounts.customers.class-passes.store');
         Route::get('accounts/{account}/customers/search', CustomerSearchController::class)
@@ -218,6 +236,10 @@ Route::middleware('auth:web')
             ->name('accounts.integrations.update');
         Route::get('accounts/{account}/scheduled-classes', ScheduledClassController::class)
             ->name('accounts.scheduled-classes.index');
+        Route::post('accounts/{account}/quick-bookings', [QuickBookingController::class, 'store'])
+            ->name('accounts.quick-bookings.store');
+        Route::get('accounts/{account}/quick-bookings/group-availability', [QuickBookingController::class, 'groupAvailability'])
+            ->name('accounts.quick-bookings.group-availability');
         Route::post('accounts/{account}/scheduled-classes/manual/{scheduleKind}', [ManualScheduledClassController::class, 'store'])
             ->name('accounts.scheduled-classes.manual.store');
         Route::post('accounts/{account}/scheduled-classes/{scheduledClass}/bookings', [ClassBookingController::class, 'store'])

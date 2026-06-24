@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna API Docs Update"
+  short_description: "Keep Ladna API docs synchronized"
+  default_prompt: "Use $ladna-api-docs-update before changing Ladna API routes, resources, request payloads, or examples."
