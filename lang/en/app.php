@@ -220,6 +220,7 @@ return [
     'view_all' => 'View all',
     'version' => 'Version',
     'whats_new' => "What's new",
+    'help' => 'Help',
     'terms_of_service' => 'Terms of Service',
     'privacy_policy' => 'Privacy Policy',
     'footer_links' => 'Footer links',

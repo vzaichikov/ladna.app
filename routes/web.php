@@ -18,6 +18,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HelpController;
 use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
@@ -58,6 +59,10 @@ Route::get('/privacy.en.html', [LegalPageController::class, 'privacyEnglish'])->
 Route::get('/privacy.ua.html', [LegalPageController::class, 'privacyUkrainian'])->name('privacy.ua');
 Route::get('/api-docs', [ApiDocumentationController::class, 'show'])->name('api-docs.show');
 Route::get('/api-docs/openapi.json', [ApiDocumentationController::class, 'openApi'])->name('api-docs.openapi');
+Route::get('/help', [HelpController::class, 'index'])->name('help.index');
+Route::get('/help/{slug}', [HelpController::class, 'show'])
+    ->where('slug', '[A-Za-z0-9-]+')
+    ->name('help.show');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
