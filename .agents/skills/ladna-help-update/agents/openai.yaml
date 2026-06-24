@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Help Update"
+  short_description: "Keep public owner help accurate"
+  default_prompt: "Use $ladna-help-update to add this Ladna studio-owner feature to the public help."

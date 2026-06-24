@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.27.0',
+                'date' => '2026-06-24',
+                'title' => 'Public studio owner help',
+                'items' => ['Added a public Ukrainian help section for studio owners with plain-language guides, desktop screenshots, footer access, and a dedicated Ladna help-update skill for keeping future feature documentation current.'],
+                'meta' => 'Release commit pending.',
+            ],
+            [
                 'version' => '0.26.0',
                 'date' => '2026-06-24',
                 'title' => 'Public class pass checkout',
@@ -268,6 +275,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.27.0',
+                'date' => '2026-06-24',
+                'title' => 'Публічна допомога для власниць студій',
+                'items' => ['Додано публічний україномовний розділ допомоги для власниць студій з простими інструкціями, скріншотами desktop-екранів, посиланням у футері та окремим skill для майбутнього оновлення хелпа.'],
+                'meta' => 'Релізний коміт очікується.',
+            ],
             [
                 'version' => '0.26.0',
                 'date' => '2026-06-24',
