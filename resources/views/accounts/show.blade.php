@@ -4,191 +4,237 @@
 
 @section('content')
     @php
-        $firstLocation = $account->locations->first();
-        $accountStatusClass = match ($account->status->value) {
-            'active' => 'crm-status-active',
-            'trialing' => 'crm-status-scheduled',
-            default => 'crm-status-muted',
-        };
+        $activeBookingStatuses = [
+            \App\Enums\ClassBookingStatus::Booked->value,
+            \App\Enums\ClassBookingStatus::Attended->value,
+        ];
+        $isTrainerDashboard = $mode === 'trainer';
+        $pageTitle = $isTrainerDashboard ? __('app.trainer_dashboard_title') : __('app.studio_dashboard_title');
+        $pageCopy = $isTrainerDashboard ? __('app.trainer_dashboard_copy') : __('app.studio_dashboard_copy');
+        $now = $isTrainerDashboard ? $trainerDashboard['now'] : $ownerDashboard['now'];
     @endphp
 
-    <x-ui.panel padding="lg">
-        <div class="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div class="flex flex-col gap-5 sm:flex-row sm:items-start">
-                <div class="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl bg-brand-50 shadow-crm ring-1 ring-stone-200">
-                    <img src="{{ $account->logoUrl() }}" alt="" class="max-h-20 max-w-20 object-contain">
-                </div>
-                <div>
-                    <div class="flex flex-wrap items-center gap-3">
-                        <h1 class="text-3xl font-semibold text-slate-950">{{ $account->name }}</h1>
-                        <span class="{{ $accountStatusClass }}">{{ __('app.'.$account->status->value) }}</span>
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <div class="crm-page-kicker">{{ $account->name }}</div>
+            <h1 class="crm-page-title">{{ $pageTitle }}</h1>
+            <p class="crm-page-copy">{{ $pageCopy }}</p>
+        </div>
+        <div class="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm shadow-xs">
+            <div class="font-semibold text-slate-950">{{ $now->translatedFormat('l, j F') }}</div>
+            <div class="mt-1 text-slate-500">{{ $now->format('H:i') }} · {{ $timezone }}</div>
+        </div>
+    </div>
+
+    @if ($isTrainerDashboard)
+        @if (! $trainer)
+            <x-ui.empty-state :title="__('app.trainer_profile_missing_title')" icon="trainers" class="mt-6">
+                <p class="mt-2 max-w-xl text-sm leading-6 text-slate-500">{{ __('app.trainer_profile_missing_copy') }}</p>
+            </x-ui.empty-state>
+        @else
+            <section class="mt-6 grid gap-6 xl:grid-cols-2">
+                <x-ui.panel padding="none" class="overflow-hidden">
+                    <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.today') }}</h2>
+                            <p class="mt-1 text-sm text-slate-500">{{ __('app.trainer_agenda_for', ['trainer' => $trainer->name]) }}</p>
+                        </div>
+                        <span class="crm-status-active">{{ $trainerDashboard['todayClasses']->count() }}</span>
                     </div>
-                    <dl class="mt-5 grid gap-x-10 gap-y-4 text-sm sm:grid-cols-3">
-                        <div>
-                            <dt class="font-medium text-slate-500">{{ __('app.slug') }}</dt>
-                            <dd class="mt-1 font-semibold text-slate-950">{{ $account->slug }}</dd>
-                        </div>
-                        <div>
-                            <dt class="font-medium text-slate-500">{{ __('app.default_language') }}</dt>
-                            <dd class="mt-1 font-semibold uppercase text-slate-950">{{ $account->default_language }}</dd>
-                        </div>
-                        <div>
-                            <dt class="font-medium text-slate-500">{{ __('app.currency') }}</dt>
-                            <dd class="mt-1 font-semibold text-slate-950">{{ $account->default_currency }}</dd>
-                        </div>
-                        <div>
-                            <dt class="font-medium text-slate-500">{{ __('app.timezone') }}</dt>
-                            <dd class="mt-1 font-semibold text-slate-950">{{ $account->timezone }}</dd>
-                        </div>
-                        <div>
-                            <dt class="font-medium text-slate-500">{{ __('app.brand_color') }}</dt>
-                            <dd class="mt-1 flex items-center gap-2 font-semibold text-slate-950">
-                                <span class="h-8 w-8 rounded-lg border border-stone-200" style="background-color: {{ $account->brand_color ?? '#3B223F' }}"></span>
-                                {{ $account->brand_color ?? '#3B223F' }}
-                            </dd>
-                        </div>
-                        @if ($firstLocation)
-                            <div>
-                                <dt class="font-medium text-slate-500">{{ __('app.public_schedule') }}</dt>
-                                <dd class="mt-1">
-                                    <a href="{{ route('public.schedule', [$account->slug, $firstLocation->slug]) }}" class="inline-flex items-center gap-1 font-semibold text-violet-crm-600 hover:text-violet-crm-700">
-                                        {{ __('app.open') }}
-                                        <x-ui.icon name="external" class="h-3.5 w-3.5" />
-                                    </a>
-                                </dd>
+                    <div class="grid gap-4 p-5">
+                        @forelse ($trainerDashboard['todayClasses'] as $scheduledClass)
+                            @include('accounts._dashboard-class-card', [
+                                'account' => $account,
+                                'scheduledClass' => $scheduledClass,
+                                'showRoster' => true,
+                                'bookingStatuses' => $trainerDashboard['bookingStatuses'],
+                                'activeBookingStatuses' => $activeBookingStatuses,
+                            ])
+                        @empty
+                            <p class="rounded-lg border border-stone-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">{{ __('app.no_assigned_classes_today') }}</p>
+                        @endforelse
+                    </div>
+                </x-ui.panel>
+
+                <x-ui.panel padding="none" class="overflow-hidden">
+                    <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.tomorrow') }}</h2>
+                        <span class="crm-status-scheduled">{{ $trainerDashboard['tomorrowClasses']->count() }}</span>
+                    </div>
+                    <div class="grid gap-4 p-5">
+                        @forelse ($trainerDashboard['tomorrowClasses'] as $scheduledClass)
+                            @include('accounts._dashboard-class-card', [
+                                'account' => $account,
+                                'scheduledClass' => $scheduledClass,
+                                'showRoster' => true,
+                                'bookingStatuses' => $trainerDashboard['bookingStatuses'],
+                                'activeBookingStatuses' => $activeBookingStatuses,
+                            ])
+                        @empty
+                            <p class="rounded-lg border border-stone-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">{{ __('app.no_assigned_classes_tomorrow') }}</p>
+                        @endforelse
+                    </div>
+                </x-ui.panel>
+            </section>
+
+            <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+                <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.rest_of_week') }}</h2>
+                    <x-ui.icon name="calendar" class="h-5 w-5 text-brand-600" />
+                </div>
+                @if ($trainerDashboard['weekDays']->isNotEmpty())
+                    <div class="grid gap-4 p-5 lg:grid-cols-2 2xl:grid-cols-3">
+                        @foreach ($trainerDashboard['weekDays'] as $day)
+                            <div class="rounded-xl border border-stone-200 bg-slate-50 p-4">
+                                <div class="flex items-center justify-between gap-3">
+                                    <h3 class="font-semibold text-slate-950">{{ $day['date']->translatedFormat('l, j F') }}</h3>
+                                    <span class="crm-status-muted">{{ $day['classes']->count() }}</span>
+                                </div>
+                                <div class="mt-4 space-y-3">
+                                    @forelse ($day['classes'] as $scheduledClass)
+                                        @php
+                                            $startsAt = $scheduledClass->starts_at->copy()->timezone($scheduledClass->displayTimezone());
+                                            $endsAt = $scheduledClass->ends_at->copy()->timezone($scheduledClass->displayTimezone());
+                                            $bookingCount = $scheduledClass->classBookings
+                                                ->filter(fn ($booking): bool => in_array($booking->status->value, $activeBookingStatuses, true))
+                                                ->count();
+                                        @endphp
+                                        <div class="rounded-lg border border-stone-200 bg-white p-3">
+                                            <div class="text-sm font-semibold text-brand-600">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
+                                            <div class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->title }}</div>
+                                            <div class="mt-1 text-sm text-slate-500">{{ $scheduledClass->location?->name }} · {{ $scheduledClass->room?->name ?? __('app.room') }}</div>
+                                            <div class="mt-2 text-xs font-semibold text-slate-500">{{ __('app.booked_of_capacity', ['booked' => $bookingCount, 'capacity' => max(0, (int) ($scheduledClass->capacity ?? 0))]) }}</div>
+                                        </div>
+                                    @empty
+                                        <p class="text-sm text-slate-500">{{ __('app.no_assigned_classes_week') }}</p>
+                                    @endforelse
+                                </div>
                             </div>
-                        @endif
-                    </dl>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="m-5 rounded-lg border border-stone-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">{{ __('app.no_assigned_classes_week') }}</p>
+                @endif
+            </x-ui.panel>
+        @endif
+    @else
+        <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <x-ui.metric :label="__('app.active_customer_passes')" :value="$ownerDashboard['metrics']['activePasses']" icon="class-pass-plans" accent="brand" />
+            <x-ui.metric :label="__('app.customers')" :value="$ownerDashboard['metrics']['customers']" :meta="__('app.new_customers_7_days', ['count' => $ownerDashboard['metrics']['newCustomers']])" icon="accounts" />
+            <x-ui.metric :label="__('app.open_website_leads')" :value="$ownerDashboard['metrics']['openLeads']" :meta="__('app.new_leads_today', ['count' => $ownerDashboard['metrics']['todayNewLeads']])" icon="website-leads" accent="emerald" />
+            <x-ui.metric :label="__('app.today_load')" :value="$ownerDashboard['metrics']['todayLoad']['percent'].'%'" :meta="__('app.booked_of_capacity', ['booked' => $ownerDashboard['metrics']['todayLoad']['bookings'], 'capacity' => $ownerDashboard['metrics']['todayLoad']['capacity']])" icon="generated-classes" accent="slate" />
+        </section>
+
+        <section class="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+            <x-ui.panel padding="none" class="overflow-hidden">
+                <div class="border-b border-stone-100 px-5 py-4">
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.live_today') }}</h2>
+                    <p class="mt-1 text-sm text-slate-500">{{ __('app.live_today_copy') }}</p>
                 </div>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-                <x-ui.button :href="route('dashboard.accounts.brand.edit', $account)" variant="secondary">
-                    <x-ui.icon name="edit" class="h-4 w-4" />
-                    {{ __('app.edit') }}
-                </x-ui.button>
-                <x-ui.button :href="route('dashboard.accounts.locations.create', $account)">
-                    <x-ui.icon name="plus" class="h-4 w-4" />
-                    {{ __('app.create_location') }}
-                </x-ui.button>
-                <form method="POST" action="{{ route('dashboard.accounts.destroy', $account) }}" data-confirm-delete>
-                    @csrf
-                    @method('DELETE')
-                    <x-ui.button type="submit" variant="danger">
-                        <x-ui.icon name="trash" class="h-4 w-4" />
-                        {{ __('app.delete') }}
-                    </x-ui.button>
-                </form>
-            </div>
-        </div>
-    </x-ui.panel>
-
-    <section class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-7">
-        <x-ui.metric :label="__('app.locations')" :value="$account->locations_count" icon="locations" :href="route('dashboard.accounts.locations.index', $account)" />
-        <x-ui.metric :label="__('app.rooms')" :value="$account->rooms_count" icon="rooms" accent="brand" :href="route('dashboard.accounts.rooms.index', $account)" />
-        <x-ui.metric :label="__('app.activity_directions')" :value="$account->activity_directions_count" icon="directions" :href="route('dashboard.accounts.activity-directions.index', $account)" />
-        <x-ui.metric :label="__('app.class_types')" :value="$account->class_types_count" icon="class-types" accent="brand" :href="route('dashboard.accounts.class-types.index', $account)" />
-        <x-ui.metric :label="__('app.trainers')" :value="$account->trainers_count" icon="trainers" :href="route('dashboard.accounts.trainers.index', $account)" />
-        <x-ui.metric :label="__('app.customers')" :value="$account->customers_count" icon="accounts" :href="route('dashboard.accounts.customers.index', $account)" />
-        <x-ui.metric :label="__('app.generated_classes')" :value="$account->scheduled_classes_count" icon="generated-classes" accent="emerald" :href="route('dashboard.accounts.scheduled-classes.index', $account)" />
-    </section>
-
-    <section class="mt-6 grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
-        <x-ui.panel padding="none" class="overflow-hidden">
-            <div class="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
-                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.locations') }}</h2>
-                <x-ui.button :href="route('dashboard.accounts.locations.create', $account)" size="sm">
-                    <x-ui.icon name="plus" class="h-4 w-4" />
-                    {{ __('app.create_location') }}
-                </x-ui.button>
-            </div>
-            @forelse ($account->locations as $index => $location)
-                <div class="crm-row md:grid-cols-[auto_1fr_auto] md:items-center">
-                    <span class="flex h-11 w-11 items-center justify-center rounded-full bg-violet-crm-50 text-sm font-semibold text-violet-crm-700">
-                        {{ $index + 1 }}
-                    </span>
+                <div class="grid gap-5 p-5">
                     <div>
-                        <h3 class="font-semibold text-slate-950">{{ $location->name }}</h3>
-                        <p class="mt-1 text-sm text-slate-500">{{ $location->address ?: $location->slug }}</p>
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                            <h3 class="text-sm font-semibold uppercase text-slate-500">{{ __('app.live_now') }}</h3>
+                            <span class="crm-status-active">{{ $ownerDashboard['liveClasses']->count() }}</span>
+                        </div>
+                        <div class="grid gap-4 lg:grid-cols-2">
+                            @forelse ($ownerDashboard['liveClasses'] as $scheduledClass)
+                                @include('accounts._dashboard-class-card', [
+                                    'account' => $account,
+                                    'scheduledClass' => $scheduledClass,
+                                    'showRoster' => false,
+                                    'activeBookingStatuses' => $activeBookingStatuses,
+                                ])
+                            @empty
+                                <p class="rounded-lg border border-stone-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">{{ __('app.no_live_classes') }}</p>
+                            @endforelse
+                        </div>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <x-ui.action-button :href="route('public.schedule', [$account->slug, $location->slug])" icon="calendar" :label="__('app.schedule')" />
-                        <x-ui.action-button :href="route('dashboard.accounts.locations.edit', [$account, $location])" icon="edit" :label="__('app.edit')" />
-                        <form method="POST" action="{{ route('dashboard.accounts.locations.destroy', [$account, $location]) }}" data-confirm-delete>
-                            @csrf
-                            @method('DELETE')
-                            <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
-                        </form>
-                    </div>
-                </div>
-            @empty
-                <x-ui.empty-state :title="__('app.no_locations')" icon="locations" class="m-5" />
-            @endforelse
-            @if ($account->locations->isNotEmpty())
-                <div class="border-t border-slate-100 px-5 py-4 text-center">
-                    <a href="{{ route('dashboard.accounts.locations.index', $account) }}" class="inline-flex items-center gap-2 text-sm font-semibold text-violet-crm-600 hover:text-violet-crm-700">
-                        {{ __('app.view_all') }}
-                        <x-ui.icon name="chevron-right" class="h-4 w-4" />
-                    </a>
-                </div>
-            @endif
-        </x-ui.panel>
 
-        <x-ui.panel padding="none" class="overflow-hidden">
-            <div class="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
-                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.public_schedule') }}</h2>
-                <x-ui.icon name="calendar" class="h-5 w-5 text-violet-crm-600" />
-            </div>
-            @forelse ($account->locations as $location)
-                <div class="crm-row grid-cols-[auto_1fr_auto] items-center">
-                    <x-ui.icon name="locations" class="h-5 w-5 text-brand-600" />
                     <div>
-                        <div class="font-semibold text-slate-950">{{ $location->name }}</div>
-                        <div class="mt-1 text-sm text-slate-500">{{ $location->timezone ?? $account->timezone }}</div>
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                            <h3 class="text-sm font-semibold uppercase text-slate-500">{{ __('app.next_today') }}</h3>
+                            <span class="crm-status-scheduled">{{ $ownerDashboard['nextClasses']->count() }}</span>
+                        </div>
+                        <div class="grid gap-4 lg:grid-cols-2">
+                            @forelse ($ownerDashboard['nextClasses'] as $scheduledClass)
+                                @include('accounts._dashboard-class-card', [
+                                    'account' => $account,
+                                    'scheduledClass' => $scheduledClass,
+                                    'showRoster' => false,
+                                    'activeBookingStatuses' => $activeBookingStatuses,
+                                ])
+                            @empty
+                                <p class="rounded-lg border border-stone-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">{{ __('app.no_next_classes_today') }}</p>
+                            @endforelse
+                        </div>
                     </div>
-                    <a href="{{ route('public.schedule', [$account->slug, $location->slug]) }}" class="text-violet-crm-600 hover:text-violet-crm-700">
-                        <x-ui.icon name="external" class="h-4 w-4" />
-                    </a>
                 </div>
-            @empty
-                <x-ui.empty-state :title="__('app.no_public_classes')" icon="calendar" class="m-5" />
-            @endforelse
-        </x-ui.panel>
-    </section>
+            </x-ui.panel>
 
-    <x-ui.panel class="mt-6">
-        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.quick_actions') }}</h2>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            <x-ui.button :href="route('dashboard.accounts.locations.create', $account)" variant="secondary">
-                <x-ui.icon name="locations" class="h-4 w-4 text-brand-600" />
-                {{ __('app.create_location') }}
-            </x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.rooms.index', $account)" variant="secondary">
-                <x-ui.icon name="rooms" class="h-4 w-4 text-brand-600" />
-                {{ __('app.rooms') }}
-            </x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.activity-directions.index', $account)" variant="secondary">
-                <x-ui.icon name="directions" class="h-4 w-4 text-brand-600" />
-                {{ __('app.activity_directions') }}
-            </x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.trainers.index', $account)" variant="secondary">
-                <x-ui.icon name="trainers" class="h-4 w-4 text-brand-600" />
-                {{ __('app.trainers') }}
-            </x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.customers.index', $account)" variant="secondary">
-                <x-ui.icon name="accounts" class="h-4 w-4 text-brand-600" />
-                {{ __('app.customers') }}
-            </x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">
-                <x-ui.icon name="schedule" class="h-4 w-4 text-brand-600" />
-                {{ __('app.schedule_series') }}
-            </x-ui.button>
-            @if ($account->isOwnedBy(auth()->user()))
-                <x-ui.button :href="route('dashboard.accounts.integrations.index', $account)" variant="secondary">
-                    <x-ui.icon name="integrations" class="h-4 w-4 text-brand-600" />
-                    {{ __('app.integrations') }}
-                </x-ui.button>
-            @endif
-        </div>
-    </x-ui.panel>
+            <x-ui.panel padding="none" class="overflow-hidden">
+                <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.studio_7_day_outlook') }}</h2>
+                    <x-ui.icon name="calendar" class="h-5 w-5 text-brand-600" />
+                </div>
+                <div class="space-y-4 p-5">
+                    @foreach ($ownerDashboard['outlookDays'] as $day)
+                        @php
+                            $barWidth = min(100, max(0, $day['percent']));
+                        @endphp
+                        <div>
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <div class="font-semibold text-slate-950">{{ $day['date']->translatedFormat('D, j M') }}</div>
+                                    <div class="text-xs font-semibold text-slate-500">{{ __('app.classes_bookings_capacity_short', ['classes' => $day['classes'], 'bookings' => $day['bookings'], 'capacity' => $day['capacity']]) }}</div>
+                                </div>
+                                <span class="crm-status-muted">{{ $day['percent'] }}%</span>
+                            </div>
+                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
+                                <div class="h-full rounded-full bg-brand-600" style="width: {{ $barWidth }}%"></div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </x-ui.panel>
+        </section>
+
+        <section class="mt-6 grid gap-6 xl:grid-cols-2">
+            @foreach ([
+                ['title' => __('app.load_by_location'), 'items' => $ownerDashboard['locationLoad'], 'empty' => __('app.no_location_load')],
+                ['title' => __('app.load_by_room'), 'items' => $ownerDashboard['roomLoad'], 'empty' => __('app.no_room_load')],
+            ] as $loadSection)
+                <x-ui.panel padding="none" class="overflow-hidden">
+                    <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                        <h2 class="text-lg font-semibold text-slate-950">{{ $loadSection['title'] }}</h2>
+                        <x-ui.icon name="generated-classes" class="h-5 w-5 text-brand-600" />
+                    </div>
+                    <div class="space-y-4 p-5">
+                        @forelse ($loadSection['items'] as $load)
+                            @php
+                                $barWidth = min(100, max(0, $load['percent']));
+                            @endphp
+                            <div class="rounded-xl border border-stone-200 bg-white p-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="font-semibold text-slate-950">{{ $load['name'] ?? __('app.unassigned') }}</div>
+                                        @if ($load['secondary'])
+                                            <div class="mt-1 text-sm text-slate-500">{{ $load['secondary'] }}</div>
+                                        @endif
+                                    </div>
+                                    <span class="crm-status-muted">{{ $load['percent'] }}%</span>
+                                </div>
+                                <div class="mt-3 h-2 overflow-hidden rounded-full bg-stone-100">
+                                    <div class="h-full rounded-full bg-brand-600" style="width: {{ $barWidth }}%"></div>
+                                </div>
+                                <div class="mt-3 text-xs font-semibold text-slate-500">{{ __('app.classes_bookings_capacity_short', ['classes' => $load['classes'], 'bookings' => $load['bookings'], 'capacity' => $load['capacity']]) }}</div>
+                            </div>
+                        @empty
+                            <p class="rounded-lg border border-stone-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">{{ $loadSection['empty'] }}</p>
+                        @endforelse
+                    </div>
+                </x-ui.panel>
+            @endforeach
+        </section>
+    @endif
 @endsection
