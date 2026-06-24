@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.22.3',
+                'date' => '2026-06-24',
+                'title' => 'Website lead list polish',
+                'items' => ['Removed the API token shortcut from website leads and added clearer spacing between status controls and quick-booking actions.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.22.2',
                 'date' => '2026-06-24',
                 'title' => 'Website lead cleanup controls',
@@ -219,6 +226,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.22.3',
+                'date' => '2026-06-24',
+                'title' => 'Полірування списку заявок',
+                'items' => ['Прибрано посилання на API токени зі сторінки заявок і додано чіткіший відступ між зміною статусу та швидкими діями запису.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.22.2',
                 'date' => '2026-06-24',

@@ -3,15 +3,11 @@
 @section('title', __('app.website_leads').' - '.$account->name)
 
 @section('content')
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div>
         <div>
             <h1 class="crm-page-title">{{ __('app.website_leads') }}</h1>
             <p class="crm-page-copy">{{ __('app.website_leads_copy') }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api'])" variant="secondary">
-            <x-ui.icon name="key" class="h-4 w-4" />
-            {{ __('app.api_tokens') }}
-        </x-ui.button>
     </div>
 
     <form method="GET" action="{{ route('dashboard.accounts.website-leads.index', $account) }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
@@ -58,7 +54,7 @@
                     </select>
                     <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.save') }}</x-ui.button>
                 </form>
-                <div class="flex flex-wrap gap-2 lg:justify-end">
+                <div class="flex flex-wrap gap-2 lg:ml-4 lg:justify-end">
                     @foreach ($quickBookingOptions as $quickBookingOption)
                         <x-ui.button
                             type="button"
