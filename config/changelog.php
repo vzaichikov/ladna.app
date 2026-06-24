@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.22.2',
+                'date' => '2026-06-24',
+                'title' => 'Website lead cleanup controls',
+                'items' => ['Shortened website lead quick-booking buttons, switched them to the primary brand color, and added guarded lead deletion for cleanup of test submissions.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.22.1',
                 'date' => '2026-06-24',
                 'title' => 'Release metadata cleanup',
@@ -212,6 +219,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.22.2',
+                'date' => '2026-06-24',
+                'title' => 'Очищення заявок з сайту',
+                'items' => ['Скорочено кнопки швидкого запису в заявках з сайту, переведено їх на основний фіолетовий колір і додано захищене видалення заявок для очищення тестових відправок.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.22.1',
                 'date' => '2026-06-24',

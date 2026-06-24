@@ -223,6 +223,8 @@ Route::middleware('auth:web')
             ->name('accounts.website-leads.store');
         Route::patch('accounts/{account}/website-leads/{websiteLead}', [WebsiteLeadController::class, 'update'])
             ->name('accounts.website-leads.update');
+        Route::delete('accounts/{account}/website-leads/{websiteLead}', [WebsiteLeadController::class, 'destroy'])
+            ->name('accounts.website-leads.destroy');
         Route::post('accounts/{account}/customers/{customer}/class-passes', [CustomerClassPassController::class, 'store'])
             ->name('accounts.customers.class-passes.store');
         Route::get('accounts/{account}/customers/search', CustomerSearchController::class)

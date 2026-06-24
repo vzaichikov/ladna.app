@@ -62,7 +62,6 @@
                     @foreach ($quickBookingOptions as $quickBookingOption)
                         <x-ui.button
                             type="button"
-                            variant="secondary"
                             size="sm"
                             data-quick-booking-open="{{ $quickBookingOption['kind']->value }}"
                             data-quick-booking-prefill-name="{{ $websiteLead->name }}"
@@ -70,10 +69,14 @@
                             data-quick-booking-prefill-lead="{{ $websiteLead->id }}"
                         >
                             <x-ui.icon name="plus" class="h-4 w-4" />
-                            <span class="hidden sm:inline">{{ __('app.add_'.$quickBookingOption['kind']->value.'_booking') }}</span>
-                            <span class="sm:hidden">{{ __('app.add_'.$quickBookingOption['kind']->value.'_booking_short') }}</span>
+                            {{ __('app.quick_booking_'.$quickBookingOption['kind']->value.'_button') }}
                         </x-ui.button>
                     @endforeach
+                    <form method="POST" action="{{ route('dashboard.accounts.website-leads.destroy', [$account, $websiteLead]) }}" data-confirm-delete>
+                        @csrf
+                        @method('DELETE')
+                        <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
+                    </form>
                 </div>
             </div>
         @empty
