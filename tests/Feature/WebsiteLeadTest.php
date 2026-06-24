@@ -9,6 +9,7 @@ use App\Models\AccountMembership;
 use App\Models\User;
 use App\Models\WebsiteLead;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class WebsiteLeadTest extends TestCase
@@ -18,13 +19,14 @@ class WebsiteLeadTest extends TestCase
     public function test_owner_can_view_and_filter_website_leads(): void
     {
         $owner = User::factory()->create();
-        $account = Account::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
         $otherAccount = Account::factory()->create();
         $account->addOwner($owner);
         WebsiteLead::factory()->for($account)->create([
             'name' => 'Олена Коваль',
             'phone' => '+380671112233',
             'status' => WebsiteLeadStatus::New->value,
+            'created_at' => Carbon::parse('2026-06-24 08:48:00', 'UTC'),
         ]);
         WebsiteLead::factory()->for($account)->create([
             'name' => 'Марія Шевченко',
@@ -45,6 +47,7 @@ class WebsiteLeadTest extends TestCase
             ->assertOk()
             ->assertSee('Олена Коваль')
             ->assertSee('+380671112233')
+            ->assertSee('2026-06-24 11:48')
             ->assertDontSee('Марія Шевченко')
             ->assertDontSee('Олена Інша');
     }

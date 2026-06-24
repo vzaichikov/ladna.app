@@ -11,6 +11,7 @@ class WebsiteLeadController extends Controller
     public function __invoke(StoreWebsiteLeadRequest $request): JsonResponse
     {
         $account = $request->attributes->get('account');
+        $timezone = $account->timezone ?? config('app.timezone');
         $websiteLead = $account->websiteLeads()->create($request->validated());
 
         return response()->json([
@@ -20,7 +21,7 @@ class WebsiteLeadController extends Controller
                 'phone' => $websiteLead->phone,
                 'name' => $websiteLead->name,
                 'source_page' => $websiteLead->source_page,
-                'created_at' => $websiteLead->created_at?->toIso8601String(),
+                'created_at' => $websiteLead->created_at?->copy()->timezone($timezone)->toIso8601String(),
             ],
         ], 201);
     }

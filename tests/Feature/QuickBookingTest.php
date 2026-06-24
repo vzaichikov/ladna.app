@@ -182,4 +182,68 @@ class QuickBookingTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_group_availability_uses_account_timezone_for_requested_date(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 02:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'America/New_York']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'America/New_York']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+        $trainer = Trainer::factory()->for($account)->create();
+
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'Past Local Class',
+                'starts_at' => '2026-06-17 01:00:00',
+                'ends_at' => '2026-06-17 02:00:00',
+                'capacity' => 2,
+            ]);
+        $availableClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'Late Local Class',
+                'starts_at' => '2026-06-17 03:30:00',
+                'ends_at' => '2026-06-17 04:30:00',
+                'capacity' => 2,
+            ]);
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'Next Local Day Class',
+                'starts_at' => '2026-06-17 04:30:00',
+                'ends_at' => '2026-06-17 05:30:00',
+                'capacity' => 2,
+            ]);
+
+        $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.group-availability', [
+                'account' => $account,
+                'date' => '2026-06-16',
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $availableClass->id)
+            ->assertJsonPath('data.0.time', '23:30')
+            ->assertJsonMissing(['title' => 'Past Local Class'])
+            ->assertJsonMissing(['title' => 'Next Local Day Class']);
+
+        Carbon::setTestNow();
+    }
 }

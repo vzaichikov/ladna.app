@@ -32,6 +32,8 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./api/v1/website-leads.post.tags.0', 'Website leads')
             ->assertJsonPath('paths./api/v1/website-leads.post.security.0.AccountBearerToken', [])
             ->assertJsonPath('components.schemas.WebsiteLeadRequest.required.0', 'phone')
+            ->assertJsonPath('components.schemas.WebsiteLead.allOf.1.properties.created_at.description', 'Lead creation time in the bearer token account timezone.')
+            ->assertJsonPath('components.schemas.WebsiteLead.allOf.1.properties.created_at.example', '2026-06-24T11:48:00+03:00')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.scheme', 'bearer');
     }
 }

@@ -43,7 +43,7 @@
                         <p class="mt-1 truncate text-sm text-slate-500">{{ $websiteLead->source_page }}</p>
                     @endif
                 </div>
-                <div class="text-sm font-medium text-slate-500">{{ $websiteLead->created_at?->format('Y-m-d H:i') }}</div>
+                <div class="text-sm font-medium text-slate-500">{{ $websiteLead->created_at?->copy()->timezone($websiteLeadTimezone)->format('Y-m-d H:i') }}</div>
                 <form method="POST" action="{{ route('dashboard.accounts.website-leads.update', [$account, $websiteLead]) }}" class="flex gap-2">
                     @csrf
                     @method('PATCH')

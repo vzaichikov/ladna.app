@@ -39,6 +39,7 @@ class WebsiteLeadController extends Controller
             'statuses' => WebsiteLeadStatus::cases(),
             'activeStatus' => $status?->value ?? '',
             'searchTerm' => $term,
+            'websiteLeadTimezone' => $account->timezone ?? config('app.timezone'),
             'quickBookingOptions' => $quickBookingData['options'],
             'quickBookingLocations' => $quickBookingData['locations'],
             'quickBookingRooms' => $quickBookingData['rooms'],

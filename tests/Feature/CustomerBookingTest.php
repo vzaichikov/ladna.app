@@ -451,6 +451,37 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_today_tab_uses_account_timezone_for_past_grouping(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 03:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'America/New_York']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'America/New_York']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+
+        $this->scheduledClass($account, $location, $room, $classType, 'Old Local Hidden Class', '2026-06-17 01:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Cutoff Local Visible Class', '2026-06-17 01:30:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Future Local Visible Class', '2026-06-17 03:45:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Next Local Day Class', '2026-06-17 04:30:00');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee('data-scheduled-class-history', false)
+            ->assertSeeInOrder([
+                'Cutoff Local Visible Class',
+                'Future Local Visible Class',
+                __('app.older_today_classes'),
+                'Old Local Hidden Class',
+            ])
+            ->assertDontSee('Next Local Day Class');
+
+        Carbon::setTestNow();
+    }
+
     public function test_customer_search_matches_same_account_customer_fields(): void
     {
         $owner = User::factory()->create();

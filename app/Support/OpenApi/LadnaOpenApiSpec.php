@@ -354,7 +354,12 @@ class LadnaOpenApiSpec
                         'properties' => [
                             'id' => ['type' => 'integer'],
                             'status' => ['type' => 'string', 'enum' => ['new', 'rejected', 'booked', 'callback']],
-                            'created_at' => ['type' => 'string', 'format' => 'date-time'],
+                            'created_at' => [
+                                'type' => 'string',
+                                'format' => 'date-time',
+                                'description' => 'Lead creation time in the bearer token account timezone.',
+                                'example' => '2026-06-24T11:48:00+03:00',
+                            ],
                         ],
                     ],
                 ],

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.22.4',
+                'date' => '2026-06-24',
+                'title' => 'Account timezone lead timestamps',
+                'items' => ['Returned website lead API and admin creation times in the studio account timezone and added regression coverage for non-UTC group-class availability and same-day past grouping.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.22.3',
                 'date' => '2026-06-24',
                 'title' => 'Website lead list polish',
@@ -226,6 +233,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.22.4',
+                'date' => '2026-06-24',
+                'title' => 'Час заявок у часовому поясі акаунта',
+                'items' => ['Повертаємо час створення заявок з сайту в API та адмінці у часовому поясі студійного акаунта й додали regression-покриття для групових занять у не-UTC часових поясах.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.22.3',
                 'date' => '2026-06-24',
