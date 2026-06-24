@@ -17,11 +17,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone', 'enabled_schedule_kinds', 'schedule_kind_colors'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
     use HasFactory;
+
+    private const DEFAULT_OPENING_TIME = '08:00';
+
+    private const DEFAULT_CLOSING_TIME = '22:00';
 
     protected $attributes = [
         'status' => 'active',
@@ -39,6 +43,7 @@ class Account extends Model
             'status' => AccountStatus::class,
             'enabled_schedule_kinds' => 'array',
             'schedule_kind_colors' => 'array',
+            'opening_hours' => 'array',
         ];
     }
 
@@ -172,6 +177,70 @@ class Account extends Model
         $luminance = (($red * 299) + ($green * 587) + ($blue * 114)) / 1000;
 
         return $luminance > 150 ? '#1E293B' : '#FFFFFF';
+    }
+
+    /**
+     * @return array<int, array{enabled: bool, opens_at: string, closes_at: string}>
+     */
+    public static function defaultOpeningHours(): array
+    {
+        return collect(range(1, 7))
+            ->mapWithKeys(fn (int $weekday): array => [
+                $weekday => [
+                    'enabled' => true,
+                    'opens_at' => self::DEFAULT_OPENING_TIME,
+                    'closes_at' => self::DEFAULT_CLOSING_TIME,
+                ],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{enabled: bool, opens_at: string, closes_at: string}>
+     */
+    public function openingHours(): array
+    {
+        $defaults = self::defaultOpeningHours();
+        $openingHours = is_array($this->opening_hours) ? $this->opening_hours : [];
+
+        foreach (range(1, 7) as $weekday) {
+            $dayHours = $openingHours[$weekday] ?? $openingHours[(string) $weekday] ?? [];
+
+            if (! is_array($dayHours)) {
+                $dayHours = [];
+            }
+
+            $defaults[$weekday] = [
+                'enabled' => filter_var($dayHours['enabled'] ?? $defaults[$weekday]['enabled'], FILTER_VALIDATE_BOOLEAN),
+                'opens_at' => self::normalizeOpeningTime($dayHours['opens_at'] ?? null, $defaults[$weekday]['opens_at']),
+                'closes_at' => self::normalizeOpeningTime($dayHours['closes_at'] ?? null, $defaults[$weekday]['closes_at']),
+            ];
+        }
+
+        return $defaults;
+    }
+
+    /**
+     * @return array{enabled: bool, opens_at: string, closes_at: string}|null
+     */
+    public function openingHoursForIsoWeekday(int $weekday): ?array
+    {
+        $openingHours = $this->openingHours()[$weekday] ?? null;
+
+        if (! $openingHours || ! $openingHours['enabled']) {
+            return null;
+        }
+
+        return $openingHours;
+    }
+
+    private static function normalizeOpeningTime(mixed $time, string $default): string
+    {
+        if (is_string($time) && preg_match('/^\d{2}:\d{2}$/', $time) === 1) {
+            return $time;
+        }
+
+        return $default;
     }
 
     public function classPassPlans(): HasMany

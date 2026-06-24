@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.23.0',
+                'date' => '2026-06-24',
+                'title' => 'Opening hours and quick booking availability',
+                'items' => ['Added account opening hours in My Brand and made quick private lesson and room rental booking show only available account-local time slots, with room and trainer conflict checks.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.22.4',
                 'date' => '2026-06-24',
                 'title' => 'Account timezone lead timestamps',
@@ -233,6 +240,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.23.0',
+                'date' => '2026-06-24',
+                'title' => 'Графік роботи та доступний час швидкого запису',
+                'items' => ['Додано графік роботи акаунта в Мій бренд і зроблено швидкий запис на індивідуальні заняття та оренду через доступні локальні слоти з перевіркою конфліктів залу й тренера.'],
+                'meta' => 'Релізний комміт.',
+            ],
             [
                 'version' => '0.22.4',
                 'date' => '2026-06-24',

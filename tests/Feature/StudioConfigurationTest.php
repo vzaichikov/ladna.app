@@ -269,6 +269,77 @@ class StudioConfigurationTest extends TestCase
         $this->assertSame('#AAFF00', $account->scheduleKindColor('room_rental'));
     }
 
+    public function test_brand_settings_persist_opening_hours(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']))
+            ->assertOk()
+            ->assertSee(__('app.opening_hours'))
+            ->assertSee('opening_hours_present', false);
+
+        $openingHours = [
+            1 => ['enabled' => '1', 'opens_at' => '09:00', 'closes_at' => '21:00'],
+            2 => ['enabled' => '0', 'opens_at' => '09:00', 'closes_at' => '21:00'],
+            3 => ['enabled' => '1', 'opens_at' => '10:00', 'closes_at' => '20:00'],
+            4 => ['enabled' => '1', 'opens_at' => '10:00', 'closes_at' => '20:00'],
+            5 => ['enabled' => '1', 'opens_at' => '10:00', 'closes_at' => '20:00'],
+            6 => ['enabled' => '1', 'opens_at' => '11:00', 'closes_at' => '18:00'],
+            7 => ['enabled' => '0', 'opens_at' => '11:00', 'closes_at' => '18:00'],
+        ];
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'opening_hours',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+                'opening_hours_present' => '1',
+                'opening_hours' => $openingHours,
+            ])
+            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']));
+
+        $account->refresh();
+
+        $this->assertSame('09:00', $account->openingHours()[1]['opens_at']);
+        $this->assertSame('21:00', $account->openingHours()[1]['closes_at']);
+        $this->assertFalse($account->openingHours()[2]['enabled']);
+        $this->assertFalse($account->openingHours()[7]['enabled']);
+    }
+
+    public function test_brand_settings_reject_invalid_opening_hours(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']))
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'opening_hours',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+                'opening_hours_present' => '1',
+                'opening_hours' => [
+                    1 => ['enabled' => '1', 'opens_at' => '18:00', 'closes_at' => '10:00'],
+                ],
+            ])
+            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']))
+            ->assertSessionHasErrors('opening_hours.1.closes_at');
+    }
+
     public function test_configuration_entities_can_be_copied_with_localized_prefix(): void
     {
         $owner = User::factory()->create();

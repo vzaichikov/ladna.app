@@ -96,7 +96,7 @@ class AccountController extends Controller
     {
         $this->authorize('update', $account);
         $customerLoginUrl = route('customer.studio.login', $account->slug);
-        $activeTab = in_array($request->query('tab'), ['formats', 'qr', 'api'], true) ? $request->query('tab') : 'business';
+        $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'qr', 'api'], true) ? $request->query('tab') : 'business';
 
         return view('accounts.brand-edit', [
             'account' => $account,
@@ -114,12 +114,14 @@ class AccountController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
-        $account->update(collect($validated)->except(['brand_tab', 'logo', 'enabled_schedule_kinds_present', 'schedule_kind_colors_present'])->all());
+        $account->update(collect($validated)->except(['brand_tab', 'logo', 'enabled_schedule_kinds_present', 'schedule_kind_colors_present', 'opening_hours_present'])->all());
         $this->storeLogo($request, $account);
 
-        $routeParameters = $request->input('brand_tab') === 'formats'
-            ? [$account, 'tab' => 'formats']
-            : [$account];
+        $routeParameters = match ($request->input('brand_tab')) {
+            'formats' => [$account, 'tab' => 'formats'],
+            'opening_hours' => [$account, 'tab' => 'opening_hours'],
+            default => [$account],
+        };
 
         return redirect()->route('dashboard.accounts.brand.edit', $routeParameters)
             ->with('status', __('app.account_updated'));

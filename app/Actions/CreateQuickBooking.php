@@ -10,6 +10,7 @@ use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
 use App\Models\User;
 use App\Models\WebsiteLead;
+use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,7 @@ class CreateQuickBooking
     public function __construct(
         private readonly ResolveQuickBookingCustomer $resolveQuickBookingCustomer,
         private readonly ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking,
+        private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
     ) {}
 
     /**
@@ -90,6 +92,17 @@ class CreateQuickBooking
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['starts_at'], $timezone);
         $durationMinutes = (int) ($classType->default_duration_minutes ?: 60);
         $endsAt = $startsAt->addMinutes($durationMinutes);
+
+        if (! $this->manualQuickBookingAvailability->hasStart($account, $scheduleKind, (string) $validated['starts_at'], [
+            'location_id' => $location->id,
+            'room_id' => $room->id,
+            'class_type_id' => $classType->id,
+            'trainer_id' => $trainer?->id,
+        ])) {
+            throw ValidationException::withMessages([
+                'starts_at' => __('app.manual_slot_unavailable'),
+            ]);
+        }
 
         return $account->scheduledClasses()->create([
             'location_id' => $location->id,

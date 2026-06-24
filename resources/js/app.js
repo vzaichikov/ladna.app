@@ -512,6 +512,7 @@ function fillQuickBookingForm(modal, button) {
     }
 
     updateQuickBookingRooms(form);
+    loadManualBookingAvailability(form);
 }
 
 function renderGroupClassResults(container, classes) {
@@ -583,6 +584,124 @@ function loadGroupClassAvailability(input) {
         .then((response) => (response.ok ? response.json() : { data: [] }))
         .then((payload) => renderGroupClassResults(results, payload.data ?? []))
         .catch(() => renderGroupClassResults(results, []));
+}
+
+function setManualBookingResultsMessage(container, message) {
+    container.innerHTML = `<p class="px-2 py-3 text-sm text-slate-500">${message}</p>`;
+}
+
+function updateManualBookingStartsAt(form) {
+    const dateInput = form?.querySelector('[data-manual-booking-date]');
+    const timeInput = form?.querySelector('[data-manual-booking-time]');
+    const startsAtInput = form?.querySelector('[data-manual-booking-starts-at]');
+
+    if (!dateInput || !timeInput || !startsAtInput) {
+        return;
+    }
+
+    startsAtInput.value = dateInput.value && timeInput.value ? `${dateInput.value}T${timeInput.value}` : '';
+}
+
+function resetManualBookingTime(form) {
+    const timeInput = form?.querySelector('[data-manual-booking-time]');
+
+    if (timeInput) {
+        timeInput.value = '';
+    }
+
+    updateManualBookingStartsAt(form);
+}
+
+function renderManualBookingResults(container, slots, form, closed = false) {
+    container.innerHTML = '';
+
+    if (!slots.length) {
+        const message = closed
+            ? (container.dataset.closed || container.dataset.empty || 'No available times.')
+            : (container.dataset.empty || 'No available times.');
+
+        setManualBookingResultsMessage(container, message);
+        return;
+    }
+
+    slots.forEach((slot) => {
+        const label = document.createElement('label');
+        label.className = 'flex cursor-pointer items-center gap-3 rounded-lg border border-stone-200 bg-white p-3 text-sm transition hover:border-brand-100 hover:bg-brand-50';
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'manual_booking_slot';
+        radio.value = slot.starts_at;
+        radio.className = 'size-4 border-stone-300 text-brand-600 focus:ring-brand-500';
+        radio.addEventListener('change', () => {
+            const timeInput = form?.querySelector('[data-manual-booking-time]');
+
+            if (timeInput) {
+                timeInput.value = slot.time;
+            }
+
+            updateManualBookingStartsAt(form);
+        });
+
+        const body = document.createElement('span');
+        body.className = 'min-w-0';
+
+        const title = document.createElement('span');
+        title.className = 'block font-semibold text-slate-950';
+        title.textContent = slot.label || `${slot.time}-${slot.ends_time}`;
+
+        body.append(title);
+        label.append(radio, body);
+        container.append(label);
+    });
+}
+
+function loadManualBookingAvailability(form) {
+    const dateInput = form?.querySelector('[data-manual-booking-date]');
+    const results = form?.querySelector('[data-manual-booking-results]');
+    const availabilityUrl = dateInput?.dataset.availabilityUrl;
+
+    if (!dateInput || !results || !availabilityUrl) {
+        return;
+    }
+
+    const scheduleKind = form.querySelector('input[name="schedule_kind"]')?.value;
+    const locationId = form.querySelector('[data-quick-booking-location]')?.value;
+    const roomId = form.querySelector('[data-quick-booking-room]')?.value;
+    const classTypeId = form.querySelector('[data-manual-booking-class-type]')?.value;
+    const trainerInput = form.querySelector('[data-manual-booking-trainer]');
+    const trainerId = trainerInput?.value || '';
+
+    resetManualBookingTime(form);
+
+    if (!dateInput.value || !scheduleKind || !locationId || !roomId || !classTypeId || (trainerInput?.required && !trainerId)) {
+        setManualBookingResultsMessage(results, results.dataset.empty || 'No available times.');
+        return;
+    }
+
+    setManualBookingResultsMessage(results, dateInput.dataset.loading || 'Loading...');
+
+    const url = new URL(availabilityUrl, window.location.origin);
+    url.searchParams.set('schedule_kind', scheduleKind);
+    url.searchParams.set('date', dateInput.value);
+    url.searchParams.set('location_id', locationId);
+    url.searchParams.set('room_id', roomId);
+    url.searchParams.set('class_type_id', classTypeId);
+
+    if (trainerId) {
+        url.searchParams.set('trainer_id', trainerId);
+    }
+
+    fetch(url, {
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+    })
+        .then((response) => (response.ok ? response.json() : { data: [] }))
+        .then((payload) => renderManualBookingResults(results, payload.data ?? [], form, Boolean(payload.closed)))
+        .catch(() => renderManualBookingResults(results, [], form));
 }
 
 function updateQuickBookingRooms(form) {
@@ -719,8 +838,36 @@ function initQuickBookingModals() {
         }
 
         input.dataset.quickBookingLocationReady = 'true';
-        input.addEventListener('change', () => updateQuickBookingRooms(input.closest('form')));
+        input.addEventListener('change', () => {
+            const form = input.closest('form');
+
+            updateQuickBookingRooms(form);
+            loadManualBookingAvailability(form);
+        });
         updateQuickBookingRooms(input.closest('form'));
+    });
+
+    document.querySelectorAll('[data-quick-booking-room], [data-manual-booking-date], [data-manual-booking-class-type], [data-manual-booking-trainer]').forEach((input) => {
+        if (input.dataset.manualAvailabilityReady === 'true') {
+            return;
+        }
+
+        input.dataset.manualAvailabilityReady = 'true';
+        input.addEventListener('change', () => loadManualBookingAvailability(input.closest('form')));
+    });
+
+    document.querySelectorAll('[data-manual-booking-time]').forEach((input) => {
+        if (input.dataset.manualTimeReady === 'true') {
+            return;
+        }
+
+        input.dataset.manualTimeReady = 'true';
+        input.addEventListener('input', () => {
+            input.closest('form')?.querySelectorAll('input[name="manual_booking_slot"]').forEach((radio) => {
+                radio.checked = false;
+            });
+            updateManualBookingStartsAt(input.closest('form'));
+        });
     });
 }
 

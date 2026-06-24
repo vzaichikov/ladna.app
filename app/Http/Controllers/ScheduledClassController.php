@@ -72,6 +72,7 @@ class ScheduledClassController extends Controller
             'selectedRoomIds' => $selectedRoomIds,
             'customerSearchUrl' => route('dashboard.accounts.customers.search', $account),
             'groupAvailabilityUrl' => route('dashboard.accounts.quick-bookings.group-availability', $account),
+            'manualAvailabilityUrl' => route('dashboard.accounts.quick-bookings.manual-availability', $account),
             'bookingStatuses' => ClassBookingStatus::cases(),
         ]);
     }

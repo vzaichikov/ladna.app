@@ -242,6 +242,8 @@ Route::middleware('auth:web')
             ->name('accounts.quick-bookings.store');
         Route::get('accounts/{account}/quick-bookings/group-availability', [QuickBookingController::class, 'groupAvailability'])
             ->name('accounts.quick-bookings.group-availability');
+        Route::get('accounts/{account}/quick-bookings/manual-availability', [QuickBookingController::class, 'manualAvailability'])
+            ->name('accounts.quick-bookings.manual-availability');
         Route::post('accounts/{account}/scheduled-classes/manual/{scheduleKind}', [ManualScheduledClassController::class, 'store'])
             ->name('accounts.scheduled-classes.manual.store');
         Route::post('accounts/{account}/scheduled-classes/{scheduledClass}/bookings', [ClassBookingController::class, 'store'])
