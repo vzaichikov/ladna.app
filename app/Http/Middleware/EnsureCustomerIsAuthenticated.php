@@ -15,6 +15,10 @@ class EnsureCustomerIsAuthenticated
     public function handle(Request $request, Closure $next): Response
     {
         if (! Auth::guard('customer')->check()) {
+            if ($request->isMethod('GET')) {
+                session()->put('url.intended', $request->fullUrl());
+            }
+
             return redirect()->route('customer.studio.login', $request->route('accountSlug'));
         }
 

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.26.0',
+                'date' => '2026-06-24',
+                'title' => 'Public class pass checkout',
+                'items' => ['Added public class-pass purchase links with customer login/profile return flow, payment attempt history, branded provider buttons, and Monopay, LiqPay, and WayForPay callback handling that issues real customer passes only after verified successful payment.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.25.0',
                 'date' => '2026-06-24',
                 'title' => 'QR links and print poster',
@@ -261,6 +268,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.26.0',
+                'date' => '2026-06-24',
+                'title' => 'Публічна купівля абонементів',
+                'items' => ['Додано публічні посилання купівлі абонементів з поверненням після входу та доповнення профілю клієнта, історію спроб оплати, брендовані кнопки провайдерів і callback-обробку Monopay, LiqPay та WayForPay, яка видає реальний абонемент тільки після перевіреної успішної оплати.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.25.0',
                 'date' => '2026-06-24',

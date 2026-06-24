@@ -101,6 +101,50 @@
                     </div>
                 </div>
             </section>
+
+            <section class="mt-6 rounded-xl border border-stone-200 bg-white shadow-crm">
+                <div class="border-b border-stone-100 px-5 py-4">
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.payment_history') }}</h2>
+                </div>
+                <div class="divide-y divide-stone-100">
+                    @forelse ($purchaseHistory as $purchase)
+                        @php
+                            $providerLabel = config('integrations.providers.'.$purchase->provider.'.label', $purchase->provider);
+                            $statusClass = match ($purchase->status->value) {
+                                'payment_paid' => 'crm-status-active',
+                                'payment_failed', 'payment_cancelled', 'payment_expired' => 'crm-status-danger',
+                                default => 'crm-status-muted',
+                            };
+                        @endphp
+                        <article class="p-5">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <div class="font-semibold text-slate-950">{{ $purchase->plan_name }}</div>
+                                    <div class="mt-1 text-sm text-slate-500">{{ $purchase->order_id }} &middot; {{ $providerLabel }} &middot; {{ $formatMoney($purchase->amount_cents, $purchase->currency) }}</div>
+                                </div>
+                                <span class="{{ $statusClass }}">{{ __('app.'.$purchase->status->value) }}</span>
+                            </div>
+                            <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
+                                <span>{{ __('app.started_at') }}: {{ $purchase->started_at?->format('Y-m-d H:i') ?? __('app.not_set') }}</span>
+                                <span>{{ __('app.paid_at') }}: {{ $purchase->paid_at?->format('Y-m-d H:i') ?? __('app.not_set') }}</span>
+                                @if ($purchase->customerClassPass)
+                                    <span>{{ __('app.class_pass_code') }}: {{ $purchase->customerClassPass->code }}</span>
+                                @endif
+                            </div>
+                            @if ($purchase->failure_reason)
+                                <div class="mt-3 text-sm text-rose-700">{{ $purchase->failure_reason }}</div>
+                            @endif
+                        </article>
+                    @empty
+                        <x-ui.empty-state :title="__('app.no_payment_history')" icon="credit-card" class="m-5" />
+                    @endforelse
+                </div>
+                @if ($purchaseHistory->hasPages())
+                    <div class="border-t border-stone-100 px-5 py-4">
+                        {{ $purchaseHistory->links() }}
+                    </div>
+                @endif
+            </section>
         </section>
     </main>
 @endsection

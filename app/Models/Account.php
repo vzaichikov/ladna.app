@@ -253,6 +253,11 @@ class Account extends Model
         return $this->hasMany(CustomerClassPass::class);
     }
 
+    public function customerPurchases(): HasMany
+    {
+        return $this->hasMany(CustomerPurchase::class);
+    }
+
     public function customerClassPassReservations(): HasMany
     {
         return $this->hasMany(CustomerClassPassReservation::class);

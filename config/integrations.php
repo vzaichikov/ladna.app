@@ -22,6 +22,7 @@ return [
             'category' => 'payment',
             'fields' => [
                 'api_token' => ['label_key' => 'app.integration_field_api_token', 'type' => 'password', 'sensitive' => true, 'required_when_enabled' => true, 'max' => 2048],
+                'webhook_public_key' => ['label_key' => 'app.integration_field_webhook_public_key', 'type' => 'textarea', 'max' => 4096, 'rows' => 4],
                 'payment_type' => ['label_key' => 'app.integration_field_payment_type', 'type' => 'select', 'default' => 'debit', 'options' => [
                     'debit' => 'app.integration_option_debit',
                     'hold' => 'app.integration_option_hold',

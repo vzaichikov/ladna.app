@@ -252,6 +252,11 @@ class CustomerAuthController extends Controller
     {
         $account = $this->account($accountSlug);
         $customer = $this->customerForAccount($account);
+        $purchaseHistory = $customer->purchases()
+            ->with(['customerClassPass', 'classPassPlan'])
+            ->newestFirst()
+            ->paginate(10, ['*'], 'purchases_page')
+            ->withQueryString();
 
         $customer->load([
             'customerClassPasses.classPassPlan.classTypes',
@@ -265,6 +270,7 @@ class CustomerAuthController extends Controller
         return view('customer-auth.dashboard', [
             'account' => $account,
             'customer' => $customer,
+            'purchaseHistory' => $purchaseHistory,
         ]);
     }
 
@@ -297,8 +303,14 @@ class CustomerAuthController extends Controller
 
         $customer->update($validated);
 
+        if ($customer->profileIsComplete()) {
+            return redirect()
+                ->intended(route('customer.dashboard', $account->slug))
+                ->with('status', __('app.customer_profile_updated'));
+        }
+
         return redirect()
-            ->route($customer->profileIsComplete() ? 'customer.dashboard' : 'customer.profile.complete', $account->slug)
+            ->route('customer.profile.complete', $account->slug)
             ->with('status', __('app.customer_profile_updated'));
     }
 
@@ -361,10 +373,11 @@ class CustomerAuthController extends Controller
         Auth::guard('customer')->login($customer);
         app(CustomerRememberTokenService::class)->issue($customer);
 
-        return redirect()->route(
-            $customer->profileIsComplete() ? 'customer.dashboard' : 'customer.profile.complete',
-            $account->slug,
-        );
+        if ($customer->profileIsComplete()) {
+            return redirect()->intended(route('customer.dashboard', $account->slug));
+        }
+
+        return redirect()->route('customer.profile.complete', $account->slug);
     }
 
     private function currentCustomerBelongsTo(Account $account): bool

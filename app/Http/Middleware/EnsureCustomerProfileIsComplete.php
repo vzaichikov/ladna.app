@@ -20,6 +20,10 @@ class EnsureCustomerProfileIsComplete
         $accountSlug = $request->route('accountSlug');
 
         if ($customer && ! $customer->profileIsComplete() && ! $request->routeIs('customer.profile.*')) {
+            if ($request->isMethod('GET')) {
+                session()->put('url.intended', $request->fullUrl());
+            }
+
             return redirect()->route('customer.profile.complete', $accountSlug);
         }
 

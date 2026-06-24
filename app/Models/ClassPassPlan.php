@@ -80,6 +80,11 @@ class ClassPassPlan extends Model
         return $this->hasMany(CustomerClassPass::class);
     }
 
+    public function customerPurchases(): HasMany
+    {
+        return $this->hasMany(CustomerPurchase::class);
+    }
+
     public function isAvailableFor(ScheduledClass $scheduledClass, bool $requireActivePlan = true): bool
     {
         if (($requireActivePlan && ! $this->is_active) || $scheduledClass->account_id !== $this->account_id) {

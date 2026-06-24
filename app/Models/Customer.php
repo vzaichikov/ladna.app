@@ -45,6 +45,11 @@ class Customer extends Authenticatable
         return $this->hasMany(CustomerClassPass::class);
     }
 
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(CustomerPurchase::class);
+    }
+
     public function rememberTokens(): HasMany
     {
         return $this->hasMany(CustomerRememberToken::class);

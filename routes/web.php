@@ -15,6 +15,7 @@ use App\Http\Controllers\ClassTypeController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LegalPageController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\ProfileController as PlatformProfileController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SystemSettingsController;
+use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\QuickBookingController;
@@ -90,6 +92,7 @@ Route::prefix('{accountSlug}/customer')
             Route::middleware(EnsureCustomerProfileIsComplete::class)->group(function (): void {
                 Route::get('/', [CustomerAuthController::class, 'studioDashboard'])->name('dashboard');
                 Route::get('profile', [CustomerAuthController::class, 'editProfile'])->name('profile.edit');
+                Route::get('purchases/{customerPurchase}/return', CustomerPurchaseReturnController::class)->name('purchases.return');
             });
         });
     });
@@ -262,3 +265,7 @@ Route::get('/{accountSlug}/{locationSlug}/price', [PublicPriceController::class,
     ->name('public.price');
 Route::get('/{accountSlug}/{locationSlug}/price/embed', [PublicPriceController::class, 'embed'])
     ->name('public.price.embed');
+Route::get('/{accountSlug}/{locationSlug}/price/{classPassPlanSlug}/buy', [PublicClassPassPurchaseController::class, 'show'])
+    ->name('public.class-pass-plans.buy');
+Route::post('/{accountSlug}/{locationSlug}/price/{classPassPlanSlug}/buy', [PublicClassPassPurchaseController::class, 'store'])
+    ->name('public.class-pass-plans.purchase');

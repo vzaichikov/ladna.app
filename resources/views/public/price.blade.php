@@ -83,6 +83,12 @@
                                                         <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">{{ $room->name }}</span>
                                                     @endforeach
                                                 </div>
+                                                <div class="mt-5">
+                                                    <x-ui.button :href="route('public.class-pass-plans.buy', [$account->slug, $location->slug, $classPassPlan->slug])" class="w-full">
+                                                        <x-ui.icon name="credit-card" class="h-4 w-4" />
+                                                        {{ __('app.buy') }}
+                                                    </x-ui.button>
+                                                </div>
                                             </article>
                                         @endforeach
                                     </div>
