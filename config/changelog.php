@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.23.1',
+                'date' => '2026-06-24',
+                'title' => 'Mobile quick booking labels',
+                'items' => ['Removed duplicate plus signs from mobile quick booking button labels while keeping the icon and short action text.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.23.0',
                 'date' => '2026-06-24',
                 'title' => 'Opening hours and quick booking availability',
@@ -240,6 +247,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.23.1',
+                'date' => '2026-06-24',
+                'title' => 'Мобільні підписи швидкого запису',
+                'items' => ['Прибрано дубльовані плюси з мобільних кнопок швидкого запису, залишивши іконку та коротку назву дії.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.23.0',
                 'date' => '2026-06-24',
