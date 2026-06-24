@@ -6,6 +6,7 @@ use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
 use App\Support\SlugGenerator;
+use App\Support\StudioDashboardData;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
@@ -68,16 +69,13 @@ class AccountController extends Controller
             ->with('status', __('app.account_created'));
     }
 
-    public function show(Account $account): View
+    public function show(Request $request, Account $account, StudioDashboardData $studioDashboardData): View
     {
         $this->authorize('view', $account);
 
-        $account->load([
-            'locations' => fn ($query) => $query->orderBy('name'),
-        ])->loadCount(['locations', 'rooms', 'activityDirections', 'classTypes', 'trainers', 'customers', 'scheduleSeries', 'scheduledClasses', 'classBookings']);
-
         return view('accounts.show', [
             'account' => $account,
+            ...$studioDashboardData->forAccount($account, $request->user()),
         ]);
     }
 

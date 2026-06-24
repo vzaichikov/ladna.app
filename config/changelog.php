@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.24.0',
+                'date' => '2026-06-24',
+                'title' => 'Role-focused studio dashboards',
+                'items' => ['Reworked the main studio page into an operational owner dashboard with live classes, passes, customers, leads, and load by location and hall, while trainer logins now see their own agenda for today, tomorrow, and the rest of the week.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.23.1',
                 'date' => '2026-06-24',
                 'title' => 'Mobile quick booking labels',
@@ -247,6 +254,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.24.0',
+                'date' => '2026-06-24',
+                'title' => 'Рольові дашборди студії',
+                'items' => ['Перероблено головну сторінку студії в операційний дашборд власника з живими заняттями, абонементами, клієнтами, заявками та завантаженням за локаціями і залами, а тренери тепер бачать власний розклад на сьогодні, завтра і решту тижня.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.23.1',
                 'date' => '2026-06-24',
