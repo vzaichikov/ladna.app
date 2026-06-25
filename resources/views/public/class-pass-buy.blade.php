@@ -54,14 +54,18 @@
 
                     <div class="mt-6 text-4xl font-semibold text-slate-950">{{ $formatMoney($classPassPlan->price_cents, $classPassPlan->currency) }}</div>
 
-                    <dl class="mt-6 grid gap-3 text-sm sm:grid-cols-3">
+                    <dl class="mt-6 grid gap-3 text-sm sm:grid-cols-4">
                         <div class="rounded-lg bg-slate-50 p-3">
                             <dt class="text-slate-500">{{ __('app.sessions_count') }}</dt>
                             <dd class="mt-1 font-semibold text-slate-950">{{ $classPassPlan->sessions_count }}</dd>
                         </div>
                         <div class="rounded-lg bg-slate-50 p-3">
-                            <dt class="text-slate-500">{{ __('app.validity_days') }}</dt>
+                            <dt class="text-slate-500">{{ __('app.validity_days_after_first_class') }}</dt>
                             <dd class="mt-1 font-semibold text-slate-950">{{ $classPassPlan->validity_days }}</dd>
+                        </div>
+                        <div class="rounded-lg bg-slate-50 p-3">
+                            <dt class="text-slate-500">{{ __('app.total_validity_days') }}</dt>
+                            <dd class="mt-1 font-semibold text-slate-950">{{ $classPassPlan->total_validity_days }}</dd>
                         </div>
                         <div class="rounded-lg bg-slate-50 p-3">
                             <dt class="text-slate-500">{{ __('app.location') }}</dt>

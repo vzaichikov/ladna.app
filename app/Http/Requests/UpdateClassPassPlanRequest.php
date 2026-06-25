@@ -55,6 +55,7 @@ class UpdateClassPassPlanRequest extends FormRequest
             'currency' => ['required', Rule::in(config('charm.currencies'))],
             'sessions_count' => ['required', 'integer', 'min:1', 'max:999'],
             'validity_days' => ['required', 'integer', 'min:1', 'max:3650'],
+            'total_validity_days' => ['required', 'integer', 'min:1', 'max:3650'],
             'available_from_time' => ['nullable', 'date_format:H:i'],
             'available_until_time' => ['nullable', 'date_format:H:i'],
             'allows_any_time' => ['nullable', 'boolean'],
@@ -98,6 +99,10 @@ class UpdateClassPassPlanRequest extends FormRequest
                     && $this->filled('available_until_time')
                     && $this->input('available_from_time') >= $this->input('available_until_time')) {
                     $validator->errors()->add('available_until_time', __('app.class_pass_plan_time_window_invalid'));
+                }
+
+                if ((int) $this->input('total_validity_days') < (int) $this->input('validity_days')) {
+                    $validator->errors()->add('total_validity_days', __('app.class_pass_plan_total_validity_too_short'));
                 }
 
                 $this->validateScheduleKindClassTypes($validator);

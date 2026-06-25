@@ -68,7 +68,8 @@
                     <div class="mt-1">{{ __('app.opened_at') }}: {{ $customerClassPass->opened_at?->format('Y-m-d') ?? __('app.not_set') }}</div>
                 </div>
                 <div class="text-sm text-slate-600">
-                    <div>{{ __('app.expires_at') }}: {{ $customerClassPass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</div>
+                    <div>{{ __('app.expires_after_first_class') }}: {{ $customerClassPass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</div>
+                    <div class="mt-1 whitespace-nowrap">{{ __('app.usable_until_at') }}: {{ $customerClassPass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</div>
                     <div class="mt-1">{{ __('app.reserved_sessions') }}: {{ $customerClassPass->reserved_sessions_count }}</div>
                 </div>
                 <div class="flex flex-wrap gap-2 xl:justify-end">

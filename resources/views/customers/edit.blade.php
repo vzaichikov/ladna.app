@@ -72,7 +72,8 @@
                         <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
                             <span>{{ __('app.purchased_at') }}: {{ $customerClassPass->purchased_at?->format('Y-m-d') }}</span>
                             <span>{{ __('app.opened_at') }}: {{ $customerClassPass->opened_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
-                            <span>{{ __('app.expires_at') }}: {{ $customerClassPass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
+                            <span>{{ __('app.expires_after_first_class') }}: {{ $customerClassPass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
+                            <span>{{ __('app.usable_until_at') }}: {{ $customerClassPass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</span>
                         </div>
                         <div class="mt-3">
                             <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />

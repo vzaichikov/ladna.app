@@ -44,9 +44,13 @@
                 @error('opened_at') <span class="crm-help">{{ $message }}</span> @enderror
             </label>
             <label class="block">
-                <span class="crm-label">{{ __('app.expires_at') }}</span>
+                <span class="crm-label">{{ __('app.expires_after_first_class') }}</span>
                 <input name="expires_at" type="datetime-local" value="{{ old('expires_at', $customerClassPass->expires_at?->format('Y-m-d\\TH:i')) }}" class="crm-field">
                 @error('expires_at') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            <label class="block">
+                <span class="crm-label">{{ __('app.usable_until_at') }}</span>
+                <input type="datetime-local" value="{{ $customerClassPass->usableUntilAt()?->format('Y-m-d\\TH:i') }}" class="crm-field" disabled>
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.closed_at') }}</span>

@@ -15,12 +15,16 @@ class IssueCustomerClassPass
 {
     public function __construct(private readonly ClassPassCodeGenerator $codeGenerator) {}
 
+    /**
+     * @param  array{plan_name?: string, plan_slug?: string|null, price_cents?: int, currency?: string, sessions_count?: int, validity_days?: int, total_validity_days?: int}  $snapshot
+     */
     public function execute(
         Account $account,
         Customer $customer,
         ClassPassPlan $classPassPlan,
         string $source = 'manual',
         ?Carbon $purchasedAt = null,
+        array $snapshot = [],
     ): CustomerClassPass {
         if ($customer->account_id !== $account->id || $classPassPlan->account_id !== $account->id) {
             abort(404);
@@ -32,19 +36,24 @@ class IssueCustomerClassPass
             ]);
         }
 
+        $purchasedAt ??= now();
+        $totalValidityDays = (int) ($snapshot['total_validity_days'] ?? $classPassPlan->total_validity_days);
+
         return DB::transaction(fn (): CustomerClassPass => $account->customerClassPasses()->create([
             'customer_id' => $customer->id,
             'class_pass_plan_id' => $classPassPlan->id,
             'code' => $this->codeGenerator->unique(),
             'source' => $source,
             'status' => 'active',
-            'plan_name' => $classPassPlan->name,
-            'plan_slug' => $classPassPlan->slug,
-            'price_cents' => $classPassPlan->price_cents,
-            'currency' => $classPassPlan->currency,
-            'sessions_count' => $classPassPlan->sessions_count,
-            'validity_days' => $classPassPlan->validity_days,
-            'purchased_at' => $purchasedAt ?? now(),
+            'plan_name' => $snapshot['plan_name'] ?? $classPassPlan->name,
+            'plan_slug' => $snapshot['plan_slug'] ?? $classPassPlan->slug,
+            'price_cents' => $snapshot['price_cents'] ?? $classPassPlan->price_cents,
+            'currency' => $snapshot['currency'] ?? $classPassPlan->currency,
+            'sessions_count' => $snapshot['sessions_count'] ?? $classPassPlan->sessions_count,
+            'validity_days' => $snapshot['validity_days'] ?? $classPassPlan->validity_days,
+            'total_validity_days' => $totalValidityDays,
+            'purchased_at' => $purchasedAt,
+            'usable_until_at' => $purchasedAt->copy()->addDays($totalValidityDays),
             'is_active' => true,
         ]));
     }

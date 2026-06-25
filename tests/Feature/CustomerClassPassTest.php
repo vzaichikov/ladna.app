@@ -15,6 +15,7 @@ use App\Models\Trainer;
 use App\Models\TrainerType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class CustomerClassPassTest extends TestCase
@@ -23,6 +24,7 @@ class CustomerClassPassTest extends TestCase
 
     public function test_owner_can_issue_manual_customer_class_pass(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
         [$owner, $account, $customer, $plan] = $this->passContext();
 
         $this->actingAs($owner)
@@ -36,7 +38,13 @@ class CustomerClassPassTest extends TestCase
         $this->assertMatchesRegularExpression('/^[A-Z2-9]{4}-[A-Z2-9]{4}$/', $customerClassPass->code);
         $this->assertSame($plan->price_cents, $customerClassPass->price_cents);
         $this->assertSame($plan->sessions_count, $customerClassPass->sessions_count);
+        $this->assertSame($plan->validity_days, $customerClassPass->validity_days);
+        $this->assertSame($plan->total_validity_days, $customerClassPass->total_validity_days);
+        $this->assertTrue($customerClassPass->purchased_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+        $this->assertTrue($customerClassPass->usable_until_at->equalTo(Carbon::parse('2026-10-18 10:00:00')));
         $this->assertNull($customerClassPass->opened_at);
+
+        Carbon::setTestNow();
     }
 
     public function test_trial_class_pass_is_blocked_after_any_booking(): void
@@ -84,6 +92,8 @@ class CustomerClassPassTest extends TestCase
         $customer = Customer::factory()->for($account)->create(['name' => 'Олена Коваль']);
         $plan = ClassPassPlan::factory()->for($account)->create([
             'sessions_count' => 4,
+            'validity_days' => 30,
+            'total_validity_days' => 120,
             'is_trial' => $isTrial,
         ]);
         $plan->classTypes()->sync([$classType->id]);

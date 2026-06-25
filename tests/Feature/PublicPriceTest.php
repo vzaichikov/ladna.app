@@ -29,6 +29,8 @@ class PublicPriceTest extends TestCase
             ->assertSee('brand/ladna-mark.svg', false)
             ->assertDontSee(__('app.terms_of_service'))
             ->assertSee($plans['group']->name)
+            ->assertSee(__('app.validity_days_after_first_class'))
+            ->assertSee(__('app.total_validity_days'))
             ->assertSee($plans['private']->name)
             ->assertSee($plans['rental']->name)
             ->assertDontSee($plans['inactive']->name);
@@ -44,6 +46,7 @@ class PublicPriceTest extends TestCase
             ->assertJsonPath('data.0.key', 'group_class')
             ->assertJsonPath('data.0.sections.0.plans.0.name', $plans['group']->name)
             ->assertJsonPath('data.0.sections.0.plans.0.schedule_kind', 'group_class')
+            ->assertJsonPath('data.0.sections.0.plans.0.total_validity_days', 120)
             ->assertJsonPath('data.1.key', 'private_lesson')
             ->assertJsonPath('data.1.sections.0.plans.0.schedule_kind', 'private_lesson')
             ->assertJsonPath('data.1.sections.0.plans.0.trainer_types.0.name', 'Top trainer')
@@ -73,6 +76,7 @@ class PublicPriceTest extends TestCase
         $groupPlan = ClassPassPlan::factory()->for($account)->create([
             'name' => 'Group 8 classes',
             'sort_order' => 10,
+            'total_validity_days' => 120,
         ]);
         $groupPlan->classTypes()->sync([$groupType->id]);
 

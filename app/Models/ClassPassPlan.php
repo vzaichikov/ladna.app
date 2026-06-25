@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'schedule_kind', 'name', 'slug', 'description', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'is_trial', 'is_active', 'sort_order'])]
+#[Fillable(['account_id', 'schedule_kind', 'name', 'slug', 'description', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'is_trial', 'is_active', 'sort_order'])]
 class ClassPassPlan extends Model
 {
     /** @use HasFactory<ClassPassPlanFactory> */
@@ -22,6 +22,7 @@ class ClassPassPlan extends Model
         'schedule_kind' => 'group_class',
         'currency' => 'UAH',
         'validity_days' => 30,
+        'total_validity_days' => 180,
         'allows_any_time' => false,
         'is_trial' => false,
         'is_active' => true,

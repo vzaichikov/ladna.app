@@ -319,6 +319,8 @@ class DatabaseSeeder extends Seeder
                 continue;
             }
 
+            $purchasedAt = now()->subDays(2);
+
             CustomerClassPass::updateOrCreate(
                 ['code' => $pass['code']],
                 [
@@ -333,11 +335,13 @@ class DatabaseSeeder extends Seeder
                     'currency' => $classPassPlan->currency,
                     'sessions_count' => $classPassPlan->sessions_count,
                     'validity_days' => $classPassPlan->validity_days,
+                    'total_validity_days' => $classPassPlan->total_validity_days,
                     'reserved_sessions_count' => 0,
                     'used_sessions_count' => 0,
-                    'purchased_at' => now()->subDays(2),
+                    'purchased_at' => $purchasedAt,
                     'opened_at' => null,
                     'expires_at' => null,
+                    'usable_until_at' => $purchasedAt->copy()->addDays($classPassPlan->total_validity_days),
                     'closed_at' => null,
                     'is_active' => true,
                 ],

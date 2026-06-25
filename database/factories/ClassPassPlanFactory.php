@@ -31,6 +31,7 @@ class ClassPassPlanFactory extends Factory
             'currency' => 'UAH',
             'sessions_count' => fake()->randomElement([4, 6, 8, 12, 16]),
             'validity_days' => 30,
+            'total_validity_days' => 180,
             'available_from_time' => null,
             'available_until_time' => null,
             'allows_any_time' => false,

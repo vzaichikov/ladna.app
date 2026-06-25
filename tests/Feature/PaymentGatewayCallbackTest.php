@@ -17,6 +17,7 @@ use App\Support\Payments\LiqPayGateway;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\Payments\WayForPayGateway;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -33,9 +34,14 @@ class PaymentGatewayCallbackTest extends TestCase
 
     public function test_liqpay_success_callback_creates_class_pass_and_logs_callback(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
         [$account, $purchase] = $this->purchase(IntegrationProvider::Liqpay, [
             'public_key' => 'public-key',
             'private_key' => 'private-key',
+        ]);
+        $purchase->classPassPlan->update([
+            'validity_days' => 45,
+            'total_validity_days' => 365,
         ]);
         $data = base64_encode((string) json_encode([
             'order_id' => $purchase->order_id,
@@ -58,9 +64,17 @@ class PaymentGatewayCallbackTest extends TestCase
         $this->assertNotNull($purchase->customer_class_pass_id);
         $this->assertSame(1, CustomerClassPass::whereBelongsTo($purchase->customer)->count());
 
+        $customerClassPass = CustomerClassPass::whereBelongsTo($purchase->customer)->firstOrFail();
+        $this->assertSame($purchase->validity_days, $customerClassPass->validity_days);
+        $this->assertSame($purchase->total_validity_days, $customerClassPass->total_validity_days);
+        $this->assertSame(30, $customerClassPass->validity_days);
+        $this->assertSame(120, $customerClassPass->total_validity_days);
+        $this->assertTrue($customerClassPass->usable_until_at->equalTo(Carbon::parse('2026-10-18 10:00:00')));
+
         $files = Storage::disk('local')->allFiles("payment-callbacks/accounts/{$account->id}/liqpay/{$purchase->order_id}");
 
         $this->assertNotEmpty($files);
+        Carbon::setTestNow();
     }
 
     public function test_liqpay_callback_is_idempotent_and_rejects_bad_signature(): void
@@ -247,6 +261,7 @@ class PaymentGatewayCallbackTest extends TestCase
             'currency' => 'UAH',
             'sessions_count' => 8,
             'validity_days' => 30,
+            'total_validity_days' => 120,
         ]);
         $plan->classTypes()->sync([$classType->id]);
         $customer = Customer::factory()->for($account)->create([

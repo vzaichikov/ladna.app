@@ -301,6 +301,7 @@ class CharmpoleDemoCatalog
             'price_cents' => $priceCents,
             'sessions_count' => $sessionsCount,
             'validity_days' => 30,
+            'total_validity_days' => 180,
             'available_from_time' => null,
             'available_until_time' => $availableUntilTime,
             'allows_any_time' => false,

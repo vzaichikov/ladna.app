@@ -74,7 +74,8 @@
                                 <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
                                     <span>{{ __('app.purchased_at') }}: {{ $pass->purchased_at?->format('Y-m-d') }}</span>
                                     <span>{{ __('app.opened_at') }}: {{ $pass->opened_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
-                                    <span>{{ __('app.expires_at') }}: {{ $pass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
+                                    <span>{{ __('app.expires_after_first_class') }}: {{ $pass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
+                                    <span>{{ __('app.usable_until_at') }}: {{ $pass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</span>
                                 </div>
                             </article>
                         @empty
@@ -133,6 +134,7 @@
                                 <span>{{ __('app.paid_at') }}: {{ $purchase->paid_at?->format('Y-m-d H:i') ?? __('app.not_set') }}</span>
                                 @if ($purchase->customerClassPass)
                                     <span>{{ __('app.class_pass_code') }}: {{ $purchase->customerClassPass->code }}</span>
+                                    <span>{{ __('app.usable_until_at') }}: {{ $purchase->customerClassPass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</span>
                                 @endif
                             </div>
                             @if ($purchase->failure_reason)

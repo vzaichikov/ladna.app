@@ -50,6 +50,11 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - After browser QA, inspect the screenshot visually and use Boost `browser-logs` for recent console errors when relevant.
 - Store QA screenshots, traces, and temporary artifacts in `.codex/output`; keep application source and root frontend dependencies unchanged unless the task requires a real app change.
 
+## Sub-agents
+
+- You may use subagents without asking first when they are useful for repo exploration, code review, test investigation, security review, or parallel research.
+- Subagents must not make file changes unless the user explicitly asked for implementation work. Prefer read-only subagents for discovery and verification.
+
 ## Application Structure & Architecture
 
 - Stick to existing directory structure; don't create new base folders without approval.
@@ -115,12 +120,6 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Use TitleCase for Enum keys: `FavoritePerson`, `BestLake`, `Monthly`.
 - Prefer PHPDoc blocks over inline comments. Only add inline comments for exceptionally complex logic.
 - Use array shape type definitions in PHPDoc blocks.
-
-=== deployments rules ===
-
-# Deployment
-
-- Laravel can be deployed using [Laravel Cloud](https://cloud.laravel.com/), which is the fastest way to deploy and scale production Laravel applications.
 
 === laravel/core rules ===
 

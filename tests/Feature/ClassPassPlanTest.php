@@ -42,6 +42,7 @@ class ClassPassPlanTest extends TestCase
         $this->assertNotNull($classPassPlan);
         $this->assertModelExists($classPassPlan);
         $this->assertSame(150000, $classPassPlan->price_cents);
+        $this->assertSame(180, $classPassPlan->total_validity_days);
         $this->assertFalse($classPassPlan->allows_any_time);
         $this->assertNull($classPassPlan->any_time_addon_price_cents);
         $this->assertTrue($classPassPlan->classTypes()->where('activity_direction_id', $direction->id)->exists());
@@ -176,11 +177,13 @@ class ClassPassPlanTest extends TestCase
                 'name' => 'BASE',
                 'slug' => 'base',
                 'sessions_count' => 8,
+                'total_validity_days' => 365,
             ]))
             ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'group_class']));
 
         $this->assertSame('BASE', $classPassPlan->fresh()->name);
         $this->assertSame(8, $classPassPlan->fresh()->sessions_count);
+        $this->assertSame(365, $classPassPlan->fresh()->total_validity_days);
 
         $this->actingAs($owner)
             ->delete(route('dashboard.accounts.class-pass-plans.destroy', [$account, $classPassPlan]))
@@ -205,17 +208,23 @@ class ClassPassPlanTest extends TestCase
             ->assertOk()
             ->assertSee('START')
             ->assertSee('Pole Dance')
-            ->assertSee($trainerType->name);
+            ->assertSee($trainerType->name)
+            ->assertSee(__('app.validity_after_first_class_short'))
+            ->assertSee(__('app.total_validity_short'));
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.class-pass-plans.create', $account))
             ->assertOk()
-            ->assertSee(__('app.select_all'));
+            ->assertSee(__('app.select_all'))
+            ->assertSee(__('app.validity_days_after_first_class'))
+            ->assertSee(__('app.total_validity_days'));
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.class-pass-plans.edit', [$account, $classPassPlan]))
             ->assertOk()
-            ->assertSee('START');
+            ->assertSee('START')
+            ->assertSee(__('app.validity_days_after_first_class'))
+            ->assertSee(__('app.total_validity_days'));
     }
 
     public function test_class_pass_plan_index_tabs_filter_by_schedule_kind(): void
@@ -347,6 +356,7 @@ class ClassPassPlanTest extends TestCase
             'currency' => 'UAH',
             'sessions_count' => 4,
             'validity_days' => 30,
+            'total_validity_days' => 240,
             'available_from_time' => '09:00',
             'available_until_time' => '12:00',
             'allows_any_time' => true,
@@ -375,6 +385,7 @@ class ClassPassPlanTest extends TestCase
         $this->assertSame('UAH', $copy->currency);
         $this->assertSame(4, $copy->sessions_count);
         $this->assertSame(30, $copy->validity_days);
+        $this->assertSame(240, $copy->total_validity_days);
         $this->assertSame('09:00:00', $copy->available_from_time);
         $this->assertSame('12:00:00', $copy->available_until_time);
         $this->assertTrue($copy->allows_any_time);
@@ -448,6 +459,21 @@ class ClassPassPlanTest extends TestCase
                 'available_until_time' => '12:00',
             ]))
             ->assertSessionHasErrors('available_until_time');
+    }
+
+    public function test_total_validity_cannot_be_shorter_than_validity_after_first_class(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['default_currency' => 'UAH']);
+        $account->addOwner($owner);
+        $direction = ActivityDirection::factory()->for($account)->create();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.class-pass-plans.store', $account), $this->validPayload($direction, [
+                'validity_days' => 60,
+                'total_validity_days' => 30,
+            ]))
+            ->assertSessionHasErrors('total_validity_days');
     }
 
     public function test_class_pass_plan_availability_checks_direction_and_start_time(): void
@@ -535,6 +561,7 @@ class ClassPassPlanTest extends TestCase
         $this->assertSame(11, (clone $query)->where('schedule_kind', 'group_class')->count());
         $this->assertSame(4, (clone $query)->where('schedule_kind', 'private_lesson')->count());
         $this->assertSame(6, (clone $query)->where('schedule_kind', 'room_rental')->count());
+        $this->assertSame(21, (clone $query)->where('total_validity_days', 180)->count());
     }
 
     /**
@@ -555,6 +582,7 @@ class ClassPassPlanTest extends TestCase
             'currency' => 'UAH',
             'sessions_count' => 4,
             'validity_days' => 30,
+            'total_validity_days' => 180,
             'available_from_time' => null,
             'available_until_time' => null,
             'allows_any_time' => '0',

@@ -38,6 +38,7 @@ class CustomerPurchaseFactory extends Factory
             'currency' => 'UAH',
             'sessions_count' => fake()->randomElement([1, 4, 8, 12]),
             'validity_days' => 30,
+            'total_validity_days' => 180,
             'started_at' => now(),
         ];
     }

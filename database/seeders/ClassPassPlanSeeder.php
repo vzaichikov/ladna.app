@@ -53,6 +53,7 @@ class ClassPassPlanSeeder extends Seeder
                     'price_cents',
                     'sessions_count',
                     'validity_days',
+                    'total_validity_days',
                     'available_from_time',
                     'available_until_time',
                     'allows_any_time',

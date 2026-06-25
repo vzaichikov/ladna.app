@@ -59,7 +59,8 @@
                     <div class="mt-1">{{ $classPassPlan->sessions_count }} {{ __('app.classes_count') }}</div>
                 </div>
                 <div class="text-sm text-slate-600">
-                    <div>{{ $classPassPlan->validity_days }} {{ __('app.days') }}</div>
+                    <div>{{ __('app.validity_after_first_class_short') }}: {{ $classPassPlan->validity_days }} {{ __('app.days') }}</div>
+                    <div class="mt-1">{{ __('app.total_validity_short') }}: {{ $classPassPlan->total_validity_days }} {{ __('app.days') }}</div>
                     <div class="mt-1">
                         @if ($fromTime && $untilTime)
                             {{ $fromTime }}-{{ $untilTime }}

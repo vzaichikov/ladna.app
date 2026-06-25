@@ -67,6 +67,7 @@ class CharmpoleCatalogSyncTest extends TestCase
         $this->assertSame(11, $account->classPassPlans()->whereIn('slug', array_keys(CharmpoleDemoCatalog::classPassPlans()))->where('schedule_kind', ScheduleKind::GroupClass->value)->count());
         $this->assertSame(4, $account->classPassPlans()->whereIn('slug', array_keys(CharmpoleDemoCatalog::classPassPlans()))->where('schedule_kind', ScheduleKind::PrivateLesson->value)->count());
         $this->assertSame(6, $account->classPassPlans()->whereIn('slug', array_keys(CharmpoleDemoCatalog::classPassPlans()))->where('schedule_kind', ScheduleKind::RoomRental->value)->count());
+        $this->assertSame(21, $account->classPassPlans()->whereIn('slug', array_keys(CharmpoleDemoCatalog::classPassPlans()))->where('total_validity_days', 180)->count());
 
         $this->assertFalse($account->classTypes()->where('slug', 'legacy-private')->exists());
         $this->assertFalse($account->classPassPlans()->where('slug', 'legacy-plan')->exists());
