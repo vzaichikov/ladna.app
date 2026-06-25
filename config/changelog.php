@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.31.0',
+                'date' => '2026-06-25',
+                'title' => 'Public schedule redesign',
+                'items' => ['Redesigned the public studio schedule with customer login context, active pass summaries, today/tomorrow/next-7-days/30-day filters, full localized dates, day grouping, readable timelines, room/date quick navigation, free-slot counts, disabled booking actions when full, and conditional private lesson and room rental mock actions.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.30.0',
                 'date' => '2026-06-25',
                 'title' => 'Booking cutoff and pass adjustments',
@@ -303,6 +310,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.31.0',
+                'date' => '2026-06-25',
+                'title' => 'Оновлений публічний розклад',
+                'items' => ['Перероблено публічний розклад студії: додано контекст входу клієнта, короткий показ активних абонементів, фільтри сьогодні/завтра/наступні 7 днів/30 днів, повні локалізовані дати, групування за днями, читабельні таймлайни, швидку навігацію за датами і залами, кількість вільних місць, неактивну кнопку запису при повній зайнятості та умовні mock-дії для індивідуального заняття й оренди залу.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.30.0',
                 'date' => '2026-06-25',

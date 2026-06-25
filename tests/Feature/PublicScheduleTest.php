@@ -2,8 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ClassBookingStatus;
+use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\ClassBooking;
+use App\Models\ClassPassPlan;
 use App\Models\ClassType;
+use App\Models\Customer;
+use App\Models\CustomerClassPass;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -49,6 +55,7 @@ class PublicScheduleTest extends TestCase
             ->assertSee('Big Hall')
             ->assertSee(__('app.powered_by_ladna'))
             ->assertSee('brand/ladna-mark.svg', false)
+            ->assertDontSee('Europe/Kyiv')
             ->assertDontSee(__('app.terms_of_service'))
             ->assertDontSee('Private Staff Class')
             ->assertDontSee('Other Location Class');
@@ -123,6 +130,103 @@ class PublicScheduleTest extends TestCase
             ->assertDontSee('Room Rental');
     }
 
+    public function test_public_schedule_manual_mock_buttons_follow_enabled_schedule_kinds(): void
+    {
+        $account = Account::factory()->create([
+            'slug' => 'test-enabled-public-cta-studio',
+            'default_language' => 'uk',
+            'enabled_schedule_kinds' => [
+                ScheduleKind::GroupClass->value,
+                ScheduleKind::PrivateLesson->value,
+            ],
+        ]);
+        Location::factory()->for($account)->create(['slug' => 'main']);
+
+        $this->get('/test-enabled-public-cta-studio/main/schedule')
+            ->assertOk()
+            ->assertSee('Запис на індивідуальне')
+            ->assertDontSee('Орендувати зал');
+    }
+
+    public function test_public_schedule_shows_available_slots_and_disables_full_classes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-full-public-class-studio',
+            'default_language' => 'uk',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Full Public Class',
+            'starts_at' => Carbon::parse('2026-06-18 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-18 11:00:00', 'UTC'),
+            'capacity' => 1,
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+
+        ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass, 'scheduledClass')
+            ->for($customer)
+            ->create(['status' => ClassBookingStatus::Booked->value]);
+
+        $this->get('/test-full-public-class-studio/main/schedule')
+            ->assertOk()
+            ->assertSee(__('app.available_slots'))
+            ->assertSee(__('app.no_available_group_slots'))
+            ->assertSee(__('app.booking_full'))
+            ->assertDontSee(route('customer.studio.login', $account->slug), false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_public_schedule_shows_logged_in_customer_passes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-customer-public-schedule-studio',
+            'default_language' => 'uk',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Customer Visible Class',
+            'starts_at' => Carbon::parse('2026-06-18 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-18 11:00:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Olena Client']);
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create();
+
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($classPassPlan)
+            ->create([
+                'code' => 'ABCD-1234',
+                'plan_name' => 'BASE 8',
+                'sessions_count' => 8,
+                'reserved_sessions_count' => 1,
+                'used_sessions_count' => 2,
+            ]);
+
+        $this->actingAs($customer, 'customer')
+            ->get('/test-customer-public-schedule-studio/main/schedule')
+            ->assertOk()
+            ->assertSee('Ви увійшли як Olena Client')
+            ->assertSee('BASE 8')
+            ->assertSee('ABCD-1234')
+            ->assertSee(route('customer.dashboard', $account->slug), false);
+
+        Carbon::setTestNow();
+    }
+
     public function test_account_default_language_affects_public_schedule_without_session_locale(): void
     {
         $account = Account::factory()->create([
@@ -158,8 +262,39 @@ class PublicScheduleTest extends TestCase
 
         $this->get('/test-ukrainian-studio/main/schedule')
             ->assertOk()
-            ->assertSee('ср, 17 чер')
+            ->assertSee('середа, 17 червня')
             ->assertDontSee('Wed');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_public_schedule_month_period_includes_thirty_days_with_full_date_links(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-25 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-month-public-schedule-studio',
+            'default_language' => 'uk',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Thirty Day Class',
+            'starts_at' => Carbon::parse('2026-07-25 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-07-25 11:00:00', 'UTC'),
+        ]);
+
+        $this->get('/test-month-public-schedule-studio/main/schedule')
+            ->assertOk()
+            ->assertDontSee('Thirty Day Class');
+
+        $this->get('/test-month-public-schedule-studio/main/schedule?period=month')
+            ->assertOk()
+            ->assertSee('Thirty Day Class')
+            ->assertSee('субота, 25 липня');
 
         Carbon::setTestNow();
     }
