@@ -25,8 +25,12 @@
     >
         @yield('content')
 
-        @unless (($hideAppFooter ?? false) || ($isEmbed ?? false))
-            <x-ui.app-footer :version="$applicationVersion" />
+        @unless ($isEmbed ?? false)
+            @hasSection('publicFooter')
+                @yield('publicFooter')
+            @elseif (! ($hideAppFooter ?? false))
+                <x-ui.app-footer :version="$applicationVersion" />
+            @endif
         @endunless
     </body>
 </html>

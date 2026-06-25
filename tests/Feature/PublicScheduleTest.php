@@ -47,6 +47,9 @@ class PublicScheduleTest extends TestCase
             ->assertOk()
             ->assertSee('Pole Beginner')
             ->assertSee('Big Hall')
+            ->assertSee(__('app.powered_by_ladna'))
+            ->assertSee('brand/ladna-mark.svg', false)
+            ->assertDontSee(__('app.terms_of_service'))
             ->assertDontSee('Private Staff Class')
             ->assertDontSee('Other Location Class');
     }

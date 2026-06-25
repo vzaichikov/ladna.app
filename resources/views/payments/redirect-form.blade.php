@@ -2,8 +2,12 @@
 
 @section('title', __('app.redirecting_to_payment').' - '.$account->name)
 
+@section('publicFooter')
+    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+@endsection
+
 @section('content')
-    <main class="flex min-h-screen items-center justify-center bg-canvas px-5 py-8 text-slate-950">
+    <main class="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-canvas px-5 py-8 text-slate-950">
         <section class="w-full max-w-md rounded-xl border border-stone-200 bg-white p-6 text-center shadow-crm">
             <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
                 <x-ui.icon name="credit-card" class="h-6 w-6" />

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.28.1',
+                'date' => '2026-06-25',
+                'title' => 'Public powered footer branding',
+                'items' => ['Unified studio-facing public page footers with a reusable Ladna powered footer, matching the branding print footer and replacing the generic legal-navigation footer on studio public and customer pages.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.28.0',
                 'date' => '2026-06-24',
                 'title' => 'Studio rules and purchase agreement',
@@ -282,6 +289,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.28.1',
+                'date' => '2026-06-25',
+                'title' => 'Брендований footer публічних сторінок',
+                'items' => ['Уніфіковано footer публічних сторінок студії через reusable блок Працює на Ladna, у стилі footer для друку з Мій бренд, і замінено загальний legal-navigation footer на сторінках студії та клієнтського кабінету.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.28.0',
                 'date' => '2026-06-24',

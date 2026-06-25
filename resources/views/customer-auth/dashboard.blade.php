@@ -2,6 +2,10 @@
 
 @section('title', __('app.customer_portal').' - '.$account->name)
 
+@section('publicFooter')
+    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+@endsection
+
 @section('content')
     @php
         $formatMoney = fn (?int $amount, ?string $currency): string => $amount === null ? __('app.not_set') : number_format($amount / 100, 0, '.', ' ').' '.$currency;
@@ -11,7 +15,7 @@
             ->sortByDesc(fn ($booking) => $booking->scheduledClass?->starts_at?->timestamp ?? $booking->created_at?->timestamp ?? 0);
     @endphp
 
-    <main class="min-h-screen bg-canvas px-5 py-8">
+    <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8">
         <section class="mx-auto max-w-6xl">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-4">

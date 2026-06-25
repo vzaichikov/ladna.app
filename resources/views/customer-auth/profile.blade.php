@@ -2,8 +2,12 @@
 
 @section('title', __('app.profile').' - '.$account->name)
 
+@section('publicFooter')
+    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+@endsection
+
 @section('content')
-    <main class="min-h-screen bg-canvas px-5 py-8">
+    <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8">
         <section class="mx-auto max-w-2xl">
             <div class="flex items-center gap-4">
                 <span class="flex h-14 w-14 items-center justify-center rounded-2xl border border-stone-200 bg-white shadow-xs">

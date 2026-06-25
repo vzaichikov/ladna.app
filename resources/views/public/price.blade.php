@@ -2,6 +2,10 @@
 
 @section('title', $account->name.' '.$location->name.' '.strtolower(__('app.price')))
 
+@section('publicFooter')
+    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+@endsection
+
 @section('content')
     @php
         $formatMoney = static function (?int $priceCents, string $currency = 'UAH'): string {
@@ -13,7 +17,7 @@
         };
     @endphp
 
-    <main class="min-h-screen bg-canvas text-slate-950">
+    <main class="min-h-[calc(100vh-8rem)] bg-canvas text-slate-950">
         <section class="mx-auto max-w-6xl px-5 sm:px-8 {{ $isEmbed ? 'py-5' : 'py-10' }}">
             @unless ($isEmbed)
                 <a href="{{ route('home') }}" class="inline-flex items-center gap-3 text-sm font-semibold text-slate-600 hover:text-slate-950">

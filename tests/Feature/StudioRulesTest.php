@@ -66,6 +66,9 @@ class StudioRulesTest extends TestCase
             ->assertOk()
             ->assertSee('Rules Dance Studio')
             ->assertSee('Studio rules')
+            ->assertSee(__('app.powered_by_ladna'))
+            ->assertSee('brand/ladna-mark.svg', false)
+            ->assertDontSee(__('app.terms_of_service'))
             ->assertSee('<h2>Safety</h2>', false)
             ->assertSee('Arrive ten minutes early.');
     }
@@ -95,10 +98,14 @@ class StudioRulesTest extends TestCase
 
         $this->get(route('public.schedule', [$account->slug, $location->slug]))
             ->assertOk()
+            ->assertSee(__('app.powered_by_ladna'))
             ->assertSee(route('public.studio-rules', $account->slug), false);
 
         $this->get(route('customer.studio.login', $account->slug))
             ->assertOk()
+            ->assertSee(__('app.powered_by_ladna'))
+            ->assertSee('brand/ladna-mark.svg', false)
+            ->assertDontSee(__('app.terms_of_service'))
             ->assertSee(route('public.studio-rules', $account->slug), false);
     }
 }
