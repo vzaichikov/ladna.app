@@ -114,6 +114,17 @@ class ScheduleKindRegistry
             ->all();
     }
 
+    /**
+     * @return array<int, ScheduleKind>
+     */
+    public static function oneOffRecordKinds(): array
+    {
+        return collect(self::all())
+            ->map(fn (array $definition): ScheduleKind => $definition['kind'])
+            ->values()
+            ->all();
+    }
+
     public static function routeName(ScheduleKind $scheduleKind, string $action): string
     {
         return 'dashboard.accounts.'.self::get($scheduleKind)['route_name'].'.'.$action;

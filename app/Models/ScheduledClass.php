@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 #[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'schedule_series_id', 'title', 'description', 'starts_at', 'ends_at', 'capacity', 'booking_cutoff_minutes', 'cancellation_cutoff_minutes', 'is_generated', 'is_manually_modified', 'metadata', 'is_public', 'status'])]
@@ -77,6 +78,18 @@ class ScheduledClass extends Model
     public function classBookings(): HasMany
     {
         return $this->hasMany(ClassBooking::class);
+    }
+
+    public function cancellations(): HasMany
+    {
+        return $this->hasMany(ScheduledClassCancellation::class);
+    }
+
+    public function activeCancellation(): HasOne
+    {
+        return $this->hasOne(ScheduledClassCancellation::class)
+            ->whereNull('restored_at')
+            ->latestOfMany();
     }
 
     public function scopePublicUpcoming(Builder $query): Builder

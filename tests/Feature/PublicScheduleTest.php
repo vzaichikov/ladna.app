@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\ClassBookingStatus;
+use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassBooking;
@@ -43,6 +44,12 @@ class PublicScheduleTest extends TestCase
             'ends_at' => now()->addDay()->addHour(),
             'is_public' => false,
         ]);
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
+            'title' => 'Cancelled Public Class',
+            'starts_at' => now()->addDay(),
+            'ends_at' => now()->addDay()->addHour(),
+            'status' => ScheduledClassStatus::Cancelled->value,
+        ]);
         ScheduledClass::factory()->for($account)->for($otherLocation)->for($otherRoom)->for($classType)->for($trainer)->create([
             'title' => 'Other Location Class',
             'starts_at' => now()->addDay(),
@@ -58,6 +65,7 @@ class PublicScheduleTest extends TestCase
             ->assertDontSee('Europe/Kyiv')
             ->assertDontSee(__('app.terms_of_service'))
             ->assertDontSee('Private Staff Class')
+            ->assertDontSee('Cancelled Public Class')
             ->assertDontSee('Other Location Class');
     }
 

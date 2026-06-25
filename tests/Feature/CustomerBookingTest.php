@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\ScheduleSeries;
 use App\Models\Trainer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -57,6 +58,8 @@ class CustomerBookingTest extends TestCase
             ->get(route('dashboard.accounts.scheduled-classes.index', $account))
             ->assertOk()
             ->assertSee('Pole Beginner')
+            ->assertSee(__('app.add_group_class_record'))
+            ->assertDontSee('app.add_group_class_class_record')
             ->assertSee('background-color: #C7F000;', false)
             ->assertSee('border-right-color: #FF00AA;', false)
             ->assertSee('color: #1E293B;', false);
@@ -172,6 +175,67 @@ class CustomerBookingTest extends TestCase
         $this->assertSame($trainer->id, $scheduledClass->trainer_id);
         $this->assertSame(2, $scheduledClass->capacity);
         $this->assertSame('private_lesson', $scheduledClass->metadata['schedule_kind']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_can_create_manual_group_class_record_and_generation_keeps_it(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['capacity' => 12]);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Replacement Group',
+            'schedule_kind' => 'group_class',
+            'default_duration_minutes' => 75,
+            'default_capacity' => 10,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.scheduled-classes.manual.store', [$account, 'group_class']), [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'title' => 'Sick Coach Replacement',
+                'starts_at' => '2026-06-17T15:00',
+                'duration_minutes' => 75,
+                'capacity' => 9,
+            ])
+            ->assertRedirect(route('dashboard.accounts.scheduled-classes.index', $account));
+
+        $manualClass = ScheduledClass::whereBelongsTo($account)
+            ->where('title', 'Sick Coach Replacement')
+            ->firstOrFail();
+
+        $this->assertFalse($manualClass->is_generated);
+        $this->assertTrue($manualClass->is_public);
+        $this->assertNull($manualClass->schedule_series_id);
+        $this->assertSame('group_class', $manualClass->metadata['schedule_kind']);
+        $this->assertSame(9, $manualClass->capacity);
+        $this->assertSame(75, $manualClass->durationMinutes());
+
+        ScheduleSeries::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'weekday' => Carbon::parse('2026-06-17 09:00:00', 'UTC')->isoWeekday(),
+                'start_time' => '12:00',
+                'start_date' => '2026-06-17',
+            ]);
+
+        $this->artisan('schedule:generate')->assertSuccessful();
+
+        $this->assertModelExists($manualClass);
+        $this->assertNotNull($manualClass->fresh());
 
         Carbon::setTestNow();
     }

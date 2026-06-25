@@ -57,7 +57,7 @@ class StoreManualScheduledClassRequest extends FormRequest
                 $account = $this->route('account');
                 $scheduleKind = $this->scheduleKind();
 
-                if (! $scheduleKind || ! in_array($scheduleKind, ScheduleKindRegistry::manualKinds(), true)) {
+                if (! $scheduleKind || ! in_array($scheduleKind, ScheduleKindRegistry::oneOffRecordKinds(), true)) {
                     $validator->errors()->add('class_type_id', __('app.manual_class_format_invalid'));
 
                     return;

@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -44,6 +44,7 @@ class Account extends Model
             'enabled_schedule_kinds' => 'array',
             'schedule_kind_colors' => 'array',
             'opening_hours' => 'array',
+            'class_pass_cancellation_rules' => 'array',
         ];
     }
 
@@ -196,6 +197,37 @@ class Account extends Model
     }
 
     /**
+     * @return array{return_sessions_enabled: bool, return_sessions_count: int, extend_days_enabled: bool, extend_days_count: int}
+     */
+    public static function defaultClassPassCancellationRules(): array
+    {
+        return [
+            'return_sessions_enabled' => false,
+            'return_sessions_count' => 1,
+            'extend_days_enabled' => false,
+            'extend_days_count' => 1,
+        ];
+    }
+
+    /**
+     * @return array{return_sessions_enabled: bool, return_sessions_count: int, extend_days_enabled: bool, extend_days_count: int}
+     */
+    public function classPassCancellationRules(): array
+    {
+        $rules = is_array($this->class_pass_cancellation_rules)
+            ? $this->class_pass_cancellation_rules
+            : [];
+        $defaults = self::defaultClassPassCancellationRules();
+
+        return [
+            'return_sessions_enabled' => filter_var($rules['return_sessions_enabled'] ?? $defaults['return_sessions_enabled'], FILTER_VALIDATE_BOOLEAN),
+            'return_sessions_count' => self::positiveInteger($rules['return_sessions_count'] ?? $defaults['return_sessions_count'], $defaults['return_sessions_count']),
+            'extend_days_enabled' => filter_var($rules['extend_days_enabled'] ?? $defaults['extend_days_enabled'], FILTER_VALIDATE_BOOLEAN),
+            'extend_days_count' => self::positiveInteger($rules['extend_days_count'] ?? $defaults['extend_days_count'], $defaults['extend_days_count']),
+        ];
+    }
+
+    /**
      * @return array<int, array{enabled: bool, opens_at: string, closes_at: string}>
      */
     public function openingHours(): array
@@ -241,6 +273,13 @@ class Account extends Model
         }
 
         return $default;
+    }
+
+    private static function positiveInteger(mixed $value, int $default): int
+    {
+        $integer = filter_var($value, FILTER_VALIDATE_INT);
+
+        return is_int($integer) && $integer > 0 ? $integer : $default;
     }
 
     public function classPassPlans(): HasMany
@@ -324,6 +363,11 @@ class Account extends Model
     public function scheduledClasses(): HasMany
     {
         return $this->hasMany(ScheduledClass::class);
+    }
+
+    public function scheduledClassCancellations(): HasMany
+    {
+        return $this->hasMany(ScheduledClassCancellation::class);
     }
 
     public function subscription(): HasOne

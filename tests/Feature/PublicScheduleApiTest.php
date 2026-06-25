@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Models\ClassType;
 use App\Models\Location;
@@ -36,6 +37,12 @@ class PublicScheduleApiTest extends TestCase
             'ends_at' => now()->addDay()->addHour(),
             'is_public' => false,
         ]);
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
+            'title' => 'Cancelled Class',
+            'starts_at' => now()->addDay(),
+            'ends_at' => now()->addDay()->addHour(),
+            'status' => ScheduledClassStatus::Cancelled->value,
+        ]);
 
         $response = $this->getJson('/api/v1/public/test-api-studio-nastya/test-location-1/schedule');
 
@@ -49,7 +56,8 @@ class PublicScheduleApiTest extends TestCase
             ->assertJsonPath('data.0.trainer.name', 'Nastya')
             ->assertJsonPath('data.0.capacity', 12)
             ->assertJsonPath('data.0.available_spots', null)
-            ->assertJsonMissing(['title' => 'Hidden Class']);
+            ->assertJsonMissing(['title' => 'Hidden Class'])
+            ->assertJsonMissing(['title' => 'Cancelled Class']);
 
         $this->assertStringEndsWith('+03:00', $response->json('data.0.starts_at'));
     }

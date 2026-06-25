@@ -800,8 +800,19 @@ function initManualClassModals() {
 
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+            updateQuickBookingRooms(modal.querySelector('form'));
             modal.querySelector('[data-manual-class-close]')?.focus();
         });
+    });
+
+    document.querySelectorAll('[data-manual-class-modal] [data-quick-booking-location]').forEach((input) => {
+        if (input.dataset.manualClassLocationReady === 'true') {
+            return;
+        }
+
+        input.dataset.manualClassLocationReady = 'true';
+        input.addEventListener('change', () => updateQuickBookingRooms(input.closest('form')));
+        updateQuickBookingRooms(input.closest('form'));
     });
 
     document.querySelectorAll('[data-manual-class-close]').forEach((button) => {
@@ -1048,7 +1059,7 @@ async function submitAsyncForm(form) {
         const payload = await response.json().catch(() => ({}));
 
         if (response.ok) {
-            if (form.matches('[data-confirm-delete]')) {
+            if (form.matches('[data-confirm-delete], [data-confirm-action]')) {
                 const modal = document.getElementById('delete-confirmation-modal');
 
                 if (modal) {
@@ -1175,8 +1186,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const modal = document.getElementById('delete-confirmation-modal');
-    const cancelButton = document.querySelector('[data-confirm-cancel]');
-    const acceptButton = document.querySelector('[data-confirm-accept]');
+    const cancelButton = modal?.querySelector('[data-confirm-cancel]');
+    const acceptButton = modal?.querySelector('[data-confirm-accept]');
+    const confirmTitle = modal?.querySelector('[data-confirm-title]');
+    const confirmBody = modal?.querySelector('[data-confirm-body]');
+
+    const formNeedsConfirmation = (form) => form?.matches('[data-confirm-delete], [data-confirm-action]') && form.dataset.confirmed !== 'true';
+    const applyConfirmationCopy = (form) => {
+        if (confirmTitle) {
+            confirmTitle.textContent = form.dataset.confirmTitle || confirmTitle.dataset.defaultText || confirmTitle.textContent;
+        }
+
+        if (confirmBody) {
+            confirmBody.textContent = form.dataset.confirmBody || confirmBody.dataset.defaultText || confirmBody.textContent;
+        }
+
+        acceptButton.textContent = form.dataset.confirmAccept || acceptButton.dataset.defaultText || acceptButton.textContent;
+    };
 
     if (!modal || !cancelButton || !acceptButton) {
         return;
@@ -1184,15 +1210,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('submit', (event) => {
         const asyncForm = event.target.closest('form[data-async-form]');
-        const isUnconfirmedAsyncDelete = asyncForm?.matches('[data-confirm-delete]') && asyncForm.dataset.confirmed !== 'true';
+        const isUnconfirmedAsyncConfirmation = formNeedsConfirmation(asyncForm);
 
-        if (asyncForm && !isUnconfirmedAsyncDelete) {
+        if (asyncForm && !isUnconfirmedAsyncConfirmation) {
             event.preventDefault();
             submitAsyncForm(asyncForm);
             return;
         }
 
-        const form = event.target.closest('form[data-confirm-delete]');
+        const form = event.target.closest('form[data-confirm-delete], form[data-confirm-action]');
 
         if (!form || form.dataset.confirmed === 'true') {
             return;
@@ -1200,6 +1226,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         event.preventDefault();
         pendingDeleteForm = form;
+        applyConfirmationCopy(form);
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         acceptButton.focus();
