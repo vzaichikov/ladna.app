@@ -13,6 +13,7 @@
             ->sortByDesc(fn ($pass) => ($pass->is_active ? '1' : '0').($pass->opened_at?->timestamp ?? $pass->purchased_at?->timestamp ?? 0));
         $bookings = $customer->classBookings
             ->sortByDesc(fn ($booking) => $booking->scheduledClass?->starts_at?->timestamp ?? $booking->created_at?->timestamp ?? 0);
+        $cancellationWindow = app(\App\Support\ClassBookingCancellationWindow::class);
     @endphp
 
     <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8">
@@ -42,6 +43,11 @@
             @if (session('status'))
                 <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
                     {{ session('status') }}
+                </div>
+            @endif
+            @if ($errors->any())
+                <div class="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                    {{ $errors->first() }}
                 </div>
             @endif
 
@@ -90,6 +96,12 @@
                     </div>
                     <div class="divide-y divide-stone-100">
                         @forelse ($bookings as $booking)
+                            @php
+                                $bookingCancellationLocked = $cancellationWindow->isLockedForBooking($booking);
+                                $canCancelBooking = $booking->status === \App\Enums\ClassBookingStatus::Booked
+                                    && $booking->scheduledClass?->starts_at?->greaterThan(now())
+                                    && ! $bookingCancellationLocked;
+                            @endphp
                             <article class="p-5 text-sm">
                                 <div class="font-semibold text-slate-950">{{ $booking->scheduledClass?->title ?? $booking->scheduledClass?->classType?->name ?? __('app.class_type') }}</div>
                                 <div class="mt-1 text-slate-500">{{ $booking->scheduledClass?->starts_at?->format('Y-m-d H:i') ?? $booking->created_at?->format('Y-m-d H:i') }}</div>
@@ -98,7 +110,17 @@
                                     @if ($booking->classPassReservation?->customerClassPass)
                                         <span class="crm-status-muted">{{ $booking->classPassReservation->customerClassPass->code }}</span>
                                     @endif
+                                    @if ($booking->status === \App\Enums\ClassBookingStatus::Booked && $bookingCancellationLocked)
+                                        <span class="crm-status-warning">{{ __('app.booking_cancellation_cutoff_marker') }}</span>
+                                    @endif
                                 </div>
+                                @if ($canCancelBooking)
+                                    <form method="POST" action="{{ route('customer.bookings.cancel', [$account->slug, $booking]) }}" class="mt-3">
+                                        @csrf
+                                        @method('PATCH')
+                                        <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.cancel_booking') }}</x-ui.button>
+                                    </form>
+                                @endif
                             </article>
                         @empty
                             <x-ui.empty-state :title="__('app.no_bookings')" icon="schedule" class="m-5" />

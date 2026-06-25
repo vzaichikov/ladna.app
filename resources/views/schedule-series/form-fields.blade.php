@@ -64,7 +64,7 @@
     @error('description') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
 
-<div class="grid gap-4 sm:grid-cols-4">
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
     <label class="block">
         <span class="crm-label">{{ __('app.weekday') }}</span>
         <select name="weekday" class="crm-field">
@@ -101,6 +101,11 @@
         <span class="crm-label">{{ __('app.booking_cutoff') }}</span>
         <input name="booking_cutoff_minutes" type="number" min="0" value="{{ old('booking_cutoff_minutes', $scheduleSeries->booking_cutoff_minutes) }}" class="crm-field">
         @error('booking_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+    <label class="block">
+        <span class="crm-label">{{ __('app.cancellation_cutoff') }}</span>
+        <input name="cancellation_cutoff_minutes" type="number" min="0" value="{{ old('cancellation_cutoff_minutes', $scheduleSeries->cancellation_cutoff_minutes) }}" class="crm-field">
+        @error('cancellation_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="block">
         <span class="crm-label">{{ __('app.capacity') }}</span>

@@ -36,6 +36,7 @@ class StoreClassTypeRequest extends FormRequest
             'schedule_kind' => ['nullable', Rule::enum(ScheduleKind::class)],
             'default_duration_minutes' => ['required', 'integer', 'min:15', 'max:480'],
             'booking_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
+            'cancellation_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
             'default_capacity' => ['nullable', 'integer', 'min:1', 'max:999'],
             'is_active' => ['nullable', 'boolean'],
         ];

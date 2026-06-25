@@ -71,7 +71,7 @@ class CustomerBookingTest extends TestCase
         $account->addOwner($owner);
         $location = Location::factory()->for($account)->create();
         $room = Room::factory()->for($account)->for($location)->create();
-        $classType = ClassType::factory()->for($account)->create();
+        $classType = ClassType::factory()->for($account)->create(['cancellation_cutoff_minutes' => null]);
         $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create();
 
         $this->actingAs($owner)
@@ -112,7 +112,7 @@ class CustomerBookingTest extends TestCase
         $account->addOwner($owner);
         $location = Location::factory()->for($account)->create();
         $room = Room::factory()->for($account)->for($location)->create();
-        $classType = ClassType::factory()->for($account)->create();
+        $classType = ClassType::factory()->for($account)->create(['cancellation_cutoff_minutes' => null]);
         $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
             'title' => 'Pole Beginner',
         ]);
@@ -245,7 +245,7 @@ class CustomerBookingTest extends TestCase
         $account->addOwner($owner);
         $location = Location::factory()->for($account)->create();
         $room = Room::factory()->for($account)->for($location)->create();
-        $classType = ClassType::factory()->for($account)->create();
+        $classType = ClassType::factory()->for($account)->create(['cancellation_cutoff_minutes' => null]);
         $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create();
         $customer = Customer::factory()->for($account)->create(['name' => 'Ірина Мельник']);
         $booking = ClassBooking::factory()
@@ -265,6 +265,176 @@ class CustomerBookingTest extends TestCase
         $this->assertModelMissing($booking);
         $this->assertStringContainsString('data-scheduled-class-card', $response->json('card_html'));
         $this->assertStringNotContainsString('Ірина Мельник', $response->json('card_html'));
+    }
+
+    public function test_booking_cutoff_does_not_block_admin_delete_before_cancellation_cutoff(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'booking_cutoff_minutes' => 60,
+            'cancellation_cutoff_minutes' => 10,
+        ]);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'starts_at' => Carbon::parse('2026-06-17 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+
+        $this->actingAs($owner)
+            ->deleteJson(route('dashboard.accounts.bookings.destroy', [$account, $booking]))
+            ->assertOk();
+
+        $this->assertModelMissing($booking);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_cannot_delete_booking_inside_cancellation_cutoff(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['booking_cutoff_minutes' => 5, 'cancellation_cutoff_minutes' => 60]);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Locked Class',
+            'starts_at' => Carbon::parse('2026-06-17 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Locked Client']);
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+
+        $this->actingAs($owner)
+            ->deleteJson(route('dashboard.accounts.bookings.destroy', [$account, $booking]))
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.booking.0', __('app.booking_cancellation_cutoff_locked'));
+
+        $this->assertModelExists($booking);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.booking_cancellation_cutoff_marker'))
+            ->assertDontSee('data-confirm-delete', false)
+            ->assertDontSee('value="DELETE"', false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_cancelled_status_is_blocked_inside_cutoff_but_operational_statuses_remain_allowed(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['booking_cutoff_minutes' => 5, 'cancellation_cutoff_minutes' => 60]);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'starts_at' => Carbon::parse('2026-06-17 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+
+        $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.bookings.update', [$account, $booking]), ['status' => 'cancelled'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.status.0', __('app.booking_cancellation_cutoff_locked'));
+
+        $this->assertSame('booked', $booking->fresh()->status->value);
+
+        $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.bookings.update', [$account, $booking]), ['status' => 'attended'])
+            ->assertOk();
+
+        $this->assertSame('attended', $booking->fresh()->status->value);
+
+        $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.bookings.update', [$account, $booking]), ['status' => 'no_show'])
+            ->assertOk();
+
+        $this->assertSame('no_show', $booking->fresh()->status->value);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_customer_can_cancel_own_upcoming_booking_before_cutoff(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 08:30:00', 'UTC'));
+
+        $account = Account::factory()->create(['timezone' => 'UTC', 'slug' => 'customer-cancel-before-cutoff']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['booking_cutoff_minutes' => 5, 'cancellation_cutoff_minutes' => 60]);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Customer Cancel Class',
+            'starts_at' => Carbon::parse('2026-06-17 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Client One', 'phone' => '+380501111111']);
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee(route('customer.bookings.cancel', [$account->slug, $booking]), false);
+
+        $this->actingAs($customer, 'customer')
+            ->patch(route('customer.bookings.cancel', [$account->slug, $booking]))
+            ->assertRedirect(route('customer.dashboard', $account->slug))
+            ->assertSessionHas('status', __('app.customer_booking_cancelled'));
+
+        $this->assertSame('cancelled', $booking->fresh()->status->value);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_customer_cannot_cancel_booking_inside_cutoff_or_for_another_customer(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:30:00', 'UTC'));
+
+        $account = Account::factory()->create(['timezone' => 'UTC', 'slug' => 'customer-cancel-locked']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['booking_cutoff_minutes' => 5, 'cancellation_cutoff_minutes' => 60]);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Locked Customer Class',
+            'starts_at' => Carbon::parse('2026-06-17 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create(['phone' => '+380501111112']);
+        $otherCustomer = Customer::factory()->for($account)->create(['phone' => '+380501111113']);
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee(__('app.booking_cancellation_cutoff_marker'))
+            ->assertDontSee(route('customer.bookings.cancel', [$account->slug, $booking]), false);
+
+        $this->actingAs($customer, 'customer')
+            ->patch(route('customer.bookings.cancel', [$account->slug, $booking]))
+            ->assertSessionHasErrors('booking');
+
+        $this->assertSame('booked', $booking->fresh()->status->value);
+
+        $this->actingAs($otherCustomer, 'customer')
+            ->patch(route('customer.bookings.cancel', [$account->slug, $booking]))
+            ->assertNotFound();
+
+        Carbon::setTestNow();
     }
 
     public function test_booking_rejects_customer_from_another_account(): void

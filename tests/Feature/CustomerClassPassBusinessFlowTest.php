@@ -93,6 +93,80 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         $this->assertSame(0, $customerClassPass->used_sessions_count);
         $this->assertNull($customerClassPass->opened_at);
         $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->status);
+        $this->assertSame(1, $customerClassPass->remainingSessionsCount());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_cancelled_and_no_show_bookings_consume_sessions_and_normalizer_is_idempotent(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 3);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $bookedClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $cancelledClass = $this->scheduledClass($context, '2026-06-22 10:00:00');
+        $noShowClass = $this->scheduledClass($context, '2026-06-23 10:00:00');
+
+        foreach ([$bookedClass, $cancelledClass, $noShowClass] as $scheduledClass) {
+            $this->actingAs($context['owner'])->post(route('dashboard.accounts.scheduled-classes.bookings.store', [$context['account'], $scheduledClass]), [
+                'customer_id' => $context['customer']->id,
+            ]);
+        }
+
+        $cancelledBooking = $cancelledClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail();
+        $noShowBooking = $noShowClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail();
+
+        $this->actingAs($context['owner'])
+            ->patch(route('dashboard.accounts.bookings.update', [$context['account'], $cancelledBooking]), ['status' => 'cancelled'])
+            ->assertRedirect();
+        $this->actingAs($context['owner'])
+            ->patch(route('dashboard.accounts.bookings.update', [$context['account'], $noShowBooking]), ['status' => 'no_show'])
+            ->assertRedirect();
+
+        app(NormalizeCustomerClassPasses::class)->execute();
+        app(NormalizeCustomerClassPasses::class)->execute();
+
+        $customerClassPass->refresh();
+        $this->assertSame(1, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(2, $customerClassPass->used_sessions_count);
+        $this->assertSame(0, $customerClassPass->remainingSessionsCount());
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $cancelledBooking->classPassReservation()->firstOrFail()->status);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $noShowBooking->classPassReservation()->firstOrFail()->status);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_admin_delete_before_cutoff_releases_reserved_pass_session(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+
+        $context = $this->context();
+        $context['classType']->update(['cancellation_cutoff_minutes' => 60]);
+        $plan = $this->plan($context, sessions: 1);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+
+        $this->actingAs($context['owner'])
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$context['account'], $scheduledClass]), [
+                'customer_id' => $context['customer']->id,
+            ])
+            ->assertCreated();
+
+        $booking = $scheduledClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail();
+        $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->remainingSessionsCount());
+
+        $this->actingAs($context['owner'])
+            ->deleteJson(route('dashboard.accounts.bookings.destroy', [$context['account'], $booking]))
+            ->assertOk();
+
+        $customerClassPass->refresh();
+        $this->assertModelMissing($booking);
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->remainingSessionsCount());
 
         Carbon::setTestNow();
     }

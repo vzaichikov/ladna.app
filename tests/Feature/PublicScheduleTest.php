@@ -62,6 +62,38 @@ class PublicScheduleTest extends TestCase
         $this->get('/test-studio-inactive/inactive-location/schedule')->assertNotFound();
     }
 
+    public function test_public_schedule_hides_booking_action_after_booking_cutoff(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:30:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-booking-cutoff-studio',
+            'default_language' => 'uk',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => 'group_class',
+            'booking_cutoff_minutes' => 60,
+            'cancellation_cutoff_minutes' => 1440,
+        ]);
+
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Closed Booking Class',
+            'starts_at' => Carbon::parse('2026-06-17 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
+        ]);
+
+        $this->get('/test-booking-cutoff-studio/main/schedule')
+            ->assertOk()
+            ->assertSee(__('app.booking_cutoff_closed'))
+            ->assertSee(__('app.booking_closed'))
+            ->assertDontSee(route('customer.studio.login', $account->slug), false);
+
+        Carbon::setTestNow();
+    }
+
     public function test_suspended_account_schedule_is_not_public(): void
     {
         $account = Account::factory()->create(['slug' => 'test-suspended-studio', 'status' => 'suspended']);

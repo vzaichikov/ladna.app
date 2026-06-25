@@ -46,6 +46,7 @@ class StoreManualScheduledClassRequest extends FormRequest
             'duration_minutes' => ['nullable', 'integer', 'min:15', 'max:480'],
             'capacity' => ['nullable', 'integer', 'min:1', 'max:999'],
             'booking_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
+            'cancellation_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
         ];
     }
 

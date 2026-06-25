@@ -71,9 +71,14 @@ class CustomerClassPass extends Model
         return $this->hasMany(CustomerClassPassReservation::class);
     }
 
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(CustomerClassPassAdjustment::class);
+    }
+
     public function remainingSessionsCount(): int
     {
-        return max(0, $this->sessions_count - $this->used_sessions_count);
+        return max(0, $this->sessions_count - $this->used_sessions_count - $this->reserved_sessions_count);
     }
 
     public function availableReservationSessionsCount(): int

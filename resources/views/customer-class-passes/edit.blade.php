@@ -67,4 +67,48 @@
 
         <x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
     </form>
+
+    <div class="mt-6 grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <x-ui.panel>
+            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.add_class_pass_sessions') }}</h2>
+            <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]) }}" class="mt-4 space-y-4">
+                @csrf
+                <label class="block">
+                    <span class="crm-label">{{ __('app.sessions_to_add') }}</span>
+                    <input name="sessions_delta" type="number" min="1" max="500" value="{{ old('sessions_delta', 1) }}" class="crm-field" required>
+                    @error('sessions_delta') <span class="crm-help">{{ $message }}</span> @enderror
+                </label>
+                <label class="block">
+                    <span class="crm-label">{{ __('app.adjustment_reason') }}</span>
+                    <textarea name="reason" rows="4" class="crm-field" required>{{ old('reason') }}</textarea>
+                    @error('reason') <span class="crm-help">{{ $message }}</span> @enderror
+                </label>
+                <x-ui.button type="submit">
+                    <x-ui.icon name="plus" class="h-4 w-4" />
+                    {{ __('app.add_sessions') }}
+                </x-ui.button>
+            </form>
+        </x-ui.panel>
+
+        <x-ui.panel padding="none" class="overflow-hidden">
+            <div class="border-b border-stone-100 px-5 py-4">
+                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_adjustments') }}</h2>
+            </div>
+            @forelse ($customerClassPass->adjustments->sortByDesc('created_at') as $adjustment)
+                <div class="border-b border-stone-100 px-5 py-4 text-sm last:border-b-0">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <div class="font-semibold text-slate-950">+{{ $adjustment->sessions_delta }} {{ __('app.classes_count') }}</div>
+                            <div class="mt-1 text-slate-500">{{ $adjustment->previous_sessions_count }} -> {{ $adjustment->new_sessions_count }}</div>
+                        </div>
+                        <div class="text-slate-500">{{ $adjustment->created_at?->format('Y-m-d H:i') }}</div>
+                    </div>
+                    <div class="mt-2 text-slate-600">{{ $adjustment->reason }}</div>
+                    <div class="mt-1 text-xs text-slate-500">{{ __('app.adjusted_by') }}: {{ $adjustment->user?->name ?? __('app.system') }}</div>
+                </div>
+            @empty
+                <x-ui.empty-state :title="__('app.no_class_pass_adjustments')" icon="class-pass-plans" class="m-5" />
+            @endforelse
+        </x-ui.panel>
+    </div>
 @endsection

@@ -45,6 +45,7 @@ class ManualScheduledClassController extends Controller
             'ends_at' => $endsAt->timezone(config('app.timezone')),
             'capacity' => ($validated['capacity'] ?? null) ?? $classType->default_capacity ?? $room->capacity,
             'booking_cutoff_minutes' => ($validated['booking_cutoff_minutes'] ?? null) ?? $classType->booking_cutoff_minutes,
+            'cancellation_cutoff_minutes' => ($validated['cancellation_cutoff_minutes'] ?? null) ?? $classType->cancellation_cutoff_minutes,
             'is_generated' => false,
             'is_manually_modified' => false,
             'metadata' => [

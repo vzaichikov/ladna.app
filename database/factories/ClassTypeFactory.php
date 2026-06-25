@@ -32,6 +32,7 @@ class ClassTypeFactory extends Factory
             'schedule_kind' => 'group_class',
             'default_duration_minutes' => 60,
             'booking_cutoff_minutes' => 120,
+            'cancellation_cutoff_minutes' => 1440,
             'default_capacity' => 12,
             'is_active' => true,
         ];

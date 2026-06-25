@@ -100,10 +100,17 @@
                         </dl>
 
                         <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p class="text-sm text-slate-500">{{ __('app.book_stub') }}</p>
-                            <x-ui.button :href="route('customer.studio.login', $account->slug)" variant="brand">
-                                {{ __('app.book') }}
-                            </x-ui.button>
+                            @if ($scheduledClass->isBookingOpen())
+                                <p class="text-sm text-slate-500">{{ __('app.book_stub') }}</p>
+                                <x-ui.button :href="route('customer.studio.login', $account->slug)" variant="brand">
+                                    {{ __('app.book') }}
+                                </x-ui.button>
+                            @else
+                                <p class="text-sm font-semibold text-amber-700">{{ __('app.booking_cutoff_closed') }}</p>
+                                <span class="inline-flex rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">
+                                    {{ __('app.booking_closed') }}
+                                </span>
+                            @endif
                         </div>
                     </article>
                 @empty

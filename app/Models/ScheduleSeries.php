@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'title', 'description', 'weekday', 'start_time', 'start_date', 'end_date', 'capacity', 'duration_minutes', 'booking_cutoff_minutes', 'status', 'generated_until', 'generated_at'])]
+#[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'title', 'description', 'weekday', 'start_time', 'start_date', 'end_date', 'capacity', 'duration_minutes', 'booking_cutoff_minutes', 'cancellation_cutoff_minutes', 'status', 'generated_until', 'generated_at'])]
 class ScheduleSeries extends Model
 {
     /** @use HasFactory<ScheduleSeriesFactory> */
@@ -87,5 +87,10 @@ class ScheduleSeries extends Model
     public function effectiveBookingCutoffMinutes(): ?int
     {
         return $this->booking_cutoff_minutes ?? $this->classType->booking_cutoff_minutes;
+    }
+
+    public function effectiveCancellationCutoffMinutes(): ?int
+    {
+        return $this->cancellation_cutoff_minutes ?? $this->classType->cancellation_cutoff_minutes;
     }
 }

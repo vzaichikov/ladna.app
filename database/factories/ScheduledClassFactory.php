@@ -38,6 +38,7 @@ class ScheduledClassFactory extends Factory
             'ends_at' => (clone $startsAt)->modify('+1 hour'),
             'capacity' => fake()->numberBetween(8, 16),
             'booking_cutoff_minutes' => null,
+            'cancellation_cutoff_minutes' => null,
             'is_generated' => false,
             'is_manually_modified' => false,
             'metadata' => null,

@@ -15,7 +15,7 @@ class ReserveCustomerClassPassForBooking
     {
         $classBooking->loadMissing(['scheduledClass.classType', 'scheduledClass.trainer', 'scheduledClass.room', 'customer']);
 
-        if (! in_array($classBooking->status, [ClassBookingStatus::Booked, ClassBookingStatus::Attended], true)) {
+        if (! in_array($classBooking->status, ClassBookingStatus::cases(), true)) {
             return null;
         }
 

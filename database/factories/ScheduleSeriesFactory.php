@@ -38,6 +38,7 @@ class ScheduleSeriesFactory extends Factory
             'capacity' => null,
             'duration_minutes' => null,
             'booking_cutoff_minutes' => null,
+            'cancellation_cutoff_minutes' => null,
             'status' => ScheduleSeriesStatus::Active->value,
         ];
     }

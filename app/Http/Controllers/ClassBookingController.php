@@ -12,6 +12,7 @@ use App\Http\Requests\UpdateClassBookingStatusRequest;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
+use App\Support\ClassBookingCancellationWindow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,11 +61,16 @@ class ClassBookingController extends Controller
             ->with('status', __('app.booking_created'));
     }
 
-    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking, ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking): RedirectResponse|JsonResponse
+    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking, ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking, ClassBookingCancellationWindow $cancellationWindow): RedirectResponse|JsonResponse
     {
         $this->ensureBookingBelongsToAccount($account, $classBooking);
 
         $status = ClassBookingStatus::from($request->validated('status'));
+
+        if ($status === ClassBookingStatus::Cancelled && $cancellationWindow->isLockedForBooking($classBooking)) {
+            return $this->bookingBlockedResponse($request, __('app.booking_cancellation_cutoff_locked'), 'status');
+        }
+
         $classBooking->update([
             'status' => $status->value,
             'attended_at' => $status === ClassBookingStatus::Attended ? now() : null,
@@ -80,10 +86,14 @@ class ClassBookingController extends Controller
             ->with('status', __('app.booking_updated'));
     }
 
-    public function destroy(Request $request, Account $account, ClassBooking $classBooking, NormalizeCustomerClassPasses $normalizeCustomerClassPasses): RedirectResponse|JsonResponse
+    public function destroy(Request $request, Account $account, ClassBooking $classBooking, NormalizeCustomerClassPasses $normalizeCustomerClassPasses, ClassBookingCancellationWindow $cancellationWindow): RedirectResponse|JsonResponse
     {
         $this->authorize('manageBookings', $account);
         $this->ensureBookingBelongsToAccount($account, $classBooking);
+
+        if ($cancellationWindow->isLockedForBooking($classBooking)) {
+            return $this->bookingBlockedResponse($request, __('app.booking_cancellation_cutoff_locked'), 'booking');
+        }
 
         $scheduledClass = $classBooking->scheduledClass;
         $classBooking->loadMissing('classPassReservation.customerClassPass');
@@ -151,5 +161,19 @@ class ClassBookingController extends Controller
                 'bookingStatuses' => ClassBookingStatus::cases(),
             ])->render(),
         ], $status);
+    }
+
+    private function bookingBlockedResponse(Request $request, string $message, string $field): RedirectResponse|JsonResponse
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'errors' => [
+                    $field => [$message],
+                ],
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return back()->withErrors([$field => $message])->withInput();
     }
 }

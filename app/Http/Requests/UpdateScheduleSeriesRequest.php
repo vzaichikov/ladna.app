@@ -47,6 +47,7 @@ class UpdateScheduleSeriesRequest extends FormRequest
             'capacity' => ['nullable', 'integer', 'min:1', 'max:999'],
             'duration_minutes' => ['nullable', 'integer', 'min:15', 'max:480'],
             'booking_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
+            'cancellation_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
             'status' => ['required', Rule::enum(ScheduleSeriesStatus::class)],
         ];
     }

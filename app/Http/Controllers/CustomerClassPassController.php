@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\AddCustomerClassPassSessions;
 use App\Actions\IssueCustomerClassPass;
+use App\Http\Requests\StoreCustomerClassPassAdjustmentRequest;
 use App\Http\Requests\StoreCustomerClassPassRequest;
 use App\Http\Requests\UpdateCustomerClassPassRequest;
 use App\Models\Account;
@@ -73,7 +75,7 @@ class CustomerClassPassController extends Controller
         $this->ensureBelongsToAccount($account, $customerClassPass);
         $this->ensureCurrentUserOwns($account);
 
-        $customerClassPass->load(['customer', 'classPassPlan.classTypes', 'reservations.classBooking.scheduledClass']);
+        $customerClassPass->load(['customer', 'classPassPlan.classTypes', 'reservations.classBooking.scheduledClass', 'adjustments.user']);
 
         return view('customer-class-passes.edit', [
             'account' => $account,
@@ -102,6 +104,24 @@ class CustomerClassPassController extends Controller
 
         return redirect()->route('dashboard.accounts.customer-class-passes.index', $account)
             ->with('status', __('app.customer_class_pass_updated'));
+    }
+
+    public function storeAdjustment(StoreCustomerClassPassAdjustmentRequest $request, Account $account, CustomerClassPass $customerClassPass, AddCustomerClassPassSessions $addCustomerClassPassSessions): RedirectResponse
+    {
+        $this->ensureBelongsToAccount($account, $customerClassPass);
+        $this->ensureCurrentUserOwns($account);
+
+        $addCustomerClassPassSessions->execute(
+            $account,
+            $customerClassPass,
+            $request->user(),
+            (int) $request->validated('sessions_delta'),
+            (string) $request->validated('reason'),
+        );
+
+        return redirect()
+            ->route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])
+            ->with('status', __('app.customer_class_pass_adjusted'));
     }
 
     private function ensureBelongsToAccount(Account $account, CustomerClassPass $customerClassPass): void

@@ -69,6 +69,7 @@ class GenerateScheduleOccurrences
                     'ends_at' => $endsAt->timezone(config('app.timezone')),
                     'capacity' => $series->effectiveCapacity(),
                     'booking_cutoff_minutes' => $series->effectiveBookingCutoffMinutes(),
+                    'cancellation_cutoff_minutes' => $series->effectiveCancellationCutoffMinutes(),
                     'is_generated' => true,
                     'is_manually_modified' => false,
                     'is_public' => $series->classType->schedule_kind === ScheduleKind::GroupClass,

@@ -116,6 +116,7 @@ class CreateQuickBooking
             'ends_at' => $endsAt->timezone(config('app.timezone')),
             'capacity' => $classType->default_capacity ?? $room->capacity,
             'booking_cutoff_minutes' => $classType->booking_cutoff_minutes,
+            'cancellation_cutoff_minutes' => $classType->cancellation_cutoff_minutes,
             'is_generated' => false,
             'is_manually_modified' => false,
             'metadata' => [

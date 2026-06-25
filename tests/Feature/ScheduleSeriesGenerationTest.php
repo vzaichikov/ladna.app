@@ -30,6 +30,7 @@ class ScheduleSeriesGenerationTest extends TestCase
             'schedule_kind' => 'group_class',
             'default_duration_minutes' => 60,
             'booking_cutoff_minutes' => 180,
+            'cancellation_cutoff_minutes' => 1440,
             'default_capacity' => 10,
         ]);
         $trainer = Trainer::factory()->for($account)->create();
@@ -39,6 +40,7 @@ class ScheduleSeriesGenerationTest extends TestCase
             'start_date' => now('Europe/Kyiv')->toDateString(),
             'duration_minutes' => 90,
             'booking_cutoff_minutes' => 60,
+            'cancellation_cutoff_minutes' => 720,
         ]);
 
         $created = app(GenerateScheduleOccurrences::class)->execute($series);
@@ -50,6 +52,7 @@ class ScheduleSeriesGenerationTest extends TestCase
         $this->assertSame($trainer->id, $firstClass->trainer_id);
         $this->assertSame(90, $firstClass->durationMinutes());
         $this->assertSame(60, $firstClass->booking_cutoff_minutes);
+        $this->assertSame(720, $firstClass->cancellation_cutoff_minutes);
         $this->assertSame(10, $firstClass->capacity);
         $this->assertSame('2026-07-01', $series->fresh()->generated_until->toDateString());
 
@@ -64,12 +67,14 @@ class ScheduleSeriesGenerationTest extends TestCase
         $classType = ClassType::factory()->for($account)->create([
             'default_duration_minutes' => 75,
             'booking_cutoff_minutes' => 240,
+            'cancellation_cutoff_minutes' => 1440,
             'default_capacity' => null,
         ]);
         $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->create([
             'weekday' => now()->isoWeekday(),
             'duration_minutes' => null,
             'booking_cutoff_minutes' => null,
+            'cancellation_cutoff_minutes' => null,
             'capacity' => null,
         ]);
 
@@ -78,6 +83,7 @@ class ScheduleSeriesGenerationTest extends TestCase
         $firstClass = $series->scheduledClasses()->firstOrFail();
         $this->assertSame(75, $firstClass->durationMinutes());
         $this->assertSame(240, $firstClass->booking_cutoff_minutes);
+        $this->assertSame(1440, $firstClass->cancellation_cutoff_minutes);
         $this->assertSame(8, $firstClass->capacity);
     }
 

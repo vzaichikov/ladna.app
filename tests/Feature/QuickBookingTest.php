@@ -37,6 +37,7 @@ class QuickBookingTest extends TestCase
             'schedule_kind' => ScheduleKind::PrivateLesson->value,
             'default_duration_minutes' => 75,
             'booking_cutoff_minutes' => 15,
+            'cancellation_cutoff_minutes' => 1440,
             'default_capacity' => 2,
         ]);
         $trainer = Trainer::factory()->for($account)->create();
@@ -66,6 +67,7 @@ class QuickBookingTest extends TestCase
         $this->assertSame($trainer->id, $scheduledClass->trainer_id);
         $this->assertSame(2, $scheduledClass->capacity);
         $this->assertSame(15, $scheduledClass->booking_cutoff_minutes);
+        $this->assertSame(1440, $scheduledClass->cancellation_cutoff_minutes);
         $this->assertSame('quick_booking', $scheduledClass->metadata['source']);
         $this->assertSame(75, (int) $scheduledClass->starts_at->diffInMinutes($scheduledClass->ends_at));
         $this->assertSame($scheduledClass->id, $booking->scheduled_class_id);

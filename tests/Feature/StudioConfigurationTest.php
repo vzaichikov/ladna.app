@@ -181,6 +181,7 @@ class StudioConfigurationTest extends TestCase
                 'schedule_kind' => 'private_lesson',
                 'default_duration_minutes' => 60,
                 'booking_cutoff_minutes' => 120,
+                'cancellation_cutoff_minutes' => 1440,
                 'default_capacity' => 12,
                 'is_active' => '1',
             ])
@@ -192,6 +193,7 @@ class StudioConfigurationTest extends TestCase
 
         $this->assertSame('#123ABC', $classType->color);
         $this->assertSame('group_class', $classType->schedule_kind->value);
+        $this->assertSame(1440, $classType->cancellation_cutoff_minutes);
     }
 
     public function test_class_type_sections_are_split_by_schedule_kind(): void
@@ -398,6 +400,7 @@ class StudioConfigurationTest extends TestCase
                 'color' => '#123ABC',
                 'default_duration_minutes' => 75,
                 'booking_cutoff_minutes' => 60,
+                'cancellation_cutoff_minutes' => 1440,
                 'default_capacity' => 8,
                 'is_active' => false,
             ]);
@@ -430,6 +433,7 @@ class StudioConfigurationTest extends TestCase
         $this->assertSame('#123ABC', $copiedClassType->color);
         $this->assertSame(75, $copiedClassType->default_duration_minutes);
         $this->assertSame(60, $copiedClassType->booking_cutoff_minutes);
+        $this->assertSame(1440, $copiedClassType->cancellation_cutoff_minutes);
         $this->assertSame(8, $copiedClassType->default_capacity);
         $this->assertFalse($copiedClassType->is_active);
     }

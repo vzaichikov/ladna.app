@@ -11,6 +11,7 @@
     $directionColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
     $formatColor = $account->scheduleKindColor($scheduleKind);
     $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
+    $cancellationWindow = app(\App\Support\ClassBookingCancellationWindow::class);
 @endphp
 
 <article id="scheduled-class-{{ $scheduledClass->id }}" data-scheduled-class-card data-scheduled-class-id="{{ $scheduledClass->id }}" class="scroll-mt-24 rounded-xl border border-stone-200 bg-white p-4 shadow-xs" style="border-top-color: {{ $directionColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;">
@@ -71,6 +72,7 @@
         <div class="mt-4 space-y-2">
             @foreach ($scheduledClass->classBookings as $booking)
                 @php
+                    $bookingCancellationLocked = $cancellationWindow->isLockedForClass($scheduledClass);
                     $bookingStatusClass = match ($booking->status->value) {
                         'attended' => 'crm-status-active',
                         'cancelled', 'no_show' => 'crm-status-danger',
@@ -91,9 +93,14 @@
                                     <span>{{ $reservedPass->remainingSessionsCount() }} {{ __('app.remaining_sessions_short') }}</span>
                                     <span>{{ __('app.'.$booking->classPassReservation->status->value) }}</span>
                                 </div>
-                            @elseif (in_array($booking->status->value, ['booked', 'attended'], true))
+                            @elseif (in_array($booking->status->value, ['booked', 'attended', 'cancelled', 'no_show'], true))
                                 <div class="mt-2 inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
                                     {{ __('app.no_matching_class_pass_alert') }}
+                                </div>
+                            @endif
+                            @if ($bookingCancellationLocked)
+                                <div class="mt-2 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
+                                    {{ __('app.booking_cancellation_cutoff_marker') }}
                                 </div>
                             @endif
                         </div>
@@ -106,6 +113,7 @@
                                 @method('PATCH')
                                 <select name="status" class="crm-field mt-0 min-w-36">
                                     @foreach ($bookingStatuses as $status)
+                                        @continue($bookingCancellationLocked && $status === \App\Enums\ClassBookingStatus::Cancelled && $booking->status !== $status)
                                         <option value="{{ $status->value }}" @selected($booking->status === $status)>{{ __('app.'.$status->value) }}</option>
                                     @endforeach
                                 </select>
@@ -113,11 +121,13 @@
                             </form>
                         @endcan
                         @can('manageBookings', $account)
+                            @unless ($bookingCancellationLocked)
                             <form method="POST" action="{{ route('dashboard.accounts.bookings.destroy', [$account, $booking]) }}" data-async-form data-confirm-delete>
                                 @csrf
                                 @method('DELETE')
                                 <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                             </form>
+                            @endunless
                         @endcan
                     </div>
                 </div>

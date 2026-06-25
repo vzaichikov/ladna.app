@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'activity_direction_id', 'name', 'slug', 'description', 'color', 'schedule_kind', 'default_duration_minutes', 'booking_cutoff_minutes', 'default_capacity', 'is_active'])]
+#[Fillable(['account_id', 'activity_direction_id', 'name', 'slug', 'description', 'color', 'schedule_kind', 'default_duration_minutes', 'booking_cutoff_minutes', 'cancellation_cutoff_minutes', 'default_capacity', 'is_active'])]
 class ClassType extends Model
 {
     /** @use HasFactory<ClassTypeFactory> */
@@ -21,6 +21,7 @@ class ClassType extends Model
     protected $attributes = [
         'schedule_kind' => 'group_class',
         'default_duration_minutes' => 60,
+        'cancellation_cutoff_minutes' => 1440,
         'is_active' => true,
     ];
 

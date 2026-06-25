@@ -13,5 +13,5 @@ Schedule::command('schedule:generate')
     ->withoutOverlapping();
 
 Schedule::command('class-passes:normalize')
-    ->daily()
-    ->withoutOverlapping();
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(30);

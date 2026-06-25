@@ -13,6 +13,7 @@ use App\Http\Controllers\ClassBookingController;
 use App\Http\Controllers\ClassPassPlanController;
 use App\Http\Controllers\ClassTypeController;
 use App\Http\Controllers\CustomerAuthController;
+use App\Http\Controllers\CustomerBookingCancellationController;
 use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
@@ -98,6 +99,7 @@ Route::prefix('{accountSlug}/customer')
             Route::middleware(EnsureCustomerProfileIsComplete::class)->group(function (): void {
                 Route::get('/', [CustomerAuthController::class, 'studioDashboard'])->name('dashboard');
                 Route::get('profile', [CustomerAuthController::class, 'editProfile'])->name('profile.edit');
+                Route::patch('bookings/{classBooking}/cancel', CustomerBookingCancellationController::class)->name('bookings.cancel');
                 Route::get('purchases/{customerPurchase}/return', CustomerPurchaseReturnController::class)->name('purchases.return');
             });
         });
@@ -215,6 +217,8 @@ Route::middleware('auth:web')
             ->name('accounts.customer-class-passes.edit');
         Route::put('accounts/{account}/customer-class-passes/{customerClassPass}', [CustomerClassPassController::class, 'update'])
             ->name('accounts.customer-class-passes.update');
+        Route::post('accounts/{account}/customer-class-passes/{customerClassPass}/adjustments', [CustomerClassPassController::class, 'storeAdjustment'])
+            ->name('accounts.customer-class-passes.adjustments.store');
         Route::resource('accounts.trainers', TrainerController::class)
             ->except(['show'])
             ->scoped();

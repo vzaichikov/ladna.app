@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.30.0',
+                'date' => '2026-06-25',
+                'title' => 'Booking cutoff and pass adjustments',
+                'items' => ['Separated public booking cutoff from cancellation lock rules, added 24-hour default cancellation locks for class formats, series, and scheduled classes, protected admin and customer cancellations inside that window, made cancelled and no-show bookings consume pass sessions, and added owner-only manual session compensation with audit history.'],
+                'meta' => 'Release commit pending.',
+            ],
+            [
                 'version' => '0.29.0',
                 'date' => '2026-06-25',
                 'title' => 'Class pass total validity',
@@ -296,6 +303,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.30.0',
+                'date' => '2026-06-25',
+                'title' => 'Обмеження запису та коригування абонементів',
+                'items' => ['Розділено закриття публічного запису і блокування скасування, додано стандартне 24-годинне блокування скасувань для форматів занять, серій і конкретних занять, захищено скасування в адмінці та кабінеті клієнта в межах цього вікна, зроблено скасовані та неявлені записи такими, що списують заняття з абонемента, і додано ручну компенсацію занять власником із журналом історії.'],
+                'meta' => 'Релізний коміт очікується.',
+            ],
             [
                 'version' => '0.29.0',
                 'date' => '2026-06-25',

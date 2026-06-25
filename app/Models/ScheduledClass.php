@@ -13,8 +13,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
-#[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'schedule_series_id', 'title', 'description', 'starts_at', 'ends_at', 'capacity', 'booking_cutoff_minutes', 'is_generated', 'is_manually_modified', 'metadata', 'is_public', 'status'])]
+#[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'schedule_series_id', 'title', 'description', 'starts_at', 'ends_at', 'capacity', 'booking_cutoff_minutes', 'cancellation_cutoff_minutes', 'is_generated', 'is_manually_modified', 'metadata', 'is_public', 'status'])]
 class ScheduledClass extends Model
 {
     /** @use HasFactory<ScheduledClassFactory> */
@@ -121,5 +122,28 @@ class ScheduledClass extends Model
     public function effectiveBookingCutoffMinutes(): ?int
     {
         return $this->booking_cutoff_minutes ?? $this->classType?->booking_cutoff_minutes;
+    }
+
+    public function bookingClosesAt(): ?Carbon
+    {
+        $cutoffMinutes = $this->effectiveBookingCutoffMinutes();
+
+        if ($cutoffMinutes === null) {
+            return null;
+        }
+
+        return $this->starts_at->copy()->subMinutes((int) $cutoffMinutes);
+    }
+
+    public function isBookingOpen(): bool
+    {
+        $closesAt = $this->bookingClosesAt();
+
+        return $closesAt === null || now()->lessThan($closesAt);
+    }
+
+    public function effectiveCancellationCutoffMinutes(): ?int
+    {
+        return $this->cancellation_cutoff_minutes ?? $this->classType?->cancellation_cutoff_minutes;
     }
 }
