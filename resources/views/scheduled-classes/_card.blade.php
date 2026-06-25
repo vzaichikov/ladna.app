@@ -12,6 +12,15 @@
     $formatColor = $account->scheduleKindColor($scheduleKind);
     $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
     $cancellationWindow = app(\App\Support\ClassBookingCancellationWindow::class);
+    $isCancelledClass = $scheduledClass->status === \App\Enums\ScheduledClassStatus::Cancelled;
+    $activeCancellation = $scheduledClass->activeCancellation;
+    $cancellationEffects = $activeCancellation?->effects ?? collect();
+    $cancellationBookingsCount = $cancellationEffects->count();
+    $releasedReservationsCount = $cancellationEffects->where('new_reservation_status', \App\Enums\CustomerClassPassReservationStatus::Released->value)->count();
+    $addedSessionsCount = $cancellationEffects->sum('added_sessions_count');
+    $addedDaysPassesCount = $cancellationEffects->where('added_validity_days', '>', 0)->count();
+    $addedDaysCount = (int) ($cancellationEffects->max('added_validity_days') ?? 0);
+    $canManageClassCancellation = auth()->user()?->can('manageSchedule', $account) && auth()->user()?->can('manageBookings', $account);
 @endphp
 
 <article id="scheduled-class-{{ $scheduledClass->id }}" data-scheduled-class-card data-scheduled-class-id="{{ $scheduledClass->id }}" class="scroll-mt-24 rounded-xl border border-stone-200 bg-white p-4 shadow-xs" style="border-top-color: {{ $directionColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;">
@@ -26,7 +35,40 @@
                 </span>
             @endif
         </div>
-        <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>
+        <div class="flex shrink-0 items-center gap-2">
+            <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>
+            @if ($canManageClassCancellation)
+                @if (! $isCancelledClass)
+                    <form
+                        method="POST"
+                        action="{{ route('dashboard.accounts.scheduled-classes.cancel', [$account, $scheduledClass]) }}"
+                        data-async-form
+                        data-confirm-action
+                        data-confirm-title="{{ __('app.confirm_cancel_scheduled_class_title') }}"
+                        data-confirm-body="{{ __('app.confirm_cancel_scheduled_class_body') }}"
+                        data-confirm-accept="{{ __('app.cancel_class') }}"
+                    >
+                        @csrf
+                        @method('PATCH')
+                        <x-ui.action-button type="submit" variant="danger" icon="ban" :label="__('app.cancel_class')" />
+                    </form>
+                @else
+                    <form
+                        method="POST"
+                        action="{{ route('dashboard.accounts.scheduled-classes.restore', [$account, $scheduledClass]) }}"
+                        data-async-form
+                        data-confirm-action
+                        data-confirm-title="{{ __('app.confirm_restore_scheduled_class_title') }}"
+                        data-confirm-body="{{ __('app.confirm_restore_scheduled_class_body') }}"
+                        data-confirm-accept="{{ __('app.restore_class') }}"
+                    >
+                        @csrf
+                        @method('PATCH')
+                        <x-ui.action-button type="submit" variant="secondary" icon="rotate-ccw" :label="__('app.restore_class')" />
+                    </form>
+                @endif
+            @endif
+        </div>
     </div>
 
     <dl class="mt-4 grid gap-3 text-sm">
@@ -40,7 +82,26 @@
         </div>
     </dl>
 
+    @if ($activeCancellation)
+        <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+            <div class="font-semibold">{{ __('app.scheduled_class_cancelled_by_studio') }}</div>
+            <div class="mt-1 flex flex-wrap gap-2 text-xs font-semibold">
+                <span class="rounded-md bg-white/70 px-2 py-1">{{ trans_choice('app.cancelled_bookings_count', $cancellationBookingsCount, ['count' => $cancellationBookingsCount]) }}</span>
+                @if ($releasedReservationsCount > 0)
+                    <span class="rounded-md bg-white/70 px-2 py-1">{{ trans_choice('app.released_pass_reservations_count', $releasedReservationsCount, ['count' => $releasedReservationsCount]) }}</span>
+                @endif
+                @if ($addedSessionsCount > 0)
+                    <span class="rounded-md bg-white/70 px-2 py-1">{{ trans_choice('app.added_sessions_count', $addedSessionsCount, ['count' => $addedSessionsCount]) }}</span>
+                @endif
+                @if ($addedDaysPassesCount > 0)
+                    <span class="rounded-md bg-white/70 px-2 py-1">{{ trans_choice('app.extended_passes_days_count', $addedDaysPassesCount, ['passes' => $addedDaysPassesCount, 'days' => $addedDaysCount]) }}</span>
+                @endif
+            </div>
+        </div>
+    @endif
+
     @can('manageBookings', $account)
+        @unless ($isCancelledClass)
         <form method="POST" action="{{ route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]) }}" data-async-form class="mt-4 space-y-3 rounded-lg bg-slate-50 p-3">
             @csrf
             <div
@@ -66,6 +127,7 @@
             <input name="notes" class="crm-field" placeholder="{{ __('app.notes') }}">
             <x-ui.button type="submit" class="w-full">{{ __('app.add_booking') }}</x-ui.button>
         </form>
+        @endunless
     @endcan
 
     @if ($scheduledClass->classBookings->isNotEmpty())
@@ -84,7 +146,7 @@
                         <div class="min-w-0">
                             <div class="font-semibold text-slate-950">{{ $booking->customer->name }}</div>
                             <div class="mt-1 text-slate-500">{{ $booking->customer->phone ?? $booking->customer->email ?? __('app.no_contact') }}</div>
-                            @if ($booking->classPassReservation?->customerClassPass && $booking->classPassReservation->status->value !== 'released')
+                            @if ($booking->classPassReservation?->customerClassPass && ($booking->classPassReservation->status->value !== 'released' || $isCancelledClass))
                                 @php
                                     $reservedPass = $booking->classPassReservation->customerClassPass;
                                 @endphp
@@ -93,7 +155,7 @@
                                     <span>{{ $reservedPass->remainingSessionsCount() }} {{ __('app.remaining_sessions_short') }}</span>
                                     <span>{{ __('app.'.$booking->classPassReservation->status->value) }}</span>
                                 </div>
-                            @elseif (in_array($booking->status->value, ['booked', 'attended', 'cancelled', 'no_show'], true))
+                            @elseif (! $isCancelledClass && in_array($booking->status->value, ['booked', 'attended', 'cancelled', 'no_show'], true))
                                 <div class="mt-2 inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
                                     {{ __('app.no_matching_class_pass_alert') }}
                                 </div>
@@ -106,6 +168,7 @@
                         </div>
                         <span class="{{ $bookingStatusClass }}">{{ __('app.'.$booking->status->value) }}</span>
                     </div>
+                    @unless ($isCancelledClass)
                     <div class="mt-3 flex flex-wrap gap-2">
                         @can('markAttendance', $account)
                             <form method="POST" action="{{ route('dashboard.accounts.bookings.update', [$account, $booking]) }}" data-async-form class="flex grow gap-2">
@@ -130,6 +193,7 @@
                             @endunless
                         @endcan
                     </div>
+                    @endunless
                 </div>
             @endforeach
         </div>

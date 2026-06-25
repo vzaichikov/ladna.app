@@ -48,6 +48,29 @@ class HelpPagesTest extends TestCase
             ->assertSee('навіть тоді, коли заняття ще залишилися або клієнт ще не прийшов на перше заняття', false);
     }
 
+    public function test_help_documents_studio_class_cancellation_flow(): void
+    {
+        $this->get(route('help.show', 'schedule', false))
+            ->assertStatus(200)
+            ->assertSee('Як скасувати заняття з вини студії', false)
+            ->assertSee('Скасувати заняття', false)
+            ->assertSee('Відновити заняття', false)
+            ->assertSee('Як створити заняття на заміну', false)
+            ->assertSee('assets/help/screenshots/class-cancellation-confirm.png', false)
+            ->assertSee('assets/help/screenshots/manual-class-modal.png', false);
+
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('Що стається з абонементом, коли заняття скасовує студія', false)
+            ->assertSee('Повернути X занять', false)
+            ->assertSee('Додати X днів', false);
+
+        $this->get(route('help.show', 'start', false))
+            ->assertStatus(200)
+            ->assertSee('assets/help/screenshots/class-pass-rules.png', false)
+            ->assertSee('Правила абонементів', false);
+    }
+
     public function test_public_footer_links_to_help(): void
     {
         $response = $this->get('/');

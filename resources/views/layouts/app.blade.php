@@ -406,10 +406,10 @@
                         <x-ui.icon name="trash" class="h-5 w-5" />
                     </div>
                     <div>
-                        <h2 id="delete-confirmation-title" class="text-lg font-semibold text-slate-950">
+                        <h2 id="delete-confirmation-title" class="text-lg font-semibold text-slate-950" data-confirm-title data-default-text="{{ __('app.confirm_delete_title') }}">
                             {{ __('app.confirm_delete_title') }}
                         </h2>
-                        <p class="mt-2 text-sm leading-6 text-slate-500">
+                        <p class="mt-2 text-sm leading-6 text-slate-500" data-confirm-body data-default-text="{{ __('app.confirm_delete_body') }}">
                             {{ __('app.confirm_delete_body') }}
                         </p>
                     </div>
@@ -419,7 +419,7 @@
                     <x-ui.button type="button" variant="secondary" data-confirm-cancel>
                         {{ __('app.cancel') }}
                     </x-ui.button>
-                    <x-ui.button type="button" variant="danger" data-confirm-accept>
+                    <x-ui.button type="button" variant="danger" data-confirm-accept data-default-text="{{ __('app.delete') }}">
                         {{ __('app.delete') }}
                     </x-ui.button>
                 </div>

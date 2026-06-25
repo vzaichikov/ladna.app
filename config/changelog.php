@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.32.0',
+                'date' => '2026-06-25',
+                'title' => 'Studio class cancellation workflow',
+                'items' => ['Added reversible studio-initiated class cancellation for group classes, private lessons, and room rentals, with studio-wide pass compensation rules, public schedule hiding for cancelled classes, one-off replacement class creation from the calendar, and updated owner help documentation.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.31.0',
                 'date' => '2026-06-25',
                 'title' => 'Public schedule redesign',
@@ -310,6 +317,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.32.0',
+                'date' => '2026-06-25',
+                'title' => 'Скасування занять студією',
+                'items' => ['Додано зворотне скасування занять з ініціативи студії для групових занять, індивідуальних занять і оренди, загальні правила компенсації абонементів, приховування скасованих занять у публічному розкладі, створення разових замін із календаря та оновлену допомогу для власниць.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.31.0',
                 'date' => '2026-06-25',

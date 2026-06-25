@@ -15,7 +15,7 @@ class ManualScheduledClassController extends Controller
     public function store(StoreManualScheduledClassRequest $request, Account $account, string $scheduleKind): RedirectResponse
     {
         $scheduleKind = ScheduleKind::tryFrom($scheduleKind);
-        abort_unless($scheduleKind && in_array($scheduleKind, ScheduleKindRegistry::manualKinds(), true), 404);
+        abort_unless($scheduleKind && in_array($scheduleKind, ScheduleKindRegistry::oneOffRecordKinds(), true), 404);
         abort_unless($account->hasScheduleKindEnabled($scheduleKind), 404);
 
         $validated = $request->validated();

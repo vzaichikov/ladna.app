@@ -9,6 +9,15 @@
             <p class="crm-page-copy">{{ __('app.generated_classes_copy') }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
+            @can('manageSchedule', $account)
+                @foreach ($quickBookingOptions as $quickBookingOption)
+                    <x-ui.button type="button" variant="secondary" data-manual-class-open="{{ $quickBookingOption['kind']->value }}">
+                        <x-ui.icon name="calendar" class="h-4 w-4" />
+                        <span class="hidden sm:inline">{{ __('app.add_'.$quickBookingOption['kind']->value.'_record') }}</span>
+                        <span class="sm:hidden">{{ __('app.add_class_record_short') }}</span>
+                    </x-ui.button>
+                @endforeach
+            @endcan
             @foreach ($quickBookingOptions as $quickBookingOption)
                 <x-ui.button type="button" data-quick-booking-open="{{ $quickBookingOption['kind']->value }}">
                     <x-ui.icon name="plus" class="h-4 w-4" />
@@ -120,5 +129,12 @@
         'groupAvailabilityUrl' => $groupAvailabilityUrl,
         'manualAvailabilityUrl' => $manualAvailabilityUrl,
         'customerSearchUrl' => $customerSearchUrl,
+    ])
+
+    @include('scheduled-classes._manual-class-modals', [
+        'quickBookingOptions' => $quickBookingOptions,
+        'quickBookingLocations' => $quickBookingLocations,
+        'quickBookingRooms' => $quickBookingRooms,
+        'quickBookingTrainers' => $quickBookingTrainers,
     ])
 @endsection

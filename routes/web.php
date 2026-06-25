@@ -37,6 +37,7 @@ use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\PublicStudioRulesController;
 use App\Http\Controllers\QuickBookingController;
 use App\Http\Controllers\RoomController;
+use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
 use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\StudioSettingsController;
@@ -259,6 +260,10 @@ Route::middleware('auth:web')
             ->name('accounts.quick-bookings.manual-availability');
         Route::post('accounts/{account}/scheduled-classes/manual/{scheduleKind}', [ManualScheduledClassController::class, 'store'])
             ->name('accounts.scheduled-classes.manual.store');
+        Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/cancel', [ScheduledClassCancellationController::class, 'cancel'])
+            ->name('accounts.scheduled-classes.cancel');
+        Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/restore', [ScheduledClassCancellationController::class, 'restore'])
+            ->name('accounts.scheduled-classes.restore');
         Route::post('accounts/{account}/scheduled-classes/{scheduledClass}/bookings', [ClassBookingController::class, 'store'])
             ->name('accounts.scheduled-classes.bookings.store');
         Route::patch('accounts/{account}/bookings/{classBooking}', [ClassBookingController::class, 'update'])

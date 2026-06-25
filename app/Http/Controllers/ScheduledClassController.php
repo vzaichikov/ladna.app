@@ -41,6 +41,7 @@ class ScheduledClassController extends Controller
                 'classType.activityDirection',
                 'trainer',
                 'scheduleSeries',
+                'activeCancellation.effects',
                 'classBookings.customer',
                 'classBookings.classPassReservation.customerClassPass.classPassPlan',
             ])
