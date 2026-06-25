@@ -2,6 +2,10 @@
 
 @section('title', __('app.customer_login').' - '.$account->name)
 
+@section('publicFooter')
+    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+@endsection
+
 @push('head')
     @if ($methods->google)
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@500&amp;display=swap">
@@ -13,7 +17,7 @@
 @endpush
 
 @section('content')
-    <main class="min-h-screen bg-canvas px-5 py-8 sm:py-12">
+    <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8 sm:py-12">
         <section class="mx-auto grid w-full max-w-5xl gap-8 lg:grid-cols-[0.9fr_1fr] lg:items-center">
             <div class="space-y-5">
                 <div class="flex items-center gap-4">

@@ -2,6 +2,10 @@
 
 @section('title', __('app.buy_class_pass').' - '.$classPassPlan->name)
 
+@section('publicFooter')
+    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+@endsection
+
 @section('content')
     @php
         $formatMoney = static fn (?int $priceCents, string $currency = 'UAH'): string => $priceCents === null
@@ -9,7 +13,7 @@
             : number_format($priceCents / 100, $priceCents % 100 === 0 ? 0 : 2, '.', ' ').' '.$currency;
     @endphp
 
-    <main class="min-h-screen bg-canvas px-5 py-8 text-slate-950">
+    <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8 text-slate-950">
         <section class="mx-auto max-w-5xl">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-4">
@@ -105,8 +109,6 @@
                     </div>
                 </aside>
             </section>
-
-            <div class="mt-8 text-center text-xs font-semibold text-slate-400">{{ __('app.powered_by_ladna') }}</div>
         </section>
     </main>
 @endsection

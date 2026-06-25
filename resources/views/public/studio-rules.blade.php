@@ -2,8 +2,12 @@
 
 @section('title', __('app.studio_rules').' - '.$account->name)
 
+@section('publicFooter')
+    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+@endsection
+
 @section('content')
-    <main class="min-h-screen bg-canvas text-slate-950">
+    <main class="min-h-[calc(100vh-8rem)] bg-canvas text-slate-950">
         <section class="mx-auto max-w-4xl px-5 py-8 sm:px-8 sm:py-12">
             <header class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-4">
@@ -37,8 +41,6 @@
                     </x-ui.empty-state>
                 @endif
             </article>
-
-            <div class="mt-8 text-center text-xs font-semibold text-slate-400">{{ __('app.powered_by_ladna') }}</div>
         </section>
     </main>
 @endsection
