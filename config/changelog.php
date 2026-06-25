@@ -24,14 +24,14 @@ return [
                 'date' => '2026-06-25',
                 'title' => 'Booking cutoff and pass adjustments',
                 'items' => ['Separated public booking cutoff from cancellation lock rules, added 24-hour default cancellation locks for class formats, series, and scheduled classes, protected admin and customer cancellations inside that window, made cancelled and no-show bookings consume pass sessions, and added owner-only manual session compensation with audit history.'],
-                'meta' => 'Release commit pending.',
+                'meta' => 'Release commit.',
             ],
             [
                 'version' => '0.29.0',
                 'date' => '2026-06-25',
                 'title' => 'Class pass total validity',
                 'items' => ['Added a total class-pass validity window from purchase, shown alongside the existing first-class validity in admin, customer, public price, checkout, help, and public price API flows. Expired total validity now closes passes through the normalizer and releases remaining reserved pass rows without deleting bookings.'],
-                'meta' => 'Release commit pending.',
+                'meta' => 'Release commit.',
             ],
             [
                 'version' => '0.28.1',
@@ -308,14 +308,14 @@ return [
                 'date' => '2026-06-25',
                 'title' => 'Обмеження запису та коригування абонементів',
                 'items' => ['Розділено закриття публічного запису і блокування скасування, додано стандартне 24-годинне блокування скасувань для форматів занять, серій і конкретних занять, захищено скасування в адмінці та кабінеті клієнта в межах цього вікна, зроблено скасовані та неявлені записи такими, що списують заняття з абонемента, і додано ручну компенсацію занять власником із журналом історії.'],
-                'meta' => 'Релізний коміт очікується.',
+                'meta' => 'Релізний коміт.',
             ],
             [
                 'version' => '0.29.0',
                 'date' => '2026-06-25',
                 'title' => 'Загальний строк дії абонементів',
                 'items' => ['Додано загальний строк дії абонемента від покупки, який показується разом зі строком від першого заняття в адмінці, кабінеті клієнта, публічному прайсі, купівлі, довідці та public price API. Коли загальний строк минає, нормалізація закриває абонемент як прострочений і звільняє залишкові резерви без видалення записів.'],
-                'meta' => 'Релізний коміт очікується.',
+                'meta' => 'Релізний коміт.',
             ],
             [
                 'version' => '0.28.1',
