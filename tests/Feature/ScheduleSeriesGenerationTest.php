@@ -3,10 +3,14 @@
 namespace Tests\Feature;
 
 use App\Actions\GenerateScheduleOccurrences;
+use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\ClassBooking;
 use App\Models\ClassType;
+use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Room;
+use App\Models\ScheduledClass;
 use App\Models\ScheduleSeries;
 use App\Models\Trainer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -85,6 +89,154 @@ class ScheduleSeriesGenerationTest extends TestCase
         $this->assertSame(240, $firstClass->booking_cutoff_minutes);
         $this->assertSame(1440, $firstClass->cancellation_cutoff_minutes);
         $this->assertSame(8, $firstClass->capacity);
+    }
+
+    public function test_regeneration_syncs_booked_future_generated_capacity_without_deleting_bookings(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['capacity' => 12]);
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'default_capacity' => 8,
+        ]);
+        $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'weekday' => now('UTC')->isoWeekday(),
+            'start_time' => '14:00',
+            'start_date' => now('UTC')->toDateString(),
+            'capacity' => 8,
+        ]);
+        $generator = app(GenerateScheduleOccurrences::class);
+
+        $this->assertSame(3, $generator->execute($series));
+        $bookedClass = $series->scheduledClasses()->orderBy('starts_at')->firstOrFail();
+        $firstCustomer = Customer::factory()->for($account)->create();
+        $secondCustomer = Customer::factory()->for($account)->create();
+        ClassBooking::factory()->for($account)->for($bookedClass, 'scheduledClass')->for($firstCustomer)->create([
+            'booked_by_user_id' => null,
+        ]);
+        ClassBooking::factory()->for($account)->for($bookedClass, 'scheduledClass')->for($secondCustomer)->create([
+            'booked_by_user_id' => null,
+        ]);
+
+        $series->forceFill(['capacity' => 1])->save();
+
+        $this->assertSame(0, $generator->execute($series->refresh()));
+        $bookedClass->refresh();
+
+        $this->assertSame(1, $bookedClass->capacity);
+        $this->assertSame(2, $bookedClass->classBookings()->count());
+        $this->assertSame(3, $series->scheduledClasses()->where('is_generated', true)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_regeneration_deletes_only_empty_untouched_stale_generated_classes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $privateClassType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+        ]);
+        $rentalClassType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+        ]);
+        $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'weekday' => now('UTC')->isoWeekday(),
+            'start_time' => '14:00',
+            'start_date' => now('UTC')->toDateString(),
+        ]);
+        $generator = app(GenerateScheduleOccurrences::class);
+        $generator->execute($series);
+        $generatedClasses = $series->scheduledClasses()->orderBy('starts_at')->get();
+        $bookedStaleClass = $generatedClasses->firstOrFail();
+        $emptyStaleClass = $generatedClasses->skip(1)->firstOrFail();
+        $customer = Customer::factory()->for($account)->create();
+        ClassBooking::factory()->for($account)->for($bookedStaleClass, 'scheduledClass')->for($customer)->create([
+            'booked_by_user_id' => null,
+        ]);
+        $manualClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'schedule_series_id' => null,
+            'is_generated' => false,
+            'starts_at' => '2026-06-18 12:00:00',
+            'ends_at' => '2026-06-18 13:00:00',
+        ]);
+        $privateClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($privateClassType)->create([
+            'schedule_series_id' => null,
+            'is_generated' => false,
+            'starts_at' => '2026-06-18 14:00:00',
+            'ends_at' => '2026-06-18 15:00:00',
+        ]);
+        $rentalClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($rentalClassType)->create([
+            'schedule_series_id' => null,
+            'is_generated' => false,
+            'starts_at' => '2026-06-18 16:00:00',
+            'ends_at' => '2026-06-18 17:00:00',
+        ]);
+
+        $series->forceFill(['start_time' => '16:00'])->save();
+
+        $this->assertSame(3, $generator->execute($series->refresh()));
+
+        $this->assertNotNull($bookedStaleClass->fresh());
+        $this->assertSame(1, $bookedStaleClass->classBookings()->count());
+        $this->assertNull($emptyStaleClass->fresh());
+        $this->assertModelExists($manualClass);
+        $this->assertModelExists($privateClass);
+        $this->assertModelExists($rentalClass);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_regeneration_preserves_manually_modified_generated_occurrence_without_duplicate(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'default_capacity' => 8,
+        ]);
+        $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'weekday' => now('UTC')->isoWeekday(),
+            'start_time' => '14:00',
+            'start_date' => now('UTC')->toDateString(),
+            'capacity' => 8,
+        ]);
+        $generator = app(GenerateScheduleOccurrences::class);
+        $generator->execute($series);
+        $customClass = $series->scheduledClasses()->orderBy('starts_at')->firstOrFail();
+        $customClass->forceFill([
+            'capacity' => 5,
+            'is_manually_modified' => true,
+        ])->save();
+        $customStartsAt = $customClass->starts_at->toDateTimeString();
+
+        $series->forceFill(['capacity' => 2])->save();
+        $generator->execute($series->refresh());
+
+        $customClass->refresh();
+        $syncedClass = $series->scheduledClasses()
+            ->whereKeyNot($customClass->id)
+            ->orderBy('starts_at')
+            ->firstOrFail();
+
+        $this->assertTrue($customClass->is_manually_modified);
+        $this->assertSame(5, $customClass->capacity);
+        $this->assertSame(1, $series->scheduledClasses()->where('starts_at', $customStartsAt)->count());
+        $this->assertSame(2, $syncedClass->capacity);
+
+        Carbon::setTestNow();
     }
 
     public function test_schedule_generate_is_registered_in_laravel_scheduler(): void
