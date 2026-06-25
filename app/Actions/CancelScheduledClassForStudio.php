@@ -38,6 +38,12 @@ class CancelScheduledClassForStudio
                 ]);
             }
 
+            if (! $lockedClass->isStudioCancellationOpen()) {
+                throw ValidationException::withMessages([
+                    'scheduled_class' => __('app.scheduled_class_cancel_unavailable'),
+                ]);
+            }
+
             $rules = $account->fresh()?->classPassCancellationRules() ?? Account::defaultClassPassCancellationRules();
             $cancellation = $lockedClass->cancellations()->create([
                 'account_id' => $account->id,

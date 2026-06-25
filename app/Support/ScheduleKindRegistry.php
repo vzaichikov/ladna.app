@@ -119,10 +119,7 @@ class ScheduleKindRegistry
      */
     public static function oneOffRecordKinds(): array
     {
-        return collect(self::all())
-            ->map(fn (array $definition): ScheduleKind => $definition['kind'])
-            ->values()
-            ->all();
+        return [ScheduleKind::GroupClass];
     }
 
     public static function routeName(ScheduleKind $scheduleKind, string $action): string

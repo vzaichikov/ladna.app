@@ -54,15 +54,32 @@ class CustomerBookingTest extends TestCase
                 'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
             ]);
 
-        $this->actingAs($owner)
-            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account));
+
+        $response
             ->assertOk()
             ->assertSee('Pole Beginner')
-            ->assertSee(__('app.add_group_class_record'))
+            ->assertSee(__('app.add_class_record_short'))
+            ->assertSee(route('dashboard.accounts.schedule-series.index', $account), false)
+            ->assertSee('data-schedule-secondary-actions', false)
+            ->assertSee('data-schedule-primary-actions', false)
+            ->assertSee('data-manual-class-open="group_class"', false)
+            ->assertDontSee('data-manual-class-open="private_lesson"', false)
+            ->assertDontSee('data-manual-class-open="room_rental"', false)
             ->assertDontSee('app.add_group_class_class_record')
             ->assertSee('background-color: #C7F000;', false)
             ->assertSee('border-right-color: #FF00AA;', false)
             ->assertSee('color: #1E293B;', false);
+
+        $this->assertLessThan(
+            mb_strpos($response->getContent(), 'data-manual-class-open="group_class"'),
+            mb_strpos($response->getContent(), route('dashboard.accounts.schedule-series.index', $account))
+        );
+        $this->assertLessThan(
+            mb_strpos($response->getContent(), 'data-schedule-primary-actions'),
+            mb_strpos($response->getContent(), 'data-schedule-secondary-actions')
+        );
 
         Carbon::setTestNow();
     }
@@ -139,7 +156,7 @@ class CustomerBookingTest extends TestCase
         $this->assertSame('First visit', $booking->notes);
     }
 
-    public function test_owner_can_create_manual_private_lesson_record(): void
+    public function test_owner_cannot_create_standalone_private_lesson_or_rental_record(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
 
@@ -148,9 +165,15 @@ class CustomerBookingTest extends TestCase
         $account->addOwner($owner);
         $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create(['capacity' => 6]);
-        $classType = ClassType::factory()->for($account)->create([
+        $privateClassType = ClassType::factory()->for($account)->create([
             'name' => 'Private 60',
             'schedule_kind' => 'private_lesson',
+            'default_duration_minutes' => 60,
+            'default_capacity' => 2,
+        ]);
+        $rentalClassType = ClassType::factory()->for($account)->create([
+            'name' => 'Rental 60',
+            'schedule_kind' => 'room_rental',
             'default_duration_minutes' => 60,
             'default_capacity' => 2,
         ]);
@@ -160,21 +183,24 @@ class CustomerBookingTest extends TestCase
             ->post(route('dashboard.accounts.scheduled-classes.manual.store', [$account, 'private_lesson']), [
                 'location_id' => $location->id,
                 'room_id' => $room->id,
-                'class_type_id' => $classType->id,
+                'class_type_id' => $privateClassType->id,
                 'trainer_id' => $trainer->id,
                 'starts_at' => '2026-06-17T15:00',
                 'capacity' => 2,
             ])
-            ->assertRedirect(route('dashboard.accounts.scheduled-classes.index', $account));
+            ->assertSessionHasErrors(['class_type_id' => __('app.manual_class_format_invalid')]);
 
-        $scheduledClass = ScheduledClass::whereBelongsTo($account)->where('title', 'Private 60')->firstOrFail();
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.scheduled-classes.manual.store', [$account, 'room_rental']), [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $rentalClassType->id,
+                'starts_at' => '2026-06-17T15:00',
+                'capacity' => 2,
+            ])
+            ->assertSessionHasErrors(['class_type_id' => __('app.manual_class_format_invalid')]);
 
-        $this->assertFalse($scheduledClass->is_generated);
-        $this->assertFalse($scheduledClass->is_public);
-        $this->assertNull($scheduledClass->schedule_series_id);
-        $this->assertSame($trainer->id, $scheduledClass->trainer_id);
-        $this->assertSame(2, $scheduledClass->capacity);
-        $this->assertSame('private_lesson', $scheduledClass->metadata['schedule_kind']);
+        $this->assertFalse(ScheduledClass::whereBelongsTo($account)->whereIn('title', ['Private 60', 'Rental 60'])->exists());
 
         Carbon::setTestNow();
     }

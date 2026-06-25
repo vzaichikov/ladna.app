@@ -38,6 +38,14 @@ class ScheduledClassCancellationTest extends TestCase
             ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'pass_rules']))
             ->assertOk()
             ->assertSee(__('app.class_pass_rules'))
+            ->assertSee(__('app.return_cancelled_class_sessions'))
+            ->assertSee(__('app.return_cancelled_class_sessions_help'))
+            ->assertSee(__('app.bonus_sessions_count'))
+            ->assertSee(__('app.extend_cancelled_class_pass_days'))
+            ->assertSee(__('app.extend_cancelled_class_pass_days_help'))
+            ->assertSee(__('app.extension_days_count'))
+            ->assertDontSee('Return X classes')
+            ->assertDontSee('Повернути X занять')
             ->assertSee('class_pass_cancellation_rules_present', false);
 
         $this->actingAs($owner)
@@ -255,6 +263,8 @@ class ScheduledClassCancellationTest extends TestCase
 
     public function test_cancel_affects_only_booked_active_bookings(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00', 'UTC'));
+
         $context = $this->context([
             'class_pass_cancellation_rules' => [
                 'return_sessions_enabled' => true,
@@ -284,6 +294,87 @@ class ScheduledClassCancellationTest extends TestCase
         $this->assertSame(ClassBookingStatus::NoShow, $noShowBooking->fresh()->status);
         $this->assertSame(ClassBookingStatus::Cancelled, $alreadyCancelledBooking->fresh()->status);
         $this->assertSame(1, ScheduledClassCancellation::whereBelongsTo($scheduledClass, 'scheduledClass')->firstOrFail()->effects()->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_can_cancel_class_until_one_hour_after_finish(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-21 09:00:00', 'UTC'));
+
+        $context = $this->context([
+            'class_pass_cancellation_rules' => [
+                'return_sessions_enabled' => true,
+                'return_sessions_count' => 1,
+                'extend_days_enabled' => false,
+                'extend_days_count' => 1,
+            ],
+        ]);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $this->bookCustomer($context, $scheduledClass);
+
+        Carbon::setTestNow(Carbon::parse('2026-06-21 12:00:00', 'UTC'));
+
+        $this->actingAs($context['owner'])
+            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $scheduledClass]))
+            ->assertOk();
+
+        $this->assertSame(ScheduledClassStatus::Cancelled, $scheduledClass->fresh()->status);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_cannot_cancel_class_more_than_one_hour_after_finish(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-21 09:00:00', 'UTC'));
+
+        $context = $this->context([
+            'class_pass_cancellation_rules' => [
+                'return_sessions_enabled' => true,
+                'return_sessions_count' => 2,
+                'extend_days_enabled' => true,
+                'extend_days_count' => 5,
+            ],
+        ]);
+        $customerClassPass = $this->issuePass($context, sessions: 1);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $booking = $this->bookCustomer($context, $scheduledClass);
+        $reservation = $booking->classPassReservation()->firstOrFail();
+
+        Carbon::setTestNow(Carbon::parse('2026-06-21 12:01:00', 'UTC'));
+
+        $this->actingAs($context['owner'])
+            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $scheduledClass]))
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.scheduled_class.0', __('app.scheduled_class_cancel_unavailable'));
+
+        $this->assertSame(ScheduledClassStatus::Scheduled, $scheduledClass->fresh()->status);
+        $this->assertSame(ClassBookingStatus::Booked, $booking->fresh()->status);
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->fresh()->status);
+        $this->assertSame(1, $customerClassPass->fresh()->sessions_count);
+        $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, ScheduledClassCancellation::whereBelongsTo($scheduledClass, 'scheduledClass')->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_cancel_button_is_hidden_after_studio_cancellation_window_closes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-21 12:01:00', 'UTC'));
+
+        $context = $this->context();
+        $expiredClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $openClass = $this->scheduledClass($context, '2026-06-21 10:30:00');
+
+        $response = $this->actingAs($context['owner'])
+            ->get(route('dashboard.accounts.scheduled-classes.index', $context['account']));
+
+        $response
+            ->assertOk()
+            ->assertDontSee(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $expiredClass]), false)
+            ->assertSee(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $openClass]), false);
+
+        Carbon::setTestNow();
     }
 
     /**

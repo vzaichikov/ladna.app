@@ -8,26 +8,29 @@
             <h1 class="crm-page-title">{{ __('app.generated_classes') }}</h1>
             <p class="crm-page-copy">{{ __('app.generated_classes_copy') }}</p>
         </div>
-        <div class="flex flex-wrap gap-2">
-            @can('manageSchedule', $account)
+        <div class="flex flex-col gap-2 sm:items-end">
+            @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass))
+                <div class="flex flex-wrap gap-2" data-schedule-secondary-actions>
+                    <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
+                    @can('manageSchedule', $account)
+                        @foreach ($manualClassOptions as $manualClassOption)
+                            <x-ui.button type="button" variant="secondary" data-manual-class-open="{{ $manualClassOption['kind']->value }}">
+                                <x-ui.icon name="plus" class="h-4 w-4" />
+                                <span>{{ __('app.add_class_record_short') }}</span>
+                            </x-ui.button>
+                        @endforeach
+                    @endcan
+                </div>
+            @endif
+            <div class="flex flex-wrap gap-2" data-schedule-primary-actions>
                 @foreach ($quickBookingOptions as $quickBookingOption)
-                    <x-ui.button type="button" variant="secondary" data-manual-class-open="{{ $quickBookingOption['kind']->value }}">
-                        <x-ui.icon name="calendar" class="h-4 w-4" />
-                        <span class="hidden sm:inline">{{ __('app.add_'.$quickBookingOption['kind']->value.'_record') }}</span>
-                        <span class="sm:hidden">{{ __('app.add_class_record_short') }}</span>
+                    <x-ui.button type="button" data-quick-booking-open="{{ $quickBookingOption['kind']->value }}">
+                        <x-ui.icon name="plus" class="h-4 w-4" />
+                        <span class="hidden sm:inline">{{ __('app.add_'.$quickBookingOption['kind']->value.'_booking') }}</span>
+                        <span class="sm:hidden">{{ __('app.add_'.$quickBookingOption['kind']->value.'_booking_short') }}</span>
                     </x-ui.button>
                 @endforeach
-            @endcan
-            @foreach ($quickBookingOptions as $quickBookingOption)
-                <x-ui.button type="button" data-quick-booking-open="{{ $quickBookingOption['kind']->value }}">
-                    <x-ui.icon name="plus" class="h-4 w-4" />
-                    <span class="hidden sm:inline">{{ __('app.add_'.$quickBookingOption['kind']->value.'_booking') }}</span>
-                    <span class="sm:hidden">{{ __('app.add_'.$quickBookingOption['kind']->value.'_booking_short') }}</span>
-                </x-ui.button>
-            @endforeach
-            @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass))
-                <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
-            @endif
+            </div>
         </div>
     </div>
 
@@ -132,7 +135,7 @@
     ])
 
     @include('scheduled-classes._manual-class-modals', [
-        'quickBookingOptions' => $quickBookingOptions,
+        'manualClassOptions' => $manualClassOptions,
         'quickBookingLocations' => $quickBookingLocations,
         'quickBookingRooms' => $quickBookingRooms,
         'quickBookingTrainers' => $quickBookingTrainers,

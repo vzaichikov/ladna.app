@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\ClassBookingStatus;
 use App\Models\Account;
 use App\Support\QuickBookingOptions;
+use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
@@ -31,6 +32,9 @@ class ScheduledClassController extends Controller
             ->orderBy('name')
             ->get(['id', 'location_id', 'name']);
         $quickBookingData = $quickBookingOptions->forAccount($account);
+        $manualClassOptions = $quickBookingData['options']
+            ->filter(fn (array $option): bool => in_array($option['kind'], ScheduleKindRegistry::oneOffRecordKinds(), true))
+            ->values();
         $selectedLocationIds = $this->selectedIds($request, 'locations', $filterLocations->pluck('id')->all());
         $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
 
@@ -66,6 +70,7 @@ class ScheduledClassController extends Controller
             'filterLocations' => $filterLocations,
             'filterRooms' => $filterRooms,
             'quickBookingOptions' => $quickBookingData['options'],
+            'manualClassOptions' => $manualClassOptions,
             'quickBookingLocations' => $quickBookingData['locations'],
             'quickBookingRooms' => $quickBookingData['rooms'],
             'quickBookingTrainers' => $quickBookingData['trainers'],
