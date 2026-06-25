@@ -24,6 +24,7 @@ class ClassPassPlanResource extends JsonResource
             'currency' => $this->currency,
             'sessions_count' => $this->sessions_count,
             'validity_days' => $this->validity_days,
+            'total_validity_days' => $this->total_validity_days,
             'available_from_time' => $this->available_from_time,
             'available_until_time' => $this->available_until_time,
             'allows_any_time' => $this->allows_any_time,

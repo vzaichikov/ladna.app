@@ -29,11 +29,9 @@ class NormalizeCustomerClassPasses
     public function forPass(CustomerClassPass $customerClassPass): CustomerClassPass
     {
         return DB::transaction(function () use ($customerClassPass): CustomerClassPass {
+            $now = now();
             $customerClassPass->load('reservations');
 
-            $reservedCount = $customerClassPass->reservations
-                ->where('status', CustomerClassPassReservationStatus::Reserved)
-                ->count();
             $usedReservations = $customerClassPass->reservations
                 ->where('status', CustomerClassPassReservationStatus::Used)
                 ->filter(fn ($reservation): bool => $reservation->used_at !== null)
@@ -41,20 +39,41 @@ class NormalizeCustomerClassPasses
             $usedCount = $usedReservations->count();
             $openedAt = $usedReservations->first()?->used_at;
             $expiresAt = $openedAt?->copy()->addDays($customerClassPass->validity_days);
-            $isExpired = $expiresAt && $expiresAt->lessThanOrEqualTo(now());
+            $usableUntilAt = $customerClassPass->usableUntilAt();
+            $isExpired = $expiresAt && $expiresAt->lessThanOrEqualTo($now);
+            $isTotalExpired = $usableUntilAt && $usableUntilAt->lessThanOrEqualTo($now);
             $isUsedUp = $usedCount >= $customerClassPass->sessions_count;
-            $status = CustomerClassPassStatus::Active;
-            $isActive = true;
-            $closedAt = null;
+            $wasActivePass = $customerClassPass->is_active && $customerClassPass->status === CustomerClassPassStatus::Active;
 
-            if ($isUsedUp) {
+            if ($wasActivePass && $isTotalExpired) {
+                $customerClassPass->reservations()
+                    ->where('status', CustomerClassPassReservationStatus::Reserved->value)
+                    ->update([
+                        'status' => CustomerClassPassReservationStatus::Released->value,
+                        'released_at' => $now,
+                    ]);
+
+                $customerClassPass->load('reservations');
+            }
+
+            $reservedCount = $customerClassPass->reservations
+                ->where('status', CustomerClassPassReservationStatus::Reserved)
+                ->count();
+            $status = $customerClassPass->status;
+            $isActive = (bool) $customerClassPass->is_active;
+            $closedAt = $customerClassPass->closed_at;
+
+            if (! $wasActivePass) {
+                $isActive = false;
+                $closedAt = $closedAt ?? ($status === CustomerClassPassStatus::Active ? null : $now);
+            } elseif ($isUsedUp) {
                 $status = CustomerClassPassStatus::UsedUp;
                 $isActive = false;
-                $closedAt = $customerClassPass->closed_at ?? now();
-            } elseif ($isExpired) {
+                $closedAt = $closedAt ?? $now;
+            } elseif ($isExpired || $isTotalExpired) {
                 $status = CustomerClassPassStatus::Expired;
                 $isActive = false;
-                $closedAt = $customerClassPass->closed_at ?? now();
+                $closedAt = $closedAt ?? $now;
             }
 
             $customerClassPass->forceFill([
@@ -62,6 +81,7 @@ class NormalizeCustomerClassPasses
                 'used_sessions_count' => $usedCount,
                 'opened_at' => $openedAt,
                 'expires_at' => $expiresAt,
+                'usable_until_at' => $usableUntilAt,
                 'status' => $status->value,
                 'is_active' => $isActive,
                 'closed_at' => $closedAt,

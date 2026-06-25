@@ -10,8 +10,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
-#[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'code', 'source', 'status', 'plan_name', 'plan_slug', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'reserved_sessions_count', 'used_sessions_count', 'purchased_at', 'opened_at', 'expires_at', 'closed_at', 'is_active'])]
+#[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'code', 'source', 'status', 'plan_name', 'plan_slug', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'reserved_sessions_count', 'used_sessions_count', 'purchased_at', 'opened_at', 'expires_at', 'usable_until_at', 'closed_at', 'is_active'])]
 class CustomerClassPass extends Model
 {
     /** @use HasFactory<CustomerClassPassFactory> */
@@ -21,6 +22,7 @@ class CustomerClassPass extends Model
         'source' => 'manual',
         'status' => 'active',
         'currency' => 'UAH',
+        'total_validity_days' => 180,
         'reserved_sessions_count' => 0,
         'used_sessions_count' => 0,
         'is_active' => true,
@@ -36,6 +38,7 @@ class CustomerClassPass extends Model
             'purchased_at' => 'datetime',
             'opened_at' => 'datetime',
             'expires_at' => 'datetime',
+            'usable_until_at' => 'datetime',
             'closed_at' => 'datetime',
             'is_active' => 'boolean',
         ];
@@ -78,6 +81,17 @@ class CustomerClassPass extends Model
         return max(0, $this->sessions_count - $this->used_sessions_count - $this->reserved_sessions_count);
     }
 
+    public function usableUntilAt(): ?Carbon
+    {
+        if ($this->usable_until_at) {
+            return $this->usable_until_at;
+        }
+
+        $purchasedAt = $this->purchased_at ?? $this->created_at;
+
+        return $purchasedAt?->copy()->addDays((int) $this->total_validity_days);
+    }
+
     public function canReserveFor(ScheduledClass $scheduledClass): bool
     {
         $this->loadMissing('classPassPlan');
@@ -91,6 +105,12 @@ class CustomerClassPass extends Model
         }
 
         if ($this->expires_at && $scheduledClass->starts_at->greaterThan($this->expires_at)) {
+            return false;
+        }
+
+        $usableUntilAt = $this->usableUntilAt();
+
+        if ($usableUntilAt && $scheduledClass->starts_at->greaterThanOrEqualTo($usableUntilAt)) {
             return false;
         }
 

@@ -34,6 +34,7 @@ class CreateCustomerPurchase
             'currency' => $classPassPlan->currency,
             'sessions_count' => $classPassPlan->sessions_count,
             'validity_days' => $classPassPlan->validity_days,
+            'total_validity_days' => $classPassPlan->total_validity_days,
             'started_at' => now(),
         ]);
     }

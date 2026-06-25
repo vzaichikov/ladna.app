@@ -327,6 +327,7 @@ class LadnaOpenApiSpec
                     'currency' => ['type' => 'string'],
                     'sessions_count' => ['type' => 'integer'],
                     'validity_days' => ['type' => 'integer'],
+                    'total_validity_days' => ['type' => 'integer'],
                     'available_from_time' => ['type' => ['string', 'null'], 'example' => '09:00'],
                     'available_until_time' => ['type' => ['string', 'null'], 'example' => '17:00'],
                     'allows_any_time' => ['type' => 'boolean'],

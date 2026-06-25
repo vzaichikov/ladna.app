@@ -59,7 +59,9 @@ class CustomerPurchaseFlowTest extends TestCase
             ->assertSee('name="provider"', false)
             ->assertSee('name="studio_rules_accepted"', false)
             ->assertSee(route('public.studio-rules', $account->slug), false)
-            ->assertSee(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), false);
+            ->assertSee(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), false)
+            ->assertSee(__('app.validity_days_after_first_class'))
+            ->assertSee(__('app.total_validity_days'));
     }
 
     public function test_purchase_requires_studio_rules_acceptance(): void
@@ -105,6 +107,8 @@ class CustomerPurchaseFlowTest extends TestCase
         $this->assertSame('payment_started', $purchase->status->value);
         $this->assertSame($plan->name, $purchase->plan_name);
         $this->assertSame($plan->price_cents, $purchase->amount_cents);
+        $this->assertSame($plan->validity_days, $purchase->validity_days);
+        $this->assertSame($plan->total_validity_days, $purchase->total_validity_days);
         $this->assertSame(0, CustomerClassPass::whereBelongsTo($customer)->count());
     }
 
@@ -161,6 +165,7 @@ class CustomerPurchaseFlowTest extends TestCase
             'currency' => 'UAH',
             'sessions_count' => 8,
             'validity_days' => 30,
+            'total_validity_days' => 120,
         ]);
         $plan->classTypes()->sync([$classType->id]);
         $customer = Customer::factory()->for($account)->create([

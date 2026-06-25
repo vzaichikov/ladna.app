@@ -39,6 +39,15 @@ class HelpPagesTest extends TestCase
         $this->get('/help/not-a-page')->assertNotFound();
     }
 
+    public function test_passes_prices_help_explains_both_validity_terms(): void
+    {
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('Загальний строк дії', false)
+            ->assertSee('Строк дії з першого заняття', false)
+            ->assertSee('навіть тоді, коли заняття ще залишилися або клієнт ще не прийшов на перше заняття', false);
+    }
+
     public function test_public_footer_links_to_help(): void
     {
         $response = $this->get('/');

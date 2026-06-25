@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.29.0',
+                'date' => '2026-06-25',
+                'title' => 'Class pass total validity',
+                'items' => ['Added a total class-pass validity window from purchase, shown alongside the existing first-class validity in admin, customer, public price, checkout, help, and public price API flows. Expired total validity now closes passes through the normalizer and releases remaining reserved pass rows without deleting bookings.'],
+                'meta' => 'Release commit pending.',
+            ],
+            [
                 'version' => '0.28.1',
                 'date' => '2026-06-25',
                 'title' => 'Public powered footer branding',
@@ -289,6 +296,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.29.0',
+                'date' => '2026-06-25',
+                'title' => 'Загальний строк дії абонементів',
+                'items' => ['Додано загальний строк дії абонемента від покупки, який показується разом зі строком від першого заняття в адмінці, кабінеті клієнта, публічному прайсі, купівлі, довідці та public price API. Коли загальний строк минає, нормалізація закриває абонемент як прострочений і звільняє залишкові резерви без видалення записів.'],
+                'meta' => 'Релізний коміт очікується.',
+            ],
             [
                 'version' => '0.28.1',
                 'date' => '2026-06-25',

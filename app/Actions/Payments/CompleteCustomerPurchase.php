@@ -43,6 +43,15 @@ class CompleteCustomerPurchase
                         $lockedPurchase->classPassPlan,
                         source: 'online_payment',
                         purchasedAt: $callback->paidAt,
+                        snapshot: [
+                            'plan_name' => $lockedPurchase->plan_name,
+                            'plan_slug' => $lockedPurchase->plan_slug,
+                            'price_cents' => $lockedPurchase->amount_cents,
+                            'currency' => $lockedPurchase->currency,
+                            'sessions_count' => $lockedPurchase->sessions_count,
+                            'validity_days' => $lockedPurchase->validity_days,
+                            'total_validity_days' => $lockedPurchase->total_validity_days,
+                        ],
                     );
                 }
 

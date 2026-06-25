@@ -21,6 +21,8 @@ class CustomerClassPassFactory extends Factory
     public function definition(): array
     {
         $code = strtoupper(fake()->bothify('????-####'));
+        $purchasedAt = now();
+        $totalValidityDays = 180;
 
         return [
             'account_id' => Account::factory(),
@@ -35,11 +37,13 @@ class CustomerClassPassFactory extends Factory
             'currency' => 'UAH',
             'sessions_count' => fake()->randomElement([1, 4, 8, 12]),
             'validity_days' => 30,
+            'total_validity_days' => $totalValidityDays,
             'reserved_sessions_count' => 0,
             'used_sessions_count' => 0,
-            'purchased_at' => now(),
+            'purchased_at' => $purchasedAt,
             'opened_at' => null,
             'expires_at' => null,
+            'usable_until_at' => $purchasedAt->copy()->addDays($totalValidityDays),
             'closed_at' => null,
             'is_active' => true,
         ];

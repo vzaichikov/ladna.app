@@ -160,7 +160,7 @@
     @error('description') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
 
-<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
     <label class="block">
         <span class="crm-label">{{ __('app.price') }}</span>
         <input name="price" type="number" min="0" step="0.01" value="{{ $price }}" required class="crm-field">
@@ -181,9 +181,14 @@
         @error('sessions_count') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="block">
-        <span class="crm-label">{{ __('app.validity_days') }}</span>
+        <span class="crm-label">{{ __('app.validity_days_after_first_class') }}</span>
         <input name="validity_days" type="number" min="1" value="{{ old('validity_days', $classPassPlan->validity_days ?? 30) }}" required class="crm-field">
         @error('validity_days') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+    <label class="block">
+        <span class="crm-label">{{ __('app.total_validity_days') }}</span>
+        <input name="total_validity_days" type="number" min="1" value="{{ old('total_validity_days', $classPassPlan->total_validity_days ?? 180) }}" required class="crm-field">
+        @error('total_validity_days') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 </div>
 
