@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.32.1',
+                'date' => '2026-06-25',
+                'title' => 'Safe schedule capacity sync',
+                'items' => ['Changed recurring schedule generation to update future generated classes in place, keeping bookings, manual changes, private lessons, and room rentals intact while removing only empty untouched generated rows.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.32.0',
                 'date' => '2026-06-25',
                 'title' => 'Studio class cancellation workflow',
@@ -317,6 +324,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.32.1',
+                'date' => '2026-06-25',
+                'title' => 'Безпечне оновлення місткості розкладу',
+                'items' => ['Змінено генерацію регулярного розкладу так, щоб майбутні згенеровані заняття оновлювалися на місці, зберігаючи записи клієнтів, ручні зміни, індивідуальні заняття й оренду, а видалялися лише порожні незмінені згенеровані записи.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.32.0',
                 'date' => '2026-06-25',
