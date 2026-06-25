@@ -21,6 +21,7 @@
     $addedDaysPassesCount = $cancellationEffects->where('added_validity_days', '>', 0)->count();
     $addedDaysCount = (int) ($cancellationEffects->max('added_validity_days') ?? 0);
     $canManageClassCancellation = auth()->user()?->can('manageSchedule', $account) && auth()->user()?->can('manageBookings', $account);
+    $canCancelClass = $canManageClassCancellation && ! $isCancelledClass && $scheduledClass->isStudioCancellationOpen();
 @endphp
 
 <article id="scheduled-class-{{ $scheduledClass->id }}" data-scheduled-class-card data-scheduled-class-id="{{ $scheduledClass->id }}" class="scroll-mt-24 rounded-xl border border-stone-200 bg-white p-4 shadow-xs" style="border-top-color: {{ $directionColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;">
@@ -38,7 +39,7 @@
         <div class="flex shrink-0 items-center gap-2">
             <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>
             @if ($canManageClassCancellation)
-                @if (! $isCancelledClass)
+                @if ($canCancelClass)
                     <form
                         method="POST"
                         action="{{ route('dashboard.accounts.scheduled-classes.cancel', [$account, $scheduledClass]) }}"
@@ -52,7 +53,7 @@
                         @method('PATCH')
                         <x-ui.action-button type="submit" variant="danger" icon="ban" :label="__('app.cancel_class')" />
                     </form>
-                @else
+                @elseif ($isCancelledClass)
                     <form
                         method="POST"
                         action="{{ route('dashboard.accounts.scheduled-classes.restore', [$account, $scheduledClass]) }}"

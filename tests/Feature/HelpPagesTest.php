@@ -62,8 +62,11 @@ class HelpPagesTest extends TestCase
         $this->get(route('help.show', 'passes-prices', false))
             ->assertStatus(200)
             ->assertSee('Що стається з абонементом, коли заняття скасовує студія', false)
-            ->assertSee('Повернути X занять', false)
-            ->assertSee('Додати X днів', false);
+            ->assertSee('Повернути скасоване заняття', false)
+            ->assertSee('бонусних занять', false)
+            ->assertSee('Продовжити абонемент', false)
+            ->assertDontSee('Повернути X занять', false)
+            ->assertDontSee('Додати X днів', false);
 
         $this->get(route('help.show', 'start', false))
             ->assertStatus(200)

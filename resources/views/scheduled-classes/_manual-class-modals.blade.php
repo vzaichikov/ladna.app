@@ -4,7 +4,7 @@
     $singleLocation = $quickBookingLocations->count() === 1 ? $quickBookingLocations->first() : null;
 @endphp
 
-@foreach ($quickBookingOptions as $quickBookingOption)
+@foreach ($manualClassOptions as $quickBookingOption)
     @php
         $scheduleKind = $quickBookingOption['kind'];
         $definition = $quickBookingOption['definition'];

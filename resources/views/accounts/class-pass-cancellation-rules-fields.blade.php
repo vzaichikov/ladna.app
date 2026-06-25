@@ -36,7 +36,7 @@
                     </span>
                 </label>
                 <label class="block">
-                    <span class="crm-label">{{ __('app.sessions_count') }}</span>
+                    <span class="crm-label">{{ __('app.bonus_sessions_count') }}</span>
                     <input
                         name="class_pass_cancellation_rules[return_sessions_count]"
                         type="number"
@@ -67,7 +67,7 @@
                     </span>
                 </label>
                 <label class="block">
-                    <span class="crm-label">{{ __('app.days_count') }}</span>
+                    <span class="crm-label">{{ __('app.extension_days_count') }}</span>
                     <input
                         name="class_pass_cancellation_rules[extend_days_count]"
                         type="number"
