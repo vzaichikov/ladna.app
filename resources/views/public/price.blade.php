@@ -1,6 +1,6 @@
 @extends('layouts.public')
 
-@section('title', $account->name.' '.$location->name.' '.strtolower(__('app.price')))
+@section('title', $account->name.' '.$location->name.' '.__('app.public_price_title'))
 
 @section('publicFooter')
     <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
@@ -29,7 +29,7 @@
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <div class="text-sm font-semibold uppercase text-brand-600">{{ $account->name }}</div>
-                        <h1 class="mt-2 text-4xl font-semibold leading-tight text-slate-950">{{ __('app.price') }}</h1>
+                        <h1 class="mt-2 text-4xl font-semibold leading-tight text-slate-950">{{ __('app.public_price_title') }}</h1>
                         <p class="mt-3 max-w-2xl text-slate-500">{{ $location->name }} · {{ $location->address }}</p>
                     </div>
                     <form method="POST" action="{{ route('locale.update') }}">
@@ -51,7 +51,12 @@
                             @foreach ($group['sections'] as $section)
                                 <section>
                                     @if ($section['title'] !== '')
-                                        <div class="mb-3 text-sm font-semibold uppercase text-brand-600">{{ $section['title'] }}</div>
+                                        <div class="mb-3 flex items-center gap-3">
+                                            <span class="inline-flex items-center rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 shadow-xs">
+                                                {{ $section['title'] }}
+                                            </span>
+                                            <span class="h-px flex-1 bg-stone-200"></span>
+                                        </div>
                                     @endif
                                     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                         @foreach ($section['plans'] as $classPassPlan)

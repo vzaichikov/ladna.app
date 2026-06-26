@@ -642,6 +642,7 @@ return [
     'public_links_copy' => 'Quick access to schedule and price pages for this studio\'s active locations.',
     'public_links_empty' => 'Add an active location to get public schedule and price links.',
     'public_price' => 'Public price',
+    'public_price_title' => 'Class passes & prices',
     'public_schedule_embed' => 'Schedule embed',
     'public_price_embed' => 'Price embed',
     'powered_by_ladna' => 'Powered by Ladna',

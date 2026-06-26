@@ -642,6 +642,7 @@ return [
     'public_links_copy' => 'Швидкі переходи до розкладу та прайсу для активних локацій цієї студії.',
     'public_links_empty' => 'Додайте активну локацію, щоб отримати публічні посилання для розкладу та прайсу.',
     'public_price' => 'Публічний прайс',
+    'public_price_title' => 'Абонементи й ціни',
     'public_schedule_embed' => 'Embed розклад',
     'public_price_embed' => 'Embed прайс',
     'powered_by_ladna' => 'Працює на Ladna',

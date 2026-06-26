@@ -23,6 +23,7 @@ class PublicPriceTest extends TestCase
         $response = $this->get(route('public.price', [$account->slug, $location->slug]));
 
         $response->assertOk()
+            ->assertSee(__('app.public_price_title'))
             ->assertSee(__('app.group_classes_price'))
             ->assertSee(__('app.private_lessons_price'))
             ->assertSee(__('app.room_rental_price'))
