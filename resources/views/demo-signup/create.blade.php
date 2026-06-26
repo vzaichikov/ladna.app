@@ -85,11 +85,10 @@
                         <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900">{{ $message }}</div>
                     @enderror
 
-                    <div class="flex flex-col gap-3 border-t border-[#E7DDC9]/80 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                        <p class="text-sm leading-6 text-[#4D3152]/70">{{ __('app.demo_signup_payment_note') }}</p>
+                    <div class="flex justify-end border-t border-[#E7DDC9]/80 pt-5">
                         <x-ui.button type="submit">
-                            <x-ui.icon name="payments" class="h-4 w-4" />
-                            {{ __('app.pay_demo_now') }}
+                            <x-ui.icon name="plus" class="h-4 w-4" />
+                            {{ __('app.create_my_studio') }}
                         </x-ui.button>
                     </div>
                 </form>

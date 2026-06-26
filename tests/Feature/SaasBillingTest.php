@@ -72,11 +72,16 @@ class SaasBillingTest extends TestCase
             ->assertSee('999 ₴')
             ->assertDontSee('1.00 UAH')
             ->assertDontSee('name="account_slug"', false)
+            ->assertSee(__('app.demo_signup_copy'))
+            ->assertDontSee('Кабінет створюється')
+            ->assertDontSee('Після створення студії')
+            ->assertDontSee('After creating the studio')
             ->assertSee('name="owner_phone"', false)
             ->assertSee('type="tel"', false)
             ->assertSee('autocomplete="tel"', false)
             ->assertSee('data-phone-mask', false)
-            ->assertSee('data-country-code="UA"', false);
+            ->assertSee('data-country-code="UA"', false)
+            ->assertSee(__('app.create_my_studio'));
     }
 
     public function test_landing_formats_subscription_prices_with_hryvnia_symbol(): void
@@ -112,7 +117,7 @@ class SaasBillingTest extends TestCase
             ->assertDontSee('1.00 UAH');
     }
 
-    public function test_demo_signup_starts_one_uah_monopay_payment_without_creating_account(): void
+    public function test_demo_signup_creates_account_owner_and_embedded_one_uah_payment(): void
     {
         $this->platformMonopayIntegration([
             'api_token' => 'mono-token',
@@ -145,21 +150,35 @@ class SaasBillingTest extends TestCase
             'owner_phone' => '+380501111111',
             'owner_password' => 'secret123',
             'owner_password_confirmation' => 'secret123',
-        ])->assertRedirect('https://pay.example/demo');
+        ])->assertRedirect();
 
         $signup = AccountSignupRequest::firstOrFail();
         $payment = AccountSubscriptionPayment::firstOrFail();
+        $account = Account::where('slug', 'studio-one')->firstOrFail();
+        $owner = User::where('email', 'owner-demo@example.com')->firstOrFail();
+        $subscription = $account->subscription()->firstOrFail();
 
         $this->assertSame($demoPlan->id, $signup->subscription_plan_id);
+        $this->assertSame($account->id, $signup->account_id);
         $this->assertSame('studio-one', $signup->account_slug);
         $this->assertSame(100, $signup->amount_cents);
         $this->assertSame('invoice-demo-1', $signup->gateway_invoice_id);
         $this->assertSame($signup->order_id, $payment->order_id);
+        $this->assertSame($account->id, $payment->account_id);
+        $this->assertSame($subscription->id, $payment->account_subscription_id);
         $this->assertSame('payment_started', $payment->status->value);
-        $this->assertFalse(Account::where('slug', 'studio-one')->exists());
+        $this->assertSame(SubscriptionStatus::PendingPayment, $subscription->status);
+        $this->assertTrue($account->isOwnedBy($owner));
+        $this->assertAuthenticatedAs($owner);
+
+        $this->get(route('dashboard.accounts.tariff-payments.show', $account))
+            ->assertOk()
+            ->assertSee(__('app.demo_payment_required_title'))
+            ->assertSee('https://pay.example/demo', false);
 
         Http::assertSent(fn (HttpClientRequest $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
             && $request['paymentType'] === 'debit'
+            && $request['displayType'] === 'iframe'
             && ! array_key_exists('code', $request->data()));
     }
 
@@ -193,15 +212,38 @@ class SaasBillingTest extends TestCase
             'owner_phone' => '+380501111111',
             'owner_password' => 'secret123',
             'owner_password_confirmation' => 'secret123',
-        ])->assertRedirect('https://pay.example/demo-conflict');
+        ])->assertRedirect();
 
         $signup = AccountSignupRequest::where('owner_email', 'owner-demo-conflict@example.com')->firstOrFail();
+        $account = Account::where('slug', 'studio-one-1')->firstOrFail();
 
         $this->assertSame($demoPlan->id, $signup->subscription_plan_id);
         $this->assertSame('studio-one-1', $signup->account_slug);
+        $this->assertSame($account->id, $signup->account_id);
     }
 
-    public function test_signed_monopay_demo_callback_creates_account_owner_and_trial_subscription(): void
+    public function test_demo_payment_return_keeps_authenticated_owner_inside_tariff_page(): void
+    {
+        $owner = User::factory()->create(['email' => 'return-owner@example.com']);
+        $account = Account::factory()->create(['slug' => 'return-studio']);
+        $account->addOwner($owner);
+        $demoPlan = SubscriptionPlan::factory()->create([
+            'plan_type' => SubscriptionPlanType::Demo,
+        ]);
+        $signup = AccountSignupRequest::factory()->for($demoPlan, 'plan')->create([
+            'account_id' => $account->id,
+            'status' => 'payment_started',
+            'account_slug' => $account->slug,
+            'owner_email' => $owner->email,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('demo.return', $signup))
+            ->assertRedirect(route('dashboard.accounts.tariff-payments.show', $account))
+            ->assertSessionHas('status', __('app.payment_processing'));
+    }
+
+    public function test_signed_monopay_demo_callback_activates_existing_account_trial_subscription(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-26 12:00:00'));
         [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
@@ -219,14 +261,25 @@ class SaasBillingTest extends TestCase
             'access_days' => 30,
             'renewal_lead_days' => 2,
         ]);
+        $owner = User::factory()->create(['email' => 'callback-owner@example.com']);
+        $account = Account::factory()->create(['slug' => 'callback-studio']);
+        $account->addOwner($owner);
+        $subscription = $account->subscription()->create([
+            'subscription_plan_id' => $demoPlan->id,
+            'status' => SubscriptionStatus::PendingPayment,
+            'started_at' => now(),
+            'ends_at' => null,
+            'payment_provider' => IntegrationProvider::Monopay->value,
+        ]);
         $signup = AccountSignupRequest::factory()->for($demoPlan, 'plan')->create([
+            'account_id' => $account->id,
             'status' => 'payment_started',
             'studio_name' => 'Callback Studio',
             'account_slug' => 'callback-studio',
             'owner_email' => 'callback-owner@example.com',
             'amount_cents' => 100,
         ]);
-        AccountSubscriptionPayment::factory()->for($demoPlan, 'plan')->for($signup, 'signupRequest')->create([
+        AccountSubscriptionPayment::factory()->for($account)->for($subscription, 'subscription')->for($demoPlan, 'plan')->for($signup, 'signupRequest')->create([
             'payment_type' => AccountSubscriptionPaymentType::DemoInitial,
             'order_id' => $signup->order_id,
             'amount_cents' => 100,
@@ -254,19 +307,158 @@ class SaasBillingTest extends TestCase
             $body,
         )->assertOk();
 
-        $account = Account::where('slug', 'callback-studio')->firstOrFail();
         $subscription = $account->subscription()->firstOrFail();
 
         $this->assertSame('payment_paid', AccountSubscriptionPayment::firstOrFail()->status->value);
         $this->assertSame('account_created', $signup->fresh()->status->value);
-        $this->assertSame('callback-owner@example.com', User::where('email', 'callback-owner@example.com')->firstOrFail()->email);
+        $this->assertSame(1, User::where('email', 'callback-owner@example.com')->count());
         $this->assertSame(SubscriptionStatus::Trialing, $subscription->status);
         $this->assertTrue($subscription->ends_at->equalTo(Carbon::parse('2026-07-26 12:00:00')));
         $this->assertTrue($subscription->next_payment_at->equalTo(Carbon::parse('2026-07-24 12:00:00')));
 
-        $files = Storage::disk('local')->allFiles('payment-callbacks/saas/accounts/unknown/monopay/'.$signup->order_id);
+        $files = Storage::disk('local')->allFiles('payment-callbacks/saas/accounts/'.$account->id.'/monopay/'.$signup->order_id);
         $this->assertNotEmpty($files);
         Carbon::setTestNow();
+    }
+
+    public function test_failed_demo_payment_keeps_account_and_allows_retry_from_owner_billing(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-26 13:00:00'));
+        [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
+        $this->platformMonopayIntegration([
+            'api_token' => 'mono-token',
+        ]);
+        $this->upsertPlan('demo-month', [
+            'name' => 'Demo test',
+            'price_cents' => 100,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Demo,
+            'access_days' => 30,
+            'public_signup_enabled' => true,
+            'requires_recurring_payment' => false,
+            'sort_order' => 0,
+        ]);
+        $this->upsertPlan('standard-monthly', [
+            'name' => 'Standard test',
+            'price_cents' => 99900,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Standard,
+            'access_days' => 30,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => true,
+            'sort_order' => 10,
+        ]);
+        $invoiceCalls = 0;
+
+        Http::preventStrayRequests();
+        Http::fake(function (HttpClientRequest $request) use (&$invoiceCalls, $publicKeyBase64) {
+            if ($request->url() === 'https://api.monobank.ua/api/merchant/invoice/create') {
+                $invoiceCalls++;
+
+                return Http::response([
+                    'pageUrl' => 'https://pay.example/demo-retry-'.$invoiceCalls,
+                    'invoiceId' => 'invoice-demo-retry-'.$invoiceCalls,
+                    'status' => 'created',
+                ]);
+            }
+
+            if ($request->url() === 'https://api.monobank.ua/api/merchant/pubkey') {
+                return Http::response(['key' => $publicKeyBase64]);
+            }
+
+            return Http::response(['message' => 'Unexpected request'], 500);
+        });
+
+        $this->post(route('demo.signup.store'), [
+            'studio_name' => 'Retry Studio',
+            'owner_name' => 'Retry Owner',
+            'owner_email' => 'retry-owner@example.com',
+            'owner_phone' => '+380501234500',
+            'owner_password' => 'retry-secret',
+            'owner_password_confirmation' => 'retry-secret',
+        ])->assertRedirect();
+
+        $signup = AccountSignupRequest::firstOrFail();
+        $account = Account::where('slug', 'retry-studio')->firstOrFail();
+        $owner = User::where('email', 'retry-owner@example.com')->firstOrFail();
+        $firstPayment = AccountSubscriptionPayment::whereBelongsTo($account)->firstOrFail();
+
+        $this->postSignedMonopayCallback($privateKey, [
+            'invoiceId' => 'invoice-demo-retry-1',
+            'paymentId' => 'payment-demo-failed',
+            'status' => 'failure',
+            'amount' => 100,
+            'finalAmount' => 100,
+            'ccy' => PaymentAmounts::iso4217NumericCode('UAH'),
+            'reference' => $signup->order_id,
+            'modifiedDate' => now()->toIso8601String(),
+        ])->assertOk();
+
+        $this->assertModelExists($account);
+        $this->assertModelExists($owner);
+        $this->assertSame(AccountSubscriptionPaymentStatus::PaymentFailed, $firstPayment->fresh()->status);
+        $this->assertSame('payment_failed', $signup->fresh()->status->value);
+        $this->assertSame(SubscriptionStatus::PendingPayment, $account->subscription()->firstOrFail()->status);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.tariff-payments.pay-now', $account))
+            ->assertRedirect(route('dashboard.accounts.tariff-payments.show', $account));
+
+        $retryPayment = AccountSubscriptionPayment::whereBelongsTo($account)
+            ->where('status', AccountSubscriptionPaymentStatus::PaymentStarted)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertNotSame($firstPayment->order_id, $retryPayment->order_id);
+        $this->assertSame(AccountSubscriptionPaymentType::DemoInitial, $retryPayment->payment_type);
+        $this->assertSame('invoice-demo-retry-2', $retryPayment->gateway_invoice_id);
+        $this->assertSame('https://pay.example/demo-retry-2', $retryPayment->checkoutUrl());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_demo_callback_without_created_account_is_rejected(): void
+    {
+        [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
+        $this->platformMonopayIntegration([
+            'api_token' => 'mono-token',
+        ]);
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/pubkey' => Http::response(['key' => $publicKeyBase64]),
+        ]);
+        $demoPlan = SubscriptionPlan::factory()->create([
+            'name' => 'Old invoice demo',
+            'price_cents' => 100,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Demo,
+            'access_days' => 30,
+        ]);
+        $signup = AccountSignupRequest::factory()->for($demoPlan, 'plan')->create([
+            'account_id' => null,
+            'status' => 'payment_started',
+            'studio_name' => 'Old Invoice Studio',
+            'account_slug' => 'old-invoice-studio',
+            'owner_email' => 'old-invoice@example.com',
+            'amount_cents' => 100,
+        ]);
+        AccountSubscriptionPayment::factory()->for($demoPlan, 'plan')->for($signup, 'signupRequest')->create([
+            'payment_type' => AccountSubscriptionPaymentType::DemoInitial,
+            'order_id' => $signup->order_id,
+            'amount_cents' => 100,
+            'currency' => 'UAH',
+        ]);
+
+        $this->postSignedMonopayCallback($privateKey, [
+            'invoiceId' => 'invoice-old-demo',
+            'status' => 'success',
+            'amount' => 100,
+            'finalAmount' => 100,
+            'ccy' => PaymentAmounts::iso4217NumericCode('UAH'),
+            'reference' => $signup->order_id,
+            'modifiedDate' => now()->toIso8601String(),
+        ])->assertBadRequest();
+
+        $this->assertFalse(Account::where('slug', 'old-invoice-studio')->exists());
     }
 
     public function test_expired_subscription_blocks_public_content_and_studio_mutations_but_keeps_owner_billing_visible(): void
@@ -445,19 +637,42 @@ class SaasBillingTest extends TestCase
             'owner_phone' => '+380501234567',
             'owner_password' => 'flow-secret',
             'owner_password_confirmation' => 'flow-secret',
-        ])->assertRedirect('https://pay.example/demo-flow');
+        ])->assertRedirect();
 
         Http::assertSent(fn (HttpClientRequest $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
             && $request['amount'] === 100
             && $request['ccy'] === PaymentAmounts::iso4217NumericCode('UAH')
             && $request['paymentType'] === 'debit'
+            && $request['displayType'] === 'iframe'
             && ($request['merchantPaymInfo']['reference'] ?? null) === AccountSignupRequest::firstOrFail()->order_id
             && ! array_key_exists('code', $request->data()));
 
         $signup = AccountSignupRequest::firstOrFail();
+        $account = Account::where('slug', 'flow-studio')->firstOrFail();
+        $owner = User::where('email', 'flow-owner@example.com')->firstOrFail();
+        $subscription = $account->subscription()->firstOrFail();
 
         $this->assertSame($demoPlan->id, $signup->subscription_plan_id);
-        $this->assertFalse(Account::where('slug', 'flow-studio')->exists());
+        $this->assertSame($account->id, $signup->account_id);
+        $this->assertSame(SubscriptionStatus::PendingPayment, $subscription->status);
+        $this->assertAuthenticatedAs($owner);
+
+        $this->get(route('customer.studio.login', $account->slug))
+            ->assertStatus(402)
+            ->assertSee(__('app.demo_payment_required_public_title'));
+
+        $this->getJson("/api/v1/public/{$account->slug}/main-studio/price")
+            ->assertStatus(402)
+            ->assertJsonPath('code', 'demo_payment_required');
+
+        $this->get(route('dashboard.accounts.show', $account))
+            ->assertRedirect(route('dashboard.accounts.tariff-payments.show', $account))
+            ->assertSessionHasErrors('subscription');
+
+        $this->get(route('dashboard.accounts.tariff-payments.show', $account))
+            ->assertOk()
+            ->assertSee(__('app.demo_payment_required_title'))
+            ->assertSee('https://pay.example/demo-flow', false);
 
         $this->postSignedMonopayCallback($privateKey, [
             'invoiceId' => 'invoice-demo-flow',
@@ -470,19 +685,11 @@ class SaasBillingTest extends TestCase
             'modifiedDate' => now()->toIso8601String(),
         ])->assertOk();
 
-        $account = Account::where('slug', 'flow-studio')->firstOrFail();
-        $owner = User::where('email', 'flow-owner@example.com')->firstOrFail();
         $subscription = $account->subscription()->firstOrFail();
 
         $this->assertSame(SubscriptionStatus::Trialing, $subscription->status);
         $this->assertSame($demoPlan->id, $subscription->subscription_plan_id);
         $this->assertTrue($subscription->ends_at->equalTo(Carbon::parse('2026-07-26 09:00:00')));
-
-        $this->post(route('login'), [
-            'email' => 'flow-owner@example.com',
-            'password' => 'flow-secret',
-        ])->assertRedirect(route('dashboard.index', absolute: false));
-        $this->assertAuthenticatedAs($owner);
 
         $subscription->forceFill([
             'status' => SubscriptionStatus::Active,

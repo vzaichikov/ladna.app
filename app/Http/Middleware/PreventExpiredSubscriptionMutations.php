@@ -19,20 +19,40 @@ class PreventExpiredSubscriptionMutations
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->isMethodSafe()) {
-            return $next($request);
-        }
-
         if ($request->user()?->isPlatformAdmin()) {
             return $next($request);
         }
 
-        if ($this->isBillingRoute($request->route()?->getName())) {
+        $routeName = $request->route()?->getName();
+        $account = $this->routeAccount($request);
+
+        if (
+            $account
+            && $this->subscriptionAccess->requiresInitialDemoPayment($account)
+            && ! $this->isPrePaymentRoute($routeName)
+        ) {
+            if ($request->isMethodSafe()) {
+                return redirect()
+                    ->route('dashboard.accounts.tariff-payments.show', $account)
+                    ->withErrors(['subscription' => __('app.demo_payment_required_readonly')]);
+            }
+
+            if ($request->expectsJson()) {
+                abort(Response::HTTP_LOCKED, 'demo_payment_required');
+            }
+
+            return redirect()
+                ->back()
+                ->withErrors(['subscription' => __('app.demo_payment_required_readonly')]);
+        }
+
+        if ($request->isMethodSafe()) {
             return $next($request);
         }
 
-        $routeAccount = $request->route('account');
-        $account = $routeAccount instanceof Account ? $routeAccount : null;
+        if ($this->isPrePaymentRoute($routeName)) {
+            return $next($request);
+        }
 
         if (! $account || $this->subscriptionAccess->canEditStudio($account)) {
             return $next($request);
@@ -47,9 +67,20 @@ class PreventExpiredSubscriptionMutations
             ->withErrors(['subscription' => __('app.subscription_expired_readonly')]);
     }
 
-    private function isBillingRoute(?string $routeName): bool
+    private function routeAccount(Request $request): ?Account
     {
-        return is_string($routeName)
-            && str_starts_with($routeName, 'dashboard.accounts.tariff-payments.');
+        $routeAccount = $request->route('account');
+
+        return $routeAccount instanceof Account ? $routeAccount : null;
+    }
+
+    private function isPrePaymentRoute(?string $routeName): bool
+    {
+        if (! is_string($routeName)) {
+            return false;
+        }
+
+        return str_starts_with($routeName, 'dashboard.accounts.tariff-payments.')
+            || str_starts_with($routeName, 'dashboard.accounts.owner-profile.');
     }
 }

@@ -251,14 +251,18 @@ class LadnaOpenApiSpec
                 'description' => 'Account, location, or resource was not found.',
             ],
             'SubscriptionExpired' => [
-                'description' => 'The studio SaaS subscription has expired, so public content is unavailable.',
+                'description' => 'The studio SaaS subscription is unavailable, so public content is unavailable.',
                 'content' => [
                     'application/json' => [
                         'schema' => [
                             'type' => 'object',
                             'properties' => [
                                 'message' => ['type' => 'string'],
-                                'code' => ['type' => 'string', 'example' => 'subscription_expired'],
+                                'code' => [
+                                    'type' => 'string',
+                                    'enum' => ['subscription_expired', 'demo_payment_required'],
+                                    'example' => 'subscription_expired',
+                                ],
                                 'support_url' => ['type' => ['string', 'null']],
                             ],
                         ],

@@ -6,10 +6,14 @@ use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\SubscriptionPlanType;
 use App\Models\Account;
+use App\Models\AccountSubscriptionPayment;
 use App\Models\SystemSetting;
+use App\Support\SaasBilling\AccountSubscriptionAccess;
 use App\Support\SaasBilling\CreateAccountSubscriptionPayment;
+use App\Support\SaasBilling\CreateDemoSignup;
 use App\Support\SaasBilling\MonopaySaasBilling;
 use App\Support\SaasBilling\SaasBillingPlans;
+use App\Support\SaasBilling\StartAccountSubscriptionPaymentCheckout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +22,7 @@ use Throwable;
 
 class AccountTariffPaymentController extends Controller
 {
-    public function show(Request $request, Account $account, SaasBillingPlans $plans): View
+    public function show(Request $request, Account $account, SaasBillingPlans $plans, AccountSubscriptionAccess $subscriptionAccess): View
     {
         $this->authorize('view', $account);
         abort_unless($account->isOwnedBy($request->user()), 403);
@@ -32,6 +36,16 @@ class AccountTariffPaymentController extends Controller
             'account' => $account,
             'subscription' => $account->subscription,
             'standardPlan' => $plans->standardPlan(),
+            'requiresInitialDemoPayment' => $subscriptionAccess->requiresInitialDemoPayment($account),
+            'pendingDemoPayment' => $account->subscriptionPayments()
+                ->where('payment_type', AccountSubscriptionPaymentType::DemoInitial->value)
+                ->whereIn('status', [
+                    AccountSubscriptionPaymentStatus::PaymentStarted->value,
+                    AccountSubscriptionPaymentStatus::PaymentPending->value,
+                ])
+                ->whereNotNull('gateway_checkout_payload')
+                ->latest()
+                ->first(),
             'payments' => $account->subscriptionPayments()
                 ->with('plan')
                 ->latest()
@@ -45,12 +59,15 @@ class AccountTariffPaymentController extends Controller
         Account $account,
         SaasBillingPlans $plans,
         CreateAccountSubscriptionPayment $createPayment,
+        AccountSubscriptionAccess $subscriptionAccess,
         MonopaySaasBilling $billing,
+        StartAccountSubscriptionPaymentCheckout $startCheckout,
+        CreateDemoSignup $createDemoSignup,
     ): RedirectResponse {
         $this->authorize('view', $account);
         abort_unless($account->isOwnedBy($request->user()), 403);
 
-        $account->loadMissing('subscription.plan');
+        $account->loadMissing(['signupRequests', 'subscription.plan']);
 
         $plan = $account->subscription?->plan;
 
@@ -72,15 +89,18 @@ class AccountTariffPaymentController extends Controller
             ]);
         }
 
-        $type = $targetPlan->requires_recurring_payment
-            ? AccountSubscriptionPaymentType::FullSubscription
-            : AccountSubscriptionPaymentType::ManualRenewal;
-        $payment = $createPayment->execute($account, $targetPlan, $type);
+        $payment = $subscriptionAccess->requiresInitialDemoPayment($account)
+            ? $this->createDemoPayment($account, $createDemoSignup)
+            : $createPayment->execute(
+                $account,
+                $targetPlan,
+                $targetPlan->requires_recurring_payment
+                    ? AccountSubscriptionPaymentType::FullSubscription
+                    : AccountSubscriptionPaymentType::ManualRenewal,
+            );
 
         try {
-            $checkout = $targetPlan->requires_recurring_payment
-                ? $billing->startRecurringPayment($payment, $setting, route('dashboard.accounts.tariff-payments.show', $account))
-                : $billing->startOneTimePayment($payment, $setting, route('dashboard.accounts.tariff-payments.show', $account));
+            $checkout = $startCheckout->execute($payment, $setting, route('dashboard.accounts.tariff-payments.show', $account));
         } catch (Throwable $exception) {
             $payment->forceFill([
                 'status' => AccountSubscriptionPaymentStatus::PaymentFailed,
@@ -93,16 +113,22 @@ class AccountTariffPaymentController extends Controller
             ]);
         }
 
-        $payload = $checkout->gatewayPayload;
-        $response = is_array($payload['response'] ?? null) ? $payload['response'] : [];
-
-        $payment->forceFill([
-            'gateway_invoice_id' => is_string($response['invoiceId'] ?? null) ? $response['invoiceId'] : null,
-            'gateway_subscription_id' => is_string($response['subscriptionId'] ?? null) ? $response['subscriptionId'] : null,
-            'gateway_status' => is_string($response['status'] ?? null) ? $response['status'] : null,
-            'gateway_checkout_payload' => $payload,
-        ])->save();
+        if ($payment->payment_type === AccountSubscriptionPaymentType::DemoInitial) {
+            return redirect()
+                ->route('dashboard.accounts.tariff-payments.show', $account)
+                ->with('status', __('app.demo_payment_started'));
+        }
 
         return redirect()->away($checkout->url);
+    }
+
+    private function createDemoPayment(Account $account, CreateDemoSignup $createDemoSignup): AccountSubscriptionPayment
+    {
+        $signup = $account->signupRequests()
+            ->with(['account.subscription', 'plan'])
+            ->latest()
+            ->firstOrFail();
+
+        return $createDemoSignup->createPayment($signup);
     }
 }
