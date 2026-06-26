@@ -5,11 +5,15 @@
 @section('content')
     @php
         $landing = __('app.landing');
+        $demoPlan = $demoPlan ?? null;
+        $standardPlan = $standardPlan ?? null;
         $primaryLabel = auth()->check() ? __('app.dashboard') : $landing['hero_primary'];
         $currentLandingLocale = app()->getLocale() === 'en' ? 'en' : 'uk';
+        $loginHref = $currentLandingLocale === 'en' ? route('login.en') : route('login');
         $primaryHref = auth()->check()
             ? route('dashboard.index')
-            : ($currentLandingLocale === 'en' ? route('login.en') : route('login'));
+            : route('demo.signup.create');
+        $formatMoney = fn (?int $cents, ?string $currency, int $fallbackCents): string => number_format(($cents ?? $fallbackCents) / 100, 2).' '.($currency ?: 'UAH');
         $landingLocales = [
             'uk' => ['label' => 'UA', 'href' => route('home')],
             'en' => ['label' => 'EN', 'href' => route('home.en')],
@@ -88,7 +92,7 @@
                         </nav>
 
                         <a href="{{ $primaryHref }}" class="inline-flex h-10 items-center justify-center rounded-lg bg-[#3B223F] px-4 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(59,34,63,0.2)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
-                            {{ auth()->check() ? __('app.dashboard') : __('app.login') }}
+                            {{ $primaryLabel }}
                         </a>
                     </div>
                 </header>
@@ -109,6 +113,11 @@
                             <a href="#flow" class="inline-flex h-12 items-center justify-center rounded-lg border border-[#A78AB9]/30 bg-white/70 px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
                                 {{ $landing['hero_secondary'] }}
                             </a>
+                            @unless (auth()->check())
+                                <a href="{{ $loginHref }}" class="inline-flex h-12 items-center justify-center rounded-lg px-6 text-sm font-semibold text-[#3B223F] transition hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                                    {{ __('app.login') }}
+                                </a>
+                            @endunless
                         </div>
 
                         <div class="mt-8 max-w-xl border-l-2 border-[#A78AB9]/40 pl-4 text-sm leading-6 text-[#4D3152]/70">
@@ -174,6 +183,38 @@
                             <p class="relative mt-3 text-sm leading-6 text-[#4D3152]/75">{{ $step['copy'] }}</p>
                         </article>
                     @endforeach
+                </div>
+            </div>
+        </section>
+
+        <section class="border-b border-[#E7DDC9]/80 bg-[#FAF8F5] px-5 py-18 sm:px-8 lg:px-10">
+            <div class="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+                <div>
+                    <h2 class="text-3xl font-semibold leading-tight text-[#2B1731] sm:text-5xl">
+                        {{ $landing['pricing_title'] }}
+                    </h2>
+                    <p class="mt-5 text-base leading-7 text-[#4D3152]/75">
+                        {{ $landing['pricing_copy'] }}
+                    </p>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <article class="rounded-lg border border-[#A78AB9]/28 bg-white/75 p-6 shadow-[0_18px_44px_rgba(59,34,63,0.06)]">
+                        <div class="text-sm font-semibold uppercase tracking-[0.18em] text-[#A78AB9]">{{ $landing['pricing_demo_label'] }}</div>
+                        <h3 class="mt-4 text-2xl font-semibold text-[#2B1731]">{{ $landing['pricing_demo_title'] }}</h3>
+                        <div class="mt-5 text-4xl font-semibold text-[#2B1731]">{{ $formatMoney($demoPlan?->price_cents, $demoPlan?->currency, 100) }}</div>
+                        <p class="mt-4 text-sm leading-6 text-[#4D3152]/75">{{ $landing['pricing_demo_copy'] }}</p>
+                        <a href="{{ $primaryHref }}" class="mt-6 inline-flex h-11 items-center justify-center rounded-lg bg-[#3B223F] px-5 text-sm font-semibold text-white transition hover:bg-[#2B1731]">
+                            {{ $landing['pricing_demo_cta'] }}
+                        </a>
+                    </article>
+
+                    <article class="rounded-lg border border-[#E7DDC9]/90 bg-white/75 p-6 shadow-[0_18px_44px_rgba(59,34,63,0.06)]">
+                        <div class="text-sm font-semibold uppercase tracking-[0.18em] text-[#A78AB9]">{{ $landing['pricing_standard_label'] }}</div>
+                        <h3 class="mt-4 text-2xl font-semibold text-[#2B1731]">{{ $landing['pricing_standard_title'] }}</h3>
+                        <div class="mt-5 text-4xl font-semibold text-[#2B1731]">{{ $formatMoney($standardPlan?->price_cents, $standardPlan?->currency, 99900) }}</div>
+                        <p class="mt-4 text-sm leading-6 text-[#4D3152]/75">{{ $landing['pricing_standard_copy'] }}</p>
+                    </article>
                 </div>
             </div>
         </section>

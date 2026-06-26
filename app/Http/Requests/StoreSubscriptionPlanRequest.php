@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\SubscriptionPlanType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -30,6 +31,11 @@ class StoreSubscriptionPlanRequest extends FormRequest
             'price_cents' => ['required', 'integer', 'min:0', 'max:99999999'],
             'currency' => ['required', Rule::in(config('charm.currencies'))],
             'billing_interval' => ['required', Rule::in(['monthly', 'yearly'])],
+            'plan_type' => ['required', Rule::enum(SubscriptionPlanType::class)],
+            'access_days' => ['nullable', 'integer', 'min:1', 'max:3660'],
+            'public_signup_enabled' => ['nullable', 'boolean'],
+            'requires_recurring_payment' => ['nullable', 'boolean'],
+            'renewal_lead_days' => ['required', 'integer', 'min:0', 'max:30'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:32767'],
         ];

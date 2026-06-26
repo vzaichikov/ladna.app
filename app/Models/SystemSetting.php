@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['key', 'value'])]
 class SystemSetting extends Model
 {
+    public const SupportUrlKey = 'support.url';
+
     public static function stringValue(string $key, ?string $default = null): ?string
     {
         return static::query()

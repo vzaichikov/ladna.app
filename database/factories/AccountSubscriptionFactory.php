@@ -26,6 +26,9 @@ class AccountSubscriptionFactory extends Factory
             'status' => SubscriptionStatus::Trialing->value,
             'started_at' => now(),
             'ends_at' => now()->addMonth(),
+            'next_payment_at' => now()->addMonth()->subDays(2),
+            'payment_provider' => 'monopay',
+            'auto_renew_enabled' => false,
         ];
     }
 }

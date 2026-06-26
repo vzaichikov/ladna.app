@@ -302,6 +302,11 @@ class Account extends Model
         return $this->hasMany(CustomerPurchase::class);
     }
 
+    public function subscriptionPayments(): HasMany
+    {
+        return $this->hasMany(AccountSubscriptionPayment::class);
+    }
+
     public function customerClassPassReservations(): HasMany
     {
         return $this->hasMany(CustomerClassPassReservation::class);

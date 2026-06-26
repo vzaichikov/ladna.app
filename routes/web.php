@@ -34,6 +34,7 @@ use App\Http\Controllers\Platform\ProfileController as PlatformProfileController
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SystemSettingsController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
+use App\Http\Controllers\PublicDemoSignupController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\PublicStudioRulesController;
@@ -49,7 +50,10 @@ use App\Http\Controllers\TrainerTypeController;
 use App\Http\Controllers\WebsiteLeadController;
 use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
+use App\Http\Middleware\EnsurePublicSubscriptionIsActive;
+use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Models\Account;
+use App\Support\SaasBilling\SaasBillingPlans;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -57,20 +61,36 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\View;
 
-Route::get('/', function (Request $request): View {
+$landingPlans = static function (): array {
+    try {
+        $plans = app(SaasBillingPlans::class);
+
+        return [
+            'demoPlan' => $plans->demoPlan(),
+            'standardPlan' => $plans->standardPlan(),
+        ];
+    } catch (Throwable) {
+        return [
+            'demoPlan' => null,
+            'standardPlan' => null,
+        ];
+    }
+};
+
+Route::get('/', function (Request $request) use ($landingPlans): View {
     App::setLocale('uk');
     Carbon::setLocale('uk');
     $request->session()->put('locale', 'uk');
 
-    return view('welcome');
+    return view('welcome', $landingPlans());
 })->name('home');
 
-Route::get('/en', function (Request $request): View {
+Route::get('/en', function (Request $request) use ($landingPlans): View {
     App::setLocale('en');
     Carbon::setLocale('en');
     $request->session()->put('locale', 'en');
 
-    return view('welcome');
+    return view('welcome', $landingPlans());
 })->name('home.en');
 
 Route::get('/changelog.en.html', [ChangelogController::class, 'english'])->name('changelog.en');
@@ -90,6 +110,9 @@ Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::get('/en/login', [LoginController::class, 'createEnglish'])->name('login.en');
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
+    Route::get('/demo', [PublicDemoSignupController::class, 'create'])->name('demo.signup.create');
+    Route::post('/demo', [PublicDemoSignupController::class, 'store'])->middleware('throttle:demo-signup')->name('demo.signup.store');
+    Route::get('/demo/{accountSignupRequest}/return', [PublicDemoSignupController::class, 'returned'])->name('demo.return');
 });
 
 Route::post('/logout', [LoginController::class, 'destroy'])
@@ -102,6 +125,7 @@ Route::get('/customer/auth/google/callback', [CustomerAuthController::class, 'go
 
 Route::prefix('{accountSlug}/customer')
     ->name('customer.')
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->group(function (): void {
         Route::get('login', [CustomerAuthController::class, 'studioLogin'])->name('studio.login');
         Route::post('login/email', [CustomerAuthController::class, 'emailLogin'])->middleware('throttle:customer-login')->name('email.login');
@@ -127,8 +151,10 @@ Route::prefix('{accountSlug}/customer')
     });
 
 Route::get('/{accountSlug}/client/login', fn (string $accountSlug): RedirectResponse => redirect()->route('customer.studio.login', $accountSlug))
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('customer.legacy.login');
 Route::get('/{accountSlug}/client', fn (string $accountSlug): RedirectResponse => redirect()->route('customer.dashboard', $accountSlug))
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('customer.studio.dashboard');
 
 Route::middleware(['auth:web', 'can:accessPlatform'])
@@ -150,7 +176,7 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::resource('subscription-plans', SubscriptionPlanController::class)->except(['show']);
     });
 
-Route::middleware('auth:web')
+Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class])
     ->prefix('dashboard')
     ->name('dashboard.')
     ->group(function (): void {
@@ -166,8 +192,10 @@ Route::middleware('auth:web')
             ->name('accounts.owner-profile.edit');
         Route::put('accounts/{account}/owner-profile', [AccountOwnerProfileController::class, 'update'])
             ->name('accounts.owner-profile.update');
-        Route::get('accounts/{account}/tariff-payments', AccountTariffPaymentController::class)
+        Route::get('accounts/{account}/tariff-payments', [AccountTariffPaymentController::class, 'show'])
             ->name('accounts.tariff-payments.show');
+        Route::post('accounts/{account}/tariff-payments/pay-now', [AccountTariffPaymentController::class, 'payNow'])
+            ->name('accounts.tariff-payments.pay-now');
         Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])
             ->name('accounts.api-tokens.store');
         Route::post('accounts/{account}/api-tokens/{accountApiToken}/regenerate', [AccountApiTokenController::class, 'regenerate'])
@@ -304,16 +332,23 @@ Route::middleware('auth:web')
     });
 
 Route::get('/{accountSlug}/rules', PublicStudioRulesController::class)
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.studio-rules');
 Route::get('/{accountSlug}/{locationSlug}/schedule', [PublicScheduleController::class, 'show'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.schedule');
 Route::get('/{accountSlug}/{locationSlug}/schedule/embed', [PublicScheduleController::class, 'embed'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.schedule.embed');
 Route::get('/{accountSlug}/{locationSlug}/price', [PublicPriceController::class, 'show'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.price');
 Route::get('/{accountSlug}/{locationSlug}/price/embed', [PublicPriceController::class, 'embed'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.price.embed');
 Route::get('/{accountSlug}/{locationSlug}/price/{classPassPlanSlug}/buy', [PublicClassPassPurchaseController::class, 'show'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.class-pass-plans.buy');
 Route::post('/{accountSlug}/{locationSlug}/price/{classPassPlanSlug}/buy', [PublicClassPassPurchaseController::class, 'store'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.class-pass-plans.purchase');

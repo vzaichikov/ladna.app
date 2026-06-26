@@ -16,11 +16,12 @@
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($plans as $plan)
-            <div class="crm-row lg:grid-cols-[1fr_160px_120px_auto] lg:items-center">
+            <div class="crm-row lg:grid-cols-[1fr_140px_160px_120px_auto] lg:items-center">
                 <div>
                     <h2 class="font-semibold text-slate-950">{{ $plan->name }}</h2>
                     <p class="mt-1 text-sm text-slate-500">{{ $plan->slug }}</p>
                 </div>
+                <div class="text-sm font-semibold text-slate-700">{{ __('app.subscription_plan_type_'.$plan->plan_type->value) }}</div>
                 <div class="text-sm font-semibold text-slate-700">{{ number_format($plan->price_cents / 100, 2) }} {{ $plan->currency }}</div>
                 <span class="{{ $plan->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
                     {{ $plan->is_active ? __('app.active') : __('app.inactive') }}

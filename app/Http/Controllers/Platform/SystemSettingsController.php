@@ -19,12 +19,14 @@ class SystemSettingsController extends Controller
             'fontOptions' => $fontOptions,
             'currentFontKey' => SystemAppearance::currentFontKey(),
             'previewFontsUrl' => SystemAppearance::googleFontsUrl($fontOptions),
+            'supportUrl' => SystemSetting::stringValue(SystemSetting::SupportUrlKey),
         ]);
     }
 
     public function update(UpdateSystemSettingsRequest $request): RedirectResponse
     {
         SystemSetting::setValue(SystemAppearance::FontSettingKey, $request->validated('font_family'));
+        SystemSetting::setValue(SystemSetting::SupportUrlKey, $request->validated('support_url'));
 
         return redirect()
             ->route('platform.settings.edit')
