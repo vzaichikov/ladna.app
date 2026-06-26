@@ -44,18 +44,11 @@
                 <form method="POST" action="{{ route('demo.signup.store') }}" class="space-y-5">
                     @csrf
 
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <label class="block">
-                            <span class="crm-label">{{ __('app.studio_name') }}</span>
-                            <input name="studio_name" value="{{ old('studio_name') }}" required class="crm-field">
-                            @error('studio_name') <span class="crm-help">{{ $message }}</span> @enderror
-                        </label>
-                        <label class="block">
-                            <span class="crm-label">{{ __('app.account_slug') }}</span>
-                            <input name="account_slug" value="{{ old('account_slug') }}" class="crm-field">
-                            @error('account_slug') <span class="crm-help">{{ $message }}</span> @enderror
-                        </label>
-                    </div>
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.studio_name') }}</span>
+                        <input name="studio_name" value="{{ old('studio_name') }}" required class="crm-field">
+                        @error('studio_name') <span class="crm-help">{{ $message }}</span> @enderror
+                    </label>
 
                     <div class="grid gap-4 sm:grid-cols-2">
                         <label class="block">
@@ -65,7 +58,7 @@
                         </label>
                         <label class="block">
                             <span class="crm-label">{{ __('app.owner_phone') }}</span>
-                            <input name="owner_phone" value="{{ old('owner_phone') }}" class="crm-field">
+                            <input name="owner_phone" type="tel" value="{{ old('owner_phone') }}" class="crm-field" autocomplete="tel" data-phone-mask data-country-code="UA">
                             @error('owner_phone') <span class="crm-help">{{ $message }}</span> @enderror
                         </label>
                     </div>

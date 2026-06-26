@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Enums\AccountSignupStatus;
-use App\Models\Account;
 use App\Models\AccountSignupRequest;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,14 +27,6 @@ class StartDemoSignupRequest extends FormRequest
     {
         return [
             'studio_name' => ['required', 'string', 'max:255'],
-            'account_slug' => [
-                'nullable',
-                'string',
-                'max:255',
-                'alpha_dash:ascii',
-                Rule::unique((new Account)->getTable(), 'slug'),
-                Rule::unique((new AccountSignupRequest)->getTable(), 'account_slug'),
-            ],
             'owner_name' => ['required', 'string', 'max:255'],
             'owner_email' => [
                 'required',

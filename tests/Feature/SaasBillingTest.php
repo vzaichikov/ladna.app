@@ -43,6 +43,39 @@ class SaasBillingTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_demo_signup_form_uses_phone_mask_for_owner_phone(): void
+    {
+        $this->upsertPlan('demo-month', [
+            'name' => 'Demo test',
+            'price_cents' => 100,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Demo,
+            'access_days' => 30,
+            'public_signup_enabled' => true,
+            'requires_recurring_payment' => false,
+            'sort_order' => 0,
+        ]);
+        $this->upsertPlan('standard-monthly', [
+            'name' => 'Standard test',
+            'price_cents' => 99900,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Standard,
+            'access_days' => 30,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => true,
+            'sort_order' => 10,
+        ]);
+
+        $this->get(route('demo.signup.create'))
+            ->assertOk()
+            ->assertDontSee('name="account_slug"', false)
+            ->assertSee('name="owner_phone"', false)
+            ->assertSee('type="tel"', false)
+            ->assertSee('autocomplete="tel"', false)
+            ->assertSee('data-phone-mask', false)
+            ->assertSee('data-country-code="UA"', false);
+    }
+
     public function test_demo_signup_starts_one_uah_monopay_payment_without_creating_account(): void
     {
         $this->platformMonopayIntegration(['api_token' => 'mono-token']);
@@ -67,7 +100,6 @@ class SaasBillingTest extends TestCase
 
         $this->post(route('demo.signup.store'), [
             'studio_name' => 'Studio One',
-            'account_slug' => 'studio-one-demo',
             'owner_name' => 'Oksana Studio',
             'owner_email' => 'owner-demo@example.com',
             'owner_phone' => '+380501111111',
@@ -79,12 +111,50 @@ class SaasBillingTest extends TestCase
         $payment = AccountSubscriptionPayment::firstOrFail();
 
         $this->assertSame($demoPlan->id, $signup->subscription_plan_id);
-        $this->assertSame('studio-one-demo', $signup->account_slug);
+        $this->assertSame('studio-one', $signup->account_slug);
         $this->assertSame(100, $signup->amount_cents);
         $this->assertSame('invoice-demo-1', $signup->gateway_invoice_id);
         $this->assertSame($signup->order_id, $payment->order_id);
         $this->assertSame('payment_started', $payment->status->value);
-        $this->assertFalse(Account::where('slug', 'studio-one-demo')->exists());
+        $this->assertFalse(Account::where('slug', 'studio-one')->exists());
+    }
+
+    public function test_demo_signup_generates_slug_with_one_suffix_when_base_slug_exists(): void
+    {
+        $this->platformMonopayIntegration(['api_token' => 'mono-token']);
+        Account::factory()->create(['slug' => 'studio-one']);
+        $demoPlan = $this->upsertPlan('demo-month', [
+            'name' => 'Demo test',
+            'price_cents' => 100,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Demo,
+            'access_days' => 30,
+            'public_signup_enabled' => true,
+            'requires_recurring_payment' => false,
+            'sort_order' => 0,
+        ]);
+
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'pageUrl' => 'https://pay.example/demo-conflict',
+                'invoiceId' => 'invoice-demo-conflict',
+                'status' => 'created',
+            ]),
+        ]);
+
+        $this->post(route('demo.signup.store'), [
+            'studio_name' => 'Studio One',
+            'owner_name' => 'Oksana Studio',
+            'owner_email' => 'owner-demo-conflict@example.com',
+            'owner_phone' => '+380501111111',
+            'owner_password' => 'secret123',
+            'owner_password_confirmation' => 'secret123',
+        ])->assertRedirect('https://pay.example/demo-conflict');
+
+        $signup = AccountSignupRequest::where('owner_email', 'owner-demo-conflict@example.com')->firstOrFail();
+
+        $this->assertSame($demoPlan->id, $signup->subscription_plan_id);
+        $this->assertSame('studio-one-1', $signup->account_slug);
     }
 
     public function test_signed_monopay_demo_callback_creates_account_owner_and_trial_subscription(): void
@@ -319,7 +389,6 @@ class SaasBillingTest extends TestCase
 
         $this->post(route('demo.signup.store'), [
             'studio_name' => 'Flow Studio',
-            'account_slug' => 'flow-studio',
             'owner_name' => 'Flow Owner',
             'owner_email' => 'flow-owner@example.com',
             'owner_phone' => '+380501234567',

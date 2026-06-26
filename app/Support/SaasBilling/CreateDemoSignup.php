@@ -20,7 +20,7 @@ class CreateDemoSignup
      */
     public function execute(array $validated, SubscriptionPlan $plan): array
     {
-        $slug = $this->uniqueSlug((string) ($validated['account_slug'] ?: $validated['studio_name']));
+        $slug = $this->uniqueSlug((string) $validated['studio_name']);
         $orderId = $this->orderId();
 
         $signup = AccountSignupRequest::create([
@@ -61,7 +61,7 @@ class CreateDemoSignup
         $base = Str::slug($source);
         $slugBase = $base !== '' ? $base : 'studio';
         $candidate = $slugBase;
-        $suffix = 2;
+        $suffix = 1;
 
         while (AccountSignupRequest::where('account_slug', $candidate)->exists() || Account::where('slug', $candidate)->exists()) {
             $candidate = $slugBase.'-'.$suffix;
