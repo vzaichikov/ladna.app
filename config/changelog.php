@@ -20,27 +20,6 @@ return [
     'releases' => [
         'en' => [
             [
-                'version' => '0.37.0',
-                'date' => '2026-06-26',
-                'title' => 'Studio-first demo onboarding',
-                'items' => ['Changed demo signup so the studio workspace is created immediately, the owner enters the account first, and the 1 ₴ demo payment is completed from the plan and payments page before workspace sections and public pages open.'],
-                'meta' => 'Release commit.',
-            ],
-            [
-                'version' => '0.36.1',
-                'date' => '2026-06-26',
-                'title' => 'Billing setup polish',
-                'items' => ['Simplified Monopay integration settings, kept demo payments on direct debit while subscriptions use the recurring flow, and switched visible UAH prices to the hryvnia symbol.'],
-                'meta' => 'Release commit.',
-            ],
-            [
-                'version' => '0.36.0',
-                'date' => '2026-06-26',
-                'title' => 'SaaS trial and billing flow',
-                'items' => ['Added the one-month paid demo signup flow, configurable promo, demo, and monthly SaaS plans, Monopay subscription payments for studio owners, billing history, expired-plan read-only access, public expired-plan messaging, support links, and safer payment retry and auto-renewal handling.'],
-                'meta' => 'Release commit.',
-            ],
-            [
                 'version' => '0.35.0',
                 'date' => '2026-06-26',
                 'title' => 'Class history and pass normalization',
@@ -373,27 +352,6 @@ return [
             ],
         ],
         'uk' => [
-            [
-                'version' => '0.37.0',
-                'date' => '2026-06-26',
-                'title' => 'Демо-онбординг зі створенням студії',
-                'items' => ['Змінено демо-реєстрацію: кабінет студії створюється одразу, власниця спершу входить у нього, а демо-оплата 1 ₴ завершується на сторінці тарифу й платежів перед відкриттям робочих розділів і публічних сторінок.'],
-                'meta' => 'Релізний коміт.',
-            ],
-            [
-                'version' => '0.36.1',
-                'date' => '2026-06-26',
-                'title' => 'Полірування оплат',
-                'items' => ['Спрощено налаштування інтеграції Monopay, демо-оплати залишено прямим списанням, а підписки - у recurring-флоу, ціни в UAH замінено на символ гривні.'],
-                'meta' => 'Релізний коміт.',
-            ],
-            [
-                'version' => '0.36.0',
-                'date' => '2026-06-26',
-                'title' => 'Демо-доступ і SaaS-оплати',
-                'items' => ['Додано платний демо-флоу на місяць, налаштовувані промо, демо та місячні SaaS-тарифи, підписки Monopay для власниць студій, історію оплат, режим перегляду після завершення тарифу, повідомлення для публічних сторінок, посилання підтримки та безпечнішу повторну оплату й обробку автосписань.'],
-                'meta' => 'Релізний коміт.',
-            ],
             [
                 'version' => '0.35.0',
                 'date' => '2026-06-26',
