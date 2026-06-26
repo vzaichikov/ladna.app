@@ -23,7 +23,7 @@ return [
                 'version' => '0.36.1',
                 'date' => '2026-06-26',
                 'title' => 'Billing setup polish',
-                'items' => ['Simplified Monopay integration settings, kept demo payments on direct debit while subscriptions use the recurring flow, switched visible UAH prices to the hryvnia symbol, and adjusted the landing header so sign-in is separate from demo signup on mobile and desktop.'],
+                'items' => ['Simplified Monopay integration settings, kept demo payments on direct debit while subscriptions use the recurring flow, and switched visible UAH prices to the hryvnia symbol.'],
                 'meta' => 'Release commit.',
             ],
             [
@@ -369,8 +369,8 @@ return [
             [
                 'version' => '0.36.1',
                 'date' => '2026-06-26',
-                'title' => 'Полірування оплат і лендингу',
-                'items' => ['Спрощено налаштування інтеграції Monopay, демо-оплати залишено прямим списанням, а підписки - у recurring-флоу, ціни в UAH замінено на символ гривні, а в хедері лендингу вхід відокремлено від оформлення демо на мобільному й десктопі.'],
+                'title' => 'Полірування оплат',
+                'items' => ['Спрощено налаштування інтеграції Monopay, демо-оплати залишено прямим списанням, а підписки - у recurring-флоу, ціни в UAH замінено на символ гривні.'],
                 'meta' => 'Релізний коміт.',
             ],
             [
