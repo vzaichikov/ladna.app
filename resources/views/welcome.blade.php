@@ -62,8 +62,8 @@
             </div>
 
             <div class="relative mx-auto flex max-w-7xl flex-col">
-                <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <a href="{{ route('home') }}" class="mx-auto inline-flex items-center gap-3 text-[#2B1731] md:mx-0">
+                <header class="flex items-center justify-between gap-4">
+                    <a href="{{ route('home') }}" class="inline-flex items-center gap-3 text-[#2B1731]">
                         <x-ui.app-logo
                             mark-class="h-10 w-10"
                             text-class="text-[#2B1731]"
@@ -77,7 +77,7 @@
                         <a href="#team" class="transition hover:text-[#2B1731]">{{ $landing['nav_team'] }}</a>
                     </nav>
 
-                    <div class="flex w-full items-center justify-center gap-3 md:w-auto md:justify-end">
+                    <div class="flex items-center gap-2">
                         <nav class="inline-flex h-10 items-center rounded-lg border border-[#A78AB9]/30 bg-white/70 p-1 shadow-xs" aria-label="{{ __('app.default_language') }}">
                             @foreach ($landingLocales as $locale => $localeOption)
                                 <a
