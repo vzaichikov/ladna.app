@@ -50,7 +50,9 @@
                         <div class="mt-4 space-y-6">
                             @foreach ($group['sections'] as $section)
                                 <section>
-                                    <div class="mb-3 text-sm font-semibold uppercase text-brand-600">{{ $section['title'] }}</div>
+                                    @if ($section['title'] !== '')
+                                        <div class="mb-3 text-sm font-semibold uppercase text-brand-600">{{ $section['title'] }}</div>
+                                    @endif
                                     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                         @foreach ($section['plans'] as $classPassPlan)
                                             <article class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm">

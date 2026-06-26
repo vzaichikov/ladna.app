@@ -45,28 +45,51 @@ class PublicPriceTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('data.0.key', 'group_class')
+            ->assertJsonPath('data.0.sections.0.key', 'all')
+            ->assertJsonPath('data.0.sections.0.title', '')
             ->assertJsonPath('data.0.sections.0.plans.0.name', $plans['group']->name)
             ->assertJsonPath('data.0.sections.0.plans.0.schedule_kind', 'group_class')
             ->assertJsonPath('data.0.sections.0.plans.0.total_validity_days', 120)
             ->assertJsonPath('data.1.key', 'private_lesson')
+            ->assertJsonPath('data.1.sections.0.key', 'all')
+            ->assertJsonPath('data.1.sections.0.title', '')
             ->assertJsonPath('data.1.sections.0.plans.0.schedule_kind', 'private_lesson')
             ->assertJsonPath('data.1.sections.0.plans.0.trainer_types.0.name', 'Top trainer')
             ->assertJsonPath('data.2.key', 'room_rental')
+            ->assertJsonPath('data.2.sections.0.key', 'all')
+            ->assertJsonPath('data.2.sections.0.title', '')
             ->assertJsonPath('data.2.sections.0.plans.0.schedule_kind', 'room_rental')
             ->assertJsonPath('data.2.sections.0.plans.0.rooms.0.slug', 'big-hall')
-            ->assertJsonMissing(['name' => $plans['inactive']->name]);
+            ->assertJsonMissing(['name' => $plans['inactive']->name])
+            ->assertJsonMissing(['key' => 'morning'])
+            ->assertJsonMissing(['key' => 'full_day'])
+            ->assertJsonMissing(['key' => 'big-hall'])
+            ->assertJsonMissing(['title' => 'Top trainer']);
     }
 
     public function test_public_price_groups_segmented_plans_inside_schedule_kind(): void
     {
         [$account, $location, $plans] = $this->priceContext();
         $classType = $plans['group']->classTypes()->firstOrFail();
+        $morningSegment = ClassPassSegment::factory()->for($account)->create([
+            'name' => 'Morning passes',
+            'slug' => 'morning-passes',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 10,
+        ]);
         $segment = ClassPassSegment::factory()->for($account)->create([
             'name' => 'Kids passes',
             'slug' => 'kids-passes',
             'schedule_kind' => 'group_class',
-            'sort_order' => 10,
+            'sort_order' => 20,
         ]);
+        $morningPlan = ClassPassPlan::factory()->for($account)->for($morningSegment)->create([
+            'name' => 'Morning 8 classes',
+            'slug' => 'morning-8-classes',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 15,
+        ]);
+        $morningPlan->classTypes()->sync([$classType->id]);
         $segmentedPlan = ClassPassPlan::factory()->for($account)->for($segment)->create([
             'name' => 'Kids 8 classes',
             'slug' => 'kids-8-classes',
@@ -77,18 +100,72 @@ class PublicPriceTest extends TestCase
 
         $this->get(route('public.price', [$account->slug, $location->slug]))
             ->assertOk()
+            ->assertSee(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plans['group']->slug]), false)
+            ->assertDontSee(__('app.without_class_pass_segment'))
+            ->assertDontSee(__('app.morning_format'))
+            ->assertDontSee(__('app.full_day'))
+            ->assertSee('Morning passes')
             ->assertSee('Kids passes')
             ->assertSee($segmentedPlan->name);
 
         $this->getJson("/api/v1/public/{$account->slug}/{$location->slug}/price")
             ->assertOk()
             ->assertJsonPath('data.0.key', 'group_class')
-            ->assertJsonPath('data.0.sections.0.key', 'full_day')
+            ->assertJsonPath('data.0.sections.0.key', 'without_segment')
+            ->assertJsonPath('data.0.sections.0.title', '')
             ->assertJsonPath('data.0.sections.0.plans.0.segment', null)
-            ->assertJsonPath('data.0.sections.1.key', 'segment:kids-passes')
-            ->assertJsonPath('data.0.sections.1.title', 'Kids passes')
-            ->assertJsonPath('data.0.sections.1.plans.0.name', $segmentedPlan->name)
-            ->assertJsonPath('data.0.sections.1.plans.0.segment.slug', 'kids-passes');
+            ->assertJsonPath('data.0.sections.1.key', 'segment:morning-passes')
+            ->assertJsonPath('data.0.sections.1.title', 'Morning passes')
+            ->assertJsonPath('data.0.sections.1.plans.0.name', $morningPlan->name)
+            ->assertJsonPath('data.0.sections.1.plans.0.segment.slug', 'morning-passes')
+            ->assertJsonPath('data.0.sections.2.key', 'segment:kids-passes')
+            ->assertJsonPath('data.0.sections.2.title', 'Kids passes')
+            ->assertJsonPath('data.0.sections.2.plans.0.name', $segmentedPlan->name)
+            ->assertJsonPath('data.0.sections.2.plans.0.segment.slug', 'kids-passes');
+    }
+
+    public function test_public_price_treats_inactive_and_mismatched_segments_as_unsegmented(): void
+    {
+        [$account, $location, $plans] = $this->priceContext();
+        $classType = $plans['group']->classTypes()->firstOrFail();
+        $inactiveSegment = ClassPassSegment::factory()->for($account)->create([
+            'name' => 'Inactive segment',
+            'slug' => 'inactive-segment',
+            'schedule_kind' => 'group_class',
+            'is_active' => false,
+        ]);
+        $mismatchedSegment = ClassPassSegment::factory()->for($account)->create([
+            'name' => 'Private segment',
+            'slug' => 'private-segment',
+            'schedule_kind' => 'private_lesson',
+        ]);
+        $inactiveSegmentPlan = ClassPassPlan::factory()->for($account)->for($inactiveSegment)->create([
+            'name' => 'Inactive segment plan',
+            'slug' => 'inactive-segment-plan',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 11,
+        ]);
+        $mismatchedSegmentPlan = ClassPassPlan::factory()->for($account)->for($mismatchedSegment)->create([
+            'name' => 'Mismatched segment plan',
+            'slug' => 'mismatched-segment-plan',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 12,
+        ]);
+        $inactiveSegmentPlan->classTypes()->sync([$classType->id]);
+        $mismatchedSegmentPlan->classTypes()->sync([$classType->id]);
+
+        $this->getJson("/api/v1/public/{$account->slug}/{$location->slug}/price")
+            ->assertOk()
+            ->assertJsonPath('data.0.sections.0.key', 'all')
+            ->assertJsonPath('data.0.sections.0.title', '')
+            ->assertJsonPath('data.0.sections.0.plans.0.name', $plans['group']->name)
+            ->assertJsonPath('data.0.sections.0.plans.0.segment', null)
+            ->assertJsonPath('data.0.sections.0.plans.1.name', $inactiveSegmentPlan->name)
+            ->assertJsonPath('data.0.sections.0.plans.1.segment', null)
+            ->assertJsonPath('data.0.sections.0.plans.2.name', $mismatchedSegmentPlan->name)
+            ->assertJsonPath('data.0.sections.0.plans.2.segment', null)
+            ->assertJsonMissing(['key' => 'segment:inactive-segment'])
+            ->assertJsonMissing(['key' => 'segment:private-segment']);
     }
 
     /**

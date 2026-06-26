@@ -308,8 +308,8 @@ class LadnaOpenApiSpec
             'PriceSection' => [
                 'type' => 'object',
                 'properties' => [
-                    'key' => ['type' => 'string'],
-                    'title' => ['type' => 'string'],
+                    'key' => ['type' => 'string', 'description' => 'Section key. Segment sections use segment:{slug}; anonymous unsegmented sections use an internal key.'],
+                    'title' => ['type' => 'string', 'description' => 'Visible segment title, or an empty string for anonymous unsegmented plan sections.'],
                     'plans' => [
                         'type' => 'array',
                         'items' => ['$ref' => '#/components/schemas/ClassPassPlan'],

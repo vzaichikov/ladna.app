@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.33.1',
+                'date' => '2026-06-26',
+                'title' => 'Public price segment grouping',
+                'items' => ['Updated the public price page and API to group class passes only by manually assigned segments, with unsegmented passes shown first without an extra public heading.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.33.0',
                 'date' => '2026-06-26',
                 'title' => 'Class pass segments',
@@ -331,6 +338,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.33.1',
+                'date' => '2026-06-26',
+                'title' => 'Групування сегментів у публічному прайсі',
+                'items' => ['Оновлено публічний прайс і API: абонементи тепер групуються тільки за вручну призначеними сегментами, а абонементи без сегмента показуються першими без додаткового публічного заголовка.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.33.0',
                 'date' => '2026-06-26',

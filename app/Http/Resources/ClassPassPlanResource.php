@@ -14,7 +14,10 @@ class ClassPassPlanResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $segment = $this->resource->relationLoaded('classPassSegment') && $this->classPassSegment?->is_active
+        $segment = $this->resource->relationLoaded('classPassSegment')
+            && $this->classPassSegment?->account_id === $this->account_id
+            && $this->classPassSegment?->schedule_kind === $this->schedule_kind
+            && $this->classPassSegment?->is_active
             ? $this->classPassSegment
             : null;
 

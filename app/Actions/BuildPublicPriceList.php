@@ -24,6 +24,7 @@ class BuildPublicPriceList
             ->with(['classPassSegment', 'classTypes', 'trainerTypes', 'rooms.location'])
             ->orderBy('sort_order')
             ->orderBy('name')
+            ->orderBy('id')
             ->get();
 
         return collect([
@@ -46,69 +47,96 @@ class BuildPublicPriceList
         return [
             'key' => $scheduleKind->value,
             'title' => __('app.'.$titleKey),
-            'sections' => $groupPlans
-                ->groupBy(fn (ClassPassPlan $plan): string => $this->sectionKey($plan, $scheduleKind))
-                ->map(fn (Collection $plans, string $key): array => [
-                    'key' => $key,
-                    'title' => $this->sectionTitle($plans->first(), $scheduleKind, $key),
-                    'sort_key' => $this->sectionSortKey($plans->first(), $scheduleKind, $key),
-                    'plans' => $plans->values(),
-                ])
+            'sections' => $this->sections($groupPlans, $scheduleKind),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, ClassPassPlan>  $plans
+     * @return Collection<int, array{key: string, title: string, plans: Collection<int, ClassPassPlan>}>
+     */
+    private function sections(Collection $plans, ScheduleKind $scheduleKind): Collection
+    {
+        $plans = $plans
+            ->sortBy(fn (ClassPassPlan $plan): string => $this->planSortKey($plan))
+            ->values();
+
+        if ($plans->isEmpty()) {
+            return collect();
+        }
+
+        $segmentedPlans = $plans->filter(fn (ClassPassPlan $plan): bool => $this->hasPublicSegment($plan, $scheduleKind));
+
+        if ($segmentedPlans->isEmpty()) {
+            return collect([$this->anonymousSection('all', $plans)]);
+        }
+
+        $sections = collect();
+        $anonymousPlans = $plans
+            ->reject(fn (ClassPassPlan $plan): bool => $this->hasPublicSegment($plan, $scheduleKind))
+            ->values();
+
+        if ($anonymousPlans->isNotEmpty()) {
+            $sections->push($this->anonymousSection('without_segment', $anonymousPlans));
+        }
+
+        return $sections
+            ->concat($segmentedPlans
+                ->groupBy(fn (ClassPassPlan $plan): string => (string) $plan->classPassSegment->id)
+                ->map(fn (Collection $plans): array => $this->segmentSection($plans))
                 ->sortBy('sort_key')
-                ->map(fn (array $section): array => [
-                    'key' => $section['key'],
-                    'title' => $section['title'],
-                    'plans' => $section['plans'],
-                ])
+                ->values())
+            ->map(fn (array $section): array => [
+                'key' => $section['key'],
+                'title' => $section['title'],
+                'plans' => $section['plans'],
+            ])
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, ClassPassPlan>  $plans
+     * @return array{key: string, title: string, plans: Collection<int, ClassPassPlan>}
+     */
+    private function anonymousSection(string $key, Collection $plans): array
+    {
+        return [
+            'key' => $key,
+            'title' => '',
+            'plans' => $plans,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, ClassPassPlan>  $plans
+     * @return array{key: string, title: string, sort_key: string, plans: Collection<int, ClassPassPlan>}
+     */
+    private function segmentSection(Collection $plans): array
+    {
+        $segment = $plans->first()->classPassSegment;
+
+        return [
+            'key' => 'segment:'.$segment->slug,
+            'title' => $segment->name,
+            'sort_key' => sprintf('%05d-%s-%010d', $segment->sort_order, mb_strtolower($segment->name), $segment->id),
+            'plans' => $plans
+                ->sortBy(fn (ClassPassPlan $plan): string => $this->planSortKey($plan))
                 ->values(),
         ];
     }
 
-    private function sectionKey(ClassPassPlan $plan, ScheduleKind $scheduleKind): string
+    private function hasPublicSegment(ClassPassPlan $plan, ScheduleKind $scheduleKind): bool
     {
-        if ($this->hasActiveSegment($plan)) {
-            return 'segment:'.$plan->classPassSegment->slug;
-        }
+        $segment = $plan->classPassSegment;
 
-        return match ($scheduleKind) {
-            ScheduleKind::GroupClass => $plan->available_until_time ? 'morning' : 'full_day',
-            ScheduleKind::PrivateLesson => $plan->trainerTypes->pluck('name')->sort()->implode('|') ?: 'any_trainer',
-            ScheduleKind::RoomRental => $plan->rooms->pluck('slug')->sort()->implode('|') ?: 'all_rooms',
-        };
+        return $segment !== null
+            && $segment->account_id === $plan->account_id
+            && $segment->schedule_kind === $scheduleKind
+            && $segment->is_active;
     }
 
-    private function sectionTitle(?ClassPassPlan $plan, ScheduleKind $scheduleKind, string $key): string
+    private function planSortKey(ClassPassPlan $plan): string
     {
-        if (! $plan) {
-            return '';
-        }
-
-        if ($this->hasActiveSegment($plan)) {
-            return $plan->classPassSegment->name;
-        }
-
-        return match ($scheduleKind) {
-            ScheduleKind::GroupClass => $key === 'morning' ? __('app.morning_format') : __('app.full_day'),
-            ScheduleKind::PrivateLesson => $plan->trainerTypes->pluck('name')->sort()->implode(', ') ?: __('app.any_trainer_type'),
-            ScheduleKind::RoomRental => $plan->rooms->pluck('name')->sort()->implode(', ') ?: __('app.all_rooms'),
-        };
-    }
-
-    private function sectionSortKey(?ClassPassPlan $plan, ScheduleKind $scheduleKind, string $key): string
-    {
-        if (! $plan) {
-            return '99999-'.$key;
-        }
-
-        $segmentSort = $this->hasActiveSegment($plan)
-            ? $plan->classPassSegment->sort_order
-            : -1;
-
-        return sprintf('%05d-%05d-%s-%s', $segmentSort, $plan->sort_order, $scheduleKind->value, $key);
-    }
-
-    private function hasActiveSegment(ClassPassPlan $plan): bool
-    {
-        return $plan->classPassSegment !== null && $plan->classPassSegment->is_active;
+        return sprintf('%05d-%s-%010d', $plan->sort_order, mb_strtolower($plan->name), $plan->id);
     }
 }
