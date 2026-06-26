@@ -87,6 +87,7 @@ class CustomerClassPassTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
                 'sessions_delta' => 2,
                 'reason' => 'Medical recovery compensation',
             ])
@@ -107,6 +108,88 @@ class CustomerClassPassTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_owner_can_remove_sessions_from_customer_class_pass_and_history_is_stored(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'subtract',
+                'sessions_delta' => 2,
+                'reason' => 'Manual correction after wrong issue',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertSessionHas('status', __('app.customer_class_pass_adjusted'));
+
+        $customerClassPass->refresh();
+        $adjustment = $customerClassPass->adjustments()->firstOrFail();
+
+        $this->assertSame(2, $customerClassPass->sessions_count);
+        $this->assertSame(-2, $adjustment->sessions_delta);
+        $this->assertSame(4, $adjustment->previous_sessions_count);
+        $this->assertSame(2, $adjustment->new_sessions_count);
+        $this->assertSame('Manual correction after wrong issue', $adjustment->reason);
+        $this->assertSame($owner->id, $adjustment->user_id);
+        $this->assertSame($account->id, $adjustment->account_id);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_session_removal_cannot_drop_total_below_used_or_reserved_sessions(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan, $scheduledClass] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+        $usedBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create(['status' => 'attended', 'attended_at' => Carbon::parse('2026-06-19 10:00:00')]);
+        $reservedScheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->create([
+                'starts_at' => Carbon::parse('2026-06-22 10:00:00'),
+                'ends_at' => Carbon::parse('2026-06-22 11:00:00'),
+            ]);
+        $reservedBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($reservedScheduledClass)
+            ->for($customer)
+            ->create();
+
+        $customerClassPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $usedBooking->id,
+            'scheduled_class_id' => $scheduledClass->id,
+            'status' => CustomerClassPassReservationStatus::Used->value,
+            'reserved_at' => Carbon::parse('2026-06-18 10:00:00'),
+            'used_at' => Carbon::parse('2026-06-19 10:00:00'),
+        ]);
+        $customerClassPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $reservedBooking->id,
+            'scheduled_class_id' => $reservedScheduledClass->id,
+            'status' => CustomerClassPassReservationStatus::Reserved->value,
+            'reserved_at' => Carbon::parse('2026-06-20 09:00:00'),
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'subtract',
+                'sessions_delta' => 3,
+                'reason' => 'Invalid correction',
+            ])
+            ->assertSessionHasErrors('sessions_delta');
+
+        $customerClassPass->refresh();
+        $this->assertSame(4, $customerClassPass->sessions_count);
+        $this->assertSame(0, $customerClassPass->adjustments()->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_non_owner_cannot_add_sessions_to_customer_class_pass(): void
     {
         [, $account, $customer, $plan] = $this->passContext();
@@ -118,6 +201,7 @@ class CustomerClassPassTest extends TestCase
 
         $this->actingAs($manager)
             ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
                 'sessions_delta' => 2,
                 'reason' => 'Manager attempt',
             ])
@@ -157,6 +241,7 @@ class CustomerClassPassTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
                 'sessions_delta' => 1,
                 'reason' => 'Force majeure replacement',
             ])
@@ -192,7 +277,7 @@ class CustomerClassPassTest extends TestCase
             'closed_at' => Carbon::parse('2026-01-10 10:00:00'),
         ])->save();
 
-        $payload = ['sessions_delta' => 1, 'reason' => 'Invalid compensation'];
+        $payload = ['direction' => 'add', 'sessions_delta' => 1, 'reason' => 'Invalid compensation'];
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $cancelledPass]), $payload)
@@ -236,7 +321,9 @@ class CustomerClassPassTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
             ->assertOk()
-            ->assertSee((string) $customerClassPass->sessions_count);
+            ->assertSee((string) $customerClassPass->sessions_count)
+            ->assertSee(__('app.remove_class_pass_sessions'))
+            ->assertSee('name="direction" value="subtract"', false);
     }
 
     /**

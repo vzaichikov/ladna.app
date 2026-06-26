@@ -25,6 +25,7 @@ return [
         'logout' => 'log-out',
         'map-pin' => 'map-pin',
         'menu' => 'menu',
+        'minus' => 'minus',
         'payments' => 'credit-card',
         'plus' => 'plus',
         'rooms' => 'building',

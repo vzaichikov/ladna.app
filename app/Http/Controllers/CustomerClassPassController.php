@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\AddCustomerClassPassSessions;
+use App\Actions\AdjustCustomerClassPassSessions;
 use App\Actions\IssueCustomerClassPass;
 use App\Http\Requests\StoreCustomerClassPassAdjustmentRequest;
 use App\Http\Requests\StoreCustomerClassPassRequest;
@@ -106,16 +106,16 @@ class CustomerClassPassController extends Controller
             ->with('status', __('app.customer_class_pass_updated'));
     }
 
-    public function storeAdjustment(StoreCustomerClassPassAdjustmentRequest $request, Account $account, CustomerClassPass $customerClassPass, AddCustomerClassPassSessions $addCustomerClassPassSessions): RedirectResponse
+    public function storeAdjustment(StoreCustomerClassPassAdjustmentRequest $request, Account $account, CustomerClassPass $customerClassPass, AdjustCustomerClassPassSessions $adjustCustomerClassPassSessions): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $customerClassPass);
         $this->ensureCurrentUserOwns($account);
 
-        $addCustomerClassPassSessions->execute(
+        $adjustCustomerClassPassSessions->execute(
             $account,
             $customerClassPass,
             $request->user(),
-            (int) $request->validated('sessions_delta'),
+            $request->signedSessionsDelta(),
             (string) $request->validated('reason'),
         );
 
