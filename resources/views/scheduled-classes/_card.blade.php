@@ -8,6 +8,7 @@
         default => 'crm-status-scheduled',
     };
     $scheduleKind = $scheduledClass->classType?->schedule_kind;
+    $displayTypeLabels = $scheduledClass->displayTypeLabels();
     $directionColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
     $formatColor = $account->scheduleKindColor($scheduleKind);
     $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
@@ -29,12 +30,16 @@
         <div class="min-w-0">
             <div class="text-sm font-semibold text-brand-600">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
             <h3 class="mt-2 text-lg font-semibold leading-tight text-slate-950">{{ $scheduledClass->title }}</h3>
-            <p class="mt-1 text-sm text-slate-500">{{ $scheduledClass->classType?->name ?? __('app.class_type') }}</p>
-            @if ($scheduleKind)
-                <span class="mt-2 inline-flex rounded-md px-2 py-1 text-xs font-semibold" style="background-color: {{ $formatColor }}; color: {{ $formatTextColor }};">
-                    {{ __('app.'.$scheduleKind->value) }}
-                </span>
-            @endif
+            <div class="mt-2 flex flex-wrap gap-2">
+                @foreach ($displayTypeLabels as $displayTypeLabel)
+                    <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">{{ $displayTypeLabel }}</span>
+                @endforeach
+                @if ($scheduleKind)
+                    <span class="rounded-md px-2 py-1 text-xs font-semibold" style="background-color: {{ $formatColor }}; color: {{ $formatTextColor }};">
+                        {{ __('app.'.$scheduleKind->value) }}
+                    </span>
+                @endif
+            </div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
             <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>

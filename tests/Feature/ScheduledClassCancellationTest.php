@@ -35,7 +35,7 @@ class ScheduledClassCancellationTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'pass_rules']))
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']))
             ->assertOk()
             ->assertSee(__('app.class_pass_rules'))
             ->assertSee(__('app.return_cancelled_class_sessions'))
@@ -65,7 +65,7 @@ class ScheduledClassCancellationTest extends TestCase
                     'extend_days_count' => '5',
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'pass_rules']));
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']));
 
         $this->assertSame([
             'return_sessions_enabled' => true,

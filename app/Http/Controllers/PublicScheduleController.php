@@ -26,14 +26,16 @@ class PublicScheduleController extends Controller
      */
     private const PERIODS = ['today', 'tomorrow', 'week', 'month'];
 
-    public function show(Request $request, string $accountSlug, string $locationSlug): View
+    public function show(Request $request, string $accountSlug, string $locationSlug): View|string
     {
-        return view('public.schedule', $this->scheduleViewData($request, $accountSlug, $locationSlug, false));
+        return view('public.schedule', $this->scheduleViewData($request, $accountSlug, $locationSlug, false))
+            ->fragmentIf($request->ajax(), 'schedule-results');
     }
 
-    public function embed(Request $request, string $accountSlug, string $locationSlug): View
+    public function embed(Request $request, string $accountSlug, string $locationSlug): View|string
     {
-        return view('public.schedule', $this->scheduleViewData($request, $accountSlug, $locationSlug, true));
+        return view('public.schedule', $this->scheduleViewData($request, $accountSlug, $locationSlug, true))
+            ->fragmentIf($request->ajax(), 'schedule-results');
     }
 
     /**

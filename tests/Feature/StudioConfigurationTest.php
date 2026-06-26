@@ -235,7 +235,7 @@ class StudioConfigurationTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'formats']))
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'formats']))
             ->assertOk()
             ->assertSee(__('app.studio_class_formats'))
             ->assertSee(__('app.schedule_format_color'))
@@ -261,7 +261,7 @@ class StudioConfigurationTest extends TestCase
                     'room_rental' => '#AAFF00',
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'formats']));
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'formats']));
 
         $account->refresh();
 
@@ -278,7 +278,7 @@ class StudioConfigurationTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']))
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'opening_hours']))
             ->assertOk()
             ->assertSee(__('app.opening_hours'))
             ->assertSee('opening_hours_present', false);
@@ -306,7 +306,7 @@ class StudioConfigurationTest extends TestCase
                 'opening_hours_present' => '1',
                 'opening_hours' => $openingHours,
             ])
-            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']));
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'opening_hours']));
 
         $account->refresh();
 
@@ -337,7 +337,7 @@ class StudioConfigurationTest extends TestCase
         ]);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'qr']))
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'qr']))
             ->assertOk()
             ->assertSee(__('app.login_qr_codes_and_links'))
             ->assertSee(__('app.public_links'))
@@ -360,7 +360,7 @@ class StudioConfigurationTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->from(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']))
+            ->from(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'opening_hours']))
             ->put(route('dashboard.accounts.update', $account), [
                 'brand_tab' => 'opening_hours',
                 'name' => $account->name,
@@ -375,7 +375,7 @@ class StudioConfigurationTest extends TestCase
                     1 => ['enabled' => '1', 'opens_at' => '18:00', 'closes_at' => '10:00'],
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'opening_hours']))
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'opening_hours']))
             ->assertSessionHasErrors('opening_hours.1.closes_at');
     }
 

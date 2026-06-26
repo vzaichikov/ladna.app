@@ -26,7 +26,7 @@ class HelpPagesTest extends TestCase
 
             $response->assertStatus(200);
             $response->assertSee($page['title'], false);
-            $response->assertSee('Що побачите на скріншоті', false);
+            $response->assertSee('Що побачите в розділі', false);
             $response->assertSee('assets/help/screenshots/', false);
             $response->assertDontSee('tenant', false);
             $response->assertDontSee('Bearer', false);

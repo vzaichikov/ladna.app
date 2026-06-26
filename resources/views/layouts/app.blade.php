@@ -46,6 +46,7 @@
     $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
+    $canViewTariffPayments = $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
     $classFormatNav = [];
 
     if ($showAccountNav && $canManageStudioSettings) {
@@ -147,7 +148,7 @@
         ...($canManageStudioSettings ? [
             [
                 'label' => __('app.trainer_types'),
-                'icon' => 'settings',
+                'icon' => 'trainer-levels',
                 'href' => route('dashboard.accounts.trainer-types.index', $activeAccount),
                 'active' => request()->routeIs('dashboard.accounts.trainer-types.*'),
             ],
@@ -160,21 +161,27 @@
                 'active' => request()->routeIs('dashboard.accounts.integrations.*'),
             ],
         ] : []),
-    ] : [];
-
-    $accountSettingsNav = $showAccountNav && $canManageStudioSettings ? [
-        [
+        ...($canManageStudioSettings ? [[
             'label' => __('app.my_brand'),
             'icon' => 'sparkles',
-            'href' => route('dashboard.accounts.brand.edit', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.brand.*'),
-        ],
-        [
+            'href' => route('dashboard.accounts.general-settings.edit', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.general-settings.*', 'dashboard.accounts.brand.*'),
+        ]] : []),
+    ] : [];
+
+    $accountSettingsNav = $showAccountNav ? [
+        ...($canManageStudioSettings ? [[
             'label' => __('app.my_account'),
             'icon' => 'user',
             'href' => route('dashboard.accounts.owner-profile.edit', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.owner-profile.*'),
-        ],
+        ]] : []),
+        ...($canViewTariffPayments ? [[
+            'label' => __('app.tariff_payments'),
+            'icon' => 'payments',
+            'href' => route('dashboard.accounts.tariff-payments.show', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.tariff-payments.*'),
+        ]] : []),
     ] : [];
 
     $platformSettingsNav = $isPlatformAdmin ? [

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.34.0',
+                'date' => '2026-06-26',
+                'title' => 'Schedule and studio settings UX',
+                'items' => ['Simplified schedule class labels to avoid repeated type names, added AJAX navigation for public and embedded schedules, moved studio general settings into the studio settings menu, added an owner-only Plan and payments information page, and refreshed owner help screenshots and wording.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.33.1',
                 'date' => '2026-06-26',
                 'title' => 'Public price segment grouping',
@@ -338,6 +345,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.34.0',
+                'date' => '2026-06-26',
+                'title' => 'UX розкладу та налаштувань студії',
+                'items' => ['Спрощено підписи занять у розкладі без повторення однакових назв типів, додано AJAX-навігацію для публічного та embedded розкладу, перенесено загальні налаштування в меню налаштувань студії, додано інформаційний розділ Тариф та платежі для власниці й оновлено скріншоти та тексти допомоги.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.33.1',
                 'date' => '2026-06-26',

@@ -124,64 +124,69 @@
                 </section>
             @endif
 
-            <nav class="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="{{ __('app.schedule_periods') }}">
-                @foreach ($periodOptions as $periodOption)
-                    <a
-                        href="{{ $periodOption['url'] }}"
-                        class="rounded-xl border p-4 transition {{ $periodOption['active'] ? 'border-violet-crm-600 bg-violet-crm-600 text-white shadow-sm shadow-violet-crm-600/20' : 'border-slate-200 bg-white text-slate-700 hover:border-violet-crm-200 hover:bg-violet-crm-50' }}"
-                    >
-                        <span class="block text-sm font-semibold">{{ $periodOption['label'] }}</span>
-                        <span class="mt-1 block text-xs {{ $periodOption['active'] ? 'text-white/80' : 'text-slate-500' }}">{{ $periodOption['date'] }}</span>
-                    </a>
-                @endforeach
-            </nav>
-
-            @if ($showDateAnchors)
-                <nav class="mt-4 flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.schedule_dates') }}">
-                    @foreach ($dateAnchors as $dateAnchor)
-                        <a href="#{{ $dateAnchor['id'] }}" class="whitespace-nowrap rounded-full border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-100 hover:bg-brand-50">
-                            {{ $dateAnchor['label'] }}
-                            <span class="ml-1 text-xs text-slate-500">{{ $dateAnchor['count'] }}</span>
-                        </a>
-                    @endforeach
-                </nav>
-            @endif
-
-            @if ($rooms->count() > 1)
-                <nav class="mt-6 flex flex-wrap gap-2">
-                    <a href="{{ route($routeName, $baseScheduleParams) }}" class="rounded-full border px-4 py-2 text-sm font-semibold transition {{ $selectedRoomSlug ? 'border-slate-200 bg-white text-slate-700 hover:border-violet-crm-200' : 'border-violet-crm-600 bg-violet-crm-600 text-white' }}">{{ __('app.all_rooms') }}</a>
-                    @foreach ($rooms as $room)
-                        <a href="{{ route($routeName, [...$baseScheduleParams, 'room' => $room->slug]) }}" class="rounded-full border px-4 py-2 text-sm font-semibold transition {{ $selectedRoomSlug === $room->slug ? 'border-violet-crm-600 bg-violet-crm-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-violet-crm-200' }}">{{ $room->name }}</a>
-                    @endforeach
-                </nav>
-            @endif
-
-            <section class="mt-6 space-y-8">
-                @forelse ($classDays as $date => $classesForDay)
-                    @include('public._schedule-day', [
-                        'account' => $account,
-                        'location' => $location,
-                        'date' => $date,
-                        'classes' => $classesForDay,
-                        'customer' => $customer,
-                    ])
-                @empty
-                    <x-ui.empty-state icon="calendar">
-                        {{ __('app.no_public_classes') }}
-                    </x-ui.empty-state>
-                @endforelse
-
-                @if ($showDateAnchors)
-                    <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.schedule_dates') }}">
-                        @foreach ($dateAnchors as $dateAnchor)
-                            <a href="#{{ $dateAnchor['id'] }}" class="whitespace-nowrap rounded-full border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-100 hover:bg-brand-50">
-                                {{ $dateAnchor['label'] }}
-                                <span class="ml-1 text-xs text-slate-500">{{ $dateAnchor['count'] }}</span>
+            @fragment('schedule-results')
+                <div data-public-schedule-fragment data-public-schedule-loading="{{ __('app.loading') }}">
+                    <nav class="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="{{ __('app.schedule_periods') }}">
+                        @foreach ($periodOptions as $periodOption)
+                            <a
+                                href="{{ $periodOption['url'] }}"
+                                data-public-schedule-link
+                                class="rounded-xl border p-4 transition {{ $periodOption['active'] ? 'border-violet-crm-600 bg-violet-crm-600 text-white shadow-sm shadow-violet-crm-600/20' : 'border-slate-200 bg-white text-slate-700 hover:border-violet-crm-200 hover:bg-violet-crm-50' }}"
+                            >
+                                <span class="block text-sm font-semibold">{{ $periodOption['label'] }}</span>
+                                <span class="mt-1 block text-xs {{ $periodOption['active'] ? 'text-white/80' : 'text-slate-500' }}">{{ $periodOption['date'] }}</span>
                             </a>
                         @endforeach
                     </nav>
-                @endif
-            </section>
+
+                    @if ($showDateAnchors)
+                        <nav class="mt-4 flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.schedule_dates') }}">
+                            @foreach ($dateAnchors as $dateAnchor)
+                                <a href="#{{ $dateAnchor['id'] }}" class="whitespace-nowrap rounded-full border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-100 hover:bg-brand-50">
+                                    {{ $dateAnchor['label'] }}
+                                    <span class="ml-1 text-xs text-slate-500">{{ $dateAnchor['count'] }}</span>
+                                </a>
+                            @endforeach
+                        </nav>
+                    @endif
+
+                    @if ($rooms->count() > 1)
+                        <nav class="mt-6 flex flex-wrap gap-2">
+                            <a href="{{ route($routeName, $baseScheduleParams) }}" data-public-schedule-link class="rounded-full border px-4 py-2 text-sm font-semibold transition {{ $selectedRoomSlug ? 'border-slate-200 bg-white text-slate-700 hover:border-violet-crm-200' : 'border-violet-crm-600 bg-violet-crm-600 text-white' }}">{{ __('app.all_rooms') }}</a>
+                            @foreach ($rooms as $room)
+                                <a href="{{ route($routeName, [...$baseScheduleParams, 'room' => $room->slug]) }}" data-public-schedule-link class="rounded-full border px-4 py-2 text-sm font-semibold transition {{ $selectedRoomSlug === $room->slug ? 'border-violet-crm-600 bg-violet-crm-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-violet-crm-200' }}">{{ $room->name }}</a>
+                            @endforeach
+                        </nav>
+                    @endif
+
+                    <section class="mt-6 space-y-8">
+                        @forelse ($classDays as $date => $classesForDay)
+                            @include('public._schedule-day', [
+                                'account' => $account,
+                                'location' => $location,
+                                'date' => $date,
+                                'classes' => $classesForDay,
+                                'customer' => $customer,
+                            ])
+                        @empty
+                            <x-ui.empty-state icon="calendar">
+                                {{ __('app.no_public_classes') }}
+                            </x-ui.empty-state>
+                        @endforelse
+
+                        @if ($showDateAnchors)
+                            <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.schedule_dates') }}">
+                                @foreach ($dateAnchors as $dateAnchor)
+                                    <a href="#{{ $dateAnchor['id'] }}" class="whitespace-nowrap rounded-full border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-100 hover:bg-brand-50">
+                                        {{ $dateAnchor['label'] }}
+                                        <span class="ml-1 text-xs text-slate-500">{{ $dateAnchor['count'] }}</span>
+                                    </a>
+                                @endforeach
+                            </nav>
+                        @endif
+                    </section>
+                </div>
+            @endfragment
         </section>
     </main>
 @endsection

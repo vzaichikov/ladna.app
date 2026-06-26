@@ -86,7 +86,7 @@ class AccountController extends Controller
         $this->authorize('update', $account);
 
         if ($request->query('tab') === 'business') {
-            return redirect()->route('dashboard.accounts.brand.edit', $account);
+            return redirect()->route('dashboard.accounts.general-settings.edit', $account);
         }
 
         return redirect()->route('dashboard.accounts.owner-profile.edit', $account);
@@ -128,7 +128,7 @@ class AccountController extends Controller
             default => [$account],
         };
 
-        return redirect()->route('dashboard.accounts.brand.edit', $routeParameters)
+        return redirect()->route('dashboard.accounts.general-settings.edit', $routeParameters)
             ->with('status', __('app.account_updated'));
     }
 

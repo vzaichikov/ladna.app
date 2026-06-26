@@ -35,7 +35,7 @@
                 $startsAt = $scheduledClass->starts_at->copy()->timezone($mobileTimezone);
                 $endsAt = $scheduledClass->ends_at->copy()->timezone($mobileTimezone);
                 $scheduleKind = $scheduledClass->classType?->schedule_kind;
-                $direction = $scheduledClass->classType?->activityDirection?->name;
+                $displayTypeLabels = $scheduledClass->displayTypeLabels();
                 $timelineColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
                 $formatColor = $account->scheduleKindColor($scheduleKind);
                 $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
@@ -43,9 +43,13 @@
             <a href="#scheduled-class-{{ $scheduledClass->id }}" class="block rounded-lg border border-stone-200 bg-slate-50 p-3 shadow-xs" style="border-left-color: {{ $timelineColor }}; border-left-width: 5px;">
                 <span class="text-xs font-semibold text-brand-700">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</span>
                 <span class="mt-1 block text-base font-semibold leading-snug text-slate-950">{{ $scheduledClass->title }}</span>
-                <span class="mt-1 block text-sm leading-snug text-slate-600">
-                    {{ $direction ? $direction.' · ' : '' }}{{ $scheduledClass->classType?->name ?? __('app.class_type') }}
-                </span>
+                @if ($displayTypeLabels !== [])
+                    <span class="mt-2 flex flex-wrap gap-1">
+                        @foreach ($displayTypeLabels as $displayTypeLabel)
+                            <span class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700">{{ $displayTypeLabel }}</span>
+                        @endforeach
+                    </span>
+                @endif
                 @if ($scheduleKind)
                     <span class="mt-2 inline-flex rounded-md px-2 py-1 text-xs font-semibold" style="background-color: {{ $formatColor }}; color: {{ $formatTextColor }};">
                         {{ __('app.'.$scheduleKind->value) }}
@@ -83,7 +87,7 @@
                         $widthPercent = min(100 - $leftPercent, max(14, ($durationMinutes / $timelineTotalMinutes) * 100));
                         $timelineTop = 18 + ($loop->index * 88);
                         $scheduleKind = $scheduledClass->classType?->schedule_kind;
-                        $direction = $scheduledClass->classType?->activityDirection?->name;
+                        $displayTypeLabels = $scheduledClass->displayTypeLabels();
                         $timelineColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
                         $timelineTextColor = $scheduledClass->classType?->activityDirection?->colorText('#3B223F') ?? '#FFFFFF';
                         $timelineKindColor = $account->scheduleKindColor($scheduleKind);
@@ -94,9 +98,11 @@
                         style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; border-right-color: {{ $timelineKindColor }}; border-right-width: 5px; color: {{ $timelineTextColor }};"
                     >
                         <span class="text-[11px] font-semibold opacity-90">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</span>
-                        <span class="text-sm font-semibold leading-snug">{{ $scheduledClass->title }}</span>
-                        <span class="text-[11px] font-semibold leading-snug opacity-90">
-                            {{ $direction ? $direction.' · ' : '' }}{{ $scheduledClass->classType?->name ?? __('app.class_type') }}
+                        <span class="flex flex-wrap items-center gap-1 text-sm font-semibold leading-snug">
+                            <span>{{ $scheduledClass->title }}</span>
+                            @foreach ($displayTypeLabels as $displayTypeLabel)
+                                <span class="rounded-md border border-current/30 bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold leading-none">{{ $displayTypeLabel }}</span>
+                            @endforeach
                         </span>
                     </a>
                 @endforeach
@@ -117,6 +123,7 @@
                 $isBookingOpen = $scheduledClass->isBookingOpen();
                 $canBook = $isBookingOpen && ! $isFull;
                 $scheduleKind = $scheduledClass->classType?->schedule_kind;
+                $displayTypeLabels = $scheduledClass->displayTypeLabels();
                 $directionColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
                 $formatColor = $account->scheduleKindColor($scheduleKind);
                 $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
@@ -128,10 +135,9 @@
                         <div class="text-sm font-semibold text-brand-600">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
                         <h3 class="mt-2 text-2xl font-semibold leading-tight text-slate-950">{{ $scheduledClass->title }}</h3>
                         <div class="mt-2 flex flex-wrap gap-2">
-                            @if ($scheduledClass->classType?->activityDirection)
-                                <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">{{ $scheduledClass->classType->activityDirection->name }}</span>
-                            @endif
-                            <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">{{ $scheduledClass->classType?->name ?? __('app.class_type') }}</span>
+                            @foreach ($displayTypeLabels as $displayTypeLabel)
+                                <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">{{ $displayTypeLabel }}</span>
+                            @endforeach
                             @if ($scheduleKind)
                                 <span class="rounded-md px-2 py-1 text-xs font-semibold" style="background-color: {{ $formatColor }}; color: {{ $formatTextColor }};">
                                     {{ __('app.'.$scheduleKind->value) }}

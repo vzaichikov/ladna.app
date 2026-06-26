@@ -21,7 +21,7 @@ class StudioRulesTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'rules']))
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'rules']))
             ->assertOk()
             ->assertSee(__('app.studio_rules'))
             ->assertSee('data-studio-rules-editor', false);
@@ -38,7 +38,7 @@ class StudioRulesTest extends TestCase
                 'timezone' => 'Europe/Kyiv',
                 'studio_rules_html' => '<h2 onclick="alert(1)">Safety</h2><script>alert(1)</script><p style="text-align: center; color: red;">Arrive early.</p><a href="javascript:alert(1)" target="_blank">bad</a><a href="https://example.com/rules" target="_blank">safe</a>',
             ])
-            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'rules']));
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'rules']));
 
         $account->refresh();
 

@@ -84,7 +84,7 @@ class AccountTenancyTest extends TestCase
                 'timezone' => 'Europe/Kyiv',
                 'logo' => UploadedFile::fake()->image('studio-logo.png', 256, 256),
             ])
-            ->assertRedirect(route('dashboard.accounts.brand.edit', $account));
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', $account));
 
         $account->refresh();
 
@@ -108,7 +108,7 @@ class AccountTenancyTest extends TestCase
             ->get(route('dashboard.accounts.owner-profile.edit', $account))
             ->assertOk()
             ->assertSee('Мій акаунт')
-            ->assertSee('Мій бренд')
+            ->assertSee('Загальні налаштування')
             ->assertSee('old-owner@example.com');
 
         $this->actingAs($owner)
@@ -158,16 +158,19 @@ class AccountTenancyTest extends TestCase
                 'Тренери',
                 'Рівні тренерів',
                 'Інтеграції',
+                'Загальні налаштування',
                 'Налаштування акаунта',
-                'Мій бренд',
                 'Мій акаунт',
+                'Тариф та платежі',
             ])
+            ->assertDontSee('Мій бренд')
             ->assertDontSee('Брендінг')
             ->assertDontSee('Шаблон тижня')
             ->assertDontSee('Мій бізнес')
             ->assertDontSee('Мій аккаунт')
-            ->assertSee(route('dashboard.accounts.brand.edit', $account), false)
+            ->assertSee(route('dashboard.accounts.general-settings.edit', $account), false)
             ->assertSee(route('dashboard.accounts.owner-profile.edit', $account), false)
+            ->assertSee(route('dashboard.accounts.tariff-payments.show', $account), false)
             ->assertDontSee('tab=business', false)
             ->assertDontSee('tab=account', false);
     }
@@ -207,6 +210,7 @@ class AccountTenancyTest extends TestCase
             ->assertDontSee(route('dashboard.accounts.class-pass-plans.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.trainers.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.trainer-types.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.tariff-payments.show', $account), false)
             ->assertDontSee(route('dashboard.accounts.integrations.index', $account), false);
     }
 
@@ -218,11 +222,15 @@ class AccountTenancyTest extends TestCase
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.edit', [$account, 'tab' => 'business']))
-            ->assertRedirect(route('dashboard.accounts.brand.edit', $account));
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', $account));
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.edit', [$account, 'tab' => 'account']))
             ->assertRedirect(route('dashboard.accounts.owner-profile.edit', $account));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']));
     }
 
     public function test_locations_are_scoped_to_their_parent_account(): void

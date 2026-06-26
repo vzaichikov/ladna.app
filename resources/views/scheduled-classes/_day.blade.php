@@ -54,6 +54,7 @@
                         $widthPercent = min(100 - $leftPercent, max(6, ($durationMinutes / $timelineTotalMinutes) * 100));
                         $timelineTop = 14 + ($loop->index % 2) * 34;
                         $scheduleKind = $scheduledClass->classType?->schedule_kind;
+                        $displayTypeLabels = $scheduledClass->displayTypeLabels();
                         $timelineColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
                         $timelineTextColor = $scheduledClass->classType?->activityDirection?->colorText('#3B223F') ?? '#FFFFFF';
                         $timelineKindColor = $account->scheduleKindColor($scheduleKind);
@@ -66,6 +67,9 @@
                     >
                         <span class="shrink-0">{{ $startsAt->format('H:i') }}</span>
                         <span class="truncate">{{ $scheduledClass->title }}</span>
+                        @foreach ($displayTypeLabels as $displayTypeLabel)
+                            <span class="shrink-0 rounded-md border border-current/30 bg-white/20 px-1.5 py-0.5 text-[10px] leading-none opacity-90">{{ $displayTypeLabel }}</span>
+                        @endforeach
                         @if ($scheduleKind)
                             <span class="ml-auto shrink-0 opacity-80">{{ __('app.'.$scheduledClass->classType->schedule_kind->value) }}</span>
                         @endif

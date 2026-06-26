@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 #[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'schedule_series_id', 'title', 'description', 'starts_at', 'ends_at', 'capacity', 'booking_cutoff_minutes', 'cancellation_cutoff_minutes', 'is_generated', 'is_manually_modified', 'metadata', 'is_public', 'status'])]
 class ScheduledClass extends Model
@@ -132,6 +133,43 @@ class ScheduledClass extends Model
     public function durationMinutes(): int
     {
         return (int) $this->starts_at->diffInMinutes($this->ends_at);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function displayTypeLabels(): array
+    {
+        $title = $this->normalizeDisplayLabel($this->title);
+        $seen = [$title => true];
+
+        return collect([
+            $this->classType?->activityDirection?->name,
+            $this->classType?->name,
+        ])
+            ->filter(fn (?string $label): bool => filled($label))
+            ->map(fn (string $label): string => trim($label))
+            ->filter(function (string $label) use (&$seen): bool {
+                $normalized = $this->normalizeDisplayLabel($label);
+
+                if ($normalized === '' || isset($seen[$normalized])) {
+                    return false;
+                }
+
+                $seen[$normalized] = true;
+
+                return true;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function normalizeDisplayLabel(?string $label): string
+    {
+        return Str::of((string) $label)
+            ->squish()
+            ->lower()
+            ->toString();
     }
 
     public function effectiveBookingCutoffMinutes(): ?int

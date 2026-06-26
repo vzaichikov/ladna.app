@@ -5,6 +5,7 @@ use App\Http\Controllers\AccountApiTokenController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountOwnerProfileController;
+use App\Http\Controllers\AccountTariffPaymentController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\ApiDocumentationController;
 use App\Http\Controllers\Auth\LoginController;
@@ -49,6 +50,7 @@ use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -137,12 +139,18 @@ Route::middleware('auth:web')
     ->group(function (): void {
         Route::get('/', DashboardController::class)->name('index');
         Route::resource('accounts', AccountController::class);
-        Route::get('accounts/{account}/brand', [AccountController::class, 'editBrand'])
+        Route::get('accounts/{account}/general-settings', [AccountController::class, 'editBrand'])
+            ->name('accounts.general-settings.edit');
+        Route::get('accounts/{account}/brand', function (Request $request, Account $account): RedirectResponse {
+            return redirect()->route('dashboard.accounts.general-settings.edit', ['account' => $account] + $request->query());
+        })
             ->name('accounts.brand.edit');
         Route::get('accounts/{account}/owner-profile', [AccountOwnerProfileController::class, 'edit'])
             ->name('accounts.owner-profile.edit');
         Route::put('accounts/{account}/owner-profile', [AccountOwnerProfileController::class, 'update'])
             ->name('accounts.owner-profile.update');
+        Route::get('accounts/{account}/tariff-payments', AccountTariffPaymentController::class)
+            ->name('accounts.tariff-payments.show');
         Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])
             ->name('accounts.api-tokens.store');
         Route::post('accounts/{account}/api-tokens/{accountApiToken}/regenerate', [AccountApiTokenController::class, 'regenerate'])

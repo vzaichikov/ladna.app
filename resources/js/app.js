@@ -3,6 +3,7 @@ import SimplePhoneMask from 'simple-phone-mask';
 import 'summernote/dist/summernote-lite.css';
 
 let pendingDeleteForm = null;
+let publicScheduleAbortController = null;
 
 const cyrillicMap = {
     а: 'a',
@@ -1070,6 +1071,85 @@ function replaceScheduledClassCard(cardHtml, fallbackCard) {
     createIcons({ icons });
 }
 
+function setPublicScheduleBusy(fragment, isBusy) {
+    fragment.setAttribute('aria-busy', isBusy ? 'true' : 'false');
+    fragment.classList.toggle('opacity-60', isBusy);
+    fragment.classList.toggle('pointer-events-none', isBusy);
+}
+
+function replacePublicScheduleFragment(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html.trim();
+    const replacement = template.content.querySelector('[data-public-schedule-fragment]');
+    const current = document.querySelector('[data-public-schedule-fragment]');
+
+    if (!replacement || !current) {
+        return null;
+    }
+
+    current.replaceWith(replacement);
+    createIcons({ icons });
+
+    return replacement;
+}
+
+async function loadPublicScheduleUrl(url, pushState = true) {
+    const fragment = document.querySelector('[data-public-schedule-fragment]');
+
+    if (!fragment) {
+        window.location.href = url;
+        return;
+    }
+
+    publicScheduleAbortController?.abort();
+    const abortController = new AbortController();
+    publicScheduleAbortController = abortController;
+    setPublicScheduleBusy(fragment, true);
+
+    try {
+        const response = await fetch(url, {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/html',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+            throw new Error('Public schedule request failed.');
+        }
+
+        const replacement = replacePublicScheduleFragment(await response.text());
+
+        if (!replacement) {
+            throw new Error('Public schedule fragment missing.');
+        }
+
+        if (pushState) {
+            window.history.pushState({ publicSchedule: true }, '', url);
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            return;
+        }
+
+        window.location.href = url;
+    } finally {
+        if (publicScheduleAbortController !== abortController) {
+            return;
+        }
+
+        publicScheduleAbortController = null;
+
+        const current = document.querySelector('[data-public-schedule-fragment]');
+
+        if (current) {
+            setPublicScheduleBusy(current, false);
+        }
+    }
+}
+
 async function submitAsyncForm(form) {
     const fallbackCard = form.closest('[data-scheduled-class-card]');
     const formData = new FormData(form);
@@ -1135,6 +1215,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initQuickBookingModals();
     initCopyButtons();
 
+    if (document.querySelector('[data-public-schedule-fragment]')) {
+        window.history.replaceState({ publicSchedule: true }, '', window.location.href);
+    }
+
     const sidebar = document.querySelector('[data-sidebar]');
     const sidebarBackdrop = document.querySelector('[data-sidebar-backdrop]');
     const openSidebarButton = document.querySelector('[data-sidebar-open]');
@@ -1182,6 +1266,29 @@ document.addEventListener('DOMContentLoaded', () => {
         group?.querySelectorAll('[data-class-type-checkbox]:not(:disabled)').forEach((checkbox) => {
             checkbox.checked = true;
         });
+    });
+
+    document.addEventListener('click', (event) => {
+        const link = event.target.closest('a[data-public-schedule-link]');
+
+        if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target) {
+            return;
+        }
+
+        const url = new URL(link.href, window.location.href);
+
+        if (url.origin !== window.location.origin || url.pathname !== window.location.pathname) {
+            return;
+        }
+
+        event.preventDefault();
+        loadPublicScheduleUrl(url.toString());
+    });
+
+    window.addEventListener('popstate', () => {
+        if (document.querySelector('[data-public-schedule-fragment]')) {
+            loadPublicScheduleUrl(window.location.href, false);
+        }
     });
 
     document.addEventListener('click', (event) => {

@@ -6,6 +6,7 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
@@ -22,6 +23,33 @@ use Tests\TestCase;
 class PublicScheduleTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_scheduled_class_display_type_labels_hide_title_duplicates_and_keep_unique_metadata(): void
+    {
+        $matchingDirection = new ActivityDirection(['name' => 'Pole Dance']);
+        $matchingType = new ClassType(['name' => 'Pole Dance']);
+        $matchingType->setRelation('activityDirection', $matchingDirection);
+        $matchingClass = new ScheduledClass(['title' => 'Pole Dance']);
+        $matchingClass->setRelation('classType', $matchingType);
+
+        $this->assertSame([], $matchingClass->displayTypeLabels());
+
+        $distinctDirection = new ActivityDirection(['name' => 'Exotic']);
+        $matchingDistinctType = new ClassType(['name' => 'Exot Easy']);
+        $matchingDistinctType->setRelation('activityDirection', $distinctDirection);
+        $distinctClass = new ScheduledClass(['title' => 'Exot Easy']);
+        $distinctClass->setRelation('classType', $matchingDistinctType);
+
+        $this->assertSame(['Exotic'], $distinctClass->displayTypeLabels());
+
+        $duplicateDirection = new ActivityDirection(['name' => 'Pole']);
+        $duplicateType = new ClassType(['name' => 'pole']);
+        $duplicateType->setRelation('activityDirection', $duplicateDirection);
+        $duplicateClass = new ScheduledClass(['title' => 'Pole Flow']);
+        $duplicateClass->setRelation('classType', $duplicateType);
+
+        $this->assertSame(['Pole'], $duplicateClass->displayTypeLabels());
+    }
 
     public function test_public_schedule_page_shows_only_public_classes_for_location(): void
     {
@@ -67,6 +95,34 @@ class PublicScheduleTest extends TestCase
             ->assertDontSee('Private Staff Class')
             ->assertDontSee('Cancelled Public Class')
             ->assertDontSee('Other Location Class');
+    }
+
+    public function test_public_schedule_xhr_returns_only_schedule_fragment(): void
+    {
+        $account = Account::factory()->create(['slug' => 'test-fragment-studio', 'timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+
+        ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Fragment Class',
+            'starts_at' => now('UTC')->addDay(),
+            'ends_at' => now('UTC')->addDay()->addHour(),
+        ]);
+
+        $this->get('/test-fragment-studio/main/schedule?period=week', ['X-Requested-With' => 'XMLHttpRequest'])
+            ->assertOk()
+            ->assertSee('data-public-schedule-fragment', false)
+            ->assertSee('Fragment Class')
+            ->assertDontSee('<main', false)
+            ->assertDontSee('<html', false);
+
+        $this->get('/test-fragment-studio/main/schedule/embed?period=week', ['X-Requested-With' => 'XMLHttpRequest'])
+            ->assertOk()
+            ->assertSee('data-public-schedule-fragment', false)
+            ->assertSee('Fragment Class')
+            ->assertDontSee('<main', false)
+            ->assertDontSee('<html', false);
     }
 
     public function test_inactive_location_schedule_is_not_public(): void

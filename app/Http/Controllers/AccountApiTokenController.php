@@ -14,7 +14,7 @@ class AccountApiTokenController extends Controller
     {
         $accountApiTokenIssuer->issue($account, (string) $request->validated('name'));
 
-        return redirect()->route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api'])
+        return redirect()->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api'])
             ->with('status', __('app.api_token_created'));
     }
 
@@ -24,7 +24,7 @@ class AccountApiTokenController extends Controller
         $this->ensureBelongsToAccount($account, $accountApiToken);
         $accountApiTokenIssuer->regenerate($accountApiToken);
 
-        return redirect()->route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api'])
+        return redirect()->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api'])
             ->with('status', __('app.api_token_regenerated'));
     }
 
@@ -34,7 +34,7 @@ class AccountApiTokenController extends Controller
         $this->ensureBelongsToAccount($account, $accountApiToken);
         $accountApiToken->update(['is_active' => false]);
 
-        return redirect()->route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api'])
+        return redirect()->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api'])
             ->with('status', __('app.api_token_revoked'));
     }
 

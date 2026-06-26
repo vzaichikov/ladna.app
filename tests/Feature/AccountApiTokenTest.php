@@ -25,7 +25,7 @@ class AccountApiTokenTest extends TestCase
             ->post(route('dashboard.accounts.api-tokens.store', $account), [
                 'name' => 'Website form',
             ])
-            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
             ->assertSessionHas('status', __('app.api_token_created'));
 
         $apiToken = AccountApiToken::whereBelongsTo($account)->firstOrFail();
@@ -35,7 +35,7 @@ class AccountApiTokenTest extends TestCase
         $this->assertStringStartsWith('ladna_', $apiToken->tokenValue());
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api']))
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
             ->assertOk()
             ->assertSee('Website form')
             ->assertSee($apiToken->tokenValue());
@@ -51,7 +51,7 @@ class AccountApiTokenTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]))
-            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
             ->assertSessionHas('status', __('app.api_token_regenerated'));
 
         $apiToken->refresh();
@@ -61,7 +61,7 @@ class AccountApiTokenTest extends TestCase
 
         $this->actingAs($owner)
             ->delete(route('dashboard.accounts.api-tokens.destroy', [$account, $apiToken]))
-            ->assertRedirect(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
             ->assertSessionHas('status', __('app.api_token_revoked'));
 
         $this->assertFalse($apiToken->refresh()->is_active);
