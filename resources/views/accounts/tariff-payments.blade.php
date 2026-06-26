@@ -9,13 +9,15 @@
         $formatMoney = fn (?int $cents, ?string $currency): string => \App\Support\MoneyFormatter::format($cents, $currency ?: $account->default_currency);
         $statusClass = match ($subscription?->status?->value) {
             'active' => 'crm-status-active',
-            'trialing' => 'crm-status-scheduled',
+            'trialing', 'pending_payment' => 'crm-status-scheduled',
             'past_due' => 'crm-status-warning',
             'expired', 'suspended', 'cancelled' => 'crm-status-danger',
             default => 'crm-status-muted',
         };
         $isPromo = $plan?->plan_type === \App\Enums\SubscriptionPlanType::Promo;
+        $requiresInitialDemoPayment = $requiresInitialDemoPayment ?? false;
         $paymentTargetPlan = $plan?->plan_type === \App\Enums\SubscriptionPlanType::Standard ? $plan : $standardPlan;
+        $pendingDemoCheckoutUrl = $pendingDemoPayment?->checkoutUrl();
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -29,7 +31,7 @@
                     @csrf
                     <x-ui.button type="submit">
                         <x-ui.icon name="payments" class="h-4 w-4" />
-                        {{ $paymentTargetPlan->requires_recurring_payment ? __('app.subscribe_or_pay_now') : __('app.pay_now') }}
+                        {{ $requiresInitialDemoPayment ? __('app.pay_demo_now') : ($paymentTargetPlan->requires_recurring_payment ? __('app.subscribe_or_pay_now') : __('app.pay_now')) }}
                     </x-ui.button>
                 </form>
             @endif
@@ -40,6 +42,10 @@
             @endif
         </div>
     </div>
+
+    @error('provider')
+        <div class="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900 shadow-xs">{{ $message }}</div>
+    @enderror
 
     <section class="mt-6 grid gap-4 lg:grid-cols-4">
         <x-ui.metric
@@ -70,6 +76,35 @@
             accent="amber"
         />
     </section>
+
+    @if ($requiresInitialDemoPayment)
+        <x-ui.panel class="mt-6">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.demo_payment_required_title') }}</h2>
+                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.demo_payment_required_copy') }}</p>
+                </div>
+                <form method="POST" action="{{ route('dashboard.accounts.tariff-payments.pay-now', $account) }}">
+                    @csrf
+                    <x-ui.button type="submit">
+                        <x-ui.icon name="payments" class="h-4 w-4" />
+                        {{ $pendingDemoCheckoutUrl ? __('app.restart_demo_payment') : __('app.pay_demo_now') }}
+                    </x-ui.button>
+                </form>
+            </div>
+
+            @if ($pendingDemoCheckoutUrl)
+                <div class="mt-5 overflow-hidden rounded-lg border border-stone-200 bg-white">
+                    <iframe
+                        src="{{ $pendingDemoCheckoutUrl }}"
+                        title="{{ __('app.demo_payment_frame_title') }}"
+                        allow="payment *"
+                        class="h-[680px] w-full"
+                    ></iframe>
+                </div>
+            @endif
+        </x-ui.panel>
+    @endif
 
     <x-ui.panel class="mt-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

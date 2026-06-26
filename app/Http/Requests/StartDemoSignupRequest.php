@@ -2,8 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\AccountSignupStatus;
-use App\Models\AccountSignupRequest;
+use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -32,13 +31,7 @@ class StartDemoSignupRequest extends FormRequest
                 'required',
                 'email',
                 'max:255',
-                Rule::unique('users', 'email'),
-                Rule::unique((new AccountSignupRequest)->getTable(), 'owner_email')
-                    ->whereIn('status', [
-                        AccountSignupStatus::PendingPayment->value,
-                        AccountSignupStatus::PaymentStarted->value,
-                        AccountSignupStatus::PaymentPaid->value,
-                    ]),
+                Rule::unique((new User)->getTable(), 'email'),
             ],
             'owner_phone' => ['nullable', 'string', 'max:64'],
             'owner_password' => ['required', 'string', 'min:6', 'confirmed'],

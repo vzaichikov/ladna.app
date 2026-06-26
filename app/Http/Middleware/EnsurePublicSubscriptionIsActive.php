@@ -31,11 +31,14 @@ class EnsurePublicSubscriptionIsActive
         }
 
         $supportUrl = SystemSetting::stringValue(SystemSetting::SupportUrlKey);
+        $requiresInitialDemoPayment = $this->subscriptionAccess->requiresInitialDemoPayment($account);
 
         if ($request->is('api/*') || $request->expectsJson()) {
             return response()->json([
-                'message' => __('app.subscription_expired_public_api_message'),
-                'code' => 'subscription_expired',
+                'message' => $requiresInitialDemoPayment
+                    ? __('app.demo_payment_required_public_api_message')
+                    : __('app.subscription_expired_public_api_message'),
+                'code' => $requiresInitialDemoPayment ? 'demo_payment_required' : 'subscription_expired',
                 'support_url' => $supportUrl,
             ], Response::HTTP_PAYMENT_REQUIRED);
         }
@@ -43,6 +46,12 @@ class EnsurePublicSubscriptionIsActive
         return response()->view('public.subscription-expired', [
             'account' => $account,
             'supportUrl' => $supportUrl,
+            'title' => $requiresInitialDemoPayment
+                ? __('app.demo_payment_required_public_title')
+                : __('app.subscription_expired_public_title'),
+            'copy' => $requiresInitialDemoPayment
+                ? __('app.demo_payment_required_public_copy')
+                : __('app.subscription_expired_public_copy'),
         ], Response::HTTP_PAYMENT_REQUIRED);
     }
 

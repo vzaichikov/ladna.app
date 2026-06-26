@@ -6,13 +6,15 @@ use App\Enums\AccountSignupStatus;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Http\Requests\StartDemoSignupRequest;
 use App\Models\AccountSignupRequest;
-use App\Support\Payments\PaymentGatewayException;
 use App\Support\SaasBilling\CreateDemoSignup;
 use App\Support\SaasBilling\MonopaySaasBilling;
 use App\Support\SaasBilling\SaasBillingPlans;
+use App\Support\SaasBilling\StartAccountSubscriptionPaymentCheckout;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use Throwable;
 
 class PublicDemoSignupController extends Controller
 {
@@ -29,24 +31,35 @@ class PublicDemoSignupController extends Controller
         SaasBillingPlans $plans,
         CreateDemoSignup $createDemoSignup,
         MonopaySaasBilling $billing,
+        StartAccountSubscriptionPaymentCheckout $startCheckout,
     ): RedirectResponse {
+        [$signup, $payment, $account, $owner] = $createDemoSignup->execute($request->validated(), $plans->demoPlan());
+
+        Auth::login($owner);
+        $request->session()->regenerate();
+
         $setting = $billing->platformSetting();
 
         if (! $setting) {
-            throw ValidationException::withMessages([
-                'provider' => __('app.payment_provider_unavailable'),
-            ]);
+            $signup->forceFill([
+                'status' => AccountSignupStatus::PaymentFailed,
+                'failure_reason' => __('app.payment_provider_unavailable'),
+            ])->save();
+
+            $payment->forceFill([
+                'status' => AccountSubscriptionPaymentStatus::PaymentFailed,
+                'failure_reason' => __('app.payment_provider_unavailable'),
+                'failed_at' => now(),
+            ])->save();
+
+            return redirect()
+                ->route('dashboard.accounts.tariff-payments.show', $account)
+                ->withErrors(['provider' => __('app.payment_provider_unavailable')]);
         }
 
-        [$signup, $payment] = $createDemoSignup->execute($request->validated(), $plans->demoPlan());
-
         try {
-            $checkout = $billing->startOneTimePayment(
-                $payment,
-                $setting,
-                route('demo.return', $signup),
-            );
-        } catch (PaymentGatewayException) {
+            $startCheckout->execute($payment, $setting, route('demo.return', $signup));
+        } catch (Throwable) {
             $signup->forceFill([
                 'status' => AccountSignupStatus::PaymentFailed,
                 'failure_reason' => __('app.payment_start_failed'),
@@ -58,37 +71,34 @@ class PublicDemoSignupController extends Controller
                 'failed_at' => now(),
             ])->save();
 
-            throw ValidationException::withMessages([
-                'provider' => __('app.payment_start_failed'),
-            ]);
+            return redirect()
+                ->route('dashboard.accounts.tariff-payments.show', $account)
+                ->withErrors(['provider' => __('app.payment_start_failed')]);
         }
 
-        $payload = $checkout->gatewayPayload;
-        $response = is_array($payload['response'] ?? null) ? $payload['response'] : [];
-
-        $payment->forceFill([
-            'gateway_invoice_id' => is_string($response['invoiceId'] ?? null) ? $response['invoiceId'] : null,
-            'gateway_status' => is_string($response['status'] ?? null) ? $response['status'] : null,
-            'gateway_checkout_payload' => $payload,
-        ])->save();
-
-        $signup->forceFill([
-            'gateway_invoice_id' => $payment->gateway_invoice_id,
-            'gateway_status' => $payment->gateway_status,
-            'gateway_checkout_payload' => $payload,
-        ])->save();
-
-        return redirect()->away($checkout->url);
+        return redirect()
+            ->route('dashboard.accounts.tariff-payments.show', $account)
+            ->with('status', __('app.demo_signup_account_created'));
     }
 
-    public function returned(AccountSignupRequest $accountSignupRequest): RedirectResponse
+    public function returned(Request $request, AccountSignupRequest $accountSignupRequest): RedirectResponse
     {
         $accountSignupRequest->loadMissing('account');
 
         if ($accountSignupRequest->account) {
+            $status = $accountSignupRequest->status === AccountSignupStatus::AccountCreated
+                ? __('app.demo_signup_payment_completed')
+                : __('app.payment_processing');
+
+            if ($request->user() && $accountSignupRequest->account->isAccessibleBy($request->user())) {
+                return redirect()
+                    ->route('dashboard.accounts.tariff-payments.show', $accountSignupRequest->account)
+                    ->with('status', $status);
+            }
+
             return redirect()
                 ->route('login')
-                ->with('status', __('app.demo_signup_payment_completed'));
+                ->with('status', $status);
         }
 
         return redirect()

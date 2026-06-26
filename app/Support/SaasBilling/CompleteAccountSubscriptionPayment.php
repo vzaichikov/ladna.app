@@ -2,16 +2,13 @@
 
 namespace App\Support\SaasBilling;
 
-use App\Enums\AccountRole;
 use App\Enums\AccountSignupStatus;
-use App\Enums\AccountStatus;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\SubscriptionStatus;
 use App\Models\Account;
 use App\Models\AccountSignupRequest;
 use App\Models\AccountSubscriptionPayment;
-use App\Models\User;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -98,7 +95,7 @@ class CompleteAccountSubscriptionPayment
         $paidAt = $callback->paidAt ?? now();
 
         if ($payment->payment_type === AccountSubscriptionPaymentType::DemoInitial) {
-            $account = $this->createAccountFromSignup($payment->signupRequest, $paidAt);
+            $account = $this->activateDemoSignup($payment->signupRequest, $paidAt);
             $subscription = $account->subscription()->firstOrFail();
 
             $payment->forceFill([
@@ -149,55 +146,38 @@ class CompleteAccountSubscriptionPayment
         return $payment->refresh();
     }
 
-    private function createAccountFromSignup(?AccountSignupRequest $signup, Carbon $paidAt): Account
+    private function activateDemoSignup(?AccountSignupRequest $signup, Carbon $paidAt): Account
     {
         if (! $signup || ! $signup->plan) {
             throw new InvalidPaymentCallbackException('Signup request is unavailable.');
         }
 
-        if ($signup->account) {
-            return $signup->account;
+        if (! $signup->account) {
+            throw new InvalidPaymentCallbackException('Signup account is unavailable.');
         }
 
-        $account = Account::create([
-            'name' => $signup->studio_name,
-            'slug' => $signup->account_slug,
-            'status' => AccountStatus::Active,
-            'default_language' => $signup->default_language,
-            'country_code' => 'UA',
-            'default_currency' => $signup->currency,
-            'timezone' => $signup->timezone,
-        ]);
-        $account->ensureDefaultTrainerType();
-
-        $owner = User::create([
-            'name' => $signup->owner_name,
-            'email' => $signup->owner_email,
-            'phone' => $signup->owner_phone,
-            'password' => $signup->owner_password,
-            'email_verified_at' => now(),
-        ]);
-
-        $account->users()->attach($owner->id, [
-            'role' => AccountRole::Owner->value,
-            'permissions' => null,
-        ]);
-
+        $account = $signup->account;
         $endsAt = $paidAt->copy()->addDays($signup->plan->access_days ?? 30);
-        $account->subscription()->create([
-            'subscription_plan_id' => $signup->plan->id,
-            'status' => SubscriptionStatus::Trialing,
-            'started_at' => $paidAt,
-            'ends_at' => $endsAt,
-            'next_payment_at' => $endsAt->copy()->subDays($signup->plan->renewal_lead_days ?? 2),
-            'payment_provider' => $signup->provider,
-            'auto_renew_enabled' => false,
-        ]);
+
+        $account->subscription()->updateOrCreate(
+            ['account_id' => $account->id],
+            [
+                'subscription_plan_id' => $signup->plan->id,
+                'status' => SubscriptionStatus::Trialing,
+                'started_at' => $paidAt,
+                'ends_at' => $endsAt,
+                'next_payment_at' => $endsAt->copy()->subDays($signup->plan->renewal_lead_days ?? 2),
+                'payment_provider' => $signup->provider,
+                'provider_status' => null,
+                'auto_renew_enabled' => false,
+                'cancelled_at' => null,
+            ],
+        );
 
         $signup->forceFill([
-            'account_id' => $account->id,
             'status' => AccountSignupStatus::AccountCreated,
             'paid_at' => $paidAt,
+            'failure_reason' => null,
         ])->save();
 
         return $account->refresh();

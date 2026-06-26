@@ -65,4 +65,14 @@ class AccountSubscriptionPayment extends Model
     {
         return $this->status === AccountSubscriptionPaymentStatus::PaymentPaid;
     }
+
+    public function checkoutUrl(): ?string
+    {
+        $response = is_array($this->gateway_checkout_payload['response'] ?? null)
+            ? $this->gateway_checkout_payload['response']
+            : [];
+        $pageUrl = $response['pageUrl'] ?? null;
+
+        return is_string($pageUrl) && $pageUrl !== '' ? $pageUrl : null;
+    }
 }

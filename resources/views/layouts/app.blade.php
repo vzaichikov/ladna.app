@@ -50,9 +50,11 @@
     $subscriptionAccess = $showAccountNav ? app(\App\Support\SaasBilling\AccountSubscriptionAccess::class) : null;
     $subscriptionWarning = $showAccountNav && $subscriptionAccess?->shouldShowWarning($activeAccount);
     $subscriptionCanEdit = ! $showAccountNav || $subscriptionAccess?->canEditStudio($activeAccount);
-    $subscriptionWarningMessage = $subscriptionCanEdit
-        ? __('app.subscription_past_due_warning')
-        : __('app.subscription_expired_readonly');
+    $subscriptionWarningMessage = match (true) {
+        $showAccountNav && $subscriptionAccess?->requiresInitialDemoPayment($activeAccount) => __('app.demo_payment_required_readonly'),
+        $subscriptionCanEdit => __('app.subscription_past_due_warning'),
+        default => __('app.subscription_expired_readonly'),
+    };
     $supportUrl = \App\Models\SystemSetting::stringValue(\App\Models\SystemSetting::SupportUrlKey);
     $classFormatNav = [];
 

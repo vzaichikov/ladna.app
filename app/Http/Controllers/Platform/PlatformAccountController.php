@@ -11,6 +11,7 @@ use App\Models\Account;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\SaasBilling\DeleteAccountWithOwnedUsers;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
@@ -116,9 +117,9 @@ class PlatformAccountController extends Controller
             ->with('status', __('app.account_updated'));
     }
 
-    public function destroy(Account $account): RedirectResponse
+    public function destroy(Account $account, DeleteAccountWithOwnedUsers $deleteAccount): RedirectResponse
     {
-        $account->delete();
+        $deleteAccount->execute($account);
 
         return redirect()->route('platform.accounts.index')
             ->with('status', __('app.account_deleted'));

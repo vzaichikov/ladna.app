@@ -2,6 +2,7 @@
 
 namespace App\Support\SaasBilling;
 
+use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Models\AccountSubscriptionPayment;
@@ -45,6 +46,10 @@ class MonopaySaasBilling
 
         if (filled($credentials['qr_id'] ?? null)) {
             $payload['qrId'] = (string) $credentials['qr_id'];
+        }
+
+        if ($payment->payment_type === AccountSubscriptionPaymentType::DemoInitial) {
+            $payload['displayType'] = 'iframe';
         }
 
         $response = $this->request($credentials)

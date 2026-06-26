@@ -16,6 +16,12 @@
             ? route('dashboard.index')
             : route('demo.signup.create');
         $formatMoney = fn (?int $cents, ?string $currency, int $fallbackCents): string => \App\Support\MoneyFormatter::format($cents, $currency, $fallbackCents);
+        $demoPrice = $formatMoney($demoPlan?->price_cents, $demoPlan?->currency, 100);
+        $standardPrice = $formatMoney($standardPlan?->price_cents, $standardPlan?->currency, 99900);
+        $pricingCopy = __('app.landing.pricing_copy', [
+            'demo_price' => $demoPrice,
+            'standard_price' => $standardPrice,
+        ]);
         $landingLocales = [
             'uk' => ['label' => 'UA', 'href' => route('home')],
             'en' => ['label' => 'EN', 'href' => route('home.en')],
@@ -196,7 +202,7 @@
                         {{ $landing['pricing_title'] }}
                     </h2>
                     <p class="mt-5 text-base leading-7 text-[#4D3152]/75">
-                        {{ $landing['pricing_copy'] }}
+                        {{ $pricingCopy }}
                     </p>
                 </div>
 
@@ -204,7 +210,7 @@
                     <article class="rounded-lg border border-[#A78AB9]/28 bg-white/75 p-6 shadow-[0_18px_44px_rgba(59,34,63,0.06)]">
                         <div class="text-sm font-semibold uppercase tracking-[0.18em] text-[#A78AB9]">{{ $landing['pricing_demo_label'] }}</div>
                         <h3 class="mt-4 text-2xl font-semibold text-[#2B1731]">{{ $landing['pricing_demo_title'] }}</h3>
-                        <div class="mt-5 text-4xl font-semibold text-[#2B1731]">{{ $formatMoney($demoPlan?->price_cents, $demoPlan?->currency, 100) }}</div>
+                        <div class="mt-5 text-4xl font-semibold text-[#2B1731]">{{ $demoPrice }}</div>
                         <p class="mt-4 text-sm leading-6 text-[#4D3152]/75">{{ $landing['pricing_demo_copy'] }}</p>
                         <a href="{{ $primaryHref }}" class="mt-6 inline-flex h-11 items-center justify-center rounded-lg bg-[#3B223F] px-5 text-sm font-semibold text-white transition hover:bg-[#2B1731]">
                             {{ $landing['pricing_demo_cta'] }}
@@ -214,7 +220,7 @@
                     <article class="rounded-lg border border-[#E7DDC9]/90 bg-white/75 p-6 shadow-[0_18px_44px_rgba(59,34,63,0.06)]">
                         <div class="text-sm font-semibold uppercase tracking-[0.18em] text-[#A78AB9]">{{ $landing['pricing_standard_label'] }}</div>
                         <h3 class="mt-4 text-2xl font-semibold text-[#2B1731]">{{ $landing['pricing_standard_title'] }}</h3>
-                        <div class="mt-5 text-4xl font-semibold text-[#2B1731]">{{ $formatMoney($standardPlan?->price_cents, $standardPlan?->currency, 99900) }}</div>
+                        <div class="mt-5 text-4xl font-semibold text-[#2B1731]">{{ $standardPrice }}</div>
                         <p class="mt-4 text-sm leading-6 text-[#4D3152]/75">{{ $landing['pricing_standard_copy'] }}</p>
                     </article>
                 </div>

@@ -153,4 +153,26 @@ class PlatformAdminTest extends TestCase
             ->exists());
         $this->assertSame($plan->id, $account->subscription?->subscription_plan_id);
     }
+
+    public function test_platform_admin_deletes_studio_and_only_dedicated_owner_user(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $dedicatedOwner = User::factory()->create(['email' => 'dedicated-owner@example.com']);
+        $sharedOwner = User::factory()->create(['email' => 'shared-owner@example.com']);
+        $account = Account::factory()->create(['name' => 'Disposable Studio']);
+        $otherAccount = Account::factory()->create(['name' => 'Other Studio']);
+        $account->addOwner($dedicatedOwner);
+        $account->addOwner($sharedOwner);
+        $otherAccount->addOwner($sharedOwner);
+
+        $this->actingAs($platformAdmin)
+            ->delete(route('platform.accounts.destroy', $account))
+            ->assertRedirect(route('platform.accounts.index'))
+            ->assertSessionHas('status', __('app.account_deleted'));
+
+        $this->assertModelMissing($account);
+        $this->assertModelMissing($dedicatedOwner);
+        $this->assertModelExists($sharedOwner);
+        $this->assertTrue($otherAccount->fresh()->isAccessibleBy($sharedOwner));
+    }
 }

@@ -112,8 +112,9 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
     Route::get('/demo', [PublicDemoSignupController::class, 'create'])->name('demo.signup.create');
     Route::post('/demo', [PublicDemoSignupController::class, 'store'])->middleware('throttle:demo-signup')->name('demo.signup.store');
-    Route::get('/demo/{accountSignupRequest}/return', [PublicDemoSignupController::class, 'returned'])->name('demo.return');
 });
+
+Route::get('/demo/{accountSignupRequest}/return', [PublicDemoSignupController::class, 'returned'])->name('demo.return');
 
 Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth:web')

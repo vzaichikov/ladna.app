@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.37.0',
+                'date' => '2026-06-26',
+                'title' => 'Studio-first demo onboarding',
+                'items' => ['Changed demo signup so the studio workspace is created immediately, the owner enters the account first, and the 1 ₴ demo payment is completed from the plan and payments page before workspace sections and public pages open.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.36.1',
                 'date' => '2026-06-26',
                 'title' => 'Billing setup polish',
@@ -366,6 +373,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.37.0',
+                'date' => '2026-06-26',
+                'title' => 'Демо-онбординг зі створенням студії',
+                'items' => ['Змінено демо-реєстрацію: кабінет студії створюється одразу, власниця спершу входить у нього, а демо-оплата 1 ₴ завершується на сторінці тарифу й платежів перед відкриттям робочих розділів і публічних сторінок.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.36.1',
                 'date' => '2026-06-26',
