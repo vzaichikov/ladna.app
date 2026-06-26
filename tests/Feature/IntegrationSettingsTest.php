@@ -22,6 +22,7 @@ class IntegrationSettingsTest extends TestCase
             ->get(route('platform.integrations.index'))
             ->assertOk()
             ->assertSee(__('app.integration_category_authentication'), false)
+            ->assertSee(__('app.integration_category_email'), false)
             ->assertSee('Monopay')
             ->assertSee('LiqPay')
             ->assertDontSee('credentials[payment_type]', false)
@@ -50,6 +51,49 @@ class IntegrationSettingsTest extends TestCase
         $this->assertArrayNotHasKey('webhook_public_key', $setting->credentials);
     }
 
+    public function test_platform_admin_can_configure_email_delivery_engine(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.integrations.index', ['tab' => 'email']))
+            ->assertOk()
+            ->assertSee('Email delivery')
+            ->assertSee('name="credentials[engine]"', false)
+            ->assertSee('SendPulse SMTP')
+            ->assertSee(route('platform.integrations.index', ['tab' => 'email']), false);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.integrations.update', 'mail_delivery'), [
+                'is_enabled' => '1',
+                'credentials' => [
+                    'engine' => 'sendpulse_smtp',
+                    'fallback_engine' => 'log',
+                    'mail_from_email' => 'studio@example.com',
+                    'mail_from_name' => 'Ladna Mail',
+                    'smtp_host' => 'smtp-pulse.com',
+                    'smtp_port' => 587,
+                    'smtp_login' => 'smtp-user',
+                    'smtp_password' => 'smtp-secret',
+                    'smtp_encryption' => 'tls',
+                ],
+            ])
+            ->assertRedirect(route('platform.integrations.index', ['tab' => 'email']));
+
+        $setting = IntegrationSetting::platform()->where('provider', 'mail_delivery')->firstOrFail();
+
+        $this->assertTrue($setting->is_enabled);
+        $this->assertSame('email', $setting->category->value);
+        $this->assertSame('sendpulse_smtp', $setting->credentials['engine']);
+        $this->assertSame('log', $setting->credentials['fallback_engine']);
+        $this->assertSame('studio@example.com', $setting->credentials['mail_from_email']);
+        $this->assertSame('Ladna Mail', $setting->credentials['mail_from_name']);
+        $this->assertSame('smtp-pulse.com', $setting->credentials['smtp_host']);
+        $this->assertSame(587, $setting->credentials['smtp_port']);
+        $this->assertSame('smtp-user', $setting->credentials['smtp_login']);
+        $this->assertSame('smtp-secret', $setting->credentials['smtp_password']);
+    }
+
     public function test_normal_studio_owner_cannot_access_platform_integrations(): void
     {
         $owner = User::factory()->create();
@@ -69,6 +113,8 @@ class IntegrationSettingsTest extends TestCase
             ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
             ->assertOk()
             ->assertDontSee(__('app.integration_category_authentication'), false)
+            ->assertDontSee('Email delivery')
+            ->assertDontSee('mail_delivery')
             ->assertSee('TurboSMS')
             ->assertSee('SendPulse');
 

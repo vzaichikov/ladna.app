@@ -5,6 +5,7 @@ namespace App\Actions\Payments;
 use App\Actions\IssueCustomerClassPass;
 use App\Enums\CustomerPurchaseStatus;
 use App\Models\CustomerPurchase;
+use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -12,16 +13,22 @@ use Illuminate\Support\Facades\DB;
 
 class CompleteCustomerPurchase
 {
-    public function __construct(private readonly IssueCustomerClassPass $issueCustomerClassPass) {}
+    public function __construct(
+        private readonly IssueCustomerClassPass $issueCustomerClassPass,
+        private readonly TransactionalMailDispatcher $mailDispatcher,
+    ) {}
 
     public function execute(CustomerPurchase $purchase, PaymentCallbackResult $callback): CustomerPurchase
     {
-        return DB::transaction(function () use ($purchase, $callback): CustomerPurchase {
+        $previousStatus = null;
+
+        $completedPurchase = DB::transaction(function () use ($purchase, $callback, &$previousStatus): CustomerPurchase {
             $lockedPurchase = CustomerPurchase::query()
                 ->with(['account', 'customer', 'classPassPlan', 'customerClassPass'])
                 ->whereKey($purchase->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            $previousStatus = $lockedPurchase->getRawOriginal('status');
 
             if ($lockedPurchase->isPaid()) {
                 return $lockedPurchase;
@@ -83,6 +90,18 @@ class CompleteCustomerPurchase
 
             return $lockedPurchase->refresh();
         });
+
+        if ($completedPurchase->status === CustomerPurchaseStatus::PaymentPaid && $previousStatus !== CustomerPurchaseStatus::PaymentPaid->value) {
+            $completedPurchase->loadMissing('customerClassPass');
+
+            if ($completedPurchase->customerClassPass) {
+                $this->mailDispatcher->customerClassPassIssued($completedPurchase->customerClassPass);
+            }
+        } elseif ($completedPurchase->status->isFinal() && $previousStatus !== $completedPurchase->status->value) {
+            $this->mailDispatcher->customerPurchaseFailed($completedPurchase);
+        }
+
+        return $completedPurchase;
     }
 
     private function assertCallbackMatchesPurchase(CustomerPurchase $purchase, PaymentCallbackResult $callback): void

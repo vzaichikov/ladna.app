@@ -9,6 +9,7 @@ use App\Enums\SubscriptionStatus;
 use App\Models\Account;
 use App\Models\AccountSignupRequest;
 use App\Models\AccountSubscriptionPayment;
+use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -17,14 +18,21 @@ use Illuminate\Support\Facades\DB;
 
 class CompleteAccountSubscriptionPayment
 {
+    public function __construct(
+        private readonly TransactionalMailDispatcher $mailDispatcher,
+    ) {}
+
     public function execute(AccountSubscriptionPayment $payment, PaymentCallbackResult $callback): AccountSubscriptionPayment
     {
-        return DB::transaction(function () use ($payment, $callback): AccountSubscriptionPayment {
+        $previousStatus = null;
+
+        $completedPayment = DB::transaction(function () use ($payment, $callback, &$previousStatus): AccountSubscriptionPayment {
             $lockedPayment = AccountSubscriptionPayment::query()
                 ->with(['account.subscription', 'subscription', 'plan', 'signupRequest.account', 'signupRequest.plan'])
                 ->whereKey($payment->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            $previousStatus = $lockedPayment->getRawOriginal('status');
 
             if ($lockedPayment->isPaid()) {
                 return $lockedPayment;
@@ -88,6 +96,12 @@ class CompleteAccountSubscriptionPayment
 
             return $lockedPayment->refresh();
         });
+
+        if ($completedPayment->status->isFinal() && $previousStatus !== $completedPayment->status->value) {
+            $this->mailDispatcher->saasPaymentResolved($completedPayment);
+        }
+
+        return $completedPayment;
     }
 
     private function markPaid(AccountSubscriptionPayment $payment, PaymentCallbackResult $callback): AccountSubscriptionPayment

@@ -11,6 +11,9 @@ return [
         'messaging' => [
             'label_key' => 'app.integration_category_messaging',
         ],
+        'email' => [
+            'label_key' => 'app.integration_category_email',
+        ],
         'authentication' => [
             'label_key' => 'app.integration_category_authentication',
         ],
@@ -101,6 +104,34 @@ return [
                 'sms_sender' => ['label_key' => 'app.integration_field_sms_sender', 'type' => 'text', 'max' => 255],
                 'sms_address_book_id' => ['label_key' => 'app.integration_field_sms_address_book_id', 'type' => 'integer', 'min' => 1],
                 'sms_route' => ['label_key' => 'app.integration_field_sms_route', 'type' => 'text', 'max' => 255],
+            ],
+        ],
+        'mail_delivery' => [
+            'label' => 'Email delivery',
+            'category' => 'email',
+            'scopes' => ['platform'],
+            'fields' => [
+                'engine' => ['label_key' => 'app.integration_field_mail_engine', 'type' => 'select', 'default' => 'sendpulse_smtp', 'required_when_enabled' => true, 'options' => [
+                    'sendpulse_smtp' => 'app.mail_engine_sendpulse_smtp',
+                    'smtp' => 'app.mail_engine_smtp',
+                    'sendmail' => 'app.mail_engine_sendmail',
+                    'log' => 'app.mail_engine_log',
+                ]],
+                'fallback_engine' => ['label_key' => 'app.integration_field_mail_fallback_engine', 'type' => 'select', 'default' => 'log', 'options' => [
+                    'sendmail' => 'app.mail_engine_sendmail',
+                    'log' => 'app.mail_engine_log',
+                ]],
+                'mail_from_email' => ['label_key' => 'app.integration_field_mail_from_email', 'type' => 'email', 'required_when_enabled' => true, 'max' => 255],
+                'mail_from_name' => ['label_key' => 'app.integration_field_mail_from_name', 'type' => 'text', 'required_when_enabled' => true, 'max' => 255],
+                'smtp_host' => ['label_key' => 'app.integration_field_smtp_host', 'type' => 'text', 'default' => 'smtp-pulse.com', 'required_when_enabled_if' => ['engine' => ['sendpulse_smtp', 'smtp']], 'max' => 255],
+                'smtp_port' => ['label_key' => 'app.integration_field_smtp_port', 'type' => 'integer', 'default' => 587, 'required_when_enabled_if' => ['engine' => ['sendpulse_smtp', 'smtp']], 'min' => 1, 'max' => 65535],
+                'smtp_login' => ['label_key' => 'app.integration_field_smtp_login', 'type' => 'text', 'required_when_enabled_if' => ['engine' => ['sendpulse_smtp', 'smtp']], 'max' => 255],
+                'smtp_password' => ['label_key' => 'app.integration_field_smtp_password', 'type' => 'password', 'sensitive' => true, 'required_when_enabled_if' => ['engine' => ['sendpulse_smtp', 'smtp']], 'max' => 2048],
+                'smtp_encryption' => ['label_key' => 'app.integration_field_smtp_encryption', 'type' => 'select', 'default' => 'tls', 'options' => [
+                    '' => 'app.integration_option_none',
+                    'tls' => 'TLS',
+                    'ssl' => 'SSL',
+                ]],
             ],
         ],
         'google_oauth' => [

@@ -34,9 +34,9 @@ class AccountIntegrationController extends Controller
             'providers' => IntegrationCatalog::providersForCategory($activeCategory, IntegrationScope::Account),
             'settings' => $settings,
             'tabRoute' => 'dashboard.accounts.integrations.index',
-            'tabRouteParameters' => [$account],
+            'tabRouteParameters' => ['account' => $account],
             'updateRoute' => 'dashboard.accounts.integrations.update',
-            'updateRouteParameters' => [$account],
+            'updateRouteParameters' => ['account' => $account],
         ]);
     }
 
@@ -58,7 +58,7 @@ class AccountIntegrationController extends Controller
         );
 
         return redirect()
-            ->route('dashboard.accounts.integrations.index', [$account, 'tab' => $category->value])
+            ->route('dashboard.accounts.integrations.index', ['account' => $account, 'tab' => $category->value])
             ->with('status', __('app.integration_updated'));
     }
 }

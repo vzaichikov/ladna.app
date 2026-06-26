@@ -10,6 +10,7 @@ use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
 use App\Models\User;
 use App\Models\WebsiteLead;
+use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
@@ -22,6 +23,7 @@ class CreateQuickBooking
         private readonly ResolveQuickBookingCustomer $resolveQuickBookingCustomer,
         private readonly ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking,
         private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
+        private readonly TransactionalMailDispatcher $mailDispatcher,
     ) {}
 
     /**
@@ -29,7 +31,7 @@ class CreateQuickBooking
      */
     public function execute(Account $account, User $user, array $validated): ClassBooking
     {
-        return DB::transaction(function () use ($account, $user, $validated): ClassBooking {
+        $classBooking = DB::transaction(function () use ($account, $user, $validated): ClassBooking {
             $customer = $this->resolveQuickBookingCustomer->execute($account, $validated);
             $scheduleKind = ScheduleKind::from((string) $validated['schedule_kind']);
             $scheduledClass = $scheduleKind === ScheduleKind::GroupClass
@@ -52,6 +54,10 @@ class CreateQuickBooking
 
             return $classBooking;
         });
+
+        $this->mailDispatcher->bookingCreated($classBooking);
+
+        return $classBooking;
     }
 
     private function groupScheduledClass(Account $account, int $scheduledClassId, int $customerId): ScheduledClass

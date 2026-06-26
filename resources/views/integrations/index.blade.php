@@ -14,10 +14,11 @@
         @foreach ($categories as $categoryKey => $category)
             @php
                 $isActive = $activeCategory->value === $categoryKey;
-                $tabParameters = array_merge($tabRouteParameters, ['tab' => $categoryKey]);
+                $tabParameters = [...$tabRouteParameters, 'tab' => $categoryKey];
             @endphp
             <a
                 href="{{ route($tabRoute, $tabParameters) }}"
+                @if ($isActive) data-active-scroll-target @endif
                 class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $isActive ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
             >
                 {{ __($category['label_key']) }}
@@ -33,7 +34,7 @@
                 $storedCredentials = $setting?->readableCredentials() ?? [];
                 $credentials = \App\Support\IntegrationCatalog::displayCredentials($providerKey, $storedCredentials);
                 $isEnabled = (bool) old('is_enabled', $setting?->is_enabled ?? false);
-                $updateParameters = array_merge($updateRouteParameters, [$providerKey]);
+                $updateParameters = [...$updateRouteParameters, 'provider' => $providerKey];
             @endphp
 
             <form method="POST" action="{{ route($updateRoute, $updateParameters) }}" class="rounded-xl border border-slate-200 bg-white shadow-crm">

@@ -7,6 +7,7 @@ enum IntegrationCategory: string
     case Payment = 'payment';
     case Fiscalization = 'fiscalization';
     case Messaging = 'messaging';
+    case Email = 'email';
     case Authentication = 'authentication';
 
     public function labelKey(): string

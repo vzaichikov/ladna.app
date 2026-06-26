@@ -1201,6 +1201,12 @@ async function submitAsyncForm(form) {
     }
 }
 
+function initActiveScrollTargets() {
+    document.querySelectorAll('[data-active-scroll-target]').forEach((element) => {
+        element.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
     initSlugAutofill();
@@ -1214,6 +1220,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initManualClassModals();
     initQuickBookingModals();
     initCopyButtons();
+    initActiveScrollTargets();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {
         window.history.replaceState({ publicSchedule: true }, '', window.location.href);

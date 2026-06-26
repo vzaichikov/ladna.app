@@ -7,6 +7,7 @@ use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\IntegrationProvider;
 use App\Enums\SubscriptionStatus;
 use App\Models\AccountSubscription;
+use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\SaasBilling\CreateAccountSubscriptionPayment;
 use App\Support\SaasBilling\MonopaySaasBilling;
 use Illuminate\Console\Attributes\Description;
@@ -20,9 +21,10 @@ class ReconcileSaasBilling extends Command
     /**
      * Execute the console command.
      */
-    public function handle(MonopaySaasBilling $billing, CreateAccountSubscriptionPayment $createPayment): int
+    public function handle(MonopaySaasBilling $billing, CreateAccountSubscriptionPayment $createPayment, TransactionalMailDispatcher $mailDispatcher): int
     {
-        $expired = AccountSubscription::query()
+        $expired = 0;
+        AccountSubscription::query()
             ->whereIn('status', [
                 SubscriptionStatus::Trialing->value,
                 SubscriptionStatus::Active->value,
@@ -30,11 +32,17 @@ class ReconcileSaasBilling extends Command
             ])
             ->whereNotNull('ends_at')
             ->where('ends_at', '<=', now())
-            ->update([
-                'status' => SubscriptionStatus::Expired->value,
-                'auto_renew_enabled' => false,
-                'updated_at' => now(),
-            ]);
+            ->with(['account.users', 'plan'])
+            ->lazyById()
+            ->each(function (AccountSubscription $subscription) use (&$expired, $mailDispatcher): void {
+                $subscription->forceFill([
+                    'status' => SubscriptionStatus::Expired,
+                    'auto_renew_enabled' => false,
+                ])->save();
+
+                $mailDispatcher->saasSubscriptionExpired($subscription->refresh());
+                $expired++;
+            });
 
         $checked = 0;
         $pastDue = 0;
@@ -54,7 +62,7 @@ class ReconcileSaasBilling extends Command
                 ])
                 ->with(['account.subscription', 'plan'])
                 ->lazyById()
-                ->each(function (AccountSubscription $subscription) use ($billing, $setting, $createPayment, &$checked, &$pastDue): void {
+                ->each(function (AccountSubscription $subscription) use ($billing, $setting, $createPayment, $mailDispatcher, &$checked, &$pastDue): void {
                     $checked++;
                     $payload = $billing->subscriptionStatus((string) $subscription->provider_subscription_id, $setting);
                     $providerStatus = is_string($payload['status'] ?? null) ? $payload['status'] : null;
@@ -76,7 +84,7 @@ class ReconcileSaasBilling extends Command
                                 ->exists();
 
                             if (! $alreadyTracked) {
-                                $createPayment->execute(
+                                $failedPayment = $createPayment->execute(
                                     $subscription->account,
                                     $subscription->plan,
                                     AccountSubscriptionPaymentType::AutoRenewal,
@@ -88,7 +96,9 @@ class ReconcileSaasBilling extends Command
                                     'last_callback_payload' => $payload ?? [],
                                     'failure_reason' => $providerStatus ?: 'subscription_status_unavailable',
                                     'failed_at' => now(),
-                                ])->save();
+                                ]);
+                                $failedPayment->save();
+                                $mailDispatcher->saasPaymentResolved($failedPayment->refresh());
                             }
                         }
 

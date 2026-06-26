@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.38.0',
+                'date' => '2026-06-26',
+                'title' => 'Email delivery framework',
+                'items' => ['Added configurable system email delivery with SendPulse SMTP, custom SMTP, local fallback, sender address settings, branded transactional templates, and notifications for class passes, purchases, bookings, class cancellations, pass adjustments, and Ladna subscription payments. Fixed integration tab navigation for studio owners.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.35.0',
                 'date' => '2026-06-26',
                 'title' => 'Class history and pass normalization',
@@ -352,6 +359,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.38.0',
+                'date' => '2026-06-26',
+                'title' => 'Поштовий фреймворк',
+                'items' => ['Додано системне налаштування email-відправки з SendPulse SMTP, власним SMTP, локальним fallback, адресою та іменем відправника, брендованими транзакційними шаблонами й повідомленнями для абонементів, покупок, записів, скасувань занять, коригувань абонементів і платежів Ladna. Виправлено навігацію вкладок інтеграцій для власників студій.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.35.0',
                 'date' => '2026-06-26',

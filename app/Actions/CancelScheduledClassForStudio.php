@@ -13,6 +13,7 @@ use App\Models\ScheduledClass;
 use App\Models\ScheduledClassCancellation;
 use App\Models\ScheduledClassCancellationEffect;
 use App\Models\User;
+use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,11 +22,14 @@ class CancelScheduledClassForStudio
 {
     private const MAX_UNSIGNED_SMALL_INTEGER = 65535;
 
-    public function __construct(private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses) {}
+    public function __construct(
+        private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
+        private readonly TransactionalMailDispatcher $mailDispatcher,
+    ) {}
 
     public function execute(Account $account, ScheduledClass $scheduledClass, ?User $user): ScheduledClassCancellation
     {
-        return DB::transaction(function () use ($account, $scheduledClass, $user): ScheduledClassCancellation {
+        $cancellation = DB::transaction(function () use ($account, $scheduledClass, $user): ScheduledClassCancellation {
             $lockedClass = ScheduledClass::query()
                 ->whereBelongsTo($account)
                 ->whereKey($scheduledClass->id)
@@ -69,6 +73,10 @@ class CancelScheduledClassForStudio
 
             return $cancellation->load('effects');
         });
+
+        $this->mailDispatcher->scheduledClassCancelled($cancellation);
+
+        return $cancellation;
     }
 
     /**

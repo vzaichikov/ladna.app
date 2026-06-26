@@ -7,13 +7,17 @@ use App\Models\ClassPassPlan;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Support\ClassPassCodeGenerator;
+use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class IssueCustomerClassPass
 {
-    public function __construct(private readonly ClassPassCodeGenerator $codeGenerator) {}
+    public function __construct(
+        private readonly ClassPassCodeGenerator $codeGenerator,
+        private readonly TransactionalMailDispatcher $mailDispatcher,
+    ) {}
 
     /**
      * @param  array{plan_name?: string, plan_slug?: string|null, price_cents?: int, currency?: string, sessions_count?: int, validity_days?: int, total_validity_days?: int}  $snapshot
@@ -39,7 +43,7 @@ class IssueCustomerClassPass
         $purchasedAt ??= now();
         $totalValidityDays = (int) ($snapshot['total_validity_days'] ?? $classPassPlan->total_validity_days);
 
-        return DB::transaction(fn (): CustomerClassPass => $account->customerClassPasses()->create([
+        $classPass = DB::transaction(fn (): CustomerClassPass => $account->customerClassPasses()->create([
             'customer_id' => $customer->id,
             'class_pass_plan_id' => $classPassPlan->id,
             'code' => $this->codeGenerator->unique(),
@@ -56,5 +60,11 @@ class IssueCustomerClassPass
             'usable_until_at' => $purchasedAt->copy()->addDays($totalValidityDays),
             'is_active' => true,
         ]));
+
+        if ($source !== 'online_payment') {
+            $this->mailDispatcher->customerClassPassIssued($classPass);
+        }
+
+        return $classPass;
     }
 }

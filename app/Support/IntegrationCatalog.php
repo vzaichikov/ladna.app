@@ -236,7 +236,7 @@ class IntegrationCatalog
         }
 
         foreach (($definition['required_when_enabled_if'] ?? []) as $field => $value) {
-            if (($credentials[$field] ?? null) === $value) {
+            if (in_array($credentials[$field] ?? null, Arr::wrap($value), true)) {
                 return true;
             }
         }

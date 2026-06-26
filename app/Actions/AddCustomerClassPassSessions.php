@@ -7,16 +7,20 @@ use App\Models\Account;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassAdjustment;
 use App\Models\User;
+use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AddCustomerClassPassSessions
 {
-    public function __construct(private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses) {}
+    public function __construct(
+        private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
+        private readonly TransactionalMailDispatcher $mailDispatcher,
+    ) {}
 
     public function execute(Account $account, CustomerClassPass $customerClassPass, ?User $user, int $sessionsDelta, string $reason): CustomerClassPassAdjustment
     {
-        return DB::transaction(function () use ($account, $customerClassPass, $user, $sessionsDelta, $reason): CustomerClassPassAdjustment {
+        $adjustment = DB::transaction(function () use ($account, $customerClassPass, $user, $sessionsDelta, $reason): CustomerClassPassAdjustment {
             $lockedPass = CustomerClassPass::query()
                 ->whereKey($customerClassPass->id)
                 ->lockForUpdate()
@@ -63,6 +67,10 @@ class AddCustomerClassPassSessions
                 'reason' => $reason,
             ]);
         });
+
+        $this->mailDispatcher->classPassAdjusted($adjustment);
+
+        return $adjustment;
     }
 
     private function canAdjust(CustomerClassPass $customerClassPass): bool
