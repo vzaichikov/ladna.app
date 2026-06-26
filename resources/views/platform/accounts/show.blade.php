@@ -4,7 +4,7 @@
 
 @section('content')
     @php
-        $formatMoney = fn (?int $cents, ?string $currency): string => number_format(($cents ?? 0) / 100, 2).' '.($currency ?: $account->default_currency);
+        $formatMoney = fn (?int $cents, ?string $currency): string => \App\Support\MoneyFormatter::format($cents, $currency ?: $account->default_currency);
         $timezone = $account->timezone ?? config('app.timezone');
     @endphp
 

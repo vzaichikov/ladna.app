@@ -68,6 +68,9 @@ class SaasBillingTest extends TestCase
 
         $this->get(route('demo.signup.create'))
             ->assertOk()
+            ->assertSee('1 ₴')
+            ->assertSee('999 ₴')
+            ->assertDontSee('1.00 UAH')
             ->assertDontSee('name="account_slug"', false)
             ->assertSee('name="owner_phone"', false)
             ->assertSee('type="tel"', false)
@@ -76,9 +79,46 @@ class SaasBillingTest extends TestCase
             ->assertSee('data-country-code="UA"', false);
     }
 
+    public function test_landing_formats_subscription_prices_with_hryvnia_symbol(): void
+    {
+        $this->upsertPlan('demo-month', [
+            'name' => 'Demo test',
+            'price_cents' => 100,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Demo,
+            'access_days' => 30,
+            'public_signup_enabled' => true,
+            'requires_recurring_payment' => false,
+            'sort_order' => 0,
+        ]);
+        $this->upsertPlan('standard-monthly', [
+            'name' => 'Standard test',
+            'price_cents' => 99900,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Standard,
+            'access_days' => 30,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => true,
+            'sort_order' => 10,
+        ]);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('1 ₴')
+            ->assertSee('999 ₴')
+            ->assertSee('data-landing-header-auth', false)
+            ->assertSee('href="'.route('login').'"', false)
+            ->assertSee('href="'.route('demo.signup.create').'"', false)
+            ->assertDontSee('1.00 UAH');
+    }
+
     public function test_demo_signup_starts_one_uah_monopay_payment_without_creating_account(): void
     {
-        $this->platformMonopayIntegration(['api_token' => 'mono-token']);
+        $this->platformMonopayIntegration([
+            'api_token' => 'mono-token',
+            'payment_type' => 'hold',
+            'submerchant_code' => 'legacy-submerchant',
+        ]);
         $demoPlan = $this->upsertPlan('demo-month', [
             'name' => 'Demo test',
             'price_cents' => 100,
@@ -117,6 +157,10 @@ class SaasBillingTest extends TestCase
         $this->assertSame($signup->order_id, $payment->order_id);
         $this->assertSame('payment_started', $payment->status->value);
         $this->assertFalse(Account::where('slug', 'studio-one')->exists());
+
+        Http::assertSent(fn (HttpClientRequest $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
+            && $request['paymentType'] === 'debit'
+            && ! array_key_exists('code', $request->data()));
     }
 
     public function test_demo_signup_generates_slug_with_one_suffix_when_base_slug_exists(): void
@@ -163,7 +207,9 @@ class SaasBillingTest extends TestCase
         [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
         $this->platformMonopayIntegration([
             'api_token' => 'mono-token',
-            'webhook_public_key' => $publicKeyBase64,
+        ]);
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/pubkey' => Http::response(['key' => $publicKeyBase64]),
         ]);
         $demoPlan = SubscriptionPlan::factory()->create([
             'name' => 'Demo callback',
@@ -338,7 +384,8 @@ class SaasBillingTest extends TestCase
         [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
         $this->platformMonopayIntegration([
             'api_token' => 'mono-token',
-            'webhook_public_key' => $publicKeyBase64,
+            'payment_type' => 'hold',
+            'submerchant_code' => 'legacy-submerchant',
         ]);
         $demoPlan = $this->upsertPlan('demo-month', [
             'name' => 'Demo month',
@@ -365,7 +412,7 @@ class SaasBillingTest extends TestCase
         $subscriptionCreateCalls = 0;
 
         Http::preventStrayRequests();
-        Http::fake(function (HttpClientRequest $request) use (&$subscriptionCreateCalls) {
+        Http::fake(function (HttpClientRequest $request) use (&$subscriptionCreateCalls, $publicKeyBase64) {
             if ($request->url() === 'https://api.monobank.ua/api/merchant/invoice/create') {
                 return Http::response([
                     'pageUrl' => 'https://pay.example/demo-flow',
@@ -384,6 +431,10 @@ class SaasBillingTest extends TestCase
                 ]);
             }
 
+            if ($request->url() === 'https://api.monobank.ua/api/merchant/pubkey') {
+                return Http::response(['key' => $publicKeyBase64]);
+            }
+
             return Http::response(['message' => 'Unexpected request'], 500);
         });
 
@@ -399,7 +450,9 @@ class SaasBillingTest extends TestCase
         Http::assertSent(fn (HttpClientRequest $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
             && $request['amount'] === 100
             && $request['ccy'] === PaymentAmounts::iso4217NumericCode('UAH')
-            && ($request['merchantPaymInfo']['reference'] ?? null) === AccountSignupRequest::firstOrFail()->order_id);
+            && $request['paymentType'] === 'debit'
+            && ($request['merchantPaymInfo']['reference'] ?? null) === AccountSignupRequest::firstOrFail()->order_id
+            && ! array_key_exists('code', $request->data()));
 
         $signup = AccountSignupRequest::firstOrFail();
 
@@ -496,7 +549,9 @@ class SaasBillingTest extends TestCase
         [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
         $this->platformMonopayIntegration([
             'api_token' => 'mono-token',
-            'webhook_public_key' => $publicKeyBase64,
+        ]);
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/pubkey' => Http::response(['key' => $publicKeyBase64]),
         ]);
         $owner = User::factory()->create();
         $account = Account::factory()->create();
@@ -549,7 +604,6 @@ class SaasBillingTest extends TestCase
         [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
         $this->platformMonopayIntegration([
             'api_token' => 'mono-token',
-            'webhook_public_key' => $publicKeyBase64,
         ]);
         $owner = User::factory()->create();
         $account = Account::factory()->create();
@@ -578,7 +632,7 @@ class SaasBillingTest extends TestCase
         $subscriptionCreateCalls = 0;
 
         Http::preventStrayRequests();
-        Http::fake(function (HttpClientRequest $request) use (&$subscriptionCreateCalls) {
+        Http::fake(function (HttpClientRequest $request) use (&$subscriptionCreateCalls, $publicKeyBase64) {
             if (str_starts_with($request->url(), 'https://api.monobank.ua/api/merchant/subscription/status')) {
                 return Http::response(['status' => 'failure']);
             }
@@ -591,6 +645,10 @@ class SaasBillingTest extends TestCase
                     'subscriptionId' => 'sub-retry-standard-'.$subscriptionCreateCalls,
                     'status' => 'created',
                 ]);
+            }
+
+            if ($request->url() === 'https://api.monobank.ua/api/merchant/pubkey') {
+                return Http::response(['key' => $publicKeyBase64]);
             }
 
             return Http::response(['message' => 'Unexpected request'], 500);

@@ -58,7 +58,7 @@ class UpdateClassPassPlanRequest extends FormRequest
             ],
             'description' => ['nullable', 'string', 'max:2000'],
             'price' => ['required', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
-            'currency' => ['required', Rule::in(config('charm.currencies'))],
+            'currency' => ['required', Rule::in(config('ladna.currencies'))],
             'sessions_count' => ['required', 'integer', 'min:1', 'max:999'],
             'validity_days' => ['required', 'integer', 'min:1', 'max:3650'],
             'total_validity_days' => ['required', 'integer', 'min:1', 'max:3650'],

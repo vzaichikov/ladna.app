@@ -6,7 +6,7 @@
     @php
         $plan = $subscription?->plan;
         $timezone = $account->timezone ?? config('app.timezone');
-        $formatMoney = fn (?int $cents, ?string $currency): string => number_format(($cents ?? 0) / 100, 2).' '.($currency ?: $account->default_currency);
+        $formatMoney = fn (?int $cents, ?string $currency): string => \App\Support\MoneyFormatter::format($cents, $currency ?: $account->default_currency);
         $statusClass = match ($subscription?->status?->value) {
             'active' => 'crm-status-active',
             'trialing' => 'crm-status-scheduled',

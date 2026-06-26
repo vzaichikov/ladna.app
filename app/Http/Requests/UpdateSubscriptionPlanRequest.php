@@ -29,7 +29,7 @@ class UpdateSubscriptionPlanRequest extends FormRequest
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'price_cents' => ['required', 'integer', 'min:0', 'max:99999999'],
-            'currency' => ['required', Rule::in(config('charm.currencies'))],
+            'currency' => ['required', Rule::in(config('ladna.currencies'))],
             'billing_interval' => ['required', Rule::in(['monthly', 'yearly'])],
             'plan_type' => ['required', Rule::enum(SubscriptionPlanType::class)],
             'access_days' => ['nullable', 'integer', 'min:1', 'max:3660'],

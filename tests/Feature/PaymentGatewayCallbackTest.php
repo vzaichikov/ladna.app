@@ -18,6 +18,7 @@ use App\Support\Payments\PaymentAmounts;
 use App\Support\Payments\WayForPayGateway;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -187,10 +188,11 @@ class PaymentGatewayCallbackTest extends TestCase
         [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
         [$account, $purchase] = $this->purchase(IntegrationProvider::Monopay, [
             'api_token' => 'mono-token',
-            'webhook_public_key' => $publicKeyBase64,
-            'payment_type' => 'debit',
         ]);
         unset($account);
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/pubkey' => Http::response(['key' => $publicKeyBase64]),
+        ]);
 
         $body = (string) json_encode([
             'invoiceId' => 'mono-invoice-1',

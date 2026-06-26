@@ -23,14 +23,16 @@ class IntegrationSettingsTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.integration_category_authentication'), false)
             ->assertSee('Monopay')
-            ->assertSee('LiqPay');
+            ->assertSee('LiqPay')
+            ->assertDontSee('credentials[payment_type]', false)
+            ->assertDontSee('credentials[submerchant_code]', false)
+            ->assertDontSee('credentials[webhook_public_key]', false);
 
         $this->actingAs($platformAdmin)
             ->put(route('platform.integrations.update', 'monopay'), [
                 'is_enabled' => '1',
                 'credentials' => [
                     'api_token' => 'mono-platform-secret',
-                    'payment_type' => 'hold',
                     'invoice_validity_seconds' => 3600,
                 ],
             ])
@@ -42,8 +44,10 @@ class IntegrationSettingsTest extends TestCase
         $this->assertSame(IntegrationScope::Platform, $setting->scope_type);
         $this->assertNull($setting->account_id);
         $this->assertSame('mono-platform-secret', $setting->credentials['api_token']);
-        $this->assertSame('hold', $setting->credentials['payment_type']);
         $this->assertSame(3600, $setting->credentials['invoice_validity_seconds']);
+        $this->assertArrayNotHasKey('payment_type', $setting->credentials);
+        $this->assertArrayNotHasKey('submerchant_code', $setting->credentials);
+        $this->assertArrayNotHasKey('webhook_public_key', $setting->credentials);
     }
 
     public function test_normal_studio_owner_cannot_access_platform_integrations(): void
@@ -231,7 +235,6 @@ class IntegrationSettingsTest extends TestCase
                 'is_enabled' => '1',
                 'credentials' => [
                     'api_token' => 'new-secret',
-                    'payment_type' => 'hold',
                     'invoice_validity_seconds' => 3600,
                 ],
             ])
@@ -240,7 +243,9 @@ class IntegrationSettingsTest extends TestCase
         $setting->refresh();
 
         $this->assertSame('new-secret', $setting->credentials['api_token']);
-        $this->assertSame('hold', $setting->credentials['payment_type']);
         $this->assertSame(3600, $setting->credentials['invoice_validity_seconds']);
+        $this->assertArrayNotHasKey('payment_type', $setting->credentials);
+        $this->assertArrayNotHasKey('submerchant_code', $setting->credentials);
+        $this->assertArrayNotHasKey('webhook_public_key', $setting->credentials);
     }
 }

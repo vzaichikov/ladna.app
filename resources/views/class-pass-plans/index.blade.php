@@ -3,16 +3,6 @@
 @section('title', __('app.class_pass_plans').' - '.$account->name)
 
 @section('content')
-    @php
-        $formatMoney = static function (?int $priceCents): string {
-            if ($priceCents === null) {
-                return '';
-            }
-
-            return number_format($priceCents / 100, $priceCents % 100 === 0 ? 0 : 2, '.', ' ');
-        };
-    @endphp
-
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.class_pass_plans') }}</h1>
@@ -78,9 +68,9 @@
                     </div>
                 </div>
                 <div class="text-sm text-slate-600">
-                    <div class="font-semibold text-slate-950">{{ $formatMoney($classPassPlan->price_cents) }} {{ $classPassPlan->currency }}</div>
+                    <div class="font-semibold text-slate-950">{{ \App\Support\MoneyFormatter::format($classPassPlan->price_cents, $classPassPlan->currency) }}</div>
                     @if ($classPassPlan->allows_any_time && $classPassPlan->any_time_addon_price_cents !== null)
-                        <div class="mt-1 text-xs font-semibold text-violet-crm-700">+ {{ $formatMoney($classPassPlan->any_time_addon_price_cents) }} {{ $classPassPlan->currency }} {{ __('app.any_time_addon_summary') }}</div>
+                        <div class="mt-1 text-xs font-semibold text-violet-crm-700">+ {{ \App\Support\MoneyFormatter::format($classPassPlan->any_time_addon_price_cents, $classPassPlan->currency) }} {{ __('app.any_time_addon_summary') }}</div>
                     @endif
                     <div class="mt-1">{{ $classPassPlan->sessions_count }} {{ __('app.classes_count') }}</div>
                 </div>

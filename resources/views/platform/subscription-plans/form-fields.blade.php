@@ -26,7 +26,7 @@
     <label class="block">
         <span class="crm-label">{{ __('app.currency') }}</span>
         <select name="currency" class="crm-field">
-            @foreach (config('charm.currencies') as $currency)
+            @foreach (config('ladna.currencies') as $currency)
                 <option value="{{ $currency }}" @selected(old('currency', $plan->currency) === $currency)>{{ $currency }}</option>
             @endforeach
         </select>

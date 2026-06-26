@@ -9,7 +9,7 @@
                 return '';
             }
 
-            return number_format($priceCents / 100, $priceCents % 100 === 0 ? 0 : 2, '.', ' ').' '.$currency;
+            return \App\Support\MoneyFormatter::format($priceCents, $currency);
         };
     @endphp
 

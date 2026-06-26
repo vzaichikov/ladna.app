@@ -22,7 +22,7 @@
                     <p class="mt-1 text-sm text-slate-500">{{ $plan->slug }}</p>
                 </div>
                 <div class="text-sm font-semibold text-slate-700">{{ __('app.subscription_plan_type_'.$plan->plan_type->value) }}</div>
-                <div class="text-sm font-semibold text-slate-700">{{ number_format($plan->price_cents / 100, 2) }} {{ $plan->currency }}</div>
+                <div class="text-sm font-semibold text-slate-700">{{ \App\Support\MoneyFormatter::format($plan->price_cents, $plan->currency) }}</div>
                 <span class="{{ $plan->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
                     {{ $plan->is_active ? __('app.active') : __('app.inactive') }}
                 </span>

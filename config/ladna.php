@@ -12,6 +12,12 @@ return [
         'EUR',
     ],
 
+    'currency_symbols' => [
+        'UAH' => '₴',
+        'USD' => '$',
+        'EUR' => '€',
+    ],
+
     'countries' => [
         'UA' => 'Ukraine',
         'PL' => 'Poland',

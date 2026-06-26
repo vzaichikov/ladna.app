@@ -117,8 +117,9 @@ class CustomerPurchaseFlowTest extends TestCase
         [$account, $location, $plan, $customer] = $this->purchaseContext();
         $this->accountIntegration($account, IntegrationProvider::Monopay, [
             'api_token' => 'mono-token',
-            'payment_type' => 'debit',
+            'payment_type' => 'hold',
             'invoice_validity_seconds' => 3600,
+            'submerchant_code' => 'legacy-submerchant',
         ]);
 
         Http::preventStrayRequests();
@@ -144,7 +145,9 @@ class CustomerPurchaseFlowTest extends TestCase
 
         Http::assertSent(fn ($request): bool => $request->hasHeader('X-Token', 'mono-token')
             && $request->data()['amount'] === $plan->price_cents
-            && $request->data()['merchantPaymInfo']['reference'] === $purchase->order_id);
+            && $request->data()['merchantPaymInfo']['reference'] === $purchase->order_id
+            && $request->data()['paymentType'] === 'debit'
+            && ! array_key_exists('code', $request->data()));
     }
 
     /**

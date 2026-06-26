@@ -42,15 +42,11 @@ class MonopayGateway implements PaymentGateway
             'redirectUrl' => route('customer.purchases.return', [$purchase->account->slug, $purchase]),
             'webHookUrl' => route('api.v1.payments.callbacks', $this->provider()->value),
             'validity' => (int) ($credentials['invoice_validity_seconds'] ?? 3600),
-            'paymentType' => (string) ($credentials['payment_type'] ?? 'debit'),
+            'paymentType' => 'debit',
         ];
 
         if (filled($credentials['qr_id'] ?? null)) {
             $payload['qrId'] = (string) $credentials['qr_id'];
-        }
-
-        if (filled($credentials['submerchant_code'] ?? null)) {
-            $payload['code'] = (string) $credentials['submerchant_code'];
         }
 
         $response = Http::withHeaders(['X-Token' => (string) $credentials['api_token']])
@@ -136,10 +132,6 @@ class MonopayGateway implements PaymentGateway
      */
     private function publicKey(array $credentials): string
     {
-        if (filled($credentials['webhook_public_key'] ?? null)) {
-            return (string) $credentials['webhook_public_key'];
-        }
-
         $response = Http::withHeaders(['X-Token' => (string) $credentials['api_token']])
             ->acceptJson()
             ->timeout(5)

@@ -40,7 +40,7 @@ class AccountTariffPaymentTest extends TestCase
             ->assertOk()
             ->assertSee('Тариф та платежі')
             ->assertSee('Studio Pro')
-            ->assertSee('2,500.00 UAH')
+            ->assertSee('2 500 ₴')
             ->assertSee(__('app.active'));
     }
 

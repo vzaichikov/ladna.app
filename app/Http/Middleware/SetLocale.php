@@ -19,7 +19,7 @@ class SetLocale
     {
         $locale = $request->session()->get('locale');
 
-        if (is_string($locale) && array_key_exists($locale, config('charm.locales'))) {
+        if (is_string($locale) && array_key_exists($locale, config('ladna.locales'))) {
             App::setLocale($locale);
         }
 

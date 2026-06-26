@@ -10,7 +10,7 @@
     @php
         $formatMoney = static fn (?int $priceCents, string $currency = 'UAH'): string => $priceCents === null
             ? ''
-            : number_format($priceCents / 100, $priceCents % 100 === 0 ? 0 : 2, '.', ' ').' '.$currency;
+            : \App\Support\MoneyFormatter::format($priceCents, $currency);
     @endphp
 
     <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8 text-slate-950">

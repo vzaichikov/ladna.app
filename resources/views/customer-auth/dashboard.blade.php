@@ -8,7 +8,7 @@
 
 @section('content')
     @php
-        $formatMoney = fn (?int $amount, ?string $currency): string => $amount === null ? __('app.not_set') : number_format($amount / 100, 0, '.', ' ').' '.$currency;
+        $formatMoney = fn (?int $amount, ?string $currency): string => $amount === null ? __('app.not_set') : \App\Support\MoneyFormatter::format($amount, $currency);
         $passes = $customer->customerClassPasses
             ->sortByDesc(fn ($pass) => ($pass->is_active ? '1' : '0').($pass->opened_at?->timestamp ?? $pass->purchased_at?->timestamp ?? 0));
         $bookings = $customer->classBookings

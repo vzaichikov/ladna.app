@@ -22,7 +22,7 @@
         <span class="crm-label">{{ __('app.default_language') }}</span>
         <select name="default_language" class="crm-field">
             <option value="">{{ __('app.not_set') }}</option>
-            @foreach (config('charm.locales') as $locale => $label)
+            @foreach (config('ladna.locales') as $locale => $label)
                 <option value="{{ $locale }}" @selected(old('default_language', $customer->default_language) === $locale)>{{ $label }}</option>
             @endforeach
         </select>

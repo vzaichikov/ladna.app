@@ -34,7 +34,7 @@ class UpdateCustomerRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255', Rule::unique((new Customer)->getTable(), 'email')->where('account_id', $account?->id)->ignore($customer)],
             'phone' => ['nullable', 'string', 'max:255', Rule::unique((new Customer)->getTable(), 'phone')->where('account_id', $account?->id)->ignore($customer)],
             'password' => ['nullable', Password::defaults()],
-            'default_language' => ['nullable', Rule::in(array_keys(config('charm.locales')))],
+            'default_language' => ['nullable', Rule::in(array_keys(config('ladna.locales')))],
         ];
     }
 

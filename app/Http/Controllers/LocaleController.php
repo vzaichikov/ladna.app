@@ -11,7 +11,7 @@ class LocaleController extends Controller
     public function __invoke(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'locale' => ['required', Rule::in(array_keys(config('charm.locales')))],
+            'locale' => ['required', Rule::in(array_keys(config('ladna.locales')))],
         ]);
 
         $request->session()->put('locale', $validated['locale']);

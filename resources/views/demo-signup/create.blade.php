@@ -4,7 +4,7 @@
 
 @section('content')
     @php
-        $formatMoney = fn (?int $cents, ?string $currency): string => number_format(($cents ?? 0) / 100, 2).' '.($currency ?: 'UAH');
+        $formatMoney = fn (?int $cents, ?string $currency): string => \App\Support\MoneyFormatter::format($cents, $currency);
     @endphp
 
     <main class="min-h-screen bg-[#FAF8F5] px-5 py-8 text-[#2B2B2F] sm:px-8 lg:px-10">

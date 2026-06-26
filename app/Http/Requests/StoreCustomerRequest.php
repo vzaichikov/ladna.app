@@ -33,7 +33,7 @@ class StoreCustomerRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255', Rule::unique((new Customer)->getTable(), 'email')->where('account_id', $account?->id)],
             'phone' => ['nullable', 'string', 'max:255', Rule::unique((new Customer)->getTable(), 'phone')->where('account_id', $account?->id)],
             'password' => ['nullable', Password::defaults()],
-            'default_language' => ['nullable', Rule::in(array_keys(config('charm.locales')))],
+            'default_language' => ['nullable', Rule::in(array_keys(config('ladna.locales')))],
         ];
     }
 

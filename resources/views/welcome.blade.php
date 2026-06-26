@@ -10,10 +10,12 @@
         $primaryLabel = auth()->check() ? __('app.dashboard') : $landing['hero_primary'];
         $currentLandingLocale = app()->getLocale() === 'en' ? 'en' : 'uk';
         $loginHref = $currentLandingLocale === 'en' ? route('login.en') : route('login');
+        $headerAuthHref = auth()->check() ? route('dashboard.index') : $loginHref;
+        $headerAuthLabel = auth()->check() ? __('app.dashboard') : __('app.login');
         $primaryHref = auth()->check()
             ? route('dashboard.index')
             : route('demo.signup.create');
-        $formatMoney = fn (?int $cents, ?string $currency, int $fallbackCents): string => number_format(($cents ?? $fallbackCents) / 100, 2).' '.($currency ?: 'UAH');
+        $formatMoney = fn (?int $cents, ?string $currency, int $fallbackCents): string => \App\Support\MoneyFormatter::format($cents, $currency, $fallbackCents);
         $landingLocales = [
             'uk' => ['label' => 'UA', 'href' => route('home')],
             'en' => ['label' => 'EN', 'href' => route('home.en')],
@@ -60,8 +62,8 @@
             </div>
 
             <div class="relative mx-auto flex max-w-7xl flex-col">
-                <header class="flex items-center justify-between gap-4">
-                    <a href="{{ route('home') }}" class="inline-flex items-center gap-3 text-[#2B1731]">
+                <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <a href="{{ route('home') }}" class="mx-auto inline-flex items-center gap-3 text-[#2B1731] md:mx-0">
                         <x-ui.app-logo
                             mark-class="h-10 w-10"
                             text-class="text-[#2B1731]"
@@ -75,7 +77,7 @@
                         <a href="#team" class="transition hover:text-[#2B1731]">{{ $landing['nav_team'] }}</a>
                     </nav>
 
-                    <div class="flex items-center gap-2">
+                    <div class="flex w-full items-center justify-center gap-3 md:w-auto md:justify-end">
                         <nav class="inline-flex h-10 items-center rounded-lg border border-[#A78AB9]/30 bg-white/70 p-1 shadow-xs" aria-label="{{ __('app.default_language') }}">
                             @foreach ($landingLocales as $locale => $localeOption)
                                 <a
@@ -91,8 +93,8 @@
                             @endforeach
                         </nav>
 
-                        <a href="{{ $primaryHref }}" class="inline-flex h-10 items-center justify-center rounded-lg bg-[#3B223F] px-4 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(59,34,63,0.2)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
-                            {{ $primaryLabel }}
+                        <a href="{{ $headerAuthHref }}" data-landing-header-auth class="inline-flex h-10 items-center justify-center rounded-lg bg-[#3B223F] px-4 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(59,34,63,0.2)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                            {{ $headerAuthLabel }}
                         </a>
                     </div>
                 </header>

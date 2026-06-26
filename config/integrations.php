@@ -22,15 +22,8 @@ return [
             'category' => 'payment',
             'fields' => [
                 'api_token' => ['label_key' => 'app.integration_field_api_token', 'type' => 'password', 'sensitive' => true, 'required_when_enabled' => true, 'max' => 2048],
-                'webhook_public_key' => ['label_key' => 'app.integration_field_webhook_public_key', 'type' => 'textarea', 'max' => 4096, 'rows' => 4],
-                'payment_type' => ['label_key' => 'app.integration_field_payment_type', 'type' => 'select', 'default' => 'debit', 'options' => [
-                    'debit' => 'app.integration_option_debit',
-                    'hold' => 'app.integration_option_hold',
-                    'verification' => 'app.integration_option_verification',
-                ]],
                 'invoice_validity_seconds' => ['label_key' => 'app.integration_field_invoice_validity_seconds', 'type' => 'integer', 'min' => 60, 'max' => 2592000],
                 'qr_id' => ['label_key' => 'app.integration_field_qr_id', 'type' => 'text', 'max' => 255],
-                'submerchant_code' => ['label_key' => 'app.integration_field_submerchant_code', 'type' => 'text', 'max' => 255],
             ],
         ],
         'liqpay' => [

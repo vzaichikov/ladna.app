@@ -345,7 +345,7 @@
                         @csrf
                         <label class="sr-only" for="app-locale">{{ __('app.default_language') }}</label>
                         <select id="app-locale" name="locale" onchange="this.form.submit()" class="w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2.5 text-sm font-semibold text-white outline-none transition focus:border-brand-500">
-                            @foreach (config('charm.locales') as $locale => $label)
+                            @foreach (config('ladna.locales') as $locale => $label)
                                 <option value="{{ $locale }}" class="text-slate-950" @selected(app()->getLocale() === $locale)>{{ $label }}</option>
                             @endforeach
                         </select>

@@ -264,7 +264,7 @@ class ClassPassPlanController extends Controller
                 ->get(),
             'trainerTypes' => $account->trainerTypes()->ordered()->get(),
             'rooms' => $account->rooms()->with('location:id,name')->orderBy('location_id')->orderBy('name')->get(),
-            'currencies' => config('charm.currencies'),
+            'currencies' => config('ladna.currencies'),
         ];
     }
 

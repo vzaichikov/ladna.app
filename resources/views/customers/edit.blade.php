@@ -9,7 +9,7 @@
                 return '';
             }
 
-            return number_format($priceCents / 100, $priceCents % 100 === 0 ? 0 : 2, '.', ' ').' '.$currency;
+            return \App\Support\MoneyFormatter::format($priceCents, $currency);
         };
         $customerClassPasses = $customer->customerClassPasses
             ->sortByDesc(fn ($customerClassPass) => ($customerClassPass->is_active ? '1' : '0').($customerClassPass->opened_at?->timestamp ?? $customerClassPass->purchased_at?->timestamp ?? 0));

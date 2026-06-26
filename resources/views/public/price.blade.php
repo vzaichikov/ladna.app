@@ -13,7 +13,7 @@
                 return '';
             }
 
-            return number_format($priceCents / 100, $priceCents % 100 === 0 ? 0 : 2, '.', ' ').' '.$currency;
+            return \App\Support\MoneyFormatter::format($priceCents, $currency);
         };
     @endphp
 
@@ -35,7 +35,7 @@
                     <form method="POST" action="{{ route('locale.update') }}">
                         @csrf
                         <select name="locale" onchange="this.form.submit()" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-xs">
-                            @foreach (config('charm.locales') as $locale => $label)
+                            @foreach (config('ladna.locales') as $locale => $label)
                                 <option value="{{ $locale }}" @selected(app()->getLocale() === $locale)>{{ strtoupper($locale) }}</option>
                             @endforeach
                         </select>
