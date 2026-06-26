@@ -3,66 +3,118 @@
 @section('title', __('app.login').' - '.__('app.app_name'))
 
 @section('content')
-    <main class="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#FAF8F5] px-4 py-6 sm:px-6 lg:px-8">
-        <div class="pointer-events-none absolute -left-32 top-8 h-72 w-72 rounded-full bg-[#DCCFF0]/45 blur-3xl"></div>
-        <div class="pointer-events-none absolute -right-28 bottom-12 h-80 w-80 rounded-full bg-[#E7DDC9]/60 blur-3xl"></div>
+    @php
+        $currentLoginLocale = app()->getLocale() === 'en' ? 'en' : 'uk';
+        $homeHref = $currentLoginLocale === 'en' ? route('home.en') : route('home');
+        $loginLocales = [
+            'uk' => ['label' => 'UA', 'href' => route('login')],
+            'en' => ['label' => 'EN', 'href' => route('login.en')],
+        ];
+    @endphp
 
-        <section class="relative grid w-full max-w-5xl overflow-hidden rounded-[28px] border border-[#E7DDC9]/80 bg-white shadow-[0_24px_80px_rgba(59,34,63,0.16)] lg:min-h-[620px] lg:grid-cols-[0.98fr_1fr]">
-            <div class="relative isolate flex min-h-[300px] items-center justify-center overflow-hidden bg-[#3B223F] px-8 py-12 text-white lg:min-h-full">
-                <div class="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(167,138,185,0.28),transparent_34%),linear-gradient(145deg,#3B223F_0%,#2B1731_100%)]"></div>
-                <svg class="absolute -bottom-20 -left-24 h-64 w-[620px] text-[#DCCFF0]/42 sm:h-72 sm:w-[720px] lg:-bottom-14" viewBox="0 0 720 280" fill="none" aria-hidden="true">
-                    <path d="M-38 228C108 117 272 239 415 149C516 85 604 48 752 102" stroke="currentColor" stroke-width="1.25" />
-                    <path d="M-42 216C112 105 276 228 421 138C525 75 615 39 758 91" stroke="currentColor" stroke-width="1.25" />
-                    <path d="M-46 204C116 93 280 217 427 127C534 65 626 30 764 80" stroke="currentColor" stroke-width="1.25" />
-                    <path d="M-50 192C120 81 284 206 433 116C543 55 637 21 770 69" stroke="currentColor" stroke-width="1.25" />
-                    <path d="M-54 180C124 69 288 195 439 105C552 45 648 12 776 58" stroke="currentColor" stroke-width="1.25" />
-                    <path d="M-58 168C128 57 292 184 445 94C561 35 659 3 782 47" stroke="currentColor" stroke-width="1.25" />
-                    <path d="M-62 156C132 45 296 173 451 83C570 25 670 -6 788 36" stroke="currentColor" stroke-width="1.25" />
-                    <path d="M-66 144C136 33 300 162 457 72C579 15 681 -15 794 25" stroke="currentColor" stroke-width="1.25" />
-                </svg>
-                <div class="relative flex flex-col items-center text-center">
-                    <a href="{{ route('home') }}" class="flex items-center gap-4 rounded-2xl px-2 py-2 transition hover:bg-white/5">
-                        <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] bg-[#FAF8F5] p-2.5 shadow-[0_14px_34px_rgba(20,10,24,0.22)] ring-1 ring-white/70">
-                            <img src="{{ asset('brand/ladna-mark.svg') }}" alt="" class="h-full w-full object-contain">
-                        </span>
-                        <span class="text-[2.75rem] font-semibold leading-none tracking-normal text-white">{{ __('app.app_name') }}</span>
-                    </a>
-                    <p class="mt-3 text-base font-medium leading-6 text-[#DCCFF0]">{{ __('app.app_tagline') }}</p>
+    <main class="relative min-h-screen overflow-hidden bg-[#FAF8F5] text-[#2B2B2F]">
+        <div class="absolute inset-0 overflow-hidden" aria-hidden="true">
+            <div class="absolute left-[-10rem] top-[-12rem] h-[30rem] w-[30rem] rounded-full bg-[#E7DDC9]/62 blur-3xl"></div>
+            <div class="absolute right-[-14rem] top-20 h-[34rem] w-[34rem] rounded-full bg-[#DCCFF0]/50 blur-3xl"></div>
+            <div class="absolute bottom-[-12rem] left-[34%] h-[26rem] w-[42rem] rounded-full bg-white/72 blur-3xl"></div>
+            <div class="absolute inset-x-0 top-24 h-px bg-gradient-to-r from-transparent via-[#A78AB9]/26 to-transparent"></div>
+        </div>
+
+        <div class="relative mx-auto flex min-h-screen max-w-7xl flex-col px-5 py-5 sm:px-8 lg:px-10">
+            <header class="flex items-center justify-between gap-4">
+                <a href="{{ $homeHref }}" class="inline-flex items-center gap-3 text-[#2B1731]">
+                    <x-ui.app-logo
+                        mark-class="h-10 w-10"
+                        text-class="text-[#2B1731]"
+                    />
+                </a>
+
+                <nav class="inline-flex h-10 items-center rounded-lg border border-[#A78AB9]/30 bg-white/70 p-1 shadow-xs" aria-label="{{ __('app.default_language') }}">
+                    @foreach ($loginLocales as $locale => $localeOption)
+                        <a
+                            href="{{ $localeOption['href'] }}"
+                            @class([
+                                'flex h-8 min-w-9 items-center justify-center rounded-md px-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2',
+                                'bg-[#3B223F] text-white shadow-[0_8px_18px_rgba(59,34,63,0.16)]' => $currentLoginLocale === $locale,
+                                'text-[#4D3152] hover:bg-[#DCCFF0]/45 hover:text-[#2B1731]' => $currentLoginLocale !== $locale,
+                            ])
+                        >
+                            {{ $localeOption['label'] }}
+                        </a>
+                    @endforeach
+                </nav>
+            </header>
+
+            <section class="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[0.94fr_1.06fr] lg:py-6">
+                <div class="max-w-xl">
+                    <h1 class="text-4xl font-semibold leading-[1.04] text-[#2B1731] sm:text-5xl">
+                        {{ __('app.auth_welcome_back') }}
+                    </h1>
+                    <p class="mt-5 max-w-lg text-lg leading-8 text-[#4D3152]/76">
+                        {{ __('app.auth_intro') }}
+                    </p>
+
+                    <form method="POST" action="{{ route('login') }}" class="mt-8 max-w-md rounded-lg border border-[#E7DDC9]/80 bg-white/82 p-5 shadow-[0_22px_54px_rgba(59,34,63,0.09)] backdrop-blur sm:p-6">
+                        @csrf
+
+                        <div class="space-y-5">
+                            <label class="block">
+                                <span class="block text-xs font-semibold uppercase text-[#4D3152]/72">{{ __('app.email') }}</span>
+                                <input name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="email" placeholder="{{ __('app.auth_email_placeholder') }}" class="mt-2 h-12 w-full rounded-lg border border-[#E7DDC9] bg-[#FAF8F5]/70 px-4 text-sm font-semibold text-[#2B2B2F] shadow-xs outline-none transition placeholder:font-medium placeholder:text-[#4D3152]/38 focus:border-[#A78AB9] focus:bg-white focus:ring-3 focus:ring-[#DCCFF0]/65">
+                                @error('email')
+                                    <span class="mt-2 block text-xs font-semibold text-rose-600">{{ $message }}</span>
+                                @enderror
+                            </label>
+
+                            <label class="block">
+                                <span class="block text-xs font-semibold uppercase text-[#4D3152]/72">{{ __('app.password') }}</span>
+                                <input name="password" type="password" required autocomplete="current-password" class="mt-2 h-12 w-full rounded-lg border border-[#E7DDC9] bg-[#FAF8F5]/70 px-4 text-sm font-semibold text-[#2B2B2F] shadow-xs outline-none transition focus:border-[#A78AB9] focus:bg-white focus:ring-3 focus:ring-[#DCCFF0]/65">
+                                @error('password')
+                                    <span class="mt-2 block text-xs font-semibold text-rose-600">{{ $message }}</span>
+                                @enderror
+                            </label>
+
+                            <label class="inline-flex items-center gap-2 text-xs font-semibold text-[#4D3152]/78">
+                                <input name="remember" type="checkbox" value="1" @checked(old('remember')) class="h-4 w-4 rounded border-[#A78AB9]/45 text-[#3B223F] focus:ring-[#A78AB9]">
+                                {{ __('app.remember_me') }}
+                            </label>
+
+                            <button type="submit" class="inline-flex h-12 w-full items-center justify-center rounded-lg bg-[#3B223F] px-4 text-sm font-semibold text-white shadow-[0_16px_32px_rgba(59,34,63,0.22)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                                {{ __('app.login') }}
+                            </button>
+                        </div>
+                    </form>
                 </div>
-            </div>
 
-            <div class="flex items-center justify-center px-6 py-10 sm:px-12 lg:px-16">
-                <form method="POST" action="{{ route('login') }}" class="w-full max-w-[360px]">
-                    @csrf
-                    <div>
-                        <h1 class="text-[1.72rem] font-semibold leading-tight text-[#2B2B2F]">{{ __('app.auth_welcome_back') }}</h1>
-                        <p class="mt-2 text-sm font-medium text-slate-500">{{ __('app.auth_login_subtitle') }}</p>
+                <div class="relative min-h-[28rem] lg:min-h-[42rem]" aria-hidden="true">
+                    <div class="absolute inset-0">
+                        <div class="absolute left-1/2 top-1/2 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#E7DDC9]/36 lg:h-[34rem] lg:w-[34rem]"></div>
+                        <div class="absolute right-4 top-8 h-72 w-72 rounded-full border-2 border-[#A78AB9]/24 lg:right-10"></div>
+                        <div class="absolute bottom-10 left-6 h-72 w-72 rounded-full border border-[#E7DDC9]/80"></div>
+                        <div class="absolute left-4 top-20 grid grid-cols-4 gap-2 opacity-75 lg:left-12">
+                            @foreach ([true, false, true, false, false, true, false, true, true, false, false, true] as $isActive)
+                                <span class="h-7 w-9 rounded-md {{ $isActive ? 'bg-[#C7B4D3]/60' : 'bg-white/72' }}"></span>
+                            @endforeach
+                        </div>
+                        <div class="absolute bottom-12 left-1/2 h-28 w-[68%] -translate-x-1/2 rounded-[50%] bg-[#3B223F]/10 blur-2xl"></div>
+                        <svg class="absolute right-4 top-4 h-80 w-80 text-[#A78AB9]/35 lg:right-12" viewBox="0 0 320 320" fill="none">
+                            <path d="M36 218C88 76 214 48 284 101" stroke="currentColor" stroke-linecap="round" stroke-width="3" />
+                            <path d="M80 265C126 223 207 214 258 246" stroke="currentColor" stroke-linecap="round" stroke-width="2" />
+                            <circle cx="284" cy="101" r="6" fill="currentColor" />
+                        </svg>
+                        <svg class="absolute bottom-24 right-2 h-28 w-28 text-[#3B223F]/10" viewBox="0 0 112 112" fill="none">
+                            <circle cx="54" cy="22" r="7" fill="currentColor" />
+                            <path d="M52 32C44 42 35 52 20 59M54 35C67 41 78 48 91 58M47 52C40 68 34 79 25 92M56 53C68 68 75 79 88 90" stroke="currentColor" stroke-linecap="round" stroke-width="8" />
+                        </svg>
                     </div>
 
-                    <div class="mt-8 space-y-5">
-                        <label class="block">
-                            <span class="block text-xs font-semibold text-[#2B2B2F]">{{ __('app.email') }}</span>
-                            <input name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="email" placeholder="{{ __('app.auth_email_placeholder') }}" class="mt-2 h-12 w-full rounded-[10px] border border-stone-200 bg-white px-4 text-sm text-slate-900 shadow-xs outline-none transition placeholder:text-slate-400 focus:border-[#A78AB9] focus:ring-3 focus:ring-[#DCCFF0]/70">
-                            @error('email') <span class="crm-help">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="block">
-                            <span class="block text-xs font-semibold text-[#2B2B2F]">{{ __('app.password') }}</span>
-                            <input name="password" type="password" required autocomplete="current-password" class="mt-2 h-12 w-full rounded-[10px] border border-stone-200 bg-white px-4 text-sm text-slate-900 shadow-xs outline-none transition placeholder:text-slate-400 focus:border-[#A78AB9] focus:ring-3 focus:ring-[#DCCFF0]/70">
-                            @error('password') <span class="crm-help">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
-                            <input name="remember" type="checkbox" value="1" class="h-4 w-4 rounded border-stone-300 text-[#3B223F] focus:ring-[#A78AB9]">
-                            {{ __('app.remember_me') }}
-                        </label>
-
-                        <button type="submit" class="inline-flex h-12 w-full items-center justify-center rounded-[10px] bg-[#3B223F] px-4 text-sm font-semibold text-white shadow-[0_12px_26px_rgba(59,34,63,0.22)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
-                            {{ __('app.login') }}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </section>
+                    <img
+                        src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}"
+                        alt=""
+                        class="absolute bottom-0 left-1/2 h-full max-h-[42rem] w-auto max-w-none -translate-x-1/2 object-contain drop-shadow-[0_28px_54px_rgba(59,34,63,0.18)]"
+                    >
+                </div>
+            </section>
+        </div>
     </main>
 @endsection
