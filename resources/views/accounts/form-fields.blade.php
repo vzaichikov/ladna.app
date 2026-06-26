@@ -62,6 +62,20 @@
 
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
+        <span class="crm-label">{{ __('app.legal_entity_name') }}</span>
+        <input name="legal_entity_name" value="{{ old('legal_entity_name', $account->legal_entity_name) }}" class="crm-field">
+        @error('legal_entity_name') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+
+    <label class="block">
+        <span class="crm-label">{{ __('app.tax_id') }}</span>
+        <input name="tax_id" value="{{ old('tax_id', $account->tax_id) }}" class="crm-field">
+        @error('tax_id') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+</div>
+
+<div class="grid gap-4 sm:grid-cols-2">
+    <label class="block">
         <span class="crm-label">{{ __('app.brand_color') }}</span>
         <input name="brand_color" value="{{ old('brand_color', $account->brand_color) }}" placeholder="#3B223F" class="crm-field">
         @error('brand_color') <span class="crm-help">{{ $message }}</span> @enderror

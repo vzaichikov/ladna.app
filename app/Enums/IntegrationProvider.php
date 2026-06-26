@@ -7,6 +7,7 @@ enum IntegrationProvider: string
     case Monopay = 'monopay';
     case Liqpay = 'liqpay';
     case Wayforpay = 'wayforpay';
+    case LadnaFiscalization = 'ladna_fiscalization';
     case Checkbox = 'checkbox';
     case Turbosms = 'turbosms';
     case Smsclub = 'smsclub';

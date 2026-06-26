@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 #[Fillable(['account_id', 'account_subscription_id', 'subscription_plan_id', 'account_signup_request_id', 'provider', 'payment_type', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_subscription_id', 'gateway_status', 'status', 'amount_cents', 'currency', 'period_starts_at', 'period_ends_at', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
 class AccountSubscriptionPayment extends Model
@@ -59,6 +61,16 @@ class AccountSubscriptionPayment extends Model
     public function signupRequest(): BelongsTo
     {
         return $this->belongsTo(AccountSignupRequest::class, 'account_signup_request_id');
+    }
+
+    public function fiscalReceipts(): MorphMany
+    {
+        return $this->morphMany(FiscalReceipt::class, 'payment');
+    }
+
+    public function fiscalReceipt(): MorphOne
+    {
+        return $this->morphOne(FiscalReceipt::class, 'payment')->latestOfMany();
     }
 
     public function isPaid(): bool

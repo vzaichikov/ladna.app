@@ -36,6 +36,12 @@
             'href' => route('platform.accounts.index'),
             'active' => request()->routeIs('platform.accounts.*'),
         ],
+        [
+            'label' => __('app.payments'),
+            'icon' => 'payments',
+            'href' => route('platform.payments.index'),
+            'active' => request()->routeIs('platform.payments.*'),
+        ],
     ] : [];
 
     $canManageSchedule = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageSchedule);
@@ -106,6 +112,12 @@
             'icon' => 'class-pass-plans',
             'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customer-class-passes.*'),
+        ]] : []),
+        ...($canViewTariffPayments ? [[
+            'label' => __('app.payments'),
+            'icon' => 'payments',
+            'href' => route('dashboard.accounts.payments.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.payments.*'),
         ]] : []),
     ] : [];
 

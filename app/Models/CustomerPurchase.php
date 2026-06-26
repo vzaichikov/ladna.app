@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 #[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'customer_class_pass_id', 'provider', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
 #[Hidden(['gateway_checkout_payload', 'last_callback_payload'])]
@@ -63,6 +65,16 @@ class CustomerPurchase extends Model
     public function customerClassPass(): BelongsTo
     {
         return $this->belongsTo(CustomerClassPass::class);
+    }
+
+    public function fiscalReceipts(): MorphMany
+    {
+        return $this->morphMany(FiscalReceipt::class, 'payment');
+    }
+
+    public function fiscalReceipt(): MorphOne
+    {
+        return $this->morphOne(FiscalReceipt::class, 'payment')->latestOfMany();
     }
 
     public function isPaid(): bool

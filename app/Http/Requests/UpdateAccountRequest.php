@@ -38,6 +38,8 @@ class UpdateAccountRequest extends FormRequest
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
             'timezone' => ['nullable', 'timezone'],
+            'legal_entity_name' => ['nullable', 'string', 'max:255'],
+            'tax_id' => ['nullable', 'string', 'max:255'],
             'enabled_schedule_kinds_present' => ['nullable', 'boolean'],
             'enabled_schedule_kinds' => ['required_if:enabled_schedule_kinds_present,1', 'array', 'min:1'],
             'enabled_schedule_kinds.*' => [Rule::in(ScheduleKindRegistry::defaultEnabledValues())],

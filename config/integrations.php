@@ -49,6 +49,12 @@ return [
                 'merchant_auth_type' => ['label_key' => 'app.integration_field_merchant_auth_type', 'type' => 'text', 'default' => 'SimpleSignature', 'max' => 255],
             ],
         ],
+        'ladna_fiscalization' => [
+            'label' => 'Ladna fiscalization',
+            'category' => 'fiscalization',
+            'description_key' => 'app.integration_ladna_fiscalization_copy',
+            'fields' => [],
+        ],
         'checkbox' => [
             'label' => 'Checkbox',
             'category' => 'fiscalization',

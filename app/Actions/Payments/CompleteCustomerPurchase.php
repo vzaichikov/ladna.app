@@ -5,17 +5,20 @@ namespace App\Actions\Payments;
 use App\Actions\IssueCustomerClassPass;
 use App\Enums\CustomerPurchaseStatus;
 use App\Models\CustomerPurchase;
+use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class CompleteCustomerPurchase
 {
     public function __construct(
         private readonly IssueCustomerClassPass $issueCustomerClassPass,
         private readonly TransactionalMailDispatcher $mailDispatcher,
+        private readonly FiscalReceiptService $fiscalReceipts,
     ) {}
 
     public function execute(CustomerPurchase $purchase, PaymentCallbackResult $callback): CustomerPurchase
@@ -96,6 +99,12 @@ class CompleteCustomerPurchase
 
             if ($completedPurchase->customerClassPass) {
                 $this->mailDispatcher->customerClassPassIssued($completedPurchase->customerClassPass);
+            }
+
+            try {
+                $this->fiscalReceipts->fiscalizeCustomerPurchase($completedPurchase);
+            } catch (Throwable $exception) {
+                report($exception);
             }
         } elseif ($completedPurchase->status->isFinal() && $previousStatus !== $completedPurchase->status->value) {
             $this->mailDispatcher->customerPurchaseFailed($completedPurchase);

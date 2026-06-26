@@ -54,6 +54,9 @@
                                 <span class="crm-status-muted">{{ __('app.configured') }}</span>
                             @endif
                         </div>
+                        @if (isset($provider['description_key']))
+                            <p class="mt-2 text-sm leading-6 text-slate-500">{{ __($provider['description_key']) }}</p>
+                        @endif
                     </div>
 
                     <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -69,8 +72,9 @@
                     </div>
                 @endif
 
-                <div class="grid gap-4 p-5 sm:grid-cols-2">
-                    @foreach ($provider['fields'] as $fieldKey => $field)
+                @if (($provider['fields'] ?? []) !== [])
+                    <div class="grid gap-4 p-5 sm:grid-cols-2">
+                        @foreach ($provider['fields'] as $fieldKey => $field)
                         @php
                             $fieldName = 'credentials['.$fieldKey.']';
                             $errorName = 'credentials.'.$fieldKey;
@@ -120,8 +124,9 @@
                                 <span class="crm-help">{{ $message }}</span>
                             @enderror
                         </label>
-                    @endforeach
-                </div>
+                        @endforeach
+                    </div>
+                @endif
 
                 <div class="flex justify-end border-t border-slate-100 px-5 py-4">
                     <x-ui.button type="submit">

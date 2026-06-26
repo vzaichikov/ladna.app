@@ -33,6 +33,8 @@ class StoreAccountRequest extends FormRequest
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
             'timezone' => ['nullable', 'timezone'],
+            'legal_entity_name' => ['nullable', 'string', 'max:255'],
+            'tax_id' => ['nullable', 'string', 'max:255'],
         ];
     }
 

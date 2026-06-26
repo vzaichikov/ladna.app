@@ -39,6 +39,8 @@ class StorePlatformAccountRequest extends FormRequest
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
             'timezone' => ['nullable', 'timezone'],
+            'legal_entity_name' => ['nullable', 'string', 'max:255'],
+            'tax_id' => ['nullable', 'string', 'max:255'],
             'subscription_plan_id' => ['nullable', Rule::exists((new SubscriptionPlan)->getTable(), 'id')],
             'subscription_status' => ['required', Rule::enum(SubscriptionStatus::class)],
             'subscription_ends_at' => ['nullable', 'date'],

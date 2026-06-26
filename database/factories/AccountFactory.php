@@ -29,6 +29,8 @@ class AccountFactory extends Factory
             'default_currency' => fake()->randomElement(['UAH', 'USD', 'EUR']),
             'brand_color' => fake()->hexColor(),
             'timezone' => 'Europe/Kyiv',
+            'legal_entity_name' => null,
+            'tax_id' => null,
         ];
     }
 }

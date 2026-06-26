@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.39.0',
+                'date' => '2026-06-26',
+                'title' => 'Payment history and fiscalization',
+                'items' => ['Added Ladna fiscalization settings with Checkbox receipt tracking, payment history pages for platform and studio owners, fiscal receipt numbers and error visibility when fiscalization is enabled, and legal entity name and tax ID fields for studio branding.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.38.0',
                 'date' => '2026-06-26',
                 'title' => 'Email delivery framework',
@@ -359,6 +366,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.39.0',
+                'date' => '2026-06-26',
+                'title' => 'Історія оплат і фіскалізація',
+                'items' => ['Додано налаштування фіскалізації Ladna з обліком чеків Checkbox, сторінки історії оплат для платформи та власників студій, показ номерів фіскальних чеків і помилок за увімкненої фіскалізації, а також поля назви юридичної особи та ІПН у брендингу студії.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.38.0',
                 'date' => '2026-06-26',

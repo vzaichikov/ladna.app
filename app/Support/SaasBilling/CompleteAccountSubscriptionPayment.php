@@ -9,17 +9,20 @@ use App\Enums\SubscriptionStatus;
 use App\Models\Account;
 use App\Models\AccountSignupRequest;
 use App\Models\AccountSubscriptionPayment;
+use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class CompleteAccountSubscriptionPayment
 {
     public function __construct(
         private readonly TransactionalMailDispatcher $mailDispatcher,
+        private readonly FiscalReceiptService $fiscalReceipts,
     ) {}
 
     public function execute(AccountSubscriptionPayment $payment, PaymentCallbackResult $callback): AccountSubscriptionPayment
@@ -99,6 +102,14 @@ class CompleteAccountSubscriptionPayment
 
         if ($completedPayment->status->isFinal() && $previousStatus !== $completedPayment->status->value) {
             $this->mailDispatcher->saasPaymentResolved($completedPayment);
+
+            if ($completedPayment->status === AccountSubscriptionPaymentStatus::PaymentPaid) {
+                try {
+                    $this->fiscalReceipts->fiscalizeAccountSubscriptionPayment($completedPayment);
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
+            }
         }
 
         return $completedPayment;
