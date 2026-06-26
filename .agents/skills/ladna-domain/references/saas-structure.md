@@ -58,9 +58,9 @@
 
 ## Demo Defaults
 
-- Platform user: `platform-owner@example.test`.
-- Studio owner: `studio-owner@example.test`.
+- Platform user credentials are configured by local-only `LADNA_DEMO_*` env values.
+- Studio owner credentials are configured by local-only `LADNA_DEMO_*` env values.
 - Demo account/location: `Charmpole`.
 - Demo rooms: `Великий зал` and `Малий зал`.
 - Demo data should model the real Charmpole studio, not generic placeholder fitness data. Charmpole demo class-pass plans include group classes, private lessons, room rental, and one trial pass.
-- `App\Support\CharmpoleDemoCatalog` is the code source of truth for Charmpole demo directions, rooms, trainer type defaults, class types, pass plans, weekly schedule rows, customers, and demo customer passes. Update it first when changing demo catalog content, then let seeders consume it.
+- `App\Support\CharmpoleDemoCatalog` is the code source of truth for sanitized Charmpole demo account, location, directions, rooms, trainer type defaults, trainers, class types, pass segments, pass plans, and weekly schedule rows. Do not add studio customers, bookings, purchased passes, or usable demo credentials to this tracked catalog.

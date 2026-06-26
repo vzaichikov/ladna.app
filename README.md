@@ -30,6 +30,8 @@ npm install --ignore-scripts
 npm run build
 ```
 
+Before running `php artisan db:seed` or `php artisan migrate --seed`, set the local-only `LADNA_DEMO_*` user credentials in `.env`. The demo seed creates the platform and studio-owner login users from those values and does not commit usable demo credentials.
+
 For active frontend development, run:
 
 ```bash
@@ -38,7 +40,7 @@ npm run dev
 
 Open the app using the local URL configured for your machine.
 
-Seeded demo users are defined in `DatabaseSeeder`.
+Seeded demo login users are configured by local env values and created by `DatabaseSeeder`.
 
 ## Schedule Generation
 

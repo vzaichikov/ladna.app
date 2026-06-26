@@ -20,6 +20,8 @@ php artisan db:seed --no-interaction
 npm run build
 ```
 
+Before seeding, configure the local-only `LADNA_DEMO_*` user credentials in `.env`.
+
 Local URL:
 
 ```txt
@@ -29,9 +31,7 @@ local-app-url/
 Demo internal users:
 
 ```txt
-platform-owner@example.test / password
-studio-owner@example.test / password
-oxana@example.com / password
+Configured by local-only LADNA_DEMO_* env values.
 ```
 
 ## Demo URLs

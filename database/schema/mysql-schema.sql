@@ -5,6 +5,26 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*M!100616 SET @OLD_NOTE_VERBOSITY=@@NOTE_VERBOSITY, NOTE_VERBOSITY=0 */;
+DROP TABLE IF EXISTS `account_api_tokens`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `account_api_tokens` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) unsigned NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `token_hash` varchar(64) NOT NULL,
+  `encrypted_token` text NOT NULL,
+  `last_four` varchar(4) NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `account_api_tokens_token_hash_unique` (`token_hash`),
+  KEY `account_api_tokens_account_id_is_active_index` (`account_id`,`is_active`),
+  CONSTRAINT `account_api_tokens_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `account_memberships`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8mb4 */;
@@ -59,11 +79,28 @@ CREATE TABLE `accounts` (
   `timezone` varchar(255) DEFAULT NULL,
   `enabled_schedule_kinds` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`enabled_schedule_kinds`)),
   `schedule_kind_colors` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`schedule_kind_colors`)),
+  `opening_hours` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`opening_hours`)),
+  `studio_rules_html` mediumtext DEFAULT NULL,
+  `class_pass_cancellation_rules` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`class_pass_cancellation_rules`)),
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `accounts_slug_unique` (`slug`),
   KEY `accounts_status_index` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `activity_direction_class_pass_segment`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `activity_direction_class_pass_segment` (
+  `activity_direction_id` bigint(20) unsigned NOT NULL,
+  `class_pass_segment_id` bigint(20) unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`activity_direction_id`,`class_pass_segment_id`),
+  KEY `direction_class_pass_segment_segment_index` (`class_pass_segment_id`),
+  CONSTRAINT `direction_segment_direction_fk` FOREIGN KEY (`activity_direction_id`) REFERENCES `activity_directions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `direction_segment_segment_fk` FOREIGN KEY (`class_pass_segment_id`) REFERENCES `class_pass_segments` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `activity_directions`;
@@ -197,11 +234,13 @@ CREATE TABLE `class_pass_plans` (
   `name` varchar(255) NOT NULL,
   `slug` varchar(255) NOT NULL,
   `schedule_kind` varchar(255) NOT NULL DEFAULT 'group_class',
+  `class_pass_segment_id` bigint(20) unsigned DEFAULT NULL,
   `description` text DEFAULT NULL,
   `price_cents` int(10) unsigned NOT NULL,
   `currency` varchar(3) NOT NULL DEFAULT 'UAH',
   `sessions_count` smallint(5) unsigned NOT NULL,
   `validity_days` smallint(5) unsigned NOT NULL DEFAULT 30,
+  `total_validity_days` smallint(5) unsigned NOT NULL DEFAULT 180,
   `available_from_time` time DEFAULT NULL,
   `available_until_time` time DEFAULT NULL,
   `allows_any_time` tinyint(1) NOT NULL DEFAULT 0,
@@ -216,7 +255,29 @@ CREATE TABLE `class_pass_plans` (
   KEY `class_pass_plans_account_id_is_active_sort_order_index` (`account_id`,`is_active`,`sort_order`),
   KEY `class_pass_plans_account_active_trial_index` (`account_id`,`is_active`,`is_trial`),
   KEY `class_pass_plans_account_kind_active_sort_index` (`account_id`,`schedule_kind`,`is_active`,`sort_order`),
-  CONSTRAINT `class_pass_plans_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
+  KEY `class_pass_plans_class_pass_segment_id_foreign` (`class_pass_segment_id`),
+  KEY `class_pass_plans_account_kind_segment_active_sort_index` (`account_id`,`schedule_kind`,`class_pass_segment_id`,`is_active`,`sort_order`),
+  CONSTRAINT `class_pass_plans_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `class_pass_plans_class_pass_segment_id_foreign` FOREIGN KEY (`class_pass_segment_id`) REFERENCES `class_pass_segments` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `class_pass_segments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `class_pass_segments` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) unsigned NOT NULL,
+  `schedule_kind` varchar(255) NOT NULL DEFAULT 'group_class',
+  `name` varchar(255) NOT NULL,
+  `slug` varchar(255) NOT NULL,
+  `sort_order` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `class_pass_segments_account_id_slug_unique` (`account_id`,`slug`),
+  KEY `class_pass_segments_account_kind_active_sort_index` (`account_id`,`schedule_kind`,`is_active`,`sort_order`),
+  CONSTRAINT `class_pass_segments_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `class_types`;
@@ -233,6 +294,7 @@ CREATE TABLE `class_types` (
   `schedule_kind` varchar(255) NOT NULL DEFAULT 'group_class',
   `default_duration_minutes` smallint(5) unsigned NOT NULL DEFAULT 60,
   `booking_cutoff_minutes` smallint(5) unsigned DEFAULT NULL,
+  `cancellation_cutoff_minutes` smallint(5) unsigned DEFAULT 1440,
   `default_capacity` smallint(5) unsigned DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -263,6 +325,29 @@ CREATE TABLE `customer_auth_settings` (
   UNIQUE KEY `customer_auth_settings_account_id_unique` (`account_id`),
   KEY `customer_auth_settings_otp_sender_scope_otp_provider_index` (`otp_sender_scope`,`otp_provider`),
   CONSTRAINT `customer_auth_settings_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_class_pass_adjustments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `customer_class_pass_adjustments` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) unsigned NOT NULL,
+  `customer_class_pass_id` bigint(20) unsigned NOT NULL,
+  `user_id` bigint(20) unsigned DEFAULT NULL,
+  `sessions_delta` smallint(5) unsigned NOT NULL,
+  `previous_sessions_count` smallint(5) unsigned NOT NULL,
+  `new_sessions_count` smallint(5) unsigned NOT NULL,
+  `reason` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `customer_class_pass_adjustments_customer_class_pass_id_foreign` (`customer_class_pass_id`),
+  KEY `customer_class_pass_adjustments_user_id_foreign` (`user_id`),
+  KEY `class_pass_adjustments_account_pass_index` (`account_id`,`customer_class_pass_id`),
+  CONSTRAINT `customer_class_pass_adjustments_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `customer_class_pass_adjustments_customer_class_pass_id_foreign` FOREIGN KEY (`customer_class_pass_id`) REFERENCES `customer_class_passes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `customer_class_pass_adjustments_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `customer_class_pass_reservations`;
@@ -308,11 +393,13 @@ CREATE TABLE `customer_class_passes` (
   `currency` varchar(3) NOT NULL DEFAULT 'UAH',
   `sessions_count` smallint(5) unsigned NOT NULL,
   `validity_days` smallint(5) unsigned NOT NULL,
+  `total_validity_days` smallint(5) unsigned NOT NULL DEFAULT 180,
   `reserved_sessions_count` smallint(5) unsigned NOT NULL DEFAULT 0,
   `used_sessions_count` smallint(5) unsigned NOT NULL DEFAULT 0,
   `purchased_at` timestamp NULL DEFAULT NULL,
   `opened_at` timestamp NULL DEFAULT NULL,
   `expires_at` timestamp NULL DEFAULT NULL,
+  `usable_until_at` timestamp NULL DEFAULT NULL,
   `closed_at` timestamp NULL DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -323,6 +410,7 @@ CREATE TABLE `customer_class_passes` (
   KEY `customer_class_passes_account_active_status_index` (`account_id`,`is_active`,`status`,`purchased_at`),
   KEY `customer_class_passes_customer_active_index` (`customer_id`,`is_active`,`purchased_at`),
   KEY `customer_class_passes_plan_status_index` (`class_pass_plan_id`,`status`),
+  KEY `customer_passes_account_active_usable_index` (`account_id`,`is_active`,`status`,`usable_until_at`),
   CONSTRAINT `customer_class_passes_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
   CONSTRAINT `customer_class_passes_class_pass_plan_id_foreign` FOREIGN KEY (`class_pass_plan_id`) REFERENCES `class_pass_plans` (`id`) ON DELETE SET NULL,
   CONSTRAINT `customer_class_passes_customer_id_foreign` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
@@ -352,6 +440,55 @@ CREATE TABLE `customer_otp_challenges` (
   KEY `customer_otp_lookup_index` (`account_id`,`phone`,`consumed_at`,`expires_at`),
   KEY `customer_otp_challenges_expires_at_index` (`expires_at`),
   CONSTRAINT `customer_otp_challenges_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_purchases`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `customer_purchases` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) unsigned NOT NULL,
+  `customer_id` bigint(20) unsigned NOT NULL,
+  `class_pass_plan_id` bigint(20) unsigned DEFAULT NULL,
+  `customer_class_pass_id` bigint(20) unsigned DEFAULT NULL,
+  `provider` varchar(255) NOT NULL,
+  `order_id` varchar(255) NOT NULL,
+  `gateway_invoice_id` varchar(255) DEFAULT NULL,
+  `gateway_payment_id` varchar(255) DEFAULT NULL,
+  `gateway_status` varchar(255) DEFAULT NULL,
+  `status` varchar(255) NOT NULL DEFAULT 'payment_started',
+  `plan_name` varchar(255) NOT NULL,
+  `plan_slug` varchar(255) DEFAULT NULL,
+  `schedule_kind` varchar(255) NOT NULL,
+  `amount_cents` int(10) unsigned NOT NULL,
+  `currency` varchar(3) NOT NULL DEFAULT 'UAH',
+  `sessions_count` smallint(5) unsigned NOT NULL,
+  `validity_days` smallint(5) unsigned NOT NULL,
+  `total_validity_days` smallint(5) unsigned NOT NULL DEFAULT 180,
+  `gateway_checkout_payload` text DEFAULT NULL,
+  `last_callback_payload` text DEFAULT NULL,
+  `failure_reason` text DEFAULT NULL,
+  `started_at` timestamp NULL DEFAULT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `failed_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `customer_purchases_order_id_unique` (`order_id`),
+  KEY `customer_purchases_customer_id_foreign` (`customer_id`),
+  KEY `customer_purchases_customer_class_pass_id_foreign` (`customer_class_pass_id`),
+  KEY `customer_purchases_account_id_customer_id_created_at_index` (`account_id`,`customer_id`,`created_at`),
+  KEY `customer_purchases_account_id_provider_status_index` (`account_id`,`provider`,`status`),
+  KEY `customer_purchases_class_pass_plan_id_status_index` (`class_pass_plan_id`,`status`),
+  KEY `customer_purchases_started_at_index` (`started_at`),
+  KEY `customer_purchases_paid_at_index` (`paid_at`),
+  KEY `customer_purchases_failed_at_index` (`failed_at`),
+  KEY `customer_purchases_expires_at_index` (`expires_at`),
+  CONSTRAINT `customer_purchases_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `customer_purchases_class_pass_plan_id_foreign` FOREIGN KEY (`class_pass_plan_id`) REFERENCES `class_pass_plans` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `customer_purchases_customer_class_pass_id_foreign` FOREIGN KEY (`customer_class_pass_id`) REFERENCES `customer_class_passes` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `customer_purchases_customer_id_foreign` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `customer_remember_tokens`;
@@ -549,6 +686,7 @@ CREATE TABLE `schedule_series` (
   `capacity` smallint(5) unsigned DEFAULT NULL,
   `duration_minutes` smallint(5) unsigned DEFAULT NULL,
   `booking_cutoff_minutes` smallint(5) unsigned DEFAULT NULL,
+  `cancellation_cutoff_minutes` smallint(5) unsigned DEFAULT NULL,
   `status` varchar(255) NOT NULL DEFAULT 'active',
   `generated_until` date DEFAULT NULL,
   `generated_at` timestamp NULL DEFAULT NULL,
@@ -568,6 +706,79 @@ CREATE TABLE `schedule_series` (
   CONSTRAINT `schedule_series_trainer_id_foreign` FOREIGN KEY (`trainer_id`) REFERENCES `trainers` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `scheduled_class_cancellation_effects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `scheduled_class_cancellation_effects` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) unsigned NOT NULL,
+  `scheduled_class_cancellation_id` bigint(20) unsigned NOT NULL,
+  `class_booking_id` bigint(20) unsigned NOT NULL,
+  `customer_class_pass_id` bigint(20) unsigned DEFAULT NULL,
+  `customer_class_pass_reservation_id` bigint(20) unsigned DEFAULT NULL,
+  `previous_booking_status` varchar(255) NOT NULL,
+  `new_booking_status` varchar(255) NOT NULL,
+  `previous_reservation_status` varchar(255) DEFAULT NULL,
+  `new_reservation_status` varchar(255) DEFAULT NULL,
+  `previous_reserved_at` timestamp NULL DEFAULT NULL,
+  `new_reserved_at` timestamp NULL DEFAULT NULL,
+  `previous_used_at` timestamp NULL DEFAULT NULL,
+  `new_used_at` timestamp NULL DEFAULT NULL,
+  `previous_released_at` timestamp NULL DEFAULT NULL,
+  `new_released_at` timestamp NULL DEFAULT NULL,
+  `added_sessions_count` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `added_validity_days` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `previous_sessions_count` smallint(5) unsigned DEFAULT NULL,
+  `new_sessions_count` smallint(5) unsigned DEFAULT NULL,
+  `previous_validity_days` smallint(5) unsigned DEFAULT NULL,
+  `new_validity_days` smallint(5) unsigned DEFAULT NULL,
+  `previous_total_validity_days` smallint(5) unsigned DEFAULT NULL,
+  `new_total_validity_days` smallint(5) unsigned DEFAULT NULL,
+  `reversed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `class_cancellation_effects_account_event_index` (`account_id`,`scheduled_class_cancellation_id`),
+  KEY `class_cancellation_effects_pass_reversed_index` (`customer_class_pass_id`,`reversed_at`),
+  KEY `sc_cancel_effects_cancel_fk` (`scheduled_class_cancellation_id`),
+  KEY `sc_cancel_effects_booking_fk` (`class_booking_id`),
+  KEY `sc_cancel_effects_reservation_fk` (`customer_class_pass_reservation_id`),
+  KEY `scheduled_class_cancellation_effects_reversed_at_index` (`reversed_at`),
+  CONSTRAINT `sc_cancel_effects_account_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `sc_cancel_effects_booking_fk` FOREIGN KEY (`class_booking_id`) REFERENCES `class_bookings` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `sc_cancel_effects_cancel_fk` FOREIGN KEY (`scheduled_class_cancellation_id`) REFERENCES `scheduled_class_cancellations` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `sc_cancel_effects_pass_fk` FOREIGN KEY (`customer_class_pass_id`) REFERENCES `customer_class_passes` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `sc_cancel_effects_reservation_fk` FOREIGN KEY (`customer_class_pass_reservation_id`) REFERENCES `customer_class_pass_reservations` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `scheduled_class_cancellations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `scheduled_class_cancellations` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) unsigned NOT NULL,
+  `scheduled_class_id` bigint(20) unsigned NOT NULL,
+  `cancelled_by_user_id` bigint(20) unsigned DEFAULT NULL,
+  `restored_by_user_id` bigint(20) unsigned DEFAULT NULL,
+  `previous_scheduled_class_status` varchar(255) NOT NULL,
+  `rules_snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`rules_snapshot`)),
+  `cancelled_at` timestamp NOT NULL,
+  `restored_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `scheduled_class_cancellations_scheduled_class_id_foreign` (`scheduled_class_id`),
+  KEY `scheduled_class_cancellations_cancelled_by_user_id_foreign` (`cancelled_by_user_id`),
+  KEY `scheduled_class_cancellations_restored_by_user_id_foreign` (`restored_by_user_id`),
+  KEY `class_cancellations_account_class_restored_index` (`account_id`,`scheduled_class_id`,`restored_at`),
+  KEY `scheduled_class_cancellations_cancelled_at_index` (`cancelled_at`),
+  KEY `scheduled_class_cancellations_restored_at_index` (`restored_at`),
+  CONSTRAINT `scheduled_class_cancellations_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `scheduled_class_cancellations_cancelled_by_user_id_foreign` FOREIGN KEY (`cancelled_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `scheduled_class_cancellations_restored_by_user_id_foreign` FOREIGN KEY (`restored_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `scheduled_class_cancellations_scheduled_class_id_foreign` FOREIGN KEY (`scheduled_class_id`) REFERENCES `scheduled_classes` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `scheduled_classes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8mb4 */;
@@ -585,6 +796,7 @@ CREATE TABLE `scheduled_classes` (
   `ends_at` datetime NOT NULL,
   `capacity` smallint(5) unsigned DEFAULT NULL,
   `booking_cutoff_minutes` smallint(5) unsigned DEFAULT NULL,
+  `cancellation_cutoff_minutes` smallint(5) unsigned DEFAULT NULL,
   `is_generated` tinyint(1) NOT NULL DEFAULT 0,
   `is_manually_modified` tinyint(1) NOT NULL DEFAULT 0,
   `metadata` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`metadata`)),
@@ -726,6 +938,33 @@ CREATE TABLE `users` (
   KEY `users_system_role_index` (`system_role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `website_leads`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `website_leads` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `account_id` bigint(20) unsigned NOT NULL,
+  `customer_id` bigint(20) unsigned DEFAULT NULL,
+  `class_booking_id` bigint(20) unsigned DEFAULT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `phone` varchar(255) NOT NULL,
+  `source_page` varchar(255) DEFAULT NULL,
+  `status` varchar(255) NOT NULL DEFAULT 'new',
+  `notes` text DEFAULT NULL,
+  `converted_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `website_leads_customer_id_foreign` (`customer_id`),
+  KEY `website_leads_class_booking_id_foreign` (`class_booking_id`),
+  KEY `website_leads_account_id_status_created_at_index` (`account_id`,`status`,`created_at`),
+  KEY `website_leads_account_id_phone_index` (`account_id`,`phone`),
+  KEY `website_leads_account_id_name_index` (`account_id`,`name`),
+  CONSTRAINT `website_leads_account_id_foreign` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `website_leads_class_booking_id_foreign` FOREIGN KEY (`class_booking_id`) REFERENCES `class_bookings` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `website_leads_customer_id_foreign` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -779,5 +1018,19 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (41,'2026_06_21_161
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (42,'2026_06_23_163644_add_enabled_schedule_kinds_to_accounts_table',11);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (43,'2026_06_23_170541_add_schedule_kind_colors_to_accounts_table',12);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (44,'2026_06_23_195224_add_schedule_kind_to_class_pass_plans_table',13);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (45,'2026_06_24_063616_create_account_api_tokens_table',14);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (46,'2026_06_24_063616_create_website_leads_table',14);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (47,'2026_06_24_091739_add_opening_hours_to_accounts_table',15);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (48,'2026_06_24_143201_create_customer_purchases_table',16);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (49,'2026_06_24_185452_add_studio_rules_html_to_accounts_table',17);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (50,'2026_06_25_071937_add_total_validity_to_class_passes',18);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (51,'2026_06_25_081304_create_customer_class_pass_adjustments_table',19);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (52,'2026_06_25_085709_add_cancellation_cutoff_minutes_to_schedule_entities',20);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (53,'2026_06_25_085858_backfill_cancellation_cutoff_minutes_defaults',20);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (54,'2026_06_25_100000_add_class_pass_cancellation_rules_to_accounts',21);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (55,'2026_06_25_100001_create_scheduled_class_cancellations_table',21);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (56,'2026_06_25_100002_create_scheduled_class_cancellation_effects_table',22);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (57,'2026_06_26_063601_create_class_pass_segments_table',23);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (58,'2026_06_26_063602_add_class_pass_segment_id_to_class_pass_plans_table',23);
 COMMIT;
 SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
