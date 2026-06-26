@@ -41,6 +41,7 @@ class StorePlatformAccountRequest extends FormRequest
             'timezone' => ['nullable', 'timezone'],
             'subscription_plan_id' => ['nullable', Rule::exists((new SubscriptionPlan)->getTable(), 'id')],
             'subscription_status' => ['required', Rule::enum(SubscriptionStatus::class)],
+            'subscription_ends_at' => ['nullable', 'date'],
             'owner_name' => ['required', 'string', 'max:255'],
             'owner_email' => ['required', 'email', 'max:255', Rule::unique((new User)->getTable(), 'email')],
             'owner_password' => ['required', Password::defaults()],

@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SubscriptionPlanType;
+use App\Enums\SubscriptionStatus;
 use App\Models\Account;
+use App\Models\SubscriptionPlan;
 use App\Models\WebsiteLead;
 use App\Support\AccountApiTokenIssuer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -80,6 +83,28 @@ class WebsiteLeadApiTest extends TestCase
             ])
             ->assertUnauthorized()
             ->assertJsonPath('message', __('app.api_token_invalid'));
+
+        $this->assertSame(0, WebsiteLead::whereBelongsTo($account)->count());
+    }
+
+    public function test_website_lead_api_rejects_expired_subscription_account(): void
+    {
+        $account = Account::factory()->create();
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Website form');
+        $plan = SubscriptionPlan::factory()->create(['plan_type' => SubscriptionPlanType::Standard]);
+        $account->subscription()->create([
+            'subscription_plan_id' => $plan->id,
+            'status' => SubscriptionStatus::Active,
+            'started_at' => now()->subMonths(2),
+            'ends_at' => now()->subDay(),
+        ]);
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/api/v1/website-leads', [
+                'phone' => '+380671112233',
+            ])
+            ->assertStatus(402)
+            ->assertJsonPath('code', 'subscription_expired');
 
         $this->assertSame(0, WebsiteLead::whereBelongsTo($account)->count());
     }

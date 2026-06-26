@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Platform;
 
+use App\Enums\SubscriptionPlanType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSubscriptionPlanRequest;
 use App\Http\Requests\UpdateSubscriptionPlanRequest;
@@ -25,7 +26,15 @@ class SubscriptionPlanController extends Controller
     public function create(): View
     {
         return view('platform.subscription-plans.create', [
-            'plan' => new SubscriptionPlan(['currency' => 'UAH', 'billing_interval' => 'monthly', 'is_active' => true]),
+            'plan' => new SubscriptionPlan([
+                'currency' => 'UAH',
+                'billing_interval' => 'monthly',
+                'plan_type' => SubscriptionPlanType::Standard,
+                'access_days' => 30,
+                'requires_recurring_payment' => true,
+                'renewal_lead_days' => 2,
+                'is_active' => true,
+            ]),
         ]);
     }
 
@@ -34,6 +43,8 @@ class SubscriptionPlanController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->slug($validated);
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['public_signup_enabled'] = $request->boolean('public_signup_enabled');
+        $validated['requires_recurring_payment'] = $request->boolean('requires_recurring_payment');
 
         SubscriptionPlan::create($validated);
 
@@ -58,6 +69,8 @@ class SubscriptionPlanController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->slug($validated, $subscriptionPlan);
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['public_signup_enabled'] = $request->boolean('public_signup_enabled');
+        $validated['requires_recurring_payment'] = $request->boolean('requires_recurring_payment');
 
         $subscriptionPlan->update($validated);
 

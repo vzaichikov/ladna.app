@@ -47,6 +47,13 @@
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
     $canViewTariffPayments = $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
+    $subscriptionAccess = $showAccountNav ? app(\App\Support\SaasBilling\AccountSubscriptionAccess::class) : null;
+    $subscriptionWarning = $showAccountNav && $subscriptionAccess?->shouldShowWarning($activeAccount);
+    $subscriptionCanEdit = ! $showAccountNav || $subscriptionAccess?->canEditStudio($activeAccount);
+    $subscriptionWarningMessage = $subscriptionCanEdit
+        ? __('app.subscription_past_due_warning')
+        : __('app.subscription_expired_readonly');
+    $supportUrl = \App\Models\SystemSetting::stringValue(\App\Models\SystemSetting::SupportUrlKey);
     $classFormatNav = [];
 
     if ($showAccountNav && $canManageStudioSettings) {
@@ -326,7 +333,9 @@
                                 <div class="font-semibold text-white">{{ $sidebarAccount->name }}</div>
                                 <div class="mt-1 text-sm text-violet-crm-100/80">{{ $sidebarAccount->slug }}</div>
                                 <div class="mt-3">
-                                    <span class="crm-status-active">{{ __('app.active') }}</span>
+                                    <span class="{{ $subscriptionCanEdit ? 'crm-status-active' : 'crm-status-danger' }}">
+                                        {{ $subscriptionCanEdit ? __('app.active') : __('app.expired') }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -384,10 +393,36 @@
                     </div>
                 </header>
 
+                @if ($subscriptionWarning)
+                    <div class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 sm:px-6 lg:px-8">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <span>{{ $subscriptionWarningMessage }}</span>
+                            <span class="flex flex-wrap gap-3">
+                                @if ($canViewTariffPayments)
+                                    <a href="{{ route('dashboard.accounts.tariff-payments.show', $activeAccount) }}" class="text-[#3B223F] underline decoration-[#A78AB9] underline-offset-4">
+                                        {{ __('app.pay_now') }}
+                                    </a>
+                                @endif
+                                @if ($supportUrl)
+                                    <a href="{{ $supportUrl }}" class="text-[#3B223F] underline decoration-[#A78AB9] underline-offset-4">
+                                        {{ __('app.support') }}
+                                    </a>
+                                @endif
+                            </span>
+                        </div>
+                    </div>
+                @endif
+
                 <main class="px-4 py-6 sm:px-6 lg:px-8">
                     @if (session('status'))
                         <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 shadow-xs">
                             {{ session('status') }}
+                        </div>
+                    @endif
+
+                    @if ($errors->has('subscription'))
+                        <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 shadow-xs">
+                            {{ $errors->first('subscription') }}
                         </div>
                     @endif
 

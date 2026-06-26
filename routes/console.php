@@ -15,3 +15,7 @@ Schedule::command('schedule:generate')
 Schedule::command('class-passes:normalize')
     ->everyFifteenMinutes()
     ->withoutOverlapping(30);
+
+Schedule::command('billing:reconcile')
+    ->hourly()
+    ->withoutOverlapping(30);

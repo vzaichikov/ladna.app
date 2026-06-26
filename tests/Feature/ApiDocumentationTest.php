@@ -28,9 +28,12 @@ class ApiDocumentationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('openapi', '3.1.0')
             ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/schedule.get.tags.0', 'Public schedule')
+            ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/schedule.get.responses.402.$ref', '#/components/responses/SubscriptionExpired')
             ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/price.get.tags.0', 'Public prices')
+            ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/price.get.responses.402.$ref', '#/components/responses/SubscriptionExpired')
             ->assertJsonPath('paths./api/v1/website-leads.post.tags.0', 'Website leads')
             ->assertJsonPath('paths./api/v1/website-leads.post.security.0.AccountBearerToken', [])
+            ->assertJsonPath('paths./api/v1/website-leads.post.responses.402.$ref', '#/components/responses/SubscriptionExpired')
             ->assertJsonPath('components.schemas.WebsiteLeadRequest.required.0', 'phone')
             ->assertJsonPath('components.schemas.ClassPassPlan.properties.total_validity_days.type', 'integer')
             ->assertJsonPath('components.schemas.ClassPassPlan.properties.segment.anyOf.0.$ref', '#/components/schemas/ClassPassSegment')
@@ -38,6 +41,7 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.schemas.PriceGroup.properties.schedule_kind.type', 'string')
             ->assertJsonPath('components.schemas.WebsiteLead.allOf.1.properties.created_at.description', 'Lead creation time in the bearer token account timezone.')
             ->assertJsonPath('components.schemas.WebsiteLead.allOf.1.properties.created_at.example', '2026-06-24T11:48:00+03:00')
+            ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.example', 'subscription_expired')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.scheme', 'bearer');
     }
 }

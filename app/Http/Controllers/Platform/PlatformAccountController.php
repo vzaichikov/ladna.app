@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -54,6 +55,7 @@ class PlatformAccountController extends Controller
                 'logo',
                 'subscription_plan_id',
                 'subscription_status',
+                'subscription_ends_at',
                 'owner_name',
                 'owner_email',
                 'owner_password',
@@ -81,11 +83,16 @@ class PlatformAccountController extends Controller
 
     public function show(Account $account): View
     {
-        $account->load(['locations', 'subscription.plan'])
+        $account->load(['locations', 'subscription.plan', 'subscriptionPayments.plan'])
             ->loadCount(['users', 'scheduledClasses']);
 
         return view('platform.accounts.show', [
             'account' => $account,
+            'subscriptionPayments' => $account->subscriptionPayments()
+                ->with('plan')
+                ->latest()
+                ->limit(15)
+                ->get(),
         ]);
     }
 
@@ -101,7 +108,7 @@ class PlatformAccountController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
-        $account->update(collect($validated)->except(['logo', 'subscription_plan_id', 'subscription_status'])->all());
+        $account->update(collect($validated)->except(['logo', 'subscription_plan_id', 'subscription_status', 'subscription_ends_at'])->all());
         $this->storeLogo($request, $account);
         $this->syncSubscription($account, $validated);
 
@@ -135,12 +142,24 @@ class PlatformAccountController extends Controller
      */
     private function syncSubscription(Account $account, array $validated): void
     {
+        $plan = isset($validated['subscription_plan_id'])
+            ? SubscriptionPlan::find($validated['subscription_plan_id'])
+            : null;
+        $endsAt = filled($validated['subscription_ends_at'] ?? null)
+            ? Carbon::parse($validated['subscription_ends_at'], $account->timezone ?? config('app.timezone'))->endOfDay()
+            : null;
+
         $account->subscription()->updateOrCreate(
             ['account_id' => $account->id],
             [
                 'subscription_plan_id' => $validated['subscription_plan_id'] ?? null,
                 'status' => $validated['subscription_status'],
-                'started_at' => now(),
+                'started_at' => $account->subscription?->started_at ?? now(),
+                'ends_at' => $endsAt,
+                'next_payment_at' => $endsAt && $plan?->requires_recurring_payment
+                    ? $endsAt->copy()->subDays($plan->renewal_lead_days ?? 2)
+                    : null,
+                'auto_renew_enabled' => false,
             ],
         );
     }

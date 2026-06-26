@@ -19,7 +19,12 @@
             @csrf
             @method('PUT')
 
-            <div>
+            <div class="flex flex-wrap gap-2 border-b border-stone-100 pb-4">
+                <a href="#appearance" class="rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-900 ring-1 ring-brand-100">{{ __('app.system_settings_tab_appearance') }}</a>
+                <a href="#support" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-slate-950">{{ __('app.system_settings_tab_support') }}</a>
+            </div>
+
+            <div id="appearance">
                 <h2 class="text-lg font-semibold text-slate-950">{{ __('app.font_family') }}</h2>
                 <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.font_preview') }}</p>
                 <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -38,6 +43,18 @@
                 @error('font_family')
                     <span class="crm-help">{{ $message }}</span>
                 @enderror
+            </div>
+
+            <div id="support" class="border-t border-stone-100 pt-6">
+                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.system_support') }}</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.system_support_copy') }}</p>
+                <label class="mt-4 block">
+                    <span class="crm-label">{{ __('app.support_url') }}</span>
+                    <input name="support_url" type="url" value="{{ old('support_url', $supportUrl) }}" class="crm-field" placeholder="https://t.me/ladna_support">
+                    @error('support_url')
+                        <span class="crm-help">{{ $message }}</span>
+                    @enderror
+                </label>
             </div>
 
             <div class="flex justify-end border-t border-stone-100 pt-5">

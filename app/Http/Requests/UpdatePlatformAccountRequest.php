@@ -39,6 +39,7 @@ class UpdatePlatformAccountRequest extends FormRequest
             'timezone' => ['nullable', 'timezone'],
             'subscription_plan_id' => ['nullable', Rule::exists((new SubscriptionPlan)->getTable(), 'id')],
             'subscription_status' => ['required', Rule::enum(SubscriptionStatus::class)],
+            'subscription_ends_at' => ['nullable', 'date'],
         ];
     }
 

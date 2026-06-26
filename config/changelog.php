@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.36.0',
+                'date' => '2026-06-26',
+                'title' => 'SaaS trial and billing flow',
+                'items' => ['Added the one-month paid demo signup flow, configurable promo, demo, and monthly SaaS plans, Monopay subscription payments for studio owners, billing history, expired-plan read-only access, public expired-plan messaging, support links, and safer payment retry and auto-renewal handling.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.35.0',
                 'date' => '2026-06-26',
                 'title' => 'Class history and pass normalization',
@@ -352,6 +359,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.36.0',
+                'date' => '2026-06-26',
+                'title' => 'Демо-доступ і SaaS-оплати',
+                'items' => ['Додано платний демо-флоу на місяць, налаштовувані промо, демо та місячні SaaS-тарифи, підписки Monopay для власниць студій, історію оплат, режим перегляду після завершення тарифу, повідомлення для публічних сторінок, посилання підтримки та безпечнішу повторну оплату й обробку автосписань.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.35.0',
                 'date' => '2026-06-26',

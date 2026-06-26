@@ -22,15 +22,22 @@
     </label>
 </div>
 
-<label class="block">
-    <span class="crm-label">{{ __('app.subscription_status') }}</span>
-    <select name="subscription_status" class="crm-field">
-        @foreach ($subscriptionStatuses as $status)
-            <option value="{{ $status->value }}" @selected(old('subscription_status', $account->subscription?->status?->value ?? 'trialing') === $status->value)>{{ __('app.'.$status->value) }}</option>
-        @endforeach
-    </select>
-    @error('subscription_status') <span class="crm-help">{{ $message }}</span> @enderror
-</label>
+<div class="grid gap-4 sm:grid-cols-2">
+    <label class="block">
+        <span class="crm-label">{{ __('app.subscription_status') }}</span>
+        <select name="subscription_status" class="crm-field">
+            @foreach ($subscriptionStatuses as $status)
+                <option value="{{ $status->value }}" @selected(old('subscription_status', $account->subscription?->status?->value ?? 'trialing') === $status->value)>{{ __('app.'.$status->value) }}</option>
+            @endforeach
+        </select>
+        @error('subscription_status') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+    <label class="block">
+        <span class="crm-label">{{ __('app.subscription_ends_at') }}</span>
+        <input name="subscription_ends_at" type="date" value="{{ old('subscription_ends_at', $account->subscription?->ends_at?->timezone($account->timezone ?? config('app.timezone'))->toDateString()) }}" class="crm-field">
+        @error('subscription_ends_at') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+</div>
 
 @unless ($account->exists)
     <section class="rounded-lg border border-slate-200 bg-slate-50 p-4">

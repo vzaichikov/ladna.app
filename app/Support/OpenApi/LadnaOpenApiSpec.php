@@ -105,6 +105,7 @@ class LadnaOpenApiSpec
                             ],
                         ],
                     ],
+                    '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
                     '404' => ['$ref' => '#/components/responses/NotFound'],
                 ],
                 'x-codeSamples' => $this->codeSamples('GET', '/api/v1/public/charmpole/main-studio/schedule'),
@@ -139,6 +140,7 @@ class LadnaOpenApiSpec
                             ],
                         ],
                     ],
+                    '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
                     '404' => ['$ref' => '#/components/responses/NotFound'],
                 ],
                 'x-codeSamples' => $this->codeSamples('GET', '/api/v1/public/charmpole/main-studio/price'),
@@ -190,6 +192,7 @@ class LadnaOpenApiSpec
                         ],
                     ],
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -246,6 +249,21 @@ class LadnaOpenApiSpec
             ],
             'NotFound' => [
                 'description' => 'Account, location, or resource was not found.',
+            ],
+            'SubscriptionExpired' => [
+                'description' => 'The studio SaaS subscription has expired, so public content is unavailable.',
+                'content' => [
+                    'application/json' => [
+                        'schema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'message' => ['type' => 'string'],
+                                'code' => ['type' => 'string', 'example' => 'subscription_expired'],
+                                'support_url' => ['type' => ['string', 'null']],
+                            ],
+                        ],
+                    ],
+                ],
             ],
             'ValidationError' => [
                 'description' => 'Request validation failed.',

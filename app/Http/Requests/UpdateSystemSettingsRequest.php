@@ -26,6 +26,7 @@ class UpdateSystemSettingsRequest extends FormRequest
     {
         return [
             'font_family' => ['required', Rule::in(array_keys(SystemAppearance::fontOptions()))],
+            'support_url' => ['nullable', 'url', 'max:2048'],
         ];
     }
 }
