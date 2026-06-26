@@ -5,14 +5,31 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class LoginController extends Controller
 {
-    public function create(): View
+    public function create(Request $request): View
     {
+        return $this->createForLocale($request, 'uk');
+    }
+
+    public function createEnglish(Request $request): View
+    {
+        return $this->createForLocale($request, 'en');
+    }
+
+    private function createForLocale(Request $request, string $locale): View
+    {
+        App::setLocale($locale);
+        Carbon::setLocale($locale);
+        $request->session()->put('locale', $locale);
+
         return view('auth.login');
     }
 

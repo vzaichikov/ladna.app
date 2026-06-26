@@ -52,11 +52,26 @@ use App\Http\Middleware\EnsureCustomerProfileIsComplete;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\View;
 
-Route::get('/', function () {
+Route::get('/', function (Request $request): View {
+    App::setLocale('uk');
+    Carbon::setLocale('uk');
+    $request->session()->put('locale', 'uk');
+
     return view('welcome');
 })->name('home');
+
+Route::get('/en', function (Request $request): View {
+    App::setLocale('en');
+    Carbon::setLocale('en');
+    $request->session()->put('locale', 'en');
+
+    return view('welcome');
+})->name('home.en');
 
 Route::get('/changelog.en.html', [ChangelogController::class, 'english'])->name('changelog.en');
 Route::get('/changelog.ua.html', [ChangelogController::class, 'ukrainian'])->name('changelog.ua');
@@ -73,6 +88,7 @@ Route::get('/help/{slug}', [HelpController::class, 'show'])
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
+    Route::get('/en/login', [LoginController::class, 'createEnglish'])->name('login.en');
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
 });
 

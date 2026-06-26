@@ -21,6 +21,40 @@ class ExampleTest extends TestCase
         $response->assertSee('changelog.', false);
     }
 
+    public function test_landing_language_urls_control_the_visible_locale(): void
+    {
+        $this->withSession(['locale' => 'uk'])
+            ->get('/en')
+            ->assertStatus(200)
+            ->assertSee('A studio should move with classes, not spreadsheets')
+            ->assertSee('href="'.route('home').'"', false)
+            ->assertSessionHas('locale', 'en');
+
+        $this->withSession(['locale' => 'en'])
+            ->get('/')
+            ->assertStatus(200)
+            ->assertSee('Студія працює в ритмі занять, а не таблиць')
+            ->assertSee('href="'.route('home.en').'"', false)
+            ->assertSessionHas('locale', 'uk');
+    }
+
+    public function test_login_language_urls_control_the_visible_locale(): void
+    {
+        $this->withSession(['locale' => 'en'])
+            ->get('/login')
+            ->assertStatus(200)
+            ->assertSee('Увійдіть, щоб керувати розкладом')
+            ->assertSee('href="'.route('login.en').'"', false)
+            ->assertSessionHas('locale', 'uk');
+
+        $this->withSession(['locale' => 'uk'])
+            ->get('/en/login')
+            ->assertStatus(200)
+            ->assertSee('Log in to manage schedules')
+            ->assertSee('href="'.route('login').'"', false)
+            ->assertSessionHas('locale', 'en');
+    }
+
     public function test_changelog_pages_render_release_history(): void
     {
         $version = trim((string) file_get_contents(base_path('VERSION')));

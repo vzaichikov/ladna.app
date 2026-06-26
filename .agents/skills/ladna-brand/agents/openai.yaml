@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Brand"
+  short_description: "Ladna brand and mascot guidance"
+  default_prompt: "Use $ladna-brand before designing Ladna landing pages, marketing visuals, mascot variants, or brand-facing UI."
