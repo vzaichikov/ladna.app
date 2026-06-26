@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.40.0',
+                'date' => '2026-06-26',
+                'title' => 'Manual class-pass session removal',
+                'items' => ['Added owner-only manual session removal for purchased class passes, with signed adjustment history, protected used and reserved sessions, updated balance notifications, and a clearer add/remove adjustment form on the pass edit page.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.39.0',
                 'date' => '2026-06-26',
                 'title' => 'Payment history and fiscalization',
@@ -366,6 +373,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.40.0',
+                'date' => '2026-06-26',
+                'title' => 'Ручне зняття занять з абонемента',
+                'items' => ['Додано ручне зняття занять із купленого абонемента для власниці студії: з історією signed-коригувань, захистом уже використаних і зарезервованих занять, оновленими повідомленнями про баланс і зрозумілішими формами додавання та зняття на сторінці абонемента.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.39.0',
                 'date' => '2026-06-26',

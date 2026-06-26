@@ -11,7 +11,7 @@ use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class AddCustomerClassPassSessions
+class AdjustCustomerClassPassSessions
 {
     public function __construct(
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
@@ -28,14 +28,28 @@ class AddCustomerClassPassSessions
 
             abort_unless($lockedPass->account_id === $account->id, 404);
 
+            $lockedPass = $this->normalizeCustomerClassPasses->forPass($lockedPass);
+
             if (! $this->canAdjust($lockedPass)) {
                 throw ValidationException::withMessages([
                     'sessions_delta' => __('app.class_pass_adjustment_unavailable'),
                 ]);
             }
 
+            if ($sessionsDelta === 0 || abs($sessionsDelta) > 500) {
+                throw ValidationException::withMessages([
+                    'sessions_delta' => __('app.class_pass_adjustment_too_large'),
+                ]);
+            }
+
             $previousSessionsCount = (int) $lockedPass->sessions_count;
             $newSessionsCount = $previousSessionsCount + $sessionsDelta;
+
+            if ($newSessionsCount < $this->minimumSessionsCount($lockedPass)) {
+                throw ValidationException::withMessages([
+                    'sessions_delta' => __('app.class_pass_adjustment_below_usage'),
+                ]);
+            }
 
             if ($newSessionsCount > 65535) {
                 throw ValidationException::withMessages([
@@ -47,7 +61,7 @@ class AddCustomerClassPassSessions
                 'sessions_count' => $newSessionsCount,
             ];
 
-            if ($lockedPass->status === CustomerClassPassStatus::UsedUp) {
+            if ($sessionsDelta > 0 && $lockedPass->status === CustomerClassPassStatus::UsedUp) {
                 $attributes += [
                     'status' => CustomerClassPassStatus::Active->value,
                     'is_active' => true,
@@ -95,5 +109,10 @@ class AddCustomerClassPassSessions
         $usableUntilAt = $customerClassPass->usableUntilAt();
 
         return ! $usableUntilAt || $usableUntilAt->greaterThan(now());
+    }
+
+    private function minimumSessionsCount(CustomerClassPass $customerClassPass): int
+    {
+        return (int) $customerClassPass->used_sessions_count + (int) $customerClassPass->reserved_sessions_count;
     }
 }

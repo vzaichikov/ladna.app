@@ -254,7 +254,7 @@ class TransactionalMailDispatcher
             'recipient_name' => $this->recipientName($customer->name),
             'pass_name' => $classPass->plan_name,
             'pass_code' => $classPass->code,
-            'sessions_delta' => (string) $adjustment->sessions_delta,
+            'sessions_delta' => $adjustment->sessions_delta > 0 ? '+'.$adjustment->sessions_delta : (string) $adjustment->sessions_delta,
             'previous_sessions_count' => (string) $adjustment->previous_sessions_count,
             'new_sessions_count' => (string) $adjustment->new_sessions_count,
             'reason' => $adjustment->reason,
