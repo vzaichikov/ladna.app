@@ -54,3 +54,5 @@ Use Boost `get-absolute-url` before sharing or testing help URLs, and Boost `bro
 ## Versioning
 
 If the help update is committed, use `ladna-versioning`: update `VERSION` and `config/changelog.php` with the correct SemVer impact and bilingual changelog entry.
+
+Changelog entries are for studio owners and other Ladna clients. Mention only the visible feature or workflow improvement they can use; do not include internal cleanup, implementation details, deleted helper commands, refactors, or service notes.

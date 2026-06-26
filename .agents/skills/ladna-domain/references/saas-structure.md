@@ -64,4 +64,3 @@
 - Demo rooms: `Великий зал` and `Малий зал`.
 - Demo data should model the real Charmpole studio, not generic placeholder fitness data. Charmpole demo class-pass plans include group classes, private lessons, room rental, and one trial pass.
 - `App\Support\CharmpoleDemoCatalog` is the code source of truth for Charmpole demo directions, rooms, trainer type defaults, class types, pass plans, weekly schedule rows, customers, and demo customer passes. Update it first when changing demo catalog content, then let seeders consume it.
-- `php artisan ladna:sync-charmpole-catalog` is a guarded catalog-only sync for existing Charmpole accounts. It dry-runs by default and only applies changes with `--execute`. It must not replace accounts, users, customers, trainers, trainer types, brand settings, SMS settings, or integration settings; it is for directions, class types, class-pass plans, and their pivots only.

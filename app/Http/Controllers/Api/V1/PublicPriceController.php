@@ -21,6 +21,7 @@ class PublicPriceController extends Controller
         $groups = $buildPublicPriceList->execute($account, $location)
             ->map(fn (array $group): array => [
                 'key' => $group['key'],
+                'schedule_kind' => $group['key'],
                 'title' => $group['title'],
                 'sections' => $group['sections']->map(fn (array $section): array => [
                     'key' => $section['key'],

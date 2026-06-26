@@ -18,7 +18,7 @@
             <h1 class="crm-page-title">{{ __('app.class_pass_plans') }}</h1>
             <p class="crm-page-copy">{{ __('app.class_pass_plans_copy') }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.class-pass-plans.create', [$account, 'tab' => $activeScheduleKindValue])">
+        <x-ui.button :href="route('dashboard.accounts.class-pass-plans.create', [$account, 'tab' => $activeScheduleKindValue, 'segment' => $activeSegmentValue])">
             <x-ui.icon name="plus" class="h-4 w-4" />
             {{ __('app.create_class_pass_plan') }}
         </x-ui.button>
@@ -31,6 +31,29 @@
                 class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeScheduleKindValue === $scheduleKindValue ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
             >
                 {{ __('app.'.$scheduleKindDefinition['title_key']) }}
+            </a>
+        @endforeach
+    </nav>
+
+    <nav class="mt-4 flex gap-2 overflow-x-auto" aria-label="{{ __('app.class_pass_segments') }}">
+        <a
+            href="{{ route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $activeScheduleKindValue, 'segment' => 'all']) }}"
+            class="inline-flex shrink-0 items-center rounded-lg border px-3 py-2 text-sm font-semibold transition {{ $activeSegmentValue === 'all' ? 'border-violet-crm-600 bg-violet-crm-50 text-violet-crm-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950' }}"
+        >
+            {{ __('app.all_class_pass_segments') }}
+        </a>
+        <a
+            href="{{ route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $activeScheduleKindValue, 'segment' => 'none']) }}"
+            class="inline-flex shrink-0 items-center rounded-lg border px-3 py-2 text-sm font-semibold transition {{ $activeSegmentValue === 'none' ? 'border-violet-crm-600 bg-violet-crm-50 text-violet-crm-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950' }}"
+        >
+            {{ __('app.without_class_pass_segment') }}
+        </a>
+        @foreach ($classPassSegmentFilters as $classPassSegment)
+            <a
+                href="{{ route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $activeScheduleKindValue, 'segment' => $classPassSegment->id]) }}"
+                class="inline-flex shrink-0 items-center rounded-lg border px-3 py-2 text-sm font-semibold transition {{ $activeSegmentValue === (string) $classPassSegment->id ? 'border-violet-crm-600 bg-violet-crm-50 text-violet-crm-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950' }}"
+            >
+                {{ $classPassSegment->name }}
             </a>
         @endforeach
     </nav>
@@ -48,6 +71,9 @@
                         <span>{{ $classPassPlan->slug }}</span>
                         @if ($classPassPlan->is_trial)
                             <span class="crm-status-scheduled">{{ __('app.trial_class_pass_short') }}</span>
+                        @endif
+                        @if ($classPassPlan->classPassSegment)
+                            <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-semibold text-slate-600">{{ $classPassPlan->classPassSegment->name }}</span>
                         @endif
                     </div>
                 </div>
@@ -98,12 +124,12 @@
                     <span class="{{ $classPassPlan->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
                         {{ $classPassPlan->is_active ? __('app.active') : __('app.inactive') }}
                     </span>
-                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.copy', [$account, $classPassPlan, 'tab' => $activeScheduleKindValue]) }}">
+                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.copy', [$account, $classPassPlan, 'tab' => $activeScheduleKindValue, 'segment' => $activeSegmentValue]) }}">
                         @csrf
                         <x-ui.action-button type="submit" icon="copy" :label="__('app.copy')" />
                     </form>
                     <x-ui.action-button :href="route('dashboard.accounts.class-pass-plans.edit', [$account, $classPassPlan])" icon="edit" :label="__('app.edit')" />
-                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.destroy', [$account, $classPassPlan, 'tab' => $activeScheduleKindValue]) }}" data-confirm-delete>
+                    <form method="POST" action="{{ route('dashboard.accounts.class-pass-plans.destroy', [$account, $classPassPlan, 'tab' => $activeScheduleKindValue, 'segment' => $activeSegmentValue]) }}" data-confirm-delete>
                         @csrf
                         @method('DELETE')
                         <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />

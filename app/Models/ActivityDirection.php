@@ -71,4 +71,10 @@ class ActivityDirection extends Model
         return $this->belongsToMany(ClassPassPlan::class, 'class_pass_plan_activity_direction')
             ->withTimestamps();
     }
+
+    public function classPassSegments(): BelongsToMany
+    {
+        return $this->belongsToMany(ClassPassSegment::class, 'activity_direction_class_pass_segment')
+            ->withTimestamps();
+    }
 }

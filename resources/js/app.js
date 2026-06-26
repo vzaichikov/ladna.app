@@ -85,12 +85,44 @@ function updateClassPassScheduleKind(form) {
         return;
     }
 
+    const segmentSelect = form.querySelector('[data-class-pass-segment]');
+    let segmentDirectionIds = [];
+
+    if (segmentSelect) {
+        segmentSelect.querySelectorAll('option').forEach((option) => {
+            const optionScheduleKind = option.dataset.scheduleKind || '';
+            const isAvailable = !option.value || optionScheduleKind === select.value;
+
+            option.hidden = !isAvailable;
+            option.disabled = !isAvailable;
+        });
+
+        if (segmentSelect.selectedOptions[0]?.disabled) {
+            segmentSelect.value = '';
+        }
+
+        segmentDirectionIds = (segmentSelect.selectedOptions[0]?.dataset.directionIds || '')
+            .split(',')
+            .filter(Boolean);
+    }
+
     form.querySelectorAll('[data-class-type-options]').forEach((group) => {
         const isActive = group.dataset.classTypeOptions === select.value;
 
         group.classList.toggle('hidden', !isActive);
         group.querySelectorAll('input[name="class_type_ids[]"]').forEach((input) => {
-            input.disabled = !isActive;
+            const option = input.closest('[data-class-type-option]');
+            const activityDirectionId = option?.dataset.activityDirectionId || '';
+            const isAllowedBySegment = segmentDirectionIds.length === 0 || segmentDirectionIds.includes(activityDirectionId);
+            const isDisabled = !isActive || !isAllowedBySegment;
+
+            input.disabled = isDisabled;
+
+            if (isDisabled) {
+                input.checked = false;
+            }
+
+            option?.classList.toggle('hidden', isActive && !isAllowedBySegment);
         });
     });
 }
@@ -1182,6 +1214,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (scheduleKindSelect) {
             updateClassPassScheduleKind(scheduleKindSelect.closest('form'));
+        }
+
+        const classPassSegmentSelect = event.target.closest('[data-class-pass-segment]');
+
+        if (classPassSegmentSelect) {
+            updateClassPassScheduleKind(classPassSegmentSelect.closest('form'));
         }
     });
 

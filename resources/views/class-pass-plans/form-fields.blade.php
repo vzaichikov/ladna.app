@@ -27,7 +27,9 @@
     $rawScheduleKind = $classPassPlan->schedule_kind;
     $classPassPlanScheduleKindValue = $rawScheduleKind instanceof \App\Enums\ScheduleKind ? $rawScheduleKind->value : (string) $rawScheduleKind;
     $selectedScheduleKind = old('schedule_kind', $classPassPlanScheduleKindValue ?: array_key_first($scheduleKindTabs));
+    $selectedClassPassSegmentId = (int) old('class_pass_segment_id', $classPassPlan->class_pass_segment_id ?? 0);
     $classTypesByScheduleKind = $classTypes->groupBy(fn ($classType) => $classType->schedule_kind->value);
+    $classPassSegmentsByScheduleKind = $classPassSegments->groupBy(fn ($classPassSegment) => $classPassSegment->schedule_kind->value);
     $formatMoneyInput = static function (?int $priceCents): string {
         if ($priceCents === null) {
             return '';
@@ -62,15 +64,37 @@
     </label>
 </div>
 
-<label class="block">
-    <span class="crm-label">{{ __('app.schedule_kind') }}</span>
-    <select name="schedule_kind" required class="crm-field" data-class-pass-schedule-kind>
-        @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
-            <option value="{{ $scheduleKindValue }}" @selected($selectedScheduleKind === $scheduleKindValue)>{{ __('app.'.$scheduleKindDefinition['title_key']) }}</option>
-        @endforeach
-    </select>
-    @error('schedule_kind') <span class="crm-help">{{ $message }}</span> @enderror
-</label>
+<div class="grid gap-4 sm:grid-cols-2">
+    <label class="block">
+        <span class="crm-label">{{ __('app.schedule_kind') }}</span>
+        <select name="schedule_kind" required class="crm-field" data-class-pass-schedule-kind>
+            @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
+                <option value="{{ $scheduleKindValue }}" @selected($selectedScheduleKind === $scheduleKindValue)>{{ __('app.'.$scheduleKindDefinition['title_key']) }}</option>
+            @endforeach
+        </select>
+        @error('schedule_kind') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+
+    <label class="block">
+        <span class="crm-label">{{ __('app.class_pass_segment') }}</span>
+        <select name="class_pass_segment_id" class="crm-field" data-class-pass-segment>
+            <option value="" data-schedule-kind="" data-direction-ids="">{{ __('app.without_class_pass_segment') }}</option>
+            @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
+                @foreach ($classPassSegmentsByScheduleKind->get($scheduleKindValue, collect()) as $classPassSegment)
+                    <option
+                        value="{{ $classPassSegment->id }}"
+                        data-schedule-kind="{{ $scheduleKindValue }}"
+                        data-direction-ids="{{ $classPassSegment->activityDirections->pluck('id')->implode(',') }}"
+                        @selected($selectedClassPassSegmentId === $classPassSegment->id)
+                    >
+                        {{ $classPassSegment->name }}{{ $classPassSegment->is_active ? '' : ' · '.__('app.inactive') }}
+                    </option>
+                @endforeach
+            @endforeach
+        </select>
+        @error('class_pass_segment_id') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+</div>
 
 <div data-class-type-group>
     @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
@@ -90,7 +114,7 @@
             </div>
             <div class="mt-3 grid gap-3 sm:grid-cols-2">
                 @forelse ($scheduleKindClassTypes as $classType)
-                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700">
+                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700" data-class-type-option data-activity-direction-id="{{ $classType->activity_direction_id }}">
                         <input
                             name="class_type_ids[]"
                             type="{{ $isGroupClass ? 'checkbox' : 'radio' }}"

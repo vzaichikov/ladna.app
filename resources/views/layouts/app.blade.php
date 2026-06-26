@@ -132,6 +132,11 @@
             'icon' => 'class-pass-plans',
             'href' => route('dashboard.accounts.class-pass-plans.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.class-pass-plans.*'),
+        ], [
+            'label' => __('app.class_pass_segments'),
+            'icon' => 'class-pass-plans',
+            'href' => route('dashboard.accounts.class-pass-segments.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.class-pass-segments.*'),
         ]] : []),
         ...($canManageTrainers ? [[
             'label' => __('app.trainers'),

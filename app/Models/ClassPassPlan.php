@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'schedule_kind', 'name', 'slug', 'description', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'is_trial', 'is_active', 'sort_order'])]
+#[Fillable(['account_id', 'schedule_kind', 'class_pass_segment_id', 'name', 'slug', 'description', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'is_trial', 'is_active', 'sort_order'])]
 class ClassPassPlan extends Model
 {
     /** @use HasFactory<ClassPassPlanFactory> */
@@ -50,6 +50,11 @@ class ClassPassPlan extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    public function classPassSegment(): BelongsTo
+    {
+        return $this->belongsTo(ClassPassSegment::class);
     }
 
     public function activityDirections(): BelongsToMany

@@ -287,6 +287,11 @@ class Account extends Model
         return $this->hasMany(ClassPassPlan::class);
     }
 
+    public function classPassSegments(): HasMany
+    {
+        return $this->hasMany(ClassPassSegment::class);
+    }
+
     public function customerClassPasses(): HasMany
     {
         return $this->hasMany(CustomerClassPass::class);

@@ -297,6 +297,7 @@ class LadnaOpenApiSpec
                 'type' => 'object',
                 'properties' => [
                     'key' => ['type' => 'string', 'enum' => ['group_class', 'private_lesson', 'room_rental']],
+                    'schedule_kind' => ['type' => 'string', 'enum' => ['group_class', 'private_lesson', 'room_rental']],
                     'title' => ['type' => 'string'],
                     'sections' => [
                         'type' => 'array',
@@ -322,6 +323,12 @@ class LadnaOpenApiSpec
                     'name' => ['type' => 'string'],
                     'slug' => ['type' => 'string'],
                     'schedule_kind' => ['type' => 'string'],
+                    'segment' => [
+                        'anyOf' => [
+                            ['$ref' => '#/components/schemas/ClassPassSegment'],
+                            ['type' => 'null'],
+                        ],
+                    ],
                     'description' => ['type' => ['string', 'null']],
                     'price_cents' => ['type' => 'integer'],
                     'currency' => ['type' => 'string'],
@@ -336,6 +343,15 @@ class LadnaOpenApiSpec
                     'class_types' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/NamedEntity']],
                     'trainer_types' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/NamedEntity']],
                     'rooms' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/NamedEntity']],
+                ],
+            ],
+            'ClassPassSegment' => [
+                'type' => 'object',
+                'properties' => [
+                    'id' => ['type' => 'integer'],
+                    'name' => ['type' => 'string'],
+                    'slug' => ['type' => 'string'],
+                    'schedule_kind' => ['type' => 'string'],
                 ],
             ],
             'WebsiteLeadRequest' => [

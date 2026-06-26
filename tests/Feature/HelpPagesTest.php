@@ -48,6 +48,18 @@ class HelpPagesTest extends TestCase
             ->assertSee('навіть тоді, коли заняття ще залишилися або клієнт ще не прийшов на перше заняття', false);
     }
 
+    public function test_passes_prices_help_explains_class_pass_segments(): void
+    {
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('Сегменти абонементів', false)
+            ->assertSee('візуальне групування в адмінці та публічному прайсі', false)
+            ->assertSee('Створіть або відредагуйте абонемент і виберіть сегмент у формі', false)
+            ->assertSee('активні абонементи сегмента будуть показані окремою групою', false)
+            ->assertDontSee('class_pass_segment', false)
+            ->assertDontSee('sync', false);
+    }
+
     public function test_help_documents_studio_class_cancellation_flow(): void
     {
         $this->get(route('help.show', 'schedule', false))

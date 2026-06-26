@@ -26,4 +26,6 @@ Before creating a commit or pushing commits:
 6. Verify that `VERSION` exactly matches the newest changelog version.
 7. If pushing, confirm the version and changelog changes are included in the commit set being pushed.
 
+Changelog entries are client-facing release notes for studio owners and Ladna users. Describe only visible features, workflow changes, and useful fixes; do not mention internal cleanup, implementation mechanics, deleted helper commands, refactors, or service-only maintenance unless that maintenance is itself visible to clients.
+
 Do not skip versioning for small commits. If a commit is intentionally excluded from the public changelog, state the reason before committing or pushing.

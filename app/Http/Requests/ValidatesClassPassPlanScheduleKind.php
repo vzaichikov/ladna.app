@@ -62,6 +62,52 @@ trait ValidatesClassPassPlanScheduleKind
         }
     }
 
+    protected function validateClassPassSegment(Validator $validator): void
+    {
+        $account = $this->route('account');
+
+        if (! $account instanceof Account || blank($this->input('class_pass_segment_id'))) {
+            return;
+        }
+
+        $scheduleKindValue = (string) $this->input('schedule_kind');
+        $classPassSegment = $account->classPassSegments()
+            ->with('activityDirections:id')
+            ->whereKey((int) $this->input('class_pass_segment_id'))
+            ->first();
+
+        if (! $classPassSegment) {
+            return;
+        }
+
+        if ($this->scheduleKindValue($classPassSegment->schedule_kind) !== $scheduleKindValue) {
+            $validator->errors()->add('class_pass_segment_id', __('app.class_pass_plan_segment_schedule_kind_mismatch'));
+
+            return;
+        }
+
+        $directionIds = $classPassSegment->activityDirections->modelKeys();
+
+        if ($directionIds === []) {
+            return;
+        }
+
+        $classTypeIds = $this->selectedClassTypeIds();
+
+        if ($classTypeIds->isEmpty()) {
+            return;
+        }
+
+        $invalidClassTypeExists = $account->classTypes()
+            ->whereKey($classTypeIds)
+            ->whereNotIn('activity_direction_id', $directionIds)
+            ->exists();
+
+        if ($invalidClassTypeExists) {
+            $validator->errors()->add('class_type_ids', __('app.class_pass_plan_segment_direction_mismatch'));
+        }
+    }
+
     /**
      * @return Collection<int, int>
      */

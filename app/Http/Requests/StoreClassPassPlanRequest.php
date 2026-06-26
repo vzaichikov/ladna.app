@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Account;
+use App\Models\ClassPassSegment;
 use App\Models\ClassType;
 use App\Models\Room;
 use App\Models\TrainerType;
@@ -50,6 +51,11 @@ class StoreClassPassPlanRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'schedule_kind' => $this->scheduleKindRules($account instanceof Account ? $account : null),
+            'class_pass_segment_id' => [
+                'nullable',
+                'integer',
+                Rule::exists((new ClassPassSegment)->getTable(), 'id')->where('account_id', $account?->id),
+            ],
             'description' => ['nullable', 'string', 'max:2000'],
             'price' => ['required', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'currency' => ['required', Rule::in(config('charm.currencies'))],
@@ -106,6 +112,7 @@ class StoreClassPassPlanRequest extends FormRequest
                 }
 
                 $this->validateScheduleKindClassTypes($validator);
+                $this->validateClassPassSegment($validator);
             },
         ];
     }

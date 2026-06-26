@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\ClassPassPlan;
+use App\Models\ClassPassSegment;
 use App\Models\ClassType;
 use App\Models\Location;
 use App\Models\Room;
@@ -54,6 +55,40 @@ class PublicPriceTest extends TestCase
             ->assertJsonPath('data.2.sections.0.plans.0.schedule_kind', 'room_rental')
             ->assertJsonPath('data.2.sections.0.plans.0.rooms.0.slug', 'big-hall')
             ->assertJsonMissing(['name' => $plans['inactive']->name]);
+    }
+
+    public function test_public_price_groups_segmented_plans_inside_schedule_kind(): void
+    {
+        [$account, $location, $plans] = $this->priceContext();
+        $classType = $plans['group']->classTypes()->firstOrFail();
+        $segment = ClassPassSegment::factory()->for($account)->create([
+            'name' => 'Kids passes',
+            'slug' => 'kids-passes',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 10,
+        ]);
+        $segmentedPlan = ClassPassPlan::factory()->for($account)->for($segment)->create([
+            'name' => 'Kids 8 classes',
+            'slug' => 'kids-8-classes',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 5,
+        ]);
+        $segmentedPlan->classTypes()->sync([$classType->id]);
+
+        $this->get(route('public.price', [$account->slug, $location->slug]))
+            ->assertOk()
+            ->assertSee('Kids passes')
+            ->assertSee($segmentedPlan->name);
+
+        $this->getJson("/api/v1/public/{$account->slug}/{$location->slug}/price")
+            ->assertOk()
+            ->assertJsonPath('data.0.key', 'group_class')
+            ->assertJsonPath('data.0.sections.0.key', 'full_day')
+            ->assertJsonPath('data.0.sections.0.plans.0.segment', null)
+            ->assertJsonPath('data.0.sections.1.key', 'segment:kids-passes')
+            ->assertJsonPath('data.0.sections.1.title', 'Kids passes')
+            ->assertJsonPath('data.0.sections.1.plans.0.name', $segmentedPlan->name)
+            ->assertJsonPath('data.0.sections.1.plans.0.segment.slug', 'kids-passes');
     }
 
     /**

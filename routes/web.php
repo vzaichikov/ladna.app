@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ClassBookingController;
 use App\Http\Controllers\ClassPassPlanController;
+use App\Http\Controllers\ClassPassSegmentController;
 use App\Http\Controllers\ClassTypeController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\CustomerBookingCancellationController;
@@ -210,6 +211,9 @@ Route::middleware('auth:web')
         Route::post('accounts/{account}/class-pass-plans/{class_pass_plan}/copy', [ClassPassPlanController::class, 'copy'])
             ->name('accounts.class-pass-plans.copy');
         Route::resource('accounts.class-pass-plans', ClassPassPlanController::class)
+            ->except(['show'])
+            ->scoped();
+        Route::resource('accounts.class-pass-segments', ClassPassSegmentController::class)
             ->except(['show'])
             ->scoped();
         Route::get('accounts/{account}/customer-class-passes', [CustomerClassPassController::class, 'index'])

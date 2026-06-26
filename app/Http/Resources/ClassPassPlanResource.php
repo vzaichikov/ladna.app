@@ -14,11 +14,21 @@ class ClassPassPlanResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $segment = $this->resource->relationLoaded('classPassSegment') && $this->classPassSegment?->is_active
+            ? $this->classPassSegment
+            : null;
+
         return [
             'id' => $this->id,
             'name' => $this->name,
             'slug' => $this->slug,
             'schedule_kind' => $this->schedule_kind->value,
+            'segment' => $segment ? [
+                'id' => $segment->id,
+                'name' => $segment->name,
+                'slug' => $segment->slug,
+                'schedule_kind' => $segment->schedule_kind->value,
+            ] : null,
             'description' => $this->description,
             'price_cents' => $this->price_cents,
             'currency' => $this->currency,

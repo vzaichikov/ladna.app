@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.33.0',
+                'date' => '2026-06-26',
+                'title' => 'Class pass segments',
+                'items' => ['Added class-pass segments for visually grouping passes inside a class format, with a separate studio settings page, segment filters in Class passes & prices, optional segment selection on each pass, direction-based format filtering, segmented public price groups, and updated owner help.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.32.1',
                 'date' => '2026-06-25',
                 'title' => 'Safe schedule capacity sync',
@@ -324,6 +331,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.33.0',
+                'date' => '2026-06-26',
+                'title' => 'Сегменти абонементів',
+                'items' => ['Додано сегменти абонементів для візуального групування цін всередині формату занять: окрему сторінку налаштування, фільтри в Абонементи і ціни, необовʼязковий вибір сегмента в абонементі, фільтрацію форматів за напрямами сегмента, групи сегментів у публічному прайсі та оновлену допомогу для власниць.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.32.1',
                 'date' => '2026-06-25',
