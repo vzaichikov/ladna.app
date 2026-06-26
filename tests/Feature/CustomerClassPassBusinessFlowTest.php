@@ -6,6 +6,7 @@ use App\Actions\IssueCustomerClassPass;
 use App\Actions\NormalizeCustomerClassPasses;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
+use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
@@ -134,6 +135,111 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         $this->assertSame(0, $customerClassPass->remainingSessionsCount());
         $this->assertSame(CustomerClassPassReservationStatus::Used, $cancelledBooking->classPassReservation()->firstOrFail()->status);
         $this->assertSame(CustomerClassPassReservationStatus::Used, $noShowBooking->classPassReservation()->firstOrFail()->status);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_normalizer_consumes_reserved_session_after_class_has_ended_without_changing_booking_status(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-26 10:00:00'));
+
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 1);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-25 10:00:00');
+
+        $this->actingAs($context['owner'])
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$context['account'], $scheduledClass]), [
+                'customer_id' => $context['customer']->id,
+            ])
+            ->assertCreated();
+
+        $booking = $scheduledClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail();
+        $reservation = $booking->classPassReservation()->firstOrFail();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->status);
+        $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
+
+        app(NormalizeCustomerClassPasses::class)->execute();
+        app(NormalizeCustomerClassPasses::class)->execute();
+
+        $customerClassPass->refresh();
+        $reservation->refresh();
+        $booking->refresh();
+
+        $this->assertSame('booked', $booking->status->value);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->status);
+        $this->assertTrue($reservation->used_at->equalTo(Carbon::parse('2026-06-25 10:00:00')));
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+        $this->assertSame(CustomerClassPassStatus::UsedUp, $customerClassPass->status);
+        $this->assertFalse($customerClassPass->is_active);
+        $this->assertTrue($customerClassPass->closed_at->equalTo(Carbon::parse('2026-06-26 10:00:00')));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_normalizer_waits_until_studio_cancellation_window_closes_before_consuming_reserved_session(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-25 11:59:00'));
+
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 1);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-25 10:00:00');
+
+        $this->actingAs($context['owner'])
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$context['account'], $scheduledClass]), [
+                'customer_id' => $context['customer']->id,
+            ])
+            ->assertCreated();
+
+        $reservation = $scheduledClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail()->classPassReservation()->firstOrFail();
+
+        app(NormalizeCustomerClassPasses::class)->execute();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->fresh()->status);
+        $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->used_sessions_count);
+
+        Carbon::setTestNow(Carbon::parse('2026-06-25 12:01:00'));
+
+        app(NormalizeCustomerClassPasses::class)->execute();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->fresh()->status);
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(1, $customerClassPass->fresh()->used_sessions_count);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_normalizer_does_not_consume_cancelled_scheduled_class_reservation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-26 10:00:00'));
+
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 1);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-25 10:00:00');
+
+        $this->actingAs($context['owner'])
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$context['account'], $scheduledClass]), [
+                'customer_id' => $context['customer']->id,
+            ])
+            ->assertCreated();
+
+        $reservation = $scheduledClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail()->classPassReservation()->firstOrFail();
+
+        $scheduledClass->forceFill([
+            'status' => ScheduledClassStatus::Cancelled->value,
+            'is_manually_modified' => true,
+        ])->save();
+
+        app(NormalizeCustomerClassPasses::class)->execute();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->fresh()->status);
+        $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->used_sessions_count);
 
         Carbon::setTestNow();
     }
@@ -281,7 +387,7 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_normalizer_expires_pass_with_remaining_sessions_and_releases_reservations_after_total_validity_date(): void
+    public function test_normalizer_consumes_elapsed_reservations_before_expiring_pass_after_total_validity_date(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-02 10:00:00'));
         $context = $this->context();
@@ -308,9 +414,10 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         $this->assertSame(CustomerClassPassStatus::Expired, $customerClassPass->status);
         $this->assertFalse($customerClassPass->is_active);
         $this->assertSame(0, $customerClassPass->reserved_sessions_count);
-        $this->assertSame(0, $customerClassPass->used_sessions_count);
-        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->status);
-        $this->assertTrue($reservation->released_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->status);
+        $this->assertTrue($reservation->used_at->equalTo(Carbon::parse('2026-06-05 10:00:00')));
+        $this->assertNull($reservation->released_at);
         $this->assertNotNull($booking->fresh());
 
         Carbon::setTestNow();

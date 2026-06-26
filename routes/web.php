@@ -41,6 +41,7 @@ use App\Http\Controllers\QuickBookingController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
+use App\Http\Controllers\ScheduledClassHistoryController;
 use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
@@ -264,6 +265,8 @@ Route::middleware('auth:web')
             ->name('accounts.integrations.update');
         Route::get('accounts/{account}/scheduled-classes', ScheduledClassController::class)
             ->name('accounts.scheduled-classes.index');
+        Route::get('accounts/{account}/scheduled-classes-history', ScheduledClassHistoryController::class)
+            ->name('accounts.scheduled-classes-history.index');
         Route::post('accounts/{account}/quick-bookings', [QuickBookingController::class, 'store'])
             ->name('accounts.quick-bookings.store');
         Route::get('accounts/{account}/quick-bookings/group-availability', [QuickBookingController::class, 'groupAvailability'])

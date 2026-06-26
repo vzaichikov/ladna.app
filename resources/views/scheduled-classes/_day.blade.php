@@ -86,6 +86,7 @@
                 'scheduledClass' => $scheduledClass,
                 'customerSearchUrl' => $customerSearchUrl,
                 'bookingStatuses' => $bookingStatuses,
+                'readonly' => $readonly ?? false,
             ])
         @endforeach
     </div>

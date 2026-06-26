@@ -21,6 +21,7 @@
     $addedSessionsCount = $cancellationEffects->sum('added_sessions_count');
     $addedDaysPassesCount = $cancellationEffects->where('added_validity_days', '>', 0)->count();
     $addedDaysCount = (int) ($cancellationEffects->max('added_validity_days') ?? 0);
+    $readonly = $readonly ?? false;
     $canManageClassCancellation = auth()->user()?->can('manageSchedule', $account) && auth()->user()?->can('manageBookings', $account);
     $canCancelClass = $canManageClassCancellation && ! $isCancelledClass && $scheduledClass->isStudioCancellationOpen();
 @endphp
@@ -43,7 +44,7 @@
         </div>
         <div class="flex shrink-0 items-center gap-2">
             <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>
-            @if ($canManageClassCancellation)
+            @if (! $readonly && $canManageClassCancellation)
                 @if ($canCancelClass)
                     <form
                         method="POST"
@@ -106,7 +107,8 @@
         </div>
     @endif
 
-    @can('manageBookings', $account)
+    @if (! $readonly)
+        @can('manageBookings', $account)
         @unless ($isCancelledClass)
         <form method="POST" action="{{ route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]) }}" data-async-form class="mt-4 space-y-3 rounded-lg bg-slate-50 p-3">
             @csrf
@@ -134,7 +136,8 @@
             <x-ui.button type="submit" class="w-full">{{ __('app.add_booking') }}</x-ui.button>
         </form>
         @endunless
-    @endcan
+        @endcan
+    @endif
 
     @if ($scheduledClass->classBookings->isNotEmpty())
         <div class="mt-4 space-y-2">
@@ -174,7 +177,7 @@
                         </div>
                         <span class="{{ $bookingStatusClass }}">{{ __('app.'.$booking->status->value) }}</span>
                     </div>
-                    @unless ($isCancelledClass)
+                    @unless ($isCancelledClass || $readonly)
                     <div class="mt-3 flex flex-wrap gap-2">
                         @can('markAttendance', $account)
                             <form method="POST" action="{{ route('dashboard.accounts.bookings.update', [$account, $booking]) }}" data-async-form class="flex grow gap-2">

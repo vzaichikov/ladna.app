@@ -12,6 +12,7 @@
             @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass))
                 <div class="flex flex-wrap gap-2" data-schedule-secondary-actions>
                     <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
+                    <x-ui.button :href="route('dashboard.accounts.scheduled-classes-history.index', $account)" variant="secondary">{{ __('app.scheduled_classes_history') }}</x-ui.button>
                     @can('manageSchedule', $account)
                         @foreach ($manualClassOptions as $manualClassOption)
                             <x-ui.button type="button" variant="secondary" data-manual-class-open="{{ $manualClassOption['kind']->value }}">
@@ -96,6 +97,7 @@
                 'classes' => $classes,
                 'customerSearchUrl' => $customerSearchUrl,
                 'bookingStatuses' => $bookingStatuses,
+                'readonly' => false,
             ])
         @endforeach
 
@@ -117,6 +119,7 @@
                             'classes' => $classes,
                             'customerSearchUrl' => $customerSearchUrl,
                             'bookingStatuses' => $bookingStatuses,
+                            'readonly' => false,
                         ])
                     @endforeach
                 </div>

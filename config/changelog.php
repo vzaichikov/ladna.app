@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.35.0',
+                'date' => '2026-06-26',
+                'title' => 'Class history and pass normalization',
+                'items' => ['Added a read-only class history page with date, location, and room filters, and fixed class-pass normalization so past reservations are consumed only after the studio cancellation window closes while cancelled classes remain excluded from automatic consumption.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.34.0',
                 'date' => '2026-06-26',
                 'title' => 'Schedule and studio settings UX',
@@ -345,6 +352,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.35.0',
+                'date' => '2026-06-26',
+                'title' => 'Історія занять і нормалізація абонементів',
+                'items' => ['Додано сторінку історії занять у режимі перегляду з фільтрами за датою, локацією та залом, а також виправлено нормалізацію абонементів: минулі резерви списуються лише після закриття вікна скасування студією, а скасовані заняття не потрапляють в автоматичне списання.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.34.0',
                 'date' => '2026-06-26',

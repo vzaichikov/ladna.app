@@ -4,7 +4,11 @@ namespace App\Actions;
 
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
+use App\Enums\ScheduledClassStatus;
 use App\Models\CustomerClassPass;
+use App\Models\CustomerClassPassReservation;
+use App\Models\ScheduledClass;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class NormalizeCustomerClassPasses
@@ -30,6 +34,7 @@ class NormalizeCustomerClassPasses
     {
         return DB::transaction(function () use ($customerClassPass): CustomerClassPass {
             $now = now();
+            $this->consumeElapsedReservations($customerClassPass, $now);
             $customerClassPass->load('reservations');
 
             $usedReservations = $customerClassPass->reservations
@@ -89,5 +94,23 @@ class NormalizeCustomerClassPasses
 
             return $customerClassPass->refresh();
         });
+    }
+
+    private function consumeElapsedReservations(CustomerClassPass $customerClassPass, Carbon $now): void
+    {
+        $customerClassPass->reservations()
+            ->where('status', CustomerClassPassReservationStatus::Reserved->value)
+            ->whereHas('scheduledClass', fn ($query) => $query
+                ->where('status', ScheduledClassStatus::Scheduled->value)
+                ->where('ends_at', '<', $now->copy()->subMinutes(ScheduledClass::STUDIO_CANCELLATION_GRACE_MINUTES)))
+            ->with('scheduledClass:id,starts_at')
+            ->get()
+            ->each(function (CustomerClassPassReservation $reservation): void {
+                $reservation->forceFill([
+                    'status' => CustomerClassPassReservationStatus::Used->value,
+                    'used_at' => $reservation->scheduledClass?->starts_at ?? now(),
+                    'released_at' => null,
+                ])->save();
+            });
     }
 }

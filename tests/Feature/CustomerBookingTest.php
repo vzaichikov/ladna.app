@@ -62,6 +62,7 @@ class CustomerBookingTest extends TestCase
             ->assertSee('Pole Beginner')
             ->assertSee(__('app.add_class_record_short'))
             ->assertSee(route('dashboard.accounts.schedule-series.index', $account), false)
+            ->assertSee(route('dashboard.accounts.scheduled-classes-history.index', $account), false)
             ->assertSee('data-schedule-secondary-actions', false)
             ->assertSee('data-schedule-primary-actions', false)
             ->assertSee('data-manual-class-open="group_class"', false)
@@ -668,6 +669,72 @@ class CustomerBookingTest extends TestCase
             ->assertSee('Second Room Class')
             ->assertDontSee('First Location Class')
             ->assertDontSee('Other Account Class');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_scheduled_class_history_filters_by_date_locations_and_rooms_in_readonly_mode(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-26 10:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $otherAccount = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $firstLocation = Location::factory()->for($account)->create(['name' => 'First Studio', 'timezone' => 'UTC']);
+        $secondLocation = Location::factory()->for($account)->create(['name' => 'Second Studio', 'timezone' => 'UTC']);
+        $firstRoom = Room::factory()->for($account)->for($firstLocation)->create(['name' => 'Blue Room']);
+        $secondRoom = Room::factory()->for($account)->for($secondLocation)->create(['name' => 'Pink Room']);
+        $classType = ClassType::factory()->for($account)->create();
+        $otherLocation = Location::factory()->for($otherAccount)->create(['timezone' => 'UTC']);
+        $otherRoom = Room::factory()->for($otherAccount)->for($otherLocation)->create();
+        $otherClassType = ClassType::factory()->for($otherAccount)->create();
+        $firstClass = $this->scheduledClass($account, $firstLocation, $firstRoom, $classType, 'History First Class', '2026-06-25 10:00:00');
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($firstClass)
+            ->for(Customer::factory()->for($account)->create(['name' => 'Readonly Customer']))
+            ->create(['booked_by_user_id' => null]);
+        $this->scheduledClass($account, $secondLocation, $secondRoom, $classType, 'History Second Room Class', '2026-06-25 11:00:00');
+        $this->scheduledClass($account, $firstLocation, $firstRoom, $classType, 'Different Date Class', '2026-06-24 10:00:00');
+        $this->scheduledClass($account, $firstLocation, $firstRoom, $classType, 'Future Date Class', '2026-06-27 10:00:00');
+        $this->scheduledClass($otherAccount, $otherLocation, $otherRoom, $otherClassType, 'Other Account Class', '2026-06-25 10:00:00');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes-history.index', [
+                'account' => $account,
+                'date' => '2026-06-25',
+            ]))
+            ->assertOk()
+            ->assertSee('History First Class')
+            ->assertSee('History Second Room Class')
+            ->assertSee('Readonly Customer')
+            ->assertDontSee('Different Date Class')
+            ->assertDontSee('Future Date Class')
+            ->assertDontSee('Other Account Class')
+            ->assertDontSee(route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $firstClass]), false)
+            ->assertDontSee(route('dashboard.accounts.bookings.update', [$account, $booking]), false)
+            ->assertDontSee(route('dashboard.accounts.scheduled-classes.cancel', [$account, $firstClass]), false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes-history.index', [
+                'account' => $account,
+                'date' => '2026-06-25',
+                'locations' => [$firstLocation->id],
+            ]))
+            ->assertOk()
+            ->assertSee('History First Class')
+            ->assertDontSee('History Second Room Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes-history.index', [
+                'account' => $account,
+                'date' => '2026-06-25',
+                'rooms' => [$secondRoom->id],
+            ]))
+            ->assertOk()
+            ->assertSee('History Second Room Class')
+            ->assertDontSee('History First Class');
 
         Carbon::setTestNow();
     }

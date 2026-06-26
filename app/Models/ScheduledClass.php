@@ -23,7 +23,7 @@ class ScheduledClass extends Model
     /** @use HasFactory<ScheduledClassFactory> */
     use HasFactory;
 
-    private const STUDIO_CANCELLATION_GRACE_MINUTES = 60;
+    public const STUDIO_CANCELLATION_GRACE_MINUTES = 60;
 
     protected $attributes = [
         'is_generated' => false,
