@@ -31,6 +31,7 @@ return [
         'plus' => 'plus',
         'rooms' => 'building',
         'schedule' => 'calendar-days',
+        'scheduled-tasks' => 'terminal',
         'search' => 'search',
         'settings' => 'settings',
         'sparkles' => 'sparkles',
