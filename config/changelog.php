@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.42.0',
+                'date' => '2026-06-27',
+                'title' => 'Printable public QR links',
+                'items' => ['Added printable QR posters for public schedule and public price links in studio general settings, alongside the existing customer login QR poster.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.41.0',
                 'date' => '2026-06-27',
                 'title' => 'Staff permissions and activity history',
@@ -380,6 +387,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.42.0',
+                'date' => '2026-06-27',
+                'title' => 'QR-постери публічних посилань',
+                'items' => ['Додано QR-постери для друку з посиланнями на публічний розклад і публічний прайс у загальних налаштуваннях студії, поруч з наявним QR-постером входу клієнтів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.41.0',
                 'date' => '2026-06-27',
