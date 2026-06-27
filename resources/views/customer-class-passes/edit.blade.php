@@ -6,6 +6,7 @@
     @php
         $formatDateTimeLocal = static fn ($date): ?string => \App\Support\DateTimePresenter::dateTimeLocal($date, $account);
         $formatDateTime = static fn ($date): string => \App\Support\DateTimePresenter::format($date, $account) ?? __('app.not_set');
+        $locations ??= collect();
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -35,6 +36,21 @@
                 <input name="is_active" type="checkbox" value="1" @checked(old('is_active', $customerClassPass->is_active)) class="crm-checkbox">
                 {{ __('app.active') }}
             </label>
+            <label class="block">
+                <span class="crm-label">{{ __('app.issued_location') }}</span>
+                <select name="issued_location_id" class="crm-field" required>
+                    @foreach ($locations as $location)
+                        <option value="{{ $location->id }}" @selected((string) old('issued_location_id', $customerClassPass->issued_location_id) === (string) $location->id)>{{ $location->name }}</option>
+                    @endforeach
+                </select>
+                @error('issued_location_id') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            <label class="mt-7 flex items-center gap-3 text-sm font-medium text-slate-700">
+                <input type="hidden" name="is_paid" value="0">
+                <input name="is_paid" type="checkbox" value="1" @checked(old('is_paid', $customerClassPass->is_paid)) class="crm-checkbox">
+                {{ __('app.class_pass_paid') }}
+            </label>
+            @error('is_paid') <span class="crm-help">{{ $message }}</span> @enderror
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
@@ -68,6 +84,9 @@
             {{ __('app.used_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->used_sessions_count }}</span> ·
             {{ __('app.reserved_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->reserved_sessions_count }}</span> ·
             {{ __('app.sessions_count') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->sessions_count }}</span>
+            <div class="mt-2">
+                <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
+            </div>
             <div class="mt-2 text-xs text-slate-500">{{ __('app.issued_by') }}: {{ $customerClassPass->issued_by_actor_name ?? __('app.system') }}</div>
         </div>
 

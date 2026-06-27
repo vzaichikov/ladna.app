@@ -15,6 +15,7 @@ use App\Models\Customer;
 use App\Models\CustomerPurchase;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
+use App\Models\Location;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -68,6 +69,47 @@ class PaymentHistoryTest extends TestCase
             ->assertDontSee('FN-HIDDEN-1');
     }
 
+    public function test_studio_cash_class_pass_payment_uses_cash_label_location_and_no_pending_fiscal_status(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['name' => 'Studio Cash']);
+        $account->addOwner($owner);
+        $this->enableAccountFiscalization($account);
+        $location = Location::factory()->for($account)->create(['name' => 'Podil cash desk']);
+
+        $this->customerPurchase($account, $location, [
+            'provider' => CustomerPurchase::ProviderStudioCash,
+            'payment_source' => CustomerPurchase::SourceManualCashClassPass,
+            'status' => CustomerPurchaseStatus::PaymentPaid->value,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.provider_studio_cash'))
+            ->assertSee('Podil cash desk')
+            ->assertSee(__('app.manual_cash_not_fiscalized'))
+            ->assertDontSee(__('app.fiscal_status_pending'));
+    }
+
+    public function test_studio_owner_can_filter_payment_history_by_location(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['name' => 'Studio Locations']);
+        $account->addOwner($owner);
+        $firstLocation = Location::factory()->for($account)->create(['name' => 'Center cash desk']);
+        $secondLocation = Location::factory()->for($account)->create(['name' => 'Suburb cash desk']);
+        $this->customerPurchase($account, $firstLocation, ['plan_name' => 'Center plan']);
+        $this->customerPurchase($account, $secondLocation, ['plan_name' => 'Suburb plan']);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', [$account, 'location_id' => $firstLocation->id]))
+            ->assertOk()
+            ->assertSee('Center plan')
+            ->assertSee('Center cash desk')
+            ->assertDontSee('Suburb plan');
+    }
+
     public function test_platform_admin_can_view_saas_payment_history_with_fiscal_data_when_enabled(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
@@ -110,11 +152,15 @@ class PaymentHistoryTest extends TestCase
             ->assertForbidden();
     }
 
-    private function customerPurchase(Account $account): CustomerPurchase
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function customerPurchase(Account $account, ?Location $location = null, array $attributes = []): CustomerPurchase
     {
+        $location ??= Location::factory()->for($account)->create();
         $customer = Customer::factory()->for($account)->create([
             'name' => 'Payment Client',
-            'phone' => '+380501119900',
+            'phone' => '+38050'.fake()->unique()->numerify('######'),
         ]);
         $plan = ClassPassPlan::factory()->for($account)->create([
             'name' => 'Group 8 classes',
@@ -128,6 +174,7 @@ class PaymentHistoryTest extends TestCase
             ->for($customer)
             ->for($plan, 'classPassPlan')
             ->create([
+                'location_id' => $location->id,
                 'status' => CustomerPurchaseStatus::PaymentPaid->value,
                 'plan_name' => $plan->name,
                 'plan_slug' => $plan->slug,
@@ -135,6 +182,7 @@ class PaymentHistoryTest extends TestCase
                 'currency' => $plan->currency,
                 'sessions_count' => $plan->sessions_count,
                 'paid_at' => now(),
+                ...$attributes,
             ]);
     }
 

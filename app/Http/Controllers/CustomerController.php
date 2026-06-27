@@ -82,6 +82,7 @@ class CustomerController extends Controller
                 'customerClassPasses.classPassPlan.classTypes',
                 'customerClassPasses.classPassPlan.trainerTypes',
                 'customerClassPasses.classPassPlan.rooms',
+                'customerClassPasses.issuedLocation',
                 'customerClassPasses.reservations.classBooking.scheduledClass.classType',
                 'classBookings.scheduledClass.account',
                 'classBookings.scheduledClass.classType',
@@ -94,6 +95,7 @@ class CustomerController extends Controller
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
+            'locations' => $account->locations()->active()->orderBy('name')->get(),
             'classPassBackfillPreview' => $classPassBackfillPreview,
         ]);
     }

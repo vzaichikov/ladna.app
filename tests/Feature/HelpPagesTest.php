@@ -72,6 +72,19 @@ class HelpPagesTest extends TestCase
             ->assertSee('assets/help/screenshots/customer-pass-normalization.png', false);
     }
 
+    public function test_passes_prices_help_explains_manual_pass_payment_tracking(): void
+    {
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('Як позначати оплату абонемента', false)
+            ->assertSee('Оплачено готівкою', false)
+            ->assertSee('Каса готівки в студії', false)
+            ->assertSee('Не оплачено', false)
+            ->assertSee('відфільтруйте історію за потрібною локацією', false)
+            ->assertDontSee('customer_purchases', false)
+            ->assertDontSee('endpoint', false);
+    }
+
     public function test_help_documents_studio_class_cancellation_flow(): void
     {
         $this->get(route('help.show', 'schedule', false))

@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Models\ClassPassPlan;
+use App\Models\Location;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -32,6 +33,14 @@ class StoreCustomerClassPassRequest extends FormRequest
                     ->where('account_id', $account?->id)
                     ->where('is_active', true),
             ],
+            'issued_location_id' => [
+                'required',
+                'integer',
+                Rule::exists((new Location)->getTable(), 'id')
+                    ->where('account_id', $account?->id)
+                    ->where('is_active', true),
+            ],
+            'is_paid' => ['nullable', 'boolean'],
         ];
     }
 }

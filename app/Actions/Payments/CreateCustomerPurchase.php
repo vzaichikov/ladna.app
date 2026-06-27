@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\ClassPassPlan;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
+use App\Models\Location;
 use Illuminate\Support\Str;
 
 class CreateCustomerPurchase
@@ -16,15 +17,22 @@ class CreateCustomerPurchase
         Customer $customer,
         ClassPassPlan $classPassPlan,
         IntegrationProvider $provider,
+        ?Location $location = null,
     ): CustomerPurchase {
         if ($customer->account_id !== $account->id || $classPassPlan->account_id !== $account->id) {
             abort(404);
         }
 
+        if ($location && $location->account_id !== $account->id) {
+            abort(404);
+        }
+
         return $account->customerPurchases()->create([
             'customer_id' => $customer->id,
+            'location_id' => $location?->id,
             'class_pass_plan_id' => $classPassPlan->id,
             'provider' => $provider->value,
+            'payment_source' => CustomerPurchase::SourceOnlineCheckout,
             'order_id' => $this->orderId($provider),
             'status' => 'payment_started',
             'plan_name' => $classPassPlan->name,

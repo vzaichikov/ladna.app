@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.44.0',
+                'date' => '2026-06-27',
+                'title' => 'Class pass payment tracking',
+                'items' => ['Added paid and unpaid status for issued class passes, required issue location for manual class-pass delivery, studio cash desk payment history by location, location filters in payment history, a one-click unpaid-pass filter, and a more flexible manual trial rule for customers with only one booking without a reserved pass. Updated owner help with the new flow.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.43.1',
                 'date' => '2026-06-27',
                 'title' => 'Live class status badges',
@@ -401,6 +408,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.44.0',
+                'date' => '2026-06-27',
+                'title' => 'Облік оплат абонементів',
+                'items' => ['Додано статус «Оплачено» або «Не оплачено» для виданих абонементів, обовʼязковий вибір локації під час ручної видачі, історію оплат через касу студії з розділенням за локаціями, фільтр оплат за локацією, швидкий фільтр неоплачених абонементів і гнучкіше правило ручної видачі пробного абонемента для клієнта з одним записом без резерву абонемента. Оновлено допомогу для власниць студій.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.43.1',
                 'date' => '2026-06-27',

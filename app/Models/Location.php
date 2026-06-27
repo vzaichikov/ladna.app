@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
+use Database\Factories\LocationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['account_id', 'name', 'slug', 'address', 'phone', 'email', 'timezone', 'is_active'])]
 class Location extends Model
 {
-    /** @use HasFactory<\Database\Factories\LocationFactory> */
+    /** @use HasFactory<LocationFactory> */
     use HasFactory;
 
     protected $attributes = [
@@ -42,6 +43,11 @@ class Location extends Model
     public function rooms(): HasMany
     {
         return $this->hasMany(Room::class);
+    }
+
+    public function customerPurchases(): HasMany
+    {
+        return $this->hasMany(CustomerPurchase::class);
     }
 
     public function scheduleSeries(): HasMany

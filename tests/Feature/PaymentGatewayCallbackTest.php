@@ -76,6 +76,9 @@ class PaymentGatewayCallbackTest extends TestCase
         $this->assertSame($purchase->total_validity_days, $customerClassPass->total_validity_days);
         $this->assertSame(30, $customerClassPass->validity_days);
         $this->assertSame(120, $customerClassPass->total_validity_days);
+        $this->assertTrue($customerClassPass->is_paid);
+        $this->assertSame($purchase->location_id, $customerClassPass->issued_location_id);
+        $this->assertSame(CustomerPurchase::SourceOnlineCheckout, $purchase->payment_source);
         $this->assertTrue($customerClassPass->usable_until_at->equalTo(Carbon::parse('2026-10-18 10:00:00')));
 
         $files = Storage::disk('local')->allFiles("payment-callbacks/accounts/{$account->id}/liqpay/{$purchase->order_id}");
@@ -329,6 +332,10 @@ class PaymentGatewayCallbackTest extends TestCase
             'name' => 'Payment Client',
             'phone' => '+380501119900',
         ]);
+        $location = Location::factory()->for($account)->create([
+            'name' => 'Main Studio',
+            'slug' => 'main-studio',
+        ]);
 
         IntegrationSetting::create([
             'scope_type' => IntegrationScope::Account->value,
@@ -340,9 +347,9 @@ class PaymentGatewayCallbackTest extends TestCase
             'credentials' => $credentials,
         ]);
 
-        $purchase = app(CreateCustomerPurchase::class)->execute($account, $customer, $plan, $provider);
+        $purchase = app(CreateCustomerPurchase::class)->execute($account, $customer, $plan, $provider, $location);
 
-        return [$account, $purchase->load(['customer', 'account'])];
+        return [$account, $purchase->load(['customer', 'account', 'location'])];
     }
 
     /**

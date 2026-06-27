@@ -27,7 +27,7 @@ class CompleteCustomerPurchase
 
         $completedPurchase = DB::transaction(function () use ($purchase, $callback, &$previousStatus): CustomerPurchase {
             $lockedPurchase = CustomerPurchase::query()
-                ->with(['account', 'customer', 'classPassPlan', 'customerClassPass'])
+                ->with(['account', 'customer', 'classPassPlan', 'customerClassPass', 'location'])
                 ->whereKey($purchase->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -62,7 +62,14 @@ class CompleteCustomerPurchase
                             'validity_days' => $lockedPurchase->validity_days,
                             'total_validity_days' => $lockedPurchase->total_validity_days,
                         ],
+                        issuedLocation: $lockedPurchase->location,
+                        isPaid: true,
                     );
+                } else {
+                    $customerClassPass->forceFill([
+                        'is_paid' => true,
+                        'issued_location_id' => $customerClassPass->issued_location_id ?? $lockedPurchase->location_id,
+                    ])->save();
                 }
 
                 $lockedPurchase->forceFill([

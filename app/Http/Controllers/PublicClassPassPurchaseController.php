@@ -54,7 +54,7 @@ class PublicClassPassPurchaseController extends Controller
         CreateCustomerPurchase $createCustomerPurchase,
         StartCustomerPurchasePayment $startCustomerPurchasePayment,
     ): View|RedirectResponse {
-        [$account, , $classPassPlan] = $this->purchaseContext($accountSlug, $locationSlug, $classPassPlanSlug);
+        [$account, $location, $classPassPlan] = $this->purchaseContext($accountSlug, $locationSlug, $classPassPlanSlug);
         $redirect = $this->redirectIfCustomerCannotCheckout($request, $account);
 
         if ($redirect) {
@@ -79,6 +79,7 @@ class PublicClassPassPurchaseController extends Controller
                 $this->customerForAccount($account),
                 $classPassPlan,
                 $provider,
+                $location,
             );
             $checkout = $startCustomerPurchasePayment->execute($purchase, $setting);
         } catch (Throwable $exception) {

@@ -12,6 +12,12 @@
             return \App\Support\MoneyFormatter::format($priceCents, $currency);
         };
         $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
+        $unpaidActiveClassPassesCount ??= 0;
+        $paymentStatus ??= '';
+        $unpaidFilterUrl = route('dashboard.accounts.customer-class-passes.index', array_merge(['account' => $account], request()->except('page'), [
+            'state' => 'active',
+            'payment_status' => 'unpaid',
+        ]));
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -21,8 +27,17 @@
         </div>
     </div>
 
-    <form method="GET" action="{{ route('dashboard.accounts.customer-class-passes.index', $account) }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
-        <div class="grid gap-4 lg:grid-cols-[1fr_180px_220px_auto_auto] lg:items-end">
+    @if ($unpaidActiveClassPassesCount > 0 && ! ($state === 'active' && $paymentStatus === 'unpaid'))
+        <div class="mt-6 flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+            <div class="font-medium">{{ __('app.unpaid_class_passes_notice', ['count' => $unpaidActiveClassPassesCount]) }}</div>
+            <x-ui.button :href="$unpaidFilterUrl" variant="secondary" size="sm">
+                {{ __('app.show_unpaid_class_passes') }}
+            </x-ui.button>
+        </div>
+    @endif
+
+    <form method="GET" action="{{ route('dashboard.accounts.customer-class-passes.index', $account) }}" class="mt-6 overflow-x-auto rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
+        <div class="customer-pass-filter-grid">
             <label class="block">
                 <span class="crm-label">{{ __('app.search') }}</span>
                 <input name="q" value="{{ request('q') }}" class="crm-field" placeholder="{{ __('app.class_pass_search_placeholder') }}">
@@ -33,6 +48,14 @@
                     <option value="active" @selected($state === 'active')>{{ __('app.active') }}</option>
                     <option value="inactive" @selected($state === 'inactive')>{{ __('app.inactive') }}</option>
                     <option value="all" @selected($state === 'all')>{{ __('app.all_statuses') }}</option>
+                </select>
+            </label>
+            <label class="block">
+                <span class="crm-label">{{ __('app.class_pass_payment_status') }}</span>
+                <select name="payment_status" class="crm-field">
+                    <option value="" @selected($paymentStatus === '')>{{ __('app.all_payment_statuses') }}</option>
+                    <option value="paid" @selected($paymentStatus === 'paid')>{{ __('app.class_pass_paid') }}</option>
+                    <option value="unpaid" @selected($paymentStatus === 'unpaid')>{{ __('app.class_pass_unpaid') }}</option>
                 </select>
             </label>
             <label class="block">
@@ -66,6 +89,9 @@
                 </div>
                 <div class="text-sm text-slate-600">
                     <div>{{ __('app.purchased_at') }}: {{ $formatDate($customerClassPass->purchased_at) }}</div>
+                    @if ($customerClassPass->issuedLocation)
+                        <div class="mt-1">{{ __('app.issued_location') }}: {{ $customerClassPass->issuedLocation->name }}</div>
+                    @endif
                     <div class="mt-1">{{ __('app.opened_at') }}: {{ $formatDate($customerClassPass->opened_at) }}</div>
                 </div>
                 <div class="text-sm text-slate-600">
@@ -74,6 +100,7 @@
                     <div class="mt-1">{{ __('app.reserved_sessions') }}: {{ $customerClassPass->reserved_sessions_count }}</div>
                 </div>
                 <div class="flex flex-wrap gap-2 xl:justify-end">
+                    <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
                     <span class="{{ $customerClassPass->is_active ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
                     <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
                 </div>

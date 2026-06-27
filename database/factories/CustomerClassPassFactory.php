@@ -23,13 +23,16 @@ class CustomerClassPassFactory extends Factory
         $code = strtoupper(fake()->bothify('????-####'));
         $purchasedAt = now();
         $totalValidityDays = 180;
+        $account = Account::factory();
 
         return [
-            'account_id' => Account::factory(),
-            'customer_id' => Customer::factory(),
-            'class_pass_plan_id' => ClassPassPlan::factory(),
+            'account_id' => $account,
+            'customer_id' => Customer::factory()->for($account),
+            'class_pass_plan_id' => ClassPassPlan::factory()->for($account),
             'code' => $code,
             'source' => 'manual',
+            'issued_location_id' => null,
+            'is_paid' => false,
             'issued_by_actor_user_id' => null,
             'issued_by_actor_trainer_id' => null,
             'issued_by_actor_name' => null,
