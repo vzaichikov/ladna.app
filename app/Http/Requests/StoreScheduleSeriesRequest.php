@@ -44,10 +44,6 @@ class StoreScheduleSeriesRequest extends FormRequest
             'start_time' => ['required', 'date_format:H:i'],
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'capacity' => ['nullable', 'integer', 'min:1', 'max:999'],
-            'duration_minutes' => ['nullable', 'integer', 'min:15', 'max:480'],
-            'booking_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
-            'cancellation_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
             'status' => ['required', Rule::enum(ScheduleSeriesStatus::class)],
         ];
     }

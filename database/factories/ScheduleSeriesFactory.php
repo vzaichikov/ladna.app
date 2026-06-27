@@ -35,10 +35,6 @@ class ScheduleSeriesFactory extends Factory
             'start_time' => fake()->randomElement(['10:00', '14:00', '18:00']),
             'start_date' => now()->toDateString(),
             'end_date' => null,
-            'capacity' => null,
-            'duration_minutes' => null,
-            'booking_cutoff_minutes' => null,
-            'cancellation_cutoff_minutes' => null,
             'status' => ScheduleSeriesStatus::Active->value,
         ];
     }

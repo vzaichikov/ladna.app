@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\GenerateScheduleOccurrences;
 use App\Enums\ScheduleKind;
+use App\Enums\ScheduleSeriesStatus;
 use App\Http\Requests\StoreClassTypeRequest;
 use App\Http\Requests\UpdateClassTypeRequest;
 use App\Models\Account;
 use App\Models\ClassType;
+use App\Models\ScheduleSeries;
 use App\Support\ScheduleKindRegistry;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
@@ -89,7 +92,7 @@ class ClassTypeController extends Controller
         ]);
     }
 
-    public function update(UpdateClassTypeRequest $request, Account $account, ClassType $classType): RedirectResponse
+    public function update(UpdateClassTypeRequest $request, Account $account, ClassType $classType, GenerateScheduleOccurrences $generateScheduleOccurrences): RedirectResponse
     {
         $scheduleKind = $this->currentScheduleKind();
         $this->ensureBelongsToAccount($account, $classType);
@@ -102,6 +105,7 @@ class ClassTypeController extends Controller
         $validated['is_active'] = $request->boolean('is_active');
 
         $classType->update($validated);
+        $this->regenerateGroupClassScheduleSeries($classType->refresh(), $scheduleKind, $generateScheduleOccurrences);
 
         return redirect()->route(ScheduleKindRegistry::routeName($scheduleKind, 'index'), $account)
             ->with('status', __('app.class_type_updated'));
@@ -173,5 +177,18 @@ class ClassTypeController extends Controller
     private function copyName(string $name): string
     {
         return __('app.copy_prefix').' '.$name;
+    }
+
+    private function regenerateGroupClassScheduleSeries(ClassType $classType, ScheduleKind $scheduleKind, GenerateScheduleOccurrences $generateScheduleOccurrences): void
+    {
+        if ($scheduleKind !== ScheduleKind::GroupClass) {
+            return;
+        }
+
+        $classType->scheduleSeries()
+            ->where('status', ScheduleSeriesStatus::Active->value)
+            ->with(['account', 'location', 'room', 'classType', 'trainer'])
+            ->get()
+            ->each(fn (ScheduleSeries $scheduleSeries): int => $generateScheduleOccurrences->execute($scheduleSeries));
     }
 }

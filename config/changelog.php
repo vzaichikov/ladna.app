@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.45.0',
+                'date' => '2026-06-27',
+                'title' => 'Group class schedule settings',
+                'items' => ['Simplified weekly schedule setup so class duration, capacity, booking cutoff, and cancellation cutoff are managed from the group class format, with future generated classes refreshed when those settings change.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.44.0',
                 'date' => '2026-06-27',
                 'title' => 'Class pass payment tracking',
@@ -408,6 +415,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.45.0',
+                'date' => '2026-06-27',
+                'title' => 'Налаштування розкладу групових занять',
+                'items' => ['Спрощено налаштування тижневого розкладу: тривалість, місткість, обмеження запису та обмеження скасування керуються у форматі групового заняття, а майбутні згенеровані заняття оновлюються після зміни цих налаштувань.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.44.0',
                 'date' => '2026-06-27',

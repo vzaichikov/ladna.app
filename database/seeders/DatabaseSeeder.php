@@ -278,10 +278,6 @@ class DatabaseSeeder extends Seeder
                 'start_time' => $row['start_time'],
                 'start_date' => $startDate,
                 'end_date' => null,
-                'capacity' => $row['capacity'],
-                'duration_minutes' => $row['duration_minutes'],
-                'booking_cutoff_minutes' => $row['booking_cutoff_minutes'],
-                'cancellation_cutoff_minutes' => $row['cancellation_cutoff_minutes'],
                 'status' => ScheduleSeriesStatus::Active->value,
             ]);
         }
