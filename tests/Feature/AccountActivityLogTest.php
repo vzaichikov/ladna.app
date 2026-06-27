@@ -133,6 +133,42 @@ class AccountActivityLogTest extends TestCase
             ->assertDontSee('Other Account Actor');
     }
 
+    public function test_activity_log_displays_and_filters_dates_in_account_timezone(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'America/New_York']);
+        $account->addOwner($owner);
+
+        AccountActivityLog::factory()
+            ->for($account)
+            ->create([
+                'actor_name' => 'Timezone Actor',
+                'occurred_at' => Carbon::parse('2026-06-20 02:30:00', 'UTC'),
+                'subject_label' => 'Timezone Customer',
+            ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.activity-logs.index', [
+                'account' => $account,
+                'date_from' => '2026-06-19',
+                'date_to' => '2026-06-19',
+            ]))
+            ->assertOk()
+            ->assertSee('2026-06-19 22:30')
+            ->assertSee('Timezone Actor')
+            ->assertSee('Timezone Customer')
+            ->assertDontSee('2026-06-20 02:30');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.activity-logs.index', [
+                'account' => $account,
+                'date_from' => '2026-06-20',
+                'date_to' => '2026-06-20',
+            ]))
+            ->assertOk()
+            ->assertDontSee('Timezone Actor');
+    }
+
     public function test_trainer_needs_view_activity_log_permission(): void
     {
         $trainer = User::factory()->create();
