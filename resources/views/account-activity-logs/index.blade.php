@@ -40,7 +40,7 @@
         @forelse ($activityLogs as $activityLog)
             <div class="crm-row xl:grid-cols-[190px_1fr_1fr_1fr_auto] xl:items-center">
                 <div class="text-sm font-medium text-slate-500">
-                    {{ $activityLog->occurred_at?->format('Y-m-d H:i') }}
+                    {{ $activityLog->occurred_at?->copy()->timezone($timezone)->format('Y-m-d H:i') }}
                 </div>
                 <div>
                     <div class="font-semibold text-slate-950">{{ $activityLog->action }}</div>
