@@ -7,12 +7,18 @@ use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
 use App\Models\Account;
+use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
+use App\Models\CustomerClassPassReservation;
 use App\Models\CustomerPurchase;
 use App\Models\IntegrationSetting;
+use App\Models\Location;
+use App\Models\Room;
+use App\Models\ScheduledClass;
+use App\Models\Trainer;
 use App\Support\Payments\LiqPayGateway;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\Payments\WayForPayGateway;
@@ -113,6 +119,59 @@ class PaymentGatewayCallbackTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(1, CustomerClassPass::whereBelongsTo($purchase->customer)->count());
+    }
+
+    public function test_paid_customer_purchase_reconciles_existing_unlinked_booking(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$account, $purchase] = $this->purchase(IntegrationProvider::Liqpay, [
+            'public_key' => 'public-key',
+            'private_key' => 'private-key',
+        ]);
+        $classType = $purchase->classPassPlan->classTypes()->firstOrFail();
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $trainer = Trainer::factory()->for($account)->create();
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'starts_at' => Carbon::parse('2026-06-21 10:00:00'),
+                'ends_at' => Carbon::parse('2026-06-21 11:00:00'),
+            ]);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($purchase->customer)
+            ->create();
+        $data = base64_encode((string) json_encode([
+            'order_id' => $purchase->order_id,
+            'status' => 'success',
+            'amount' => '1800.00',
+            'currency' => 'UAH',
+        ]));
+        $signature = app(LiqPayGateway::class)->signature($data, 'private-key');
+
+        $this->assertFalse($booking->classPassReservation()->exists());
+
+        $this->post(route('api.v1.payments.callbacks', IntegrationProvider::Liqpay->value), [
+            'data' => $data,
+            'signature' => $signature,
+        ])->assertOk();
+
+        $customerClassPass = CustomerClassPass::whereBelongsTo($purchase->customer)->firstOrFail();
+        $reservation = $booking->classPassReservation()->firstOrFail();
+
+        $this->assertSame($customerClassPass->id, $reservation->customer_class_pass_id);
+        $this->assertSame('reserved', $reservation->status->value);
+        $this->assertSame(1, CustomerClassPassReservation::whereBelongsTo($customerClassPass)->count());
+        $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->used_sessions_count);
+
+        Carbon::setTestNow();
     }
 
     public function test_liqpay_failure_callback_marks_purchase_failed_without_class_pass(): void

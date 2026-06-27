@@ -25,6 +25,7 @@
         $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
         $canIssueCustomerClassPasses = auth()->user()?->can('issueCustomerClassPasses', $account) ?? false;
         $canManageCustomerClassPasses = auth()->user()?->can('manageCustomerClassPasses', $account) ?? false;
+        $classPassBackfillPreview ??= null;
     @endphp
 
     <h1 class="crm-page-title">{{ __('app.edit') }} {{ $customer->name }}</h1>
@@ -42,7 +43,17 @@
             @if ($canIssueCustomerClassPasses)
                 <x-ui.panel>
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.issue_class_pass') }}</h2>
-                    <form method="POST" action="{{ route('dashboard.accounts.customers.class-passes.store', [$account, $customer]) }}" class="mt-4 space-y-4">
+                    <form
+                        method="POST"
+                        action="{{ route('dashboard.accounts.customers.class-passes.store', [$account, $customer]) }}"
+                        class="mt-4 space-y-4"
+                        data-confirm-action
+                        data-confirm-title="{{ __('app.confirm_issue_class_pass_title') }}"
+                        data-confirm-body="{{ __('app.confirm_issue_class_pass_body') }}"
+                        data-confirm-accept="{{ __('app.issue_class_pass') }}"
+                        data-confirm-icon="ticket"
+                        data-confirm-variant="success"
+                    >
                         @csrf
                         <label class="block">
                             <span class="crm-label">{{ __('app.class_pass_plan') }}</span>
@@ -64,8 +75,18 @@
 
         <div class="space-y-6">
             <x-ui.panel padding="none" class="overflow-hidden">
-                <div class="border-b border-stone-100 px-5 py-4">
+                <div class="flex flex-col gap-3 border-b border-stone-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_class_passes') }}</h2>
+                    @if ($canManageCustomerClassPasses && $customerClassPasses->isNotEmpty())
+                        <x-ui.button
+                            :href="route('dashboard.accounts.customers.edit', [$account, $customer, 'class_pass_backfill_preview' => 1])"
+                            variant="secondary"
+                            size="sm"
+                        >
+                            <x-ui.icon name="refresh-cw" class="h-4 w-4" />
+                            {{ __('app.preview_class_pass_backfill') }}
+                        </x-ui.button>
+                    @endif
                 </div>
                 @forelse ($customerClassPasses as $customerClassPass)
                     <div class="border-b border-stone-100 px-5 py-4 last:border-b-0">
@@ -121,4 +142,79 @@
             </x-ui.panel>
         </div>
     </div>
+
+    @if ($classPassBackfillPreview)
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="class-pass-backfill-title">
+            <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-2xl">
+                <div class="border-b border-stone-100 px-6 py-5">
+                    <h2 id="class-pass-backfill-title" class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_backfill_title') }}</h2>
+                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.class_pass_backfill_body') }}</p>
+                </div>
+
+                <div class="space-y-3 px-6 py-5">
+                    @if (! $classPassBackfillPreview['has_changes'])
+                        <div class="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-slate-600">
+                            {{ __('app.class_pass_backfill_empty') }}
+                        </div>
+                    @else
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <div class="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+                                <div class="text-xs font-semibold uppercase text-emerald-700">{{ __('app.used_sessions') }}</div>
+                                <div class="mt-1 text-2xl font-semibold text-emerald-900">{{ $classPassBackfillPreview['totals']['used'] }}</div>
+                            </div>
+                            <div class="rounded-lg border border-sky-100 bg-sky-50 px-4 py-3">
+                                <div class="text-xs font-semibold uppercase text-sky-700">{{ __('app.reserved_sessions') }}</div>
+                                <div class="mt-1 text-2xl font-semibold text-sky-900">{{ $classPassBackfillPreview['totals']['reserved'] }}</div>
+                            </div>
+                        </div>
+
+                        @foreach ($classPassBackfillPreview['passes'] as $passSummary)
+                            <div class="rounded-lg border border-stone-200 px-4 py-3">
+                                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <div class="font-semibold text-slate-950">{{ $passSummary['pass']->plan_name }}</div>
+                                        <div class="mt-1 text-sm text-slate-500">{{ $passSummary['pass']->code }}</div>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2 text-sm">
+                                        <span class="rounded-md bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">{{ __('app.used') }}: {{ $passSummary['used_count'] }}</span>
+                                        <span class="rounded-md bg-sky-50 px-2 py-1 font-semibold text-sky-700">{{ __('app.reserved') }}: {{ $passSummary['reserved_count'] }}</span>
+                                    </div>
+                                </div>
+                                <div class="mt-3 divide-y divide-stone-100 text-sm">
+                                    @foreach ($passSummary['bookings'] as $bookingChange)
+                                        @php
+                                            $booking = $bookingChange['booking'];
+                                            $reservationStatus = $bookingChange['reservation_status'];
+                                        @endphp
+                                        <div class="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <div class="font-medium text-slate-800">{{ $booking->scheduledClass?->title }}</div>
+                                                <div class="text-xs text-slate-500">{{ $formatBookingDate($booking) }} · {{ $booking->scheduledClass?->classType?->name }}</div>
+                                            </div>
+                                            <span class="text-xs font-semibold text-slate-600">{{ __('app.'.$reservationStatus->value) }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    @endif
+                </div>
+
+                <div class="flex flex-col-reverse gap-3 border-t border-stone-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+                    <x-ui.button :href="route('dashboard.accounts.customers.edit', [$account, $customer])" variant="secondary">
+                        {{ __('app.cancel') }}
+                    </x-ui.button>
+                    @if ($classPassBackfillPreview['has_changes'])
+                        <form method="POST" action="{{ route('dashboard.accounts.customers.class-passes.backfill', [$account, $customer]) }}">
+                            @csrf
+                            <x-ui.button type="submit" variant="success">
+                                <x-ui.icon name="check" class="h-4 w-4" />
+                                {{ __('app.apply_class_pass_backfill') }}
+                            </x-ui.button>
+                        </form>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
 @endsection

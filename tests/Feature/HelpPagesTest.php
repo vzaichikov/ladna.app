@@ -60,6 +60,18 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('sync', false);
     }
 
+    public function test_passes_prices_help_explains_customer_pass_normalization(): void
+    {
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('Як вручну нормалізувати записи клієнта', false)
+            ->assertSee('Нормалізувати записи', false)
+            ->assertSee('попередній перегляд', false)
+            ->assertSee('Застосувати нормалізацію', false)
+            ->assertSee('Статус самого запису не змінюється', false)
+            ->assertSee('assets/help/screenshots/customer-pass-normalization.png', false);
+    }
+
     public function test_help_documents_studio_class_cancellation_flow(): void
     {
         $this->get(route('help.show', 'schedule', false))

@@ -98,7 +98,7 @@ class ClassPassPlan extends Model
         }
 
         $this->loadMissing(['classTypes:id', 'rooms:id', 'trainerTypes:id']);
-        $scheduledClass->loadMissing(['classType', 'trainer', 'room']);
+        $scheduledClass->loadMissing(['account', 'classType', 'location', 'trainer', 'room']);
         $classTypeId = $scheduledClass->class_type_id;
 
         if (! $classTypeId || ! $this->classTypes->contains('id', $classTypeId)) {

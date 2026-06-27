@@ -20,6 +20,7 @@ class IssueCustomerClassPass
         private readonly ClassPassCodeGenerator $codeGenerator,
         private readonly ActorSnapshot $actorSnapshot,
         private readonly TransactionalMailDispatcher $mailDispatcher,
+        private readonly ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookingsForIssuedClassPass,
     ) {}
 
     /**
@@ -47,24 +48,30 @@ class IssueCustomerClassPass
         $purchasedAt ??= now();
         $totalValidityDays = (int) ($snapshot['total_validity_days'] ?? $classPassPlan->total_validity_days);
 
-        $classPass = DB::transaction(fn (): CustomerClassPass => $account->customerClassPasses()->create([
-            'customer_id' => $customer->id,
-            'class_pass_plan_id' => $classPassPlan->id,
-            'code' => $this->codeGenerator->unique(),
-            'source' => $source,
-            ...$this->actorSnapshot->prefixed($account, $issuedBy, 'issued_by_actor'),
-            'status' => 'active',
-            'plan_name' => $snapshot['plan_name'] ?? $classPassPlan->name,
-            'plan_slug' => $snapshot['plan_slug'] ?? $classPassPlan->slug,
-            'price_cents' => $snapshot['price_cents'] ?? $classPassPlan->price_cents,
-            'currency' => $snapshot['currency'] ?? $classPassPlan->currency,
-            'sessions_count' => $snapshot['sessions_count'] ?? $classPassPlan->sessions_count,
-            'validity_days' => $snapshot['validity_days'] ?? $classPassPlan->validity_days,
-            'total_validity_days' => $totalValidityDays,
-            'purchased_at' => $purchasedAt,
-            'usable_until_at' => $purchasedAt->copy()->addDays($totalValidityDays),
-            'is_active' => true,
-        ]));
+        $classPass = DB::transaction(function () use ($account, $customer, $classPassPlan, $source, $issuedBy, $snapshot, $purchasedAt, $totalValidityDays): CustomerClassPass {
+            $classPass = $account->customerClassPasses()->create([
+                'customer_id' => $customer->id,
+                'class_pass_plan_id' => $classPassPlan->id,
+                'code' => $this->codeGenerator->unique(),
+                'source' => $source,
+                ...$this->actorSnapshot->prefixed($account, $issuedBy, 'issued_by_actor'),
+                'status' => 'active',
+                'plan_name' => $snapshot['plan_name'] ?? $classPassPlan->name,
+                'plan_slug' => $snapshot['plan_slug'] ?? $classPassPlan->slug,
+                'price_cents' => $snapshot['price_cents'] ?? $classPassPlan->price_cents,
+                'currency' => $snapshot['currency'] ?? $classPassPlan->currency,
+                'sessions_count' => $snapshot['sessions_count'] ?? $classPassPlan->sessions_count,
+                'validity_days' => $snapshot['validity_days'] ?? $classPassPlan->validity_days,
+                'total_validity_days' => $totalValidityDays,
+                'purchased_at' => $purchasedAt,
+                'usable_until_at' => $purchasedAt->copy()->addDays($totalValidityDays),
+                'is_active' => true,
+            ]);
+
+            $this->reconcileUnreservedCustomerBookingsForIssuedClassPass->execute($classPass);
+
+            return $classPass->refresh();
+        });
 
         if ($source !== 'online_payment') {
             $this->mailDispatcher->customerClassPassIssued($classPass);

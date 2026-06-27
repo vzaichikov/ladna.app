@@ -83,6 +83,84 @@ class CustomerClassPassTest extends TestCase
             ->assertSee($customer->name);
     }
 
+    public function test_manual_class_pass_issue_form_requires_confirmation(): void
+    {
+        [$owner, $account, $customer] = $this->passContext();
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customers.edit', [$account, $customer]))
+            ->assertOk()
+            ->assertSee(__('app.confirm_issue_class_pass_title'))
+            ->assertSee(__('app.confirm_issue_class_pass_body'));
+
+        $html = $response->getContent();
+
+        $this->assertStringContainsString('data-confirm-action', $html);
+        $this->assertStringContainsString('data-confirm-icon="ticket"', $html);
+        $this->assertStringContainsString('data-confirm-variant="success"', $html);
+        $this->assertStringContainsString('data-confirm-accept="'.__('app.issue_class_pass').'"', $html);
+    }
+
+    public function test_owner_can_preview_and_apply_existing_class_pass_backfill(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 12:30:00'));
+        [$owner, $account, $customer, $plan, $scheduledClass] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+        $pastClass = $this->matchingScheduledClass($scheduledClass, '2026-06-20 10:00:00');
+        $futureClass = $this->matchingScheduledClass($scheduledClass, '2026-06-21 10:00:00');
+        $pastBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($pastClass)
+            ->for($customer)
+            ->create();
+        $futureBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($futureClass)
+            ->for($customer)
+            ->create();
+
+        $this->assertFalse($pastBooking->classPassReservation()->exists());
+        $this->assertFalse($futureBooking->classPassReservation()->exists());
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customers.edit', [$account, $customer, 'class_pass_backfill_preview' => 1]))
+            ->assertOk()
+            ->assertSee(__('app.preview_class_pass_backfill'))
+            ->assertSee(__('app.class_pass_backfill_title'))
+            ->assertSee($customerClassPass->code)
+            ->assertSee(__('app.used').': 1')
+            ->assertSee(__('app.reserved').': 1');
+
+        $this->assertFalse($pastBooking->classPassReservation()->exists());
+        $this->assertFalse($futureBooking->classPassReservation()->exists());
+        $this->assertSame(0, $customerClassPass->fresh()->used_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customers.class-passes.backfill', [$account, $customer]))
+            ->assertRedirect(route('dashboard.accounts.customers.edit', [$account, $customer]))
+            ->assertSessionHas('status', __('app.customer_class_pass_backfill_applied', [
+                'used' => 1,
+                'reserved' => 1,
+            ]));
+
+        $pastReservation = $pastBooking->classPassReservation()->firstOrFail();
+        $futureReservation = $futureBooking->classPassReservation()->firstOrFail();
+        $customerClassPass->refresh();
+
+        $this->assertSame(1, $customer->customerClassPasses()->count());
+        $this->assertSame('booked', $pastBooking->fresh()->status->value);
+        $this->assertSame('booked', $futureBooking->fresh()->status->value);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $pastReservation->status);
+        $this->assertTrue($pastReservation->used_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $futureReservation->status);
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(2, $customerClassPass->remainingSessionsCount());
+
+        Carbon::setTestNow();
+    }
+
     public function test_customer_class_pass_adjustment_form_uses_single_input_with_direction_buttons(): void
     {
         [$owner, $account, $customer, $plan] = $this->passContext();
@@ -540,5 +618,21 @@ class CustomerClassPassTest extends TestCase
             ->create();
 
         return [$owner, $account, $customer, $plan, $scheduledClass];
+    }
+
+    private function matchingScheduledClass(ScheduledClass $template, string $startsAt): ScheduledClass
+    {
+        $startsAt = Carbon::parse($startsAt);
+
+        return ScheduledClass::factory()
+            ->for($template->account()->firstOrFail())
+            ->for($template->location()->firstOrFail())
+            ->for($template->room()->firstOrFail())
+            ->for($template->classType()->firstOrFail())
+            ->for($template->trainer()->firstOrFail())
+            ->create([
+                'starts_at' => $startsAt,
+                'ends_at' => $startsAt->copy()->addHour(),
+            ]);
     }
 }

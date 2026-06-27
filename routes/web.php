@@ -310,6 +310,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.website-leads.destroy');
         Route::post('accounts/{account}/customers/{customer}/class-passes', [CustomerClassPassController::class, 'store'])
             ->name('accounts.customers.class-passes.store');
+        Route::post('accounts/{account}/customers/{customer}/class-passes/backfill', [CustomerClassPassController::class, 'backfill'])
+            ->name('accounts.customers.class-passes.backfill');
         Route::get('accounts/{account}/customers/search', CustomerSearchController::class)
             ->name('accounts.customers.search');
         Route::resource('accounts.schedule-series', ScheduleSeriesController::class)

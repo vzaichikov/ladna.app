@@ -65,6 +65,83 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_issuing_pass_reconciles_all_existing_unlinked_customer_bookings(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 12:30:00'));
+        $context = $this->context();
+        $pastClass = $this->scheduledClass($context, '2026-06-20 10:00:00');
+        $currentClass = $this->scheduledClass($context, '2026-06-20 12:00:00');
+        $futureClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $pastBooking = $this->unlinkedBooking($context, $pastClass);
+        $currentBooking = $this->unlinkedBooking($context, $currentClass);
+        $futureBooking = $this->unlinkedBooking($context, $futureClass);
+        $plan = $this->plan($context, sessions: 3);
+
+        $this->assertFalse($pastBooking->classPassReservation()->exists());
+        $this->assertFalse($currentBooking->classPassReservation()->exists());
+        $this->assertFalse($futureBooking->classPassReservation()->exists());
+
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+
+        $pastReservation = $pastBooking->classPassReservation()->firstOrFail();
+        $currentReservation = $currentBooking->classPassReservation()->firstOrFail();
+        $futureReservation = $futureBooking->classPassReservation()->firstOrFail();
+        $customerClassPass->refresh();
+
+        $this->assertSame('booked', $pastBooking->fresh()->status->value);
+        $this->assertSame('booked', $currentBooking->fresh()->status->value);
+        $this->assertSame('booked', $futureBooking->fresh()->status->value);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $pastReservation->status);
+        $this->assertTrue($pastReservation->used_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $currentReservation->status);
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $futureReservation->status);
+        $this->assertSame(2, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+        $this->assertSame(0, $customerClassPass->remainingSessionsCount());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_issuing_non_matching_pass_does_not_reconcile_unlinked_booking(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        $context = $this->context();
+        $otherClassType = ClassType::factory()->for($context['account'])->create(['schedule_kind' => 'group_class']);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $booking = $this->unlinkedBooking($context, $scheduledClass);
+        $plan = $this->plan($context, sessions: 1, classType: $otherClassType);
+
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+
+        $this->assertFalse($booking->classPassReservation()->exists());
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->fresh()->remainingSessionsCount());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_issuing_pass_does_not_reconcile_cancelled_scheduled_class_booking(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        $context = $this->context();
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $scheduledClass->forceFill([
+            'status' => ScheduledClassStatus::Cancelled->value,
+            'is_manually_modified' => true,
+        ])->save();
+        $booking = $this->unlinkedBooking($context, $scheduledClass);
+        $plan = $this->plan($context, sessions: 1);
+
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+
+        $this->assertFalse($booking->classPassReservation()->exists());
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->used_sessions_count);
+
+        Carbon::setTestNow();
+    }
+
     public function test_attendance_uses_reserved_session_and_reverting_to_booked_restores_reservation(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
@@ -511,6 +588,19 @@ class CustomerClassPassBusinessFlowTest extends TestCase
                 'starts_at' => $startsAt,
                 'ends_at' => $startsAt->copy()->addHour(),
             ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function unlinkedBooking(array $context, ScheduledClass $scheduledClass, string $status = 'booked'): ClassBooking
+    {
+        return $scheduledClass->classBookings()->create([
+            'account_id' => $context['account']->id,
+            'customer_id' => $context['customer']->id,
+            'status' => $status,
+            'attended_at' => $status === 'attended' ? $scheduledClass->starts_at : null,
+        ]);
     }
 
     /**

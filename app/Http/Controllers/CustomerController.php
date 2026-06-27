@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\ReconcileUnreservedCustomerBookingsForIssuedClassPass;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Account;
@@ -65,10 +66,15 @@ class CustomerController extends Controller
         abort(404);
     }
 
-    public function edit(Account $account, Customer $customer): View
+    public function edit(Request $request, Account $account, Customer $customer, ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings): View
     {
         $this->ensureBelongsToAccount($account, $customer);
         $this->authorize('manageClients', $account);
+        $classPassBackfillPreview = null;
+
+        if ($request->boolean('class_pass_backfill_preview') && ($request->user()?->can('manageCustomerClassPasses', $account) ?? false)) {
+            $classPassBackfillPreview = $reconcileUnreservedCustomerBookings->previewForCustomer($customer);
+        }
 
         return view('customers.edit', [
             'account' => $account,
@@ -77,7 +83,9 @@ class CustomerController extends Controller
                 'customerClassPasses.classPassPlan.trainerTypes',
                 'customerClassPasses.classPassPlan.rooms',
                 'customerClassPasses.reservations.classBooking.scheduledClass.classType',
+                'classBookings.scheduledClass.account',
                 'classBookings.scheduledClass.classType',
+                'classBookings.scheduledClass.location',
                 'classBookings.classPassReservation.customerClassPass',
             ]),
             'classPassPlans' => $account->classPassPlans()
@@ -86,6 +94,7 @@ class CustomerController extends Controller
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
+            'classPassBackfillPreview' => $classPassBackfillPreview,
         ]);
     }
 

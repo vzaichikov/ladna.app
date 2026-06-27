@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\AdjustCustomerClassPassSessions;
 use App\Actions\IssueCustomerClassPass;
+use App\Actions\ReconcileUnreservedCustomerBookingsForIssuedClassPass;
 use App\Http\Requests\StoreCustomerClassPassAdjustmentRequest;
 use App\Http\Requests\StoreCustomerClassPassRequest;
 use App\Http\Requests\UpdateCustomerClassPassRequest;
@@ -68,6 +69,21 @@ class CustomerClassPassController extends Controller
 
         return redirect()->route('dashboard.accounts.customers.edit', [$account, $customer])
             ->with('status', __('app.customer_class_pass_issued'));
+    }
+
+    public function backfill(Account $account, Customer $customer, ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings): RedirectResponse
+    {
+        $this->ensureCustomerBelongsToAccount($account, $customer);
+        $this->authorize('manageCustomerClassPasses', $account);
+
+        $preview = $reconcileUnreservedCustomerBookings->previewForCustomer($customer);
+        $reconcileUnreservedCustomerBookings->executeForCustomer($customer);
+
+        return redirect()->route('dashboard.accounts.customers.edit', [$account, $customer])
+            ->with('status', __('app.customer_class_pass_backfill_applied', [
+                'used' => $preview['totals']['used'],
+                'reserved' => $preview['totals']['reserved'],
+            ]));
     }
 
     public function edit(Account $account, CustomerClassPass $customerClassPass): View

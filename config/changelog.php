@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.43.0',
+                'date' => '2026-06-27',
+                'title' => 'Class pass booking normalization',
+                'items' => ['Added automatic linking for existing customer bookings when a class pass is issued, plus a manual customer-card normalization preview that shows how many past bookings will be used and how many future bookings will be reserved before applying changes. Updated owner help for the new flow.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.42.0',
                 'date' => '2026-06-27',
                 'title' => 'Printable public QR links',
@@ -387,6 +394,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.43.0',
+                'date' => '2026-06-27',
+                'title' => 'Нормалізація записів за абонементами',
+                'items' => ['Додано автоматичну привʼязку наявних записів клієнта під час видачі абонемента, а також ручну нормалізацію в картці клієнта з попереднім переглядом: скільки минулих занять буде списано і скільки майбутніх записів буде зарезервовано. Оновлено допомогу для власниць студій під новий flow.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.42.0',
                 'date' => '2026-06-27',
