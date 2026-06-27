@@ -3,6 +3,11 @@
 @section('title', __('app.edit').' '.$customerClassPass->code)
 
 @section('content')
+    @php
+        $formatDateTimeLocal = static fn ($date): ?string => \App\Support\DateTimePresenter::dateTimeLocal($date, $account);
+        $formatDateTime = static fn ($date): string => \App\Support\DateTimePresenter::format($date, $account) ?? __('app.not_set');
+    @endphp
+
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ $customerClassPass->code }}</h1>
@@ -35,26 +40,26 @@
         <div class="grid gap-4 sm:grid-cols-2">
             <label class="block">
                 <span class="crm-label">{{ __('app.purchased_at') }}</span>
-                <input name="purchased_at" type="datetime-local" value="{{ old('purchased_at', $customerClassPass->purchased_at?->format('Y-m-d\\TH:i')) }}" class="crm-field" required>
+                <input name="purchased_at" type="datetime-local" value="{{ old('purchased_at', $formatDateTimeLocal($customerClassPass->purchased_at)) }}" class="crm-field" required>
                 @error('purchased_at') <span class="crm-help">{{ $message }}</span> @enderror
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.opened_at') }}</span>
-                <input name="opened_at" type="datetime-local" value="{{ old('opened_at', $customerClassPass->opened_at?->format('Y-m-d\\TH:i')) }}" class="crm-field">
+                <input name="opened_at" type="datetime-local" value="{{ old('opened_at', $formatDateTimeLocal($customerClassPass->opened_at)) }}" class="crm-field">
                 @error('opened_at') <span class="crm-help">{{ $message }}</span> @enderror
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.expires_after_first_class') }}</span>
-                <input name="expires_at" type="datetime-local" value="{{ old('expires_at', $customerClassPass->expires_at?->format('Y-m-d\\TH:i')) }}" class="crm-field">
+                <input name="expires_at" type="datetime-local" value="{{ old('expires_at', $formatDateTimeLocal($customerClassPass->expires_at)) }}" class="crm-field">
                 @error('expires_at') <span class="crm-help">{{ $message }}</span> @enderror
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.usable_until_at') }}</span>
-                <input type="datetime-local" value="{{ $customerClassPass->usableUntilAt()?->format('Y-m-d\\TH:i') }}" class="crm-field" disabled>
+                <input type="datetime-local" value="{{ $formatDateTimeLocal($customerClassPass->usableUntilAt()) }}" class="crm-field" disabled>
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.closed_at') }}</span>
-                <input name="closed_at" type="datetime-local" value="{{ old('closed_at', $customerClassPass->closed_at?->format('Y-m-d\\TH:i')) }}" class="crm-field">
+                <input name="closed_at" type="datetime-local" value="{{ old('closed_at', $formatDateTimeLocal($customerClassPass->closed_at)) }}" class="crm-field">
                 @error('closed_at') <span class="crm-help">{{ $message }}</span> @enderror
             </label>
         </div>
@@ -141,7 +146,7 @@
                         <div class="font-semibold text-slate-950">{{ $sessionsDeltaLabel }} {{ __('app.classes_count') }}</div>
                         <div class="mt-1 text-slate-500">{{ $adjustment->previous_sessions_count }} -> {{ $adjustment->new_sessions_count }}</div>
                     </div>
-                    <div class="text-slate-500">{{ $adjustment->created_at?->format('Y-m-d H:i') }}</div>
+                    <div class="text-slate-500">{{ $formatDateTime($adjustment->created_at) }}</div>
                 </div>
                 <div class="mt-2 text-slate-600">{{ $adjustment->reason }}</div>
                 <div class="mt-1 text-xs text-slate-500">{{ __('app.adjusted_by') }}: {{ $adjustment->actor_name ?? $adjustment->user?->name ?? __('app.system') }}</div>

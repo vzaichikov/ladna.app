@@ -528,6 +528,40 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_customer_visit_history_uses_studio_timezone_in_admin_and_customer_portal(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'slug' => 'visit-timezone-'.fake()->unique()->numberBetween(1000, 9999),
+            'timezone' => 'America/New_York',
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'America/New_York']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['name' => 'Timezone Pole']);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Timezone Visit Class',
+            'starts_at' => Carbon::parse('2026-06-20 02:30:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-20 03:30:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Timezone Customer']);
+        ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customers.edit', [$account, $customer]))
+            ->assertOk()
+            ->assertSee('Timezone Visit Class')
+            ->assertSee('2026-06-19 22:30')
+            ->assertDontSee('2026-06-20 02:30');
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee('Timezone Visit Class')
+            ->assertSee('2026-06-19 22:30')
+            ->assertDontSee('2026-06-20 02:30');
+    }
+
     public function test_booking_rejects_customer_from_another_account(): void
     {
         $owner = User::factory()->create();

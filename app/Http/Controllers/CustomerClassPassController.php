@@ -10,9 +10,9 @@ use App\Http\Requests\UpdateCustomerClassPassRequest;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
+use App\Support\DateTimePresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 class CustomerClassPassController extends Controller
@@ -88,9 +88,15 @@ class CustomerClassPassController extends Controller
         $this->ensureBelongsToAccount($account, $customerClassPass);
 
         $validated = $request->validated();
+        foreach (['purchased_at', 'opened_at', 'expires_at', 'closed_at'] as $dateField) {
+            $validated[$dateField] = DateTimePresenter::parseAccountDateTime($validated[$dateField] ?? null, $account);
+        }
+
         $validated['is_active'] = $request->boolean('is_active');
-        $validated['usable_until_at'] = Carbon::parse($validated['purchased_at'])
-            ->addDays($customerClassPass->total_validity_days);
+        $validated['usable_until_at'] = $validated['purchased_at']
+            ->timezone(DateTimePresenter::accountTimezone($account))
+            ->addDays($customerClassPass->total_validity_days)
+            ->timezone((string) config('app.timezone', 'UTC'));
 
         if (! $validated['is_active'] && blank($validated['closed_at'] ?? null)) {
             $validated['closed_at'] = now();

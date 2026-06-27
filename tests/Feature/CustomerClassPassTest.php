@@ -165,6 +165,56 @@ class CustomerClassPassTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_customer_class_pass_dates_display_and_save_in_account_timezone(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 02:30:00', 'UTC'));
+        [$owner, $account, $customer, $plan] = $this->passContext();
+        $account->update(['timezone' => 'America/New_York']);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+        $customerClassPass->update([
+            'purchased_at' => Carbon::parse('2026-06-20 02:30:00', 'UTC'),
+            'opened_at' => Carbon::parse('2026-06-20 02:30:00', 'UTC'),
+            'expires_at' => Carbon::parse('2026-07-20 02:30:00', 'UTC'),
+            'usable_until_at' => Carbon::parse('2026-10-18 02:30:00', 'UTC'),
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
+                'sessions_delta' => 1,
+                'reason' => 'Timezone audit',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertOk()
+            ->assertSee('value="2026-06-19T22:30"', false)
+            ->assertSee('2026-06-19 22:30')
+            ->assertDontSee('2026-06-20T02:30')
+            ->assertDontSee('2026-06-20 02:30');
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]), [
+                'status' => CustomerClassPassStatus::Active->value,
+                'is_active' => '1',
+                'purchased_at' => '2026-06-19T22:30',
+                'opened_at' => '',
+                'expires_at' => '',
+                'closed_at' => '',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+
+        $customerClassPass->refresh();
+
+        $this->assertTrue($customerClassPass->purchased_at->equalTo(Carbon::parse('2026-06-20 02:30:00', 'UTC')));
+        $this->assertNull($customerClassPass->opened_at);
+        $this->assertNull($customerClassPass->expires_at);
+        $this->assertNull($customerClassPass->closed_at);
+
+        Carbon::setTestNow();
+    }
+
     public function test_session_removal_cannot_drop_total_below_used_or_reserved_sessions(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
