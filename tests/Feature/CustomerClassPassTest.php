@@ -12,6 +12,8 @@ use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
+use App\Models\CustomerClassPass;
+use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -29,11 +31,12 @@ class CustomerClassPassTest extends TestCase
     public function test_owner_can_issue_manual_customer_class_pass(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
-        [$owner, $account, $customer, $plan] = $this->passContext();
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
                 'class_pass_plan_id' => $plan->id,
+                'issued_location_id' => $location->id,
             ])
             ->assertRedirect(route('dashboard.accounts.customers.edit', [$account, $customer]));
 
@@ -47,6 +50,9 @@ class CustomerClassPassTest extends TestCase
         $this->assertSame($owner->id, $customerClassPass->issued_by_actor_user_id);
         $this->assertSame($owner->name, $customerClassPass->issued_by_actor_name);
         $this->assertSame('owner', $customerClassPass->issued_by_actor_role);
+        $this->assertSame($location->id, $customerClassPass->issued_location_id);
+        $this->assertFalse($customerClassPass->is_paid);
+        $this->assertSame(0, CustomerPurchase::whereBelongsTo($customerClassPass)->count());
         $this->assertTrue($customerClassPass->purchased_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
         $this->assertTrue($customerClassPass->usable_until_at->equalTo(Carbon::parse('2026-10-18 10:00:00')));
         $this->assertNull($customerClassPass->opened_at);
@@ -54,11 +60,139 @@ class CustomerClassPassTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_trial_class_pass_is_blocked_after_any_booking(): void
+    public function test_manual_class_pass_issue_requires_location(): void
     {
-        [$owner, $account, $customer, $plan, $scheduledClass] = $this->passContext(isTrial: true);
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
+                'class_pass_plan_id' => $plan->id,
+            ])
+            ->assertSessionHasErrors('issued_location_id');
+    }
+
+    public function test_paid_manual_class_pass_creates_studio_cash_purchase_with_location(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
+                'class_pass_plan_id' => $plan->id,
+                'issued_location_id' => $location->id,
+                'is_paid' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customers.edit', [$account, $customer]));
+
+        $customerClassPass = $customer->customerClassPasses()->firstOrFail();
+        $purchase = CustomerPurchase::whereBelongsTo($customerClassPass)->firstOrFail();
+
+        $this->assertTrue($customerClassPass->is_paid);
+        $this->assertSame($location->id, $customerClassPass->issued_location_id);
+        $this->assertSame(CustomerPurchase::ProviderStudioCash, $purchase->provider);
+        $this->assertSame(CustomerPurchase::SourceManualCashClassPass, $purchase->payment_source);
+        $this->assertSame($location->id, $purchase->location_id);
+        $this->assertSame($customerClassPass->id, $purchase->customer_class_pass_id);
+        $this->assertSame('payment_paid', $purchase->status->value);
+        $this->assertSame($plan->price_cents, $purchase->amount_cents);
+        $this->assertTrue($purchase->paid_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_manual_class_pass_payment_toggle_creates_and_removes_only_manual_cash_purchase(): void
+    {
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
+
+        $this->actingAs($owner)
+            ->put(
+                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
+                $this->classPassUpdatePayload($customerClassPass, $location, isPaid: true),
+            )
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+
+        $customerClassPass->refresh();
+        $manualPurchase = CustomerPurchase::whereBelongsTo($customerClassPass)
+            ->where('payment_source', CustomerPurchase::SourceManualCashClassPass)
+            ->firstOrFail();
+
+        $this->assertTrue($customerClassPass->is_paid);
+        $this->assertSame(CustomerPurchase::ProviderStudioCash, $manualPurchase->provider);
+        $this->assertSame($location->id, $manualPurchase->location_id);
+
+        $this->actingAs($owner)
+            ->put(
+                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
+                $this->classPassUpdatePayload($customerClassPass, $location, isPaid: false),
+            )
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+
+        $this->assertFalse($customerClassPass->fresh()->is_paid);
+        $this->assertSame(0, CustomerPurchase::whereKey($manualPurchase->id)->count());
+    }
+
+    public function test_online_purchase_is_not_deleted_when_paid_flag_is_removed_from_pass(): void
+    {
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
+        $customerClassPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($plan, 'classPassPlan')
+            ->create([
+                'source' => 'online_payment',
+                'issued_location_id' => $location->id,
+                'is_paid' => true,
+            ]);
+        $purchase = CustomerPurchase::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($plan, 'classPassPlan')
+            ->for($customerClassPass, 'customerClassPass')
+            ->create([
+                'location_id' => $location->id,
+                'payment_source' => CustomerPurchase::SourceOnlineCheckout,
+                'status' => 'payment_paid',
+            ]);
+
+        $this->actingAs($owner)
+            ->put(
+                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
+                $this->classPassUpdatePayload($customerClassPass, $location, isPaid: false),
+            )
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+
+        $this->assertFalse($customerClassPass->fresh()->is_paid);
+        $this->assertSame(1, CustomerPurchase::whereKey($purchase->id)->count());
+    }
+
+    public function test_trial_class_pass_is_blocked_after_multiple_bookings(): void
+    {
+        [$owner, $account, $customer, $plan, $scheduledClass, $location] = $this->passContext(isTrial: true);
 
         ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create();
+        ClassBooking::factory()
+            ->for($account)
+            ->for($this->matchingScheduledClass($scheduledClass, '2026-06-21 10:00:00'))
+            ->for($customer)
+            ->create();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
+                'class_pass_plan_id' => $plan->id,
+                'issued_location_id' => $location->id,
+            ])
+            ->assertSessionHasErrors('class_pass_plan_id');
+    }
+
+    public function test_manual_trial_class_pass_allows_single_booking_without_reservation(): void
+    {
+        [$owner, $account, $customer, $plan, $scheduledClass, $location] = $this->passContext(isTrial: true);
+        $booking = ClassBooking::factory()
             ->for($account)
             ->for($scheduledClass)
             ->for($customer)
@@ -67,13 +201,18 @@ class CustomerClassPassTest extends TestCase
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
                 'class_pass_plan_id' => $plan->id,
+                'issued_location_id' => $location->id,
             ])
-            ->assertSessionHasErrors('class_pass_plan_id');
+            ->assertRedirect(route('dashboard.accounts.customers.edit', [$account, $customer]));
+
+        $customerClassPass = $customer->customerClassPasses()->firstOrFail();
+
+        $this->assertSame($customerClassPass->id, $booking->classPassReservation()->firstOrFail()->customer_class_pass_id);
     }
 
     public function test_customer_list_searches_by_class_pass_code(): void
     {
-        [$owner, $account, $customer, $plan] = $this->passContext();
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
         app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
         $code = $customer->customerClassPasses()->firstOrFail()->code;
 
@@ -81,6 +220,31 @@ class CustomerClassPassTest extends TestCase
             ->get(route('dashboard.accounts.customers.index', ['account' => $account, 'q' => $code]))
             ->assertOk()
             ->assertSee($customer->name);
+    }
+
+    public function test_customer_class_pass_index_filters_by_payment_status_and_links_unpaid_notice(): void
+    {
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
+        $paidPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location, isPaid: true);
+        $unpaidPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.unpaid_class_passes_notice', ['count' => 1]))
+            ->assertSee(__('app.show_unpaid_class_passes'))
+            ->assertSee($paidPass->code)
+            ->assertSee($unpaidPass->code);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.index', [
+                'account' => $account,
+                'payment_status' => 'unpaid',
+            ]))
+            ->assertOk()
+            ->assertSee($unpaidPass->code)
+            ->assertSee(__('app.class_pass_unpaid'))
+            ->assertDontSee($paidPass->code);
     }
 
     public function test_manual_class_pass_issue_form_requires_confirmation(): void
@@ -246,7 +410,7 @@ class CustomerClassPassTest extends TestCase
     public function test_customer_class_pass_dates_display_and_save_in_account_timezone(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 02:30:00', 'UTC'));
-        [$owner, $account, $customer, $plan] = $this->passContext();
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
         $account->update(['timezone' => 'America/New_York']);
         $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
         $customerClassPass->update([
@@ -276,6 +440,7 @@ class CustomerClassPassTest extends TestCase
             ->put(route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]), [
                 'status' => CustomerClassPassStatus::Active->value,
                 'is_active' => '1',
+                'issued_location_id' => $location->id,
                 'purchased_at' => '2026-06-19T22:30',
                 'opened_at' => '',
                 'expires_at' => '',
@@ -371,7 +536,7 @@ class CustomerClassPassTest extends TestCase
 
     public function test_trainer_with_issue_permission_can_issue_but_cannot_adjust_customer_class_pass(): void
     {
-        [$owner, $account, $customer, $plan] = $this->passContext();
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
         $trainerUser = User::factory()->create([
             'name' => 'Trainer Actor',
             'email' => 'trainer-actor@example.com',
@@ -389,6 +554,7 @@ class CustomerClassPassTest extends TestCase
         $this->actingAs($trainerUser)
             ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
                 'class_pass_plan_id' => $plan->id,
+                'issued_location_id' => $location->id,
             ])
             ->assertRedirect(route('dashboard.accounts.customers.edit', [$account, $customer]));
 
@@ -414,7 +580,7 @@ class CustomerClassPassTest extends TestCase
     public function test_trainer_with_manage_permission_can_edit_and_adjust_but_cannot_issue_customer_class_pass(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
-        [, $account, $customer, $plan] = $this->passContext();
+        [, $account, $customer, $plan, , $location] = $this->passContext();
         $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
         $trainerUser = User::factory()->create([
             'name' => 'Pass Manager',
@@ -439,6 +605,7 @@ class CustomerClassPassTest extends TestCase
         $this->actingAs($trainerUser)
             ->put(route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]), [
                 'status' => CustomerClassPassStatus::Active->value,
+                'issued_location_id' => $location->id,
                 'purchased_at' => '2026-06-20T10:00',
                 'opened_at' => null,
                 'expires_at' => null,
@@ -588,7 +755,7 @@ class CustomerClassPassTest extends TestCase
     }
 
     /**
-     * @return array{0: User, 1: Account, 2: Customer, 3: ClassPassPlan, 4: ScheduledClass}
+     * @return array{0: User, 1: Account, 2: Customer, 3: ClassPassPlan, 4: ScheduledClass, 5: Location}
      */
     private function passContext(bool $isTrial = false): array
     {
@@ -617,7 +784,28 @@ class CustomerClassPassTest extends TestCase
             ->for($trainer)
             ->create();
 
-        return [$owner, $account, $customer, $plan, $scheduledClass];
+        return [$owner, $account, $customer, $plan, $scheduledClass, $location];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function classPassUpdatePayload(CustomerClassPass $customerClassPass, Location $location, bool $isPaid): array
+    {
+        $account = $customerClassPass->account()->firstOrFail();
+        $timezone = $account->timezone ?? config('app.timezone');
+        $formatDate = static fn ($date): string => $date ? $date->copy()->timezone($timezone)->format('Y-m-d\TH:i') : '';
+
+        return [
+            'status' => $customerClassPass->status->value,
+            'issued_location_id' => (string) $location->id,
+            'purchased_at' => $formatDate($customerClassPass->purchased_at ?? now()),
+            'opened_at' => $formatDate($customerClassPass->opened_at),
+            'expires_at' => $formatDate($customerClassPass->expires_at),
+            'closed_at' => $formatDate($customerClassPass->closed_at),
+            'is_active' => $customerClassPass->is_active ? '1' : '0',
+            'is_paid' => $isPaid ? '1' : '0',
+        ];
     }
 
     private function matchingScheduledClass(ScheduledClass $template, string $startsAt): ScheduledClass

@@ -19,15 +19,17 @@ class AccountPaymentController extends Controller
         abort_unless($account->isOwnedBy($request->user()), 403);
 
         $status = $this->statusFilter($request->query('status'));
-        $provider = $this->providerFilter($request->query('provider'));
+        $provider = $this->providerFilter($request->query('provider'), $account);
+        $locationId = $this->locationFilter($request->query('location_id'), $account);
         $fiscalizationEnabled = $fiscalization->enabledForAccount($account);
         $baseQuery = CustomerPurchase::query()
             ->whereBelongsTo($account)
             ->when($status, fn (Builder $query): Builder => $query->where('status', $status))
-            ->when($provider, fn (Builder $query): Builder => $query->where('provider', $provider));
+            ->when($provider, fn (Builder $query): Builder => $query->where('provider', $provider))
+            ->when($locationId, fn (Builder $query): Builder => $query->where('location_id', $locationId));
 
         $payments = (clone $baseQuery)
-            ->with(['customer', 'classPassPlan', 'customerClassPass', 'fiscalReceipt'])
+            ->with(['customer', 'location', 'classPassPlan', 'customerClassPass', 'fiscalReceipt'])
             ->newestFirst()
             ->paginate(20)
             ->withQueryString();
@@ -37,6 +39,8 @@ class AccountPaymentController extends Controller
             'payments' => $payments,
             'status' => $status,
             'provider' => $provider,
+            'locationId' => $locationId,
+            'locations' => $account->locations()->orderBy('name')->get(),
             'providers' => $this->providerOptions($account),
             'statuses' => CustomerPurchaseStatus::cases(),
             'fiscalizationEnabled' => $fiscalizationEnabled,
@@ -53,9 +57,28 @@ class AccountPaymentController extends Controller
         return in_array($value, array_column(CustomerPurchaseStatus::cases(), 'value'), true) ? $value : null;
     }
 
-    private function providerFilter(mixed $value): ?string
+    private function providerFilter(mixed $value, Account $account): ?string
     {
-        return is_string($value) && array_key_exists($value, config('integrations.providers', [])) ? $value : null;
+        if (! is_string($value)) {
+            return null;
+        }
+
+        if (array_key_exists($value, config('integrations.providers', []))) {
+            return $value;
+        }
+
+        return $account->customerPurchases()->where('provider', $value)->exists() ? $value : null;
+    }
+
+    private function locationFilter(mixed $value, Account $account): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $locationId = (int) $value;
+
+        return $account->locations()->whereKey($locationId)->exists() ? $locationId : null;
     }
 
     /**
@@ -69,9 +92,19 @@ class AccountPaymentController extends Controller
             ->orderBy('provider')
             ->pluck('provider')
             ->mapWithKeys(fn (string $provider): array => [
-                $provider => config('integrations.providers.'.$provider.'.label', $provider),
+                $provider => $this->providerLabel($provider),
             ])
             ->all();
+    }
+
+    private function providerLabel(string $provider): string
+    {
+        $translationKey = 'app.provider_'.$provider;
+        $label = __($translationKey);
+
+        return $label === $translationKey
+            ? config('integrations.providers.'.$provider.'.label', $provider)
+            : $label;
     }
 
     /**

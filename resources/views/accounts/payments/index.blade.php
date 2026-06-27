@@ -6,6 +6,12 @@
     @php
         $formatMoney = fn (?int $cents, ?string $currency = null): string => \App\Support\MoneyFormatter::format($cents ?? 0, $currency ?: $account->default_currency);
         $formatPaymentDate = fn ($payment): string => \App\Support\DateTimePresenter::format($payment->paid_at ?? $payment->started_at, $account) ?? __('app.not_set');
+        $providerLabelResolver = static function (string $provider): string {
+            $translationKey = 'app.provider_'.$provider;
+            $label = __($translationKey);
+
+            return $label === $translationKey ? config('integrations.providers.'.$provider.'.label', $provider) : $label;
+        };
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -25,7 +31,7 @@
         @endif
     </section>
 
-    <form method="GET" action="{{ route('dashboard.accounts.payments.index', $account) }}" class="mt-6 grid gap-4 rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+    <form method="GET" action="{{ route('dashboard.accounts.payments.index', $account) }}" class="mt-6 grid gap-4 rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end">
         <label class="block">
             <span class="crm-label">{{ __('app.payment_status') }}</span>
             <select name="status" class="crm-field">
@@ -40,8 +46,18 @@
             <span class="crm-label">{{ __('app.payment_provider') }}</span>
             <select name="provider" class="crm-field">
                 <option value="">{{ __('app.all_payment_providers') }}</option>
-                @foreach ($providers as $providerKey => $providerLabel)
-                    <option value="{{ $providerKey }}" @selected($provider === $providerKey)>{{ $providerLabel }}</option>
+                @foreach ($providers as $providerKey => $providerOptionLabel)
+                    <option value="{{ $providerKey }}" @selected($provider === $providerKey)>{{ $providerOptionLabel }}</option>
+                @endforeach
+            </select>
+        </label>
+
+        <label class="block">
+            <span class="crm-label">{{ __('app.payment_location') }}</span>
+            <select name="location_id" class="crm-field">
+                <option value="">{{ __('app.all_locations') }}</option>
+                @foreach ($locations as $location)
+                    <option value="{{ $location->id }}" @selected((int) $locationId === $location->id)>{{ $location->name }}</option>
                 @endforeach
             </select>
         </label>
@@ -72,7 +88,8 @@
                     'failed' => 'crm-status-danger',
                     default => 'crm-status-muted',
                 };
-                $providerLabel = config('integrations.providers.'.$payment->provider.'.label', $payment->provider);
+                $currentProviderLabel = $providerLabelResolver($payment->provider);
+                $showFiscalStatus = $fiscalizationEnabled && ! $payment->isManualCashClassPassPayment();
             @endphp
 
             <article class="crm-row lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_130px_140px_160px] lg:items-center">
@@ -93,14 +110,15 @@
                 <div class="text-sm font-semibold text-slate-700">{{ $formatMoney($payment->amount_cents, $payment->currency) }}</div>
 
                 <div class="text-sm text-slate-500">
-                    <div>{{ $providerLabel }}</div>
+                    <div>{{ $currentProviderLabel }}</div>
+                    <div class="mt-1">{{ __('app.payment_location') }}: {{ $payment->location?->name ?? __('app.not_set') }}</div>
                     <div class="mt-1">{{ $formatPaymentDate($payment) }}</div>
                 </div>
 
                 <div class="space-y-2">
                     <span class="{{ $paymentStatusClass }}">{{ __('app.'.$payment->status->value) }}</span>
 
-                    @if ($fiscalizationEnabled)
+                    @if ($showFiscalStatus)
                         <div class="text-xs leading-5 text-slate-500">
                             <span class="{{ $fiscalStatusClass }}">{{ $receipt?->status ? __('app.fiscal_status_'.$receipt->status->value) : __('app.fiscal_status_pending') }}</span>
                             @if ($receipt?->fiscal_number)
@@ -111,6 +129,8 @@
                                 <div class="mt-1 text-rose-700">{{ __('app.fiscalization_contact_checkbox') }}</div>
                             @endif
                         </div>
+                    @elseif ($payment->isManualCashClassPassPayment())
+                        <div class="text-xs leading-5 text-slate-500">{{ __('app.manual_cash_not_fiscalized') }}</div>
                     @endif
                 </div>
             </article>

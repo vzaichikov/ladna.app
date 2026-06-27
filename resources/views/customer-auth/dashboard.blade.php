@@ -16,6 +16,12 @@
         $cancellationWindow = app(\App\Support\ClassBookingCancellationWindow::class);
         $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
         $formatDateTime = static fn ($date): string => \App\Support\DateTimePresenter::format($date, $account) ?? __('app.not_set');
+        $providerLabel = static function (string $provider): string {
+            $translationKey = 'app.provider_'.$provider;
+            $label = __($translationKey);
+
+            return $label === $translationKey ? config('integrations.providers.'.$provider.'.label', $provider) : $label;
+        };
         $formatBookingDate = static function ($booking) use ($account): string {
             $scheduledClass = $booking->scheduledClass;
             $date = $scheduledClass?->starts_at ?? $booking->created_at;
@@ -145,7 +151,7 @@
                 <div class="divide-y divide-stone-100">
                     @forelse ($purchaseHistory as $purchase)
                         @php
-                            $providerLabel = config('integrations.providers.'.$purchase->provider.'.label', $purchase->provider);
+                            $currentProviderLabel = $providerLabel($purchase->provider);
                             $statusClass = match ($purchase->status->value) {
                                 'payment_paid' => 'crm-status-active',
                                 'payment_failed', 'payment_cancelled', 'payment_expired' => 'crm-status-danger',
@@ -156,13 +162,16 @@
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
                                     <div class="font-semibold text-slate-950">{{ $purchase->plan_name }}</div>
-                                    <div class="mt-1 text-sm text-slate-500">{{ $purchase->order_id }} &middot; {{ $providerLabel }} &middot; {{ $formatMoney($purchase->amount_cents, $purchase->currency) }}</div>
+                                    <div class="mt-1 text-sm text-slate-500">{{ $purchase->order_id }} &middot; {{ $currentProviderLabel }} &middot; {{ $formatMoney($purchase->amount_cents, $purchase->currency) }}</div>
                                 </div>
                                 <span class="{{ $statusClass }}">{{ __('app.'.$purchase->status->value) }}</span>
                             </div>
                             <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
                                 <span>{{ __('app.started_at') }}: {{ $formatDateTime($purchase->started_at) }}</span>
                                 <span>{{ __('app.paid_at') }}: {{ $formatDateTime($purchase->paid_at) }}</span>
+                                @if ($purchase->location)
+                                    <span>{{ __('app.payment_location') }}: {{ $purchase->location->name }}</span>
+                                @endif
                                 @if ($purchase->customerClassPass)
                                     <span>{{ __('app.class_pass_code') }}: {{ $purchase->customerClassPass->code }}</span>
                                     <span>{{ __('app.usable_until_at') }}: {{ $formatDate($purchase->customerClassPass->usableUntilAt()) }}</span>

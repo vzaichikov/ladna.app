@@ -27,8 +27,10 @@ class CustomerPurchaseFactory extends Factory
         return [
             'account_id' => $account,
             'customer_id' => Customer::factory()->for($account),
+            'location_id' => null,
             'class_pass_plan_id' => ClassPassPlan::factory()->for($account),
             'provider' => 'liqpay',
+            'payment_source' => CustomerPurchase::SourceOnlineCheckout,
             'order_id' => 'LP-'.Str::upper(Str::random(16)),
             'status' => 'payment_started',
             'plan_name' => $planName,

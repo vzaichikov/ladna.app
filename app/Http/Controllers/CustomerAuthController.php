@@ -253,7 +253,7 @@ class CustomerAuthController extends Controller
         $account = $this->account($accountSlug);
         $customer = $this->customerForAccount($account);
         $purchaseHistory = $customer->purchases()
-            ->with(['customerClassPass', 'classPassPlan'])
+            ->with(['customerClassPass', 'classPassPlan', 'location'])
             ->newestFirst()
             ->paginate(10, ['*'], 'purchases_page')
             ->withQueryString();

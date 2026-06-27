@@ -13,15 +13,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-#[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'customer_class_pass_id', 'provider', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
+#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
 #[Hidden(['gateway_checkout_payload', 'last_callback_payload'])]
 class CustomerPurchase extends Model
 {
     /** @use HasFactory<CustomerPurchaseFactory> */
     use HasFactory;
 
+    public const ProviderStudioCash = 'studio_cash';
+
+    public const SourceOnlineCheckout = 'online_checkout';
+
+    public const SourceManualCashClassPass = 'manual_cash_class_pass';
+
     protected $attributes = [
         'status' => 'payment_started',
+        'payment_source' => self::SourceOnlineCheckout,
         'currency' => 'UAH',
         'total_validity_days' => 180,
     ];
@@ -57,6 +64,11 @@ class CustomerPurchase extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
+    }
+
     public function classPassPlan(): BelongsTo
     {
         return $this->belongsTo(ClassPassPlan::class);
@@ -80,5 +92,10 @@ class CustomerPurchase extends Model
     public function isPaid(): bool
     {
         return $this->status === CustomerPurchaseStatus::PaymentPaid;
+    }
+
+    public function isManualCashClassPassPayment(): bool
+    {
+        return $this->payment_source === self::SourceManualCashClassPass;
     }
 }

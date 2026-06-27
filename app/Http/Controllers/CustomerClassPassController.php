@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\AdjustCustomerClassPassSessions;
 use App\Actions\IssueCustomerClassPass;
 use App\Actions\ReconcileUnreservedCustomerBookingsForIssuedClassPass;
+use App\Actions\SyncManualCustomerClassPassPayment;
 use App\Http\Requests\StoreCustomerClassPassAdjustmentRequest;
 use App\Http\Requests\StoreCustomerClassPassRequest;
 use App\Http\Requests\UpdateCustomerClassPassRequest;
@@ -14,6 +15,7 @@ use App\Models\CustomerClassPass;
 use App\Support\DateTimePresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class CustomerClassPassController extends Controller
@@ -27,9 +29,15 @@ class CustomerClassPassController extends Controller
         $enabledScheduleKinds = $account->enabledScheduleKindValues();
         $requestedScheduleKind = (string) $request->query('schedule_kind', '');
         $scheduleKind = in_array($requestedScheduleKind, $enabledScheduleKinds, true) ? $requestedScheduleKind : '';
+        $requestedPaymentStatus = (string) $request->query('payment_status', '');
+        $paymentStatus = in_array($requestedPaymentStatus, ['paid', 'unpaid'], true) ? $requestedPaymentStatus : '';
+        $unpaidActiveClassPassesCount = $account->customerClassPasses()
+            ->where('is_active', true)
+            ->unpaid()
+            ->count();
 
         $customerClassPasses = $account->customerClassPasses()
-            ->with(['customer', 'classPassPlan.classTypes', 'classPassPlan.trainerTypes', 'classPassPlan.rooms'])
+            ->with(['customer', 'issuedLocation', 'classPassPlan.classTypes', 'classPassPlan.trainerTypes', 'classPassPlan.rooms'])
             ->when($term !== '', function ($query) use ($term): void {
                 $query->where(function ($query) use ($term): void {
                     $query->where('code', 'like', "%{$term}%")
@@ -42,6 +50,8 @@ class CustomerClassPassController extends Controller
             })
             ->when($state === 'active', fn ($query) => $query->where('is_active', true))
             ->when($state === 'inactive', fn ($query) => $query->where('is_active', false))
+            ->when($paymentStatus === 'paid', fn ($query) => $query->paid())
+            ->when($paymentStatus === 'unpaid', fn ($query) => $query->unpaid())
             ->when($scheduleKind !== '', function ($query) use ($scheduleKind): void {
                 $query->whereHas('classPassPlan', fn ($query) => $query->where('schedule_kind', $scheduleKind));
             })
@@ -56,7 +66,9 @@ class CustomerClassPassController extends Controller
             'customerClassPasses' => $customerClassPasses,
             'state' => $state,
             'scheduleKind' => $scheduleKind,
+            'paymentStatus' => $paymentStatus,
             'enabledScheduleKinds' => $enabledScheduleKinds,
+            'unpaidActiveClassPassesCount' => $unpaidActiveClassPassesCount,
         ]);
     }
 
@@ -64,8 +76,16 @@ class CustomerClassPassController extends Controller
     {
         $this->ensureCustomerBelongsToAccount($account, $customer);
         $classPassPlan = $account->classPassPlans()->whereKey($request->validated('class_pass_plan_id'))->firstOrFail();
+        $issuedLocation = $account->locations()->whereKey($request->validated('issued_location_id'))->firstOrFail();
 
-        $issueCustomerClassPass->execute($account, $customer, $classPassPlan, issuedBy: $request->user());
+        $issueCustomerClassPass->execute(
+            $account,
+            $customer,
+            $classPassPlan,
+            issuedBy: $request->user(),
+            issuedLocation: $issuedLocation,
+            isPaid: $request->boolean('is_paid'),
+        );
 
         return redirect()->route('dashboard.accounts.customers.edit', [$account, $customer])
             ->with('status', __('app.customer_class_pass_issued'));
@@ -91,24 +111,33 @@ class CustomerClassPassController extends Controller
         $this->ensureBelongsToAccount($account, $customerClassPass);
         $this->authorize('manageCustomerClassPasses', $account);
 
-        $customerClassPass->load(['customer', 'classPassPlan.classTypes', 'reservations.classBooking.scheduledClass', 'adjustments.user']);
+        $customerClassPass->load(['customer', 'issuedLocation', 'classPassPlan.classTypes', 'reservations.classBooking.scheduledClass', 'adjustments.user']);
 
         return view('customer-class-passes.edit', [
             'account' => $account,
             'customerClassPass' => $customerClassPass,
+            'locations' => $account->locations()->orderBy('name')->get(),
         ]);
     }
 
-    public function update(UpdateCustomerClassPassRequest $request, Account $account, CustomerClassPass $customerClassPass): RedirectResponse
-    {
+    public function update(
+        UpdateCustomerClassPassRequest $request,
+        Account $account,
+        CustomerClassPass $customerClassPass,
+        SyncManualCustomerClassPassPayment $syncManualCustomerClassPassPayment,
+    ): RedirectResponse {
         $this->ensureBelongsToAccount($account, $customerClassPass);
 
         $validated = $request->validated();
+        $wasPaid = (bool) $customerClassPass->is_paid;
+        $wasLocationId = $customerClassPass->issued_location_id;
+
         foreach (['purchased_at', 'opened_at', 'expires_at', 'closed_at'] as $dateField) {
             $validated[$dateField] = DateTimePresenter::parseAccountDateTime($validated[$dateField] ?? null, $account);
         }
 
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['is_paid'] = $request->boolean('is_paid');
         $validated['usable_until_at'] = $validated['purchased_at']
             ->timezone(DateTimePresenter::accountTimezone($account))
             ->addDays($customerClassPass->total_validity_days)
@@ -122,7 +151,21 @@ class CustomerClassPassController extends Controller
             $validated['closed_at'] = null;
         }
 
-        $customerClassPass->update($validated);
+        DB::transaction(function () use ($account, $customerClassPass, $syncManualCustomerClassPassPayment, $validated, $wasLocationId, $wasPaid): void {
+            $customerClassPass->update($validated);
+
+            if ($customerClassPass->source !== 'manual') {
+                return;
+            }
+
+            $paymentChanged = $wasPaid !== (bool) $customerClassPass->is_paid;
+            $paidLocationChanged = $customerClassPass->is_paid && $wasLocationId !== $customerClassPass->issued_location_id;
+
+            if ($paymentChanged || $paidLocationChanged) {
+                $customerClassPass->load('classPassPlan');
+                $syncManualCustomerClassPassPayment->execute($account, $customerClassPass, (bool) $customerClassPass->is_paid);
+            }
+        });
 
         return redirect()->route('dashboard.accounts.customer-class-passes.index', $account)
             ->with('status', __('app.customer_class_pass_updated'));

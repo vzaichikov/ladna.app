@@ -92,6 +92,14 @@
         @apply grid gap-3 border-b border-stone-100 px-5 py-4 last:border-b-0;
     }
 
+    .customer-pass-filter-grid {
+        @apply grid gap-4;
+    }
+
+    .customer-pass-filter-grid > * {
+        @apply min-w-0;
+    }
+
     .crm-studio-card {
         @apply overflow-hidden rounded-xl border border-white/10 bg-white/10 shadow-[0_18px_44px_rgba(20,10,24,0.24)];
     }
@@ -180,6 +188,14 @@
 
     .note-editor.note-frame {
         @apply mt-2 overflow-hidden rounded-lg border-stone-200 shadow-xs;
+    }
+}
+
+@media (min-width: 1024px) {
+    .customer-pass-filter-grid {
+        align-items: end;
+        grid-template-columns: minmax(220px, 1fr) 160px 190px 200px max-content max-content;
+        min-width: 960px;
     }
 }
 

@@ -26,6 +26,8 @@
         $canIssueCustomerClassPasses = auth()->user()?->can('issueCustomerClassPasses', $account) ?? false;
         $canManageCustomerClassPasses = auth()->user()?->can('manageCustomerClassPasses', $account) ?? false;
         $classPassBackfillPreview ??= null;
+        $locations ??= collect();
+        $selectedIssueLocationId = old('issued_location_id');
     @endphp
 
     <h1 class="crm-page-title">{{ __('app.edit') }} {{ $customer->name }}</h1>
@@ -64,6 +66,34 @@
                             </select>
                             @error('class_pass_plan_id') <span class="crm-help">{{ $message }}</span> @enderror
                         </label>
+                        @if ($locations->count() === 1)
+                            @php
+                                $onlyLocation = $locations->first();
+                            @endphp
+                            <input type="hidden" name="issued_location_id" value="{{ $onlyLocation->id }}">
+                            <div>
+                                <span class="crm-label">{{ __('app.issued_location') }}</span>
+                                <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-medium text-slate-700">{{ $onlyLocation->name }}</div>
+                            </div>
+                            @error('issued_location_id') <span class="crm-help">{{ $message }}</span> @enderror
+                        @else
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.issued_location') }}</span>
+                                <select name="issued_location_id" class="crm-field" required>
+                                    <option value="">{{ __('app.location') }}</option>
+                                    @foreach ($locations as $location)
+                                        <option value="{{ $location->id }}" @selected((string) $selectedIssueLocationId === (string) $location->id)>{{ $location->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('issued_location_id') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                        @endif
+                        <label class="flex items-center gap-3 text-sm font-medium text-slate-700">
+                            <input type="hidden" name="is_paid" value="0">
+                            <input name="is_paid" type="checkbox" value="1" @checked(old('is_paid')) class="crm-checkbox">
+                            {{ __('app.class_pass_mark_paid') }}
+                        </label>
+                        @error('is_paid') <span class="crm-help">{{ $message }}</span> @enderror
                         <x-ui.button type="submit">
                             <x-ui.icon name="ticket" class="h-4 w-4" />
                             {{ __('app.issue_class_pass') }}
@@ -95,7 +125,10 @@
                                 <div class="font-semibold text-slate-950">{{ $customerClassPass->plan_name }}</div>
                                 <div class="mt-1 text-sm text-slate-500">{{ $customerClassPass->code }} · {{ $formatMoney($customerClassPass->price_cents, $customerClassPass->currency) }}</div>
                             </div>
-                            <span class="{{ $customerClassPass->is_active ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
+                            <div class="flex flex-wrap gap-2 sm:justify-end">
+                                <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
+                                <span class="{{ $customerClassPass->is_active ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
+                            </div>
                         </div>
                         <div class="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-3">
                             <div>{{ __('app.remaining_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->remainingSessionsCount() }}</span></div>
@@ -104,6 +137,9 @@
                         </div>
                         <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
                             <span>{{ __('app.purchased_at') }}: {{ $formatDate($customerClassPass->purchased_at) }}</span>
+                            @if ($customerClassPass->issuedLocation)
+                                <span>{{ __('app.issued_location') }}: {{ $customerClassPass->issuedLocation->name }}</span>
+                            @endif
                             <span>{{ __('app.opened_at') }}: {{ $formatDate($customerClassPass->opened_at) }}</span>
                             <span>{{ __('app.expires_after_first_class') }}: {{ $formatDate($customerClassPass->expires_at) }}</span>
                             <span>{{ __('app.usable_until_at') }}: {{ $formatDate($customerClassPass->usableUntilAt()) }}</span>
