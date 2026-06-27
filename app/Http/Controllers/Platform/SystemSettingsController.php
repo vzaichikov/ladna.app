@@ -41,8 +41,10 @@ class SystemSettingsController extends Controller
             (int) ($request->validated('activity_log_retention_days') ?? AccountActivityLogSettings::retentionDays())
         );
 
+        $activeTab = $request->validated('settings_tab');
+
         return redirect()
-            ->route('platform.settings.edit')
+            ->route('platform.settings.edit', $activeTab ? ['tab' => $activeTab] : [])
             ->with('status', __('app.system_settings_updated'));
     }
 }

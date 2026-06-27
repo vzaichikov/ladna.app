@@ -88,15 +88,35 @@ class PlatformAdminTest extends TestCase
         $this->actingAs($platformAdmin)
             ->get(route('platform.settings.edit'))
             ->assertOk()
-            ->assertSee('Manrope');
+            ->assertSee('Manrope')
+            ->assertSee('data-platform-settings-tabs', false)
+            ->assertSee('role="tablist"', false)
+            ->assertSee('role="tab"', false)
+            ->assertSee('data-platform-settings-panel="appearance"', false)
+            ->assertSee('form="platform-settings-form"', false)
+            ->assertSee(__('app.save'));
 
         $this->actingAs($platformAdmin)
             ->put(route('platform.settings.update'), [
                 'font_family' => 'rubik',
+                'settings_tab' => 'appearance',
             ])
-            ->assertRedirect(route('platform.settings.edit'));
+            ->assertRedirect(route('platform.settings.edit', ['tab' => 'appearance']));
 
         $this->assertSame('rubik', SystemSetting::stringValue(SystemAppearance::FontSettingKey));
+    }
+
+    public function test_platform_settings_tabs_select_requested_tab(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.settings.edit', ['tab' => 'support']))
+            ->assertOk()
+            ->assertSee('data-active-tab="support"', false)
+            ->assertSee('id="platform-settings-tab-support"', false)
+            ->assertSee('aria-controls="support"', false)
+            ->assertSee('data-platform-settings-panel="support"', false);
     }
 
     public function test_platform_admin_can_update_activity_log_settings(): void
@@ -116,8 +136,9 @@ class PlatformAdminTest extends TestCase
                 'support_url' => null,
                 'activity_log_enabled' => '0',
                 'activity_log_retention_days' => '45',
+                'settings_tab' => 'activity-log',
             ])
-            ->assertRedirect(route('platform.settings.edit'));
+            ->assertRedirect(route('platform.settings.edit', ['tab' => 'activity-log']));
 
         $this->assertFalse(AccountActivityLogSettings::enabled());
         $this->assertSame(45, AccountActivityLogSettings::retentionDays());

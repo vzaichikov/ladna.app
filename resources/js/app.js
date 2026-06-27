@@ -559,6 +559,86 @@ function initCustomerAuthTabs(root = document) {
     });
 }
 
+function initPlatformSettingsTabs(root = document) {
+    root.querySelectorAll('[data-platform-settings-tabs]').forEach((container) => {
+        if (container.dataset.platformSettingsTabsReady === 'true') {
+            return;
+        }
+
+        const tabs = Array.from(container.querySelectorAll('[data-platform-settings-tab]'));
+        const panels = Array.from(container.querySelectorAll('[data-platform-settings-panel]'));
+        const activeTabInput = container.querySelector('[data-platform-settings-active-tab]');
+
+        if (!tabs.length || !panels.length) {
+            return;
+        }
+
+        container.dataset.platformSettingsTabsReady = 'true';
+
+        const activate = (tabName, focusTab = false) => {
+            tabs.forEach((tab) => {
+                const selected = tab.dataset.platformSettingsTab === tabName;
+                tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+                tab.tabIndex = selected ? 0 : -1;
+
+                if (selected && focusTab) {
+                    tab.focus();
+                }
+            });
+
+            panels.forEach((panel) => {
+                const selected = panel.dataset.platformSettingsPanel === tabName;
+                panel.classList.toggle('hidden', !selected);
+            });
+
+            if (activeTabInput) {
+                activeTabInput.value = tabName;
+            }
+        };
+
+        tabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => {
+                if (tab.dataset.platformSettingsTab) {
+                    activate(tab.dataset.platformSettingsTab);
+                }
+            });
+
+            tab.addEventListener('keydown', (event) => {
+                const lastIndex = tabs.length - 1;
+                let nextIndex = index;
+
+                if (event.key === 'ArrowRight') {
+                    nextIndex = index === lastIndex ? 0 : index + 1;
+                } else if (event.key === 'ArrowLeft') {
+                    nextIndex = index === 0 ? lastIndex : index - 1;
+                } else if (event.key === 'Home') {
+                    nextIndex = 0;
+                } else if (event.key === 'End') {
+                    nextIndex = lastIndex;
+                } else {
+                    return;
+                }
+
+                event.preventDefault();
+
+                const tabName = tabs[nextIndex]?.dataset.platformSettingsTab;
+
+                if (tabName) {
+                    activate(tabName, true);
+                }
+            });
+        });
+
+        const initialTab = tabs.some((tab) => tab.dataset.platformSettingsTab === container.dataset.activeTab)
+            ? container.dataset.activeTab
+            : tabs[0]?.dataset.platformSettingsTab;
+
+        if (initialTab) {
+            activate(initialTab);
+        }
+    });
+}
+
 function initPrintButtons() {
     document.querySelectorAll('[data-print-button]').forEach((button) => {
         if (button.dataset.printReady === 'true') {
@@ -1247,6 +1327,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initStudioRulesEditors();
     initCustomerAutocomplete();
     initCustomerAuthTabs();
+    initPlatformSettingsTabs();
     initPhoneMasks();
     initOtpCountdowns();
     initPrintButtons();
