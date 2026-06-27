@@ -13,6 +13,7 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\ScheduleSeries;
 use App\Models\Trainer;
+use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -32,9 +33,9 @@ class ScheduleSeriesGenerationTest extends TestCase
         $classType = ClassType::factory()->for($account)->create([
             'name' => 'Exotic Flow',
             'schedule_kind' => 'group_class',
-            'default_duration_minutes' => 60,
-            'booking_cutoff_minutes' => 180,
-            'cancellation_cutoff_minutes' => 1440,
+            'default_duration_minutes' => 90,
+            'booking_cutoff_minutes' => 60,
+            'cancellation_cutoff_minutes' => 720,
             'default_capacity' => 10,
         ]);
         $trainer = Trainer::factory()->for($account)->create();
@@ -42,9 +43,6 @@ class ScheduleSeriesGenerationTest extends TestCase
             'weekday' => now('Europe/Kyiv')->isoWeekday(),
             'start_time' => '14:00',
             'start_date' => now('Europe/Kyiv')->toDateString(),
-            'duration_minutes' => 90,
-            'booking_cutoff_minutes' => 60,
-            'cancellation_cutoff_minutes' => 720,
         ]);
 
         $created = app(GenerateScheduleOccurrences::class)->execute($series);
@@ -76,10 +74,6 @@ class ScheduleSeriesGenerationTest extends TestCase
         ]);
         $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->create([
             'weekday' => now()->isoWeekday(),
-            'duration_minutes' => null,
-            'booking_cutoff_minutes' => null,
-            'cancellation_cutoff_minutes' => null,
-            'capacity' => null,
         ]);
 
         app(GenerateScheduleOccurrences::class)->execute($series);
@@ -91,7 +85,7 @@ class ScheduleSeriesGenerationTest extends TestCase
         $this->assertSame(8, $firstClass->capacity);
     }
 
-    public function test_regeneration_syncs_booked_future_generated_capacity_without_deleting_bookings(): void
+    public function test_regeneration_syncs_booked_future_generated_capacity_from_class_type_without_deleting_bookings(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
 
@@ -106,7 +100,6 @@ class ScheduleSeriesGenerationTest extends TestCase
             'weekday' => now('UTC')->isoWeekday(),
             'start_time' => '14:00',
             'start_date' => now('UTC')->toDateString(),
-            'capacity' => 8,
         ]);
         $generator = app(GenerateScheduleOccurrences::class);
 
@@ -121,9 +114,9 @@ class ScheduleSeriesGenerationTest extends TestCase
             'booked_by_user_id' => null,
         ]);
 
-        $series->forceFill(['capacity' => 1])->save();
+        $classType->forceFill(['default_capacity' => 1])->save();
 
-        $this->assertSame(0, $generator->execute($series->refresh()));
+        $this->assertSame(0, $generator->execute($series->fresh()));
         $bookedClass->refresh();
 
         $this->assertSame(1, $bookedClass->capacity);
@@ -211,7 +204,6 @@ class ScheduleSeriesGenerationTest extends TestCase
             'weekday' => now('UTC')->isoWeekday(),
             'start_time' => '14:00',
             'start_date' => now('UTC')->toDateString(),
-            'capacity' => 8,
         ]);
         $generator = app(GenerateScheduleOccurrences::class);
         $generator->execute($series);
@@ -222,8 +214,8 @@ class ScheduleSeriesGenerationTest extends TestCase
         ])->save();
         $customStartsAt = $customClass->starts_at->toDateTimeString();
 
-        $series->forceFill(['capacity' => 2])->save();
-        $generator->execute($series->refresh());
+        $classType->forceFill(['default_capacity' => 2])->save();
+        $generator->execute($series->fresh());
 
         $customClass->refresh();
         $syncedClass = $series->scheduledClasses()
@@ -235,6 +227,57 @@ class ScheduleSeriesGenerationTest extends TestCase
         $this->assertSame(5, $customClass->capacity);
         $this->assertSame(1, $series->scheduledClasses()->where('starts_at', $customStartsAt)->count());
         $this->assertSame(2, $syncedClass->capacity);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_updating_group_class_regenerates_future_schedule_series_from_class_type_defaults(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['capacity' => 12]);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Pole Flow',
+            'slug' => 'pole-flow',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'default_duration_minutes' => 60,
+            'booking_cutoff_minutes' => 120,
+            'cancellation_cutoff_minutes' => 1440,
+            'default_capacity' => 8,
+        ]);
+        $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'weekday' => now('UTC')->isoWeekday(),
+            'start_time' => '14:00',
+            'start_date' => now('UTC')->toDateString(),
+        ]);
+
+        app(GenerateScheduleOccurrences::class)->execute($series);
+        $generatedClass = $series->scheduledClasses()->orderBy('starts_at')->firstOrFail();
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.group-classes.update', [$account, $classType]), [
+                'name' => 'Pole Flow',
+                'slug' => 'pole-flow',
+                'description' => 'Updated recurring defaults.',
+                'color' => '#A78AB9',
+                'default_duration_minutes' => 80,
+                'booking_cutoff_minutes' => 45,
+                'cancellation_cutoff_minutes' => 600,
+                'default_capacity' => 6,
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.group-classes.index', $account));
+
+        $generatedClass->refresh();
+
+        $this->assertSame(80, $generatedClass->durationMinutes());
+        $this->assertSame(45, $generatedClass->booking_cutoff_minutes);
+        $this->assertSame(600, $generatedClass->cancellation_cutoff_minutes);
+        $this->assertSame(6, $generatedClass->capacity);
 
         Carbon::setTestNow();
     }

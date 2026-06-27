@@ -90,26 +90,3 @@
         @error('end_date') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 </div>
-
-<div class="grid gap-4 sm:grid-cols-3">
-    <label class="block">
-        <span class="crm-label">{{ __('app.duration') }}</span>
-        <input name="duration_minutes" type="number" min="15" value="{{ old('duration_minutes', $scheduleSeries->duration_minutes) }}" class="crm-field">
-        @error('duration_minutes') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
-    <label class="block">
-        <span class="crm-label">{{ __('app.booking_cutoff') }}</span>
-        <input name="booking_cutoff_minutes" type="number" min="0" value="{{ old('booking_cutoff_minutes', $scheduleSeries->booking_cutoff_minutes) }}" class="crm-field">
-        @error('booking_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
-    <label class="block">
-        <span class="crm-label">{{ __('app.cancellation_cutoff') }}</span>
-        <input name="cancellation_cutoff_minutes" type="number" min="0" value="{{ old('cancellation_cutoff_minutes', $scheduleSeries->cancellation_cutoff_minutes) }}" class="crm-field">
-        @error('cancellation_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
-    <label class="block">
-        <span class="crm-label">{{ __('app.capacity') }}</span>
-        <input name="capacity" type="number" min="1" value="{{ old('capacity', $scheduleSeries->capacity) }}" class="crm-field">
-        @error('capacity') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
-</div>
