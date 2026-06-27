@@ -62,10 +62,12 @@
         @apply mt-1 block text-sm text-rose-600;
     }
 
+    .crm-tab,
     .customer-auth-tab {
         @apply inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
     }
 
+    .crm-tab[aria-selected='true'],
     .customer-auth-tab[aria-selected='true'] {
         @apply bg-white text-slate-950 shadow-xs;
     }

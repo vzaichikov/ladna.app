@@ -30,6 +30,7 @@ class UpdateSystemSettingsRequest extends FormRequest
             'support_url' => ['nullable', 'url', 'max:2048'],
             'activity_log_enabled' => ['nullable', 'boolean'],
             'activity_log_retention_days' => ['nullable', 'integer', 'min:'.AccountActivityLogSettings::MinRetentionDays, 'max:'.AccountActivityLogSettings::MaxRetentionDays],
+            'settings_tab' => ['nullable', Rule::in(['appearance', 'support', 'activity-log'])],
         ];
     }
 }
