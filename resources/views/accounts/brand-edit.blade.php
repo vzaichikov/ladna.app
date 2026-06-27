@@ -56,7 +56,7 @@
     </nav>
 
     @if ($activeTab === 'qr')
-        <div class="mt-6 grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div class="mt-6 grid max-w-6xl gap-6 lg:grid-cols-2">
             <section class="rounded-xl border border-stone-200 bg-white p-6 shadow-crm" data-print-section>
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between" data-print-screen-only>
                     <div>
@@ -106,7 +106,61 @@
                 </div>
             </section>
 
-            <section class="rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
+            @foreach ($publicLinkLocations as $publicLinkLocation)
+                @foreach ($publicLinkLocation['printable_links'] as $printableLink)
+                    <section class="rounded-xl border border-stone-200 bg-white p-6 shadow-crm" data-print-section>
+                        <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between" data-print-screen-only>
+                            <div>
+                                <h2 class="text-lg font-semibold text-slate-950">{{ __($printableLink['label_key']) }}</h2>
+                                <p class="mt-2 text-sm leading-6 text-slate-500">{{ $publicLinkLocation['location']->name }}</p>
+                            </div>
+                            <x-ui.button type="button" variant="secondary" data-print-button>
+                                <x-ui.icon name="printer" class="h-4 w-4" />
+                                {{ __('app.print') }}
+                            </x-ui.button>
+                        </div>
+
+                        <div class="mt-6 grid gap-6 sm:grid-cols-[240px_1fr] sm:items-center" data-qr-screen-content>
+                            <div class="flex aspect-square items-center justify-center rounded-xl border border-stone-200 bg-white p-4">
+                                {!! $printableLink['qr_svg'] !!}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-3">
+                                    <img src="{{ $account->logoUrl() }}" alt="" class="h-12 w-12 rounded-lg object-contain ring-1 ring-stone-200">
+                                    <div>
+                                        <div class="text-base font-semibold text-slate-950">{{ $account->name }}</div>
+                                        <div class="text-sm text-slate-500">{{ __($printableLink['label_key']) }} · {{ $publicLinkLocation['location']->name }}</div>
+                                    </div>
+                                </div>
+                                <label class="mt-5 block">
+                                    <span class="crm-label">{{ __('app.public_url') }}</span>
+                                    <input value="{{ $printableLink['url'] }}" readonly class="crm-field font-mono text-xs">
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="hidden" data-qr-print-poster>
+                            <header class="flex flex-col items-center text-center">
+                                <img src="{{ $account->logoUrl() }}" alt="" class="h-20 w-20 object-contain">
+                                <div class="mt-4 text-2xl font-semibold text-slate-950">{{ $account->name }}</div>
+                                <div class="mt-1 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{{ __($printableLink['label_key']) }}</div>
+                                <div class="mt-2 text-base font-semibold text-slate-700">{{ $publicLinkLocation['location']->name }}</div>
+                            </header>
+                            <div class="flex flex-1 flex-col items-center justify-center gap-8 text-center">
+                                <div class="flex items-center justify-center rounded-[28px] border border-stone-200 bg-white p-8" data-qr-print-code>
+                                    {!! $printableLink['qr_svg'] !!}
+                                </div>
+                                <div class="max-w-[620px] break-all font-mono text-lg font-semibold leading-7 text-slate-900" data-qr-print-url>
+                                    {{ $printableLink['url'] }}
+                                </div>
+                            </div>
+                            <x-ui.powered-footer />
+                        </div>
+                    </section>
+                @endforeach
+            @endforeach
+
+            <section class="rounded-xl border border-stone-200 bg-white p-6 shadow-crm lg:col-span-2">
                 <div>
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.public_links') }}</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.public_links_copy') }}</p>
@@ -147,54 +201,6 @@
                                 <x-ui.icon name="external" class="h-4 w-4" />
                                 {{ __('app.public_price_embed') }}
                             </x-ui.button>
-                        </div>
-
-                        <div class="mt-5 grid gap-4 md:grid-cols-2">
-                            @foreach ($publicLinkLocation['printable_links'] as $printableLink)
-                                <section class="rounded-lg border border-stone-200 bg-slate-50 p-4" data-print-section>
-                                    <div class="flex items-start justify-between gap-3" data-print-screen-only>
-                                        <div class="min-w-0">
-                                            <div class="flex items-center gap-2 text-sm font-semibold text-slate-950">
-                                                <x-ui.icon :name="$printableLink['icon']" class="h-4 w-4 shrink-0" />
-                                                <span>{{ __($printableLink['label_key']) }}</span>
-                                            </div>
-                                            <p class="mt-1 text-xs leading-5 text-slate-500">{{ $publicLinkLocation['location']->name }}</p>
-                                        </div>
-                                        <x-ui.button type="button" variant="secondary" size="sm" data-print-button>
-                                            <x-ui.icon name="printer" class="h-4 w-4" />
-                                            {{ __('app.print') }}
-                                        </x-ui.button>
-                                    </div>
-
-                                    <div class="mt-4 grid gap-4 sm:grid-cols-[112px_1fr] sm:items-center" data-qr-screen-content>
-                                        <div class="flex aspect-square items-center justify-center rounded-lg border border-stone-200 bg-white p-3">
-                                            {!! $printableLink['qr_svg'] !!}
-                                        </div>
-                                        <label class="min-w-0">
-                                            <span class="crm-label">{{ __('app.public_url') }}</span>
-                                            <input value="{{ $printableLink['url'] }}" readonly class="crm-field font-mono text-xs">
-                                        </label>
-                                    </div>
-
-                                    <div class="hidden" data-qr-print-poster>
-                                        <header class="flex flex-col items-center text-center">
-                                            <img src="{{ $account->logoUrl() }}" alt="" class="h-20 w-20 object-contain">
-                                            <div class="mt-4 text-2xl font-semibold text-slate-950">{{ $account->name }}</div>
-                                            <div class="mt-1 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{{ __($printableLink['label_key']) }}</div>
-                                            <div class="mt-2 text-base font-semibold text-slate-700">{{ $publicLinkLocation['location']->name }}</div>
-                                        </header>
-                                        <div class="flex flex-1 flex-col items-center justify-center gap-8 text-center">
-                                            <div class="flex items-center justify-center rounded-[28px] border border-stone-200 bg-white p-8" data-qr-print-code>
-                                                {!! $printableLink['qr_svg'] !!}
-                                            </div>
-                                            <div class="max-w-[620px] break-all font-mono text-lg font-semibold leading-7 text-slate-900" data-qr-print-url>
-                                                {{ $printableLink['url'] }}
-                                            </div>
-                                        </div>
-                                        <x-ui.powered-footer />
-                                    </div>
-                                </section>
-                            @endforeach
                         </div>
                     </div>
                 @empty
