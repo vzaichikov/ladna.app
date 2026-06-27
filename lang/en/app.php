@@ -74,6 +74,7 @@ return [
     'group_classes' => 'Group classes',
     'private_lessons' => 'Private lessons',
     'room_rentals' => 'Room rental',
+    'class_pass' => 'Class pass',
     'class_pass_plan' => 'Class pass',
     'class_pass_plans' => 'Class passes & prices',
     'class_pass_segment' => 'Class pass segment',
