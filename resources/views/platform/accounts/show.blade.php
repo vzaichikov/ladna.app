@@ -5,7 +5,7 @@
 @section('content')
     @php
         $formatMoney = fn (?int $cents, ?string $currency): string => \App\Support\MoneyFormatter::format($cents, $currency ?: $account->default_currency);
-        $timezone = $account->timezone ?? config('app.timezone');
+        $formatPaymentDate = fn ($payment): string => \App\Support\DateTimePresenter::format($payment->paid_at ?? $payment->started_at, $account) ?? __('app.not_set');
     @endphp
 
     <x-ui.panel padding="lg">
@@ -69,7 +69,7 @@
                 <div class="text-sm font-semibold text-slate-700">{{ $formatMoney($payment->amount_cents, $payment->currency) }}</div>
                 <div class="text-sm text-slate-500">{{ __('app.'.$payment->payment_type->value) }}</div>
                 <div class="text-sm text-slate-500">
-                    {{ $payment->paid_at?->timezone($timezone)->format('Y-m-d H:i') ?? $payment->started_at?->timezone($timezone)->format('Y-m-d H:i') ?? __('app.not_set') }}
+                    {{ $formatPaymentDate($payment) }}
                 </div>
                 <span class="{{ $paymentStatusClass }}">{{ __('app.'.$payment->status->value) }}</span>
             </div>

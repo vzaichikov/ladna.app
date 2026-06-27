@@ -15,6 +15,14 @@
             ->sortByDesc(fn ($customerClassPass) => ($customerClassPass->is_active ? '1' : '0').($customerClassPass->opened_at?->timestamp ?? $customerClassPass->purchased_at?->timestamp ?? 0));
         $bookings = $customer->classBookings
             ->sortByDesc(fn ($booking) => $booking->scheduledClass?->starts_at?->timestamp ?? $booking->created_at?->timestamp ?? 0);
+        $formatBookingDate = static function ($booking) use ($account): string {
+            $scheduledClass = $booking->scheduledClass;
+            $date = $scheduledClass?->starts_at ?? $booking->created_at;
+            $timezone = $scheduledClass?->displayTimezone() ?? $account->timezone ?? config('app.timezone');
+
+            return \App\Support\DateTimePresenter::formatInTimezone($date, $timezone) ?? '';
+        };
+        $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
         $canIssueCustomerClassPasses = auth()->user()?->can('issueCustomerClassPasses', $account) ?? false;
         $canManageCustomerClassPasses = auth()->user()?->can('manageCustomerClassPasses', $account) ?? false;
     @endphp
@@ -74,10 +82,10 @@
                             <div>{{ __('app.used_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->used_sessions_count }}</span></div>
                         </div>
                         <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                            <span>{{ __('app.purchased_at') }}: {{ $customerClassPass->purchased_at?->format('Y-m-d') }}</span>
-                            <span>{{ __('app.opened_at') }}: {{ $customerClassPass->opened_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
-                            <span>{{ __('app.expires_after_first_class') }}: {{ $customerClassPass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
-                            <span>{{ __('app.usable_until_at') }}: {{ $customerClassPass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</span>
+                            <span>{{ __('app.purchased_at') }}: {{ $formatDate($customerClassPass->purchased_at) }}</span>
+                            <span>{{ __('app.opened_at') }}: {{ $formatDate($customerClassPass->opened_at) }}</span>
+                            <span>{{ __('app.expires_after_first_class') }}: {{ $formatDate($customerClassPass->expires_at) }}</span>
+                            <span>{{ __('app.usable_until_at') }}: {{ $formatDate($customerClassPass->usableUntilAt()) }}</span>
                         </div>
                         @if ($canManageCustomerClassPasses)
                             <div class="mt-3">
@@ -99,7 +107,7 @@
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                                 <div class="font-semibold text-slate-950">{{ $booking->scheduledClass?->title }}</div>
-                                <div class="mt-1 text-slate-500">{{ $booking->scheduledClass?->starts_at?->format('Y-m-d H:i') }} · {{ $booking->scheduledClass?->classType?->name }}</div>
+                                <div class="mt-1 text-slate-500">{{ $formatBookingDate($booking) }} · {{ $booking->scheduledClass?->classType?->name }}</div>
                                 @if ($booking->classPassReservation?->customerClassPass)
                                     <div class="mt-1 text-slate-500">{{ __('app.class_pass') }}: {{ $booking->classPassReservation->customerClassPass->code }}</div>
                                 @endif

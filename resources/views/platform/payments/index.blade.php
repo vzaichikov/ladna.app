@@ -5,6 +5,7 @@
 @section('content')
     @php
         $formatMoney = fn (?int $cents, ?string $currency = 'UAH'): string => \App\Support\MoneyFormatter::format($cents ?? 0, $currency ?? 'UAH');
+        $formatPaymentDate = fn ($payment): string => \App\Support\DateTimePresenter::format($payment->paid_at ?? $payment->started_at, $payment->account) ?? __('app.not_set');
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -90,7 +91,7 @@
 
                 <div class="text-sm text-slate-500">
                     <div>{{ $providerLabel }}</div>
-                    <div class="mt-1">{{ $payment->paid_at?->format('Y-m-d H:i') ?? $payment->started_at?->format('Y-m-d H:i') ?? __('app.not_set') }}</div>
+                    <div class="mt-1">{{ $formatPaymentDate($payment) }}</div>
                 </div>
 
                 <div class="space-y-2">

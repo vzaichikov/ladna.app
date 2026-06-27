@@ -18,6 +18,7 @@
                     'period' => $selectedPeriod,
                 ];
                 $customerDisplayName = $customer?->name ?? $customer?->phone ?? $customer?->email;
+                $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
             @endphp
 
             @unless ($isEmbed)
@@ -113,8 +114,8 @@
                                     </div>
                                 </dl>
                                 <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
-                                    <span>{{ __('app.expires_after_first_class') }}: {{ $pass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
-                                    <span>{{ __('app.usable_until_at') }}: {{ $pass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</span>
+                                    <span>{{ __('app.expires_after_first_class') }}: {{ $formatDate($pass->expires_at) }}</span>
+                                    <span>{{ __('app.usable_until_at') }}: {{ $formatDate($pass->usableUntilAt()) }}</span>
                                 </div>
                             </article>
                         @empty

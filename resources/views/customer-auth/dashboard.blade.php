@@ -14,6 +14,15 @@
         $bookings = $customer->classBookings
             ->sortByDesc(fn ($booking) => $booking->scheduledClass?->starts_at?->timestamp ?? $booking->created_at?->timestamp ?? 0);
         $cancellationWindow = app(\App\Support\ClassBookingCancellationWindow::class);
+        $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
+        $formatDateTime = static fn ($date): string => \App\Support\DateTimePresenter::format($date, $account) ?? __('app.not_set');
+        $formatBookingDate = static function ($booking) use ($account): string {
+            $scheduledClass = $booking->scheduledClass;
+            $date = $scheduledClass?->starts_at ?? $booking->created_at;
+            $timezone = $scheduledClass?->displayTimezone() ?? $account->timezone ?? config('app.timezone');
+
+            return \App\Support\DateTimePresenter::formatInTimezone($date, $timezone) ?? __('app.not_set');
+        };
     @endphp
 
     <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8">
@@ -78,10 +87,10 @@
                                     <div>{{ __('app.used_sessions') }}: <span class="font-semibold text-slate-950">{{ $pass->used_sessions_count }}</span></div>
                                 </dl>
                                 <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
-                                    <span>{{ __('app.purchased_at') }}: {{ $pass->purchased_at?->format('Y-m-d') }}</span>
-                                    <span>{{ __('app.opened_at') }}: {{ $pass->opened_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
-                                    <span>{{ __('app.expires_after_first_class') }}: {{ $pass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
-                                    <span>{{ __('app.usable_until_at') }}: {{ $pass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</span>
+                                    <span>{{ __('app.purchased_at') }}: {{ $formatDate($pass->purchased_at) }}</span>
+                                    <span>{{ __('app.opened_at') }}: {{ $formatDate($pass->opened_at) }}</span>
+                                    <span>{{ __('app.expires_after_first_class') }}: {{ $formatDate($pass->expires_at) }}</span>
+                                    <span>{{ __('app.usable_until_at') }}: {{ $formatDate($pass->usableUntilAt()) }}</span>
                                 </div>
                             </article>
                         @empty
@@ -104,7 +113,7 @@
                             @endphp
                             <article class="p-5 text-sm">
                                 <div class="font-semibold text-slate-950">{{ $booking->scheduledClass?->title ?? $booking->scheduledClass?->classType?->name ?? __('app.class_type') }}</div>
-                                <div class="mt-1 text-slate-500">{{ $booking->scheduledClass?->starts_at?->format('Y-m-d H:i') ?? $booking->created_at?->format('Y-m-d H:i') }}</div>
+                                <div class="mt-1 text-slate-500">{{ $formatBookingDate($booking) }}</div>
                                 <div class="mt-2 flex flex-wrap gap-2">
                                     <span class="crm-status-muted">{{ __('app.'.$booking->status->value) }}</span>
                                     @if ($booking->classPassReservation?->customerClassPass)
@@ -152,11 +161,11 @@
                                 <span class="{{ $statusClass }}">{{ __('app.'.$purchase->status->value) }}</span>
                             </div>
                             <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-slate-500">
-                                <span>{{ __('app.started_at') }}: {{ $purchase->started_at?->format('Y-m-d H:i') ?? __('app.not_set') }}</span>
-                                <span>{{ __('app.paid_at') }}: {{ $purchase->paid_at?->format('Y-m-d H:i') ?? __('app.not_set') }}</span>
+                                <span>{{ __('app.started_at') }}: {{ $formatDateTime($purchase->started_at) }}</span>
+                                <span>{{ __('app.paid_at') }}: {{ $formatDateTime($purchase->paid_at) }}</span>
                                 @if ($purchase->customerClassPass)
                                     <span>{{ __('app.class_pass_code') }}: {{ $purchase->customerClassPass->code }}</span>
-                                    <span>{{ __('app.usable_until_at') }}: {{ $purchase->customerClassPass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</span>
+                                    <span>{{ __('app.usable_until_at') }}: {{ $formatDate($purchase->customerClassPass->usableUntilAt()) }}</span>
                                 @endif
                             </div>
                             @if ($purchase->failure_reason)

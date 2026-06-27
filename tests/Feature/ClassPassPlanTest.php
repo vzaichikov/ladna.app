@@ -581,8 +581,8 @@ class ClassPassPlanTest extends TestCase
 
     public function test_class_pass_plan_availability_checks_direction_and_start_time(): void
     {
-        $account = Account::factory()->create();
-        $location = Location::factory()->for($account)->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
         $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole Dance']);
         $stretchingDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Stretching']);
@@ -616,6 +616,24 @@ class ClassPassPlanTest extends TestCase
         $this->assertFalse($morning->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, $trainer, '2026-06-18 16:00:00')));
         $this->assertFalse($fullDay->isAvailableFor($this->scheduledClass($account, $location, $room, $stretchingType, $trainer, '2026-06-18 09:00:00')));
         $this->assertFalse($fullDay->isAvailableFor($this->scheduledClass($account, $location, $room, $poleType, $topTrainer, '2026-06-18 09:00:00')));
+    }
+
+    public function test_class_pass_plan_availability_uses_scheduled_class_display_timezone(): void
+    {
+        $account = Account::factory()->create(['timezone' => 'America/New_York']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'America/New_York']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $trainer = Trainer::factory()->for($account)->create();
+        $evening = ClassPassPlan::factory()->for($account)->create([
+            'available_from_time' => '22:00',
+            'available_until_time' => '23:00',
+            'is_active' => true,
+        ]);
+        $evening->classTypes()->sync([$classType->id]);
+
+        $this->assertTrue($evening->isAvailableFor($this->scheduledClass($account, $location, $room, $classType, $trainer, '2026-06-20 02:30:00')));
+        $this->assertFalse($evening->isAvailableFor($this->scheduledClass($account, $location, $room, $classType, $trainer, '2026-06-20 04:30:00')));
     }
 
     public function test_demo_class_pass_plan_seeder_is_idempotent(): void

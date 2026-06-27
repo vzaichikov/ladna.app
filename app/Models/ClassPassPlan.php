@@ -119,7 +119,10 @@ class ClassPassPlan extends Model
             return false;
         }
 
-        $startsAt = $scheduledClass->starts_at->format('H:i:s');
+        $startsAt = $scheduledClass->starts_at
+            ->copy()
+            ->timezone($scheduledClass->displayTimezone())
+            ->format('H:i:s');
 
         if ($this->available_from_time && $startsAt < $this->available_from_time) {
             return false;

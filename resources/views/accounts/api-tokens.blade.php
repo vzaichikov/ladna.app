@@ -12,7 +12,7 @@
                         <div class="min-w-0">
                             <h3 class="font-semibold text-slate-950">{{ $apiToken->name }}</h3>
                             <p class="mt-1 text-sm text-slate-500">{{ __('app.api_token_last_four', ['last_four' => $apiToken->last_four]) }}</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ __('app.last_used') }}: {{ $apiToken->last_used_at?->format('Y-m-d H:i') ?? __('app.never') }}</p>
+                            <p class="mt-1 text-xs text-slate-500">{{ __('app.last_used') }}: {{ \App\Support\DateTimePresenter::format($apiToken->last_used_at, $account) ?? __('app.never') }}</p>
                         </div>
                         <span class="{{ $apiToken->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
                             {{ $apiToken->is_active ? __('app.active') : __('app.revoked') }}

@@ -18,6 +18,7 @@ use App\Models\IntegrationSetting;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class PaymentHistoryTest extends TestCase
@@ -27,10 +28,11 @@ class PaymentHistoryTest extends TestCase
     public function test_studio_owner_can_view_customer_payment_history_with_fiscal_data_when_enabled(): void
     {
         $owner = User::factory()->create();
-        $account = Account::factory()->create(['name' => 'Studio A']);
+        $account = Account::factory()->create(['name' => 'Studio A', 'timezone' => 'America/New_York']);
         $account->addOwner($owner);
         $this->enableAccountFiscalization($account);
         $purchase = $this->customerPurchase($account);
+        $purchase->update(['paid_at' => Carbon::parse('2026-06-20 02:30:00', 'UTC')]);
         FiscalReceipt::factory()
             ->forAccountScope($account)
             ->for($purchase, 'payment')
@@ -42,6 +44,8 @@ class PaymentHistoryTest extends TestCase
             ->assertOk()
             ->assertSee('Group 8 classes')
             ->assertSee('Payment Client')
+            ->assertSee('2026-06-19 22:30')
+            ->assertDontSee('2026-06-20 02:30')
             ->assertSee('FN-OWNER-1');
     }
 
@@ -68,7 +72,7 @@ class PaymentHistoryTest extends TestCase
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
         $this->enablePlatformFiscalization();
-        $account = Account::factory()->create(['name' => 'Studio Platform']);
+        $account = Account::factory()->create(['name' => 'Studio Platform', 'timezone' => 'America/New_York']);
         $plan = SubscriptionPlan::factory()->create(['name' => 'Studio Pro']);
         $payment = AccountSubscriptionPayment::factory()
             ->for($account)
@@ -78,7 +82,7 @@ class PaymentHistoryTest extends TestCase
                 'status' => AccountSubscriptionPaymentStatus::PaymentPaid->value,
                 'amount_cents' => 250000,
                 'currency' => 'UAH',
-                'paid_at' => now(),
+                'paid_at' => Carbon::parse('2026-06-20 02:30:00', 'UTC'),
             ]);
         FiscalReceipt::factory()
             ->forPlatformScope($account)
@@ -91,6 +95,8 @@ class PaymentHistoryTest extends TestCase
             ->assertOk()
             ->assertSee('Studio Pro')
             ->assertSee('Studio Platform')
+            ->assertSee('2026-06-19 22:30')
+            ->assertDontSee('2026-06-20 02:30')
             ->assertSee('FN-PLATFORM-1');
     }
 
