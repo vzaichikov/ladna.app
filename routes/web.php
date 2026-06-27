@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ScheduleKind;
+use App\Http\Controllers\AccountActivityLogController;
 use App\Http\Controllers\AccountApiTokenController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountIntegrationController;
@@ -54,6 +55,7 @@ use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
 use App\Http\Middleware\EnsurePublicSubscriptionIsActive;
 use App\Http\Middleware\PreventExpiredSubscriptionMutations;
+use App\Http\Middleware\RecordAccountActivity;
 use App\Models\Account;
 use App\Support\SaasBilling\SaasBillingPlans;
 use Illuminate\Http\RedirectResponse;
@@ -180,7 +182,7 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::resource('subscription-plans', SubscriptionPlanController::class)->except(['show']);
     });
 
-Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class])
+Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
     ->prefix('dashboard')
     ->name('dashboard.')
     ->group(function (): void {
@@ -202,6 +204,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class])
             ->name('accounts.tariff-payments.pay-now');
         Route::get('accounts/{account}/payments', [AccountPaymentController::class, 'index'])
             ->name('accounts.payments.index');
+        Route::get('accounts/{account}/activity-logs', [AccountActivityLogController::class, 'index'])
+            ->name('accounts.activity-logs.index');
         Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])
             ->name('accounts.api-tokens.store');
         Route::post('accounts/{account}/api-tokens/{accountApiToken}/regenerate', [AccountApiTokenController::class, 'regenerate'])

@@ -19,3 +19,7 @@ Schedule::command('class-passes:normalize')
 Schedule::command('billing:reconcile')
     ->hourly()
     ->withoutOverlapping(30);
+
+Schedule::command('account-activity-logs:prune')
+    ->daily()
+    ->withoutOverlapping(30);

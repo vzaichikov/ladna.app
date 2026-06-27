@@ -3,7 +3,21 @@ import SimplePhoneMask from 'simple-phone-mask';
 import 'summernote/dist/summernote-lite.css';
 
 let pendingDeleteForm = null;
+let pendingConfirmationSubmitter = null;
 let publicScheduleAbortController = null;
+
+const confirmationButtonVariants = {
+    danger: 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
+    success: 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20 hover:bg-emerald-700',
+    primary: 'bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700',
+};
+const confirmationIconVariants = {
+    danger: 'bg-rose-50 text-rose-700',
+    success: 'bg-emerald-50 text-emerald-700',
+    primary: 'bg-brand-50 text-brand-700',
+};
+const confirmationButtonVariantClassList = Object.values(confirmationButtonVariants).flatMap((classes) => classes.split(' '));
+const confirmationIconVariantClassList = Object.values(confirmationIconVariants).flatMap((classes) => classes.split(' '));
 
 const cyrillicMap = {
     а: 'a',
@@ -49,6 +63,25 @@ function closeDeleteConfirmation(modal) {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
     pendingDeleteForm = null;
+    pendingConfirmationSubmitter = null;
+}
+
+function applyClassVariant(element, allVariantClasses, variantClasses) {
+    if (!element) {
+        return;
+    }
+
+    element.classList.remove(...allVariantClasses);
+    element.classList.add(...variantClasses.split(' '));
+}
+
+function applyConfirmationIcon(container, iconName) {
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = `<i data-lucide="${iconName}" class="h-5 w-5" aria-hidden="true"></i>`;
+    createIcons({ icons });
 }
 
 function updateAnyTimeAddon(container) {
@@ -1342,18 +1375,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const acceptButton = modal?.querySelector('[data-confirm-accept]');
     const confirmTitle = modal?.querySelector('[data-confirm-title]');
     const confirmBody = modal?.querySelector('[data-confirm-body]');
+    const confirmIcon = modal?.querySelector('[data-confirm-icon]');
 
     const formNeedsConfirmation = (form) => form?.matches('[data-confirm-delete], [data-confirm-action]') && form.dataset.confirmed !== 'true';
-    const applyConfirmationCopy = (form) => {
+    const applyConfirmationCopy = (form, submitter = null) => {
+        const source = submitter?.dataset ? submitter : form;
+
         if (confirmTitle) {
-            confirmTitle.textContent = form.dataset.confirmTitle || confirmTitle.dataset.defaultText || confirmTitle.textContent;
+            confirmTitle.textContent = source.dataset.confirmTitle || form.dataset.confirmTitle || confirmTitle.dataset.defaultText || confirmTitle.textContent;
         }
 
         if (confirmBody) {
-            confirmBody.textContent = form.dataset.confirmBody || confirmBody.dataset.defaultText || confirmBody.textContent;
+            confirmBody.textContent = source.dataset.confirmBody || form.dataset.confirmBody || confirmBody.dataset.defaultText || confirmBody.textContent;
         }
 
-        acceptButton.textContent = form.dataset.confirmAccept || acceptButton.dataset.defaultText || acceptButton.textContent;
+        acceptButton.textContent = source.dataset.confirmAccept || form.dataset.confirmAccept || acceptButton.dataset.defaultText || acceptButton.textContent;
+
+        const variant = source.dataset.confirmVariant || form.dataset.confirmVariant || 'danger';
+
+        applyClassVariant(
+            acceptButton,
+            confirmationButtonVariantClassList,
+            confirmationButtonVariants[variant] ?? confirmationButtonVariants.danger,
+        );
+        applyClassVariant(
+            confirmIcon,
+            confirmationIconVariantClassList,
+            confirmationIconVariants[variant] ?? confirmationIconVariants.danger,
+        );
+        applyConfirmationIcon(confirmIcon, source.dataset.confirmIcon || form.dataset.confirmIcon || confirmIcon?.dataset.defaultIcon || 'trash-2');
     };
 
     if (!modal || !cancelButton || !acceptButton) {
@@ -1361,6 +1411,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.addEventListener('submit', (event) => {
+        const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
         const asyncForm = event.target.closest('form[data-async-form]');
         const isUnconfirmedAsyncConfirmation = formNeedsConfirmation(asyncForm);
 
@@ -1378,7 +1429,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         event.preventDefault();
         pendingDeleteForm = form;
-        applyConfirmationCopy(form);
+        pendingConfirmationSubmitter = submitter?.form === form ? submitter : null;
+        applyConfirmationCopy(form, pendingConfirmationSubmitter);
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         acceptButton.focus();
@@ -1416,6 +1468,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         pendingDeleteForm.dataset.confirmed = 'true';
+
+        if (pendingConfirmationSubmitter && document.body.contains(pendingConfirmationSubmitter)) {
+            pendingDeleteForm.requestSubmit(pendingConfirmationSubmitter);
+            return;
+        }
+
         pendingDeleteForm.requestSubmit();
     });
 });

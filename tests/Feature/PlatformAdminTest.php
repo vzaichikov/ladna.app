@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\SubscriptionPlan;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
@@ -96,6 +97,30 @@ class PlatformAdminTest extends TestCase
             ->assertRedirect(route('platform.settings.edit'));
 
         $this->assertSame('rubik', SystemSetting::stringValue(SystemAppearance::FontSettingKey));
+    }
+
+    public function test_platform_admin_can_update_activity_log_settings(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.settings.edit'))
+            ->assertOk()
+            ->assertSee(__('app.system_activity_log_settings'))
+            ->assertSee('name="activity_log_enabled"', false)
+            ->assertSee('name="activity_log_retention_days"', false);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.settings.update'), [
+                'font_family' => SystemAppearance::currentFontKey(),
+                'support_url' => null,
+                'activity_log_enabled' => '0',
+                'activity_log_retention_days' => '45',
+            ])
+            ->assertRedirect(route('platform.settings.edit'));
+
+        $this->assertFalse(AccountActivityLogSettings::enabled());
+        $this->assertSame(45, AccountActivityLogSettings::retentionDays());
     }
 
     public function test_platform_admin_can_suspend_account_without_deleting_tenant_data(): void

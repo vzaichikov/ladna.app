@@ -19,7 +19,7 @@ class CustomerClassPassController extends Controller
 {
     public function index(Request $request, Account $account): View
     {
-        $this->ensureCurrentUserOwns($account);
+        $this->authorize('manageCustomerClassPasses', $account);
 
         $term = trim((string) $request->query('q', ''));
         $state = (string) $request->query('state', 'active');
@@ -64,7 +64,7 @@ class CustomerClassPassController extends Controller
         $this->ensureCustomerBelongsToAccount($account, $customer);
         $classPassPlan = $account->classPassPlans()->whereKey($request->validated('class_pass_plan_id'))->firstOrFail();
 
-        $issueCustomerClassPass->execute($account, $customer, $classPassPlan);
+        $issueCustomerClassPass->execute($account, $customer, $classPassPlan, issuedBy: $request->user());
 
         return redirect()->route('dashboard.accounts.customers.edit', [$account, $customer])
             ->with('status', __('app.customer_class_pass_issued'));
@@ -73,7 +73,7 @@ class CustomerClassPassController extends Controller
     public function edit(Account $account, CustomerClassPass $customerClassPass): View
     {
         $this->ensureBelongsToAccount($account, $customerClassPass);
-        $this->ensureCurrentUserOwns($account);
+        $this->authorize('manageCustomerClassPasses', $account);
 
         $customerClassPass->load(['customer', 'classPassPlan.classTypes', 'reservations.classBooking.scheduledClass', 'adjustments.user']);
 
@@ -109,7 +109,6 @@ class CustomerClassPassController extends Controller
     public function storeAdjustment(StoreCustomerClassPassAdjustmentRequest $request, Account $account, CustomerClassPass $customerClassPass, AdjustCustomerClassPassSessions $adjustCustomerClassPassSessions): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $customerClassPass);
-        $this->ensureCurrentUserOwns($account);
 
         $adjustCustomerClassPassSessions->execute(
             $account,
@@ -132,10 +131,5 @@ class CustomerClassPassController extends Controller
     private function ensureCustomerBelongsToAccount(Account $account, Customer $customer): void
     {
         abort_unless($customer->account_id === $account->id, 404);
-    }
-
-    private function ensureCurrentUserOwns(Account $account): void
-    {
-        abort_unless($account->isOwnedBy(request()->user()), 403);
     }
 }

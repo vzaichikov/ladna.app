@@ -297,6 +297,11 @@ class Account extends Model
         return $this->hasMany(CustomerClassPass::class);
     }
 
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(AccountActivityLog::class);
+    }
+
     public function customerPurchases(): HasMany
     {
         return $this->hasMany(CustomerPurchase::class);

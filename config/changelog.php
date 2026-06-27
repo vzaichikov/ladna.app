@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.41.0',
+                'date' => '2026-06-27',
+                'title' => 'Staff permissions and activity history',
+                'items' => ['Added separate staff permissions for issuing and editing purchased class passes, saved who created bookings and class-pass changes, added a studio activity log controlled globally by the product owner with retention settings, and simplified pass session corrections into one add-or-remove form with confirmation.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.40.0',
                 'date' => '2026-06-26',
                 'title' => 'Manual class-pass session removal',
@@ -373,6 +380,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.41.0',
+                'date' => '2026-06-27',
+                'title' => 'Права персоналу та журнал дій',
+                'items' => ['Додано окремі права персоналу на видачу й редагування куплених абонементів, збереження того, хто створив запис або змінив абонемент, журнал дій студії з глобальним керуванням від product owner і строком зберігання, а також спрощену форму зняття або додавання занять до абонементу з підтвердженням.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.40.0',
                 'date' => '2026-06-26',

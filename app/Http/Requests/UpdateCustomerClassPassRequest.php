@@ -14,7 +14,7 @@ class UpdateCustomerClassPassRequest extends FormRequest
     {
         $account = $this->route('account');
 
-        return $account instanceof Account && $account->isOwnedBy($this->user());
+        return $account instanceof Account && ($this->user()?->can('manageCustomerClassPasses', $account) ?? false);
     }
 
     /**

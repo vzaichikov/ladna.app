@@ -6,6 +6,8 @@ use App\Models\Account;
 use App\Models\ClassPassPlan;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
+use App\Models\User;
+use App\Support\ActorSnapshot;
 use App\Support\ClassPassCodeGenerator;
 use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Carbon;
@@ -16,6 +18,7 @@ class IssueCustomerClassPass
 {
     public function __construct(
         private readonly ClassPassCodeGenerator $codeGenerator,
+        private readonly ActorSnapshot $actorSnapshot,
         private readonly TransactionalMailDispatcher $mailDispatcher,
     ) {}
 
@@ -29,6 +32,7 @@ class IssueCustomerClassPass
         string $source = 'manual',
         ?Carbon $purchasedAt = null,
         array $snapshot = [],
+        ?User $issuedBy = null,
     ): CustomerClassPass {
         if ($customer->account_id !== $account->id || $classPassPlan->account_id !== $account->id) {
             abort(404);
@@ -48,6 +52,7 @@ class IssueCustomerClassPass
             'class_pass_plan_id' => $classPassPlan->id,
             'code' => $this->codeGenerator->unique(),
             'source' => $source,
+            ...$this->actorSnapshot->prefixed($account, $issuedBy, 'issued_by_actor'),
             'status' => 'active',
             'plan_name' => $snapshot['plan_name'] ?? $classPassPlan->name,
             'plan_slug' => $snapshot['plan_slug'] ?? $classPassPlan->slug,
