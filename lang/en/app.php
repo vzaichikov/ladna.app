@@ -650,7 +650,7 @@ return [
     'mail_engine_sendpulse_smtp' => 'SendPulse SMTP',
     'mail_engine_smtp' => 'Custom SMTP',
     'mail_engine_sendmail' => 'Local sendmail',
-    'mail_engine_log' => 'Laravel log',
+    'mail_engine_log' => 'No sending (log only)',
     'mail_customer' => 'Customer',
     'mail_hello' => 'Hello, :name,',
     'mail_footer_sent_by' => 'Sent by :name.',
