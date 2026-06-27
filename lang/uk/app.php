@@ -650,7 +650,7 @@ return [
     'mail_engine_sendpulse_smtp' => 'SendPulse SMTP',
     'mail_engine_smtp' => 'Власний SMTP',
     'mail_engine_sendmail' => 'Локальний sendmail',
-    'mail_engine_log' => 'Laravel log',
+    'mail_engine_log' => 'Без відправки (лог)',
     'mail_customer' => 'Клієнт',
     'mail_hello' => 'Вітаємо, :name,',
     'mail_footer_sent_by' => 'Надіслано від :name.',
