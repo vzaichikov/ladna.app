@@ -74,6 +74,7 @@ return [
     'group_classes' => 'Групові заняття',
     'private_lessons' => 'Індивідуальні заняття',
     'room_rentals' => 'Оренда',
+    'class_pass' => 'Абонемент',
     'class_pass_plan' => 'Абонемент',
     'class_pass_plans' => 'Абонементи і ціни',
     'class_pass_segment' => 'Сегмент абонементів',

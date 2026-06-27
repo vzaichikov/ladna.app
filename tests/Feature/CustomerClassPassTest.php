@@ -222,6 +222,32 @@ class CustomerClassPassTest extends TestCase
             ->assertSee($customer->name);
     }
 
+    public function test_customer_visit_history_shows_translated_class_pass_label(): void
+    {
+        app()->setLocale('uk');
+        [$owner, $account, $customer, $plan, $scheduledClass, $location] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create();
+
+        $customerClassPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $booking->id,
+            'scheduled_class_id' => $scheduledClass->id,
+            'status' => CustomerClassPassReservationStatus::Reserved->value,
+            'reserved_at' => now(),
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customers.edit', [$account, $customer]))
+            ->assertOk()
+            ->assertSee(__('app.class_pass').': '.$customerClassPass->code)
+            ->assertDontSee('app.class_pass');
+    }
+
     public function test_customer_class_pass_index_filters_by_payment_status_and_links_unpaid_notice(): void
     {
         [$owner, $account, $customer, $plan, , $location] = $this->passContext();
