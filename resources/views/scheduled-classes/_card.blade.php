@@ -2,11 +2,7 @@
     $timezone = $scheduledClass->displayTimezone();
     $startsAt = $scheduledClass->starts_at->copy()->timezone($timezone);
     $endsAt = $scheduledClass->ends_at->copy()->timezone($timezone);
-    $statusClass = match ($scheduledClass->status->value) {
-        'cancelled' => 'crm-status-danger',
-        'draft' => 'crm-status-muted',
-        default => 'crm-status-scheduled',
-    };
+    $statusClass = $scheduledClass->displayStatusBadgeClass();
     $scheduleKind = $scheduledClass->classType?->schedule_kind;
     $displayTypeLabels = $scheduledClass->displayTypeLabels();
     $directionColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
@@ -43,7 +39,7 @@
             </div>
         </div>
         <div class="flex shrink-0 items-center gap-2">
-            <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>
+            <span class="{{ $statusClass }}">{{ __($scheduledClass->displayStatusLabelKey()) }}</span>
             @if (! $readonly && $canManageClassCancellation)
                 @if ($canCancelClass)
                     <form

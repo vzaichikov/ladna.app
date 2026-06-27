@@ -461,6 +461,7 @@ return [
     'paused' => 'Призупинено',
     'draft' => 'Чернетка',
     'ended' => 'Завершено',
+    'in_progress' => 'Йде зараз',
     'scheduled' => 'Заплановано',
     'all_rooms' => 'Усі зали',
     'public_schedule' => 'Публічний розклад',

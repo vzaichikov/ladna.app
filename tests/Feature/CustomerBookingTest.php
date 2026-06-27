@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
@@ -81,6 +82,120 @@ class CustomerBookingTest extends TestCase
             mb_strpos($response->getContent(), 'data-schedule-primary-actions'),
             mb_strpos($response->getContent(), 'data-schedule-secondary-actions')
         );
+
+        Carbon::setTestNow();
+    }
+
+    public function test_scheduled_classes_index_shows_temporal_status_badges(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+
+        $this->scheduledClassWithTimes(
+            $account,
+            $location,
+            $room,
+            $classType,
+            'Recently Ended Class',
+            Carbon::parse('2026-06-17 10:45:00', 'UTC'),
+            Carbon::parse('2026-06-17 11:15:00', 'UTC'),
+        );
+        $liveClass = $this->scheduledClassWithTimes(
+            $account,
+            $location,
+            $room,
+            $classType,
+            'Live Status Class',
+            Carbon::parse('2026-06-17 11:30:00', 'UTC'),
+            Carbon::parse('2026-06-17 12:30:00', 'UTC'),
+        );
+        $this->scheduledClassWithTimes(
+            $account,
+            $location,
+            $room,
+            $classType,
+            'Future Status Class',
+            Carbon::parse('2026-06-17 13:00:00', 'UTC'),
+            Carbon::parse('2026-06-17 14:00:00', 'UTC'),
+        );
+        $this->scheduledClassWithTimes(
+            $account,
+            $location,
+            $room,
+            $classType,
+            'Cancelled Status Class',
+            Carbon::parse('2026-06-17 14:00:00', 'UTC'),
+            Carbon::parse('2026-06-17 15:00:00', 'UTC'),
+            ScheduledClassStatus::Cancelled,
+        );
+        $this->scheduledClassWithTimes(
+            $account,
+            $location,
+            $room,
+            $classType,
+            'Draft Status Class',
+            Carbon::parse('2026-06-17 15:00:00', 'UTC'),
+            Carbon::parse('2026-06-17 16:00:00', 'UTC'),
+            ScheduledClassStatus::Draft,
+        );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Recently Ended Class',
+                __('app.ended'),
+                'Live Status Class',
+                __('app.in_progress'),
+                'Future Status Class',
+                __('app.scheduled'),
+                'Cancelled Status Class',
+                __('app.cancelled'),
+                'Draft Status Class',
+                __('app.draft'),
+            ])
+            ->assertSee('<span class="crm-status-muted">'.__('app.ended').'</span>', false)
+            ->assertSee('<span class="crm-status-active">'.__('app.in_progress').'</span>', false)
+            ->assertSee('<span class="crm-status-scheduled">'.__('app.scheduled').'</span>', false)
+            ->assertSee('<span class="crm-status-danger">'.__('app.cancelled').'</span>', false);
+
+        $this->assertSame(ScheduledClassStatus::Scheduled, $liveClass->fresh()->status);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_scheduled_classes_index_temporal_status_uses_real_time_for_non_utc_studio(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'Europe/Kyiv']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+
+        $this->scheduledClassWithTimes(
+            $account,
+            $location,
+            $room,
+            $classType,
+            'Kyiv Live Status Class',
+            Carbon::parse('2026-06-17 12:00:00', 'Europe/Kyiv')->timezone('UTC'),
+            Carbon::parse('2026-06-17 13:00:00', 'Europe/Kyiv')->timezone('UTC'),
+        );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee('Kyiv Live Status Class')
+            ->assertSee('<span class="crm-status-active">'.__('app.in_progress').'</span>', false);
 
         Carbon::setTestNow();
     }
@@ -881,6 +996,27 @@ class CustomerBookingTest extends TestCase
     {
         $startsAt = Carbon::parse($startsAt, 'UTC');
 
+        return $this->scheduledClassWithTimes(
+            $account,
+            $location,
+            $room,
+            $classType,
+            $title,
+            $startsAt,
+            $startsAt->copy()->addHour(),
+        );
+    }
+
+    private function scheduledClassWithTimes(
+        Account $account,
+        Location $location,
+        Room $room,
+        ClassType $classType,
+        string $title,
+        Carbon $startsAt,
+        Carbon $endsAt,
+        ScheduledClassStatus $status = ScheduledClassStatus::Scheduled,
+    ): ScheduledClass {
         return ScheduledClass::factory()
             ->for($account)
             ->for($location)
@@ -889,7 +1025,8 @@ class CustomerBookingTest extends TestCase
             ->create([
                 'title' => $title,
                 'starts_at' => $startsAt,
-                'ends_at' => $startsAt->copy()->addHour(),
+                'ends_at' => $endsAt,
+                'status' => $status->value,
             ]);
     }
 }
