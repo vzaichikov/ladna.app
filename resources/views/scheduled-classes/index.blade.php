@@ -38,7 +38,7 @@
     <nav class="mt-6 flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.generated_classes') }}">
         @foreach ($tabs as $tab => $label)
             <a
-                href="{{ route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => $tab, 'locations' => $selectedLocationIds, 'rooms' => $selectedRoomIds]) }}"
+                href="{{ route('dashboard.accounts.scheduled-classes.index', array_merge(['account' => $account, 'tab' => $tab], $activeFilterQuery)) }}"
                 class="whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition {{ $activeTab === $tab ? 'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20' : 'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' }}"
             >
                 {{ $label }}
@@ -49,38 +49,89 @@
     <form method="GET" action="{{ route('dashboard.accounts.scheduled-classes.index', $account) }}" class="mt-4 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
         <input type="hidden" name="tab" value="{{ $activeTab }}">
 
-        <div class="grid gap-4 lg:grid-cols-2">
-            <fieldset>
-                <legend class="crm-label">{{ __('app.filter_locations') }}</legend>
-                <div class="mt-2 flex flex-wrap gap-2">
-                    @foreach ($filterLocations as $location)
-                        <label @class([
-                            'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
-                            'border-brand-200 bg-brand-50 text-brand-700' => in_array($location->id, $selectedLocationIds, true),
-                            'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($location->id, $selectedLocationIds, true),
-                        ])>
-                            <input type="checkbox" name="locations[]" value="{{ $location->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($location->id, $selectedLocationIds, true))>
-                            <span>{{ $location->name }}</span>
-                        </label>
-                    @endforeach
-                </div>
-            </fieldset>
+        <div class="flex flex-col gap-4">
+            <h2 class="text-sm font-semibold text-slate-950">{{ __('app.filters') }}</h2>
 
-            <fieldset>
-                <legend class="crm-label">{{ __('app.filter_rooms') }}</legend>
-                <div class="mt-2 flex flex-wrap gap-2">
-                    @foreach ($filterRooms as $room)
+            <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+                <fieldset>
+                    <legend class="crm-label">{{ __('app.filter_locations') }}</legend>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach ($filterLocations as $location)
+                            <label @class([
+                                'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
+                                'border-brand-200 bg-brand-50 text-brand-700' => in_array($location->id, $selectedLocationIds, true),
+                                'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($location->id, $selectedLocationIds, true),
+                            ])>
+                                <input type="checkbox" name="locations[]" value="{{ $location->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($location->id, $selectedLocationIds, true))>
+                                <span>{{ $location->name }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend class="crm-label">{{ __('app.filter_rooms') }}</legend>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach ($filterRooms as $room)
+                            <label @class([
+                                'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
+                                'border-brand-200 bg-brand-50 text-brand-700' => in_array($room->id, $selectedRoomIds, true),
+                                'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($room->id, $selectedRoomIds, true),
+                            ])>
+                                <input type="checkbox" name="rooms[]" value="{{ $room->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($room->id, $selectedRoomIds, true))>
+                                <span>{{ $room->location?->name }} · {{ $room->name }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
+
+                @if ($filterTrainers->isNotEmpty())
+                    <fieldset>
+                        <legend class="crm-label">{{ __('app.filter_trainers') }}</legend>
+                        <div class="mt-2 space-y-2">
+                            @if ($currentTrainer)
+                                <label @class([
+                                    'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
+                                    'border-brand-200 bg-brand-50 text-brand-700' => $showOnlyMyClasses,
+                                    'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! $showOnlyMyClasses,
+                                ])>
+                                    <input type="checkbox" name="only_my_classes" value="1" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked($showOnlyMyClasses)>
+                                    <span>{{ __('app.filter_only_my_classes') }}</span>
+                                </label>
+                            @endif
+
+                            <div class="max-h-32 overflow-y-auto pr-1">
+                                <div class="flex flex-col gap-2">
+                                    @foreach ($filterTrainers as $trainer)
+                                        <label @class([
+                                            'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
+                                            'border-brand-200 bg-brand-50 text-brand-700' => in_array($trainer->id, $selectedTrainerIds, true),
+                                            'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($trainer->id, $selectedTrainerIds, true),
+                                        ])>
+                                            <input type="checkbox" name="trainers[]" value="{{ $trainer->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($trainer->id, $selectedTrainerIds, true))>
+                                            <span>{{ $trainer->name }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+                @endif
+
+                <fieldset>
+                    <legend class="crm-label">{{ __('app.filter_time') }}</legend>
+                    <div class="mt-2 flex flex-wrap gap-2">
                         <label @class([
                             'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
-                            'border-brand-200 bg-brand-50 text-brand-700' => in_array($room->id, $selectedRoomIds, true),
-                            'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($room->id, $selectedRoomIds, true),
+                            'border-brand-200 bg-brand-50 text-brand-700' => $showPassed,
+                            'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! $showPassed,
                         ])>
-                            <input type="checkbox" name="rooms[]" value="{{ $room->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($room->id, $selectedRoomIds, true))>
-                            <span>{{ $room->location?->name }} · {{ $room->name }}</span>
+                            <input type="checkbox" name="show_passed" value="1" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked($showPassed)>
+                            <span>{{ __('app.filter_show_passed') }}</span>
                         </label>
-                    @endforeach
-                </div>
-            </fieldset>
+                    </div>
+                </fieldset>
+            </div>
         </div>
 
         <div class="mt-4 flex flex-wrap gap-2">
@@ -101,29 +152,8 @@
             ])
         @endforeach
 
-        @if ($scheduledClassDays->isEmpty() && $pastScheduledClassDays->isEmpty())
+        @if ($scheduledClassDays->isEmpty())
             <x-ui.empty-state :title="__('app.no_public_classes')" icon="calendar" />
-        @endif
-
-        @if ($pastScheduledClassDays->isNotEmpty())
-            <details class="rounded-xl border border-stone-200 bg-white p-4 shadow-xs" data-scheduled-class-history>
-                <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 rounded-lg px-2 py-1 text-sm font-semibold text-slate-800 marker:hidden">
-                    <span>{{ __('app.older_today_classes') }}</span>
-                    <span class="crm-status-muted">{{ __('app.older_today_classes_count', ['count' => $pastScheduledClassesCount]) }}</span>
-                </summary>
-                <div class="mt-5 space-y-8 border-t border-stone-100 pt-5">
-                    @foreach ($pastScheduledClassDays as $date => $classes)
-                        @include('scheduled-classes._day', [
-                            'account' => $account,
-                            'date' => $date,
-                            'classes' => $classes,
-                            'customerSearchUrl' => $customerSearchUrl,
-                            'bookingStatuses' => $bookingStatuses,
-                            'readonly' => false,
-                        ])
-                    @endforeach
-                </div>
-            </details>
         @endif
     </section>
 

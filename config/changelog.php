@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.46.0',
+                'date' => '2026-06-27',
+                'title' => 'Schedule class filters',
+                'items' => ['Added trainer filters to the studio schedule, a trainer-only option to show only their own classes, a Show passed filter for finished classes, and a more compact grouped filter panel.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.45.0',
                 'date' => '2026-06-27',
                 'title' => 'Group class schedule settings',
@@ -415,6 +422,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.46.0',
+                'date' => '2026-06-27',
+                'title' => 'Фільтри занять у розкладі',
+                'items' => ['Додано фільтри занять за тренерами в розкладі студії, опцію для тренера показувати лише власні заняття, фільтр «Показати минулі» для завершених занять і компактніший згрупований блок фільтрів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.45.0',
                 'date' => '2026-06-27',

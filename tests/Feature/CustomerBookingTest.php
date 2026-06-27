@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountRole;
 use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Models\ActivityDirection;
@@ -769,7 +770,7 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_scheduled_classes_can_be_filtered_by_locations_and_rooms(): void
+    public function test_scheduled_classes_can_be_filtered_by_locations_rooms_and_trainers(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
 
@@ -782,11 +783,14 @@ class CustomerBookingTest extends TestCase
         $firstRoom = Room::factory()->for($account)->for($firstLocation)->create(['name' => 'Blue Room']);
         $secondRoom = Room::factory()->for($account)->for($secondLocation)->create(['name' => 'Pink Room']);
         $classType = ClassType::factory()->for($account)->create();
+        $firstTrainer = Trainer::factory()->for($account)->create(['name' => 'First Trainer']);
+        $secondTrainer = Trainer::factory()->for($account)->create(['name' => 'Second Trainer']);
         $otherLocation = Location::factory()->for($otherAccount)->create(['timezone' => 'UTC']);
         $otherRoom = Room::factory()->for($otherAccount)->for($otherLocation)->create();
         $otherClassType = ClassType::factory()->for($otherAccount)->create();
-        $firstClass = $this->scheduledClass($account, $firstLocation, $firstRoom, $classType, 'First Location Class', '2026-06-17 10:00:00');
-        $this->scheduledClass($account, $secondLocation, $secondRoom, $classType, 'Second Room Class', '2026-06-17 11:00:00');
+        $otherTrainer = Trainer::factory()->for($otherAccount)->create(['name' => 'Other Trainer']);
+        $firstClass = $this->scheduledClass($account, $firstLocation, $firstRoom, $classType, 'First Location Class', '2026-06-17 10:00:00', $firstTrainer);
+        $this->scheduledClass($account, $secondLocation, $secondRoom, $classType, 'Second Room Class', '2026-06-17 11:00:00', $secondTrainer);
         $this->scheduledClass($otherAccount, $otherLocation, $otherRoom, $otherClassType, 'Other Account Class', '2026-06-17 12:00:00');
 
         $this->actingAs($owner)
@@ -794,6 +798,10 @@ class CustomerBookingTest extends TestCase
             ->assertOk()
             ->assertSee('First Location Class')
             ->assertSee('Second Room Class')
+            ->assertSee('First Trainer')
+            ->assertSee('Second Trainer')
+            ->assertSee(__('app.filter_trainers'))
+            ->assertSee(__('app.filter_show_passed'))
             ->assertSee('href="#scheduled-class-'.$firstClass->id.'"', false)
             ->assertDontSee('Other Account Class');
 
@@ -818,6 +826,97 @@ class CustomerBookingTest extends TestCase
             ->assertSee('Second Room Class')
             ->assertDontSee('First Location Class')
             ->assertDontSee('Other Account Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'trainers' => [$secondTrainer->id],
+            ]))
+            ->assertOk()
+            ->assertSee('Second Room Class')
+            ->assertDontSee('First Location Class')
+            ->assertDontSee('Other Account Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'trainers' => [$otherTrainer->id],
+            ]))
+            ->assertOk()
+            ->assertSee('First Location Class')
+            ->assertSee('Second Room Class')
+            ->assertDontSee('Other Account Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'locations' => [$firstLocation->id],
+                'rooms' => [$firstRoom->id],
+                'trainers' => [$firstTrainer->id],
+                'show_passed' => 1,
+            ]))
+            ->assertOk()
+            ->assertSee('locations%5B0%5D='.$firstLocation->id, false)
+            ->assertSee('rooms%5B0%5D='.$firstRoom->id, false)
+            ->assertSee('trainers%5B0%5D='.$firstTrainer->id, false)
+            ->assertSee('show_passed=1', false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_trainer_can_filter_scheduled_classes_by_any_trainer_or_only_my_classes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $trainerUser = User::factory()->create(['name' => 'Trainer User']);
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->users()->attach($trainerUser->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => null,
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $linkedTrainer = Trainer::factory()
+            ->for($account)
+            ->for($trainerUser, 'user')
+            ->create(['name' => 'Linked Trainer']);
+        $otherTrainer = Trainer::factory()->for($account)->create(['name' => 'Other Trainer']);
+        $this->scheduledClass($account, $location, $room, $classType, 'Linked Trainer Class', '2026-06-17 10:00:00', $linkedTrainer);
+        $this->scheduledClass($account, $location, $room, $classType, 'Other Trainer Class', '2026-06-17 11:00:00', $otherTrainer);
+
+        $this->actingAs($trainerUser)
+            ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'this_week']))
+            ->assertOk()
+            ->assertSee('Linked Trainer Class')
+            ->assertSee('Other Trainer Class')
+            ->assertSee(__('app.filter_only_my_classes'));
+
+        $this->actingAs($trainerUser)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'trainers' => [$otherTrainer->id],
+            ]))
+            ->assertOk()
+            ->assertSee('Other Trainer Class')
+            ->assertDontSee('Linked Trainer Class');
+
+        $this->actingAs($trainerUser)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'trainers' => [$otherTrainer->id],
+                'only_my_classes' => 1,
+            ]))
+            ->assertOk()
+            ->assertSee('Linked Trainer Class')
+            ->assertDontSee('Other Trainer Class')
+            ->assertSee('only_my_classes=1', false)
+            ->assertDontSee('trainers%5B0%5D='.$otherTrainer->id, false);
 
         Carbon::setTestNow();
     }
@@ -888,7 +987,7 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_today_tab_collapses_classes_ended_more_than_one_hour_ago(): void
+    public function test_scheduled_classes_hide_passed_by_default_and_show_with_filter(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 12:00:00', 'UTC'));
 
@@ -906,16 +1005,29 @@ class CustomerBookingTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.scheduled-classes.index', $account))
             ->assertOk()
-            ->assertSee('data-scheduled-class-history', false)
             ->assertSeeInOrder([
                 'Cutoff Visible Class',
                 'Future Visible Class',
-                __('app.older_today_classes'),
-                'Old Hidden Class',
-            ]);
+            ])
+            ->assertDontSee('Old Hidden Class')
+            ->assertDontSee('data-scheduled-class-history', false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'this_week']))
+            ->assertOk()
+            ->assertDontSee('data-scheduled-class-history', false)
+            ->assertSeeInOrder([
+                'Cutoff Visible Class',
+                'Future Visible Class',
+            ])
+            ->assertDontSee('Old Hidden Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'show_passed' => 1,
+            ]))
             ->assertOk()
             ->assertDontSee('data-scheduled-class-history', false)
             ->assertSeeInOrder([
@@ -927,7 +1039,7 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_today_tab_uses_account_timezone_for_past_grouping(): void
+    public function test_today_tab_uses_account_timezone_for_passed_filtering(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 03:30:00', 'UTC'));
 
@@ -946,12 +1058,23 @@ class CustomerBookingTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.scheduled-classes.index', $account))
             ->assertOk()
-            ->assertSee('data-scheduled-class-history', false)
             ->assertSeeInOrder([
                 'Cutoff Local Visible Class',
                 'Future Local Visible Class',
-                __('app.older_today_classes'),
+            ])
+            ->assertDontSee('Old Local Hidden Class')
+            ->assertDontSee('Next Local Day Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'show_passed' => 1,
+            ]))
+            ->assertOk()
+            ->assertSeeInOrder([
                 'Old Local Hidden Class',
+                'Cutoff Local Visible Class',
+                'Future Local Visible Class',
             ])
             ->assertDontSee('Next Local Day Class');
 
@@ -992,7 +1115,7 @@ class CustomerBookingTest extends TestCase
             ->assertJsonFragment(['email' => 'maria@example.com']);
     }
 
-    private function scheduledClass(Account $account, Location $location, Room $room, ClassType $classType, string $title, string $startsAt): ScheduledClass
+    private function scheduledClass(Account $account, Location $location, Room $room, ClassType $classType, string $title, string $startsAt, ?Trainer $trainer = null): ScheduledClass
     {
         $startsAt = Carbon::parse($startsAt, 'UTC');
 
@@ -1004,6 +1127,7 @@ class CustomerBookingTest extends TestCase
             $title,
             $startsAt,
             $startsAt->copy()->addHour(),
+            trainer: $trainer,
         );
     }
 
@@ -1016,17 +1140,23 @@ class CustomerBookingTest extends TestCase
         Carbon $startsAt,
         Carbon $endsAt,
         ScheduledClassStatus $status = ScheduledClassStatus::Scheduled,
+        ?Trainer $trainer = null,
     ): ScheduledClass {
-        return ScheduledClass::factory()
+        $scheduledClass = ScheduledClass::factory()
             ->for($account)
             ->for($location)
             ->for($room)
-            ->for($classType)
-            ->create([
-                'title' => $title,
-                'starts_at' => $startsAt,
-                'ends_at' => $endsAt,
-                'status' => $status->value,
-            ]);
+            ->for($classType);
+
+        if ($trainer) {
+            $scheduledClass = $scheduledClass->for($trainer);
+        }
+
+        return $scheduledClass->create([
+            'title' => $title,
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'status' => $status->value,
+        ]);
     }
 }
