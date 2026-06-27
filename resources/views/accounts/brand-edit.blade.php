@@ -148,6 +148,54 @@
                                 {{ __('app.public_price_embed') }}
                             </x-ui.button>
                         </div>
+
+                        <div class="mt-5 grid gap-4 md:grid-cols-2">
+                            @foreach ($publicLinkLocation['printable_links'] as $printableLink)
+                                <section class="rounded-lg border border-stone-200 bg-slate-50 p-4" data-print-section>
+                                    <div class="flex items-start justify-between gap-3" data-print-screen-only>
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                                                <x-ui.icon :name="$printableLink['icon']" class="h-4 w-4 shrink-0" />
+                                                <span>{{ __($printableLink['label_key']) }}</span>
+                                            </div>
+                                            <p class="mt-1 text-xs leading-5 text-slate-500">{{ $publicLinkLocation['location']->name }}</p>
+                                        </div>
+                                        <x-ui.button type="button" variant="secondary" size="sm" data-print-button>
+                                            <x-ui.icon name="printer" class="h-4 w-4" />
+                                            {{ __('app.print') }}
+                                        </x-ui.button>
+                                    </div>
+
+                                    <div class="mt-4 grid gap-4 sm:grid-cols-[112px_1fr] sm:items-center" data-qr-screen-content>
+                                        <div class="flex aspect-square items-center justify-center rounded-lg border border-stone-200 bg-white p-3">
+                                            {!! $printableLink['qr_svg'] !!}
+                                        </div>
+                                        <label class="min-w-0">
+                                            <span class="crm-label">{{ __('app.public_url') }}</span>
+                                            <input value="{{ $printableLink['url'] }}" readonly class="crm-field font-mono text-xs">
+                                        </label>
+                                    </div>
+
+                                    <div class="hidden" data-qr-print-poster>
+                                        <header class="flex flex-col items-center text-center">
+                                            <img src="{{ $account->logoUrl() }}" alt="" class="h-20 w-20 object-contain">
+                                            <div class="mt-4 text-2xl font-semibold text-slate-950">{{ $account->name }}</div>
+                                            <div class="mt-1 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{{ __($printableLink['label_key']) }}</div>
+                                            <div class="mt-2 text-base font-semibold text-slate-700">{{ $publicLinkLocation['location']->name }}</div>
+                                        </header>
+                                        <div class="flex flex-1 flex-col items-center justify-center gap-8 text-center">
+                                            <div class="flex items-center justify-center rounded-[28px] border border-stone-200 bg-white p-8" data-qr-print-code>
+                                                {!! $printableLink['qr_svg'] !!}
+                                            </div>
+                                            <div class="max-w-[620px] break-all font-mono text-lg font-semibold leading-7 text-slate-900" data-qr-print-url>
+                                                {{ $printableLink['url'] }}
+                                            </div>
+                                        </div>
+                                        <x-ui.powered-footer />
+                                    </div>
+                                </section>
+                            @endforeach
+                        </div>
                     </div>
                 @empty
                     <div class="mt-6 rounded-lg border border-dashed border-stone-200 bg-stone-50 p-5">

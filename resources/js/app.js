@@ -639,6 +639,22 @@ function initPlatformSettingsTabs(root = document) {
     });
 }
 
+function selectPrintSection(printableSection = document.querySelector('[data-print-section]')) {
+    if (!printableSection) {
+        return;
+    }
+
+    document.querySelectorAll('[data-print-section]').forEach((section) => {
+        if (section === printableSection) {
+            delete section.dataset.printHidden;
+
+            return;
+        }
+
+        section.dataset.printHidden = 'true';
+    });
+}
+
 function initPrintButtons() {
     document.querySelectorAll('[data-print-button]').forEach((button) => {
         if (button.dataset.printReady === 'true') {
@@ -646,9 +662,27 @@ function initPrintButtons() {
         }
 
         button.dataset.printReady = 'true';
-        button.addEventListener('click', () => window.print());
+        button.addEventListener('click', () => {
+            selectPrintSection(button.closest('[data-print-section]'));
+            window.print();
+        });
     });
 }
+
+window.addEventListener('beforeprint', () => {
+    const hasSelectedPrintSection = Array.from(document.querySelectorAll('[data-print-section]'))
+        .some((section) => section.dataset.printHidden === 'true');
+
+    if (!hasSelectedPrintSection) {
+        selectPrintSection();
+    }
+});
+
+window.addEventListener('afterprint', () => {
+    document.querySelectorAll('[data-print-section][data-print-hidden]').forEach((section) => {
+        delete section.dataset.printHidden;
+    });
+});
 
 function closeManualClassModal(modal) {
     modal?.classList.add('hidden');

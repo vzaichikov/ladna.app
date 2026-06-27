@@ -175,7 +175,7 @@ class AccountController extends Controller
     }
 
     /**
-     * @return Collection<int, array{location: Location, schedule_url: string, schedule_embed_url: string, price_url: string, price_embed_url: string}>
+     * @return Collection<int, array{location: Location, schedule_url: string, schedule_embed_url: string, price_url: string, price_embed_url: string, printable_links: array<int, array{label_key: string, icon: string, url: string, qr_svg: string}>}>
      */
     private function publicLinkLocations(Account $account): Collection
     {
@@ -183,12 +183,31 @@ class AccountController extends Controller
             ->active()
             ->orderBy('name')
             ->get(['id', 'account_id', 'name', 'slug', 'address'])
-            ->map(fn ($location): array => [
-                'location' => $location,
-                'schedule_url' => route('public.schedule', [$account->slug, $location->slug]),
-                'schedule_embed_url' => route('public.schedule.embed', [$account->slug, $location->slug]),
-                'price_url' => route('public.price', [$account->slug, $location->slug]),
-                'price_embed_url' => route('public.price.embed', [$account->slug, $location->slug]),
-            ]);
+            ->map(function (Location $location) use ($account): array {
+                $scheduleUrl = route('public.schedule', [$account->slug, $location->slug]);
+                $priceUrl = route('public.price', [$account->slug, $location->slug]);
+
+                return [
+                    'location' => $location,
+                    'schedule_url' => $scheduleUrl,
+                    'schedule_embed_url' => route('public.schedule.embed', [$account->slug, $location->slug]),
+                    'price_url' => $priceUrl,
+                    'price_embed_url' => route('public.price.embed', [$account->slug, $location->slug]),
+                    'printable_links' => [
+                        [
+                            'label_key' => 'app.public_schedule',
+                            'icon' => 'schedule',
+                            'url' => $scheduleUrl,
+                            'qr_svg' => $this->qrCodeSvg($scheduleUrl),
+                        ],
+                        [
+                            'label_key' => 'app.public_price',
+                            'icon' => 'class-pass-plans',
+                            'url' => $priceUrl,
+                            'qr_svg' => $this->qrCodeSvg($priceUrl),
+                        ],
+                    ],
+                ];
+            });
     }
 }

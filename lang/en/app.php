@@ -840,6 +840,7 @@ return [
     'public_links' => 'Public links',
     'public_links_copy' => 'Quick access to schedule and price pages for this studio\'s active locations.',
     'public_links_empty' => 'Add an active location to get public schedule and price links.',
+    'public_url' => 'Public URL',
     'public_price' => 'Public price',
     'public_price_title' => 'Class passes & prices',
     'public_schedule_embed' => 'Schedule embed',

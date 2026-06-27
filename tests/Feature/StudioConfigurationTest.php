@@ -336,11 +336,12 @@ class StudioConfigurationTest extends TestCase
             'is_active' => false,
         ]);
 
-        $this->actingAs($owner)
+        $response = $this->actingAs($owner)
             ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'qr']))
             ->assertOk()
             ->assertSee(__('app.login_qr_codes_and_links'))
             ->assertSee(__('app.public_links'))
+            ->assertSee(__('app.public_url'))
             ->assertSee($firstLocation->name)
             ->assertSee($secondLocation->name)
             ->assertSee(route('public.schedule', [$account->slug, $firstLocation->slug]), false)
@@ -351,6 +352,9 @@ class StudioConfigurationTest extends TestCase
             ->assertSee(__('app.powered_by_ladna'))
             ->assertDontSee($inactiveLocation->name)
             ->assertDontSee(route('public.schedule', [$account->slug, $inactiveLocation->slug]), false);
+
+        $this->assertSame(5, substr_count($response->getContent(), 'data-print-section'));
+        $this->assertSame(5, substr_count($response->getContent(), 'data-qr-print-poster'));
     }
 
     public function test_brand_settings_reject_invalid_opening_hours(): void
