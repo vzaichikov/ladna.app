@@ -226,6 +226,12 @@
             'href' => route('platform.integrations.index'),
             'active' => request()->routeIs('platform.integrations.*'),
         ],
+        [
+            'label' => __('app.scheduled_tasks'),
+            'icon' => 'scheduled-tasks',
+            'href' => route('platform.scheduled-tasks.index'),
+            'active' => request()->routeIs('platform.scheduled-tasks.*'),
+        ],
     ] : [];
 
     $userInitial = mb_substr($authUser?->name ?? __('app.app_name'), 0, 1);

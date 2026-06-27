@@ -34,6 +34,7 @@ use App\Http\Controllers\Platform\PaymentController as PlatformPaymentController
 use App\Http\Controllers\Platform\PlatformAccountController;
 use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\ProfileController as PlatformProfileController;
+use App\Http\Controllers\Platform\ScheduledTaskController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SystemSettingsController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
@@ -173,6 +174,7 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
+        Route::get('scheduled-tasks', ScheduledTaskController::class)->name('scheduled-tasks.index');
         Route::get('payments', [PlatformPaymentController::class, 'index'])->name('payments.index');
         Route::resource('accounts', PlatformAccountController::class);
         Route::get('accounts/{account}/customer-auth', [PlatformCustomerAuthSettingsController::class, 'edit'])
