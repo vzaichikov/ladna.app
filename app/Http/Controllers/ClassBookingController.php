@@ -12,6 +12,7 @@ use App\Http\Requests\UpdateClassBookingStatusRequest;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
+use App\Support\ActorSnapshot;
 use App\Support\ClassBookingCancellationWindow;
 use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +22,7 @@ use Illuminate\Http\Response;
 
 class ClassBookingController extends Controller
 {
-    public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass, ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking, TransactionalMailDispatcher $mailDispatcher): RedirectResponse|JsonResponse
+    public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass, ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking, TransactionalMailDispatcher $mailDispatcher, ActorSnapshot $actorSnapshot): RedirectResponse|JsonResponse
     {
         $this->ensureClassBelongsToAccount($account, $scheduledClass);
         $scheduledClass->loadMissing('classType');
@@ -47,6 +48,7 @@ class ClassBookingController extends Controller
             [
                 'account_id' => $account->id,
                 'booked_by_user_id' => $request->user()->id,
+                ...$actorSnapshot->prefixed($account, $request->user(), 'booked_by_actor'),
                 'status' => ClassBookingStatus::Booked->value,
                 'attended_at' => null,
                 'notes' => $request->validated('notes'),

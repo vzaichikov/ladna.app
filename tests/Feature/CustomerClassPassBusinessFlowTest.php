@@ -44,6 +44,11 @@ class CustomerClassPassBusinessFlowTest extends TestCase
 
         $this->assertStringContainsString($customerClassPass->code, $firstResponse->json('card_html'));
 
+        $firstBooking = $firstClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail();
+
+        $this->assertSame($context['owner']->id, $firstBooking->booked_by_actor_user_id);
+        $this->assertSame($context['owner']->name, $firstBooking->booked_by_actor_name);
+        $this->assertSame('owner', $firstBooking->booked_by_actor_role);
         $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
 
         $secondResponse = $this->actingAs($context['owner'])

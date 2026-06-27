@@ -10,6 +10,7 @@ use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
 use App\Models\User;
 use App\Models\WebsiteLead;
+use App\Support\ActorSnapshot;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
@@ -23,6 +24,7 @@ class CreateQuickBooking
         private readonly ResolveQuickBookingCustomer $resolveQuickBookingCustomer,
         private readonly ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking,
         private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
+        private readonly ActorSnapshot $actorSnapshot,
         private readonly TransactionalMailDispatcher $mailDispatcher,
     ) {}
 
@@ -43,6 +45,7 @@ class CreateQuickBooking
                 [
                     'account_id' => $account->id,
                     'booked_by_user_id' => $user->id,
+                    ...$this->actorSnapshot->prefixed($account, $user, 'booked_by_actor'),
                     'status' => ClassBookingStatus::Booked->value,
                     'attended_at' => null,
                     'notes' => $validated['notes'] ?? null,

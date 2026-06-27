@@ -22,6 +22,7 @@
             <div class="flex flex-wrap gap-2 border-b border-stone-100 pb-4">
                 <a href="#appearance" class="rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-900 ring-1 ring-brand-100">{{ __('app.system_settings_tab_appearance') }}</a>
                 <a href="#support" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-slate-950">{{ __('app.system_settings_tab_support') }}</a>
+                <a href="#activity-log" class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-slate-950">{{ __('app.system_settings_tab_activity_log') }}</a>
             </div>
 
             <div id="appearance">
@@ -55,6 +56,39 @@
                         <span class="crm-help">{{ $message }}</span>
                     @enderror
                 </label>
+            </div>
+
+            <div id="activity-log" class="border-t border-stone-100 pt-6">
+                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.system_activity_log_settings') }}</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.system_activity_log_settings_copy') }}</p>
+
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <label class="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4">
+                        <input name="activity_log_enabled" type="hidden" value="0">
+                        <input name="activity_log_enabled" type="checkbox" value="1" @checked(old('activity_log_enabled', $activityLogEnabled)) class="crm-checkbox mt-1">
+                        <span>
+                            <span class="block text-sm font-semibold text-slate-950">{{ __('app.activity_log_enabled') }}</span>
+                            <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.activity_log_enabled_hint') }}</span>
+                        </span>
+                    </label>
+
+                    <label class="block rounded-xl border border-stone-200 bg-white p-4">
+                        <span class="crm-label">{{ __('app.activity_log_retention_days') }}</span>
+                        <input
+                            name="activity_log_retention_days"
+                            type="number"
+                            min="{{ $activityLogMinRetentionDays }}"
+                            max="{{ $activityLogMaxRetentionDays }}"
+                            value="{{ old('activity_log_retention_days', $activityLogRetentionDays) }}"
+                            class="crm-field"
+                            required
+                        >
+                        <span class="mt-2 block text-sm leading-6 text-slate-500">{{ __('app.activity_log_retention_days_hint', ['min' => $activityLogMinRetentionDays, 'max' => $activityLogMaxRetentionDays]) }}</span>
+                        @error('activity_log_retention_days')
+                            <span class="crm-help">{{ $message }}</span>
+                        @enderror
+                    </label>
+                </div>
             </div>
 
             <div class="flex justify-end border-t border-stone-100 pt-5">

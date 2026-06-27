@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -27,6 +28,8 @@ class UpdateSystemSettingsRequest extends FormRequest
         return [
             'font_family' => ['required', Rule::in(array_keys(SystemAppearance::fontOptions()))],
             'support_url' => ['nullable', 'url', 'max:2048'],
+            'activity_log_enabled' => ['nullable', 'boolean'],
+            'activity_log_retention_days' => ['nullable', 'integer', 'min:'.AccountActivityLogSettings::MinRetentionDays, 'max:'.AccountActivityLogSettings::MaxRetentionDays],
         ];
     }
 }

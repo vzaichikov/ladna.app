@@ -48,6 +48,8 @@
     $canManageClients = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageClients);
     $canManageBookings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageBookings);
     $canManageWebsiteLeads = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageWebsiteLeads);
+    $canManageCustomerClassPasses = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageCustomerClassPasses);
+    $canViewActivityLog = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ViewActivityLog);
     $canMarkAttendance = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::MarkAttendance);
     $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
@@ -107,7 +109,7 @@
             'href' => route('dashboard.accounts.website-leads.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.website-leads.*'),
         ]] : []),
-        ...($canManageClassPassPlans ? [[
+        ...($canManageCustomerClassPasses ? [[
             'label' => __('app.customer_class_passes'),
             'icon' => 'class-pass-plans',
             'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
@@ -202,6 +204,12 @@
             'icon' => 'payments',
             'href' => route('dashboard.accounts.tariff-payments.show', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.tariff-payments.*'),
+        ]] : []),
+        ...($canViewActivityLog ? [[
+            'label' => __('app.account_activity_log'),
+            'icon' => 'activity-log',
+            'href' => route('dashboard.accounts.activity-logs.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.activity-logs.*'),
         ]] : []),
     ] : [];
 
@@ -463,7 +471,7 @@
         >
             <div class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
                 <div class="flex items-start gap-4">
-                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700">
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700" data-confirm-icon data-default-icon="trash-2">
                         <x-ui.icon name="trash" class="h-5 w-5" />
                     </div>
                     <div>

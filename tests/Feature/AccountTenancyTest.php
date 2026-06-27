@@ -162,6 +162,7 @@ class AccountTenancyTest extends TestCase
                 'Налаштування акаунта',
                 'Мій акаунт',
                 'Тариф та платежі',
+                'Журнал дій',
             ])
             ->assertDontSee('Мій бренд')
             ->assertDontSee('Брендінг')
@@ -171,6 +172,7 @@ class AccountTenancyTest extends TestCase
             ->assertSee(route('dashboard.accounts.general-settings.edit', $account), false)
             ->assertSee(route('dashboard.accounts.owner-profile.edit', $account), false)
             ->assertSee(route('dashboard.accounts.tariff-payments.show', $account), false)
+            ->assertSee(route('dashboard.accounts.activity-logs.index', $account), false)
             ->assertDontSee('tab=business', false)
             ->assertDontSee('tab=account', false);
     }
@@ -200,6 +202,7 @@ class AccountTenancyTest extends TestCase
             ->assertSee(route('dashboard.accounts.schedule-series.index', $account), false)
             ->assertDontSee('href="'.route('dashboard.accounts.customers.index', $account).'"', false)
             ->assertDontSee(route('dashboard.accounts.customer-class-passes.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.activity-logs.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.locations.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.rooms.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.activity-directions.index', $account), false)

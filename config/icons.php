@@ -3,6 +3,7 @@
 return [
     'aliases' => [
         'accounts' => 'users',
+        'activity-log' => 'history',
         'arrow-left' => 'arrow-left',
         'bell' => 'bell',
         'building' => 'building-2',

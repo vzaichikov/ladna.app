@@ -6,6 +6,7 @@ use App\Actions\IssueCustomerClassPass;
 use App\Enums\AccountRole;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
+use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
@@ -43,6 +44,9 @@ class CustomerClassPassTest extends TestCase
         $this->assertSame($plan->sessions_count, $customerClassPass->sessions_count);
         $this->assertSame($plan->validity_days, $customerClassPass->validity_days);
         $this->assertSame($plan->total_validity_days, $customerClassPass->total_validity_days);
+        $this->assertSame($owner->id, $customerClassPass->issued_by_actor_user_id);
+        $this->assertSame($owner->name, $customerClassPass->issued_by_actor_name);
+        $this->assertSame('owner', $customerClassPass->issued_by_actor_role);
         $this->assertTrue($customerClassPass->purchased_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
         $this->assertTrue($customerClassPass->usable_until_at->equalTo(Carbon::parse('2026-10-18 10:00:00')));
         $this->assertNull($customerClassPass->opened_at);
@@ -77,6 +81,30 @@ class CustomerClassPassTest extends TestCase
             ->get(route('dashboard.accounts.customers.index', ['account' => $account, 'q' => $code]))
             ->assertOk()
             ->assertSee($customer->name);
+    }
+
+    public function test_customer_class_pass_adjustment_form_uses_single_input_with_direction_buttons(): void
+    {
+        [$owner, $account, $customer, $plan] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertOk()
+            ->assertSee(__('app.class_pass_session_adjustment'))
+            ->assertSee(__('app.confirm_add_class_pass_sessions_title'))
+            ->assertSee(__('app.confirm_remove_class_pass_sessions_title'));
+
+        $html = $response->getContent();
+
+        $this->assertSame(1, substr_count($html, 'name="sessions_delta"'));
+        $this->assertSame(1, substr_count($html, 'name="reason"'));
+        $this->assertStringContainsString('name="direction" value="add"', $html);
+        $this->assertStringContainsString('name="direction" value="subtract"', $html);
+        $this->assertStringContainsString('data-confirm-icon="plus"', $html);
+        $this->assertStringContainsString('data-confirm-icon="minus"', $html);
+        $this->assertStringContainsString('data-confirm-variant="success"', $html);
+        $this->assertStringContainsString('data-confirm-variant="danger"', $html);
     }
 
     public function test_owner_can_add_sessions_to_customer_class_pass_and_history_is_stored(): void
@@ -193,13 +221,14 @@ class CustomerClassPassTest extends TestCase
     public function test_non_owner_cannot_add_sessions_to_customer_class_pass(): void
     {
         [, $account, $customer, $plan] = $this->passContext();
-        $manager = User::factory()->create();
-        $account->users()->attach($manager->id, [
-            'role' => AccountRole::Admin->value,
+        $trainer = User::factory()->create();
+        $account->users()->attach($trainer->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => [],
         ]);
         $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
 
-        $this->actingAs($manager)
+        $this->actingAs($trainer)
             ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
                 'direction' => 'add',
                 'sessions_delta' => 2,
@@ -210,6 +239,110 @@ class CustomerClassPassTest extends TestCase
         $customerClassPass->refresh();
         $this->assertSame(4, $customerClassPass->sessions_count);
         $this->assertSame(0, $customerClassPass->adjustments()->count());
+    }
+
+    public function test_trainer_with_issue_permission_can_issue_but_cannot_adjust_customer_class_pass(): void
+    {
+        [$owner, $account, $customer, $plan] = $this->passContext();
+        $trainerUser = User::factory()->create([
+            'name' => 'Trainer Actor',
+            'email' => 'trainer-actor@example.com',
+        ]);
+        $account->users()->attach($trainerUser->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => [StudioPermission::IssueCustomerClassPasses->value],
+        ]);
+        $trainerProfile = Trainer::factory()
+            ->for($account)
+            ->for($trainerUser, 'user')
+            ->for($account->defaultTrainerType(), 'trainerType')
+            ->create(['name' => 'Trainer Actor']);
+
+        $this->actingAs($trainerUser)
+            ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
+                'class_pass_plan_id' => $plan->id,
+            ])
+            ->assertRedirect(route('dashboard.accounts.customers.edit', [$account, $customer]));
+
+        $customerClassPass = $customer->customerClassPasses()->firstOrFail();
+
+        $this->assertSame($trainerUser->id, $customerClassPass->issued_by_actor_user_id);
+        $this->assertSame($trainerProfile->id, $customerClassPass->issued_by_actor_trainer_id);
+        $this->assertSame('Trainer Actor', $customerClassPass->issued_by_actor_name);
+        $this->assertSame('trainer-actor@example.com', $customerClassPass->issued_by_actor_email);
+        $this->assertSame('trainer', $customerClassPass->issued_by_actor_role);
+
+        $this->actingAs($trainerUser)
+            ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
+                'sessions_delta' => 1,
+                'reason' => 'Issue-only user attempt',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(0, $customerClassPass->adjustments()->count());
+    }
+
+    public function test_trainer_with_manage_permission_can_edit_and_adjust_but_cannot_issue_customer_class_pass(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [, $account, $customer, $plan] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+        $trainerUser = User::factory()->create([
+            'name' => 'Pass Manager',
+            'email' => 'pass-manager@example.com',
+        ]);
+        $account->users()->attach($trainerUser->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => [StudioPermission::ManageCustomerClassPasses->value],
+        ]);
+        $trainerProfile = Trainer::factory()
+            ->for($account)
+            ->for($trainerUser, 'user')
+            ->for($account->defaultTrainerType(), 'trainerType')
+            ->create(['name' => 'Pass Manager']);
+
+        $this->actingAs($trainerUser)
+            ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
+                'class_pass_plan_id' => $plan->id,
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($trainerUser)
+            ->put(route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]), [
+                'status' => CustomerClassPassStatus::Active->value,
+                'purchased_at' => '2026-06-20T10:00',
+                'opened_at' => null,
+                'expires_at' => null,
+                'closed_at' => null,
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+
+        $this->actingAs($trainerUser)
+            ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
+                'sessions_delta' => 1,
+                'reason' => 'Trainer compensation',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]));
+
+        $adjustment = $customerClassPass->adjustments()->firstOrFail();
+
+        $this->assertSame($trainerUser->id, $adjustment->actor_user_id);
+        $this->assertSame($trainerProfile->id, $adjustment->actor_trainer_id);
+        $this->assertSame('Pass Manager', $adjustment->actor_name);
+        $this->assertSame('pass-manager@example.com', $adjustment->actor_email);
+        $this->assertSame('trainer', $adjustment->actor_role);
+
+        $actorUserId = $trainerUser->id;
+        $trainerUser->delete();
+        $adjustment->refresh();
+
+        $this->assertSame($actorUserId, $adjustment->actor_user_id);
+        $this->assertSame('Pass Manager', $adjustment->actor_name);
+
+        Carbon::setTestNow();
     }
 
     public function test_owner_can_reopen_valid_used_up_pass_with_session_adjustment(): void

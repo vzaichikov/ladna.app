@@ -72,6 +72,9 @@ class QuickBookingTest extends TestCase
         $this->assertSame(75, (int) $scheduledClass->starts_at->diffInMinutes($scheduledClass->ends_at));
         $this->assertSame($scheduledClass->id, $booking->scheduled_class_id);
         $this->assertSame('Incoming call', $booking->notes);
+        $this->assertSame($owner->id, $booking->booked_by_actor_user_id);
+        $this->assertSame($owner->name, $booking->booked_by_actor_name);
+        $this->assertSame('owner', $booking->booked_by_actor_role);
 
         Carbon::setTestNow();
     }

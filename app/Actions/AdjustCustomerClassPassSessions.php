@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassAdjustment;
 use App\Models\User;
+use App\Support\ActorSnapshot;
 use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -15,6 +16,7 @@ class AdjustCustomerClassPassSessions
 {
     public function __construct(
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
+        private readonly ActorSnapshot $actorSnapshot,
         private readonly TransactionalMailDispatcher $mailDispatcher,
     ) {}
 
@@ -75,6 +77,7 @@ class AdjustCustomerClassPassSessions
             return $lockedPass->adjustments()->create([
                 'account_id' => $account->id,
                 'user_id' => $user?->id,
+                ...$this->actorSnapshot->capture($account, $user),
                 'sessions_delta' => $sessionsDelta,
                 'previous_sessions_count' => $previousSessionsCount,
                 'new_sessions_count' => $newSessionsCount,

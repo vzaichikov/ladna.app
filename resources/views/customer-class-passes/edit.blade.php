@@ -3,10 +3,6 @@
 @section('title', __('app.edit').' '.$customerClassPass->code)
 
 @section('content')
-    @php
-        $adjustmentDirection = old('direction', 'add');
-    @endphp
-
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ $customerClassPass->code }}</h1>
@@ -67,72 +63,68 @@
             {{ __('app.used_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->used_sessions_count }}</span> ·
             {{ __('app.reserved_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->reserved_sessions_count }}</span> ·
             {{ __('app.sessions_count') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->sessions_count }}</span>
+            <div class="mt-2 text-xs text-slate-500">{{ __('app.issued_by') }}: {{ $customerClassPass->issued_by_actor_name ?? __('app.system') }}</div>
         </div>
 
         <x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
     </form>
 
-    <div class="mt-6 grid max-w-5xl gap-6 lg:grid-cols-2">
-        <x-ui.panel>
-            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.add_class_pass_sessions') }}</h2>
-            <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]) }}" class="mt-4 space-y-4">
-                @csrf
-                <input type="hidden" name="direction" value="add">
-                <label class="block">
-                    <span class="crm-label">{{ __('app.sessions_to_add') }}</span>
-                    <input name="sessions_delta" type="number" min="1" max="500" value="{{ $adjustmentDirection === 'add' ? old('sessions_delta', 1) : 1 }}" class="crm-field" required>
-                    @error('sessions_delta')
-                        @if ($adjustmentDirection === 'add')
-                            <span class="crm-help">{{ $message }}</span>
-                        @endif
-                    @enderror
-                </label>
-                <label class="block">
-                    <span class="crm-label">{{ __('app.adjustment_reason') }}</span>
-                    <textarea name="reason" rows="4" class="crm-field" required>{{ $adjustmentDirection === 'add' ? old('reason') : '' }}</textarea>
-                    @error('reason')
-                        @if ($adjustmentDirection === 'add')
-                            <span class="crm-help">{{ $message }}</span>
-                        @endif
-                    @enderror
-                </label>
-                <x-ui.button type="submit">
+    <x-ui.panel class="mt-6 max-w-3xl">
+        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_session_adjustment') }}</h2>
+        <form
+            method="POST"
+            action="{{ route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]) }}"
+            class="mt-4 space-y-4"
+            data-confirm-action
+            data-confirm-title="{{ __('app.confirm_add_class_pass_sessions_title') }}"
+            data-confirm-body="{{ __('app.confirm_add_class_pass_sessions_body') }}"
+            data-confirm-accept="{{ __('app.add_sessions') }}"
+            data-confirm-variant="success"
+        >
+            @csrf
+            <label class="block">
+                <span class="crm-label">{{ __('app.sessions_to_adjust') }}</span>
+                <input name="sessions_delta" type="number" min="1" max="500" value="{{ old('sessions_delta', 1) }}" class="crm-field" required>
+                @error('sessions_delta') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            <label class="block">
+                <span class="crm-label">{{ __('app.adjustment_reason') }}</span>
+                <textarea name="reason" rows="4" class="crm-field" required>{{ old('reason') }}</textarea>
+                @error('reason') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            @error('direction') <span class="crm-help">{{ $message }}</span> @enderror
+            <div class="flex flex-col gap-3 sm:flex-row">
+                <x-ui.button
+                    type="submit"
+                    name="direction"
+                    value="add"
+                    variant="success"
+                    data-confirm-title="{{ __('app.confirm_add_class_pass_sessions_title') }}"
+                    data-confirm-body="{{ __('app.confirm_add_class_pass_sessions_body') }}"
+                    data-confirm-accept="{{ __('app.add_sessions') }}"
+                    data-confirm-icon="plus"
+                    data-confirm-variant="success"
+                >
                     <x-ui.icon name="plus" class="h-4 w-4" />
                     {{ __('app.add_sessions') }}
                 </x-ui.button>
-            </form>
-        </x-ui.panel>
-
-        <x-ui.panel>
-            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.remove_class_pass_sessions') }}</h2>
-            <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]) }}" class="mt-4 space-y-4">
-                @csrf
-                <input type="hidden" name="direction" value="subtract">
-                <label class="block">
-                    <span class="crm-label">{{ __('app.sessions_to_remove') }}</span>
-                    <input name="sessions_delta" type="number" min="1" max="500" value="{{ $adjustmentDirection === 'subtract' ? old('sessions_delta', 1) : 1 }}" class="crm-field" required>
-                    @error('sessions_delta')
-                        @if ($adjustmentDirection === 'subtract')
-                            <span class="crm-help">{{ $message }}</span>
-                        @endif
-                    @enderror
-                </label>
-                <label class="block">
-                    <span class="crm-label">{{ __('app.adjustment_reason') }}</span>
-                    <textarea name="reason" rows="4" class="crm-field" required>{{ $adjustmentDirection === 'subtract' ? old('reason') : '' }}</textarea>
-                    @error('reason')
-                        @if ($adjustmentDirection === 'subtract')
-                            <span class="crm-help">{{ $message }}</span>
-                        @endif
-                    @enderror
-                </label>
-                <x-ui.button type="submit" variant="danger">
+                <x-ui.button
+                    type="submit"
+                    name="direction"
+                    value="subtract"
+                    variant="danger"
+                    data-confirm-title="{{ __('app.confirm_remove_class_pass_sessions_title') }}"
+                    data-confirm-body="{{ __('app.confirm_remove_class_pass_sessions_body') }}"
+                    data-confirm-accept="{{ __('app.remove_sessions') }}"
+                    data-confirm-icon="minus"
+                    data-confirm-variant="danger"
+                >
                     <x-ui.icon name="minus" class="h-4 w-4" />
                     {{ __('app.remove_sessions') }}
                 </x-ui.button>
-            </form>
-        </x-ui.panel>
-    </div>
+            </div>
+        </form>
+    </x-ui.panel>
 
     <x-ui.panel padding="none" class="mt-6 max-w-5xl overflow-hidden">
         <div class="border-b border-stone-100 px-5 py-4">
@@ -152,7 +144,7 @@
                     <div class="text-slate-500">{{ $adjustment->created_at?->format('Y-m-d H:i') }}</div>
                 </div>
                 <div class="mt-2 text-slate-600">{{ $adjustment->reason }}</div>
-                <div class="mt-1 text-xs text-slate-500">{{ __('app.adjusted_by') }}: {{ $adjustment->user?->name ?? __('app.system') }}</div>
+                <div class="mt-1 text-xs text-slate-500">{{ __('app.adjusted_by') }}: {{ $adjustment->actor_name ?? $adjustment->user?->name ?? __('app.system') }}</div>
             </div>
         @empty
             <x-ui.empty-state :title="__('app.no_class_pass_adjustments')" icon="class-pass-plans" class="m-5" />

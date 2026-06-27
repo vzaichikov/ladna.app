@@ -15,6 +15,8 @@
             ->sortByDesc(fn ($customerClassPass) => ($customerClassPass->is_active ? '1' : '0').($customerClassPass->opened_at?->timestamp ?? $customerClassPass->purchased_at?->timestamp ?? 0));
         $bookings = $customer->classBookings
             ->sortByDesc(fn ($booking) => $booking->scheduledClass?->starts_at?->timestamp ?? $booking->created_at?->timestamp ?? 0);
+        $canIssueCustomerClassPasses = auth()->user()?->can('issueCustomerClassPasses', $account) ?? false;
+        $canManageCustomerClassPasses = auth()->user()?->can('manageCustomerClassPasses', $account) ?? false;
     @endphp
 
     <h1 class="crm-page-title">{{ __('app.edit') }} {{ $customer->name }}</h1>
@@ -29,25 +31,27 @@
                 <x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
             </form>
 
-            <x-ui.panel>
-                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.issue_class_pass') }}</h2>
-                <form method="POST" action="{{ route('dashboard.accounts.customers.class-passes.store', [$account, $customer]) }}" class="mt-4 space-y-4">
-                    @csrf
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.class_pass_plan') }}</span>
-                        <select name="class_pass_plan_id" class="crm-field" required>
-                            @foreach ($classPassPlans as $classPassPlan)
-                                <option value="{{ $classPassPlan->id }}">{{ $classPassPlan->name }} · {{ $formatMoney($classPassPlan->price_cents, $classPassPlan->currency) }}</option>
-                            @endforeach
-                        </select>
-                        @error('class_pass_plan_id') <span class="crm-help">{{ $message }}</span> @enderror
-                    </label>
-                    <x-ui.button type="submit">
-                        <x-ui.icon name="ticket" class="h-4 w-4" />
-                        {{ __('app.issue_class_pass') }}
-                    </x-ui.button>
-                </form>
-            </x-ui.panel>
+            @if ($canIssueCustomerClassPasses)
+                <x-ui.panel>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.issue_class_pass') }}</h2>
+                    <form method="POST" action="{{ route('dashboard.accounts.customers.class-passes.store', [$account, $customer]) }}" class="mt-4 space-y-4">
+                        @csrf
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.class_pass_plan') }}</span>
+                            <select name="class_pass_plan_id" class="crm-field" required>
+                                @foreach ($classPassPlans as $classPassPlan)
+                                    <option value="{{ $classPassPlan->id }}">{{ $classPassPlan->name }} · {{ $formatMoney($classPassPlan->price_cents, $classPassPlan->currency) }}</option>
+                                @endforeach
+                            </select>
+                            @error('class_pass_plan_id') <span class="crm-help">{{ $message }}</span> @enderror
+                        </label>
+                        <x-ui.button type="submit">
+                            <x-ui.icon name="ticket" class="h-4 w-4" />
+                            {{ __('app.issue_class_pass') }}
+                        </x-ui.button>
+                    </form>
+                </x-ui.panel>
+            @endif
         </div>
 
         <div class="space-y-6">
@@ -75,9 +79,11 @@
                             <span>{{ __('app.expires_after_first_class') }}: {{ $customerClassPass->expires_at?->format('Y-m-d') ?? __('app.not_set') }}</span>
                             <span>{{ __('app.usable_until_at') }}: {{ $customerClassPass->usableUntilAt()?->format('Y-m-d') ?? __('app.not_set') }}</span>
                         </div>
-                        <div class="mt-3">
-                            <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
-                        </div>
+                        @if ($canManageCustomerClassPasses)
+                            <div class="mt-3">
+                                <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
+                            </div>
+                        @endif
                     </div>
                 @empty
                     <x-ui.empty-state :title="__('app.no_customer_class_passes')" icon="class-pass-plans" class="m-5" />
