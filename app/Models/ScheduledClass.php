@@ -135,6 +135,40 @@ class ScheduledClass extends Model
         return (int) $this->starts_at->diffInMinutes($this->ends_at);
     }
 
+    public function displayStatusValue(): string
+    {
+        if ($this->status !== ScheduledClassStatus::Scheduled) {
+            return $this->status->value;
+        }
+
+        $now = now();
+
+        if ($this->ends_at->lessThanOrEqualTo($now)) {
+            return 'ended';
+        }
+
+        if ($this->starts_at->lessThanOrEqualTo($now)) {
+            return 'in_progress';
+        }
+
+        return ScheduledClassStatus::Scheduled->value;
+    }
+
+    public function displayStatusLabelKey(): string
+    {
+        return 'app.'.$this->displayStatusValue();
+    }
+
+    public function displayStatusBadgeClass(): string
+    {
+        return match ($this->displayStatusValue()) {
+            'cancelled' => 'crm-status-danger',
+            'draft', 'ended' => 'crm-status-muted',
+            'in_progress' => 'crm-status-active',
+            default => 'crm-status-scheduled',
+        };
+    }
+
     /**
      * @return array<int, string>
      */

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.43.1',
+                'date' => '2026-06-27',
+                'title' => 'Live class status badges',
+                'items' => ['Fixed class cards in the studio schedule so currently running classes show as in progress and finished classes show as ended, while cancelled and draft classes keep their original status labels.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.43.0',
                 'date' => '2026-06-27',
                 'title' => 'Class pass booking normalization',
@@ -394,6 +401,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.43.1',
+                'date' => '2026-06-27',
+                'title' => 'Статуси поточних занять',
+                'items' => ['Виправлено бейджі занять у розкладі студії: заняття, які тривають зараз, показуються як «Йде зараз», а завершені заняття - як «Завершено», тоді як скасовані й чернетки зберігають свої основні статуси.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.43.0',
                 'date' => '2026-06-27',

@@ -461,6 +461,7 @@ return [
     'paused' => 'Paused',
     'draft' => 'Draft',
     'ended' => 'Ended',
+    'in_progress' => 'In progress',
     'scheduled' => 'Scheduled',
     'all_rooms' => 'All rooms',
     'public_schedule' => 'Public schedule',
