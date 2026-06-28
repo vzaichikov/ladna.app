@@ -18,6 +18,7 @@ use App\Http\Controllers\ClassPassSegmentController;
 use App\Http\Controllers\ClassTypeController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\CustomerBookingCancellationController;
+use App\Http\Controllers\CustomerBulkTransferController;
 use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
@@ -297,6 +298,12 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
         Route::resource('accounts.trainer-types', TrainerTypeController::class)
             ->only(['index', 'store', 'update', 'destroy'])
             ->scoped();
+        Route::get('accounts/{account}/customers/export', [CustomerBulkTransferController::class, 'export'])
+            ->name('accounts.customers.export');
+        Route::get('accounts/{account}/customers/import-example', [CustomerBulkTransferController::class, 'example'])
+            ->name('accounts.customers.example');
+        Route::post('accounts/{account}/customers/import', [CustomerBulkTransferController::class, 'import'])
+            ->name('accounts.customers.import');
         Route::resource('accounts.customers', CustomerController::class)
             ->except(['show'])
             ->scoped();

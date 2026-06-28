@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.47.0',
+                'date' => '2026-06-28',
+                'title' => 'Customer import and export',
+                'items' => ['Added customer export to XLSX and bulk customer import from XLSX or CSV, with strict name, phone, and email columns, duplicate detection by phone or email, row-by-row import results, an example file, and updated owner help.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.46.0',
                 'date' => '2026-06-27',
                 'title' => 'Schedule class filters',
@@ -422,6 +429,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.47.0',
+                'date' => '2026-06-28',
+                'title' => 'Імпорт та експорт клієнтів',
+                'items' => ['Додано експорт клієнтів у XLSX та масовий імпорт клієнтів з XLSX або CSV зі строгими колонками name, phone, email, пошуком наявних клієнтів за телефоном або email, результатами по кожному рядку, прикладом файлу та оновленою допомогою для власниць студій.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.46.0',
                 'date' => '2026-06-27',
