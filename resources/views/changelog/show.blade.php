@@ -46,6 +46,12 @@
                         <div class="text-sm font-medium text-slate-500">{{ $release['meta'] }}</div>
                     </article>
                 @endforeach
+
+                @if ($releases->hasPages())
+                    <div class="pt-4">
+                        {{ $releases->onEachSide(1)->links() }}
+                    </div>
+                @endif
             </section>
         </section>
     </main>

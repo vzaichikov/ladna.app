@@ -51,6 +51,7 @@ use App\Http\Controllers\ScheduledClassHistoryController;
 use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\TrainerSubstitutionController;
 use App\Http\Controllers\TrainerTypeController;
 use App\Http\Controllers\WebsiteLeadController;
 use App\Http\Middleware\EnsureCustomerIsAuthenticated;
@@ -290,6 +291,14 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.customer-class-passes.update');
         Route::post('accounts/{account}/customer-class-passes/{customerClassPass}/adjustments', [CustomerClassPassController::class, 'storeAdjustment'])
             ->name('accounts.customer-class-passes.adjustments.store');
+        Route::get('accounts/{account}/trainers/{trainer}/substitutions/classes', [TrainerSubstitutionController::class, 'classes'])
+            ->name('accounts.trainers.substitutions.classes');
+        Route::post('accounts/{account}/trainers/{trainer}/substitutions', [TrainerSubstitutionController::class, 'store'])
+            ->name('accounts.trainers.substitutions.store');
+        Route::put('accounts/{account}/trainers/{trainer}/substitutions/{trainerSubstitution}', [TrainerSubstitutionController::class, 'update'])
+            ->name('accounts.trainers.substitutions.update');
+        Route::delete('accounts/{account}/trainers/{trainer}/substitutions/{trainerSubstitution}', [TrainerSubstitutionController::class, 'destroy'])
+            ->name('accounts.trainers.substitutions.destroy');
         Route::resource('accounts.trainers', TrainerController::class)
             ->except(['show'])
             ->scoped();

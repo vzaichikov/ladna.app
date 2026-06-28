@@ -694,6 +694,11 @@ function closeQuickBookingModal(modal) {
     modal?.classList.remove('flex');
 }
 
+function closeTrainerSubstitutionModal(modal) {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
 function fillQuickBookingForm(modal, button) {
     const form = modal?.querySelector('form');
 
@@ -951,6 +956,219 @@ function updateQuickBookingRooms(form) {
     }
 }
 
+function updateTrainerSubstitutionRooms(form) {
+    const locationInput = form?.querySelector('[data-trainer-substitution-location]');
+    const roomSelect = form?.querySelector('[data-trainer-substitution-room]');
+
+    if (!locationInput || !roomSelect) {
+        return;
+    }
+
+    const locationId = locationInput.value;
+    let selectedOptionAllowed = false;
+
+    Array.from(roomSelect.options).forEach((option) => {
+        const isAllowed = !option.dataset.locationId || option.dataset.locationId === locationId;
+
+        option.disabled = !isAllowed;
+        option.hidden = !isAllowed;
+
+        if (option.selected && isAllowed) {
+            selectedOptionAllowed = true;
+        }
+    });
+
+    if (!selectedOptionAllowed) {
+        const firstAllowedOption = Array.from(roomSelect.options).find((option) => !option.disabled);
+
+        if (firstAllowedOption) {
+            roomSelect.value = firstAllowedOption.value;
+        }
+    }
+}
+
+function trainerSubstitutionDatasetIds(value) {
+    try {
+        const decoded = JSON.parse(value || '[]');
+
+        if (Array.isArray(decoded)) {
+            return decoded.map((id) => String(id));
+        }
+    } catch {
+        return [];
+    }
+
+    return [];
+}
+
+function renderTrainerSubstitutionClassResults(container, classes, selectedIds = []) {
+    container.innerHTML = '';
+
+    if (!classes.length) {
+        const empty = document.createElement('p');
+        empty.className = 'px-2 py-3 text-sm text-slate-500';
+        empty.textContent = container.dataset.empty || 'No classes found.';
+        container.appendChild(empty);
+        return;
+    }
+
+    classes.forEach((scheduledClass) => {
+        const label = document.createElement('label');
+        label.className = 'flex items-start gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-700';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'scheduled_class_ids[]';
+        checkbox.value = String(scheduledClass.id);
+        checkbox.className = 'crm-checkbox mt-1';
+        checkbox.checked = selectedIds.includes(String(scheduledClass.id));
+
+        const content = document.createElement('span');
+        content.className = 'min-w-0';
+
+        const title = document.createElement('span');
+        title.className = 'block font-semibold text-slate-950';
+        title.textContent = `${scheduledClass.time} · ${scheduledClass.title}`;
+
+        const meta = document.createElement('span');
+        meta.className = 'mt-1 block text-xs font-medium text-slate-500';
+        meta.textContent = [scheduledClass.class_type, scheduledClass.current_trainer].filter(Boolean).join(' · ');
+
+        content.append(title, meta);
+        label.append(checkbox, content);
+        container.appendChild(label);
+    });
+}
+
+function loadTrainerSubstitutionClasses(form, selectedIds = []) {
+    const dateInput = form?.querySelector('[data-trainer-substitution-date]');
+    const locationInput = form?.querySelector('[data-trainer-substitution-location]');
+    const roomInput = form?.querySelector('[data-trainer-substitution-room]');
+    const results = form?.querySelector('[data-trainer-substitution-class-results]');
+    const classesUrl = dateInput?.dataset.classesUrl;
+
+    if (!dateInput || !locationInput || !roomInput || !results || !classesUrl || !dateInput.value || !locationInput.value || !roomInput.value) {
+        return;
+    }
+
+    results.innerHTML = `<p class="px-2 py-3 text-sm text-slate-500">${dateInput.dataset.loading || 'Loading...'}</p>`;
+
+    const url = new URL(classesUrl, window.location.origin);
+    url.searchParams.set('date', dateInput.value);
+    url.searchParams.set('location_id', locationInput.value);
+    url.searchParams.set('room_id', roomInput.value);
+
+    fetch(url, {
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'same-origin',
+    })
+        .then((response) => (response.ok ? response.json() : { data: [] }))
+        .then((payload) => renderTrainerSubstitutionClassResults(results, payload.data ?? [], selectedIds))
+        .catch(() => renderTrainerSubstitutionClassResults(results, [], selectedIds));
+}
+
+function resetTrainerSubstitutionForm(form) {
+    const methodInput = form?.querySelector('[data-trainer-substitution-method]');
+    const title = form?.closest('[data-trainer-substitution-modal]')?.querySelector('[data-trainer-substitution-title]');
+
+    form?.reset();
+
+    if (form?.dataset.storeAction) {
+        form.action = form.dataset.storeAction;
+    }
+
+    if (methodInput) {
+        methodInput.disabled = true;
+    }
+
+    if (title) {
+        title.textContent = title.dataset.createTitle || title.textContent;
+    }
+
+    updateTrainerSubstitutionRooms(form);
+}
+
+function openTrainerSubstitutionModal(mode, button = null) {
+    const modal = document.querySelector(`[data-trainer-substitution-modal="${mode}"]`);
+    const form = modal?.querySelector(`[data-trainer-substitution-form="${mode}"]`);
+
+    if (!modal || !form) {
+        return;
+    }
+
+    resetTrainerSubstitutionForm(form);
+
+    if (button) {
+        const methodInput = form.querySelector('[data-trainer-substitution-method]');
+        const title = modal.querySelector('[data-trainer-substitution-title]');
+
+        form.action = button.dataset.action || form.action;
+
+        if (methodInput) {
+            methodInput.disabled = false;
+        }
+
+        if (title) {
+            title.textContent = title.dataset.editTitle || title.textContent;
+        }
+
+        const locationInput = form.querySelector('[data-trainer-substitution-location]');
+        const roomInput = form.querySelector('[data-trainer-substitution-room]');
+        const substituteInput = form.querySelector('[data-trainer-substitution-substitute]');
+
+        if (locationInput) {
+            locationInput.value = button.dataset.locationId || locationInput.value;
+        }
+
+        updateTrainerSubstitutionRooms(form);
+
+        if (roomInput) {
+            roomInput.value = button.dataset.roomId || roomInput.value;
+        }
+
+        if (substituteInput) {
+            substituteInput.value = button.dataset.substituteTrainerId || '';
+        }
+
+        if (mode === 'classes') {
+            const dateInput = form.querySelector('[data-trainer-substitution-date]');
+            const selectedIds = trainerSubstitutionDatasetIds(button.dataset.scheduledClassIds);
+
+            if (dateInput) {
+                dateInput.value = button.dataset.dateFrom || dateInput.value;
+            }
+
+            loadTrainerSubstitutionClasses(form, selectedIds);
+        } else {
+            const dateFromInput = form.querySelector('[data-trainer-substitution-date-from]');
+            const dateToInput = form.querySelector('[data-trainer-substitution-date-to]');
+            const selectedClassTypeIds = trainerSubstitutionDatasetIds(button.dataset.classTypeIds);
+
+            if (dateFromInput) {
+                dateFromInput.value = button.dataset.dateFrom || dateFromInput.value;
+            }
+
+            if (dateToInput) {
+                dateToInput.value = button.dataset.dateTo || dateToInput.value;
+                dateToInput.min = dateFromInput?.value || dateToInput.min;
+            }
+
+            form.querySelectorAll('[data-trainer-substitution-class-type]').forEach((checkbox) => {
+                checkbox.checked = selectedClassTypeIds.includes(String(checkbox.value));
+            });
+        }
+    } else if (mode === 'classes') {
+        loadTrainerSubstitutionClasses(form);
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    modal.querySelector('[data-trainer-substitution-close]')?.focus();
+}
+
 function initManualClassModals() {
     document.querySelectorAll('[data-manual-class-modal]').forEach((modal) => {
         if (modal.dataset.manualClassReady === 'true') {
@@ -1002,6 +1220,107 @@ function initManualClassModals() {
 
         button.dataset.manualClassCloseReady = 'true';
         button.addEventListener('click', () => closeManualClassModal(button.closest('[data-manual-class-modal]')));
+    });
+}
+
+function initTrainerSubstitutionModals() {
+    document.querySelectorAll('[data-trainer-substitution-modal]').forEach((modal) => {
+        if (modal.dataset.trainerSubstitutionReady === 'true') {
+            return;
+        }
+
+        modal.dataset.trainerSubstitutionReady = 'true';
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeTrainerSubstitutionModal(modal);
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-trainer-substitution-open]').forEach((button) => {
+        if (button.dataset.trainerSubstitutionOpenReady === 'true') {
+            return;
+        }
+
+        button.dataset.trainerSubstitutionOpenReady = 'true';
+        button.addEventListener('click', () => openTrainerSubstitutionModal(button.dataset.trainerSubstitutionOpen));
+    });
+
+    document.querySelectorAll('[data-trainer-substitution-edit]').forEach((button) => {
+        if (button.dataset.trainerSubstitutionEditReady === 'true') {
+            return;
+        }
+
+        button.dataset.trainerSubstitutionEditReady = 'true';
+        button.addEventListener('click', () => openTrainerSubstitutionModal(button.dataset.trainerSubstitutionEdit, button));
+    });
+
+    document.querySelectorAll('[data-trainer-substitution-close]').forEach((button) => {
+        if (button.dataset.trainerSubstitutionCloseReady === 'true') {
+            return;
+        }
+
+        button.dataset.trainerSubstitutionCloseReady = 'true';
+        button.addEventListener('click', () => closeTrainerSubstitutionModal(button.closest('[data-trainer-substitution-modal]')));
+    });
+
+    document.querySelectorAll('[data-trainer-substitution-location]').forEach((input) => {
+        if (input.dataset.trainerSubstitutionLocationReady === 'true') {
+            return;
+        }
+
+        input.dataset.trainerSubstitutionLocationReady = 'true';
+        input.addEventListener('change', () => {
+            const form = input.closest('form');
+
+            updateTrainerSubstitutionRooms(form);
+            loadTrainerSubstitutionClasses(form);
+        });
+        updateTrainerSubstitutionRooms(input.closest('form'));
+    });
+
+    document.querySelectorAll('[data-trainer-substitution-room], [data-trainer-substitution-date]').forEach((input) => {
+        if (input.dataset.trainerSubstitutionClassReady === 'true') {
+            return;
+        }
+
+        input.dataset.trainerSubstitutionClassReady = 'true';
+        input.addEventListener('change', () => loadTrainerSubstitutionClasses(input.closest('form')));
+    });
+
+    document.querySelectorAll('[data-trainer-substitution-date-from]').forEach((input) => {
+        if (input.dataset.trainerSubstitutionDateFromReady === 'true') {
+            return;
+        }
+
+        input.dataset.trainerSubstitutionDateFromReady = 'true';
+        input.addEventListener('change', () => {
+            const dateToInput = input.closest('form')?.querySelector('[data-trainer-substitution-date-to]');
+
+            if (!dateToInput) {
+                return;
+            }
+
+            dateToInput.min = input.value || dateToInput.min;
+
+            if (dateToInput.value < input.value) {
+                dateToInput.value = input.value;
+            }
+        });
+    });
+
+    document.addEventListener('change', (event) => {
+        const checkbox = event.target.closest('[data-trainer-substitution-class-results] input[type="checkbox"]');
+
+        if (!checkbox?.checked) {
+            return;
+        }
+
+        const checked = checkbox.closest('[data-trainer-substitution-class-results]').querySelectorAll('input[type="checkbox"]:checked');
+
+        if (checked.length > 2) {
+            checkbox.checked = false;
+        }
     });
 }
 
@@ -1690,6 +2009,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initOtpCountdowns();
     initPrintButtons();
     initManualClassModals();
+    initTrainerSubstitutionModals();
     initQuickBookingModals();
     initCustomerTransferModals();
     initCopyButtons();
@@ -1895,6 +2215,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (event.key === 'Escape') {
             closeQuickBookingModal(document.querySelector('[data-quick-booking-modal]:not(.hidden)'));
+        }
+
+        if (event.key === 'Escape') {
+            closeTrainerSubstitutionModal(document.querySelector('[data-trainer-substitution-modal]:not(.hidden)'));
         }
 
         if (event.key === 'Escape') {

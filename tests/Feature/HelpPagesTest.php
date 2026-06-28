@@ -106,7 +106,8 @@ class HelpPagesTest extends TestCase
             ->assertSee('Як скасувати заняття з вини студії', false)
             ->assertSee('Скасувати заняття', false)
             ->assertSee('Відновити заняття', false)
-            ->assertSee('Як створити заняття на заміну', false)
+            ->assertSee('Як замінити тренера на занятті', false)
+            ->assertSee('Минулі заняття можна виправити тільки за останні два дні', false)
             ->assertSee('assets/help/screenshots/class-cancellation-confirm.png', false)
             ->assertSee('assets/help/screenshots/manual-class-modal.png', false);
 

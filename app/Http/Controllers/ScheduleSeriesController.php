@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\GenerateScheduleOccurrences;
+use App\Actions\GenerateAccountSchedule;
 use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
 use App\Http\Requests\StoreScheduleSeriesRequest;
@@ -43,14 +43,14 @@ class ScheduleSeriesController extends Controller
         ])));
     }
 
-    public function store(StoreScheduleSeriesRequest $request, Account $account, GenerateScheduleOccurrences $generateScheduleOccurrences): RedirectResponse
+    public function store(StoreScheduleSeriesRequest $request, Account $account, GenerateAccountSchedule $generateAccountSchedule): RedirectResponse
     {
         $validated = $request->validated();
         $this->ensureGroupClassesEnabled($account);
         $this->ensureRoomBelongsToLocation($account, (int) $validated['location_id'], (int) $validated['room_id']);
 
         $series = $account->scheduleSeries()->create($validated);
-        $generateScheduleOccurrences->execute($series);
+        $generateAccountSchedule->execute($account, $series->id);
 
         return redirect()->route('dashboard.accounts.schedule-series.index', $account)
             ->with('status', __('app.schedule_series_created'));
@@ -70,7 +70,7 @@ class ScheduleSeriesController extends Controller
         return view('schedule-series.edit', $this->formData($account, $scheduleSeries));
     }
 
-    public function update(UpdateScheduleSeriesRequest $request, Account $account, ScheduleSeries $scheduleSeries, GenerateScheduleOccurrences $generateScheduleOccurrences): RedirectResponse
+    public function update(UpdateScheduleSeriesRequest $request, Account $account, ScheduleSeries $scheduleSeries, GenerateAccountSchedule $generateAccountSchedule): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $scheduleSeries);
         $this->ensureGroupClassesEnabled($account);
@@ -79,7 +79,7 @@ class ScheduleSeriesController extends Controller
         $this->ensureRoomBelongsToLocation($account, (int) $validated['location_id'], (int) $validated['room_id']);
 
         $scheduleSeries->update($validated);
-        $generateScheduleOccurrences->execute($scheduleSeries);
+        $generateAccountSchedule->execute($account, $scheduleSeries->id);
 
         return redirect()->route('dashboard.accounts.schedule-series.index', $account)
             ->with('status', __('app.schedule_series_updated'));

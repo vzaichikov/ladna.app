@@ -104,6 +104,7 @@ class StudioDashboardData
             'locationLoad' => $this->loadBy($outlookClasses, 'location_id', 'location'),
             'roomLoad' => $this->loadBy($outlookClasses, 'room_id', 'room'),
             'outlookDays' => $this->outlookDays($outlookClasses, $todayStartsAt, $timezone),
+            'activeTrainerSubstitutions' => $this->activeTrainerSubstitutions($account, $todayStartsAt),
         ];
     }
 
@@ -291,6 +292,20 @@ class StudioDashboardData
         return $scheduledClass->classBookings
             ->filter(fn (ClassBooking $booking): bool => in_array($booking->status->value, $this->activeBookingStatuses(), true))
             ->count();
+    }
+
+    /**
+     * @return Collection<int, mixed>
+     */
+    private function activeTrainerSubstitutions(Account $account, CarbonImmutable $todayStartsAt): Collection
+    {
+        return $account->trainerSubstitutions()
+            ->with(['replacedTrainer:id,name', 'substituteTrainer:id,name', 'location:id,name', 'room:id,name'])
+            ->whereDate('date_to', '>=', $todayStartsAt->toDateString())
+            ->orderBy('date_from')
+            ->orderByDesc('created_at')
+            ->take(8)
+            ->get();
     }
 
     /**

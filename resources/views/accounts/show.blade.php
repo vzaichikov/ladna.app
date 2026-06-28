@@ -125,6 +125,38 @@
             <x-ui.metric :label="__('app.today_load')" :value="$ownerDashboard['metrics']['todayLoad']['percent'].'%'" :meta="__('app.booked_of_capacity', ['booked' => $ownerDashboard['metrics']['todayLoad']['bookings'], 'capacity' => $ownerDashboard['metrics']['todayLoad']['capacity']])" icon="generated-classes" accent="slate" />
         </section>
 
+        @if ($ownerDashboard['activeTrainerSubstitutions']->isNotEmpty())
+            <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+                <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.active_trainer_substitutions') }}</h2>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('app.active_trainer_substitutions_copy') }}</p>
+                    </div>
+                    <x-ui.icon name="calendar-range" class="h-5 w-5 text-brand-600" />
+                </div>
+                <div class="divide-y divide-stone-100">
+                    @foreach ($ownerDashboard['activeTrainerSubstitutions'] as $substitution)
+                        <div class="grid gap-3 px-5 py-4 md:grid-cols-[1fr_1fr_1fr] md:items-center">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-950">{{ $substitution->replacedTrainer?->name ?? $substitution->replaced_trainer_name }}</div>
+                                <div class="mt-1 text-xs font-medium text-slate-500">{{ __('app.replaced_trainer') }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-950">{{ $substitution->substituteTrainer?->name ?? $substitution->substitute_trainer_name }}</div>
+                                <div class="mt-1 text-xs font-medium text-slate-500">{{ __('app.substitute_trainer') }}</div>
+                            </div>
+                            <div class="text-sm text-slate-600 md:text-right">
+                                <div class="font-semibold text-slate-950">
+                                    {{ $substitution->date_from->toDateString() }}@if (! $substitution->date_from->isSameDay($substitution->date_to)) - {{ $substitution->date_to->toDateString() }}@endif
+                                </div>
+                                <div class="mt-1 text-xs font-medium text-slate-500">{{ $substitution->location?->name ?? $substitution->location_name }} · {{ $substitution->room?->name ?? $substitution->room_name }}</div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </x-ui.panel>
+        @endif
+
         <section class="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
             <x-ui.panel padding="none" class="overflow-hidden">
                 <div class="border-b border-stone-100 px-5 py-4">

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.48.0',
+                'date' => '2026-06-28',
+                'title' => 'Trainer substitutions',
+                'items' => ['Added trainer substitutions from a trainer card: owners can replace one or two concrete classes, including recent past classes within two days, or set a replacement for a period starting today or later. The studio dashboard now shows active substitutions, and owner help explains the new flow.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.47.0',
                 'date' => '2026-06-28',
                 'title' => 'Customer import and export',
@@ -429,6 +436,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.48.0',
+                'date' => '2026-06-28',
+                'title' => 'Заміни тренерів',
+                'items' => ['Додано заміни тренера з картки тренера: власниця може замінити одне або два конкретні заняття, зокрема недавні минулі заняття за останні два дні, або налаштувати заміну на період від сьогодні чи майбутньої дати. На головному екрані студії тепер видно актуальні заміни, а допомогу оновлено під новий flow.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.47.0',
                 'date' => '2026-06-28',

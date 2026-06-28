@@ -61,6 +61,16 @@ class Trainer extends Model
         return $this->hasMany(ScheduleSeries::class);
     }
 
+    public function substitutionsAsReplacedTrainer(): HasMany
+    {
+        return $this->hasMany(TrainerSubstitution::class, 'replaced_trainer_id');
+    }
+
+    public function substitutionsAsSubstituteTrainer(): HasMany
+    {
+        return $this->hasMany(TrainerSubstitution::class, 'substitute_trainer_id');
+    }
+
     public function photoUrl(): ?string
     {
         return $this->photo_path ? Storage::disk('public')->url($this->photo_path) : null;

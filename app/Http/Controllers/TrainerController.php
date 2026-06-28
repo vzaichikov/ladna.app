@@ -74,10 +74,26 @@ class TrainerController extends Controller
         $this->authorize('manageTrainers', $account);
         $account->ensureDefaultTrainerType();
         $trainer->loadMissing(['user', 'trainerType']);
+        $timezone = $account->timezone ?: config('app.timezone');
 
         return view('trainers.edit', [
             'account' => $account,
             'trainer' => $trainer,
+            'trainerSubstitutions' => $trainer->substitutionsAsReplacedTrainer()
+                ->with(['substituteTrainer', 'location', 'room'])
+                ->latest()
+                ->paginate(10, ['*'], 'substitutions_page')
+                ->withQueryString(),
+            'substitutionLocations' => $account->locations()->active()->orderBy('name')->get(['id', 'name']),
+            'substitutionRooms' => $account->rooms()->active()->with('location:id,name')->orderBy('location_id')->orderBy('name')->get(['id', 'location_id', 'name']),
+            'substitutionClassTypes' => $account->classTypes()->active()->orderBy('name')->get(['id', 'name']),
+            'substituteTrainers' => $account->trainers()
+                ->active()
+                ->whereKeyNot($trainer->id)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'substitutionToday' => now($timezone)->toDateString(),
+            'substitutionPastLimit' => now($timezone)->subDays(2)->toDateString(),
             ...$this->staffFormData($account, $trainer),
         ]);
     }

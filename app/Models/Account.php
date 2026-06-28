@@ -337,6 +337,11 @@ class Account extends Model
         return $this->hasMany(Trainer::class);
     }
 
+    public function trainerSubstitutions(): HasMany
+    {
+        return $this->hasMany(TrainerSubstitution::class);
+    }
+
     public function trainerTypes(): HasMany
     {
         return $this->hasMany(TrainerType::class);

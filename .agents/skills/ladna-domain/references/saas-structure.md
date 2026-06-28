@@ -60,6 +60,7 @@
 
 - Platform user credentials are configured by local-only `LADNA_DEMO_*` env values.
 - Studio owner credentials are configured by local-only `LADNA_DEMO_*` env values.
+- Dev and QA login users must come from the local `.env` `LADNA_DEMO_*` values. Do not invent or create replacement demo login users when those env-backed users are missing; restore them with `php artisan db:seed --no-interaction` only on local/dev environments. Running seeders is strictly forbidden on any production environment.
 - Demo account/location: `Charmpole`.
 - Demo rooms: `Великий зал` and `Малий зал`.
 - Demo data should model the real Charmpole studio, not generic placeholder fitness data. Charmpole demo class-pass plans include group classes, private lessons, room rental, and one trial pass.
