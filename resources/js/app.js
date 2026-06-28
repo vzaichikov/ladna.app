@@ -1348,6 +1348,330 @@ async function submitAsyncForm(form) {
     }
 }
 
+function closeCustomerTransferModal(modal) {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+function importStatusClasses(status) {
+    if (status === 'inserted') {
+        return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    }
+
+    if (status === 'already_found') {
+        return 'border-amber-200 bg-amber-50 text-amber-700';
+    }
+
+    return 'border-rose-200 bg-rose-50 text-rose-700';
+}
+
+function importStatusLabel(form, status) {
+    if (status === 'inserted') {
+        return form.dataset.insertedLabel || 'Inserted';
+    }
+
+    if (status === 'already_found') {
+        return form.dataset.alreadyFoundLabel || 'Already found';
+    }
+
+    return form.dataset.skippedLabel || 'Skipped';
+}
+
+function setCustomerImportProgress(form, visible, percent = 0, label = '') {
+    const progress = form.querySelector('[data-customer-import-progress]');
+    const bar = form.querySelector('[data-customer-import-progress-bar]');
+    const value = form.querySelector('[data-customer-import-progress-value]');
+    const labelElement = form.querySelector('[data-customer-import-progress-label]');
+
+    if (!progress || !bar || !value || !labelElement) {
+        return;
+    }
+
+    progress.classList.toggle('hidden', !visible);
+    bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    value.textContent = `${Math.round(percent)}%`;
+
+    if (label) {
+        labelElement.textContent = label;
+    }
+}
+
+function setCustomerImportError(form, message = '') {
+    const error = form.querySelector('[data-customer-import-error]');
+
+    if (!error) {
+        return;
+    }
+
+    error.textContent = message;
+    error.classList.toggle('hidden', !message);
+}
+
+function resetCustomerImportResults(form) {
+    form.querySelectorAll('[data-customer-import-summary]').forEach((summary) => {
+        summary.textContent = '0';
+    });
+
+    const results = form.querySelector('[data-customer-import-results]');
+
+    if (results) {
+        results.innerHTML = '';
+        const empty = document.createElement('div');
+        empty.className = 'px-4 py-5 text-sm text-slate-500';
+        empty.textContent = form.dataset.empty || 'No rows processed yet.';
+        results.append(empty);
+    }
+}
+
+function rowContactText(row) {
+    return [row.name, row.phone, row.email].filter(Boolean).join(' · ');
+}
+
+function rowResultText(row) {
+    const parts = [row.message].filter(Boolean);
+    const matchedCustomer = row.matched_customer;
+
+    if (matchedCustomer?.name || matchedCustomer?.phone || matchedCustomer?.email) {
+        parts.push([matchedCustomer.name, matchedCustomer.phone, matchedCustomer.email].filter(Boolean).join(' · '));
+    }
+
+    return parts.join(' · ');
+}
+
+function renderCustomerImportResults(form, payload) {
+    const summary = payload.summary || {};
+
+    Object.entries(summary).forEach(([key, value]) => {
+        const target = form.querySelector(`[data-customer-import-summary="${key}"]`);
+
+        if (target) {
+            target.textContent = String(value ?? 0);
+        }
+    });
+
+    const results = form.querySelector('[data-customer-import-results]');
+
+    if (!results) {
+        return;
+    }
+
+    results.innerHTML = '';
+
+    if (!Array.isArray(payload.rows) || payload.rows.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'px-4 py-5 text-sm text-slate-500';
+        empty.textContent = form.dataset.empty || 'No rows processed yet.';
+        results.append(empty);
+        return;
+    }
+
+    payload.rows.forEach((row) => {
+        const item = document.createElement('div');
+        item.className = 'grid min-w-[720px] grid-cols-[72px_130px_1fr_1.4fr] gap-3 border-t border-stone-100 px-4 py-3 text-sm first:border-t-0';
+
+        const rowNumber = document.createElement('div');
+        rowNumber.className = 'font-semibold text-slate-600';
+        rowNumber.textContent = String(row.row ?? '');
+
+        const status = document.createElement('div');
+        const badge = document.createElement('span');
+        badge.className = `inline-flex h-6 w-fit items-center rounded-md border px-2 text-xs font-semibold ${importStatusClasses(row.status)}`;
+        badge.textContent = importStatusLabel(form, row.status);
+        status.append(badge);
+
+        const contact = document.createElement('div');
+        contact.className = 'min-w-0 truncate text-slate-700';
+        contact.textContent = rowContactText(row);
+        contact.title = contact.textContent;
+
+        const reason = document.createElement('div');
+        reason.className = 'min-w-0 truncate text-slate-500';
+        reason.textContent = rowResultText(row);
+        reason.title = reason.textContent;
+
+        item.append(rowNumber, status, contact, reason);
+        results.append(item);
+    });
+}
+
+function selectedCustomerImportFile(input) {
+    return input?.files?.[0] ?? null;
+}
+
+function setCustomerImportFile(form, file) {
+    const input = form.querySelector('[data-customer-import-input]');
+    const fileName = form.querySelector('[data-customer-import-file-name]');
+    const submit = form.querySelector('[data-customer-import-submit]');
+
+    if (file && input) {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        input.files = dataTransfer.files;
+    }
+
+    const selectedFile = selectedCustomerImportFile(input);
+
+    if (fileName) {
+        fileName.textContent = selectedFile
+            ? (form.dataset.fileReadyTemplate || '__name__').replace('__name__', selectedFile.name)
+            : '';
+        fileName.classList.toggle('hidden', !selectedFile);
+    }
+
+    if (submit) {
+        submit.disabled = !selectedFile;
+    }
+}
+
+function submitCustomerImportForm(form) {
+    const file = selectedCustomerImportFile(form.querySelector('[data-customer-import-input]'));
+
+    if (!file) {
+        return;
+    }
+
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData(form);
+
+    setCustomerImportError(form);
+    resetCustomerImportResults(form);
+    setCustomerImportProgress(form, true, 0, form.dataset.uploading || 'Uploading...');
+    setFormDisabled(form, true);
+
+    xhr.upload.addEventListener('progress', (event) => {
+        if (!event.lengthComputable) {
+            return;
+        }
+
+        const percent = Math.min(95, (event.loaded / event.total) * 100);
+        setCustomerImportProgress(form, true, percent, form.dataset.uploading || 'Uploading...');
+    });
+
+    xhr.addEventListener('load', () => {
+        let payload = {};
+
+        try {
+            payload = JSON.parse(xhr.responseText || '{}');
+        } catch {
+            payload = {};
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+            setCustomerImportProgress(form, true, 100, form.dataset.processing || 'Processing customers...');
+            renderCustomerImportResults(form, payload);
+            return;
+        }
+
+        const message = payload.errors?.file?.[0] || payload.message || form.dataset.failed || 'Could not import this file.';
+        setCustomerImportError(form, message);
+        setCustomerImportProgress(form, false);
+    });
+
+    xhr.addEventListener('error', () => {
+        setCustomerImportError(form, form.dataset.failed || 'Could not import this file.');
+        setCustomerImportProgress(form, false);
+    });
+
+    xhr.addEventListener('loadend', () => {
+        setFormDisabled(form, false);
+        setCustomerImportFile(form);
+    });
+
+    xhr.open(form.method.toUpperCase(), form.action);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.send(formData);
+}
+
+function initCustomerTransferModals() {
+    document.querySelectorAll('[data-customer-transfer-modal]').forEach((modal) => {
+        if (modal.dataset.customerTransferReady === 'true') {
+            return;
+        }
+
+        modal.dataset.customerTransferReady = 'true';
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeCustomerTransferModal(modal);
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-customer-transfer-open]').forEach((button) => {
+        if (button.dataset.customerTransferOpenReady === 'true') {
+            return;
+        }
+
+        button.dataset.customerTransferOpenReady = 'true';
+        button.addEventListener('click', () => {
+            const modal = document.querySelector(`[data-customer-transfer-modal="${button.dataset.customerTransferOpen}"]`);
+
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.querySelector('[data-customer-transfer-close]')?.focus();
+        });
+    });
+
+    document.querySelectorAll('[data-customer-transfer-close]').forEach((button) => {
+        if (button.dataset.customerTransferCloseReady === 'true') {
+            return;
+        }
+
+        button.dataset.customerTransferCloseReady = 'true';
+        button.addEventListener('click', () => closeCustomerTransferModal(button.closest('[data-customer-transfer-modal]')));
+    });
+
+    document.querySelectorAll('[data-customer-import-form]').forEach((form) => {
+        if (form.dataset.customerImportReady === 'true') {
+            return;
+        }
+
+        const input = form.querySelector('[data-customer-import-input]');
+        const dropzone = form.querySelector('[data-customer-import-dropzone]');
+        const browse = form.querySelector('[data-customer-import-browse]');
+
+        form.dataset.customerImportReady = 'true';
+        setCustomerImportFile(form);
+        resetCustomerImportResults(form);
+
+        browse?.addEventListener('click', () => input?.click());
+        dropzone?.addEventListener('click', (event) => {
+            if (event.target.closest('button, a')) {
+                return;
+            }
+
+            input?.click();
+        });
+        input?.addEventListener('change', () => setCustomerImportFile(form));
+
+        dropzone?.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dropzone.classList.add('border-brand-500', 'bg-brand-50');
+        });
+        dropzone?.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-brand-500', 'bg-brand-50');
+        });
+        dropzone?.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropzone.classList.remove('border-brand-500', 'bg-brand-50');
+            const file = event.dataTransfer?.files?.[0] ?? null;
+
+            if (file) {
+                setCustomerImportFile(form, file);
+            }
+        });
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            submitCustomerImportForm(form);
+        });
+    });
+}
+
 function initActiveScrollTargets() {
     document.querySelectorAll('[data-active-scroll-target]').forEach((element) => {
         element.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -1367,6 +1691,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPrintButtons();
     initManualClassModals();
     initQuickBookingModals();
+    initCustomerTransferModals();
     initCopyButtons();
     initActiveScrollTargets();
 
@@ -1570,6 +1895,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (event.key === 'Escape') {
             closeQuickBookingModal(document.querySelector('[data-quick-booking-modal]:not(.hidden)'));
+        }
+
+        if (event.key === 'Escape') {
+            closeCustomerTransferModal(document.querySelector('[data-customer-transfer-modal]:not(.hidden)'));
         }
 
         if (event.key === 'Escape' && pendingDeleteForm) {

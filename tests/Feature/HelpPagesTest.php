@@ -85,6 +85,20 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('endpoint', false);
     }
 
+    public function test_customers_help_explains_customer_import_and_export(): void
+    {
+        $this->get(route('help.show', 'customers-bookings', false))
+            ->assertStatus(200)
+            ->assertSee('Як імпортувати або експортувати клієнтів', false)
+            ->assertSee('Подивитися приклад', false)
+            ->assertSee('name, phone, email', false)
+            ->assertSee('Телефон порівнюється за цифрами', false)
+            ->assertSee('Вже існує', false)
+            ->assertSee('assets/help/screenshots/customer-import.png', false)
+            ->assertDontSee('tenant', false)
+            ->assertDontSee('endpoint', false);
+    }
+
     public function test_help_documents_studio_class_cancellation_flow(): void
     {
         $this->get(route('help.show', 'schedule', false))

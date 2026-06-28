@@ -8,10 +8,20 @@
             <h1 class="crm-page-title">{{ __('app.customers') }}</h1>
             <p class="crm-page-copy">{{ __('app.customers_copy') }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.customers.create', $account)">
-            <x-ui.icon name="plus" class="h-4 w-4" />
-            {{ __('app.create_customer') }}
-        </x-ui.button>
+        <div class="flex flex-wrap gap-2 sm:justify-end">
+            <x-ui.button type="button" variant="secondary" data-customer-transfer-open="export">
+                <x-ui.icon name="download" class="h-4 w-4" />
+                {{ __('app.customer_export') }}
+            </x-ui.button>
+            <x-ui.button type="button" variant="secondary" data-customer-transfer-open="import">
+                <x-ui.icon name="upload" class="h-4 w-4" />
+                {{ __('app.customer_import') }}
+            </x-ui.button>
+            <x-ui.button :href="route('dashboard.accounts.customers.create', $account)">
+                <x-ui.icon name="plus" class="h-4 w-4" />
+                {{ __('app.create_customer') }}
+            </x-ui.button>
+        </div>
     </div>
 
     <form method="GET" action="{{ route('dashboard.accounts.customers.index', $account) }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
@@ -51,4 +61,6 @@
     <div class="mt-6">
         {{ $customers->links() }}
     </div>
+
+    @include('customers._bulk-transfer-modals')
 @endsection
