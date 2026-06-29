@@ -12,6 +12,7 @@ use App\Models\SystemSetting;
 use App\Models\TelegramBotInstallation;
 use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
+use App\Support\Telegram\TelegramWebhookManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -45,11 +46,11 @@ class SystemSettingsController extends Controller
         ]);
     }
 
-    public function update(UpdateSystemSettingsRequest $request): RedirectResponse
+    public function update(UpdateSystemSettingsRequest $request, TelegramWebhookManager $telegramWebhooks): RedirectResponse
     {
         $validated = $request->validated();
 
-        DB::transaction(function () use ($request, $validated): void {
+        $ownerTelegramBotInstallation = DB::transaction(function () use ($request, $validated): TelegramBotInstallation {
             SystemSetting::setValue(SystemAppearance::FontSettingKey, $validated['font_family']);
             SystemSetting::setValue(SystemSetting::SupportUrlKey, $validated['support_url'] ?? null);
             AccountActivityLogSettings::setEnabled(
@@ -62,14 +63,26 @@ class SystemSettingsController extends Controller
             );
 
             $this->savePlatformAi($validated);
-            $this->saveOwnerTelegramBot($validated);
+
+            return $this->saveOwnerTelegramBot($validated);
         });
 
         $activeTab = $validated['settings_tab'] ?? null;
+        $telegramWebhookResult = null;
 
-        return redirect()
+        if ($ownerTelegramBotInstallation->is_enabled && $ownerTelegramBotInstallation->tokenValue()) {
+            $telegramWebhookResult = $telegramWebhooks->register($ownerTelegramBotInstallation);
+        }
+
+        $redirect = redirect()
             ->route('platform.settings.edit', $activeTab ? ['tab' => $activeTab] : [])
             ->with('status', __('app.system_settings_updated'));
+
+        if ($telegramWebhookResult && ! $telegramWebhookResult['ok']) {
+            $redirect->with('warning', $telegramWebhookResult['message']);
+        }
+
+        return $redirect;
     }
 
     /**
@@ -113,7 +126,7 @@ class SystemSettingsController extends Controller
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function saveOwnerTelegramBot(array $validated): void
+    private function saveOwnerTelegramBot(array $validated): TelegramBotInstallation
     {
         $installation = TelegramBotInstallation::query()->firstOrNew([
             'scope_type' => 'platform',
@@ -156,6 +169,8 @@ class SystemSettingsController extends Controller
             'status' => $installation->tokenValue() || filled($token) ? 'configured' : 'pending',
             'webhook_url' => $webhookKey ? route('api.v1.telegram.webhooks.handle', $webhookKey) : null,
         ])->save();
+
+        return $installation;
     }
 
     private function credentialKey(AiProvider $provider): string

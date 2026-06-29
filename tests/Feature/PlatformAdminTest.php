@@ -153,6 +153,17 @@ class PlatformAdminTest extends TestCase
 
     public function test_platform_admin_can_update_global_ai_and_owner_bot_settings(): void
     {
+        Http::fake([
+            'api.telegram.org/*/setWebhook' => Http::response(['ok' => true, 'result' => true]),
+            'api.telegram.org/*/getWebhookInfo' => Http::response([
+                'ok' => true,
+                'result' => [
+                    'url' => route('api.v1.telegram.webhooks.handle', 'placeholder'),
+                    'pending_update_count' => 0,
+                ],
+            ]),
+        ]);
+
         $platformAdmin = User::factory()->platformAdmin()->create();
 
         PlatformAiSetting::query()->delete();
@@ -206,6 +217,148 @@ class PlatformAdminTest extends TestCase
         $this->assertTrue($installation->is_enabled);
         $this->assertStringContainsString('/api/v1/telegram/webhooks/', (string) $installation->webhook_url);
         $this->assertSame('owner-secret', substr((string) $installation->tokenValue(), -12));
+        $this->assertSame('webhook_synced', $installation->status);
+        $this->assertNotNull($installation->last_webhook_synced_at);
+
+        Http::assertSent(function (Request $request) use ($installation): bool {
+            return str_ends_with($request->url(), '/setWebhook')
+                && $request['url'] === $installation->webhook_url
+                && $request['secret_token'] === $installation->webhookSecret()
+                && $request['allowed_updates'] === ['message', 'callback_query'];
+        });
+    }
+
+    public function test_platform_owner_telegram_webhook_status_is_platform_only_and_redacted(): void
+    {
+        Http::fake([
+            'api.telegram.org/*/getWebhookInfo' => Http::response([
+                'ok' => true,
+                'result' => [
+                    'url' => 'https://example.com/other-webhook',
+                    'pending_update_count' => 2,
+                    'last_error_message' => 'Wrong response from webhook',
+                    'allowed_updates' => ['message'],
+                ],
+            ]),
+        ]);
+
+        $normalUser = User::factory()->create();
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+            'encrypted_token' => '123456:owner-secret',
+            'token_last_four' => 'cret',
+            'webhook_url' => 'https://ladna.test/api/v1/telegram/webhooks/local-key',
+            'status' => 'configured',
+            'is_enabled' => true,
+        ]);
+
+        $this->actingAs($normalUser)
+            ->getJson(route('platform.settings.owner-telegram-bot.webhook-status'))
+            ->assertForbidden();
+
+        $response = $this->actingAs($platformAdmin)
+            ->getJson(route('platform.settings.owner-telegram-bot.webhook-status'))
+            ->assertOk()
+            ->assertJsonPath('local.configured', true)
+            ->assertJsonPath('local.enabled', true)
+            ->assertJsonPath('local.token_last_four', 'cret')
+            ->assertJsonPath('local.webhook_url', $installation->webhook_url)
+            ->assertJsonPath('telegram.checked', true)
+            ->assertJsonPath('telegram.is_registered', true)
+            ->assertJsonPath('telegram.url_matches', false)
+            ->assertJsonPath('telegram.pending_update_count', 2)
+            ->assertJsonMissingPath('local.token')
+            ->assertJsonMissingPath('local.webhook_secret');
+
+        $this->assertStringNotContainsString('owner-secret', $response->getContent());
+        $this->assertStringNotContainsString((string) $installation->webhookSecret(), $response->getContent());
+    }
+
+    public function test_platform_admin_can_register_and_delete_owner_telegram_webhook(): void
+    {
+        Http::fake([
+            'api.telegram.org/*/setWebhook' => Http::response(['ok' => true, 'result' => true]),
+            'api.telegram.org/*/deleteWebhook' => Http::response(['ok' => true, 'result' => true]),
+            'api.telegram.org/*/getWebhookInfo' => Http::sequence()
+                ->push([
+                    'ok' => true,
+                    'result' => [
+                        'url' => 'https://ladna.test/api/v1/telegram/webhooks/local-key',
+                        'pending_update_count' => 0,
+                    ],
+                ])
+                ->push([
+                    'ok' => true,
+                    'result' => [
+                        'url' => '',
+                        'pending_update_count' => 0,
+                    ],
+                ]),
+        ]);
+
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+            'encrypted_token' => '123456:owner-secret',
+            'token_last_four' => 'cret',
+            'webhook_url' => 'https://ladna.test/api/v1/telegram/webhooks/local-key',
+            'status' => 'configured',
+            'is_enabled' => true,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->postJson(route('platform.settings.owner-telegram-bot.register-webhook'))
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('status.local.status', 'webhook_synced')
+            ->assertJsonPath('status.telegram.url_matches', true);
+
+        $this->assertSame('webhook_synced', $installation->fresh()->status);
+        $this->assertNotNull($installation->fresh()->last_webhook_synced_at);
+
+        $this->actingAs($platformAdmin)
+            ->deleteJson(route('platform.settings.owner-telegram-bot.delete-webhook'))
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('status.local.status', 'webhook_deleted')
+            ->assertJsonPath('status.telegram.is_registered', false);
+
+        $this->assertSame('webhook_deleted', $installation->fresh()->status);
+        $this->assertNull($installation->fresh()->last_webhook_synced_at);
+    }
+
+    public function test_failed_owner_telegram_webhook_registration_is_stored_and_reported(): void
+    {
+        Http::fake([
+            'api.telegram.org/*/setWebhook' => Http::response([
+                'ok' => false,
+                'description' => 'Bad Request: invalid webhook URL',
+            ], 400),
+            'api.telegram.org/*/getWebhookInfo' => Http::response([
+                'ok' => true,
+                'result' => [
+                    'url' => '',
+                    'pending_update_count' => 0,
+                ],
+            ]),
+        ]);
+
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+            'encrypted_token' => '123456:owner-secret',
+            'token_last_four' => 'cret',
+            'webhook_url' => 'https://ladna.test/api/v1/telegram/webhooks/local-key',
+            'status' => 'configured',
+            'is_enabled' => true,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->postJson(route('platform.settings.owner-telegram-bot.register-webhook'))
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('message', 'Bad Request: invalid webhook URL')
+            ->assertJsonPath('status.local.status', 'webhook_failed');
+
+        $this->assertSame('webhook_failed', $installation->fresh()->status);
     }
 
     public function test_platform_admin_can_lazy_load_saved_provider_models(): void

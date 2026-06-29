@@ -48,6 +48,20 @@ class TelegramClient
             ], fn (mixed $value): bool => $value !== null && $value !== ''));
     }
 
+    public function getWebhookInfo(TelegramBotInstallation $installation): ?Response
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token) {
+            return null;
+        }
+
+        return Http::timeout(8)
+            ->connectTimeout(3)
+            ->retry([100, 300], throw: false)
+            ->get($this->methodUrl($token, 'getWebhookInfo'));
+    }
+
     public function answerCallbackQuery(TelegramBotInstallation $installation, string $callbackQueryId): ?Response
     {
         $token = $installation->tokenValue();
