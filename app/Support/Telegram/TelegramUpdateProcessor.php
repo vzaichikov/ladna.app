@@ -184,8 +184,27 @@ class TelegramUpdateProcessor
         }
 
         $account = $authorization->account;
-        $result = $this->ownerResponder->respond($account, $text, $authorization);
-        $outboundMessage = $this->sendAndStore($telegramUpdate, $chatId, $result['response'], [], $account->id, $authorization);
+        $result = $this->ownerResponder->respond(
+            $account,
+            $text,
+            $authorization,
+            function () use ($installation, $chatId): void {
+                try {
+                    $this->telegramClient->sendChatAction($installation, $chatId);
+                } catch (Throwable $throwable) {
+                    report($throwable);
+                }
+            },
+        );
+        $outboundMessage = $this->sendAndStore(
+            $telegramUpdate,
+            $chatId,
+            $result['response'],
+            $this->assistantTelegramFormatting(),
+            $account->id,
+            $authorization,
+            $this->assistantTelegramText($result['response']),
+        );
 
         $this->recordConversation($authorization, $inboundMessage, $outboundMessage, $text, $result['response'], $result['rejected'], $result['used_ai']);
 
@@ -195,9 +214,9 @@ class TelegramUpdateProcessor
     /**
      * @param  array<string, mixed>  $extra
      */
-    private function sendAndStore(TelegramUpdate $telegramUpdate, string $chatId, string $text, array $extra = [], ?int $accountId = null, ?TelegramChatAuthorization $authorization = null): TelegramMessage
+    private function sendAndStore(TelegramUpdate $telegramUpdate, string $chatId, string $text, array $extra = [], ?int $accountId = null, ?TelegramChatAuthorization $authorization = null, ?string $telegramText = null): TelegramMessage
     {
-        $this->telegramClient->sendMessage($telegramUpdate->installation, $chatId, $text, $extra);
+        $this->telegramClient->sendMessage($telegramUpdate->installation, $chatId, $telegramText ?? $text, $extra);
 
         return TelegramMessage::create([
             'account_id' => $accountId ?? $telegramUpdate->account_id,
@@ -212,6 +231,42 @@ class TelegramUpdateProcessor
             'payload' => $extra ?: null,
             'sent_at' => now(),
         ]);
+    }
+
+    /**
+     * @return array{parse_mode: string}
+     */
+    private function assistantTelegramFormatting(): array
+    {
+        return ['parse_mode' => 'HTML'];
+    }
+
+    private function assistantTelegramText(string $text): string
+    {
+        $bulletMarker = '__LADNA_TELEGRAM_BULLET__';
+        $text = preg_replace('/(^|\R)[ \t]*[*-][ \t]+/u', '$1'.$bulletMarker.' ', $text) ?? $text;
+        $parts = preg_split('/(\*\*.+?\*\*)/us', $text, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+
+        if (! is_array($parts)) {
+            return str_replace($bulletMarker, '&#8226;', $this->escapeTelegramHtml($text));
+        }
+
+        $formatted = collect($parts)
+            ->map(function (string $part): string {
+                if (str_starts_with($part, '**') && str_ends_with($part, '**') && mb_strlen($part) > 4) {
+                    return '<b>'.$this->escapeTelegramHtml(mb_substr($part, 2, -2)).'</b>';
+                }
+
+                return $this->escapeTelegramHtml($part);
+            })
+            ->implode('');
+
+        return str_replace($bulletMarker, '&#8226;', $formatted);
+    }
+
+    private function escapeTelegramHtml(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     private function recordConversation(

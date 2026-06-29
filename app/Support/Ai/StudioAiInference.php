@@ -21,7 +21,10 @@ class StudioAiInference
         private readonly LadnaAssistantCapabilities $capabilities,
     ) {}
 
-    public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?AiConversation $conversation = null): StudioAiResult
+    /**
+     * @param  callable(): mixed|null  $beforeProviderRequest
+     */
+    public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?AiConversation $conversation = null, ?callable $beforeProviderRequest = null): StudioAiResult
     {
         $setting = PlatformAiSetting::current();
 
@@ -43,7 +46,17 @@ class StudioAiInference
             return StudioAiResult::fallback('missing_ollama_api_key');
         }
 
+        $notifyBeforeProviderRequest = function () use ($beforeProviderRequest): void {
+            if (! $beforeProviderRequest) {
+                return;
+            }
+
+            $beforeProviderRequest();
+        };
+
         try {
+            $notifyBeforeProviderRequest();
+
             if (! $this->guard->isStudioScoped($account, $text, $apiKey, $setting->active_model)) {
                 return StudioAiResult::rejected(__('app.telegram_out_of_scope'));
             }
@@ -58,6 +71,8 @@ class StudioAiInference
             $capabilityContext = $this->capabilities->isCapabilityQuestion($text)
                 ? $this->capabilities->forPrompt($this->channel($authorization, $conversation))
                 : null;
+            $notifyBeforeProviderRequest();
+
             $response = $this->ollamaCloudClient->chat(
                 $apiKey,
                 $setting->active_model,

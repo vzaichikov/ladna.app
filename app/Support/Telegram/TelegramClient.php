@@ -29,6 +29,23 @@ class TelegramClient
             ]);
     }
 
+    public function sendChatAction(TelegramBotInstallation $installation, string|int $chatId, string $action = 'typing'): ?Response
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token || (string) $chatId === '') {
+            return null;
+        }
+
+        return Http::timeout(8)
+            ->connectTimeout(3)
+            ->retry([100, 300], throw: false)
+            ->post($this->methodUrl($token, 'sendChatAction'), [
+                'chat_id' => $chatId,
+                'action' => $action,
+            ]);
+    }
+
     public function setWebhook(TelegramBotInstallation $installation): ?Response
     {
         $token = $installation->tokenValue();

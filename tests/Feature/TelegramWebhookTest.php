@@ -14,6 +14,7 @@ use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -248,6 +249,7 @@ class TelegramWebhookTest extends TestCase
             ->where('direction', 'outbound')
             ->where('text', __('app.telegram_class_count_for_day', ['date' => '2026-06-28', 'count' => 0]))
             ->exists());
+        Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendChatAction'));
 
         Carbon::setTestNow();
     }
@@ -266,7 +268,10 @@ class TelegramWebhookTest extends TestCase
                 ->push([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => 'AI answer for studio schedule.',
+                        'content' => json_encode([
+                            'answer' => "**AI answer** for studio schedule.\n* First item",
+                            'follow_up_actions' => [],
+                        ]),
                     ],
                 ]),
             'api.telegram.org/*' => Http::response(['ok' => true]),
@@ -313,11 +318,20 @@ class TelegramWebhookTest extends TestCase
         $this->assertDatabaseHas('telegram_messages', [
             'telegram_chat_id' => '558',
             'direction' => 'outbound',
-            'text' => 'AI answer for studio schedule.',
+            'text' => "**AI answer** for studio schedule.\n* First item",
         ]);
-        $this->assertTrue(AiConversationMessage::where('content', 'AI answer for studio schedule.')
+        $this->assertTrue(AiConversationMessage::where('content', "**AI answer** for studio schedule.\n* First item")
             ->where('metadata->used_ai', true)
             ->exists());
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendChatAction')
+            && $request['chat_id'] === '558'
+            && $request['action'] === 'typing');
+        $this->assertCount(2, collect(Http::recorded())
+            ->filter(fn (array $record): bool => str_ends_with($record[0]->url(), '/sendChatAction')));
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendMessage')
+            && $request['chat_id'] === '558'
+            && $request['parse_mode'] === 'HTML'
+            && $request['text'] === "<b>AI answer</b> for studio schedule.\n&#8226; First item");
 
         Carbon::setTestNow();
     }
