@@ -113,6 +113,36 @@ class Account extends Model
         return $this->hasMany(AccountApiToken::class);
     }
 
+    public function aiSetting(): HasOne
+    {
+        return $this->hasOne(AccountAiSetting::class);
+    }
+
+    public function aiProviderCredentials(): HasMany
+    {
+        return $this->hasMany(AccountAiProviderCredential::class);
+    }
+
+    public function telegramBotInstallations(): HasMany
+    {
+        return $this->hasMany(TelegramBotInstallation::class);
+    }
+
+    public function telegramBotProfiles(): HasMany
+    {
+        return $this->hasMany(TelegramBotProfileSetting::class);
+    }
+
+    public function telegramChatAuthorizations(): HasMany
+    {
+        return $this->hasMany(TelegramChatAuthorization::class);
+    }
+
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
+
     public function classTypes(): HasMany
     {
         return $this->hasMany(ClassType::class);

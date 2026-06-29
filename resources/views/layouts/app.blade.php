@@ -53,6 +53,8 @@
     $canMarkAttendance = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::MarkAttendance);
     $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
+    $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
+    $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
     $canViewTariffPayments = $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
     $subscriptionAccess = $showAccountNav ? app(\App\Support\SaasBilling\AccountSubscriptionAccess::class) : null;
@@ -467,6 +469,67 @@
                 <x-ui.app-footer :version="$applicationVersion" />
             </div>
         </div>
+
+        @if ($showAssistantWidget)
+            <div
+                data-assistant-chat
+                data-show-url="{{ route('dashboard.accounts.assistant.show', $activeAccount) }}"
+                data-send-url="{{ route('dashboard.accounts.assistant.messages.store', $activeAccount) }}"
+                data-confirm-url-template="{{ route('dashboard.accounts.assistant.actions.confirm', [$activeAccount, '__ACTION__']) }}"
+                data-cancel-url-template="{{ route('dashboard.accounts.assistant.actions.cancel', [$activeAccount, '__ACTION__']) }}"
+                data-csrf-token="{{ csrf_token() }}"
+                data-error-message="{{ __('app.assistant_chat_error') }}"
+                data-empty-message="{{ __('app.assistant_chat_empty') }}"
+                data-confirm-label="{{ __('app.confirm') }}"
+                data-cancel-label="{{ __('app.cancel') }}"
+                class="fixed bottom-5 right-5 z-40"
+            >
+                <button
+                    type="button"
+                    data-assistant-toggle
+                    class="flex h-14 w-14 items-center justify-center rounded-full border border-white bg-[#3B223F] shadow-2xl shadow-slate-950/20 ring-1 ring-slate-950/10 transition hover:scale-[1.03]"
+                    aria-label="{{ __('app.owner_dashboard_chat_title') }}"
+                >
+                    <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="h-12 w-12 rounded-full object-cover object-top">
+                </button>
+
+                <section
+                    data-assistant-panel
+                    class="absolute bottom-16 right-0 hidden w-[min(92vw,390px)] overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl shadow-slate-950/20"
+                    aria-label="{{ __('app.owner_dashboard_chat_title') }}"
+                >
+                    <div class="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+                        <div class="flex items-center gap-3">
+                            <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="h-9 w-9 rounded-full bg-brand-50 object-cover object-top ring-1 ring-stone-200">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-950">{{ __('app.owner_dashboard_chat_title') }}</div>
+                                <div class="text-xs text-slate-500">{{ $activeAccount->name }}</div>
+                            </div>
+                        </div>
+                        <button type="button" data-assistant-close class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700" aria-label="{{ __('app.close') }}">
+                            <x-ui.icon name="close" class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    <div data-assistant-messages class="flex max-h-[48vh] min-h-64 flex-col gap-3 overflow-y-auto bg-slate-50 px-4 py-4"></div>
+
+                    <div data-assistant-actions class="hidden border-t border-stone-100 bg-white px-4 py-3"></div>
+
+                    <form data-assistant-form class="flex gap-2 border-t border-stone-100 bg-white p-3">
+                        <input
+                            data-assistant-input
+                            class="min-w-0 flex-1 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                            maxlength="2000"
+                            autocomplete="off"
+                            placeholder="{{ __('app.assistant_chat_placeholder') }}"
+                        >
+                        <button type="submit" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition hover:bg-brand-700" aria-label="{{ __('app.send') }}">
+                            <x-ui.icon name="send" class="h-4 w-4" />
+                        </button>
+                    </form>
+                </section>
+            </div>
+        @endif
 
         <div
             id="delete-confirmation-modal"

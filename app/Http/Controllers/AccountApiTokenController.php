@@ -12,7 +12,7 @@ class AccountApiTokenController extends Controller
 {
     public function store(StoreAccountApiTokenRequest $request, Account $account, AccountApiTokenIssuer $accountApiTokenIssuer): RedirectResponse
     {
-        $accountApiTokenIssuer->issue($account, (string) $request->validated('name'));
+        $accountApiTokenIssuer->issue($account, (string) $request->validated('name'), $request->abilityValues());
 
         return redirect()->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api'])
             ->with('status', __('app.api_token_created'));

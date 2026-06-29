@@ -8,6 +8,7 @@ enum StudioPermission: string
     case ManageClients = 'manage_clients';
     case ManageBookings = 'manage_bookings';
     case ManageWebsiteLeads = 'manage_website_leads';
+    case InteractWithTelegramBot = 'interact_with_telegram_bot';
     case IssueCustomerClassPasses = 'issue_customer_class_passes';
     case ManageCustomerClassPasses = 'manage_customer_class_passes';
     case ViewActivityLog = 'view_activity_log';

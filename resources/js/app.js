@@ -1997,6 +1997,210 @@ function initActiveScrollTargets() {
     });
 }
 
+function initAssistantChat() {
+    document.querySelectorAll('[data-assistant-chat]').forEach((widget) => {
+        if (widget.dataset.assistantReady === 'true') {
+            return;
+        }
+
+        const toggle = widget.querySelector('[data-assistant-toggle]');
+        const close = widget.querySelector('[data-assistant-close]');
+        const panel = widget.querySelector('[data-assistant-panel]');
+        const messages = widget.querySelector('[data-assistant-messages]');
+        const actions = widget.querySelector('[data-assistant-actions]');
+        const form = widget.querySelector('[data-assistant-form]');
+        const input = widget.querySelector('[data-assistant-input]');
+
+        if (!toggle || !panel || !messages || !actions || !form || !input) {
+            return;
+        }
+
+        widget.dataset.assistantReady = 'true';
+
+        let loaded = false;
+        let loading = false;
+
+        const csrfToken = widget.dataset.csrfToken || '';
+        const requestJson = (url, options = {}) => fetch(url, {
+            ...options,
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                ...(options.headers || {}),
+            },
+        }).then(async (response) => {
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(payload.message || widget.dataset.errorMessage || 'Request failed');
+            }
+
+            return payload;
+        });
+
+        const setLoading = (value) => {
+            loading = value;
+            input.disabled = value;
+            form.querySelector('button[type="submit"]').disabled = value;
+            form.classList.toggle('opacity-70', value);
+        };
+
+        const bubbleClass = (role) => {
+            if (role === 'user') {
+                return 'ml-auto bg-[#3B223F] text-white';
+            }
+
+            if (role === 'rejected_intent') {
+                return 'mr-auto border border-rose-100 bg-rose-50 text-rose-800';
+            }
+
+            if (role === 'tool') {
+                return 'mr-auto border border-emerald-100 bg-emerald-50 text-emerald-900';
+            }
+
+            return 'mr-auto border border-stone-200 bg-white text-slate-800';
+        };
+
+        const renderMessages = (items = []) => {
+            messages.innerHTML = '';
+
+            if (items.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'm-auto max-w-64 text-center text-sm leading-6 text-slate-500';
+                empty.textContent = widget.dataset.emptyMessage || '';
+                messages.append(empty);
+                return;
+            }
+
+            items.forEach((message) => {
+                const bubble = document.createElement('div');
+                bubble.className = `max-w-[82%] rounded-lg px-3 py-2 text-sm leading-6 shadow-xs ${bubbleClass(message.role)}`;
+                bubble.textContent = message.content || '';
+                messages.append(bubble);
+            });
+
+            messages.scrollTop = messages.scrollHeight;
+        };
+
+        const renderActions = (items = []) => {
+            actions.innerHTML = '';
+            actions.classList.toggle('hidden', items.length === 0);
+
+            items.forEach((action) => {
+                const card = document.createElement('div');
+                card.className = 'rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950';
+
+                const summary = document.createElement('div');
+                summary.className = 'font-semibold';
+                summary.textContent = action.preview?.summary || action.action_name;
+                card.append(summary);
+
+                (action.preview?.warnings || []).forEach((warning) => {
+                    const warningLine = document.createElement('div');
+                    warningLine.className = 'mt-1 text-xs font-semibold text-rose-700';
+                    warningLine.textContent = warning;
+                    card.append(warningLine);
+                });
+
+                const controls = document.createElement('div');
+                controls.className = 'mt-3 flex gap-2';
+
+                const confirm = document.createElement('button');
+                confirm.type = 'button';
+                confirm.className = 'rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60';
+                confirm.textContent = widget.dataset.confirmLabel || 'Confirm';
+                confirm.addEventListener('click', () => submitAction(widget.dataset.confirmUrlTemplate, action.id));
+                controls.append(confirm);
+
+                const cancel = document.createElement('button');
+                cancel.type = 'button';
+                cancel.className = 'rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60';
+                cancel.textContent = widget.dataset.cancelLabel || 'Cancel';
+                cancel.addEventListener('click', () => submitAction(widget.dataset.cancelUrlTemplate, action.id));
+                controls.append(cancel);
+
+                card.append(controls);
+                actions.append(card);
+            });
+        };
+
+        const render = (payload) => {
+            renderMessages(payload.messages || []);
+            renderActions(payload.pending_actions || []);
+        };
+
+        const showError = (message) => {
+            const bubble = document.createElement('div');
+            bubble.className = 'mr-auto max-w-[82%] rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800';
+            bubble.textContent = message || widget.dataset.errorMessage || '';
+            messages.append(bubble);
+            messages.scrollTop = messages.scrollHeight;
+        };
+
+        const load = () => {
+            if (loaded || loading) {
+                return;
+            }
+
+            setLoading(true);
+            requestJson(widget.dataset.showUrl)
+                .then((payload) => {
+                    loaded = true;
+                    render(payload);
+                })
+                .catch((error) => showError(error.message))
+                .finally(() => setLoading(false));
+        };
+
+        const submitAction = (template, actionId) => {
+            if (!template || loading) {
+                return;
+            }
+
+            setLoading(true);
+            requestJson(template.replace('__ACTION__', actionId), { method: 'POST', body: '{}' })
+                .then(render)
+                .catch((error) => showError(error.message))
+                .finally(() => setLoading(false));
+        };
+
+        toggle.addEventListener('click', () => {
+            panel.classList.toggle('hidden');
+
+            if (!panel.classList.contains('hidden')) {
+                load();
+                input.focus();
+            }
+        });
+
+        close?.addEventListener('click', () => panel.classList.add('hidden'));
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            const message = input.value.trim();
+
+            if (!message || loading) {
+                return;
+            }
+
+            input.value = '';
+            setLoading(true);
+            requestJson(widget.dataset.sendUrl, {
+                method: 'POST',
+                body: JSON.stringify({ message }),
+            })
+                .then((payload) => {
+                    loaded = true;
+                    render(payload);
+                })
+                .catch((error) => showError(error.message))
+                .finally(() => setLoading(false));
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
     initSlugAutofill();
@@ -2014,6 +2218,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCustomerTransferModals();
     initCopyButtons();
     initActiveScrollTargets();
+    initAssistantChat();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {
         window.history.replaceState({ publicSchedule: true }, '', window.location.href);

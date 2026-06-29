@@ -32,6 +32,7 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/price.get.tags.0', 'Public prices')
             ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/price.get.responses.402.$ref', '#/components/responses/SubscriptionExpired')
             ->assertJsonPath('paths./api/v1/website-leads.post.tags.0', 'Website leads')
+            ->assertJsonPath('paths./api/v1/website-leads.post.summary', 'Creates a website lead for the studio identified by the bearer token with the website_leads:create ability.')
             ->assertJsonPath('paths./api/v1/website-leads.post.security.0.AccountBearerToken', [])
             ->assertJsonPath('paths./api/v1/website-leads.post.responses.402.$ref', '#/components/responses/SubscriptionExpired')
             ->assertJsonPath('components.schemas.WebsiteLeadRequest.required.0', 'phone')
@@ -43,6 +44,7 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.schemas.WebsiteLead.allOf.1.properties.created_at.example', '2026-06-24T11:48:00+03:00')
             ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.example', 'subscription_expired')
             ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.enum.1', 'demo_payment_required')
-            ->assertJsonPath('components.securitySchemes.AccountBearerToken.scheme', 'bearer');
+            ->assertJsonPath('components.securitySchemes.AccountBearerToken.scheme', 'bearer')
+            ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. Website lead intake requires the website_leads:create ability.');
     }
 }

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.49.0',
+                'date' => '2026-06-29',
+                'title' => 'Owner AI assistant and Telegram bot',
+                'items' => ['Added a product-owner controlled AI assistant for studio owners and staff with a floating dashboard chat, global owner Telegram bot settings, phone-based Telegram authorization, scoped studio answers, owner help and business reference tools, and confirm-only booking creation or cancellation actions. Studio settings now keep only the future customer Telegram bot controls.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.48.0',
                 'date' => '2026-06-28',
                 'title' => 'Trainer substitutions',
@@ -436,6 +443,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.49.0',
+                'date' => '2026-06-29',
+                'title' => 'AI-асистент власниці та Telegram-бот',
+                'items' => ['Додано AI-асистента для власниць студій і staff, який керується з product-owner налаштувань: плаваючий чат у кабінеті, глобальні налаштування owner Telegram-бота, авторизація Telegram за номером телефону, відповіді тільки в межах студії, інструменти допомоги й бізнес-довідки, а також створення або скасування запису лише після явного підтвердження. У налаштуваннях студії залишено тільки майбутні налаштування customer Telegram-бота.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.48.0',
                 'date' => '2026-06-28',

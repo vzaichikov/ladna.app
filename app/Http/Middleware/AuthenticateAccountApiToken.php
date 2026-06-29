@@ -15,7 +15,7 @@ class AuthenticateAccountApiToken
      *
      * @param  Closure(Request): (Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string ...$abilities): Response
     {
         $bearerToken = $request->bearerToken();
 
@@ -30,6 +30,12 @@ class AuthenticateAccountApiToken
 
         if (! $accountApiToken || ! $accountApiToken->account) {
             return response()->json(['message' => __('app.api_token_invalid')], Response::HTTP_UNAUTHORIZED);
+        }
+
+        foreach ($abilities as $ability) {
+            if (! $accountApiToken->hasAbility($ability)) {
+                return response()->json(['message' => __('app.api_token_forbidden')], Response::HTTP_FORBIDDEN);
+            }
         }
 
         $accountApiToken->forceFill(['last_used_at' => now()])->save();

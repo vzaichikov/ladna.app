@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\AccountApiTokenAbility;
 use App\Models\Account;
 use App\Models\AccountApiToken;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -27,6 +28,7 @@ class AccountApiTokenFactory extends Factory
             'token_hash' => hash('sha256', $token),
             'encrypted_token' => $token,
             'last_four' => substr($token, -4),
+            'abilities' => [AccountApiTokenAbility::WebsiteLeadsCreate->value],
             'is_active' => true,
         ];
     }

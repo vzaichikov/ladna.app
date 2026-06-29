@@ -21,6 +21,10 @@
                 'label' => __('app.system_settings_tab_activity_log'),
                 'panel_id' => 'activity-log',
             ],
+            'ai-owner' => [
+                'label' => __('app.system_settings_tab_ai_owner'),
+                'panel_id' => 'ai-owner',
+            ],
         ];
         $requestedSettingsTab = old('settings_tab', request('tab', 'appearance'));
         $activeSettingsTab = array_key_exists($requestedSettingsTab, $settingsTabs)
@@ -151,6 +155,134 @@
                             <span class="crm-help">{{ $message }}</span>
                         @enderror
                     </label>
+                </div>
+            </section>
+
+            <section
+                id="ai-owner"
+                data-platform-settings-panel="ai-owner"
+                role="tabpanel"
+                aria-labelledby="platform-settings-tab-ai-owner"
+                @class(['hidden' => $activeSettingsTab !== 'ai-owner'])
+            >
+                <div class="max-w-6xl space-y-6">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.platform_ai_owner_bot') }}</h2>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.platform_ai_owner_bot_copy') }}</p>
+                    </div>
+
+                    <div class="grid gap-5 lg:grid-cols-2">
+                        <label class="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4">
+                            <input type="hidden" name="owner_ai_assistant_enabled" value="0">
+                            <input type="checkbox" name="owner_ai_assistant_enabled" value="1" class="crm-checkbox mt-1" @checked((bool) old('owner_ai_assistant_enabled', $platformAiSetting->owner_ai_assistant_enabled))>
+                            <span>
+                                <span class="block text-sm font-semibold text-slate-950">{{ __('app.owner_ai_assistant_enabled') }}</span>
+                                <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.owner_ai_assistant_enabled_copy') }}</span>
+                            </span>
+                        </label>
+
+                        <label class="block rounded-xl border border-stone-200 bg-white p-4">
+                            <span class="crm-label">{{ __('app.ai_active_provider') }}</span>
+                            <select name="ai_active_provider" class="crm-field">
+                                <option value="">{{ __('app.none') }}</option>
+                                @foreach ($aiProviders as $provider)
+                                    <option value="{{ $provider->value }}" @selected(old('ai_active_provider', $platformAiSetting->active_provider?->value) === $provider->value)>
+                                        {{ __($provider->labelKey()) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('ai_active_provider')
+                                <span class="crm-help">{{ $message }}</span>
+                            @enderror
+                        </label>
+
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.ai_bot_display_name') }}</span>
+                            <input name="ai_bot_display_name" value="{{ old('ai_bot_display_name', $platformAiSetting->bot_display_name) }}" class="crm-field" maxlength="80" placeholder="{{ __('app.ai_bot_display_name_placeholder') }}">
+                            @error('ai_bot_display_name')
+                                <span class="crm-help">{{ $message }}</span>
+                            @enderror
+                        </label>
+
+                        <label class="block lg:col-span-2">
+                            <span class="crm-label">{{ __('app.ai_internal_instructions') }}</span>
+                            <textarea name="ai_internal_instructions" rows="4" class="crm-field" maxlength="5000" placeholder="{{ __('app.ai_internal_instructions_placeholder') }}">{{ old('ai_internal_instructions', $platformAiSetting->internal_instructions) }}</textarea>
+                            @error('ai_internal_instructions')
+                                <span class="crm-help">{{ $message }}</span>
+                            @enderror
+                        </label>
+                    </div>
+
+                    <div class="grid gap-4 lg:grid-cols-3">
+                        @foreach ($aiProviders as $provider)
+                            @php($credential = $platformAiProviderCredentials->get($provider->value))
+                            <div class="rounded-xl border border-stone-200 bg-white p-4">
+                                <h3 class="font-semibold text-slate-950">{{ __($provider->labelKey()) }}</h3>
+                                <p class="mt-2 min-h-12 text-sm leading-6 text-slate-500">{{ __('app.ai_provider_'.$provider->value.'_copy') }}</p>
+
+                                <label class="mt-4 block">
+                                    <span class="crm-label">{{ __('app.model') }}</span>
+                                    <input name="ai_provider_models[{{ $provider->value }}]" value="{{ old("ai_provider_models.{$provider->value}", $credential?->model) }}" class="crm-field" maxlength="120" placeholder="{{ __('app.ai_model_placeholder') }}">
+                                    @error("ai_provider_models.{$provider->value}")
+                                        <span class="crm-help">{{ $message }}</span>
+                                    @enderror
+                                </label>
+
+                                <label class="mt-4 block">
+                                    <span class="crm-label">{{ __('app.ai_provider_secret') }}</span>
+                                    <input type="password" name="ai_provider_credentials[{{ $provider->value }}]" class="crm-field" maxlength="4000" autocomplete="off" placeholder="{{ $credential?->is_configured ? __('app.keep_existing_secret') : __('app.ai_provider_secret_placeholder') }}">
+                                    @error("ai_provider_credentials.{$provider->value}")
+                                        <span class="crm-help">{{ $message }}</span>
+                                    @enderror
+                                </label>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <div class="rounded-xl border border-stone-200 bg-white p-4">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <h3 class="font-semibold text-slate-950">{{ __('app.global_owner_telegram_bot') }}</h3>
+                                <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.global_owner_telegram_bot_copy') }}</p>
+                            </div>
+                            @if ($ownerTelegramBotInstallation?->is_enabled)
+                                <span class="crm-status-active">{{ __('app.active') }}</span>
+                            @else
+                                <span class="crm-status-muted">{{ __('app.disabled') }}</span>
+                            @endif
+                        </div>
+
+                        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                            <label class="flex items-start gap-3">
+                                <input type="hidden" name="owner_telegram_bot_enabled" value="0">
+                                <input type="checkbox" name="owner_telegram_bot_enabled" value="1" class="crm-checkbox mt-1" @checked((bool) old('owner_telegram_bot_enabled', $ownerTelegramBotInstallation?->is_enabled ?? false))>
+                                <span>
+                                    <span class="block text-sm font-semibold text-slate-950">{{ __('app.enabled') }}</span>
+                                    <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.global_owner_telegram_bot_enabled_copy') }}</span>
+                                </span>
+                            </label>
+
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.telegram_bot_username') }}</span>
+                                <input name="owner_telegram_bot_username" value="{{ old('owner_telegram_bot_username', $ownerTelegramBotInstallation?->bot_username) }}" class="crm-field" maxlength="255" placeholder="@ladna_owner_bot">
+                            </label>
+
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.telegram_bot_token') }}</span>
+                                <input type="password" name="owner_telegram_bot_token" class="crm-field" maxlength="255" autocomplete="off" placeholder="{{ $ownerTelegramBotInstallation?->token_last_four ? __('app.keep_existing_token_last_four', ['last_four' => $ownerTelegramBotInstallation->token_last_four]) : __('app.telegram_bot_token_placeholder') }}">
+                                @error('owner_telegram_bot_token')
+                                    <span class="crm-help">{{ $message }}</span>
+                                @enderror
+                            </label>
+
+                            @if ($ownerTelegramBotInstallation?->webhook_url)
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.telegram_webhook_url') }}</span>
+                                    <input value="{{ $ownerTelegramBotInstallation->webhook_url }}" readonly class="crm-field font-mono text-xs">
+                                </label>
+                            @endif
+                        </div>
+                    </div>
                 </div>
             </section>
 

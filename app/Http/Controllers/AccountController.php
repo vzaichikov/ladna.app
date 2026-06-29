@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AccountApiTokenAbility;
+use App\Enums\TelegramBotMode;
+use App\Enums\TelegramBotProfile;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
@@ -96,7 +99,7 @@ class AccountController extends Controller
     {
         $this->authorize('update', $account);
         $customerLoginUrl = route('customer.studio.login', $account->slug);
-        $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'rules', 'pass_rules', 'qr', 'api'], true) ? $request->query('tab') : 'business';
+        $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'rules', 'pass_rules', 'qr', 'api', 'ai'], true) ? $request->query('tab') : 'business';
 
         return view('accounts.brand-edit', [
             'account' => $account,
@@ -108,6 +111,21 @@ class AccountController extends Controller
                 : collect(),
             'apiTokens' => $activeTab === 'api'
                 ? $account->apiTokens()->latest()->get()
+                : collect(),
+            'apiTokenAbilities' => AccountApiTokenAbility::cases(),
+            'telegramBotProfilesList' => [TelegramBotProfile::Customer],
+            'telegramBotModes' => [TelegramBotMode::Disabled, TelegramBotMode::Simple],
+            'telegramBotInstallations' => $activeTab === 'ai'
+                ? $account->telegramBotInstallations()
+                    ->where('profile', TelegramBotProfile::Customer->value)
+                    ->get()
+                    ->keyBy(fn ($installation): string => $installation->profile->value)
+                : collect(),
+            'telegramBotProfiles' => $activeTab === 'ai'
+                ? $account->telegramBotProfiles()
+                    ->where('profile', TelegramBotProfile::Customer->value)
+                    ->get()
+                    ->keyBy(fn ($profile): string => $profile->profile->value)
                 : collect(),
         ]);
     }
