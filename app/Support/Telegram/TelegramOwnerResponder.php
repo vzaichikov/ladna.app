@@ -16,7 +16,7 @@ class TelegramOwnerResponder
 
     /**
      * @param  callable(): mixed|null  $beforeProviderRequest
-     * @return array{response: string, rejected: bool, used_ai: bool}
+     * @return array{response: string, rejected: bool, used_ai: bool, follow_up_actions: array<int, string>, help_sources: array<int, mixed>, provider: string|null, model: string|null, fallback_reason: string|null}
      */
     public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?callable $beforeProviderRequest = null): array
     {
@@ -27,6 +27,11 @@ class TelegramOwnerResponder
                 'response' => __('app.telegram_owner_help'),
                 'rejected' => false,
                 'used_ai' => false,
+                'follow_up_actions' => [],
+                'help_sources' => [],
+                'provider' => null,
+                'model' => null,
+                'fallback_reason' => null,
             ];
         }
 
@@ -37,6 +42,11 @@ class TelegramOwnerResponder
                 'response' => $aiResult->text,
                 'rejected' => $aiResult->rejected,
                 'used_ai' => $aiResult->usedAi,
+                'follow_up_actions' => $aiResult->followUpActions,
+                'help_sources' => $aiResult->helpSources,
+                'provider' => $aiResult->provider,
+                'model' => $aiResult->model,
+                'fallback_reason' => $aiResult->fallbackReason,
             ];
         }
 
@@ -45,6 +55,11 @@ class TelegramOwnerResponder
                 'response' => $this->studioProfileText($account),
                 'rejected' => false,
                 'used_ai' => false,
+                'follow_up_actions' => [],
+                'help_sources' => [],
+                'provider' => null,
+                'model' => null,
+                'fallback_reason' => null,
             ];
         }
 
@@ -53,6 +68,11 @@ class TelegramOwnerResponder
                 'response' => $this->classCountText($account, $date),
                 'rejected' => false,
                 'used_ai' => false,
+                'follow_up_actions' => [],
+                'help_sources' => [],
+                'provider' => null,
+                'model' => null,
+                'fallback_reason' => null,
             ];
         }
 
@@ -60,6 +80,11 @@ class TelegramOwnerResponder
             'response' => __('app.telegram_out_of_scope'),
             'rejected' => true,
             'used_ai' => false,
+            'follow_up_actions' => [],
+            'help_sources' => [],
+            'provider' => null,
+            'model' => null,
+            'fallback_reason' => null,
         ];
     }
 

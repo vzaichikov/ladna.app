@@ -953,6 +953,7 @@ return [
     'telegram_owner_help' => 'Я допомагаю тільки в межах вашої студії Ladna: розклад, записи, клієнти, абонементи, оплати, заявки, звіти, аналітика та підказки по інтерфейсу.',
     'telegram_out_of_scope' => 'Я можу допомагати тільки з операціями студії в Ladna.',
     'telegram_class_count_for_day' => ':date має :count запланованих занять.',
+    'telegram_quick_action_create_booking' => 'Записати клієнта',
     'owner_dashboard_chat_title' => 'Ladna асистент',
     'assistant_chat_error' => 'Не вдалося завантажити асистента.',
     'assistant_chat_empty' => 'Повідомлень ще немає.',

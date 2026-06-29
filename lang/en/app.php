@@ -953,6 +953,7 @@ return [
     'telegram_owner_help' => 'I can help only within your Ladna studio: schedule, bookings, customers, class passes, payments, website leads, reports, analytics, and interface guidance.',
     'telegram_out_of_scope' => 'I can only help with Ladna studio operations.',
     'telegram_class_count_for_day' => ':date has :count scheduled classes.',
+    'telegram_quick_action_create_booking' => 'Записати клієнта',
     'owner_dashboard_chat_title' => 'Ladna assistant',
     'assistant_chat_error' => 'Could not load the assistant.',
     'assistant_chat_empty' => 'No messages yet.',

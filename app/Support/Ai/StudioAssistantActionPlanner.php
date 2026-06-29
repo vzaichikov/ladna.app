@@ -20,6 +20,13 @@ use Illuminate\Support\Str;
 
 class StudioAssistantActionPlanner
 {
+    public function startGroupBookingDialog(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation): StudioAssistantActionPlan
+    {
+        return $this->resolveBookingDraft($account, $user, $trainer, $conversation, [
+            'status' => 'collecting',
+        ]);
+    }
+
     public function plan(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $text): StudioAssistantActionPlan
     {
         $normalized = Str::of($text)->lower()->squish()->toString();

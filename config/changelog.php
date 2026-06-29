@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.53.0',
+                'date' => '2026-06-29',
+                'title' => 'Telegram owner bot quick actions',
+                'items' => ['Added a persistent Telegram owner bot quick action to start client booking, plus inline Telegram buttons for assistant suggestions and booking confirmations while keeping the dashboard chat behavior unchanged.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.52.0',
                 'date' => '2026-06-29',
                 'title' => 'Assistant follow-ups and MCP schedule details',
@@ -464,6 +471,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.53.0',
+                'date' => '2026-06-29',
+                'title' => 'Швидкі дії Telegram-бота власниці',
+                'items' => ['Додано постійну швидку дію Telegram-бота власниці для старту запису клієнта, а також inline-кнопки Telegram для підказок асистента й підтвердження записів без змін у поведінці чату в адмінці.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.52.0',
                 'date' => '2026-06-29',
