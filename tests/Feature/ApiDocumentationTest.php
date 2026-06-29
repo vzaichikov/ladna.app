@@ -15,6 +15,7 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/price')
             ->assertSee('/api/v1/website-leads')
             ->assertSee('/mcp/ladna-studio')
+            ->assertSee('describe-ladna-skills')
             ->assertSee('get-class-bookings-for-day')
             ->assertSee('search-owner-help')
             ->assertSee('PHP')
@@ -43,10 +44,13 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.class_bookings_for_day.value.params.name', 'get-class-bookings-for-day')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.owner_help_search.value.params.name', 'search-owner-help')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.owner_help_search.value.params.arguments.query', 'як додати клієнта')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.describe_ladna_skills.value.params.name', 'describe-ladna-skills')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.describe_ladna_skills.value.params.arguments.channel', 'dashboard_chat')
             ->assertJsonPath('paths./mcp/ladna-studio.post.responses.401.$ref', '#/components/responses/Unauthorized')
-            ->assertJsonPath('components.schemas.McpToolCallRequest.properties.params.properties.name.enum.2', 'get-class-bookings-for-day')
             ->assertJsonPath('components.schemas.McpOwnerHelpSearchResult.properties.score.type', 'integer')
             ->assertJsonPath('components.schemas.McpOwnerHelpFragment.properties.steps.maxItems', 6)
+            ->assertJsonPath('components.schemas.McpLadnaSkillsResponse.properties.read_capabilities.items.$ref', '#/components/schemas/McpLadnaCapability')
+            ->assertJsonPath('components.schemas.McpLadnaActionCapability.properties.confirmation_required.type', 'boolean')
             ->assertJsonPath('components.schemas.WebsiteLeadRequest.required.0', 'phone')
             ->assertJsonPath('components.schemas.ClassPassPlan.properties.total_validity_days.type', 'integer')
             ->assertJsonPath('components.schemas.ClassPassPlan.properties.segment.anyOf.0.$ref', '#/components/schemas/ClassPassSegment')
@@ -58,5 +62,10 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.enum.1', 'demo_payment_required')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.scheme', 'bearer')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token.');
+
+        $toolNames = $response->json('components.schemas.McpToolCallRequest.properties.params.properties.name.enum');
+
+        $this->assertContains('describe-ladna-skills', $toolNames);
+        $this->assertContains('get-class-bookings-for-day', $toolNames);
     }
 }

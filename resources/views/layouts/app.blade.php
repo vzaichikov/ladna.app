@@ -493,7 +493,7 @@
                     aria-label="{{ __('app.owner_dashboard_chat_title') }}"
                 >
                     <span class="relative h-12 w-12 overflow-hidden rounded-full bg-[#FAF8F5] ring-1 ring-[#E7DDC9]">
-                        <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="absolute left-1/2 top-[-30px] h-[330px] w-[220px] max-w-none -translate-x-1/2 object-contain">
+                        <img src="{{ asset('assets/brand/mascot/ladna-ai-chat-avatar.png') }}" alt="" class="h-full w-full object-cover">
                     </span>
                 </button>
 
@@ -505,7 +505,7 @@
                     <div class="relative flex items-center justify-between border-b border-stone-100 px-4 py-3">
                         <div class="flex items-center gap-3">
                             <span class="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#FAF8F5] ring-1 ring-stone-200">
-                                <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="absolute left-1/2 top-[-23px] h-[250px] w-[167px] max-w-none -translate-x-1/2 object-contain">
+                                <img src="{{ asset('assets/brand/mascot/ladna-ai-chat-avatar.png') }}" alt="" class="h-full w-full object-cover">
                             </span>
                             <div>
                                 <div class="text-sm font-semibold text-slate-950">{{ __('app.owner_dashboard_chat_title') }}</div>

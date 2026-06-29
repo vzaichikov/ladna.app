@@ -50,17 +50,29 @@ class AccountAssistantController extends Controller
             'occurred_at' => now(),
         ]);
 
-        $pendingAction = $planner->plan($account, $request->user(), $this->trainerFor($account, $request), $conversation, $text);
+        $plan = $planner->plan($account, $request->user(), $this->trainerFor($account, $request), $conversation, $text);
 
-        if ($pendingAction) {
-            $assistantText = __('app.assistant_pending_action_created');
+        if ($plan->pendingAction) {
+            $assistantText = $plan->message ?? __('app.assistant_pending_action_created');
             $conversation->messages()->create([
                 'account_id' => $account->id,
                 'role' => AiConversationMessageRole::Assistant->value,
                 'content' => $assistantText,
                 'metadata' => [
-                    'pending_action_id' => $pendingAction->id,
+                    'pending_action_id' => $plan->pendingAction->id,
                     'used_ai' => false,
+                    ...$plan->metadata,
+                ],
+                'occurred_at' => now(),
+            ]);
+        } elseif ($plan->handled) {
+            $conversation->messages()->create([
+                'account_id' => $account->id,
+                'role' => AiConversationMessageRole::Assistant->value,
+                'content' => $plan->message ?? '',
+                'metadata' => [
+                    'used_ai' => false,
+                    ...$plan->metadata,
                 ],
                 'occurred_at' => now(),
             ]);

@@ -17,6 +17,7 @@ use App\Models\Location;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\ScheduledClass;
+use App\Models\Trainer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
@@ -199,6 +200,98 @@ class AccountAssistantTest extends TestCase
             ->where('channel', 'dashboard_chat')
             ->where('status', AiConversation::StatusActive)
             ->count());
+    }
+
+    public function test_dashboard_booking_dialog_resolves_typo_and_requires_class_choice_confirmation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-29 08:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $account->addOwner($owner);
+        PlatformAiSetting::query()->delete();
+        PlatformAiSetting::factory()->create(['owner_ai_assistant_enabled' => true]);
+
+        $location = Location::factory()->for($account)->create(['name' => 'Podil']);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Катя']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Pole Beginner',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Алина Тестова']);
+        $firstClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($trainer)
+            ->for($classType)
+            ->create([
+                'title' => 'Pole Beginner',
+                'capacity' => 6,
+                'starts_at' => Carbon::parse('2026-06-30 09:00:00', 'Europe/Kyiv')->timezone('UTC'),
+                'ends_at' => Carbon::parse('2026-06-30 10:00:00', 'Europe/Kyiv')->timezone('UTC'),
+            ]);
+        $secondClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($trainer)
+            ->for($classType)
+            ->create([
+                'title' => 'Stretching',
+                'capacity' => 5,
+                'starts_at' => Carbon::parse('2026-06-30 11:00:00', 'Europe/Kyiv')->timezone('UTC'),
+                'ends_at' => Carbon::parse('2026-06-30 12:00:00', 'Europe/Kyiv')->timezone('UTC'),
+            ]);
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Запиши Алину Тестовую на завтра к Кате',
+            ])
+            ->assertOk()
+            ->assertJsonPath('pending_actions', [])
+            ->assertJsonPath('messages.1.metadata.booking_dialog.status', 'awaiting_class')
+            ->assertJsonPath('messages.1.metadata.booking_dialog.customer_id', $customer->id)
+            ->assertJsonPath('messages.1.metadata.booking_dialog.trainer_id', $trainer->id)
+            ->assertJsonPath('messages.1.metadata.booking_dialog.class_options.0.id', $firstClass->id)
+            ->assertJsonPath('messages.1.metadata.booking_dialog.class_options.1.id', $secondClass->id)
+            ->assertJsonPath('messages.1.metadata.follow_up_actions.0', '1')
+            ->assertJsonPath('messages.1.metadata.follow_up_actions.1', '2');
+
+        $this->assertStringContainsString('09:00-10:00', $response->json('messages.1.content'));
+        $this->assertStringContainsString('11:00-12:00', $response->json('messages.1.content'));
+        $this->assertFalse(ClassBooking::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($customer)
+            ->exists());
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => '2',
+            ])
+            ->assertOk()
+            ->assertJsonPath('pending_actions.0.action_name', 'create-booking')
+            ->assertJsonPath('pending_actions.0.preview.scheduled_class_id', $secondClass->id)
+            ->assertJsonPath('messages.3.metadata.booking_dialog.status', 'pending_action_created');
+
+        $this->assertFalse(ClassBooking::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($customer)
+            ->exists());
+
+        $actionId = $response->json('pending_actions.0.id');
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.actions.confirm', [$account, $actionId]))
+            ->assertOk()
+            ->assertJsonPath('pending_actions', []);
+
+        $this->assertDatabaseHas('class_bookings', [
+            'account_id' => $account->id,
+            'customer_id' => $customer->id,
+            'scheduled_class_id' => $secondClass->id,
+            'status' => ClassBookingStatus::Booked->value,
+        ]);
+
+        Carbon::setTestNow();
     }
 
     public function test_cancel_booking_action_requires_confirmation_before_status_change(): void

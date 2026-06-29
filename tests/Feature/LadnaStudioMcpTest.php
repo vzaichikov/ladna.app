@@ -72,6 +72,47 @@ class LadnaStudioMcpTest extends TestCase
         ]);
     }
 
+    public function test_mcp_describe_ladna_skills_returns_curated_capabilities(): void
+    {
+        $account = Account::factory()->create([
+            'name' => 'Owner Studio',
+            'slug' => 'owner-studio',
+            'timezone' => 'Europe/Kyiv',
+        ]);
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'MCP', [
+            AccountApiTokenAbility::McpRead,
+        ]);
+
+        $response = $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('describe-ladna-skills', [
+                'channel' => 'dashboard_chat',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.assistant.name', 'Ladna')
+            ->assertJsonPath('result.structuredContent.assistant.current_channel', 'dashboard_chat')
+            ->assertJsonPath('result.structuredContent.studio_scope.name', 'Owner Studio')
+            ->assertJsonPath('result.structuredContent.read_capabilities.0.key', 'studio_profile')
+            ->assertJsonPath('result.structuredContent.guided_dialogs.0.key', 'create_group_booking_dialog')
+            ->assertJsonPath('result.structuredContent.guided_dialogs.0.confirmation_required', true)
+            ->assertJsonPath('result.structuredContent.mutating_actions.0.key', 'create-booking')
+            ->assertJsonPath('result.structuredContent.mutating_actions.0.confirmation_required', true);
+
+        $capabilities = $response->json('result.structuredContent.read_capabilities');
+
+        $this->assertTrue(collect($capabilities)->contains(
+            fn (array $capability): bool => in_array('get-class-bookings-for-day', $capability['tools'] ?? [], true)
+                && $capability['required_ability'] === AccountApiTokenAbility::McpCustomersRead->value
+        ));
+
+        $this->assertDatabaseHas('mcp_tool_invocations', [
+            'account_id' => $account->id,
+            'account_api_token_id' => $apiToken->id,
+            'tool_name' => 'describe-ladna-skills',
+            'required_ability' => AccountApiTokenAbility::McpRead->value,
+            'status' => 'succeeded',
+        ]);
+    }
+
     public function test_mcp_class_counts_for_day_count_only_token_account_classes(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));

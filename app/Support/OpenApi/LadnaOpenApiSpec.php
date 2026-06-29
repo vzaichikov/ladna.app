@@ -95,6 +95,14 @@ class LadnaOpenApiSpec
                     'limit' => 3,
                 ])),
             ],
+            'mcp_describe_ladna_skills' => [
+                'title' => __('app.api_docs_example_mcp_describe_ladna_skills'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('describe-ladna-skills', [
+                    'channel' => 'dashboard_chat',
+                ])),
+            ],
         ];
     }
 
@@ -253,6 +261,11 @@ class LadnaOpenApiSpec
                                     'value' => $this->mcpToolCallBody('search-owner-help', [
                                         'query' => 'як додати клієнта',
                                         'limit' => 3,
+                                    ]),
+                                ],
+                                'describe_ladna_skills' => [
+                                    'value' => $this->mcpToolCallBody('describe-ladna-skills', [
+                                        'channel' => 'dashboard_chat',
                                     ]),
                                 ],
                             ],
@@ -490,6 +503,7 @@ class LadnaOpenApiSpec
                             'name' => [
                                 'type' => 'string',
                                 'enum' => [
+                                    'describe-ladna-skills',
                                     'get-studio-profile',
                                     'get-class-counts-for-day',
                                     'get-class-bookings-for-day',
@@ -519,6 +533,7 @@ class LadnaOpenApiSpec
                                 'description' => 'Machine-readable tool output for successful calls.',
                                 'anyOf' => [
                                     ['$ref' => '#/components/schemas/McpOwnerHelpSearchResponse'],
+                                    ['$ref' => '#/components/schemas/McpLadnaSkillsResponse'],
                                     ['type' => 'object'],
                                 ],
                             ],
@@ -537,6 +552,66 @@ class LadnaOpenApiSpec
                         'type' => 'array',
                         'items' => ['$ref' => '#/components/schemas/McpOwnerHelpSearchResult'],
                     ],
+                ],
+            ],
+            'McpLadnaSkillsResponse' => [
+                'type' => 'object',
+                'required' => ['assistant', 'read_capabilities', 'guided_dialogs', 'mutating_actions', 'limits'],
+                'properties' => [
+                    'assistant' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'name' => ['type' => 'string', 'example' => 'Ladna'],
+                            'purpose' => ['type' => 'string'],
+                            'scope' => ['type' => 'string'],
+                            'current_channel' => ['type' => ['string', 'null'], 'example' => 'dashboard_chat'],
+                        ],
+                    ],
+                    'read_capabilities' => [
+                        'type' => 'array',
+                        'items' => ['$ref' => '#/components/schemas/McpLadnaCapability'],
+                    ],
+                    'guided_dialogs' => [
+                        'type' => 'array',
+                        'items' => ['$ref' => '#/components/schemas/McpLadnaActionCapability'],
+                    ],
+                    'mutating_actions' => [
+                        'type' => 'array',
+                        'items' => ['$ref' => '#/components/schemas/McpLadnaActionCapability'],
+                    ],
+                    'limits' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
+                    'studio_scope' => [
+                        'type' => 'object',
+                        'description' => 'Studio scope resolved from the bearer account API token.',
+                    ],
+                ],
+            ],
+            'McpLadnaCapability' => [
+                'type' => 'object',
+                'required' => ['key', 'title', 'description', 'tools'],
+                'properties' => [
+                    'key' => ['type' => 'string', 'example' => 'class_booking_details'],
+                    'title' => ['type' => 'string'],
+                    'description' => ['type' => 'string'],
+                    'tools' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
+                    'required_ability' => ['type' => ['string', 'null'], 'example' => 'mcp:customers:read'],
+                ],
+            ],
+            'McpLadnaActionCapability' => [
+                'type' => 'object',
+                'required' => ['key', 'title', 'description', 'confirmation_required'],
+                'properties' => [
+                    'key' => ['type' => 'string', 'example' => 'create-booking'],
+                    'title' => ['type' => 'string'],
+                    'description' => ['type' => 'string'],
+                    'confirmation_required' => ['type' => 'boolean'],
+                    'required_user_permission' => ['type' => ['string', 'null'], 'example' => 'manageBookings'],
                 ],
             ],
             'McpOwnerHelpSearchResult' => [
