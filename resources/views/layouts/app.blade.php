@@ -380,6 +380,14 @@
                             @endforeach
                         </select>
                     </form>
+
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button type="submit" data-sidebar-logout class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
+                            <x-ui.icon name="logout" class="h-5 w-5 text-slate-400" />
+                            <span>{{ __('app.logout') }}</span>
+                        </button>
+                    </form>
                 </div>
             </aside>
 
@@ -402,12 +410,6 @@
                         </div>
 
                         <div class="flex items-center gap-3">
-                            <form method="POST" action="{{ route('logout') }}">
-                                @csrf
-                                <button type="submit" class="hidden rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-brand-50 hover:text-slate-950 sm:inline-flex">
-                                    {{ __('app.logout') }}
-                                </button>
-                            </form>
                             <div class="flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-xs">
                                 @if ($authUser?->avatarUrl())
                                     <img src="{{ $authUser->avatarUrl() }}" alt="" class="h-8 w-8 rounded-full object-cover">
