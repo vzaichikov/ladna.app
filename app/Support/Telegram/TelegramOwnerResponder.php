@@ -15,9 +15,10 @@ class TelegramOwnerResponder
     public function __construct(private readonly StudioAiInference $studioAiInference) {}
 
     /**
+     * @param  callable(): mixed|null  $beforeProviderRequest
      * @return array{response: string, rejected: bool, used_ai: bool}
      */
-    public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null): array
+    public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?callable $beforeProviderRequest = null): array
     {
         $normalized = Str::of($text)->lower()->squish()->toString();
 
@@ -29,7 +30,7 @@ class TelegramOwnerResponder
             ];
         }
 
-        $aiResult = $this->studioAiInference->respond($account, $text, $authorization);
+        $aiResult = $this->studioAiInference->respond($account, $text, $authorization, beforeProviderRequest: $beforeProviderRequest);
 
         if ($aiResult->rejected || $aiResult->usedAi) {
             return [
