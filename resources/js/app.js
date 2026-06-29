@@ -2165,6 +2165,77 @@ function initActiveScrollTargets() {
     });
 }
 
+function normalizeAssistantText(content) {
+    return String(content || '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/:\s+-\s+/gu, ':\n- ')
+        .replace(/\s+-\s+(?=(?:\d{1,2}:\d{2}|[A-ZА-ЯІЇЄҐ][A-Za-zА-Яа-яІіЇїЄєҐґ'’ʼ .-]{0,80}:))/gu, '\n- ')
+        .trim();
+}
+
+function appendAssistantText(container, content) {
+    const normalized = normalizeAssistantText(content);
+
+    if (!normalized) {
+        return;
+    }
+
+    const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
+    let paragraphLines = [];
+    let currentList = null;
+
+    const flushParagraph = () => {
+        if (paragraphLines.length === 0) {
+            return;
+        }
+
+        const paragraph = document.createElement('p');
+        paragraph.textContent = paragraphLines.join(' ');
+        container.append(paragraph);
+        paragraphLines = [];
+    };
+
+    const appendListItem = (listType, text) => {
+        flushParagraph();
+
+        if (!currentList || currentList.tagName.toLowerCase() !== listType) {
+            currentList = document.createElement(listType);
+            currentList.className = `${listType === 'ol' ? 'list-decimal' : 'list-disc'} space-y-1 pl-4`;
+            container.append(currentList);
+        }
+
+        const item = document.createElement('li');
+        item.className = 'pl-1';
+        item.textContent = text;
+        currentList.append(item);
+    };
+
+    lines.forEach((line) => {
+        const numbered = line.match(/^(\d+)[.)]\s+(.+)$/u);
+
+        if (numbered) {
+            appendListItem('ol', numbered[2]);
+            return;
+        }
+
+        const bulleted = line.match(/^[-*•]\s+(.+)$/u);
+
+        if (bulleted) {
+            appendListItem('ul', bulleted[1]);
+            return;
+        }
+
+        currentList = null;
+        paragraphLines.push(line);
+    });
+
+    flushParagraph();
+
+    if (!container.hasChildNodes()) {
+        container.textContent = normalized;
+    }
+}
+
 function initAssistantChat() {
     document.querySelectorAll('[data-assistant-chat]').forEach((widget) => {
         if (widget.dataset.assistantReady === 'true') {
@@ -2173,6 +2244,10 @@ function initAssistantChat() {
 
         const toggle = widget.querySelector('[data-assistant-toggle]');
         const close = widget.querySelector('[data-assistant-close]');
+        const clear = widget.querySelector('[data-assistant-clear]');
+        const clearModal = widget.querySelector('[data-assistant-clear-modal]');
+        const clearCancel = widget.querySelector('[data-assistant-clear-cancel]');
+        const clearConfirm = widget.querySelector('[data-assistant-clear-confirm]');
         const panel = widget.querySelector('[data-assistant-panel]');
         const messages = widget.querySelector('[data-assistant-messages]');
         const actions = widget.querySelector('[data-assistant-actions]');
@@ -2220,11 +2295,28 @@ function initAssistantChat() {
             loading = value;
             input.disabled = value;
             form.querySelector('button[type="submit"]').disabled = value;
+            clear?.toggleAttribute('disabled', value);
+            clearConfirm?.toggleAttribute('disabled', value);
             form.classList.toggle('opacity-70', value);
 
             if (!value) {
                 focusInputSoon();
             }
+        };
+
+        const closeClearModal = () => {
+            clearModal?.classList.add('hidden');
+            clearModal?.classList.remove('flex');
+        };
+
+        const openClearModal = () => {
+            if (loading || !clearModal || !clearConfirm) {
+                return;
+            }
+
+            clearModal.classList.remove('hidden');
+            clearModal.classList.add('flex');
+            clearConfirm.focus();
         };
 
         const bubbleClass = (role) => {
@@ -2260,8 +2352,15 @@ function initAssistantChat() {
 
             items.forEach((message) => {
                 const bubble = document.createElement('div');
-                bubble.className = `max-w-[82%] rounded-lg px-3 py-2 text-sm leading-6 shadow-xs ${bubbleClass(message.role)}`;
-                bubble.textContent = message.content || '';
+                bubble.className = `max-w-[86%] break-words rounded-lg px-3 py-2 text-sm leading-6 shadow-xs ${bubbleClass(message.role)}`;
+
+                if (['assistant', 'tool', 'rejected_intent'].includes(message.role)) {
+                    bubble.classList.add('space-y-2');
+                    appendAssistantText(bubble, message.content || '');
+                } else {
+                    bubble.textContent = message.content || '';
+                }
+
                 messages.append(bubble);
             });
 
@@ -2415,6 +2514,22 @@ function initAssistantChat() {
                 .finally(() => setLoading(false));
         };
 
+        const clearChat = () => {
+            if (loading || !widget.dataset.clearUrl) {
+                return;
+            }
+
+            closeClearModal();
+            setLoading(true);
+            requestJson(widget.dataset.clearUrl, { method: 'DELETE', body: '{}' })
+                .then((payload) => {
+                    loaded = true;
+                    render(payload);
+                })
+                .catch((error) => showError(error.message))
+                .finally(() => setLoading(false));
+        };
+
         toggle.addEventListener('click', () => {
             panel.classList.toggle('hidden');
 
@@ -2425,6 +2540,14 @@ function initAssistantChat() {
         });
 
         close?.addEventListener('click', () => panel.classList.add('hidden'));
+        clear?.addEventListener('click', openClearModal);
+        clearCancel?.addEventListener('click', closeClearModal);
+        clearModal?.addEventListener('click', (event) => {
+            if (event.target === clearModal) {
+                closeClearModal();
+            }
+        });
+        clearConfirm?.addEventListener('click', clearChat);
 
         form.addEventListener('submit', (event) => {
             event.preventDefault();
@@ -2685,6 +2808,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (event.key === 'Escape') {
             closeCustomerTransferModal(document.querySelector('[data-customer-transfer-modal]:not(.hidden)'));
+        }
+
+        if (event.key === 'Escape') {
+            document.querySelectorAll('[data-assistant-clear-modal]:not(.hidden)').forEach((modal) => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            });
         }
 
         if (event.key === 'Escape' && pendingDeleteForm) {

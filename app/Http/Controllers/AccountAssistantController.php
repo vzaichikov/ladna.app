@@ -14,8 +14,10 @@ use App\Support\Ai\StudioAiInference;
 use App\Support\Ai\StudioAssistantActionExecutor;
 use App\Support\Ai\StudioAssistantActionPlanner;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AccountAssistantController extends Controller
@@ -85,6 +87,37 @@ class AccountAssistantController extends Controller
 
         return response()->json([
             'messages' => $this->messagePayload($conversation->refresh()),
+            'pending_actions' => $this->pendingActionPayload($conversation),
+        ]);
+    }
+
+    public function destroy(Request $request, Account $account): JsonResponse
+    {
+        $this->authorizeAssistant($request, $account);
+
+        $conversation = $this->activeConversationQuery($account, $request)->first();
+
+        if ($conversation) {
+            DB::transaction(function () use ($conversation): void {
+                $conversation->pendingActions()
+                    ->where('status', AiPendingAction::StatusPending)
+                    ->update([
+                        'status' => AiPendingAction::StatusCancelled,
+                        'cancelled_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                $conversation->forceFill([
+                    'status' => AiConversation::StatusCleared,
+                    'last_message_at' => now(),
+                ])->save();
+            });
+        }
+
+        $conversation = $this->conversationFor($account, $request);
+
+        return response()->json([
+            'messages' => $this->messagePayload($conversation),
             'pending_actions' => $this->pendingActionPayload($conversation),
         ]);
     }
@@ -179,26 +212,39 @@ class AccountAssistantController extends Controller
     {
         $trainer = $this->trainerFor($account, $request);
 
-        $conversation = AiConversation::firstOrCreate(
-            [
+        $conversation = $this->activeConversationQuery($account, $request)->first();
+
+        if (! $conversation) {
+            $conversation = AiConversation::create([
                 'account_id' => $account->id,
                 'channel' => 'dashboard_chat',
                 'profile' => TelegramBotProfile::Owner->value,
                 'user_id' => $request->user()->id,
-                'status' => 'active',
-            ],
-            [
+                'status' => AiConversation::StatusActive,
                 'trainer_id' => $trainer?->id,
                 'title' => __('app.owner_dashboard_chat_title'),
                 'last_message_at' => now(),
-            ],
-        );
+            ]);
+        }
 
         if ($conversation->trainer_id !== $trainer?->id) {
             $conversation->forceFill(['trainer_id' => $trainer?->id])->save();
         }
 
         return $conversation;
+    }
+
+    /**
+     * @return Builder<AiConversation>
+     */
+    private function activeConversationQuery(Account $account, Request $request): Builder
+    {
+        return AiConversation::query()
+            ->where('account_id', $account->id)
+            ->where('channel', 'dashboard_chat')
+            ->where('profile', TelegramBotProfile::Owner->value)
+            ->where('user_id', $request->user()->id)
+            ->where('status', AiConversation::StatusActive);
     }
 
     private function trainerFor(Account $account, Request $request): ?Trainer

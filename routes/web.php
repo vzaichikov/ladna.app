@@ -226,6 +226,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.assistant.show');
         Route::post('accounts/{account}/assistant/messages', [AccountAssistantController::class, 'store'])
             ->name('accounts.assistant.messages.store');
+        Route::delete('accounts/{account}/assistant', [AccountAssistantController::class, 'destroy'])
+            ->name('accounts.assistant.destroy');
         Route::post('accounts/{account}/assistant/actions/{action}/confirm', [AccountAssistantController::class, 'confirm'])
             ->name('accounts.assistant.actions.confirm');
         Route::post('accounts/{account}/assistant/actions/{action}/cancel', [AccountAssistantController::class, 'cancel'])

@@ -7,6 +7,8 @@ use App\Enums\AiProvider;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\AiConversation;
+use App\Models\AiConversationMessage;
 use App\Models\AiPendingAction;
 use App\Models\ClassBooking;
 use App\Models\ClassType;
@@ -134,6 +136,69 @@ class AccountAssistantTest extends TestCase
             ->assertJsonPath('messages.1.metadata.help_sources.0.slug', 'customers-bookings')
             ->assertJsonPath('messages.1.metadata.help_sources.0.sections.0', 'Як додати клієнта вручну')
             ->assertJsonMissingPath('messages.1.metadata.help_sources.0.fragments');
+    }
+
+    public function test_dashboard_chat_can_clear_current_user_conversation(): void
+    {
+        PlatformAiSetting::query()->delete();
+        PlatformAiSetting::factory()->create(['owner_ai_assistant_enabled' => true]);
+
+        $owner = User::factory()->create();
+        $otherOwner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $account->addOwner($otherOwner);
+
+        $conversation = AiConversation::factory()
+            ->for($account)
+            ->for($owner, 'user')
+            ->create([
+                'channel' => 'dashboard_chat',
+                'status' => AiConversation::StatusActive,
+            ]);
+        $message = AiConversationMessage::factory()
+            ->for($account)
+            ->for($conversation, 'conversation')
+            ->create([
+                'role' => AiConversationMessageRole::User->value,
+                'content' => 'Show bookings tomorrow',
+            ]);
+        $action = AiPendingAction::factory()
+            ->for($account)
+            ->for($conversation, 'conversation')
+            ->for($owner, 'user')
+            ->create();
+        $otherConversation = AiConversation::factory()
+            ->for($account)
+            ->for($otherOwner, 'user')
+            ->create([
+                'channel' => 'dashboard_chat',
+                'status' => AiConversation::StatusActive,
+            ]);
+
+        $this->actingAs($owner)
+            ->deleteJson(route('dashboard.accounts.assistant.destroy', $account))
+            ->assertOk()
+            ->assertJsonPath('messages', [])
+            ->assertJsonPath('pending_actions', []);
+
+        $this->assertSame(AiConversation::StatusCleared, $conversation->refresh()->status);
+        $this->assertSame(AiPendingAction::StatusCancelled, $action->refresh()->status);
+        $this->assertNotNull($action->cancelled_at);
+        $this->assertDatabaseHas('ai_conversation_messages', [
+            'id' => $message->id,
+            'content' => 'Show bookings tomorrow',
+        ]);
+        $this->assertDatabaseHas('ai_conversations', [
+            'id' => $otherConversation->id,
+            'status' => AiConversation::StatusActive,
+        ]);
+        $this->assertSame(1, AiConversation::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($owner, 'user')
+            ->where('channel', 'dashboard_chat')
+            ->where('status', AiConversation::StatusActive)
+            ->count());
     }
 
     public function test_cancel_booking_action_requires_confirmation_before_status_change(): void

@@ -475,6 +475,7 @@
                 data-assistant-chat
                 data-show-url="{{ route('dashboard.accounts.assistant.show', $activeAccount) }}"
                 data-send-url="{{ route('dashboard.accounts.assistant.messages.store', $activeAccount) }}"
+                data-clear-url="{{ route('dashboard.accounts.assistant.destroy', $activeAccount) }}"
                 data-confirm-url-template="{{ route('dashboard.accounts.assistant.actions.confirm', [$activeAccount, '__ACTION__']) }}"
                 data-cancel-url-template="{{ route('dashboard.accounts.assistant.actions.cancel', [$activeAccount, '__ACTION__']) }}"
                 data-csrf-token="{{ csrf_token() }}"
@@ -501,7 +502,7 @@
                     class="absolute bottom-16 right-0 hidden w-[min(92vw,390px)] overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl shadow-slate-950/20"
                     aria-label="{{ __('app.owner_dashboard_chat_title') }}"
                 >
-                    <div class="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+                    <div class="relative flex items-center justify-between border-b border-stone-100 px-4 py-3">
                         <div class="flex items-center gap-3">
                             <span class="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#FAF8F5] ring-1 ring-stone-200">
                                 <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="absolute left-1/2 top-[-23px] h-[250px] w-[167px] max-w-none -translate-x-1/2 object-contain">
@@ -511,9 +512,37 @@
                                 <div class="text-xs text-slate-500">{{ $activeAccount->name }}</div>
                             </div>
                         </div>
-                        <button type="button" data-assistant-close class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700" aria-label="{{ __('app.close') }}">
-                            <x-ui.icon name="close" class="h-4 w-4" />
-                        </button>
+                        <div class="flex items-center gap-1">
+                            <button type="button" data-assistant-clear class="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-50" aria-label="{{ __('app.assistant_clear_chat') }}">
+                                <x-ui.icon name="trash" class="h-4 w-4" />
+                            </button>
+                            <button type="button" data-assistant-close class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700" aria-label="{{ __('app.close') }}">
+                                <x-ui.icon name="close" class="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div data-assistant-clear-modal class="absolute inset-0 z-10 hidden items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="assistant-clear-chat-title">
+                        <div class="w-full max-w-xs rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
+                            <div class="flex items-start gap-3">
+                                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700">
+                                    <x-ui.icon name="trash" class="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h2 id="assistant-clear-chat-title" class="text-base font-semibold text-slate-950">{{ __('app.assistant_clear_chat_title') }}</h2>
+                                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.assistant_clear_chat_body') }}</p>
+                                </div>
+                            </div>
+
+                            <div class="mt-5 flex justify-end gap-2">
+                                <button type="button" data-assistant-clear-cancel class="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                                    {{ __('app.cancel') }}
+                                </button>
+                                <button type="button" data-assistant-clear-confirm class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60">
+                                    {{ __('app.assistant_clear_chat_confirm') }}
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div data-assistant-messages class="flex max-h-[48vh] min-h-64 flex-col gap-3 overflow-y-auto bg-slate-50 px-4 py-4"></div>

@@ -14,6 +14,10 @@ class AiConversation extends Model
 {
     use HasFactory;
 
+    public const StatusActive = 'active';
+
+    public const StatusCleared = 'cleared';
+
     /**
      * @return array<string, string>
      */
