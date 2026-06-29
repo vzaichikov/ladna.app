@@ -80,6 +80,39 @@ class AccountAssistantTest extends TestCase
         });
     }
 
+    public function test_dashboard_message_endpoint_stores_ai_follow_up_actions(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push(['message' => ['role' => 'assistant', 'content' => '{"in_scope":true,"reason":"studio analytics question"}']])
+                ->push(['message' => ['role' => 'assistant', 'content' => json_encode([
+                    'answer' => 'Tomorrow has 4 bookings.',
+                    'follow_up_actions' => [
+                        'Show trainer load for tomorrow',
+                        'Show customers without pass reservations',
+                        'Show available spots tomorrow',
+                        'This fourth suggestion must be ignored',
+                    ],
+                ])]]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'What bookings are there tomorrow?',
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', 'Tomorrow has 4 bookings.')
+            ->assertJsonPath('messages.1.metadata.follow_up_actions.0', 'Show trainer load for tomorrow')
+            ->assertJsonPath('messages.1.metadata.follow_up_actions.1', 'Show customers without pass reservations')
+            ->assertJsonPath('messages.1.metadata.follow_up_actions.2', 'Show available spots tomorrow')
+            ->assertJsonMissingPath('messages.1.metadata.follow_up_actions.3');
+    }
+
     public function test_cancel_booking_action_requires_confirmation_before_status_change(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-29 10:00:00', 'UTC'));

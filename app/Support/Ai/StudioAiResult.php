@@ -11,15 +11,20 @@ class StudioAiResult
         public readonly ?string $provider = null,
         public readonly ?string $model = null,
         public readonly ?string $fallbackReason = null,
+        public readonly array $followUpActions = [],
     ) {}
 
-    public static function ai(string $text, string $provider, string $model): self
+    /**
+     * @param  array<int, string>  $followUpActions
+     */
+    public static function ai(string $text, string $provider, string $model, array $followUpActions = []): self
     {
         return new self(
             text: $text,
             usedAi: true,
             provider: $provider,
             model: $model,
+            followUpActions: $followUpActions,
         );
     }
 

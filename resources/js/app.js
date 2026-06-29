@@ -2176,10 +2176,11 @@ function initAssistantChat() {
         const panel = widget.querySelector('[data-assistant-panel]');
         const messages = widget.querySelector('[data-assistant-messages]');
         const actions = widget.querySelector('[data-assistant-actions]');
+        const followUps = widget.querySelector('[data-assistant-follow-ups]');
         const form = widget.querySelector('[data-assistant-form]');
         const input = widget.querySelector('[data-assistant-input]');
 
-        if (!toggle || !panel || !messages || !actions || !form || !input) {
+        if (!toggle || !panel || !messages || !actions || !followUps || !form || !input) {
             return;
         }
 
@@ -2190,6 +2191,13 @@ function initAssistantChat() {
         let currentMessages = [];
 
         const csrfToken = widget.dataset.csrfToken || '';
+        const focusInputSoon = () => {
+            if (panel.classList.contains('hidden')) {
+                return;
+            }
+
+            window.requestAnimationFrame(() => input.focus());
+        };
         const requestJson = (url, options = {}) => fetch(url, {
             ...options,
             headers: {
@@ -2213,6 +2221,10 @@ function initAssistantChat() {
             input.disabled = value;
             form.querySelector('button[type="submit"]').disabled = value;
             form.classList.toggle('opacity-70', value);
+
+            if (!value) {
+                focusInputSoon();
+            }
         };
 
         const bubbleClass = (role) => {
@@ -2298,10 +2310,50 @@ function initAssistantChat() {
             });
         };
 
+        const latestFollowUpActions = (items = []) => {
+            const latest = [...items]
+                .reverse()
+                .find((message) => message.role === 'assistant' && Array.isArray(message.metadata?.follow_up_actions));
+
+            return latest?.metadata?.follow_up_actions?.slice(0, 3) || [];
+        };
+
+        const submitSuggestedMessage = (message) => {
+            if (!message || loading) {
+                return;
+            }
+
+            input.value = message;
+
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+                return;
+            }
+
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        };
+
+        const renderFollowUps = (items = [], pendingActions = []) => {
+            const suggestions = pendingActions.length ? [] : latestFollowUpActions(items);
+            followUps.innerHTML = '';
+            followUps.classList.toggle('hidden', suggestions.length === 0);
+
+            suggestions.forEach((suggestion) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'mr-2 mb-2 inline-flex rounded-full border border-brand-100 bg-brand-50 px-3 py-1.5 text-left text-xs font-semibold leading-5 text-brand-900 transition hover:border-brand-200 hover:bg-brand-100 disabled:opacity-60';
+                button.textContent = suggestion;
+                button.addEventListener('click', () => submitSuggestedMessage(suggestion));
+                followUps.append(button);
+            });
+        };
+
         const render = (payload) => {
+            const pendingActions = payload.pending_actions || [];
             currentMessages = payload.messages || [];
             renderMessages(currentMessages);
-            renderActions(payload.pending_actions || []);
+            renderActions(pendingActions);
+            renderFollowUps(currentMessages, pendingActions);
         };
 
         const renderWithLocalMessage = (message) => {
@@ -2319,6 +2371,7 @@ function initAssistantChat() {
                 },
             ];
             renderMessages(currentMessages);
+            renderFollowUps([]);
         };
 
         const showError = (message) => {

@@ -3,12 +3,19 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountApiTokenAbility;
+use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\ClassBooking;
 use App\Models\ClassType;
+use App\Models\Customer;
+use App\Models\CustomerClassPass;
+use App\Models\CustomerClassPassReservation;
 use App\Models\Location;
 use App\Models\McpToolInvocation;
+use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\Trainer;
 use App\Support\AccountApiTokenIssuer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
@@ -17,6 +24,21 @@ use Tests\TestCase;
 class LadnaStudioMcpTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_mcp_endpoint_requires_bearer_token(): void
+    {
+        $this->postJson('/mcp/ladna-studio', $this->toolPayload('get-studio-profile'))
+            ->assertUnauthorized()
+            ->assertJsonPath('message', __('app.api_token_missing'));
+    }
+
+    public function test_mcp_endpoint_rejects_invalid_bearer_token(): void
+    {
+        $this->withToken('not-a-real-token')
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('get-studio-profile'))
+            ->assertUnauthorized()
+            ->assertJsonPath('message', __('app.api_token_invalid'));
+    }
 
     public function test_mcp_get_studio_profile_uses_bearer_account_scope(): void
     {
@@ -83,6 +105,110 @@ class LadnaStudioMcpTest extends TestCase
             ->assertJsonPath('result.structuredContent.by_schedule_kind.group_class', 1);
 
         Carbon::setTestNow();
+    }
+
+    public function test_mcp_class_bookings_for_day_returns_trainer_and_customer_details_in_token_scope(): void
+    {
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $otherAccount = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $location = Location::factory()->for($account)->create(['name' => 'Podil']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Big Hall']);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Marta']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Pole Beginner',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($trainer)
+            ->for($classType)
+            ->create([
+                'title' => 'Pole Beginner',
+                'capacity' => 6,
+                'starts_at' => Carbon::parse('2026-06-30 10:00:00', 'Europe/Kyiv')->timezone('UTC'),
+                'ends_at' => Carbon::parse('2026-06-30 11:00:00', 'Europe/Kyiv')->timezone('UTC'),
+            ]);
+        $anna = Customer::factory()->for($account)->create(['name' => 'Anna Client']);
+        $olena = Customer::factory()->for($account)->create(['name' => 'Olena Client']);
+        $annaBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($anna, 'customer')
+            ->create(['status' => ClassBookingStatus::Booked->value]);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($olena, 'customer')
+            ->create(['status' => ClassBookingStatus::Booked->value]);
+        $classPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($anna, 'customer')
+            ->create(['code' => 'ABCD-1234', 'plan_name' => 'BASE 8']);
+        CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($classPass)
+            ->for($annaBooking)
+            ->for($scheduledClass)
+            ->create();
+        ScheduledClass::factory()->for($otherAccount)->create([
+            'starts_at' => Carbon::parse('2026-06-30 10:00:00', 'Europe/Kyiv')->timezone('UTC'),
+            'ends_at' => Carbon::parse('2026-06-30 11:00:00', 'Europe/Kyiv')->timezone('UTC'),
+        ]);
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'MCP customers', [
+            AccountApiTokenAbility::McpCustomersRead,
+        ]);
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('get-class-bookings-for-day', [
+                'date' => '2026-06-30',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.total_classes', 1)
+            ->assertJsonPath('result.structuredContent.total_bookings', 2)
+            ->assertJsonPath('result.structuredContent.classes.0.scheduled_class_id', $scheduledClass->id)
+            ->assertJsonPath('result.structuredContent.classes.0.time_range', '10:00-11:00')
+            ->assertJsonPath('result.structuredContent.classes.0.trainer.name', 'Marta')
+            ->assertJsonPath('result.structuredContent.classes.0.location.name', 'Podil')
+            ->assertJsonPath('result.structuredContent.classes.0.room.name', 'Big Hall')
+            ->assertJsonPath('result.structuredContent.classes.0.bookings_count', 2)
+            ->assertJsonPath('result.structuredContent.classes.0.available_spots', 4)
+            ->assertJsonPath('result.structuredContent.classes.0.bookings.0.customer.name', 'Anna Client')
+            ->assertJsonPath('result.structuredContent.classes.0.bookings.0.class_pass.plan_name', 'BASE 8')
+            ->assertJsonPath('result.structuredContent.classes.0.bookings.1.customer.name', 'Olena Client');
+
+        $this->assertDatabaseHas('mcp_tool_invocations', [
+            'account_id' => $account->id,
+            'account_api_token_id' => $apiToken->id,
+            'tool_name' => 'get-class-bookings-for-day',
+            'required_ability' => AccountApiTokenAbility::McpCustomersRead->value,
+            'status' => 'succeeded',
+        ]);
+    }
+
+    public function test_mcp_class_bookings_for_day_requires_customer_read_ability(): void
+    {
+        $account = Account::factory()->create();
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'MCP read only', [
+            AccountApiTokenAbility::McpRead,
+        ]);
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('get-class-bookings-for-day', [
+                'date' => '2026-06-30',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.isError', true)
+            ->assertJsonPath('result.content.0.text', __('app.api_token_forbidden'));
+
+        $this->assertDatabaseHas('mcp_tool_invocations', [
+            'account_id' => $account->id,
+            'account_api_token_id' => $apiToken->id,
+            'tool_name' => 'get-class-bookings-for-day',
+            'required_ability' => AccountApiTokenAbility::McpCustomersRead->value,
+            'status' => 'denied',
+        ]);
     }
 
     public function test_mcp_endpoint_requires_mcp_read_ability(): void

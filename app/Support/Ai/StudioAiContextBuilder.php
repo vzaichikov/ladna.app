@@ -15,10 +15,13 @@ use App\Models\CustomerClassPass;
 use App\Models\ScheduledClass;
 use App\Models\TelegramChatAuthorization;
 use App\Models\WebsiteLead;
+use App\Support\StudioClassScheduleDetails;
 use Illuminate\Support\Carbon;
 
 class StudioAiContextBuilder
 {
+    public function __construct(private readonly StudioClassScheduleDetails $classScheduleDetails) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -83,6 +86,10 @@ class StudioAiContextBuilder
                     'scheduled' => $this->scheduledClassCountBetween($account, $today, $nextSevenDaysEnd),
                     'booked' => $this->bookingCountBetween($account, $today, $nextSevenDaysEnd),
                 ],
+            ],
+            'class_booking_details' => [
+                'today' => $this->classScheduleDetails->forDay($account, $today, classLimit: 20, bookingLimitPerClass: 20),
+                'tomorrow' => $this->classScheduleDetails->forDay($account, $tomorrow, classLimit: 20, bookingLimitPerClass: 20),
             ],
         ];
     }

@@ -519,6 +519,7 @@
                     <div data-assistant-messages class="flex max-h-[48vh] min-h-64 flex-col gap-3 overflow-y-auto bg-slate-50 px-4 py-4"></div>
 
                     <div data-assistant-actions class="hidden border-t border-stone-100 bg-white px-4 py-3"></div>
+                    <div data-assistant-follow-ups class="hidden border-t border-stone-100 bg-white px-4 py-3"></div>
 
                     <form data-assistant-form class="flex gap-2 border-t border-stone-100 bg-white p-3">
                         <input

@@ -3,6 +3,7 @@
 namespace App\Mcp\Servers;
 
 use App\Mcp\Tools\GetBusinessLogicReferenceTool;
+use App\Mcp\Tools\GetClassBookingsForDayTool;
 use App\Mcp\Tools\GetClassCountsForDayTool;
 use App\Mcp\Tools\GetOwnerHelpPageTool;
 use App\Mcp\Tools\GetStudioProfileTool;
@@ -18,6 +19,7 @@ use Laravel\Mcp\Server\Attributes\Version;
 class LadnaStudioServer extends Server
 {
     protected array $tools = [
+        GetClassBookingsForDayTool::class,
         GetClassCountsForDayTool::class,
         GetBusinessLogicReferenceTool::class,
         GetOwnerHelpPageTool::class,

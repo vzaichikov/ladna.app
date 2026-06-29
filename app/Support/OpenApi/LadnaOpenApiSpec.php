@@ -14,7 +14,7 @@ class LadnaOpenApiSpec
             'info' => [
                 'title' => 'Ladna API',
                 'version' => config('app.version', '1.0.0'),
-                'description' => 'Public schedule, public prices, and website lead intake API for Ladna studios.',
+                'description' => 'Public schedule, public prices, website lead intake, and account-scoped MCP tools for Ladna studios.',
             ],
             'servers' => [
                 [
@@ -26,12 +26,14 @@ class LadnaOpenApiSpec
                 ['name' => 'Public schedule'],
                 ['name' => 'Public prices'],
                 ['name' => 'Website leads'],
+                ['name' => 'MCP'],
             ],
             'paths' => [
                 '/api/v1/public/{accountSlug}/{locationSlug}/schedule' => $this->publicSchedulePath('Returns upcoming public group classes for a studio location.'),
                 '/api/v1/public/{accountSlug}/{locationSlug}/classes' => $this->publicSchedulePath('Alias for the public schedule endpoint.'),
                 '/api/v1/public/{accountSlug}/{locationSlug}/price' => $this->publicPricePath(),
                 '/api/v1/website-leads' => $this->websiteLeadPath(),
+                '/mcp/ladna-studio' => $this->mcpStudioPath(),
             ],
             'components' => [
                 'securitySchemes' => [
@@ -39,7 +41,7 @@ class LadnaOpenApiSpec
                         'type' => 'http',
                         'scheme' => 'bearer',
                         'bearerFormat' => 'Ladna account API token',
-                        'description' => 'Bearer token issued in studio settings. Website lead intake requires the website_leads:create ability.',
+                        'description' => 'Bearer token issued in studio settings. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token.',
                     ],
                 ],
                 'responses' => $this->responses(),
@@ -75,6 +77,14 @@ class LadnaOpenApiSpec
                     'name' => 'Олена Коваль',
                     'source_page' => 'https://studio.example.com/trial',
                 ]),
+            ],
+            'mcp_class_bookings' => [
+                'title' => __('app.api_docs_example_mcp_class_bookings'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-class-bookings-for-day', [
+                    'date' => '2026-06-30',
+                ])),
             ],
         ];
     }
@@ -202,6 +212,53 @@ class LadnaOpenApiSpec
                     'name' => 'Олена Коваль',
                     'source_page' => 'https://studio.example.com/trial',
                 ]),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mcpStudioPath(): array
+    {
+        return [
+            'post' => [
+                'tags' => ['MCP'],
+                'summary' => 'Calls Ladna studio MCP tools through JSON-RPC in the bearer token account scope.',
+                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, such as mcp:read, mcp:customers:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Tool calls never accept account_id or tenant_id arguments for scoping.',
+                'security' => [
+                    ['AccountBearerToken' => []],
+                ],
+                'requestBody' => [
+                    'required' => true,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => '#/components/schemas/McpToolCallRequest'],
+                            'examples' => [
+                                'class_bookings_for_day' => [
+                                    'value' => $this->mcpToolCallBody('get-class-bookings-for-day', [
+                                        'date' => '2026-06-30',
+                                    ]),
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'responses' => [
+                    '200' => [
+                        'description' => 'JSON-RPC response. Tool-level ability denial is returned as a JSON-RPC error result.',
+                        'content' => [
+                            'application/json' => [
+                                'schema' => ['$ref' => '#/components/schemas/McpToolCallResponse'],
+                            ],
+                        ],
+                    ],
+                    '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '429' => ['$ref' => '#/components/responses/TooManyRequests'],
+                ],
+                'x-codeSamples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-class-bookings-for-day', [
+                    'date' => '2026-06-30',
+                ])),
             ],
         ];
     }
@@ -404,6 +461,54 @@ class LadnaOpenApiSpec
                     ],
                 ],
             ],
+            'McpToolCallRequest' => [
+                'type' => 'object',
+                'required' => ['jsonrpc', 'id', 'method', 'params'],
+                'properties' => [
+                    'jsonrpc' => ['type' => 'string', 'enum' => ['2.0']],
+                    'id' => ['type' => ['integer', 'string'], 'example' => 1],
+                    'method' => ['type' => 'string', 'enum' => ['tools/call']],
+                    'params' => [
+                        'type' => 'object',
+                        'required' => ['name', 'arguments'],
+                        'properties' => [
+                            'name' => [
+                                'type' => 'string',
+                                'enum' => [
+                                    'get-studio-profile',
+                                    'get-class-counts-for-day',
+                                    'get-class-bookings-for-day',
+                                    'search-owner-help',
+                                    'get-owner-help-page',
+                                    'get-business-logic-reference',
+                                ],
+                            ],
+                            'arguments' => [
+                                'type' => 'object',
+                                'description' => 'Tool-specific arguments. Do not pass account_id, studio_id, tenant_id, user_id, or trainer_id for scoping.',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'McpToolCallResponse' => [
+                'type' => 'object',
+                'properties' => [
+                    'jsonrpc' => ['type' => 'string', 'example' => '2.0'],
+                    'id' => ['type' => ['integer', 'string'], 'example' => 1],
+                    'result' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'structuredContent' => [
+                                'type' => 'object',
+                                'description' => 'Machine-readable tool output for successful calls.',
+                            ],
+                            'isError' => ['type' => 'boolean'],
+                            'content' => ['type' => 'array'],
+                        ],
+                    ],
+                ],
+            ],
             'NamedEntity' => [
                 'type' => 'object',
                 'properties' => [
@@ -454,6 +559,23 @@ class LadnaOpenApiSpec
                 'source' => $body
                     ? "const response = await fetch('{$url}', {\n  method: '{$method}',\n  headers: {\n    'Authorization': 'Bearer ladna_your_token',\n    'Accept': 'application/json',\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify({$json}),\n});\n\nconst data = await response.json();"
                     : "const response = await fetch('{$url}', {\n  method: '{$method}',\n  headers: { 'Accept': 'application/json' },\n});\n\nconst data = await response.json();",
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function mcpToolCallBody(string $toolName, array $arguments): array
+    {
+        return [
+            'jsonrpc' => '2.0',
+            'id' => 1,
+            'method' => 'tools/call',
+            'params' => [
+                'name' => $toolName,
+                'arguments' => $arguments,
             ],
         ];
     }

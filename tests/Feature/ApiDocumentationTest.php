@@ -14,6 +14,8 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/schedule')
             ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/price')
             ->assertSee('/api/v1/website-leads')
+            ->assertSee('/mcp/ladna-studio')
+            ->assertSee('get-class-bookings-for-day')
             ->assertSee('PHP')
             ->assertSee('Python')
             ->assertSee('JS')
@@ -35,6 +37,11 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./api/v1/website-leads.post.summary', 'Creates a website lead for the studio identified by the bearer token with the website_leads:create ability.')
             ->assertJsonPath('paths./api/v1/website-leads.post.security.0.AccountBearerToken', [])
             ->assertJsonPath('paths./api/v1/website-leads.post.responses.402.$ref', '#/components/responses/SubscriptionExpired')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.tags.0', 'MCP')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.security.0.AccountBearerToken', [])
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.class_bookings_for_day.value.params.name', 'get-class-bookings-for-day')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.responses.401.$ref', '#/components/responses/Unauthorized')
+            ->assertJsonPath('components.schemas.McpToolCallRequest.properties.params.properties.name.enum.2', 'get-class-bookings-for-day')
             ->assertJsonPath('components.schemas.WebsiteLeadRequest.required.0', 'phone')
             ->assertJsonPath('components.schemas.ClassPassPlan.properties.total_validity_days.type', 'integer')
             ->assertJsonPath('components.schemas.ClassPassPlan.properties.segment.anyOf.0.$ref', '#/components/schemas/ClassPassSegment')
@@ -45,6 +52,6 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.example', 'subscription_expired')
             ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.enum.1', 'demo_payment_required')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.scheme', 'bearer')
-            ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. Website lead intake requires the website_leads:create ability.');
+            ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token.');
     }
 }

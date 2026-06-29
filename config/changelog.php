@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.52.0',
+                'date' => '2026-06-29',
+                'title' => 'Assistant follow-ups and MCP schedule details',
+                'items' => ['Added owner assistant follow-up buttons, kept the chat input focused after replies, added detailed MCP schedule and booking data for trainer and customer questions, documented the MCP endpoint in the API documentation, and fixed demo seeder tests so local demo users remain available after test runs.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.51.0',
                 'date' => '2026-06-29',
                 'title' => 'Owner AI assistant model selection and chat polish',
@@ -457,6 +464,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.52.0',
+                'date' => '2026-06-29',
+                'title' => 'Follow-up кнопки асистента та деталі розкладу в MCP',
+                'items' => ['Додано follow-up кнопки в owner assistant, збереження фокусу в полі чату після відповіді, детальні MCP-дані розкладу й записів для питань про тренерів і клієнтів, опис MCP endpoint в API документації, а також виправлення demo seeder tests, щоб локальні demo користувачі залишалися доступними після запуску тестів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.51.0',
                 'date' => '2026-06-29',
