@@ -125,6 +125,34 @@
             <x-ui.metric :label="__('app.today_load')" :value="$ownerDashboard['metrics']['todayLoad']['percent'].'%'" :meta="__('app.booked_of_capacity', ['booked' => $ownerDashboard['metrics']['todayLoad']['bookings'], 'capacity' => $ownerDashboard['metrics']['todayLoad']['capacity']])" icon="generated-classes" accent="slate" />
         </section>
 
+        @php
+            $problemItems = collect($ownerDashboard['problems'] ?? []);
+            $problemAccentClasses = [
+                'danger' => 'border-rose-200 bg-rose-50 text-rose-900',
+                'warning' => 'border-amber-200 bg-amber-50 text-amber-950',
+                'scheduled' => 'border-indigo-200 bg-indigo-50 text-indigo-950',
+            ];
+        @endphp
+        @if ($problemItems->isNotEmpty())
+            <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+                <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.studio_problem_moments') }}</h2>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('app.studio_problem_moments_copy') }}</p>
+                    </div>
+                    <span class="crm-status-warning">{{ $problemItems->sum('count') }}</span>
+                </div>
+                <div class="grid gap-3 p-5 md:grid-cols-3">
+                    @foreach ($problemItems as $problem)
+                        <a href="{{ $problem['url'] }}" class="rounded-lg border px-4 py-3 transition hover:-translate-y-0.5 hover:shadow-xs {{ $problemAccentClasses[$problem['accent']] ?? 'border-stone-200 bg-slate-50 text-slate-950' }}">
+                            <div class="text-2xl font-semibold">{{ $problem['count'] }}</div>
+                            <div class="mt-1 text-sm font-medium">{{ $problem['label'] }}</div>
+                        </a>
+                    @endforeach
+                </div>
+            </x-ui.panel>
+        @endif
+
         @if ($ownerDashboard['activeTrainerSubstitutions']->isNotEmpty())
             <x-ui.panel padding="none" class="mt-6 overflow-hidden">
                 <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">

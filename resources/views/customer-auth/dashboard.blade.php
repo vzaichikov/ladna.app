@@ -79,13 +79,20 @@
                     </div>
                     <div class="divide-y divide-stone-100">
                         @forelse ($passes as $pass)
+                            @php
+                                $statusClass = match ($pass->status) {
+                                    \App\Enums\CustomerClassPassStatus::Active => 'crm-status-active',
+                                    \App\Enums\CustomerClassPassStatus::Freezed => 'crm-status-warning',
+                                    default => 'crm-status-muted',
+                                };
+                            @endphp
                             <article class="p-5">
                                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
                                         <div class="font-semibold text-slate-950">{{ $pass->plan_name }}</div>
                                         <div class="mt-1 text-sm text-slate-500">{{ $pass->code }} · {{ $formatMoney($pass->price_cents, $pass->currency) }}</div>
                                     </div>
-                                    <span class="{{ $pass->is_active ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$pass->status->value) }}</span>
+                                    <span class="{{ $statusClass }}">{{ __('app.'.$pass->status->value) }}</span>
                                 </div>
                                 <dl class="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
                                     <div>{{ __('app.remaining_sessions') }}: <span class="font-semibold text-slate-950">{{ $pass->remainingSessionsCount() }}</span></div>

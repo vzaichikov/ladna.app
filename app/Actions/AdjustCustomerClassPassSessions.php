@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Enums\CustomerClassPassAdjustmentType;
 use App\Enums\CustomerClassPassStatus;
 use App\Models\Account;
 use App\Models\CustomerClassPass;
@@ -78,6 +79,7 @@ class AdjustCustomerClassPassSessions
                 'account_id' => $account->id,
                 'user_id' => $user?->id,
                 ...$this->actorSnapshot->capture($account, $user),
+                'adjustment_type' => CustomerClassPassAdjustmentType::Sessions->value,
                 'sessions_delta' => $sessionsDelta,
                 'previous_sessions_count' => $previousSessionsCount,
                 'new_sessions_count' => $newSessionsCount,

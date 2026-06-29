@@ -10,6 +10,7 @@ use App\Models\Account;
 use App\Models\Trainer;
 use App\Models\User;
 use App\Support\SlugGenerator;
+use App\Support\UnreservedClassPassBookingIssues;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
@@ -18,7 +19,7 @@ use Illuminate\View\View;
 
 class TrainerController extends Controller
 {
-    public function index(Account $account): View
+    public function index(Account $account, UnreservedClassPassBookingIssues $unreservedClassPassBookingIssues): View
     {
         $this->authorize('view', $account);
 
@@ -28,6 +29,8 @@ class TrainerController extends Controller
                 ->with('trainerType')
                 ->orderBy('name')
                 ->get(),
+            'unreservedClassPassIssueCounts' => $unreservedClassPassBookingIssues->countsByTrainer($account),
+            'unreservedClassPassIssueBookings' => $unreservedClassPassBookingIssues->bookingsByTrainer($account),
         ]);
     }
 

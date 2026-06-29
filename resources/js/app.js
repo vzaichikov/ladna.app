@@ -699,6 +699,11 @@ function closeTrainerSubstitutionModal(modal) {
     modal?.classList.remove('flex');
 }
 
+function closeTrainerIssuesModal(modal) {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
 function fillQuickBookingForm(modal, button) {
     const form = modal?.querySelector('form');
 
@@ -1321,6 +1326,49 @@ function initTrainerSubstitutionModals() {
         if (checked.length > 2) {
             checkbox.checked = false;
         }
+    });
+}
+
+function initTrainerIssueModals() {
+    document.querySelectorAll('[data-trainer-issues-modal]').forEach((modal) => {
+        if (modal.dataset.trainerIssuesReady === 'true') {
+            return;
+        }
+
+        modal.dataset.trainerIssuesReady = 'true';
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeTrainerIssuesModal(modal);
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-trainer-issues-open]').forEach((button) => {
+        if (button.dataset.trainerIssuesOpenReady === 'true') {
+            return;
+        }
+
+        button.dataset.trainerIssuesOpenReady = 'true';
+        button.addEventListener('click', () => {
+            const modal = document.querySelector(`[data-trainer-issues-modal="${button.dataset.trainerIssuesOpen}"]`);
+
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.querySelector('[data-trainer-issues-close]')?.focus();
+        });
+    });
+
+    document.querySelectorAll('[data-trainer-issues-close]').forEach((button) => {
+        if (button.dataset.trainerIssuesCloseReady === 'true') {
+            return;
+        }
+
+        button.dataset.trainerIssuesCloseReady = 'true';
+        button.addEventListener('click', () => closeTrainerIssuesModal(button.closest('[data-trainer-issues-modal]')));
     });
 }
 
@@ -2214,6 +2262,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPrintButtons();
     initManualClassModals();
     initTrainerSubstitutionModals();
+    initTrainerIssueModals();
     initQuickBookingModals();
     initCustomerTransferModals();
     initCopyButtons();
@@ -2424,6 +2473,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (event.key === 'Escape') {
             closeTrainerSubstitutionModal(document.querySelector('[data-trainer-substitution-modal]:not(.hidden)'));
+        }
+
+        if (event.key === 'Escape') {
+            closeTrainerIssuesModal(document.querySelector('[data-trainer-issues-modal]:not(.hidden)'));
         }
 
         if (event.key === 'Escape') {

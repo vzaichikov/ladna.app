@@ -3,11 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Actions\AdjustCustomerClassPassSessions;
+use App\Actions\AdjustCustomerClassPassValidityDays;
+use App\Actions\FreezeCustomerClassPass;
 use App\Actions\IssueCustomerClassPass;
 use App\Actions\ReconcileUnreservedCustomerBookingsForIssuedClassPass;
 use App\Actions\SyncManualCustomerClassPassPayment;
+use App\Actions\UnfreezeCustomerClassPass;
 use App\Http\Requests\StoreCustomerClassPassAdjustmentRequest;
 use App\Http\Requests\StoreCustomerClassPassRequest;
+use App\Http\Requests\StoreCustomerClassPassValidityAdjustmentRequest;
 use App\Http\Requests\UpdateCustomerClassPassRequest;
 use App\Models\Account;
 use App\Models\Customer;
@@ -25,14 +29,15 @@ class CustomerClassPassController extends Controller
         $this->authorize('manageCustomerClassPasses', $account);
 
         $term = trim((string) $request->query('q', ''));
-        $state = (string) $request->query('state', 'active');
+        $requestedState = (string) $request->query('state', 'active');
+        $state = in_array($requestedState, ['active', 'inactive', 'freezed', 'all'], true) ? $requestedState : 'active';
         $enabledScheduleKinds = $account->enabledScheduleKindValues();
         $requestedScheduleKind = (string) $request->query('schedule_kind', '');
         $scheduleKind = in_array($requestedScheduleKind, $enabledScheduleKinds, true) ? $requestedScheduleKind : '';
         $requestedPaymentStatus = (string) $request->query('payment_status', '');
         $paymentStatus = in_array($requestedPaymentStatus, ['paid', 'unpaid'], true) ? $requestedPaymentStatus : '';
         $unpaidActiveClassPassesCount = $account->customerClassPasses()
-            ->where('is_active', true)
+            ->active()
             ->unpaid()
             ->count();
 
@@ -48,8 +53,9 @@ class CustomerClassPassController extends Controller
                         });
                 });
             })
-            ->when($state === 'active', fn ($query) => $query->where('is_active', true))
+            ->when($state === 'active', fn ($query) => $query->active())
             ->when($state === 'inactive', fn ($query) => $query->where('is_active', false))
+            ->when($state === 'freezed', fn ($query) => $query->freezed())
             ->when($paymentStatus === 'paid', fn ($query) => $query->paid())
             ->when($paymentStatus === 'unpaid', fn ($query) => $query->unpaid())
             ->when($scheduleKind !== '', function ($query) use ($scheduleKind): void {
@@ -186,6 +192,47 @@ class CustomerClassPassController extends Controller
         return redirect()
             ->route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])
             ->with('status', __('app.customer_class_pass_adjusted'));
+    }
+
+    public function storeValidityAdjustment(StoreCustomerClassPassValidityAdjustmentRequest $request, Account $account, CustomerClassPass $customerClassPass, AdjustCustomerClassPassValidityDays $adjustCustomerClassPassValidityDays): RedirectResponse
+    {
+        $this->ensureBelongsToAccount($account, $customerClassPass);
+
+        $adjustCustomerClassPassValidityDays->execute(
+            $account,
+            $customerClassPass,
+            $request->user(),
+            $request->signedDaysDelta(),
+            (string) $request->validated('reason'),
+        );
+
+        return redirect()
+            ->route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])
+            ->with('status', __('app.customer_class_pass_days_adjusted'));
+    }
+
+    public function freeze(Request $request, Account $account, CustomerClassPass $customerClassPass, FreezeCustomerClassPass $freezeCustomerClassPass): RedirectResponse
+    {
+        $this->ensureBelongsToAccount($account, $customerClassPass);
+        $this->authorize('manageCustomerClassPasses', $account);
+
+        $freezeCustomerClassPass->execute($account, $customerClassPass, $request->user());
+
+        return redirect()
+            ->route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])
+            ->with('status', __('app.customer_class_pass_freezed'));
+    }
+
+    public function unfreeze(Request $request, Account $account, CustomerClassPass $customerClassPass, UnfreezeCustomerClassPass $unfreezeCustomerClassPass): RedirectResponse
+    {
+        $this->ensureBelongsToAccount($account, $customerClassPass);
+        $this->authorize('manageCustomerClassPasses', $account);
+
+        $unfreezeCustomerClassPass->execute($account, $customerClassPass, $request->user());
+
+        return redirect()
+            ->route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])
+            ->with('status', __('app.customer_class_pass_unfreezed'));
     }
 
     private function ensureBelongsToAccount(Account $account, CustomerClassPass $customerClassPass): void

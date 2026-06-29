@@ -46,6 +46,7 @@
                 <span class="crm-label">{{ __('app.status') }}</span>
                 <select name="state" class="crm-field">
                     <option value="active" @selected($state === 'active')>{{ __('app.active') }}</option>
+                    <option value="freezed" @selected($state === 'freezed')>{{ __('app.freezed') }}</option>
                     <option value="inactive" @selected($state === 'inactive')>{{ __('app.inactive') }}</option>
                     <option value="all" @selected($state === 'all')>{{ __('app.all_statuses') }}</option>
                 </select>
@@ -74,6 +75,13 @@
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($customerClassPasses as $customerClassPass)
+            @php
+                $statusClass = match ($customerClassPass->status) {
+                    \App\Enums\CustomerClassPassStatus::Active => 'crm-status-active',
+                    \App\Enums\CustomerClassPassStatus::Freezed => 'crm-status-warning',
+                    default => 'crm-status-muted',
+                };
+            @endphp
             <div class="crm-row xl:grid-cols-[1fr_1fr_0.8fr_0.9fr_0.9fr_auto] xl:items-center">
                 <div>
                     <div class="font-semibold text-slate-950">{{ $customerClassPass->code }}</div>
@@ -97,11 +105,14 @@
                 <div class="text-sm text-slate-600">
                     <div>{{ __('app.expires_after_first_class') }}: {{ $formatDate($customerClassPass->expires_at) }}</div>
                     <div class="mt-1 whitespace-nowrap">{{ __('app.usable_until_at') }}: {{ $formatDate($customerClassPass->usableUntilAt()) }}</div>
+                    @if ($customerClassPass->frozen_at)
+                        <div class="mt-1">{{ __('app.frozen_at') }}: {{ $formatDate($customerClassPass->frozen_at) }}</div>
+                    @endif
                     <div class="mt-1">{{ __('app.reserved_sessions') }}: {{ $customerClassPass->reserved_sessions_count }}</div>
                 </div>
                 <div class="flex flex-wrap gap-2 xl:justify-end">
                     <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
-                    <span class="{{ $customerClassPass->is_active ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
+                    <span class="{{ $statusClass }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
                     <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
                 </div>
             </div>

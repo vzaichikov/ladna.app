@@ -397,6 +397,34 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_frozen_pass_is_not_reserved_for_new_booking(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 1);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $customerClassPass->forceFill([
+            'status' => CustomerClassPassStatus::Freezed->value,
+            'is_active' => true,
+            'frozen_at' => Carbon::parse('2026-06-20 10:00:00'),
+        ])->save();
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+
+        $response = $this->actingAs($context['owner'])
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$context['account'], $scheduledClass]), [
+                'customer_id' => $context['customer']->id,
+            ])
+            ->assertCreated();
+
+        $booking = $scheduledClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail();
+
+        $this->assertStringContainsString(__('app.no_matching_class_pass_alert'), $response->json('card_html'));
+        $this->assertFalse($booking->classPassReservation()->exists());
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+
+        Carbon::setTestNow();
+    }
+
     public function test_private_lessons_and_rentals_match_trainer_type_and_room(): void
     {
         $context = $this->context();

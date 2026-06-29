@@ -85,6 +85,40 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('endpoint', false);
     }
 
+    public function test_passes_prices_help_explains_freeze_and_day_adjustments(): void
+    {
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('Як заморозити абонемент клієнта', false)
+            ->assertSee('Заморозити', false)
+            ->assertSee('Розморозити', false)
+            ->assertSee('стільки календарних днів, скільки абонемент був заморожений', false)
+            ->assertSee('Як додати або зняти дні дії абонемента', false)
+            ->assertSee('не змінює загальний строк від покупки', false)
+            ->assertSee('assets/help/screenshots/class-pass-freeze.png', false)
+            ->assertDontSee('freezed', false)
+            ->assertDontSee('reservation', false);
+    }
+
+    public function test_help_explains_studio_problem_moments_and_trainer_badges(): void
+    {
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('Проблемні моменти на головному екрані', false)
+            ->assertSee('неоплачені активні абонементи', false)
+            ->assertSee('записи без резерву в абонементі', false)
+            ->assertSee('заморожені абонементи', false)
+            ->assertSee('assets/help/screenshots/studio-problems.png', false);
+
+        $this->get(route('help.show', 'trainers', false))
+            ->assertStatus(200)
+            ->assertSee('Як перевірити записи тренера без резерву', false)
+            ->assertSee('бейдж із кількістю записів', false)
+            ->assertSee('assets/help/screenshots/trainer-unreserved-bookings.png', false)
+            ->assertDontSee('CustomerClassPassReservation', false)
+            ->assertDontSee('customer_class_pass', false);
+    }
+
     public function test_customers_help_explains_customer_import_and_export(): void
     {
         $this->get(route('help.show', 'customers-bookings', false))

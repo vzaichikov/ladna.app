@@ -4,12 +4,11 @@ namespace App\Actions;
 
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
-use App\Enums\ScheduledClassStatus;
 use App\Models\ClassBooking;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\ScheduledClass;
-use Illuminate\Database\Eloquent\Builder;
+use App\Support\UnreservedClassPassBookingIssues;
 use Illuminate\Support\Collection;
 
 class ReconcileUnreservedCustomerBookingsForIssuedClassPass
@@ -17,6 +16,7 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
     public function __construct(
         private readonly ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
+        private readonly UnreservedClassPassBookingIssues $unreservedClassPassBookingIssues,
     ) {}
 
     public function execute(CustomerClassPass $customerClassPass): int
@@ -145,7 +145,7 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
     {
         $classBookingTable = (new ClassBooking)->getTable();
 
-        return $this->candidateBookingsQuery($accountId, $customerId)
+        return $this->unreservedClassPassBookingIssues->queryForAccountCustomer($accountId, $customerId)
             ->pluck("{$classBookingTable}.id");
     }
 
@@ -154,7 +154,7 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
      */
     private function candidateBookings(int $accountId, int $customerId): Collection
     {
-        return $this->candidateBookingsQuery($accountId, $customerId)
+        return $this->unreservedClassPassBookingIssues->queryForAccountCustomer($accountId, $customerId)
             ->with(['scheduledClass.classType', 'scheduledClass.trainer', 'scheduledClass.room', 'customer'])
             ->get();
     }
@@ -187,29 +187,5 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
         }
 
         return CustomerClassPassReservationStatus::Reserved;
-    }
-
-    private function candidateBookingsQuery(int $accountId, int $customerId): Builder
-    {
-        $classBookingTable = (new ClassBooking)->getTable();
-        $scheduledClassTable = (new ScheduledClass)->getTable();
-
-        return ClassBooking::query()
-            ->select("{$classBookingTable}.*")
-            ->join($scheduledClassTable, "{$scheduledClassTable}.id", '=', "{$classBookingTable}.scheduled_class_id")
-            ->where("{$classBookingTable}.account_id", $accountId)
-            ->where("{$classBookingTable}.customer_id", $customerId)
-            ->whereIn("{$classBookingTable}.status", array_map(
-                fn (ClassBookingStatus $status): string => $status->value,
-                ClassBookingStatus::cases(),
-            ))
-            ->where("{$scheduledClassTable}.account_id", $accountId)
-            ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)
-            ->whereDoesntHave('classPassReservation', fn ($query) => $query->whereIn('status', [
-                CustomerClassPassReservationStatus::Reserved->value,
-                CustomerClassPassReservationStatus::Used->value,
-            ]))
-            ->orderBy("{$scheduledClassTable}.starts_at")
-            ->orderBy("{$classBookingTable}.id");
     }
 }

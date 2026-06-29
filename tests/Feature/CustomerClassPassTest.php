@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\IssueCustomerClassPass;
 use App\Enums\AccountRole;
+use App\Enums\CustomerClassPassAdjustmentType;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\StudioPermission;
@@ -360,13 +361,17 @@ class CustomerClassPassTest extends TestCase
             ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
             ->assertOk()
             ->assertSee(__('app.class_pass_session_adjustment'))
+            ->assertSee(__('app.class_pass_validity_days_adjustment'))
             ->assertSee(__('app.confirm_add_class_pass_sessions_title'))
-            ->assertSee(__('app.confirm_remove_class_pass_sessions_title'));
+            ->assertSee(__('app.confirm_remove_class_pass_sessions_title'))
+            ->assertSee(__('app.confirm_add_class_pass_days_title'))
+            ->assertSee(__('app.confirm_remove_class_pass_days_title'));
 
         $html = $response->getContent();
 
         $this->assertSame(1, substr_count($html, 'name="sessions_delta"'));
-        $this->assertSame(1, substr_count($html, 'name="reason"'));
+        $this->assertSame(1, substr_count($html, 'name="days_delta"'));
+        $this->assertSame(2, substr_count($html, 'name="reason"'));
         $this->assertStringContainsString('name="direction" value="add"', $html);
         $this->assertStringContainsString('name="direction" value="subtract"', $html);
         $this->assertStringContainsString('data-confirm-icon="plus"', $html);
@@ -394,6 +399,7 @@ class CustomerClassPassTest extends TestCase
         $adjustment = $customerClassPass->adjustments()->firstOrFail();
 
         $this->assertSame(6, $customerClassPass->sessions_count);
+        $this->assertSame(CustomerClassPassAdjustmentType::Sessions, $adjustment->adjustment_type);
         $this->assertSame(2, $adjustment->sessions_delta);
         $this->assertSame(4, $adjustment->previous_sessions_count);
         $this->assertSame(6, $adjustment->new_sessions_count);
@@ -423,12 +429,275 @@ class CustomerClassPassTest extends TestCase
         $adjustment = $customerClassPass->adjustments()->firstOrFail();
 
         $this->assertSame(2, $customerClassPass->sessions_count);
+        $this->assertSame(CustomerClassPassAdjustmentType::Sessions, $adjustment->adjustment_type);
         $this->assertSame(-2, $adjustment->sessions_delta);
         $this->assertSame(4, $adjustment->previous_sessions_count);
         $this->assertSame(2, $adjustment->new_sessions_count);
         $this->assertSame('Manual correction after wrong issue', $adjustment->reason);
         $this->assertSame($owner->id, $adjustment->user_id);
         $this->assertSame($account->id, $adjustment->account_id);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_can_freeze_customer_class_pass_and_future_reservations_are_released(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan, $scheduledClass] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+        $futureClass = $this->matchingScheduledClass($scheduledClass, '2026-06-22 10:00:00');
+        $futureBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($futureClass)
+            ->for($customer)
+            ->create();
+        $reservation = $customerClassPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $futureBooking->id,
+            'scheduled_class_id' => $futureClass->id,
+            'status' => CustomerClassPassReservationStatus::Reserved->value,
+            'reserved_at' => Carbon::parse('2026-06-20 09:00:00'),
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertOk()
+            ->assertSee(__('app.freeze_class_pass'))
+            ->assertSee(__('app.confirm_freeze_class_pass_title'));
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.freeze', [$account, $customerClassPass]))
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertSessionHas('status', __('app.customer_class_pass_freezed'));
+
+        $customerClassPass->refresh();
+        $reservation->refresh();
+        $adjustment = $customerClassPass->adjustments()->firstOrFail();
+
+        $this->assertSame(CustomerClassPassStatus::Freezed, $customerClassPass->status);
+        $this->assertTrue($customerClassPass->is_active);
+        $this->assertTrue($customerClassPass->frozen_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->status);
+        $this->assertTrue($reservation->released_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+        $this->assertSame(CustomerClassPassAdjustmentType::Freeze, $adjustment->adjustment_type);
+        $this->assertSame(CustomerClassPassStatus::Active->value, $adjustment->previous_status);
+        $this->assertSame(CustomerClassPassStatus::Freezed->value, $adjustment->new_status);
+        $this->assertSame($owner->id, $adjustment->actor_user_id);
+        $this->assertSame($owner->name, $adjustment->actor_name);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_can_unfreeze_customer_class_pass_and_extend_validity_by_calendar_days(): void
+    {
+        $frozenAt = Carbon::parse('2026-06-19 09:00:00', 'Europe/Kyiv')->timezone('UTC');
+        Carbon::setTestNow(Carbon::parse('2026-06-21 08:00:00', 'Europe/Kyiv')->timezone('UTC'));
+        [$owner, $account, $customer, $plan] = $this->passContext();
+        $account->update(['timezone' => 'Europe/Kyiv']);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+        $customerClassPass->forceFill([
+            'status' => CustomerClassPassStatus::Freezed->value,
+            'is_active' => true,
+            'frozen_at' => $frozenAt,
+        ])->save();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.unfreeze', [$account, $customerClassPass]))
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertSessionHas('status', __('app.customer_class_pass_unfreezed'));
+
+        $customerClassPass->refresh();
+        $adjustment = $customerClassPass->adjustments()->firstOrFail();
+
+        $this->assertSame(CustomerClassPassStatus::Active, $customerClassPass->status);
+        $this->assertTrue($customerClassPass->is_active);
+        $this->assertNull($customerClassPass->frozen_at);
+        $this->assertSame(32, $customerClassPass->validity_days);
+        $this->assertSame(120, $customerClassPass->total_validity_days);
+        $this->assertSame(CustomerClassPassAdjustmentType::Unfreeze, $adjustment->adjustment_type);
+        $this->assertSame(2, $adjustment->days_delta);
+        $this->assertSame(30, $adjustment->previous_validity_days);
+        $this->assertSame(32, $adjustment->new_validity_days);
+        $this->assertSame(2, $adjustment->freeze_days_count);
+        $this->assertTrue($adjustment->freeze_started_at->equalTo($frozenAt));
+        $this->assertNotNull($adjustment->freeze_finished_at);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_unfreeze_adds_at_least_one_calendar_day(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 12:00:00'));
+        [$owner, $account, $customer, $plan] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+        $customerClassPass->forceFill([
+            'status' => CustomerClassPassStatus::Freezed->value,
+            'is_active' => true,
+            'frozen_at' => Carbon::parse('2026-06-20 10:00:00'),
+        ])->save();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.unfreeze', [$account, $customerClassPass]))
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]));
+
+        $customerClassPass->refresh();
+        $adjustment = $customerClassPass->adjustments()->firstOrFail();
+
+        $this->assertSame(31, $customerClassPass->validity_days);
+        $this->assertSame(120, $customerClassPass->total_validity_days);
+        $this->assertSame(1, $adjustment->days_delta);
+        $this->assertSame(1, $adjustment->freeze_days_count);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_can_add_and_remove_validity_days_and_history_is_stored(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.validity-adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
+                'days_delta' => 5,
+                'reason' => 'Medical validity compensation',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertSessionHas('status', __('app.customer_class_pass_days_adjusted'));
+
+        $customerClassPass->refresh();
+        $addAdjustment = $customerClassPass->adjustments()->latest('id')->firstOrFail();
+
+        $this->assertSame(35, $customerClassPass->validity_days);
+        $this->assertSame(120, $customerClassPass->total_validity_days);
+        $this->assertSame(CustomerClassPassAdjustmentType::ValidityDays, $addAdjustment->adjustment_type);
+        $this->assertSame(5, $addAdjustment->days_delta);
+        $this->assertSame(30, $addAdjustment->previous_validity_days);
+        $this->assertSame(35, $addAdjustment->new_validity_days);
+        $this->assertSame(CustomerClassPassStatus::Active->value, $addAdjustment->previous_status);
+        $this->assertSame(CustomerClassPassStatus::Active->value, $addAdjustment->new_status);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.validity-adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'subtract',
+                'days_delta' => 3,
+                'reason' => 'Manual validity correction',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]));
+
+        $customerClassPass->refresh();
+        $subtractAdjustment = $customerClassPass->adjustments()->latest('id')->firstOrFail();
+
+        $this->assertSame(32, $customerClassPass->validity_days);
+        $this->assertSame(120, $customerClassPass->total_validity_days);
+        $this->assertSame(-3, $subtractAdjustment->days_delta);
+        $this->assertSame(35, $subtractAdjustment->previous_validity_days);
+        $this->assertSame(32, $subtractAdjustment->new_validity_days);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertOk()
+            ->assertSee(__('app.adjustment_validity_days'))
+            ->assertSee('Medical validity compensation')
+            ->assertSee('Manual validity correction');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_frozen_status_can_only_change_through_freeze_actions(): void
+    {
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+
+        $this->actingAs($owner)
+            ->put(
+                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
+                [...$this->classPassUpdatePayload($customerClassPass, $location, isPaid: false), 'status' => CustomerClassPassStatus::Freezed->value],
+            )
+            ->assertSessionHasErrors('status');
+
+        $this->assertSame(CustomerClassPassStatus::Active, $customerClassPass->fresh()->status);
+
+        $customerClassPass->forceFill([
+            'status' => CustomerClassPassStatus::Freezed->value,
+            'is_active' => true,
+            'frozen_at' => now(),
+        ])->save();
+
+        $this->actingAs($owner)
+            ->put(
+                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
+                [...$this->classPassUpdatePayload($customerClassPass, $location, isPaid: false), 'is_active' => '0'],
+            )
+            ->assertSessionHasErrors('is_active');
+
+        $this->assertSame(CustomerClassPassStatus::Freezed, $customerClassPass->fresh()->status);
+        $this->assertTrue($customerClassPass->fresh()->is_active);
+
+        $this->actingAs($owner)
+            ->put(
+                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
+                [...$this->classPassUpdatePayload($customerClassPass, $location, isPaid: false), 'status' => CustomerClassPassStatus::Active->value],
+            )
+            ->assertSessionHasErrors('status');
+
+        $this->assertSame(CustomerClassPassStatus::Freezed, $customerClassPass->fresh()->status);
+    }
+
+    public function test_freeze_unfreeze_and_day_adjustments_reject_invalid_or_cross_account_passes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan] = $this->passContext();
+        $cancelledPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+        $expiredPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, purchasedAt: Carbon::parse('2026-01-01 10:00:00'));
+
+        $cancelledPass->forceFill([
+            'status' => CustomerClassPassStatus::Cancelled->value,
+            'is_active' => false,
+            'closed_at' => now(),
+        ])->save();
+        $expiredPass->forceFill([
+            'status' => CustomerClassPassStatus::Expired->value,
+            'is_active' => false,
+            'usable_until_at' => Carbon::parse('2026-01-10 10:00:00'),
+            'closed_at' => Carbon::parse('2026-01-10 10:00:00'),
+        ])->save();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.freeze', [$account, $cancelledPass]))
+            ->assertSessionHasErrors('status');
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.validity-adjustments.store', [$account, $expiredPass]), [
+                'direction' => 'add',
+                'days_delta' => 1,
+                'reason' => 'Invalid validity compensation',
+            ])
+            ->assertSessionHasErrors('days_delta');
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.unfreeze', [$account, $expiredPass]))
+            ->assertSessionHasErrors('status');
+
+        $otherAccount = Account::factory()->create();
+        $otherCustomer = Customer::factory()->for($otherAccount)->create();
+        $otherPlan = ClassPassPlan::factory()->for($otherAccount)->create();
+        $otherPass = app(IssueCustomerClassPass::class)->execute($otherAccount, $otherCustomer, $otherPlan);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.freeze', [$account, $otherPass]))
+            ->assertNotFound();
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.validity-adjustments.store', [$account, $otherPass]), [
+                'direction' => 'add',
+                'days_delta' => 1,
+                'reason' => 'Cross-account validity compensation',
+            ])
+            ->assertNotFound();
+
+        $this->assertSame(0, $cancelledPass->adjustments()->count());
+        $this->assertSame(0, $expiredPass->adjustments()->count());
+        $this->assertSame(0, $otherPass->adjustments()->count());
 
         Carbon::setTestNow();
     }

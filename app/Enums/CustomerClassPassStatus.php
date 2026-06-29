@@ -5,6 +5,7 @@ namespace App\Enums;
 enum CustomerClassPassStatus: string
 {
     case Active = 'active';
+    case Freezed = 'freezed';
     case UsedUp = 'used_up';
     case Expired = 'expired';
     case Cancelled = 'cancelled';

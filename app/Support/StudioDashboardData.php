@@ -19,6 +19,10 @@ class StudioDashboardData
 {
     private const OUTLOOK_DAYS = 7;
 
+    public function __construct(
+        private readonly UnreservedClassPassBookingIssues $unreservedClassPassBookingIssues,
+    ) {}
+
     /**
      * @return array{
      *     mode: string,
@@ -93,6 +97,7 @@ class StudioDashboardData
                     ->count(),
                 'todayLoad' => $this->loadFor($todayScheduledClasses),
             ],
+            'problems' => $this->problems($account),
             'liveClasses' => $todayClasses
                 ->filter(fn (ScheduledClass $scheduledClass): bool => $scheduledClass->starts_at->lessThanOrEqualTo($now->timezone(config('app.timezone')))
                     && $scheduledClass->ends_at->greaterThanOrEqualTo($now->timezone(config('app.timezone'))))
@@ -105,6 +110,43 @@ class StudioDashboardData
             'roomLoad' => $this->loadBy($outlookClasses, 'room_id', 'room'),
             'outlookDays' => $this->outlookDays($outlookClasses, $todayStartsAt, $timezone),
             'activeTrainerSubstitutions' => $this->activeTrainerSubstitutions($account, $todayStartsAt),
+        ];
+    }
+
+    /**
+     * @return array<int, array{key: string, count: int, label: string, url: string, accent: string}>
+     */
+    private function problems(Account $account): array
+    {
+        return [
+            [
+                'key' => 'unpaid_class_passes',
+                'count' => $account->customerClassPasses()->active()->unpaid()->count(),
+                'label' => __('app.problem_unpaid_class_passes'),
+                'url' => route('dashboard.accounts.customer-class-passes.index', [
+                    'account' => $account,
+                    'state' => 'active',
+                    'payment_status' => 'unpaid',
+                ]),
+                'accent' => 'danger',
+            ],
+            [
+                'key' => 'unreserved_bookings',
+                'count' => $this->unreservedClassPassBookingIssues->countForAccount($account),
+                'label' => __('app.problem_unreserved_bookings'),
+                'url' => route('dashboard.accounts.trainers.index', $account),
+                'accent' => 'warning',
+            ],
+            [
+                'key' => 'freezed_class_passes',
+                'count' => $account->customerClassPasses()->freezed()->count(),
+                'label' => __('app.problem_freezed_class_passes'),
+                'url' => route('dashboard.accounts.customer-class-passes.index', [
+                    'account' => $account,
+                    'state' => 'freezed',
+                ]),
+                'accent' => 'scheduled',
+            ],
         ];
     }
 

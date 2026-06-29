@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
+use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\StudioPermission;
@@ -96,6 +97,100 @@ class StudioDashboardTest extends TestCase
             ->assertDontSee('Швидкі дії')
             ->assertDontSee(route('dashboard.accounts.locations.create', $account), false)
             ->assertDontSee('Колір бренду');
+    }
+
+    public function test_owner_dashboard_groups_problem_moments_with_links(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-24 10:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $context = $this->classContext($account, trainerName: 'Problem Trainer');
+        $scheduledClass = $this->scheduledClass($context, 'Unreserved Pole', '2026-06-25 10:00:00', '2026-06-25 11:00:00', 8);
+
+        $this->booking($account, $scheduledClass, ClassBookingStatus::Booked, 'Без резерву');
+        $this->activePass($account, 'UNPAID-001');
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for(Customer::factory()->for($account))
+            ->for(ClassPassPlan::factory()->for($account), 'classPassPlan')
+            ->create([
+                'code' => 'FROZEN-001',
+                'is_paid' => true,
+                'status' => CustomerClassPassStatus::Freezed->value,
+                'is_active' => true,
+                'frozen_at' => Carbon::parse('2026-06-24 09:00:00'),
+            ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee(__('app.studio_problem_moments'))
+            ->assertSee(__('app.problem_unpaid_class_passes'))
+            ->assertSee(__('app.problem_unreserved_bookings'))
+            ->assertSee(__('app.problem_freezed_class_passes'))
+            ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
+                'account' => $account,
+                'state' => 'active',
+                'payment_status' => 'unpaid',
+            ]))
+            ->assertSee(route('dashboard.accounts.trainers.index', $account), false)
+            ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
+                'account' => $account,
+                'state' => 'freezed',
+            ]), false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_trainer_list_shows_unreserved_booking_issue_badge_and_modal_rows(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-24 10:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $context = $this->classContext($account, trainerName: 'Issue Trainer');
+        $unreservedClass = $this->scheduledClass($context, 'Unreserved Class', '2026-06-25 10:00:00', '2026-06-25 11:00:00', 8);
+        $reservedClass = $this->scheduledClass($context, 'Reserved Class', '2026-06-26 10:00:00', '2026-06-26 11:00:00', 8);
+        $usedClass = $this->scheduledClass($context, 'Used Class', '2026-06-23 10:00:00', '2026-06-23 11:00:00', 8);
+        $unreservedBooking = $this->booking($account, $unreservedClass, ClassBookingStatus::Booked, 'Needs Reserve');
+        $reservedBooking = $this->booking($account, $reservedClass, ClassBookingStatus::Booked, 'Reserved Customer');
+        $usedBooking = $this->booking($account, $usedClass, ClassBookingStatus::Attended, 'Used Customer');
+        $reservedPass = $this->activePass($account, 'RESERVED-001');
+        $usedPass = $this->activePass($account, 'USED-001');
+
+        $reservedPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $reservedBooking->id,
+            'scheduled_class_id' => $reservedClass->id,
+            'status' => CustomerClassPassReservationStatus::Reserved->value,
+            'reserved_at' => Carbon::parse('2026-06-24 09:00:00'),
+        ]);
+        $usedPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $usedBooking->id,
+            'scheduled_class_id' => $usedClass->id,
+            'status' => CustomerClassPassReservationStatus::Used->value,
+            'reserved_at' => Carbon::parse('2026-06-22 09:00:00'),
+            'used_at' => Carbon::parse('2026-06-23 10:00:00'),
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.trainers.index', $account))
+            ->assertOk()
+            ->assertSee('Issue Trainer')
+            ->assertSee(__('app.trainer_unreserved_bookings', ['count' => 1]))
+            ->assertSee('data-trainer-issues-open="'.$context['trainer']->id.'"', false)
+            ->assertSee(__('app.unreserved_booking_issues_for_trainer', ['trainer' => 'Issue Trainer']))
+            ->assertSee('Unreserved Class')
+            ->assertSee('Needs Reserve')
+            ->assertSee(route('dashboard.accounts.customers.edit', [$account, $unreservedBooking->customer]), false)
+            ->assertDontSee('Reserved Customer')
+            ->assertDontSee('Used Customer');
+
+        Carbon::setTestNow();
     }
 
     public function test_trainer_sees_only_assigned_agenda_with_attendance_controls(): void

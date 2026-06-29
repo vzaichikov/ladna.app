@@ -53,6 +53,7 @@ class CustomerClassPassFactory extends Factory
             'expires_at' => null,
             'usable_until_at' => $purchasedAt->copy()->addDays($totalValidityDays),
             'closed_at' => null,
+            'frozen_at' => null,
             'is_active' => true,
         ];
     }

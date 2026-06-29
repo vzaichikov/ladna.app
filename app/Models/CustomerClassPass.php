@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
-#[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'code', 'source', 'issued_location_id', 'is_paid', 'issued_by_actor_user_id', 'issued_by_actor_trainer_id', 'issued_by_actor_name', 'issued_by_actor_email', 'issued_by_actor_role', 'status', 'plan_name', 'plan_slug', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'reserved_sessions_count', 'used_sessions_count', 'purchased_at', 'opened_at', 'expires_at', 'usable_until_at', 'closed_at', 'is_active'])]
+#[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'code', 'source', 'issued_location_id', 'is_paid', 'issued_by_actor_user_id', 'issued_by_actor_trainer_id', 'issued_by_actor_name', 'issued_by_actor_email', 'issued_by_actor_role', 'status', 'plan_name', 'plan_slug', 'price_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'reserved_sessions_count', 'used_sessions_count', 'purchased_at', 'opened_at', 'expires_at', 'usable_until_at', 'closed_at', 'frozen_at', 'is_active'])]
 class CustomerClassPass extends Model
 {
     /** @use HasFactory<CustomerClassPassFactory> */
@@ -41,6 +41,7 @@ class CustomerClassPass extends Model
             'expires_at' => 'datetime',
             'usable_until_at' => 'datetime',
             'closed_at' => 'datetime',
+            'frozen_at' => 'datetime',
             'is_paid' => 'boolean',
             'is_active' => 'boolean',
         ];
@@ -61,6 +62,11 @@ class CustomerClassPass extends Model
     public function scopeUnpaid(Builder $query): Builder
     {
         return $query->where('is_paid', false);
+    }
+
+    public function scopeFreezed(Builder $query): Builder
+    {
+        return $query->where('status', CustomerClassPassStatus::Freezed->value);
     }
 
     public function account(): BelongsTo

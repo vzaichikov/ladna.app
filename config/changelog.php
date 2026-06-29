@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.50.0',
+                'date' => '2026-06-29',
+                'title' => 'Class pass freezing and studio problem checks',
+                'items' => ['Added freezing and unfreezing for customer class passes, automatic extension of first-class validity after unfreezing, manual add or remove day corrections, filtered frozen-pass lists, owner dashboard problem checks for unpaid passes, unreserved bookings, and frozen passes, trainer badges for bookings without a pass reserve, and updated owner help with screenshots.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.49.0',
                 'date' => '2026-06-29',
                 'title' => 'Owner AI assistant and Telegram bot',
@@ -443,6 +450,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.50.0',
+                'date' => '2026-06-29',
+                'title' => 'Заморозка абонементів і проблемні моменти студії',
+                'items' => ['Додано заморозку та розморозку абонементів клієнтів, автоматичне продовження строку дії з першого заняття після розморозки, ручне додавання або зняття днів дії, фільтр заморожених абонементів, блок проблемних моментів на головному екрані для неоплачених абонементів, записів без резерву та заморожених абонементів, бейджі тренерів для записів без резерву абонемента, а також оновлену допомогу зі скриншотами.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.49.0',
                 'date' => '2026-06-29',

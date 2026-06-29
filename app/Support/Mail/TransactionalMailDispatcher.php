@@ -254,9 +254,17 @@ class TransactionalMailDispatcher
             'recipient_name' => $this->recipientName($customer->name),
             'pass_name' => $classPass->plan_name,
             'pass_code' => $classPass->code,
-            'sessions_delta' => $adjustment->sessions_delta > 0 ? '+'.$adjustment->sessions_delta : (string) $adjustment->sessions_delta,
+            'sessions_delta' => $this->signedValue($adjustment->sessions_delta),
             'previous_sessions_count' => (string) $adjustment->previous_sessions_count,
             'new_sessions_count' => (string) $adjustment->new_sessions_count,
+            'days_delta' => $this->signedValue($adjustment->days_delta),
+            'previous_validity_days' => (string) $adjustment->previous_validity_days,
+            'new_validity_days' => (string) $adjustment->new_validity_days,
+            'previous_status' => $this->statusLabel($adjustment->previous_status),
+            'new_status' => $this->statusLabel($adjustment->new_status),
+            'freeze_started_at' => $this->formatDateTime($adjustment->freeze_started_at, $account),
+            'freeze_finished_at' => $this->formatDateTime($adjustment->freeze_finished_at, $account),
+            'freeze_days_count' => (string) $adjustment->freeze_days_count,
             'reason' => $adjustment->reason,
             'action_url' => route('customer.dashboard', $account->slug),
         ];
@@ -435,6 +443,27 @@ class TransactionalMailDispatcher
         return $date?->copy()
             ->timezone($account->timezone ?? config('app.timezone'))
             ->format('Y-m-d');
+    }
+
+    private function formatDateTime(?Carbon $date, Account $account): ?string
+    {
+        return $date?->copy()
+            ->timezone($account->timezone ?? config('app.timezone'))
+            ->format('Y-m-d H:i');
+    }
+
+    private function signedValue(?int $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return $value > 0 ? '+'.$value : (string) $value;
+    }
+
+    private function statusLabel(?string $status): ?string
+    {
+        return $status ? __('app.'.$status) : null;
     }
 
     private function period(?Carbon $startsAt, ?Carbon $endsAt, Account $account): ?string

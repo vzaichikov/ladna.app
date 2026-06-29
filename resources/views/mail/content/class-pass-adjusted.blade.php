@@ -8,6 +8,14 @@
     __('app.mail_detail_delta') => $data['sessions_delta'] ?? null,
     __('app.mail_detail_previous_sessions') => $data['previous_sessions_count'] ?? null,
     __('app.mail_detail_new_sessions') => $data['new_sessions_count'] ?? null,
+    __('app.mail_detail_days_delta') => $data['days_delta'] ?? null,
+    __('app.mail_detail_previous_validity_days') => $data['previous_validity_days'] ?? null,
+    __('app.mail_detail_new_validity_days') => $data['new_validity_days'] ?? null,
+    __('app.mail_detail_previous_status') => $data['previous_status'] ?? null,
+    __('app.mail_detail_new_status') => $data['new_status'] ?? null,
+    __('app.mail_detail_freeze_started') => $data['freeze_started_at'] ?? null,
+    __('app.mail_detail_freeze_finished') => $data['freeze_finished_at'] ?? null,
+    __('app.mail_detail_freeze_days') => $data['freeze_days_count'] ?? null,
     __('app.mail_detail_reason') => $data['reason'] ?? null,
 ]])
 

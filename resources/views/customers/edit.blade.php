@@ -119,6 +119,13 @@
                     @endif
                 </div>
                 @forelse ($customerClassPasses as $customerClassPass)
+                    @php
+                        $statusClass = match ($customerClassPass->status) {
+                            \App\Enums\CustomerClassPassStatus::Active => 'crm-status-active',
+                            \App\Enums\CustomerClassPassStatus::Freezed => 'crm-status-warning',
+                            default => 'crm-status-muted',
+                        };
+                    @endphp
                     <div class="border-b border-stone-100 px-5 py-4 last:border-b-0">
                         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
@@ -127,7 +134,7 @@
                             </div>
                             <div class="flex flex-wrap gap-2 sm:justify-end">
                                 <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
-                                <span class="{{ $customerClassPass->is_active ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
+                                <span class="{{ $statusClass }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
                             </div>
                         </div>
                         <div class="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-3">

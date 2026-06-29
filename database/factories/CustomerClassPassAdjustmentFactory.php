@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\CustomerClassPassAdjustmentType;
 use App\Models\Account;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassAdjustment;
@@ -32,9 +33,18 @@ class CustomerClassPassAdjustmentFactory extends Factory
             'actor_name' => fake()->name(),
             'actor_email' => fake()->safeEmail(),
             'actor_role' => 'owner',
+            'adjustment_type' => CustomerClassPassAdjustmentType::Sessions->value,
             'sessions_delta' => $sessionsDelta,
             'previous_sessions_count' => $previousSessionsCount,
             'new_sessions_count' => $previousSessionsCount + $sessionsDelta,
+            'days_delta' => null,
+            'previous_validity_days' => null,
+            'new_validity_days' => null,
+            'previous_status' => null,
+            'new_status' => null,
+            'freeze_started_at' => null,
+            'freeze_finished_at' => null,
+            'freeze_days_count' => null,
             'reason' => fake()->sentence(),
         ];
     }
