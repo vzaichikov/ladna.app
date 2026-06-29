@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.53.2',
+                'date' => '2026-06-29',
+                'title' => 'Dashboard assistant answer formatting',
+                'items' => ['Improved the dashboard owner assistant chat so bold markdown in Ladna answers is rendered as readable bold text inside paragraphs and lists.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.53.1',
                 'date' => '2026-06-29',
                 'title' => 'Telegram owner bot booking flow fixes',
@@ -478,6 +485,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.53.2',
+                'date' => '2026-06-29',
+                'title' => 'Форматування відповідей асистента в кабінеті',
+                'items' => ['Покращено чат owner assistant в адмінці: markdown-жирний текст у відповідях Ladna тепер відображається як читабельне жирне форматування в абзацах і списках.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.53.1',
                 'date' => '2026-06-29',

@@ -2357,6 +2357,29 @@ function normalizeAssistantText(content) {
         .trim();
 }
 
+function appendAssistantInlineText(container, content) {
+    const text = String(content || '');
+    const boldPattern = /\*\*(.+?)\*\*/gu;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = boldPattern.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            container.append(document.createTextNode(text.slice(lastIndex, match.index)));
+        }
+
+        const strong = document.createElement('strong');
+        strong.className = 'font-semibold text-inherit';
+        strong.textContent = match[1];
+        container.append(strong);
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        container.append(document.createTextNode(text.slice(lastIndex)));
+    }
+}
+
 function appendAssistantText(container, content) {
     const normalized = normalizeAssistantText(content);
 
@@ -2374,7 +2397,7 @@ function appendAssistantText(container, content) {
         }
 
         const paragraph = document.createElement('p');
-        paragraph.textContent = paragraphLines.join(' ');
+        appendAssistantInlineText(paragraph, paragraphLines.join(' '));
         container.append(paragraph);
         paragraphLines = [];
     };
@@ -2390,7 +2413,7 @@ function appendAssistantText(container, content) {
 
         const item = document.createElement('li');
         item.className = 'pl-1';
-        item.textContent = text;
+        appendAssistantInlineText(item, text);
         currentList.append(item);
     };
 
