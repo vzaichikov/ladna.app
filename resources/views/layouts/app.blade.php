@@ -450,6 +450,12 @@
                         </div>
                     @endif
 
+                    @if (session('warning'))
+                        <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 shadow-xs">
+                            {{ session('warning') }}
+                        </div>
+                    @endif
+
                     @if ($errors->has('subscription'))
                         <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 shadow-xs">
                             {{ $errors->first('subscription') }}

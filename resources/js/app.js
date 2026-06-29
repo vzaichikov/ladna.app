@@ -759,6 +759,190 @@ function initAiProviderModels(root = document) {
     });
 }
 
+function initPlatformTelegramWebhook(root = document) {
+    root.querySelectorAll('[data-telegram-webhook-status-url]').forEach((container) => {
+        if (container.dataset.telegramWebhookReady === 'true') {
+            return;
+        }
+
+        const panel = container.querySelector('[data-telegram-webhook-panel]');
+        const statusUrl = container.dataset.telegramWebhookStatusUrl;
+        const registerUrl = container.dataset.telegramWebhookRegisterUrl;
+        const deleteUrl = container.dataset.telegramWebhookDeleteUrl;
+        const csrfToken = container.querySelector('input[name="_token"]')?.value || '';
+
+        if (!panel || !statusUrl || !registerUrl || !deleteUrl || !csrfToken) {
+            return;
+        }
+
+        container.dataset.telegramWebhookReady = 'true';
+
+        const summary = panel.querySelector('[data-telegram-webhook-summary]');
+        const localStatus = panel.querySelector('[data-telegram-webhook-local]');
+        const liveStatus = panel.querySelector('[data-telegram-webhook-live]');
+        const syncedAt = panel.querySelector('[data-telegram-webhook-synced]');
+        const pendingUpdates = panel.querySelector('[data-telegram-webhook-pending]');
+        const registeredUrl = panel.querySelector('[data-telegram-webhook-url]');
+        const errorRow = panel.querySelector('[data-telegram-webhook-error-row]');
+        const errorText = panel.querySelector('[data-telegram-webhook-error]');
+        const refreshButton = panel.querySelector('[data-telegram-webhook-refresh]');
+        const registerButton = panel.querySelector('[data-telegram-webhook-register]');
+        const deleteButton = panel.querySelector('[data-telegram-webhook-delete]');
+        let loaded = false;
+
+        const requestJson = (url, options = {}) => fetch(url, {
+            ...options,
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+                ...(options.headers || {}),
+            },
+        }).then(async (response) => {
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(payload.message || container.dataset.telegramWebhookStatusFailed || 'Request failed');
+            }
+
+            return payload;
+        });
+
+        const setBusy = (busy) => {
+            [refreshButton, registerButton, deleteButton].forEach((button) => {
+                button?.toggleAttribute('disabled', busy);
+                button?.classList.toggle('opacity-60', busy);
+            });
+        };
+
+        const formatDate = (value) => {
+            if (!value) {
+                return '—';
+            }
+
+            const date = new Date(value);
+
+            return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+        };
+
+        const liveMessage = (telegram) => {
+            if (!telegram?.checked) {
+                return telegram?.message || container.dataset.telegramWebhookUnknown || '';
+            }
+
+            if (!telegram.ok) {
+                return telegram.message || container.dataset.telegramWebhookStatusFailed || '';
+            }
+
+            if (telegram.url_matches) {
+                return container.dataset.telegramWebhookRegistered || '';
+            }
+
+            if (telegram.is_registered) {
+                return container.dataset.telegramWebhookUrlMismatch || '';
+            }
+
+            return container.dataset.telegramWebhookNotRegistered || '';
+        };
+
+        const render = (payload) => {
+            const status = payload.status || payload;
+            const local = status.local || {};
+            const telegram = status.telegram || {};
+            const message = payload.message || liveMessage(telegram);
+            const hasError = Boolean(telegram.checked && (telegram.last_error_message || (!telegram.ok && telegram.message)));
+
+            if (summary) {
+                summary.textContent = message || container.dataset.telegramWebhookUnknown || '';
+                summary.classList.toggle('text-emerald-700', Boolean(telegram.url_matches));
+                summary.classList.toggle('text-amber-700', Boolean(telegram.checked && telegram.ok && !telegram.url_matches));
+                summary.classList.toggle('text-rose-700', Boolean(telegram.checked && !telegram.ok));
+            }
+
+            if (localStatus) {
+                localStatus.textContent = local.status_label || local.status || '—';
+            }
+
+            if (liveStatus) {
+                liveStatus.textContent = liveMessage(telegram) || '—';
+            }
+
+            if (syncedAt) {
+                syncedAt.textContent = formatDate(local.last_webhook_synced_at);
+            }
+
+            if (pendingUpdates) {
+                pendingUpdates.textContent = telegram.pending_update_count ?? '—';
+            }
+
+            if (registeredUrl) {
+                registeredUrl.textContent = telegram.url || '—';
+            }
+
+            if (errorRow && errorText) {
+                errorRow.classList.toggle('hidden', !hasError);
+                errorText.textContent = telegram.last_error_message || telegram.message || '';
+            }
+        };
+
+        const loadStatus = (force = false) => {
+            if (loaded && !force) {
+                return;
+            }
+
+            loaded = true;
+            setBusy(true);
+
+            if (summary) {
+                summary.textContent = container.dataset.telegramWebhookLoading || '';
+            }
+
+            requestJson(statusUrl)
+                .then(render)
+                .catch((error) => {
+                    if (summary) {
+                        summary.textContent = error.message || container.dataset.telegramWebhookStatusFailed || '';
+                        summary.classList.add('text-rose-700');
+                    }
+                })
+                .finally(() => setBusy(false));
+        };
+
+        const runAction = (url, method) => {
+            setBusy(true);
+
+            if (summary) {
+                summary.textContent = container.dataset.telegramWebhookLoading || '';
+            }
+
+            requestJson(url, { method, body: '{}' })
+                .then(render)
+                .catch((error) => {
+                    if (summary) {
+                        summary.textContent = error.message || container.dataset.telegramWebhookStatusFailed || '';
+                        summary.classList.add('text-rose-700');
+                    }
+                })
+                .finally(() => setBusy(false));
+        };
+
+        refreshButton?.addEventListener('click', () => loadStatus(true));
+        registerButton?.addEventListener('click', () => runAction(registerUrl, 'POST'));
+        deleteButton?.addEventListener('click', () => runAction(deleteUrl, 'DELETE'));
+
+        container.addEventListener('platform-settings:tab-activated', (event) => {
+            if (event.detail?.tabName === 'ai-owner') {
+                loadStatus();
+            }
+        });
+
+        if (!container.querySelector('[data-platform-settings-panel="ai-owner"]')?.classList.contains('hidden')) {
+            loadStatus();
+        }
+    });
+}
+
 function selectPrintSection(printableSection = document.querySelector('[data-print-section]')) {
     if (!printableSection) {
         return;
@@ -2584,6 +2768,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCustomerAuthTabs();
     initPlatformSettingsTabs();
     initAiProviderModels();
+    initPlatformTelegramWebhook();
     initPhoneMasks();
     initOtpCountdowns();
     initPrintButtons();

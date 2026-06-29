@@ -56,6 +56,15 @@
             data-ai-model-empty="{{ __('app.ai_model_discovery_empty') }}"
             data-ai-model-failed="{{ __('app.ai_model_discovery_failed') }}"
             data-ai-model-missing-secret="{{ __('app.ai_model_discovery_missing_secret') }}"
+            data-telegram-webhook-status-url="{{ route('platform.settings.owner-telegram-bot.webhook-status') }}"
+            data-telegram-webhook-register-url="{{ route('platform.settings.owner-telegram-bot.register-webhook') }}"
+            data-telegram-webhook-delete-url="{{ route('platform.settings.owner-telegram-bot.delete-webhook') }}"
+            data-telegram-webhook-loading="{{ __('app.telegram_webhook_status_loading') }}"
+            data-telegram-webhook-unknown="{{ __('app.telegram_webhook_status_unknown') }}"
+            data-telegram-webhook-status-failed="{{ __('app.telegram_webhook_status_failed') }}"
+            data-telegram-webhook-registered="{{ __('app.telegram_webhook_registered') }}"
+            data-telegram-webhook-not-registered="{{ __('app.telegram_webhook_not_registered') }}"
+            data-telegram-webhook-url-mismatch="{{ __('app.telegram_webhook_url_mismatch') }}"
         >
             @csrf
             @method('PUT')
@@ -304,6 +313,53 @@
                                     <input value="{{ $ownerTelegramBotInstallation->webhook_url }}" readonly class="crm-field font-mono text-xs">
                                 </label>
                             @endif
+                        </div>
+
+                        <div class="mt-5 rounded-lg border border-stone-200 bg-stone-50 p-4" data-telegram-webhook-panel>
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-slate-950">{{ __('app.telegram_webhook_status') }}</h4>
+                                    <p class="mt-1 text-sm text-slate-500" data-telegram-webhook-summary>{{ __('app.telegram_webhook_status_unknown') }}</p>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button type="button" class="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700" data-telegram-webhook-refresh>
+                                        {{ __('app.refresh') }}
+                                    </button>
+                                    <button type="button" class="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700" data-telegram-webhook-register>
+                                        {{ __('app.telegram_register_webhook') }}
+                                    </button>
+                                    <button type="button" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100" data-telegram-webhook-delete>
+                                        {{ __('app.telegram_delete_webhook') }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <dl class="mt-4 grid gap-3 text-sm md:grid-cols-2">
+                                <div>
+                                    <dt class="text-xs font-semibold uppercase text-slate-400">{{ __('app.telegram_webhook_local_status') }}</dt>
+                                    <dd class="mt-1 text-slate-700" data-telegram-webhook-local>{{ $ownerTelegramBotInstallation?->status ? __('app.'.$ownerTelegramBotInstallation->status) : __('app.telegram_not_checked') }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-xs font-semibold uppercase text-slate-400">{{ __('app.telegram_webhook_live_status') }}</dt>
+                                    <dd class="mt-1 text-slate-700" data-telegram-webhook-live>{{ __('app.telegram_not_checked') }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-xs font-semibold uppercase text-slate-400">{{ __('app.telegram_last_synced_at') }}</dt>
+                                    <dd class="mt-1 text-slate-700" data-telegram-webhook-synced>{{ $ownerTelegramBotInstallation?->last_webhook_synced_at?->format('Y-m-d H:i') ?? '—' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-xs font-semibold uppercase text-slate-400">{{ __('app.telegram_pending_updates') }}</dt>
+                                    <dd class="mt-1 text-slate-700" data-telegram-webhook-pending>—</dd>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <dt class="text-xs font-semibold uppercase text-slate-400">{{ __('app.telegram_registered_url') }}</dt>
+                                    <dd class="mt-1 break-all font-mono text-xs text-slate-700" data-telegram-webhook-url>—</dd>
+                                </div>
+                                <div class="hidden md:col-span-2" data-telegram-webhook-error-row>
+                                    <dt class="text-xs font-semibold uppercase text-rose-400">{{ __('app.telegram_last_error') }}</dt>
+                                    <dd class="mt-1 text-rose-700" data-telegram-webhook-error></dd>
+                                </div>
+                            </dl>
                         </div>
                     </div>
                 </div>

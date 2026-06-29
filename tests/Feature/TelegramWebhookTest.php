@@ -123,6 +123,33 @@ class TelegramWebhookTest extends TestCase
             ->exists());
     }
 
+    public function test_owner_bot_start_prompts_unauthorized_chat_to_share_phone(): void
+    {
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
+
+        [$installation, $webhookKey] = $this->ownerInstallation();
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1010,
+            'message' => [
+                'message_id' => 17,
+                'chat' => ['id' => 561],
+                'from' => ['id' => 781, 'username' => 'owner'],
+                'text' => '/start',
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        $message = TelegramMessage::where('telegram_chat_id', '561')
+            ->where('direction', 'outbound')
+            ->firstOrFail();
+
+        $this->assertSame(__('app.telegram_share_contact_to_authorize'), $message->text);
+        $this->assertTrue((bool) data_get($message->payload, 'reply_markup.keyboard.0.0.request_contact'));
+        $this->assertSame(__('app.telegram_share_phone_button'), data_get($message->payload, 'reply_markup.keyboard.0.0.text'));
+    }
+
     public function test_owner_bot_multi_studio_phone_uses_callback_selection(): void
     {
         Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);

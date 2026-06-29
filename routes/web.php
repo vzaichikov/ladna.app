@@ -34,6 +34,7 @@ use App\Http\Controllers\ManualScheduledClassController;
 use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
+use App\Http\Controllers\Platform\OwnerTelegramWebhookController as PlatformOwnerTelegramWebhookController;
 use App\Http\Controllers\Platform\PaymentController as PlatformPaymentController;
 use App\Http\Controllers\Platform\PlatformAccountController;
 use App\Http\Controllers\Platform\PlatformController;
@@ -178,6 +179,9 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::get('settings', [SystemSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
         Route::get('settings/ai-provider-models', PlatformAiProviderModelController::class)->name('settings.ai-provider-models');
+        Route::get('settings/owner-telegram-bot/webhook-status', [PlatformOwnerTelegramWebhookController::class, 'show'])->name('settings.owner-telegram-bot.webhook-status');
+        Route::post('settings/owner-telegram-bot/register-webhook', [PlatformOwnerTelegramWebhookController::class, 'store'])->name('settings.owner-telegram-bot.register-webhook');
+        Route::delete('settings/owner-telegram-bot/webhook', [PlatformOwnerTelegramWebhookController::class, 'destroy'])->name('settings.owner-telegram-bot.delete-webhook');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::get('scheduled-tasks', ScheduledTaskController::class)->name('scheduled-tasks.index');
