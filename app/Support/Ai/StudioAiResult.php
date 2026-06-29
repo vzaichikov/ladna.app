@@ -12,12 +12,14 @@ class StudioAiResult
         public readonly ?string $model = null,
         public readonly ?string $fallbackReason = null,
         public readonly array $followUpActions = [],
+        public readonly array $helpSources = [],
     ) {}
 
     /**
      * @param  array<int, string>  $followUpActions
+     * @param  array<int, array{slug: string, title: string, sections: array<int, string>}>  $helpSources
      */
-    public static function ai(string $text, string $provider, string $model, array $followUpActions = []): self
+    public static function ai(string $text, string $provider, string $model, array $followUpActions = [], array $helpSources = []): self
     {
         return new self(
             text: $text,
@@ -25,6 +27,7 @@ class StudioAiResult
             provider: $provider,
             model: $model,
             followUpActions: $followUpActions,
+            helpSources: $helpSources,
         );
     }
 

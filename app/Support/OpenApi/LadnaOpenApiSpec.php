@@ -86,6 +86,15 @@ class LadnaOpenApiSpec
                     'date' => '2026-06-30',
                 ])),
             ],
+            'mcp_owner_help' => [
+                'title' => __('app.api_docs_example_mcp_owner_help'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('search-owner-help', [
+                    'query' => 'як додати клієнта',
+                    'limit' => 3,
+                ])),
+            ],
         ];
     }
 
@@ -238,6 +247,12 @@ class LadnaOpenApiSpec
                                 'class_bookings_for_day' => [
                                     'value' => $this->mcpToolCallBody('get-class-bookings-for-day', [
                                         'date' => '2026-06-30',
+                                    ]),
+                                ],
+                                'owner_help_search' => [
+                                    'value' => $this->mcpToolCallBody('search-owner-help', [
+                                        'query' => 'як додати клієнта',
+                                        'limit' => 3,
                                     ]),
                                 ],
                             ],
@@ -502,11 +517,58 @@ class LadnaOpenApiSpec
                             'structuredContent' => [
                                 'type' => 'object',
                                 'description' => 'Machine-readable tool output for successful calls.',
+                                'anyOf' => [
+                                    ['$ref' => '#/components/schemas/McpOwnerHelpSearchResponse'],
+                                    ['type' => 'object'],
+                                ],
                             ],
                             'isError' => ['type' => 'boolean'],
                             'content' => ['type' => 'array'],
                         ],
                     ],
+                ],
+            ],
+            'McpOwnerHelpSearchResponse' => [
+                'type' => 'object',
+                'required' => ['query', 'results'],
+                'properties' => [
+                    'query' => ['type' => 'string', 'example' => 'як додати клієнта'],
+                    'results' => [
+                        'type' => 'array',
+                        'items' => ['$ref' => '#/components/schemas/McpOwnerHelpSearchResult'],
+                    ],
+                ],
+            ],
+            'McpOwnerHelpSearchResult' => [
+                'type' => 'object',
+                'required' => ['slug', 'title', 'summary', 'score', 'matched_sections', 'fragments'],
+                'properties' => [
+                    'slug' => ['type' => 'string', 'example' => 'customers-bookings'],
+                    'title' => ['type' => 'string', 'example' => 'Клієнти, записи та відвідування'],
+                    'summary' => ['type' => 'string'],
+                    'score' => ['type' => 'integer', 'description' => 'Deterministic relevance score for this query.'],
+                    'matched_sections' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
+                    'fragments' => [
+                        'type' => 'array',
+                        'items' => ['$ref' => '#/components/schemas/McpOwnerHelpFragment'],
+                    ],
+                ],
+            ],
+            'McpOwnerHelpFragment' => [
+                'type' => 'object',
+                'required' => ['section_title', 'excerpt', 'steps', 'score'],
+                'properties' => [
+                    'section_title' => ['type' => 'string', 'example' => 'Як додати клієнта вручну'],
+                    'excerpt' => ['type' => 'string', 'description' => 'Short curated help excerpt.'],
+                    'steps' => [
+                        'type' => 'array',
+                        'maxItems' => 6,
+                        'items' => ['type' => 'string'],
+                    ],
+                    'score' => ['type' => 'integer'],
                 ],
             ],
             'NamedEntity' => [

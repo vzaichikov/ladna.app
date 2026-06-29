@@ -236,18 +236,35 @@ class LadnaStudioMcpTest extends TestCase
 
         $this->withToken($apiToken->tokenValue())
             ->postJson('/mcp/ladna-studio', $this->toolPayload('search-owner-help', [
-                'query' => 'schedule',
+                'query' => 'як додати клієнта',
             ]))
             ->assertOk()
-            ->assertJsonPath('result.structuredContent.results.0.slug', 'schedule');
+            ->assertJsonPath('result.structuredContent.results.0.slug', 'customers-bookings')
+            ->assertJsonPath('result.structuredContent.results.0.matched_sections.0', 'Як додати клієнта вручну')
+            ->assertJsonPath('result.structuredContent.results.0.fragments.0.steps.1', 'Натисніть Додати клієнта.');
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('search-owner-help', [
+                'query' => 'як записати людину на заняття',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.results.0.slug', 'customers-bookings')
+            ->assertJsonPath('result.structuredContent.results.0.matched_sections.0', 'Як записати людину на групове заняття');
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('search-owner-help', [
+                'query' => 'рецепт пирога',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.results', []);
 
         $this->withToken($apiToken->tokenValue())
             ->postJson('/mcp/ladna-studio', $this->toolPayload('get-owner-help-page', [
-                'slug' => 'schedule',
+                'slug' => 'customers-bookings',
             ]))
             ->assertOk()
-            ->assertJsonPath('result.structuredContent.slug', 'schedule')
-            ->assertJsonPath('result.structuredContent.title', config('help.pages.schedule.title'));
+            ->assertJsonPath('result.structuredContent.slug', 'customers-bookings')
+            ->assertJsonPath('result.structuredContent.title', config('help.pages.customers-bookings.title'));
     }
 
     public function test_mcp_business_logic_reference_is_allow_listed_and_logic_gated(): void

@@ -75,6 +75,7 @@ class AccountAssistantController extends Controller
                     'model' => $result->model,
                     'fallback_reason' => $result->fallbackReason,
                     'follow_up_actions' => $result->followUpActions,
+                    'help_sources' => $result->helpSources,
                 ],
                 'occurred_at' => now(),
             ]);

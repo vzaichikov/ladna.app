@@ -94,6 +94,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('Розморозити', false)
             ->assertSee('стільки календарних днів, скільки абонемент був заморожений', false)
             ->assertSee('Як додати або зняти дні дії абонемента', false)
+            ->assertSee('Як додати або зняти заняття в абонементі', false)
             ->assertSee('не змінює загальний строк від покупки', false)
             ->assertSee('assets/help/screenshots/class-pass-freeze.png', false)
             ->assertDontSee('freezed', false)
@@ -133,6 +134,22 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('endpoint', false);
     }
 
+    public function test_customers_help_explains_customer_creation_and_booking_as_separate_actions(): void
+    {
+        $this->get(route('help.show', 'customers-bookings', false))
+            ->assertStatus(200)
+            ->assertSee('Дії в цій темі', false)
+            ->assertSee('Як додати клієнта вручну', false)
+            ->assertSee('Це саме створення клієнта в базі студії', false)
+            ->assertSee('Натисніть Додати клієнта', false)
+            ->assertSee('Як записати людину на групове заняття', false)
+            ->assertSee('Як створити індивідуальне заняття або оренду', false)
+            ->assertSee('Що зміниться в Ladna', false)
+            ->assertSee('assets/help/screenshots/customers.png', false)
+            ->assertDontSee('manual booking', false)
+            ->assertDontSee('как добавить клиента', false);
+    }
+
     public function test_help_documents_studio_class_cancellation_flow(): void
     {
         $this->get(route('help.show', 'schedule', false))
@@ -140,6 +157,8 @@ class HelpPagesTest extends TestCase
             ->assertSee('Як скасувати заняття з вини студії', false)
             ->assertSee('Скасувати заняття', false)
             ->assertSee('Відновити заняття', false)
+            ->assertSee('Як відмічати відвідування після заняття', false)
+            ->assertSee('Як переглянути історію занять', false)
             ->assertSee('Як замінити тренера на занятті', false)
             ->assertSee('Минулі заняття можна виправити тільки за останні два дні', false)
             ->assertSee('assets/help/screenshots/class-cancellation-confirm.png', false)
@@ -158,6 +177,33 @@ class HelpPagesTest extends TestCase
             ->assertStatus(200)
             ->assertSee('assets/help/screenshots/class-pass-rules.png', false)
             ->assertSee('Правила абонементів', false);
+    }
+
+    public function test_start_help_explains_dashboard_rules_and_assistant(): void
+    {
+        $this->get(route('help.show', 'start', false))
+            ->assertStatus(200)
+            ->assertSee('Як читати головний екран студії', false)
+            ->assertSee('Проблемні моменти', false)
+            ->assertSee('Як налаштувати правила студії', false)
+            ->assertSee('Як користуватися Ladna асистентом', false)
+            ->assertSee('Асистент працює тільки в межах конкретної студії', false)
+            ->assertSee('Не передавайте в чат секрети, токени, паролі або платіжні дані', false)
+            ->assertSee('assets/help/screenshots/studio-dashboard.png', false);
+    }
+
+    public function test_integrations_help_explains_api_mcp_payments_and_ladna_tariff(): void
+    {
+        $this->get(route('help.show', 'integrations-payments', false))
+            ->assertStatus(200)
+            ->assertSee('Онлайн-оплати', false)
+            ->assertSee('Заявки з сайту', false)
+            ->assertSee('Як працює історія оплат клієнтів', false)
+            ->assertSee('Як підключати сайт через API або MCP', false)
+            ->assertSee('Де дивитися тариф і оплату Ladna', false)
+            ->assertSee('Ключ працює тільки в межах цієї студії', false)
+            ->assertDontSee('Bearer', false)
+            ->assertDontSee('tenant', false);
     }
 
     public function test_public_footer_links_to_help(): void

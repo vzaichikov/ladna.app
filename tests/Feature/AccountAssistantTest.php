@@ -113,6 +113,29 @@ class AccountAssistantTest extends TestCase
             ->assertJsonMissingPath('messages.1.metadata.follow_up_actions.3');
     }
 
+    public function test_dashboard_message_endpoint_stores_help_sources_without_full_help_text(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push(['message' => ['role' => 'assistant', 'content' => '{"in_scope":true,"reason":"Ladna help question"}']])
+                ->push(['message' => ['role' => 'assistant', 'content' => '{"answer":"Відкрийте Клієнти й натисніть Додати клієнта.","follow_up_actions":[]}']]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Як додати клієнта?',
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.1.metadata.help_sources.0.slug', 'customers-bookings')
+            ->assertJsonPath('messages.1.metadata.help_sources.0.sections.0', 'Як додати клієнта вручну')
+            ->assertJsonMissingPath('messages.1.metadata.help_sources.0.fragments');
+    }
+
     public function test_cancel_booking_action_requires_confirmation_before_status_change(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-29 10:00:00', 'UTC'));

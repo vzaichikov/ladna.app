@@ -44,6 +44,29 @@
                         </div>
                     </header>
 
+                    <section class="mt-8 rounded-xl border border-stone-200 bg-white/90 p-5 shadow-xs sm:p-6" aria-labelledby="help-actions-title">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                                <h2 id="help-actions-title" class="text-2xl font-semibold text-slate-950">{{ $copy['action_topics_title'] }}</h2>
+                                <p class="mt-2 text-sm leading-6 text-slate-500">{{ $copy['action_topics_body'] }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2">
+                            @foreach ($page['sections'] as $sectionIndex => $section)
+                                @if (! empty($section['steps']))
+                                    <a href="#help-section-{{ $slug }}-{{ $sectionIndex + 1 }}" class="group flex items-start justify-between gap-4 rounded-lg border border-stone-100 bg-slate-50 px-4 py-3 transition hover:border-brand-200 hover:bg-brand-50">
+                                        <span>
+                                            <span class="block text-sm font-semibold leading-5 text-slate-950">{{ $section['title'] }}</span>
+                                            <span class="mt-1 block text-xs font-semibold text-brand-600">{{ $copy['open_action'] }}</span>
+                                        </span>
+                                        <x-ui.icon name="chevron-right" class="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-brand-600" />
+                                    </a>
+                                @endif
+                            @endforeach
+                        </div>
+                    </section>
+
                     <section class="mt-8 grid gap-5" aria-label="{{ $copy['screenshot_title'] }}">
                         <h2 class="text-2xl font-semibold text-slate-950">{{ $copy['screenshot_title'] }}</h2>
 
@@ -77,6 +100,25 @@
                                             </li>
                                         @endforeach
                                     </ol>
+                                @endif
+
+                                @if (! empty($section['business_logic']))
+                                    <div class="mt-5 rounded-lg border border-brand-100 bg-brand-50 px-4 py-3">
+                                        <h3 class="text-sm font-semibold text-brand-800">{{ $copy['business_logic_title'] }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-slate-700">{{ $section['business_logic'] }}</p>
+                                    </div>
+                                @endif
+
+                                @if (! empty($section['screenshots']))
+                                    <div class="mt-5 grid gap-4">
+                                        @foreach ($section['screenshots'] as $screenshotPath)
+                                            @php($sectionScreenshot = collect($page['screenshots'] ?? [])->firstWhere('path', $screenshotPath))
+                                            <figure class="overflow-hidden rounded-lg border border-stone-200 bg-white">
+                                                <img src="{{ asset($screenshotPath) }}" alt="{{ $sectionScreenshot['alt'] ?? $section['title'] }}" class="w-full bg-white object-contain">
+                                                <figcaption class="border-t border-stone-100 px-4 py-3 text-sm leading-6 text-slate-600">{{ $sectionScreenshot['caption'] ?? $section['title'] }}</figcaption>
+                                            </figure>
+                                        @endforeach
+                                    </div>
                                 @endif
                             </section>
                         @endforeach

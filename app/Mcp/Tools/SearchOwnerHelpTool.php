@@ -5,8 +5,8 @@ namespace App\Mcp\Tools;
 use App\Enums\AccountApiTokenAbility;
 use App\Enums\McpToolInvocationStatus;
 use App\Support\Mcp\McpAccountContext;
+use App\Support\OwnerHelpIndex;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Str;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -16,10 +16,10 @@ use Laravel\Mcp\Server\Tool;
 use Throwable;
 
 #[Name('search-owner-help')]
-#[Description('Searches Ladna owner help pages from the curated help config. Returns page slugs, titles, and summaries only.')]
+#[Description('Searches Ladna owner help pages from the curated help config. Returns matching page slugs, titles, summaries, sections, and short fragments.')]
 class SearchOwnerHelpTool extends Tool
 {
-    public function handle(Request $request, McpAccountContext $context): Response|ResponseFactory
+    public function handle(Request $request, McpAccountContext $context, OwnerHelpIndex $helpIndex): Response|ResponseFactory
     {
         $startedAt = now();
         $validated = $request->validate([
@@ -30,34 +30,12 @@ class SearchOwnerHelpTool extends Tool
         $context->ensureAbility(AccountApiTokenAbility::McpRead);
 
         try {
-            $query = Str::of((string) $validated['query'])->lower()->squish()->toString();
+            $query = (string) $validated['query'];
             $limit = (int) ($validated['limit'] ?? 5);
-            $pages = collect(config('help.pages', []))
-                ->map(function (array $page, string $slug) use ($query): array {
-                    $haystack = Str::of(implode(' ', [
-                        $slug,
-                        $page['title'] ?? '',
-                        $page['summary'] ?? '',
-                        collect($page['sections'] ?? [])->pluck('title')->implode(' '),
-                    ]))->lower()->toString();
-
-                    return [
-                        'slug' => $slug,
-                        'title' => $page['title'] ?? $slug,
-                        'summary' => $page['summary'] ?? null,
-                        'score' => str_contains($haystack, $query) ? 2 : (int) collect(explode(' ', $query))->filter(fn (string $term): bool => $term !== '' && str_contains($haystack, $term))->count(),
-                    ];
-                })
-                ->filter(fn (array $page): bool => $page['score'] > 0)
-                ->sortByDesc('score')
-                ->take($limit)
-                ->values()
-                ->map(fn (array $page): array => collect($page)->except('score')->all())
-                ->all();
 
             $payload = [
                 'query' => $query,
-                'results' => $pages,
+                'results' => $helpIndex->search($query, $limit),
             ];
 
             $context->recordInvocation('search-owner-help', AccountApiTokenAbility::McpRead, McpToolInvocationStatus::Succeeded, $validated, $payload, null, $startedAt);
