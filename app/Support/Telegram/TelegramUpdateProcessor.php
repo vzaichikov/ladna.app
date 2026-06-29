@@ -19,6 +19,7 @@ use App\Support\Ai\StudioAssistantActionExecutor;
 use App\Support\Ai\StudioAssistantActionPlan;
 use App\Support\Ai\StudioAssistantActionPlanner;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -231,6 +232,7 @@ class TelegramUpdateProcessor
     private function processAuthorizedOwnerText(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, TelegramMessage $inboundMessage, string $chatId, string $text): bool
     {
         $account = $authorization->account;
+        $this->sendTyping($telegramUpdate, $chatId);
         $conversation = $this->conversationFor($authorization);
         $conversation->messages()->create([
             'account_id' => $authorization->account_id,
@@ -260,13 +262,7 @@ class TelegramUpdateProcessor
                 $account,
                 $text,
                 $authorization,
-                function () use ($telegramUpdate, $chatId): void {
-                    try {
-                        $this->telegramClient->sendChatAction($telegramUpdate->installation, $chatId);
-                    } catch (Throwable $throwable) {
-                        report($throwable);
-                    }
-                },
+                fn (): ?Response => $this->sendTyping($telegramUpdate, $chatId),
             );
             $result['metadata'] = [
                 'used_ai' => $result['used_ai'],
@@ -300,6 +296,17 @@ class TelegramUpdateProcessor
         $conversation->update(['last_message_at' => now()]);
 
         return true;
+    }
+
+    private function sendTyping(TelegramUpdate $telegramUpdate, string $chatId): ?Response
+    {
+        try {
+            return $this->telegramClient->sendChatAction($telegramUpdate->installation, $chatId);
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return null;
+        }
     }
 
     private function processFollowUpCallback(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, int $messageId, int $index, array $callbackQuery): bool

@@ -138,6 +138,7 @@ class TelegramContactAuthorizer
                     'user_id' => $membership->user_id,
                     'trainer_id' => $trainer?->id,
                     'label' => $membership->account?->name ?? ('#'.$membership->account_id),
+                    'priority' => $trainer ? 0 : 1,
                 ];
             });
 
@@ -163,13 +164,24 @@ class TelegramContactAuthorizer
                     'user_id' => (int) $trainer->user_id,
                     'trainer_id' => $trainer->id,
                     'label' => $trainer->account?->name ?? ('#'.$trainer->account_id),
+                    'priority' => 2,
                 ];
             })
             ->filter();
 
         return $memberships
             ->merge($trainerMemberships)
-            ->unique(fn (array $candidate): string => $candidate['account_id'].':'.$candidate['user_id'].':'.($candidate['trainer_id'] ?? 'owner'))
+            ->sortBy([
+                ['account_id', 'asc'],
+                ['priority', 'asc'],
+            ])
+            ->unique('account_id')
+            ->map(fn (array $candidate): array => [
+                'account_id' => $candidate['account_id'],
+                'user_id' => $candidate['user_id'],
+                'trainer_id' => $candidate['trainer_id'],
+                'label' => $candidate['label'],
+            ])
             ->values();
     }
 
