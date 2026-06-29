@@ -13,6 +13,13 @@
                             <h3 class="font-semibold text-slate-950">{{ $apiToken->name }}</h3>
                             <p class="mt-1 text-sm text-slate-500">{{ __('app.api_token_last_four', ['last_four' => $apiToken->last_four]) }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ __('app.last_used') }}: {{ \App\Support\DateTimePresenter::format($apiToken->last_used_at, $account) ?? __('app.never') }}</p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                @foreach ($apiToken->abilityValues() as $ability)
+                                    <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-stone-200">
+                                        {{ __('app.account_api_token_ability_'.$ability) }}
+                                    </span>
+                                @endforeach
+                            </div>
                         </div>
                         <span class="{{ $apiToken->is_active ? 'crm-status-active' : 'crm-status-muted' }}">
                             {{ $apiToken->is_active ? __('app.active') : __('app.revoked') }}
@@ -62,6 +69,21 @@
             <input name="name" required value="{{ old('name') }}" class="crm-field" placeholder="{{ __('app.api_token_name_placeholder') }}">
             @error('name') <span class="crm-help">{{ $message }}</span> @enderror
         </label>
+
+        <fieldset class="mt-5">
+            <legend class="crm-label">{{ __('app.api_token_abilities') }}</legend>
+            <div class="mt-2 space-y-2">
+                @foreach ($apiTokenAbilities as $ability)
+                    <label class="flex items-start gap-3 rounded-lg border border-stone-200 bg-slate-50 p-3">
+                        <input type="checkbox" name="abilities[]" value="{{ $ability->value }}" class="mt-1 rounded border-stone-300 text-violet-crm-600 focus:ring-violet-crm-500" @checked(in_array($ability->value, old('abilities', [\App\Enums\AccountApiTokenAbility::WebsiteLeadsCreate->value]), true))>
+                        <span class="text-sm leading-5 text-slate-700">{{ __('app.account_api_token_ability_'.$ability->value) }}</span>
+                    </label>
+                @endforeach
+            </div>
+            @error('abilities') <span class="crm-help">{{ $message }}</span> @enderror
+            @error('abilities.*') <span class="crm-help">{{ $message }}</span> @enderror
+        </fieldset>
+
         <x-ui.button type="submit" class="mt-5">
             <x-ui.icon name="plus" class="h-4 w-4" />
             {{ __('app.create_api_token') }}

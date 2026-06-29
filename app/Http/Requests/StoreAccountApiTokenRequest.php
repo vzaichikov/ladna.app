@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\AccountApiTokenAbility;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreAccountApiTokenRequest extends FormRequest
 {
@@ -24,6 +26,20 @@ class StoreAccountApiTokenRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'abilities' => ['nullable', 'array', 'min:1'],
+            'abilities.*' => ['string', Rule::in(array_column(AccountApiTokenAbility::cases(), 'value'))],
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function abilityValues(): array
+    {
+        $abilities = $this->validated('abilities', [AccountApiTokenAbility::WebsiteLeadsCreate->value]);
+
+        return is_array($abilities) && $abilities !== []
+            ? array_values($abilities)
+            : [AccountApiTokenAbility::WebsiteLeadsCreate->value];
     }
 }

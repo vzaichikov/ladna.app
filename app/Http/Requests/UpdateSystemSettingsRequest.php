@@ -2,9 +2,13 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\AiProvider;
+use App\Enums\TelegramBotProfile;
+use App\Models\TelegramBotInstallation;
 use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,7 +34,52 @@ class UpdateSystemSettingsRequest extends FormRequest
             'support_url' => ['nullable', 'url', 'max:2048'],
             'activity_log_enabled' => ['nullable', 'boolean'],
             'activity_log_retention_days' => ['nullable', 'integer', 'min:'.AccountActivityLogSettings::MinRetentionDays, 'max:'.AccountActivityLogSettings::MaxRetentionDays],
-            'settings_tab' => ['nullable', Rule::in(['appearance', 'support', 'activity-log'])],
+            'owner_ai_assistant_enabled' => ['nullable', 'boolean'],
+            'ai_active_provider' => ['nullable', Rule::in(array_column(AiProvider::cases(), 'value'))],
+            'ai_bot_display_name' => ['nullable', 'string', 'max:80'],
+            'ai_internal_instructions' => ['nullable', 'string', 'max:5000'],
+            'ai_provider_models' => ['nullable', 'array'],
+            'ai_provider_models.*' => ['nullable', 'string', 'max:120'],
+            'ai_provider_credentials' => ['nullable', 'array'],
+            'ai_provider_credentials.*' => ['nullable', 'string', 'max:4000'],
+            'owner_telegram_bot_enabled' => ['nullable', 'boolean'],
+            'owner_telegram_bot_token' => ['nullable', 'string', 'max:255'],
+            'owner_telegram_bot_username' => ['nullable', 'string', 'max:255'],
+            'settings_tab' => ['nullable', Rule::in(['appearance', 'support', 'activity-log', 'ai-owner'])],
+        ];
+    }
+
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $aiEnabled = filter_var($this->input('owner_ai_assistant_enabled', false), FILTER_VALIDATE_BOOLEAN);
+                $activeProvider = (string) $this->input('ai_active_provider', '');
+
+                if ($aiEnabled && $activeProvider === '') {
+                    $validator->errors()->add('ai_active_provider', __('app.ai_provider_required'));
+                }
+
+                if ($activeProvider !== '' && blank($this->input("ai_provider_models.{$activeProvider}"))) {
+                    $validator->errors()->add("ai_provider_models.{$activeProvider}", __('app.ai_model_required'));
+                }
+            },
+            function (Validator $validator): void {
+                if (! filter_var($this->input('owner_telegram_bot_enabled', false), FILTER_VALIDATE_BOOLEAN)) {
+                    return;
+                }
+
+                $hasExistingToken = TelegramBotInstallation::query()
+                    ->where('scope_type', 'platform')
+                    ->where('scope_id', 0)
+                    ->where('profile', TelegramBotProfile::Owner->value)
+                    ->whereNotNull('encrypted_token')
+                    ->exists();
+
+                if (blank($this->input('owner_telegram_bot_token')) && ! $hasExistingToken) {
+                    $validator->errors()->add('owner_telegram_bot_token', __('app.telegram_bot_token_required'));
+                }
+            },
         ];
     }
 }

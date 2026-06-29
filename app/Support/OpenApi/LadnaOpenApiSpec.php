@@ -39,6 +39,7 @@ class LadnaOpenApiSpec
                         'type' => 'http',
                         'scheme' => 'bearer',
                         'bearerFormat' => 'Ladna account API token',
+                        'description' => 'Bearer token issued in studio settings. Website lead intake requires the website_leads:create ability.',
                     ],
                 ],
                 'responses' => $this->responses(),
@@ -156,7 +157,7 @@ class LadnaOpenApiSpec
         return [
             'post' => [
                 'tags' => ['Website leads'],
-                'summary' => 'Creates a website lead for the studio identified by the bearer token.',
+                'summary' => 'Creates a website lead for the studio identified by the bearer token with the website_leads:create ability.',
                 'security' => [
                     ['AccountBearerToken' => []],
                 ],

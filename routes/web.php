@@ -2,7 +2,9 @@
 
 use App\Enums\ScheduleKind;
 use App\Http\Controllers\AccountActivityLogController;
+use App\Http\Controllers\AccountAiTelegramSettingsController;
 use App\Http\Controllers\AccountApiTokenController;
+use App\Http\Controllers\AccountAssistantController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountOwnerProfileController;
@@ -216,6 +218,16 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.api-tokens.regenerate');
         Route::delete('accounts/{account}/api-tokens/{accountApiToken}', [AccountApiTokenController::class, 'destroy'])
             ->name('accounts.api-tokens.destroy');
+        Route::put('accounts/{account}/ai-telegram-settings', [AccountAiTelegramSettingsController::class, 'update'])
+            ->name('accounts.ai-telegram-settings.update');
+        Route::get('accounts/{account}/assistant', [AccountAssistantController::class, 'show'])
+            ->name('accounts.assistant.show');
+        Route::post('accounts/{account}/assistant/messages', [AccountAssistantController::class, 'store'])
+            ->name('accounts.assistant.messages.store');
+        Route::post('accounts/{account}/assistant/actions/{action}/confirm', [AccountAssistantController::class, 'confirm'])
+            ->name('accounts.assistant.actions.confirm');
+        Route::post('accounts/{account}/assistant/actions/{action}/cancel', [AccountAssistantController::class, 'cancel'])
+            ->name('accounts.assistant.actions.cancel');
         Route::resource('accounts.locations', LocationController::class)
             ->except(['show'])
             ->scoped();

@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'ollama_cloud' => [
+        'base_url' => env('OLLAMA_CLOUD_BASE_URL', 'https://ollama.com'),
+    ],
+
 ];

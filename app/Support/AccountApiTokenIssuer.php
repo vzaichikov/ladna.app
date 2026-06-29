@@ -2,13 +2,17 @@
 
 namespace App\Support;
 
+use App\Enums\AccountApiTokenAbility;
 use App\Models\Account;
 use App\Models\AccountApiToken;
 use Illuminate\Support\Str;
 
 class AccountApiTokenIssuer
 {
-    public function issue(Account $account, string $name): AccountApiToken
+    /**
+     * @param  array<int, AccountApiTokenAbility|string>  $abilities
+     */
+    public function issue(Account $account, string $name, array $abilities = [AccountApiTokenAbility::WebsiteLeadsCreate]): AccountApiToken
     {
         do {
             $token = 'ladna_'.Str::random(48);
@@ -20,6 +24,7 @@ class AccountApiTokenIssuer
             'token_hash' => $tokenHash,
             'encrypted_token' => $token,
             'last_four' => substr($token, -4),
+            'abilities' => $this->normalizeAbilities($abilities),
             'is_active' => true,
         ]);
     }
@@ -45,5 +50,21 @@ class AccountApiTokenIssuer
     public function hash(string $token): string
     {
         return hash('sha256', $token);
+    }
+
+    /**
+     * @param  array<int, AccountApiTokenAbility|string>  $abilities
+     * @return array<int, string>
+     */
+    private function normalizeAbilities(array $abilities): array
+    {
+        $values = collect($abilities)
+            ->map(fn (AccountApiTokenAbility|string $ability): string => $ability instanceof AccountApiTokenAbility ? $ability->value : $ability)
+            ->filter(fn (string $ability): bool => in_array($ability, array_column(AccountApiTokenAbility::cases(), 'value'), true))
+            ->unique()
+            ->values()
+            ->all();
+
+        return $values ?: [AccountApiTokenAbility::WebsiteLeadsCreate->value];
     }
 }

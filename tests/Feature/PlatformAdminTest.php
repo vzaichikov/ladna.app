@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AiProvider;
+use App\Enums\TelegramBotProfile;
 use App\Models\Account;
+use App\Models\PlatformAiProviderCredential;
+use App\Models\PlatformAiSetting;
 use App\Models\SubscriptionPlan;
 use App\Models\SystemSetting;
+use App\Models\TelegramBotInstallation;
 use App\Models\User;
 use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
@@ -142,6 +147,62 @@ class PlatformAdminTest extends TestCase
 
         $this->assertFalse(AccountActivityLogSettings::enabled());
         $this->assertSame(45, AccountActivityLogSettings::retentionDays());
+    }
+
+    public function test_platform_admin_can_update_global_ai_and_owner_bot_settings(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        PlatformAiSetting::query()->delete();
+        PlatformAiProviderCredential::query()->delete();
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.settings.edit', ['tab' => 'ai-owner']))
+            ->assertOk()
+            ->assertSee(__('app.platform_ai_owner_bot'))
+            ->assertSee('name="owner_ai_assistant_enabled"', false)
+            ->assertSee('name="owner_telegram_bot_token"', false);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.settings.update'), [
+                'font_family' => SystemAppearance::currentFontKey(),
+                'support_url' => null,
+                'owner_ai_assistant_enabled' => '1',
+                'ai_active_provider' => AiProvider::OllamaCloud->value,
+                'ai_bot_display_name' => 'Ladna coach',
+                'ai_internal_instructions' => 'Answer only about studio work.',
+                'ai_provider_models' => [
+                    AiProvider::OllamaCloud->value => 'gemma3:27b-cloud',
+                ],
+                'ai_provider_credentials' => [
+                    AiProvider::OllamaCloud->value => 'ollama-secret',
+                ],
+                'owner_telegram_bot_enabled' => '1',
+                'owner_telegram_bot_username' => 'ladna_owner_bot',
+                'owner_telegram_bot_token' => '123456:owner-secret',
+                'settings_tab' => 'ai-owner',
+            ])
+            ->assertRedirect(route('platform.settings.edit', ['tab' => 'ai-owner']));
+
+        $setting = PlatformAiSetting::query()->firstOrFail();
+        $this->assertTrue($setting->owner_ai_assistant_enabled);
+        $this->assertSame(AiProvider::OllamaCloud, $setting->active_provider);
+        $this->assertSame('gemma3:27b-cloud', $setting->active_model);
+        $this->assertSame('Ladna coach', $setting->bot_display_name);
+
+        $credential = PlatformAiProviderCredential::where('provider', AiProvider::OllamaCloud->value)->firstOrFail();
+        $this->assertSame('ollama-secret', $credential->apiKey());
+
+        $installation = TelegramBotInstallation::query()
+            ->where('scope_type', 'platform')
+            ->where('scope_id', 0)
+            ->where('profile', TelegramBotProfile::Owner->value)
+            ->firstOrFail();
+
+        $this->assertNull($installation->account_id);
+        $this->assertTrue($installation->is_enabled);
+        $this->assertStringContainsString('/api/v1/telegram/webhooks/', (string) $installation->webhook_url);
+        $this->assertSame('owner-secret', substr((string) $installation->tokenValue(), -12));
     }
 
     public function test_platform_admin_can_suspend_account_without_deleting_tenant_data(): void
