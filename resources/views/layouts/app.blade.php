@@ -480,6 +480,7 @@
                 data-csrf-token="{{ csrf_token() }}"
                 data-error-message="{{ __('app.assistant_chat_error') }}"
                 data-empty-message="{{ __('app.assistant_chat_empty') }}"
+                data-thinking-message="{{ __('app.assistant_thinking') }}"
                 data-confirm-label="{{ __('app.confirm') }}"
                 data-cancel-label="{{ __('app.cancel') }}"
                 class="fixed bottom-5 right-5 z-40"
@@ -487,10 +488,12 @@
                 <button
                     type="button"
                     data-assistant-toggle
-                    class="flex h-14 w-14 items-center justify-center rounded-full border border-white bg-[#3B223F] shadow-2xl shadow-slate-950/20 ring-1 ring-slate-950/10 transition hover:scale-[1.03]"
+                    class="flex h-14 w-14 items-center justify-center rounded-full border border-[#E7DDC9] bg-white shadow-2xl shadow-slate-950/15 ring-1 ring-[#DCCFF0] transition hover:scale-[1.03] hover:bg-[#FAF8F5]"
                     aria-label="{{ __('app.owner_dashboard_chat_title') }}"
                 >
-                    <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="h-12 w-12 rounded-full object-cover object-top">
+                    <span class="relative h-12 w-12 overflow-hidden rounded-full bg-[#FAF8F5] ring-1 ring-[#E7DDC9]">
+                        <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="absolute left-1/2 top-[-30px] h-[330px] w-[220px] max-w-none -translate-x-1/2 object-contain">
+                    </span>
                 </button>
 
                 <section
@@ -500,7 +503,9 @@
                 >
                     <div class="flex items-center justify-between border-b border-stone-100 px-4 py-3">
                         <div class="flex items-center gap-3">
-                            <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="h-9 w-9 rounded-full bg-brand-50 object-cover object-top ring-1 ring-stone-200">
+                            <span class="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#FAF8F5] ring-1 ring-stone-200">
+                                <img src="{{ asset('assets/brand/landing/ladna-landing-mascot-cutout.png') }}" alt="" class="absolute left-1/2 top-[-23px] h-[250px] w-[167px] max-w-none -translate-x-1/2 object-contain">
+                            </span>
                             <div>
                                 <div class="text-sm font-semibold text-slate-950">{{ __('app.owner_dashboard_chat_title') }}</div>
                                 <div class="text-xs text-slate-500">{{ $activeAccount->name }}</div>

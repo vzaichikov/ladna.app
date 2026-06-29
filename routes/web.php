@@ -31,6 +31,7 @@ use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ManualScheduledClassController;
+use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
 use App\Http\Controllers\Platform\PaymentController as PlatformPaymentController;
@@ -176,6 +177,7 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::put('account', [PlatformProfileController::class, 'update'])->name('account.update');
         Route::get('settings', [SystemSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
+        Route::get('settings/ai-provider-models', PlatformAiProviderModelController::class)->name('settings.ai-provider-models');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::get('scheduled-tasks', ScheduledTaskController::class)->name('scheduled-tasks.index');

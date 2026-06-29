@@ -8,6 +8,38 @@ use RuntimeException;
 class OllamaCloudClient
 {
     /**
+     * @return array<int, string>
+     */
+    public function models(string $apiKey): array
+    {
+        $response = Http::baseUrl((string) config('services.ollama_cloud.base_url', 'https://ollama.com'))
+            ->withToken($apiKey)
+            ->acceptJson()
+            ->timeout(20)
+            ->connectTimeout(5)
+            ->retry([300, 800], throw: false)
+            ->get('/api/tags');
+
+        if ($response->failed()) {
+            throw new RuntimeException('Ollama Cloud model list request failed with status '.$response->status().'.');
+        }
+
+        $payload = $response->json();
+
+        if (! is_array($payload)) {
+            throw new RuntimeException('Ollama Cloud model list response is not valid JSON.');
+        }
+
+        return collect(data_get($payload, 'models', []))
+            ->map(fn (mixed $model): ?string => is_array($model) ? ($model['name'] ?? $model['model'] ?? null) : null)
+            ->filter(fn (mixed $model): bool => is_string($model) && $model !== '')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
      * @param  array<int, array{role: string, content: string}>  $messages
      * @return array{content: string, raw: array<string, mixed>}
      */

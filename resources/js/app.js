@@ -594,6 +594,11 @@ function initPlatformSettingsTabs(root = document) {
             if (activeTabInput) {
                 activeTabInput.value = tabName;
             }
+
+            container.dispatchEvent(new CustomEvent('platform-settings:tab-activated', {
+                bubbles: true,
+                detail: { tabName },
+            }));
         };
 
         tabs.forEach((tab, index) => {
@@ -635,6 +640,121 @@ function initPlatformSettingsTabs(root = document) {
 
         if (initialTab) {
             activate(initialTab);
+        }
+    });
+}
+
+function initAiProviderModels(root = document) {
+    root.querySelectorAll('[data-ai-models-url]').forEach((container) => {
+        if (container.dataset.aiModelsReady === 'true') {
+            return;
+        }
+
+        const activeProvider = container.querySelector('[data-ai-active-provider]');
+        const url = container.dataset.aiModelsUrl;
+
+        if (!activeProvider || !url) {
+            return;
+        }
+
+        container.dataset.aiModelsReady = 'true';
+
+        const loadedProviders = new Set();
+
+        const statusFor = (provider) => container.querySelector(`[data-ai-model-status="${provider}"]`);
+        const selectFor = (provider) => container.querySelector(`[data-ai-model-select="${provider}"]`);
+
+        const setStatus = (provider, message = '') => {
+            const status = statusFor(provider);
+
+            if (status) {
+                status.textContent = message;
+            }
+        };
+
+        const setOptions = (select, models) => {
+            const current = select.value || select.dataset.currentModel || '';
+            select.innerHTML = '';
+
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = select.closest('form')?.dataset.aiModelPlaceholder || '';
+            select.append(placeholder);
+
+            const hasCurrent = current && models.includes(current);
+
+            if (current && !hasCurrent) {
+                const option = document.createElement('option');
+                option.value = current;
+                option.textContent = current;
+                select.append(option);
+            }
+
+            models.forEach((model) => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                select.append(option);
+            });
+
+            select.value = current;
+        };
+
+        const loadProvider = (provider, force = false) => {
+            const select = selectFor(provider);
+
+            if (!provider || !select || (!force && loadedProviders.has(provider))) {
+                return;
+            }
+
+            loadedProviders.add(provider);
+            select.disabled = true;
+            setStatus(provider, container.dataset.aiModelLoading || '');
+
+            const requestUrl = new URL(url, window.location.origin);
+            requestUrl.searchParams.set('provider', provider);
+
+            fetch(requestUrl, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+                .then(async (response) => {
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        throw new Error(payload.message || container.dataset.aiModelFailed || 'Failed to load models');
+                    }
+
+                    return payload;
+                })
+                .then((payload) => {
+                    const models = Array.isArray(payload.models) ? payload.models : [];
+                    setOptions(select, models);
+                    setStatus(provider, payload.message || (models.length ? '' : container.dataset.aiModelEmpty || ''));
+                })
+                .catch((error) => {
+                    loadedProviders.delete(provider);
+                    setStatus(provider, error.message || container.dataset.aiModelFailed || '');
+                })
+                .finally(() => {
+                    select.disabled = false;
+                });
+        };
+
+        activeProvider.addEventListener('change', () => loadProvider(activeProvider.value));
+        container.querySelectorAll('[data-ai-model-refresh]').forEach((button) => {
+            button.addEventListener('click', () => loadProvider(button.dataset.aiModelRefresh, true));
+        });
+        container.addEventListener('platform-settings:tab-activated', (event) => {
+            if (event.detail?.tabName === 'ai-owner') {
+                loadProvider(activeProvider.value);
+            }
+        });
+
+        if (!container.querySelector('[data-platform-settings-panel="ai-owner"]')?.classList.contains('hidden')) {
+            loadProvider(activeProvider.value);
         }
     });
 }
@@ -2067,6 +2187,7 @@ function initAssistantChat() {
 
         let loaded = false;
         let loading = false;
+        let currentMessages = [];
 
         const csrfToken = widget.dataset.csrfToken || '';
         const requestJson = (url, options = {}) => fetch(url, {
@@ -2105,6 +2226,10 @@ function initAssistantChat() {
 
             if (role === 'tool') {
                 return 'mr-auto border border-emerald-100 bg-emerald-50 text-emerald-900';
+            }
+
+            if (role === 'thinking') {
+                return 'mr-auto border border-stone-200 bg-white text-slate-500 animate-pulse';
             }
 
             return 'mr-auto border border-stone-200 bg-white text-slate-800';
@@ -2174,11 +2299,35 @@ function initAssistantChat() {
         };
 
         const render = (payload) => {
-            renderMessages(payload.messages || []);
+            currentMessages = payload.messages || [];
+            renderMessages(currentMessages);
             renderActions(payload.pending_actions || []);
         };
 
+        const renderWithLocalMessage = (message) => {
+            currentMessages = [
+                ...currentMessages,
+                {
+                    id: `local-${Date.now()}`,
+                    role: 'user',
+                    content: message,
+                },
+                {
+                    id: `thinking-${Date.now()}`,
+                    role: 'thinking',
+                    content: widget.dataset.thinkingMessage || 'Ladna is thinking...',
+                },
+            ];
+            renderMessages(currentMessages);
+        };
+
         const showError = (message) => {
+            currentMessages = currentMessages.filter((item) => item.role !== 'thinking');
+
+            if (currentMessages.length) {
+                renderMessages(currentMessages);
+            }
+
             const bubble = document.createElement('div');
             bubble.className = 'mr-auto max-w-[82%] rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm leading-6 text-rose-800';
             bubble.textContent = message || widget.dataset.errorMessage || '';
@@ -2234,6 +2383,7 @@ function initAssistantChat() {
             }
 
             input.value = '';
+            renderWithLocalMessage(message);
             setLoading(true);
             requestJson(widget.dataset.sendUrl, {
                 method: 'POST',
@@ -2257,6 +2407,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCustomerAutocomplete();
     initCustomerAuthTabs();
     initPlatformSettingsTabs();
+    initAiProviderModels();
     initPhoneMasks();
     initOtpCountdowns();
     initPrintButtons();

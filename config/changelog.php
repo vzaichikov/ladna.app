@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.51.0',
+                'date' => '2026-06-29',
+                'title' => 'Owner AI assistant model selection and chat polish',
+                'items' => ['Added lazy loading of available AI provider models in product-owner settings, improved the owner assistant chat so messages appear immediately with a Ladna thinking state, changed the chat launcher to a lighter mascot-face avatar, and expanded Ladna answers for greetings, assistant capabilities, and studio data analysis while keeping prompt injection and out-of-scope requests blocked.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.50.0',
                 'date' => '2026-06-29',
                 'title' => 'Class pass freezing and studio problem checks',
@@ -450,6 +457,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.51.0',
+                'date' => '2026-06-29',
+                'title' => 'Вибір моделей AI-асистента та поліпшення чату',
+                'items' => ['Додано lazy-завантаження доступних моделей AI provider у product-owner налаштуваннях, покращено owner assistant chat так, щоб повідомлення користувача зʼявлялося одразу зі станом «Ladna думає...», замінено кнопку чату на світліший аватар з обличчям маскота, а відповіді Ladna розширено для привітань, опису можливостей асистента та аналізу даних студії зі збереженням блокування prompt injection і out-of-scope запитів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.50.0',
                 'date' => '2026-06-29',

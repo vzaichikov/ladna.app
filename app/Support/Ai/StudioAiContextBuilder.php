@@ -3,11 +3,18 @@
 namespace App\Support\Ai;
 
 use App\Enums\AiConversationMessageRole;
+use App\Enums\ClassBookingStatus;
+use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\WebsiteLeadStatus;
 use App\Models\Account;
 use App\Models\AiConversation;
+use App\Models\ClassBooking;
+use App\Models\Customer;
+use App\Models\CustomerClassPass;
 use App\Models\ScheduledClass;
 use App\Models\TelegramChatAuthorization;
+use App\Models\WebsiteLead;
 use Illuminate\Support\Carbon;
 
 class StudioAiContextBuilder
@@ -20,12 +27,32 @@ class StudioAiContextBuilder
         $timezone = $account->timezone ?: config('app.timezone');
         $today = now($timezone)->startOfDay();
         $tomorrow = $today->copy()->addDay();
+        $nextSevenDaysEnd = $today->copy()->addDays(7)->endOfDay();
 
         return [
             'studio' => [
                 'name' => $account->name,
                 'timezone' => $timezone,
                 'opening_hours' => $account->openingHours(),
+            ],
+            'metrics' => [
+                'customers_total' => Customer::query()->whereBelongsTo($account)->count(),
+                'locations_active' => $account->locations()->active()->count(),
+                'active_class_passes' => CustomerClassPass::query()
+                    ->whereBelongsTo($account)
+                    ->where('status', CustomerClassPassStatus::Active->value)
+                    ->where('is_active', true)
+                    ->count(),
+                'unpaid_active_class_passes' => CustomerClassPass::query()
+                    ->whereBelongsTo($account)
+                    ->where('status', CustomerClassPassStatus::Active->value)
+                    ->where('is_active', true)
+                    ->where('is_paid', false)
+                    ->count(),
+                'open_website_leads' => WebsiteLead::query()
+                    ->whereBelongsTo($account)
+                    ->whereIn('status', [WebsiteLeadStatus::New->value, WebsiteLeadStatus::Callback->value])
+                    ->count(),
             ],
             'locations' => $account->locations()
                 ->active()
@@ -43,10 +70,18 @@ class StudioAiContextBuilder
                 'today' => [
                     'date' => $today->toDateString(),
                     'scheduled' => $this->scheduledClassCount($account, $today),
+                    'booked' => $this->bookingCount($account, $today),
                 ],
                 'tomorrow' => [
                     'date' => $tomorrow->toDateString(),
                     'scheduled' => $this->scheduledClassCount($account, $tomorrow),
+                    'booked' => $this->bookingCount($account, $tomorrow),
+                ],
+                'next_7_days' => [
+                    'from' => $today->toDateString(),
+                    'to' => $nextSevenDaysEnd->toDateString(),
+                    'scheduled' => $this->scheduledClassCountBetween($account, $today, $nextSevenDaysEnd),
+                    'booked' => $this->bookingCountBetween($account, $today, $nextSevenDaysEnd),
                 ],
             ],
         ];
@@ -116,10 +151,33 @@ class StudioAiContextBuilder
 
     private function scheduledClassCount(Account $account, Carbon $day): int
     {
+        return $this->scheduledClassCountBetween($account, $day->copy()->startOfDay(), $day->copy()->endOfDay());
+    }
+
+    private function scheduledClassCountBetween(Account $account, Carbon $from, Carbon $to): int
+    {
         return ScheduledClass::query()
             ->whereBelongsTo($account)
-            ->whereBetween('starts_at', [$day->copy()->timezone('UTC'), $day->copy()->endOfDay()->timezone('UTC')])
+            ->whereBetween('starts_at', [$from->copy()->timezone('UTC'), $to->copy()->timezone('UTC')])
             ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->count();
+    }
+
+    private function bookingCount(Account $account, Carbon $day): int
+    {
+        return $this->bookingCountBetween($account, $day->copy()->startOfDay(), $day->copy()->endOfDay());
+    }
+
+    private function bookingCountBetween(Account $account, Carbon $from, Carbon $to): int
+    {
+        return ClassBooking::query()
+            ->whereBelongsTo($account)
+            ->whereHas('scheduledClass', function ($query) use ($from, $to): void {
+                $query
+                    ->whereBetween('starts_at', [$from->copy()->timezone('UTC'), $to->copy()->timezone('UTC')])
+                    ->where('status', ScheduledClassStatus::Scheduled->value);
+            })
+            ->where('status', ClassBookingStatus::Booked->value)
             ->count();
     }
 }

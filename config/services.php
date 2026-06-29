@@ -39,4 +39,8 @@ return [
         'base_url' => env('OLLAMA_CLOUD_BASE_URL', 'https://ollama.com'),
     ],
 
+    'openai' => [
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com'),
+    ],
+
 ];

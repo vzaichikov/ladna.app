@@ -50,6 +50,12 @@
             class="space-y-6"
             data-platform-settings-tabs
             data-active-tab="{{ $activeSettingsTab }}"
+            data-ai-models-url="{{ route('platform.settings.ai-provider-models') }}"
+            data-ai-model-loading="{{ __('app.ai_model_discovery_loading') }}"
+            data-ai-model-placeholder="{{ __('app.ai_model_select_placeholder') }}"
+            data-ai-model-empty="{{ __('app.ai_model_discovery_empty') }}"
+            data-ai-model-failed="{{ __('app.ai_model_discovery_failed') }}"
+            data-ai-model-missing-secret="{{ __('app.ai_model_discovery_missing_secret') }}"
         >
             @csrf
             @method('PUT')
@@ -183,7 +189,7 @@
 
                         <label class="block rounded-xl border border-stone-200 bg-white p-4">
                             <span class="crm-label">{{ __('app.ai_active_provider') }}</span>
-                            <select name="ai_active_provider" class="crm-field">
+                            <select name="ai_active_provider" class="crm-field" data-ai-active-provider>
                                 <option value="">{{ __('app.none') }}</option>
                                 @foreach ($aiProviders as $provider)
                                     <option value="{{ $provider->value }}" @selected(old('ai_active_provider', $platformAiSetting->active_provider?->value) === $provider->value)>
@@ -222,7 +228,24 @@
 
                                 <label class="mt-4 block">
                                     <span class="crm-label">{{ __('app.model') }}</span>
-                                    <input name="ai_provider_models[{{ $provider->value }}]" value="{{ old("ai_provider_models.{$provider->value}", $credential?->model) }}" class="crm-field" maxlength="120" placeholder="{{ __('app.ai_model_placeholder') }}">
+                                    @php($selectedModel = old("ai_provider_models.{$provider->value}", $credential?->model))
+                                    <select
+                                        name="ai_provider_models[{{ $provider->value }}]"
+                                        class="crm-field"
+                                        data-ai-model-select="{{ $provider->value }}"
+                                        data-current-model="{{ $selectedModel }}"
+                                    >
+                                        <option value="">{{ __('app.ai_model_select_placeholder') }}</option>
+                                        @if ($selectedModel)
+                                            <option value="{{ $selectedModel }}" selected>{{ $selectedModel }}</option>
+                                        @endif
+                                    </select>
+                                    <div class="mt-2 flex items-center justify-between gap-3">
+                                        <span class="text-xs text-slate-500" data-ai-model-status="{{ $provider->value }}"></span>
+                                        <button type="button" class="text-xs font-semibold text-brand-700 transition hover:text-brand-900" data-ai-model-refresh="{{ $provider->value }}">
+                                            {{ __('app.refresh') }}
+                                        </button>
+                                    </div>
                                     @error("ai_provider_models.{$provider->value}")
                                         <span class="crm-help">{{ $message }}</span>
                                     @enderror

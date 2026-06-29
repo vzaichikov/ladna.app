@@ -14,8 +14,10 @@ use App\Models\User;
 use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -161,6 +163,7 @@ class PlatformAdminTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.platform_ai_owner_bot'))
             ->assertSee('name="owner_ai_assistant_enabled"', false)
+            ->assertSee('data-ai-model-select="'.AiProvider::OllamaCloud->value.'"', false)
             ->assertSee('name="owner_telegram_bot_token"', false);
 
         $this->actingAs($platformAdmin)
@@ -203,6 +206,56 @@ class PlatformAdminTest extends TestCase
         $this->assertTrue($installation->is_enabled);
         $this->assertStringContainsString('/api/v1/telegram/webhooks/', (string) $installation->webhook_url);
         $this->assertSame('owner-secret', substr((string) $installation->tokenValue(), -12));
+    }
+
+    public function test_platform_admin_can_lazy_load_saved_provider_models(): void
+    {
+        PlatformAiProviderCredential::query()->delete();
+
+        Http::fake([
+            'ollama.com/api/tags' => Http::response([
+                'models' => [
+                    ['name' => 'gemma4:31b'],
+                    ['model' => 'gemma3:27b'],
+                ],
+            ]),
+        ]);
+
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OllamaCloud->value,
+            'credentials' => ['api_key' => 'stored-secret'],
+            'is_configured' => true,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->getJson(route('platform.settings.ai-provider-models', ['provider' => AiProvider::OllamaCloud->value]))
+            ->assertOk()
+            ->assertJsonPath('configured', true)
+            ->assertJsonPath('models.0', 'gemma3:27b')
+            ->assertJsonPath('models.1', 'gemma4:31b');
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->url() === 'https://ollama.com/api/tags'
+                && $request->hasHeader('Authorization', 'Bearer stored-secret');
+        });
+    }
+
+    public function test_provider_model_discovery_requires_saved_secret(): void
+    {
+        PlatformAiProviderCredential::query()->delete();
+
+        Http::fake();
+
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($platformAdmin)
+            ->getJson(route('platform.settings.ai-provider-models', ['provider' => AiProvider::OllamaCloud->value]))
+            ->assertOk()
+            ->assertJsonPath('configured', false)
+            ->assertJsonPath('models', []);
+
+        Http::assertNothingSent();
     }
 
     public function test_platform_admin_can_suspend_account_without_deleting_tenant_data(): void
