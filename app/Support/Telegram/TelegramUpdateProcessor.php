@@ -14,6 +14,7 @@ use App\Models\PlatformAiSetting;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
+use App\Models\Trainer;
 use App\Support\Ai\StudioAssistantActionExecutor;
 use App\Support\Ai\StudioAssistantActionPlan;
 use App\Support\Ai\StudioAssistantActionPlanner;
@@ -96,6 +97,8 @@ class TelegramUpdateProcessor
 
             return true;
         }
+
+        $authorization = $this->resolveAuthorizedTrainer($authorization);
 
         $telegramUpdate->update(['account_id' => $authorization->account_id]);
 
@@ -201,6 +204,8 @@ class TelegramUpdateProcessor
 
             return true;
         }
+
+        $authorization = $this->resolveAuthorizedTrainer($authorization);
 
         $inboundMessage->update([
             'account_id' => $authorization->account_id,
@@ -430,16 +435,48 @@ class TelegramUpdateProcessor
             return null;
         }
 
-        if ($this->isCreateBookingQuickAction($text)) {
+        if ($this->isCreateBookingShortcut($text)) {
             return $this->actionPlanner->startGroupBookingDialog($account, $authorization->user, $authorization->trainer, $conversation);
         }
 
         return $this->actionPlanner->plan($account, $authorization->user, $authorization->trainer, $conversation, $text);
     }
 
-    private function isCreateBookingQuickAction(string $text): bool
+    private function isCreateBookingShortcut(string $text): bool
     {
-        return Str::of($text)->lower()->squish()->toString() === Str::of(__('app.telegram_quick_action_create_booking'))->lower()->squish()->toString();
+        $normalized = Str::of($text)->lower()->squish()->toString();
+
+        return $normalized === Str::of(__('app.telegram_quick_action_create_booking'))->lower()->squish()->toString()
+            || preg_match('/^\/book(?:@\w+)?(?:\s|$)/u', $normalized) === 1;
+    }
+
+    private function resolveAuthorizedTrainer(TelegramChatAuthorization $authorization): TelegramChatAuthorization
+    {
+        if ($authorization->trainer_id || ! $authorization->user_id) {
+            return $authorization;
+        }
+
+        $trainer = Trainer::query()
+            ->where('account_id', $authorization->account_id)
+            ->where('is_active', true)
+            ->where(function ($query) use ($authorization): void {
+                $query->where('user_id', $authorization->user_id);
+
+                if (filled($authorization->phone)) {
+                    $query->orWhere('phone', $authorization->phone);
+                }
+            })
+            ->orderByRaw('CASE WHEN user_id = ? THEN 0 ELSE 1 END', [$authorization->user_id])
+            ->first();
+
+        if (! $trainer) {
+            return $authorization;
+        }
+
+        $authorization->forceFill(['trainer_id' => $trainer->id])->save();
+        $authorization->setRelation('trainer', $trainer);
+
+        return $authorization;
     }
 
     /**
@@ -543,19 +580,9 @@ class TelegramUpdateProcessor
      */
     private function ownerQuickActionFormatting(): array
     {
-        if (! PlatformAiSetting::ownerAssistantEnabled()) {
-            return [];
-        }
-
         return [
             'reply_markup' => [
-                'keyboard' => [
-                    [
-                        ['text' => __('app.telegram_quick_action_create_booking')],
-                    ],
-                ],
-                'resize_keyboard' => true,
-                'is_persistent' => true,
+                'remove_keyboard' => true,
             ],
         ];
     }

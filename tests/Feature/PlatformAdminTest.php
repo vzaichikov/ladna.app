@@ -155,6 +155,7 @@ class PlatformAdminTest extends TestCase
     {
         Http::fake([
             'api.telegram.org/*/setWebhook' => Http::response(['ok' => true, 'result' => true]),
+            'api.telegram.org/*/setMyCommands' => Http::response(['ok' => true, 'result' => true]),
             'api.telegram.org/*/getWebhookInfo' => Http::response([
                 'ok' => true,
                 'result' => [
@@ -226,6 +227,11 @@ class PlatformAdminTest extends TestCase
                 && $request['secret_token'] === $installation->webhookSecret()
                 && $request['allowed_updates'] === ['message', 'callback_query'];
         });
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/setMyCommands')
+            && $request['commands'] === [[
+                'command' => 'book',
+                'description' => __('app.telegram_command_book_description'),
+            ]]);
     }
 
     public function test_platform_owner_telegram_webhook_status_is_platform_only_and_redacted(): void
@@ -278,6 +284,7 @@ class PlatformAdminTest extends TestCase
     {
         Http::fake([
             'api.telegram.org/*/setWebhook' => Http::response(['ok' => true, 'result' => true]),
+            'api.telegram.org/*/setMyCommands' => Http::response(['ok' => true, 'result' => true]),
             'api.telegram.org/*/deleteWebhook' => Http::response(['ok' => true, 'result' => true]),
             'api.telegram.org/*/getWebhookInfo' => Http::sequence()
                 ->push([
@@ -314,6 +321,8 @@ class PlatformAdminTest extends TestCase
 
         $this->assertSame('webhook_synced', $installation->fresh()->status);
         $this->assertNotNull($installation->fresh()->last_webhook_synced_at);
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/setMyCommands')
+            && data_get($request->data(), 'commands.0.command') === 'book');
 
         $this->actingAs($platformAdmin)
             ->deleteJson(route('platform.settings.owner-telegram-bot.delete-webhook'))
