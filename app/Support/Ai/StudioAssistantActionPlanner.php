@@ -116,12 +116,20 @@ class StudioAssistantActionPlanner
             return null;
         }
 
-        return $this->resolveBookingDraft($account, $user, $trainer, $conversation, [
+        $draft = [
             'status' => 'collecting',
             'customer_query' => $this->extractCustomerQuery($text),
             'trainer_query' => $this->extractTrainerQuery($text),
             'date' => $this->extractDate($text, $account),
-        ]);
+        ];
+
+        if ($trainer && $this->mentionsAuthorizedTrainer($normalized)) {
+            $draft['trainer_id'] = $trainer->id;
+            $draft['trainer_name'] = $trainer->name;
+            unset($draft['trainer_query']);
+        }
+
+        return $this->resolveBookingDraft($account, $user, $trainer, $conversation, $draft);
     }
 
     /**
@@ -557,11 +565,8 @@ class StudioAssistantActionPlanner
             return $selected;
         }
 
-        $normalized = $this->normalizeName($text);
-
         return collect($options)
-            ->first(fn (array $option): bool => $normalized !== ''
-                && str_contains($this->normalizeName((string) ($option['search_text'] ?? '')), $normalized));
+            ->first(fn (array $option): bool => $this->classChoiceMatches($text, (string) ($option['search_text'] ?? '')));
     }
 
     private function selectedOptionIndex(string $text): ?int
@@ -608,6 +613,7 @@ class StudioAssistantActionPlanner
     private function hasBookingIntent(string $text): bool
     {
         return preg_match('/\bbook\s+/u', $text) === 1
+            || preg_match('/^\/book(?:@\w+)?(?:\s|$)/u', $text) === 1
             || str_contains($text, 'запиши')
             || str_contains($text, 'запишіть')
             || str_contains($text, 'записати')
@@ -620,15 +626,35 @@ class StudioAssistantActionPlanner
         return in_array($text, ['cancel', 'скасувати', 'отмена', 'отменить', 'не треба'], true);
     }
 
+    private function mentionsAuthorizedTrainer(string $text): bool
+    {
+        return preg_match('/(?:^|\s)(?:до|к|у)\s+(?:мене|мені|мне|меня)(?:\s|$)/u', $text) === 1
+            || str_contains($text, 'with me');
+    }
+
     private function extractCustomerQuery(string $text): ?string
     {
         if (preg_match('/(?:запиши|запишіть|записати|записать|book)\s+(.+?)(?=\s+(?:на|к|до|у|to|for|with)\b|$)/iu', $text, $matches) !== 1) {
-            return null;
+            if (preg_match('/([\p{L}\'’ʼ -]{2,120})\s+(?:записати|записать)\b/iu', $text, $matches) !== 1) {
+                return null;
+            }
         }
 
-        $query = trim($matches[1], " \t\n\r\0\x0B.,!?");
+        $query = $this->cleanCustomerQuery($matches[1]);
 
         return $query !== '' ? $query : null;
+    }
+
+    private function cleanCustomerQuery(string $query): string
+    {
+        return Str::of($query)
+            ->replaceMatches('/\b(?:можемо|можна|будь\s+ласка|пожалуйста|please|can|could|можешь|можеш)\b/iu', ' ')
+            ->replaceMatches('/\b(?:сьогодні|сегодня|today|завтра|tomorrow)\b/iu', ' ')
+            ->replaceMatches('/(?:^|\s)(?:на|до|к|у|with|to)\s+(?:мене|мені|мне|меня|me)(?=\s|$)/iu', ' ')
+            ->replaceMatches('/\b(?:на|до|к|у|with|to|for)\b/iu', ' ')
+            ->squish()
+            ->trim(" \t\n\r\0\x0B.,!?")
+            ->toString();
     }
 
     private function extractTrainerQuery(string $text): ?string
@@ -726,6 +752,75 @@ class StudioAssistantActionPlanner
             ->replaceMatches('/[^\p{L}\p{N}\s:.-]+/u', ' ')
             ->squish()
             ->toString();
+    }
+
+    private function classChoiceMatches(string $query, string $searchText): bool
+    {
+        $query = $this->normalizeName($query);
+        $searchText = $this->normalizeName($searchText);
+
+        if ($query === '') {
+            return false;
+        }
+
+        if (str_contains($searchText, $query)) {
+            return true;
+        }
+
+        $queryAscii = Str::ascii($query);
+        $searchAscii = Str::ascii($searchText);
+        $queryAsciiVariants = $this->latinClassSearchVariants($queryAscii);
+        $searchAsciiVariants = $this->latinClassSearchVariants($searchAscii);
+
+        foreach ($queryAsciiVariants as $queryAsciiVariant) {
+            foreach ($searchAsciiVariants as $searchAsciiVariant) {
+                if ($queryAsciiVariant !== '' && str_contains($searchAsciiVariant, $queryAsciiVariant)) {
+                    return true;
+                }
+            }
+        }
+
+        $queryTokens = $queryAsciiVariants
+            ->flatMap(fn (string $variant): array => preg_split('/\s+/u', $variant) ?: [])
+            ->unique()
+            ->all();
+        $searchTokens = $searchAsciiVariants
+            ->flatMap(fn (string $variant): array => preg_split('/\s+/u', $variant) ?: [])
+            ->unique()
+            ->all();
+
+        foreach ($queryTokens as $queryToken) {
+            if (mb_strlen($queryToken) < 3) {
+                continue;
+            }
+
+            foreach ($searchTokens as $searchToken) {
+                if (mb_strlen($searchToken) < 3) {
+                    continue;
+                }
+
+                if (levenshtein($queryToken, $searchToken) <= max(1, (int) floor(mb_strlen($queryToken) * 0.25))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private function latinClassSearchVariants(string $value): Collection
+    {
+        return collect([
+            $value,
+            str_replace(['kz', 'ks'], 'x', $value),
+        ])
+            ->map(fn (string $variant): string => trim($variant))
+            ->filter(fn (string $variant): bool => $variant !== '')
+            ->unique()
+            ->values();
     }
 
     private function stemNameToken(string $token): string

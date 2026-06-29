@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.53.1',
+                'date' => '2026-06-29',
+                'title' => 'Telegram owner bot booking flow fixes',
+                'items' => ['Improved the owner Telegram bot so the menu command can start client booking, short replies continue the booking dialog, owners can be recognized as trainers by matching phone numbers, and the assistant better understands “me” or “my schedule” in trainer-scoped conversations.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.53.0',
                 'date' => '2026-06-29',
                 'title' => 'Telegram owner bot quick actions',
@@ -471,6 +478,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.53.1',
+                'date' => '2026-06-29',
+                'title' => 'Виправлення запису через Telegram-бота власниці',
+                'items' => ['Покращено owner Telegram-бот: команда меню може починати запис клієнта, короткі відповіді продовжують діалог запису, власниця може визначатися як тренерка за номером телефону, а асистент краще розуміє “до мене” або “мій розклад” у розмовах тренера.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.53.0',
                 'date' => '2026-06-29',

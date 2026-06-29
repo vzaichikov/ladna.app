@@ -121,11 +121,16 @@ class TelegramContactAuthorizer
             ->with(['account', 'user'])
             ->get()
             ->filter(fn (AccountMembership $membership): bool => $membership->allows(StudioPermission::InteractWithTelegramBot))
-            ->map(function (AccountMembership $membership): array {
+            ->map(function (AccountMembership $membership) use ($phone): array {
                 $trainer = Trainer::query()
                     ->where('account_id', $membership->account_id)
-                    ->where('user_id', $membership->user_id)
                     ->where('is_active', true)
+                    ->where(function ($query) use ($membership, $phone): void {
+                        $query
+                            ->where('user_id', $membership->user_id)
+                            ->orWhere('phone', $phone);
+                    })
+                    ->orderByRaw('CASE WHEN user_id = ? THEN 0 ELSE 1 END', [$membership->user_id])
                     ->first();
 
                 return [

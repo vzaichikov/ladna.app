@@ -55,8 +55,13 @@ class TelegramWebhookManager
         }
 
         try {
-            $response = $this->telegramClient->setWebhook($installation);
-            $ok = $this->telegramOk($response);
+            $webhookResponse = $this->telegramClient->setWebhook($installation);
+            $webhookOk = $this->telegramOk($webhookResponse);
+            $commandsResponse = $webhookOk
+                ? $this->telegramClient->setCommands($installation, $this->ownerCommands())
+                : null;
+            $commandsOk = $webhookOk && $this->telegramOk($commandsResponse);
+            $ok = $webhookOk && $commandsOk;
 
             $installation->forceFill([
                 'status' => $ok ? self::StatusSynced : self::StatusFailed,
@@ -65,9 +70,11 @@ class TelegramWebhookManager
 
             return [
                 'ok' => $ok,
-                'message' => $ok
-                    ? __('app.telegram_webhook_registered')
-                    : $this->telegramError($response, __('app.telegram_webhook_registration_failed')),
+                'message' => match (true) {
+                    $ok => __('app.telegram_webhook_registered'),
+                    ! $webhookOk => $this->telegramError($webhookResponse, __('app.telegram_webhook_registration_failed')),
+                    default => $this->telegramError($commandsResponse, __('app.telegram_bot_commands_registration_failed')),
+                },
                 'status' => $this->status($installation->fresh()),
             ];
         } catch (Throwable $throwable) {
@@ -233,5 +240,18 @@ class TelegramWebhookManager
         }
 
         return $fallback;
+    }
+
+    /**
+     * @return array<int, array{command: string, description: string}>
+     */
+    private function ownerCommands(): array
+    {
+        return [
+            [
+                'command' => 'book',
+                'description' => __('app.telegram_command_book_description'),
+            ],
+        ];
     }
 }

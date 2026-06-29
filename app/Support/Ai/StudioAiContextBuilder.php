@@ -95,6 +95,31 @@ class StudioAiContextBuilder
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    public function actorContext(?TelegramChatAuthorization $authorization): ?array
+    {
+        if (! $authorization) {
+            return null;
+        }
+
+        $authorization->loadMissing(['user', 'trainer']);
+
+        return [
+            'channel' => 'telegram_owner',
+            'user' => $authorization->user ? [
+                'id' => $authorization->user->id,
+                'name' => $authorization->user->name,
+            ] : null,
+            'trainer' => $authorization->trainer ? [
+                'id' => $authorization->trainer->id,
+                'name' => $authorization->trainer->name,
+            ] : null,
+            'authorized_phone_matches_trainer' => filled($authorization->phone) && $authorization->trainer !== null,
+        ];
+    }
+
+    /**
      * @return array<int, array{role: string, content: string}>
      */
     public function recentMessages(?TelegramChatAuthorization $authorization, int $limit = 8): array
