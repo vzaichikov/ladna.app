@@ -27,6 +27,9 @@ class ExampleTest extends TestCase
             ->get('/en')
             ->assertStatus(200)
             ->assertSee('A studio should move with classes, not spreadsheets')
+            ->assertSee('No manual visit counting')
+            ->assertSee('No lost website or Telegram leads')
+            ->assertSee('No Google Sheets schedule chaos')
             ->assertSee('href="'.route('home').'"', false)
             ->assertSessionHas('locale', 'en');
 
@@ -34,6 +37,9 @@ class ExampleTest extends TestCase
             ->get('/')
             ->assertStatus(200)
             ->assertSee('Студія працює в ритмі занять, а не таблиць')
+            ->assertSee('Без ручного підрахунку відвідувань')
+            ->assertSee('Заявки з сайту чи Telegram не губляться')
+            ->assertSee('Без розкладу в Google Sheets')
             ->assertSee('href="'.route('home.en').'"', false)
             ->assertSessionHas('locale', 'uk');
     }

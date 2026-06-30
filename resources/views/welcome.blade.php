@@ -171,6 +171,32 @@
             </div>
         </section>
 
+        <section class="relative border-y border-[#E7DDC9]/80 bg-white/65 px-5 py-18 sm:px-8 lg:px-10">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(167,138,185,0.14),transparent_26%),radial-gradient(circle_at_86%_20%,rgba(231,221,201,0.54),transparent_28%)]" aria-hidden="true"></div>
+            <div class="relative mx-auto max-w-7xl">
+                <div class="max-w-3xl">
+                    <h2 class="text-3xl font-semibold leading-tight text-[#2B1731] sm:text-5xl">
+                        {{ $landing['pain_title'] }}
+                    </h2>
+                    <p class="mt-5 text-base leading-7 text-[#4D3152]/75 sm:text-lg sm:leading-8">
+                        {{ $landing['pain_copy'] }}
+                    </p>
+                </div>
+
+                <div class="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach ($landing['pain_items'] as $item)
+                        <article class="min-h-52 rounded-lg border border-[#E7DDC9]/80 bg-[#FAF8F5]/88 p-5 shadow-[0_18px_44px_rgba(59,34,63,0.06)]">
+                            <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-[#3B223F] text-white shadow-[0_12px_26px_rgba(59,34,63,0.18)]">
+                                <x-ui.icon name="check" class="h-5 w-5" />
+                            </span>
+                            <h3 class="mt-5 text-lg font-semibold leading-7 text-[#2B1731]">{{ $item['title'] }}</h3>
+                            <p class="mt-3 text-sm leading-6 text-[#4D3152]/75">{{ $item['copy'] }}</p>
+                        </article>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+
         <section id="flow" class="relative border-y border-[#E7DDC9]/80 bg-white/50 px-5 py-20 sm:px-8 lg:px-10">
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_12%_22%,rgba(167,138,185,0.12),transparent_28%),radial-gradient(circle_at_88%_40%,rgba(231,221,201,0.55),transparent_30%)]" aria-hidden="true"></div>
             <div class="relative mx-auto max-w-7xl">
