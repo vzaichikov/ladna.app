@@ -188,6 +188,10 @@
                     </section>
                 </div>
             @endfragment
+
+            @unless ($isEmbed)
+                <x-ui.public-contact-links :account="$account" class="mt-8" />
+            @endunless
         </section>
     </main>
 @endsection

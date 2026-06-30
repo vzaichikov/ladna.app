@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\AccountStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\SubscriptionPlan;
+use App\Rules\PublicSupportLink;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -35,10 +36,15 @@ class UpdatePlatformAccountRequest extends FormRequest
             'country_code' => ['required', Rule::in(array_keys(config('ladna.countries')))],
             'default_currency' => ['required', Rule::in(config('ladna.currencies'))],
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'studio_slogan' => ['nullable', 'string', 'max:255'],
             'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
             'timezone' => ['nullable', 'timezone'],
             'legal_entity_name' => ['nullable', 'string', 'max:255'],
             'tax_id' => ['nullable', 'string', 'max:255'],
+            'support_instagram_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::instagram()],
+            'support_telegram_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::telegram()],
+            'support_viber_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::viber()],
+            'support_whatsapp_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::whatsapp()],
             'subscription_plan_id' => ['nullable', Rule::exists((new SubscriptionPlan)->getTable(), 'id')],
             'subscription_status' => ['required', Rule::enum(SubscriptionStatus::class)],
             'subscription_ends_at' => ['nullable', 'date'],
@@ -49,6 +55,26 @@ class UpdatePlatformAccountRequest extends FormRequest
     {
         $this->merge([
             'country_code' => $this->input('country_code') ?: ($this->route('account')?->country_code ?? 'UA'),
+            ...$this->normalizedOptionalPublicFields(),
         ]);
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private function normalizedOptionalPublicFields(): array
+    {
+        $normalized = [];
+
+        foreach (['studio_slogan', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url'] as $field) {
+            if (! $this->has($field)) {
+                continue;
+            }
+
+            $value = $this->input($field);
+            $normalized[$field] = blank($value) ? null : trim((string) $value);
+        }
+
+        return $normalized;
     }
 }

@@ -206,6 +206,24 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('tenant', false);
     }
 
+    public function test_public_pages_help_explains_studio_landing_maps_and_support_links(): void
+    {
+        $this->get(route('help.show', 'public-pages', false))
+            ->assertStatus(200)
+            ->assertSee('Публічна сторінка, розклад, прайс і QR-посилання', false)
+            ->assertSee('одна публічна сторінка за коротким посиланням', false)
+            ->assertSee('Скопіюйте посилання на сторінку студії', false)
+            ->assertSee('Як налаштувати вигляд сторінки студії', false)
+            ->assertSee('слоган студії', false)
+            ->assertSee('Instagram, Telegram, Viber або WhatsApp', false)
+            ->assertSee('Є питання - звʼяжіться з назвою студії', false)
+            ->assertSee('Google Maps embed URL', false)
+            ->assertSee('assets/help/screenshots/public-studio-page.png', false)
+            ->assertSee('assets/help/screenshots/public-links-qr.png', false)
+            ->assertDontSee('endpoint', false)
+            ->assertDontSee('tenant', false);
+    }
+
     public function test_public_footer_links_to_help(): void
     {
         $response = $this->get('/');

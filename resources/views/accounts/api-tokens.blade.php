@@ -32,9 +32,9 @@
                             <input value="{{ $apiToken->tokenValue() }}" readonly class="crm-field font-mono text-xs" data-copy-source>
                         </label>
                         <div class="mt-4 flex flex-wrap gap-2">
-                            <x-ui.button type="button" variant="secondary" size="sm" data-copy-token>
+                            <x-ui.button type="button" variant="secondary" size="sm" data-copy-token data-copy-button data-copy-success-label="{{ __('app.copied') }}">
                                 <x-ui.icon name="copy" class="h-4 w-4" />
-                                {{ __('app.copy') }}
+                                <span data-copy-label>{{ __('app.copy') }}</span>
                             </x-ui.button>
                             <form method="POST" action="{{ route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]) }}">
                                 @csrf

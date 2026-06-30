@@ -98,12 +98,15 @@ class AccountController extends Controller
     public function editBrand(Request $request, Account $account): View
     {
         $this->authorize('update', $account);
+        $studioLandingUrl = route('public.studio', $account->slug);
         $customerLoginUrl = route('customer.studio.login', $account->slug);
         $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'rules', 'pass_rules', 'qr', 'api', 'ai'], true) ? $request->query('tab') : 'business';
 
         return view('accounts.brand-edit', [
             'account' => $account,
             'activeTab' => $activeTab,
+            'studioLandingUrl' => $studioLandingUrl,
+            'studioLandingQrSvg' => $this->qrCodeSvg($studioLandingUrl),
             'customerLoginUrl' => $customerLoginUrl,
             'customerLoginQrSvg' => $this->qrCodeSvg($customerLoginUrl),
             'publicLinkLocations' => $activeTab === 'qr'

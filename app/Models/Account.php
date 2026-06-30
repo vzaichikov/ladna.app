@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'timezone', 'legal_entity_name', 'tax_id', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -68,6 +68,48 @@ class Account extends Model
         }
 
         return asset('brand/ladna-mark.svg');
+    }
+
+    /**
+     * @return array<int, array{key: string, label_key: string, url: string, icon_path: string}>
+     */
+    public function publicSupportLinks(): array
+    {
+        $links = [
+            [
+                'key' => 'instagram',
+                'label_key' => 'app.support_channel_instagram',
+                'url' => $this->support_instagram_url,
+                'icon_path' => 'assets/social/instagram.svg',
+            ],
+            [
+                'key' => 'telegram',
+                'label_key' => 'app.support_channel_telegram',
+                'url' => $this->support_telegram_url,
+                'icon_path' => 'assets/social/telegram.svg',
+            ],
+            [
+                'key' => 'viber',
+                'label_key' => 'app.support_channel_viber',
+                'url' => $this->support_viber_url,
+                'icon_path' => 'assets/social/viber.svg',
+            ],
+            [
+                'key' => 'whatsapp',
+                'label_key' => 'app.support_channel_whatsapp',
+                'url' => $this->support_whatsapp_url,
+                'icon_path' => 'assets/social/whatsapp.svg',
+            ],
+        ];
+
+        return collect($links)
+            ->filter(fn (array $link): bool => filled($link['url']))
+            ->map(fn (array $link): array => [
+                ...$link,
+                'url' => (string) $link['url'],
+            ])
+            ->values()
+            ->all();
     }
 
     public function locations(): HasMany

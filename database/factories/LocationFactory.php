@@ -26,6 +26,7 @@ class LocationFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 9999),
             'address' => fake()->address(),
+            'google_maps_embed_url' => null,
             'phone' => fake()->phoneNumber(),
             'email' => fake()->safeEmail(),
             'timezone' => 'Europe/Kyiv',

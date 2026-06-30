@@ -1769,28 +1769,83 @@ function initQuickBookingModals() {
     });
 }
 
+function copySourceForButton(button) {
+    if (button.dataset.copyTarget) {
+        return document.querySelector(button.dataset.copyTarget);
+    }
+
+    return button.closest('[data-copy-container]')?.querySelector('[data-copy-source]')
+        ?? button.closest('article')?.querySelector('[data-copy-source]');
+}
+
+function fallbackCopy(value, source) {
+    if (source && typeof source.select === 'function') {
+        source.select();
+        document.execCommand('copy');
+
+        return;
+    }
+
+    const textarea = document.createElement('textarea');
+
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.classList.add('fixed', 'left-[-9999px]', 'top-0');
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+}
+
+function showCopyConfirmation(button) {
+    const label = button.querySelector('[data-copy-label]');
+    const successLabel = button.dataset.copySuccessLabel;
+
+    if (!label || !successLabel) {
+        return;
+    }
+
+    if (!button.dataset.copyOriginalLabel) {
+        button.dataset.copyOriginalLabel = label.textContent;
+    }
+
+    label.textContent = successLabel;
+    window.clearTimeout(Number(button.dataset.copyResetTimeout || 0));
+    button.dataset.copyResetTimeout = String(window.setTimeout(() => {
+        label.textContent = button.dataset.copyOriginalLabel || '';
+    }, 1600));
+}
+
 function initCopyButtons() {
-    document.querySelectorAll('[data-copy-token]').forEach((button) => {
+    document.querySelectorAll('[data-copy-button], [data-copy-token]').forEach((button) => {
         if (button.dataset.copyReady === 'true') {
             return;
         }
 
         button.dataset.copyReady = 'true';
-        button.addEventListener('click', () => {
-            const input = button.closest('article')?.querySelector('[data-copy-source]');
+        button.addEventListener('click', async () => {
+            const source = copySourceForButton(button);
+            const value = button.dataset.copyValue ?? source?.value ?? source?.textContent ?? '';
 
-            if (!input) {
+            if (!value) {
                 return;
             }
 
-            input.select();
-
-            if (navigator.clipboard?.writeText) {
-                navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
-                return;
+            if (source && typeof source.select === 'function') {
+                source.select();
             }
 
-            document.execCommand('copy');
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(value);
+                } else {
+                    fallbackCopy(value, source);
+                }
+            } catch {
+                fallbackCopy(value, source);
+            }
+
+            showCopyConfirmation(button);
         });
     });
 }

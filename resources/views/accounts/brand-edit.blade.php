@@ -66,6 +66,61 @@
             <section class="rounded-xl border border-stone-200 bg-white p-6 shadow-crm" data-print-section>
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between" data-print-screen-only>
                     <div>
+                        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.studio_public_landing_qr') }}</h2>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.studio_public_landing_qr_copy') }}</p>
+                    </div>
+                    <x-ui.button type="button" variant="secondary" data-print-button>
+                        <x-ui.icon name="printer" class="h-4 w-4" />
+                        {{ __('app.print') }}
+                    </x-ui.button>
+                </div>
+
+                <div class="mt-6 grid gap-6 sm:grid-cols-[240px_1fr] sm:items-center" data-qr-screen-content>
+                    <div class="flex aspect-square items-center justify-center rounded-xl border border-stone-200 bg-white p-4">
+                        {!! $studioLandingQrSvg !!}
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-3">
+                            <img src="{{ $account->logoUrl() }}" alt="" class="h-12 w-12 rounded-lg object-contain ring-1 ring-stone-200">
+                            <div>
+                                <div class="text-base font-semibold text-slate-950">{{ $account->name }}</div>
+                                <div class="text-sm text-slate-500">{{ __('app.studio_public_landing') }}</div>
+                            </div>
+                        </div>
+                        <div class="mt-5">
+                            <span class="crm-label">{{ __('app.public_url') }}</span>
+                            <div class="mt-2 flex flex-col gap-2" data-copy-container>
+                                <input value="{{ $studioLandingUrl }}" readonly class="crm-field font-mono text-xs" data-copy-source>
+                                <x-ui.button type="button" variant="secondary" data-copy-button data-copy-success-label="{{ __('app.copied') }}">
+                                    <x-ui.icon name="copy" class="h-4 w-4" />
+                                    <span data-copy-label>{{ __('app.copy') }}</span>
+                                </x-ui.button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hidden" data-qr-print-poster>
+                    <header class="flex flex-col items-center text-center">
+                        <img src="{{ $account->logoUrl() }}" alt="" class="h-20 w-20 object-contain">
+                        <div class="mt-4 text-2xl font-semibold text-slate-950">{{ $account->name }}</div>
+                        <div class="mt-1 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{{ __('app.studio_public_landing') }}</div>
+                    </header>
+                    <div class="flex flex-1 flex-col items-center justify-center gap-8 text-center">
+                        <div class="flex items-center justify-center rounded-[28px] border border-stone-200 bg-white p-8" data-qr-print-code>
+                            {!! $studioLandingQrSvg !!}
+                        </div>
+                        <div class="max-w-[620px] break-all font-mono text-lg font-semibold leading-7 text-slate-900" data-qr-print-url>
+                            {{ $studioLandingUrl }}
+                        </div>
+                    </div>
+                    <x-ui.powered-footer />
+                </div>
+            </section>
+
+            <section class="rounded-xl border border-stone-200 bg-white p-6 shadow-crm" data-print-section>
+                <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between" data-print-screen-only>
+                    <div>
                         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.login_qr_codes') }}</h2>
                         <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.login_qr_codes_copy') }}</p>
                     </div>
@@ -87,10 +142,16 @@
                                 <div class="text-sm text-slate-500">{{ __('app.customer_login') }}</div>
                             </div>
                         </div>
-                        <label class="mt-5 block">
+                        <div class="mt-5">
                             <span class="crm-label">{{ __('app.login_url') }}</span>
-                            <input value="{{ $customerLoginUrl }}" readonly class="crm-field font-mono text-xs">
-                        </label>
+                            <div class="mt-2 flex flex-col gap-2" data-copy-container>
+                                <input value="{{ $customerLoginUrl }}" readonly class="crm-field font-mono text-xs" data-copy-source>
+                                <x-ui.button type="button" variant="secondary" data-copy-button data-copy-success-label="{{ __('app.copied') }}">
+                                    <x-ui.icon name="copy" class="h-4 w-4" />
+                                    <span data-copy-label>{{ __('app.copy') }}</span>
+                                </x-ui.button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -138,10 +199,16 @@
                                         <div class="text-sm text-slate-500">{{ __($printableLink['label_key']) }} · {{ $publicLinkLocation['location']->name }}</div>
                                     </div>
                                 </div>
-                                <label class="mt-5 block">
+                                <div class="mt-5">
                                     <span class="crm-label">{{ __('app.public_url') }}</span>
-                                    <input value="{{ $printableLink['url'] }}" readonly class="crm-field font-mono text-xs">
-                                </label>
+                                    <div class="mt-2 flex flex-col gap-2" data-copy-container>
+                                        <input value="{{ $printableLink['url'] }}" readonly class="crm-field font-mono text-xs" data-copy-source>
+                                        <x-ui.button type="button" variant="secondary" data-copy-button data-copy-success-label="{{ __('app.copied') }}">
+                                            <x-ui.icon name="copy" class="h-4 w-4" />
+                                            <span data-copy-label>{{ __('app.copy') }}</span>
+                                        </x-ui.button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -173,11 +240,29 @@
                 </div>
 
                 <div class="mt-5 rounded-lg border border-stone-200 bg-slate-50 p-4">
+                    <div class="text-sm font-semibold text-slate-950">{{ __('app.studio_public_landing') }}</div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <x-ui.button :href="$studioLandingUrl" variant="secondary" size="sm" target="_blank" rel="noopener">
+                            <x-ui.icon name="external" class="h-4 w-4" />
+                            {{ __('app.open_public_studio_landing') }}
+                        </x-ui.button>
+                        <x-ui.button type="button" variant="ghost" size="sm" data-copy-button data-copy-value="{{ $studioLandingUrl }}" data-copy-success-label="{{ __('app.copied') }}">
+                            <x-ui.icon name="copy" class="h-4 w-4" />
+                            <span data-copy-label>{{ __('app.copy_link') }}</span>
+                        </x-ui.button>
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-lg border border-stone-200 bg-slate-50 p-4">
                     <div class="text-sm font-semibold text-slate-950">{{ __('app.studio_rules') }}</div>
                     <div class="mt-3 flex flex-wrap gap-2">
                         <x-ui.button :href="route('public.studio-rules', $account->slug)" variant="secondary" size="sm" target="_blank" rel="noopener">
                             <x-ui.icon name="external" class="h-4 w-4" />
                             {{ __('app.open_public_studio_rules') }}
+                        </x-ui.button>
+                        <x-ui.button type="button" variant="ghost" size="sm" data-copy-button data-copy-value="{{ route('public.studio-rules', $account->slug) }}" data-copy-success-label="{{ __('app.copied') }}">
+                            <x-ui.icon name="copy" class="h-4 w-4" />
+                            <span data-copy-label>{{ __('app.copy_link') }}</span>
                         </x-ui.button>
                     </div>
                 </div>
@@ -195,17 +280,33 @@
                                 <x-ui.icon name="schedule" class="h-4 w-4" />
                                 {{ __('app.public_schedule') }}
                             </x-ui.button>
+                            <x-ui.button type="button" variant="ghost" size="sm" data-copy-button data-copy-value="{{ $publicLinkLocation['schedule_url'] }}" data-copy-success-label="{{ __('app.copied') }}">
+                                <x-ui.icon name="copy" class="h-4 w-4" />
+                                <span data-copy-label>{{ __('app.copy_link') }}</span>
+                            </x-ui.button>
                             <x-ui.button :href="$publicLinkLocation['price_url']" variant="secondary" size="sm" target="_blank" rel="noopener">
                                 <x-ui.icon name="class-pass-plans" class="h-4 w-4" />
                                 {{ __('app.public_price') }}
+                            </x-ui.button>
+                            <x-ui.button type="button" variant="ghost" size="sm" data-copy-button data-copy-value="{{ $publicLinkLocation['price_url'] }}" data-copy-success-label="{{ __('app.copied') }}">
+                                <x-ui.icon name="copy" class="h-4 w-4" />
+                                <span data-copy-label>{{ __('app.copy_link') }}</span>
                             </x-ui.button>
                             <x-ui.button :href="$publicLinkLocation['schedule_embed_url']" variant="ghost" size="sm" target="_blank" rel="noopener">
                                 <x-ui.icon name="external" class="h-4 w-4" />
                                 {{ __('app.public_schedule_embed') }}
                             </x-ui.button>
+                            <x-ui.button type="button" variant="ghost" size="sm" data-copy-button data-copy-value="{{ $publicLinkLocation['schedule_embed_url'] }}" data-copy-success-label="{{ __('app.copied') }}">
+                                <x-ui.icon name="copy" class="h-4 w-4" />
+                                <span data-copy-label>{{ __('app.copy_link') }}</span>
+                            </x-ui.button>
                             <x-ui.button :href="$publicLinkLocation['price_embed_url']" variant="ghost" size="sm" target="_blank" rel="noopener">
                                 <x-ui.icon name="external" class="h-4 w-4" />
                                 {{ __('app.public_price_embed') }}
+                            </x-ui.button>
+                            <x-ui.button type="button" variant="ghost" size="sm" data-copy-button data-copy-value="{{ $publicLinkLocation['price_embed_url'] }}" data-copy-success-label="{{ __('app.copied') }}">
+                                <x-ui.icon name="copy" class="h-4 w-4" />
+                                <span data-copy-label>{{ __('app.copy_link') }}</span>
                             </x-ui.button>
                         </div>
                     </div>

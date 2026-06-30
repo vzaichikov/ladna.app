@@ -46,6 +46,7 @@ use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicDemoSignupController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
+use App\Http\Controllers\PublicStudioLandingController;
 use App\Http\Controllers\PublicStudioRulesController;
 use App\Http\Controllers\QuickBookingController;
 use App\Http\Controllers\RoomController;
@@ -387,6 +388,9 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.bookings.destroy');
     });
 
+Route::get('/{accountSlug}', PublicStudioLandingController::class)
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->name('public.studio');
 Route::get('/{accountSlug}/rules', PublicStudioRulesController::class)
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.studio-rules');

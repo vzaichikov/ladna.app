@@ -28,9 +28,14 @@ class AccountFactory extends Factory
             'country_code' => 'UA',
             'default_currency' => fake()->randomElement(['UAH', 'USD', 'EUR']),
             'brand_color' => fake()->hexColor(),
+            'studio_slogan' => null,
             'timezone' => 'Europe/Kyiv',
             'legal_entity_name' => null,
             'tax_id' => null,
+            'support_instagram_url' => null,
+            'support_telegram_url' => null,
+            'support_viber_url' => null,
+            'support_whatsapp_url' => null,
         ];
     }
 }

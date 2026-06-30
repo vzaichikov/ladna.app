@@ -53,7 +53,12 @@ class PublicScheduleTest extends TestCase
 
     public function test_public_schedule_page_shows_only_public_classes_for_location(): void
     {
-        $account = Account::factory()->create(['slug' => 'test-studio-nastya', 'timezone' => 'Europe/Kyiv']);
+        $account = Account::factory()->create([
+            'slug' => 'test-studio-nastya',
+            'default_language' => 'en',
+            'timezone' => 'Europe/Kyiv',
+            'support_whatsapp_url' => 'https://wa.me/380501234567',
+        ]);
         $location = Location::factory()->for($account)->create(['slug' => 'test-location-1', 'name' => 'Location 1']);
         $otherLocation = Location::factory()->for($account)->create(['slug' => 'test-location-2']);
         $room = Room::factory()->for($account)->for($location)->create(['name' => 'Big Hall']);
@@ -90,6 +95,9 @@ class PublicScheduleTest extends TestCase
             ->assertSee('Big Hall')
             ->assertSee(__('app.powered_by_ladna'))
             ->assertSee('brand/ladna-mark.svg', false)
+            ->assertSee(__('app.public_contact_title', ['studio' => $account->name]))
+            ->assertSee('https://wa.me/380501234567', false)
+            ->assertSee('assets/social/whatsapp.svg', false)
             ->assertDontSee('Europe/Kyiv')
             ->assertDontSee(__('app.terms_of_service'))
             ->assertDontSee('Private Staff Class')

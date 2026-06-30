@@ -16,6 +16,13 @@
     @error('address') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
 
+<label class="block">
+    <span class="crm-label">{{ __('app.google_maps_embed_url') }}</span>
+    <input name="google_maps_embed_url" type="url" value="{{ old('google_maps_embed_url', $location->google_maps_embed_url) }}" class="crm-field" placeholder="https://www.google.com/maps?...output=embed">
+    <span class="mt-1 block text-sm text-slate-500">{{ __('app.google_maps_embed_url_help') }}</span>
+    @error('google_maps_embed_url') <span class="crm-help">{{ $message }}</span> @enderror
+</label>
+
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.phone') }}</span>

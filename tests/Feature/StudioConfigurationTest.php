@@ -316,6 +316,92 @@ class StudioConfigurationTest extends TestCase
         $this->assertFalse($account->openingHours()[7]['enabled']);
     }
 
+    public function test_owner_can_update_public_branding_and_support_links(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.general-settings.edit', $account))
+            ->assertOk()
+            ->assertSee(__('app.studio_slogan'))
+            ->assertSee(__('app.public_support_links'));
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'business',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'studio_slogan' => ' Новий слоган студії ',
+                'support_instagram_url' => ' https://instagram.example/studio ',
+                'support_telegram_url' => 'tg://resolve?domain=studio',
+                'support_viber_url' => 'viber://chat?number=%2B380501234567',
+                'support_whatsapp_url' => 'whatsapp://send?phone=380501234567',
+                'timezone' => 'Europe/Kyiv',
+            ])
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', $account));
+
+        $account->refresh();
+
+        $this->assertSame('Новий слоган студії', $account->studio_slogan);
+        $this->assertSame('https://instagram.example/studio', $account->support_instagram_url);
+        $this->assertSame('tg://resolve?domain=studio', $account->support_telegram_url);
+        $this->assertSame('viber://chat?number=%2B380501234567', $account->support_viber_url);
+        $this->assertSame('whatsapp://send?phone=380501234567', $account->support_whatsapp_url);
+        $this->assertSame(['instagram', 'telegram', 'viber', 'whatsapp'], array_column($account->publicSupportLinks(), 'key'));
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'formats',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+                'enabled_schedule_kinds_present' => '1',
+                'enabled_schedule_kinds' => ['group_class', 'private_lesson'],
+                'schedule_kind_colors_present' => '1',
+                'schedule_kind_colors' => [
+                    'group_class' => '#FF00AA',
+                    'private_lesson' => '#00AAFF',
+                    'room_rental' => '#AAFF00',
+                ],
+            ])
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'formats']));
+
+        $this->assertSame('https://instagram.example/studio', $account->fresh()->support_instagram_url);
+    }
+
+    public function test_brand_settings_reject_invalid_public_support_link(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.general-settings.edit', $account))
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'business',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'support_instagram_url' => 'javascript:alert(1)',
+                'timezone' => 'Europe/Kyiv',
+            ])
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', $account))
+            ->assertSessionHasErrors('support_instagram_url');
+    }
+
     public function test_qr_tab_lists_public_links_for_active_locations(): void
     {
         $owner = User::factory()->create();
@@ -340,21 +426,86 @@ class StudioConfigurationTest extends TestCase
             ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'qr']))
             ->assertOk()
             ->assertSee(__('app.login_qr_codes_and_links'))
+            ->assertSee(__('app.studio_public_landing'))
             ->assertSee(__('app.public_links'))
             ->assertSee(__('app.public_url'))
             ->assertSee($firstLocation->name)
             ->assertSee($secondLocation->name)
+            ->assertSee(route('public.studio', $account->slug), false)
+            ->assertSee(__('app.open_public_studio_landing'))
             ->assertSee(route('public.schedule', [$account->slug, $firstLocation->slug]), false)
             ->assertSee(route('public.schedule.embed', [$account->slug, $firstLocation->slug]), false)
             ->assertSee(route('public.price', [$account->slug, $secondLocation->slug]), false)
             ->assertSee(route('public.price.embed', [$account->slug, $secondLocation->slug]), false)
+            ->assertSee('data-copy-button', false)
+            ->assertSee('data-copy-value', false)
             ->assertSee('data-qr-print-poster', false)
             ->assertSee(__('app.powered_by_ladna'))
             ->assertDontSee($inactiveLocation->name)
             ->assertDontSee(route('public.schedule', [$account->slug, $inactiveLocation->slug]), false);
 
-        $this->assertSame(5, substr_count($response->getContent(), 'data-print-section'));
-        $this->assertSame(5, substr_count($response->getContent(), 'data-qr-print-poster'));
+        $this->assertSame(6, substr_count($response->getContent(), 'data-print-section'));
+        $this->assertSame(6, substr_count($response->getContent(), 'data-qr-print-poster'));
+        $this->assertGreaterThanOrEqual(12, substr_count($response->getContent(), 'data-copy-button'));
+    }
+
+    public function test_owner_can_store_and_update_location_google_maps_embed_url(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $mapUrl = 'https://www.google.com/maps?output=embed&q=Kyiv';
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.locations.store', $account), [
+                'name' => 'Map location',
+                'slug' => 'map-location',
+                'address' => 'Main street 1',
+                'google_maps_embed_url' => ' '.$mapUrl.' ',
+                'timezone' => 'Europe/Kyiv',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.locations.index', $account));
+
+        $location = Location::whereBelongsTo($account)
+            ->where('slug', 'map-location')
+            ->firstOrFail();
+
+        $this->assertSame($mapUrl, $location->google_maps_embed_url);
+
+        $updatedMapUrl = 'https://www.google.com/maps?output=embed&q=Lviv';
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.locations.update', [$account, $location]), [
+                'name' => 'Map location updated',
+                'slug' => 'map-location',
+                'address' => 'Main street 2',
+                'google_maps_embed_url' => $updatedMapUrl,
+                'timezone' => 'Europe/Kyiv',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.locations.index', $account));
+
+        $this->assertSame($updatedMapUrl, $location->fresh()->google_maps_embed_url);
+    }
+
+    public function test_location_google_maps_embed_url_must_be_valid_url(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.locations.create', $account))
+            ->post(route('dashboard.accounts.locations.store', $account), [
+                'name' => 'Invalid map location',
+                'slug' => 'invalid-map-location',
+                'google_maps_embed_url' => 'not-a-url',
+                'timezone' => 'Europe/Kyiv',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.locations.create', $account))
+            ->assertSessionHasErrors('google_maps_embed_url');
     }
 
     public function test_brand_settings_reject_invalid_opening_hours(): void

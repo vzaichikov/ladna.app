@@ -35,6 +35,9 @@ class PublicPriceTest extends TestCase
             ->assertSee(__('app.total_validity_days'))
             ->assertSee($plans['private']->name)
             ->assertSee($plans['rental']->name)
+            ->assertSee(__('app.public_contact_title', ['studio' => $account->name]))
+            ->assertSee('https://instagram.example/price-studio', false)
+            ->assertSee('assets/social/instagram.svg', false)
             ->assertDontSee($plans['inactive']->name);
     }
 
@@ -178,6 +181,7 @@ class PublicPriceTest extends TestCase
             'slug' => 'price-api-studio',
             'default_language' => 'en',
             'default_currency' => 'UAH',
+            'support_instagram_url' => 'https://instagram.example/price-studio',
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main-studio', 'name' => 'Main studio']);
         $room = Room::factory()->for($account)->for($location)->create(['slug' => 'big-hall', 'name' => 'Big hall']);

@@ -117,6 +117,10 @@
                     </x-ui.empty-state>
                 @endforelse
             </section>
+
+            @unless ($isEmbed)
+                <x-ui.public-contact-links :account="$account" class="mt-8" />
+            @endunless
         </section>
     </main>
 @endsection

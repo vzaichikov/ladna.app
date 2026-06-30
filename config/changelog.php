@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.54.0',
+                'date' => '2026-06-30',
+                'title' => 'Public studio landing pages',
+                'items' => ['Added a branded public studio page with active locations, maps, price and schedule buttons, owner QR and copy links, studio slogan and support contact links for Instagram, Telegram, Viber, and WhatsApp across the landing, prices, and schedule pages. Updated owner help for the new public-page setup.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.53.2',
                 'date' => '2026-06-29',
                 'title' => 'Dashboard assistant answer formatting',
@@ -485,6 +492,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.54.0',
+                'date' => '2026-06-30',
+                'title' => 'Публічні сторінки студій',
+                'items' => ['Додано брендовану публічну сторінку студії з активними локаціями, картами, кнопками прайсу й розкладу, QR-кодом і копіюванням посилань у налаштуваннях, слоганом студії та контактами Instagram, Telegram, Viber і WhatsApp на сторінці студії, у прайсі та розкладі. Оновлено допомогу для власниць щодо нового налаштування публічних сторінок.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.53.2',
                 'date' => '2026-06-29',

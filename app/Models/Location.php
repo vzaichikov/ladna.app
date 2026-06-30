@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'name', 'slug', 'address', 'phone', 'email', 'timezone', 'is_active'])]
+#[Fillable(['account_id', 'name', 'slug', 'address', 'google_maps_embed_url', 'phone', 'email', 'timezone', 'is_active'])]
 class Location extends Model
 {
     /** @use HasFactory<LocationFactory> */
