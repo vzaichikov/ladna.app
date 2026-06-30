@@ -20,6 +20,7 @@ class TelegramSupportController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search', ''));
+        $activeTab = $this->activeTab((string) $request->query('tab', 'users'));
 
         $authorizations = TelegramChatAuthorization::query()
             ->with(['account:id,name,slug,timezone', 'user:id,name,email,phone', 'trainer:id,account_id,name,phone', 'installation:id,scope_type,profile,bot_username'])
@@ -68,8 +69,10 @@ class TelegramSupportController extends Controller
             ->withQueryString();
 
         return view('platform.telegram-support.index', [
+            'activeTab' => $activeTab,
             'authorizations' => $authorizations,
             'messages' => $messages,
+            'tabs' => $this->tabs(),
             'updates' => $updates,
             'search' => $search,
         ]);
@@ -138,5 +141,31 @@ class TelegramSupportController extends Controller
     private function ensureOwnerAuthorization(TelegramChatAuthorization $authorization): void
     {
         abort_unless($authorization->profile === TelegramBotProfile::Owner, 404);
+    }
+
+    private function activeTab(string $tab): string
+    {
+        return array_key_exists($tab, $this->tabs()) ? $tab : 'users';
+    }
+
+    /**
+     * @return array<string, array{label_key: string, panel_id: string}>
+     */
+    private function tabs(): array
+    {
+        return [
+            'users' => [
+                'label_key' => 'app.telegram_linked_users',
+                'panel_id' => 'telegram-support-users',
+            ],
+            'messages' => [
+                'label_key' => 'app.telegram_message_logs',
+                'panel_id' => 'telegram-support-messages',
+            ],
+            'webhooks' => [
+                'label_key' => 'app.telegram_update_logs',
+                'panel_id' => 'telegram-support-webhooks',
+            ],
+        ];
     }
 }

@@ -63,7 +63,7 @@ class StudioAiGuard
      */
     private function scopeContext(Account $account): array
     {
-        $context = $this->contextBuilder->studioContext($account);
+        $context = $this->contextBuilder->studioContext($account, includeClassBookingDetails: false);
 
         return [
             'studio' => [

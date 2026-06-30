@@ -20,19 +20,21 @@ use Illuminate\Support\Carbon;
 
 class StudioAiContextBuilder
 {
+    private const ClassBookingDetailsDaysAhead = 7;
+
     public function __construct(private readonly StudioClassScheduleDetails $classScheduleDetails) {}
 
     /**
      * @return array<string, mixed>
      */
-    public function studioContext(Account $account): array
+    public function studioContext(Account $account, bool $includeClassBookingDetails = true): array
     {
         $timezone = $account->timezone ?: config('app.timezone');
         $today = now($timezone)->startOfDay();
         $tomorrow = $today->copy()->addDay();
         $nextSevenDaysEnd = $today->copy()->addDays(7)->endOfDay();
 
-        return [
+        $context = [
             'studio' => [
                 'name' => $account->name,
                 'timezone' => $timezone,
@@ -87,11 +89,17 @@ class StudioAiContextBuilder
                     'booked' => $this->bookingCountBetween($account, $today, $nextSevenDaysEnd),
                 ],
             ],
-            'class_booking_details' => [
-                'today' => $this->classScheduleDetails->forDay($account, $today, classLimit: 20, bookingLimitPerClass: 20),
-                'tomorrow' => $this->classScheduleDetails->forDay($account, $tomorrow, classLimit: 20, bookingLimitPerClass: 20),
-            ],
         ];
+
+        if ($includeClassBookingDetails) {
+            $context['class_booking_details'] = [
+                'available_from' => $today->toDateString(),
+                'available_to' => $today->copy()->addDays(self::ClassBookingDetailsDaysAhead)->toDateString(),
+                ...$this->classBookingDetailsForDays($account, $today, self::ClassBookingDetailsDaysAhead),
+            ];
+        }
+
+        return $context;
     }
 
     /**
@@ -211,5 +219,34 @@ class StudioAiContextBuilder
             })
             ->where('status', ClassBookingStatus::Booked->value)
             ->count();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function classBookingDetailsForDays(Account $account, Carbon $today, int $daysAhead): array
+    {
+        $details = [];
+
+        for ($offset = 0; $offset <= $daysAhead; $offset++) {
+            $details[$this->relativeDayKey($offset)] = $this->classScheduleDetails->forDay(
+                $account,
+                $today->copy()->addDays($offset),
+                classLimit: 20,
+                bookingLimitPerClass: 20,
+            );
+        }
+
+        return $details;
+    }
+
+    private function relativeDayKey(int $offset): string
+    {
+        return match ($offset) {
+            0 => 'today',
+            1 => 'tomorrow',
+            2 => 'day_after_tomorrow',
+            default => 'in_'.$offset.'_days',
+        };
     }
 }

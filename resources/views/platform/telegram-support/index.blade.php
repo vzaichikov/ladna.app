@@ -18,6 +18,10 @@
             \App\Enums\TelegramUpdateStatus::Processing->value, \App\Enums\TelegramUpdateStatus::Pending->value => 'crm-status-scheduled',
             default => 'crm-status-muted',
         };
+        $tabUrl = fn (string $tab): string => route('platform.telegram-support.index', array_filter([
+            'tab' => $tab,
+            'search' => $search,
+        ], fn ($value): bool => filled($value)));
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -27,7 +31,27 @@
         </div>
     </div>
 
-    <form method="GET" action="{{ route('platform.telegram-support.index') }}" class="mt-6 grid gap-4 rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:grid-cols-[1fr_auto] sm:items-end">
+    <div class="mt-6 rounded-xl border border-stone-200 bg-white p-2 shadow-crm">
+        <div class="grid gap-1 rounded-lg bg-stone-100 p-1 sm:inline-grid sm:grid-flow-col" role="tablist" aria-label="{{ __('app.telegram_support') }}">
+            @foreach ($tabs as $tabKey => $tab)
+                <a
+                    href="{{ $tabUrl($tabKey) }}"
+                    id="telegram-support-tab-{{ $tabKey }}"
+                    class="crm-tab justify-start sm:justify-center"
+                    role="tab"
+                    aria-controls="{{ $tab['panel_id'] }}"
+                    aria-selected="{{ $activeTab === $tabKey ? 'true' : 'false' }}"
+                    tabindex="{{ $activeTab === $tabKey ? '0' : '-1' }}"
+                >
+                    {{ __($tab['label_key']) }}
+                </a>
+            @endforeach
+        </div>
+    </div>
+
+    <form method="GET" action="{{ route('platform.telegram-support.index') }}" class="mt-4 grid gap-4 rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:grid-cols-[1fr_auto] sm:items-end">
+        <input type="hidden" name="tab" value="{{ $activeTab }}">
+
         <label class="block">
             <span class="crm-label">{{ __('app.search') }}</span>
             <input name="search" value="{{ $search }}" class="crm-field" placeholder="{{ __('app.telegram_support_search_placeholder') }}">
@@ -40,14 +64,15 @@
             </x-ui.button>
 
             @if ($search !== '')
-                <x-ui.button :href="route('platform.telegram-support.index')" variant="ghost">
+                <x-ui.button :href="route('platform.telegram-support.index', ['tab' => $activeTab])" variant="ghost">
                     {{ __('app.reset_filters') }}
                 </x-ui.button>
             @endif
         </div>
     </form>
 
-    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+    @if ($activeTab === 'users')
+    <x-ui.panel padding="none" id="telegram-support-users" class="mt-6 overflow-hidden" role="tabpanel" aria-labelledby="telegram-support-tab-users">
         <div class="border-b border-stone-100 p-5">
             <h2 class="text-lg font-semibold text-slate-950">{{ __('app.telegram_linked_users') }}</h2>
         </div>
@@ -110,7 +135,7 @@
                                 </td>
                                 <td class="px-5 py-4">
                                     <div class="flex justify-end gap-2">
-                                        <x-ui.action-button :href="route('platform.telegram-support.index', ['search' => $authorization->telegram_chat_id])" icon="search" :label="__('app.telegram_view_user_logs')" />
+                                        <x-ui.action-button :href="route('platform.telegram-support.index', ['tab' => 'messages', 'search' => $authorization->telegram_chat_id])" icon="search" :label="__('app.telegram_view_user_logs')" />
 
                                         <form method="POST" action="{{ route('platform.telegram-support.authorizations.reset', $authorization) }}">
                                             @csrf
@@ -138,7 +163,8 @@
         @endif
     </x-ui.panel>
 
-    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+    @elseif ($activeTab === 'messages')
+    <x-ui.panel padding="none" id="telegram-support-messages" class="mt-6 overflow-hidden" role="tabpanel" aria-labelledby="telegram-support-tab-messages">
         <div class="border-b border-stone-100 p-5">
             <h2 class="text-lg font-semibold text-slate-950">{{ __('app.telegram_message_logs') }}</h2>
         </div>
@@ -179,7 +205,8 @@
         @endif
     </x-ui.panel>
 
-    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+    @else
+    <x-ui.panel padding="none" id="telegram-support-webhooks" class="mt-6 overflow-hidden" role="tabpanel" aria-labelledby="telegram-support-tab-webhooks">
         <div class="border-b border-stone-100 p-5">
             <h2 class="text-lg font-semibold text-slate-950">{{ __('app.telegram_update_logs') }}</h2>
         </div>
@@ -218,4 +245,5 @@
             </div>
         @endif
     </x-ui.panel>
+    @endif
 @endsection
