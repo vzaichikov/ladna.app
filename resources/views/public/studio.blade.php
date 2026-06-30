@@ -31,15 +31,15 @@
 
             <header class="mt-8 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-crm">
                 <div class="h-2" style="background-color: var(--studio-brand-color);"></div>
-                <div class="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-end">
-                    <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
-                        <span class="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-stone-200 bg-slate-50 p-3 shadow-xs">
-                            <img src="{{ $account->logoUrl() }}" alt="" class="max-h-14 max-w-14 object-contain">
+                <div class="grid gap-6 p-5 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-end">
+                    <div class="flex items-center gap-4 sm:gap-5">
+                        <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-slate-50 p-2.5 shadow-xs sm:h-20 sm:w-20 sm:rounded-2xl sm:p-3">
+                            <img src="{{ $account->logoUrl() }}" alt="" class="max-h-11 max-w-11 object-contain sm:max-h-14 sm:max-w-14">
                         </span>
-                        <div>
-                            <h1 class="text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">{{ $account->name }}</h1>
+                        <div class="min-w-0">
+                            <h1 class="text-3xl font-semibold leading-tight text-slate-950 sm:text-5xl">{{ $account->name }}</h1>
                             @if ($account->studio_slogan)
-                                <p class="mt-4 max-w-2xl text-base leading-7 text-slate-500">{{ $account->studio_slogan }}</p>
+                                <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-500 sm:mt-4 sm:text-base sm:leading-7">{{ $account->studio_slogan }}</p>
                             @endif
                         </div>
                     </div>
