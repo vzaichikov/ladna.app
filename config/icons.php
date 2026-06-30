@@ -29,6 +29,7 @@ return [
         'minus' => 'minus',
         'payments' => 'credit-card',
         'plus' => 'plus',
+        'refresh' => 'refresh-cw',
         'rooms' => 'building',
         'schedule' => 'calendar-days',
         'scheduled-tasks' => 'terminal',

@@ -248,7 +248,9 @@ class TelegramUpdateProcessor
             return true;
         }
 
-        $this->sendTyping($telegramUpdate, $chatId);
+        $typing = $this->typingIndicator($telegramUpdate, $chatId);
+        $typing->start();
+
         $conversation = $this->conversationFor($authorization);
         $conversation->messages()->create([
             'account_id' => $authorization->account_id,
@@ -263,6 +265,8 @@ class TelegramUpdateProcessor
             : null;
 
         if ($plan?->pendingAction || $plan?->handled) {
+            $typing->refresh();
+
             $result = [
                 'response' => $plan->message ?? __('app.assistant_pending_action_created'),
                 'rejected' => false,
@@ -278,7 +282,7 @@ class TelegramUpdateProcessor
                 $account,
                 $text,
                 $authorization,
-                fn (): ?Response => $this->sendTyping($telegramUpdate, $chatId),
+                fn (): ?Response => $typing->refresh(force: true),
             );
             $result['metadata'] = [
                 'used_ai' => $result['used_ai'],
@@ -297,6 +301,10 @@ class TelegramUpdateProcessor
             'metadata' => $result['metadata'],
             'occurred_at' => now(),
         ]);
+
+        $typing->refresh();
+        $typing->stop();
+
         $outboundMessage = $this->sendAndStore(
             $telegramUpdate,
             $chatId,
@@ -314,15 +322,19 @@ class TelegramUpdateProcessor
         return true;
     }
 
-    private function sendTyping(TelegramUpdate $telegramUpdate, string $chatId): ?Response
+    private function typingIndicator(TelegramUpdate $telegramUpdate, string $chatId): TelegramTypingIndicator
     {
-        try {
-            return $this->telegramClient->sendChatAction($telegramUpdate->installation, $chatId);
-        } catch (Throwable $throwable) {
-            report($throwable);
+        return new TelegramTypingIndicator(
+            $this->telegramClient,
+            $telegramUpdate->installation,
+            $chatId,
+            $this->typingRefreshSeconds(),
+        );
+    }
 
-            return null;
-        }
+    private function typingRefreshSeconds(): float
+    {
+        return max(0.0, (float) config('services.telegram.typing_refresh_seconds', 4.0));
     }
 
     private function processFollowUpCallback(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, int $messageId, int $index, array $callbackQuery): bool

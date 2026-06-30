@@ -427,12 +427,29 @@ class PlatformAdminTest extends TestCase
         $this->actingAs($platformAdmin)
             ->get(route('platform.telegram-support.index'))
             ->assertOk()
+            ->assertSee('role="tablist"', false)
+            ->assertSee('aria-selected="true"', false)
             ->assertSee(__('app.telegram_linked_users'))
             ->assertSee('Linked Owner 1')
-            ->assertSee('Support log 1')
-            ->assertSee('Support error 1')
             ->assertSee('authorizations_page=2', false)
+            ->assertSee('data-lucide="refresh-cw"', false)
+            ->assertSee('tab=messages', false)
+            ->assertDontSee('Support log 1')
+            ->assertDontSee('Support error 1');
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.telegram-support.index', ['tab' => 'messages']))
+            ->assertOk()
+            ->assertSee(__('app.telegram_message_logs'))
+            ->assertSee('Support log 1')
             ->assertSee('messages_page=2', false)
+            ->assertDontSee('Support error 1');
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.telegram-support.index', ['tab' => 'webhooks']))
+            ->assertOk()
+            ->assertSee(__('app.telegram_update_logs'))
+            ->assertSee('Support error 1')
             ->assertSee('updates_page=2', false);
     }
 

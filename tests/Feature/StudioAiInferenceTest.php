@@ -296,6 +296,92 @@ class StudioAiInferenceTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_inference_context_includes_day_after_tomorrow_details_for_authorized_trainer(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-30 23:56:00', 'Europe/Kyiv'));
+
+        try {
+            Http::fake([
+                'ollama.com/api/chat' => Http::sequence()
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"in_scope":true,"reason":"studio booking details question"}',
+                        ],
+                    ])
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"answer":"На четвер до Slastya записані Анастасія Мошна та Юлія Бойчук.","follow_up_actions":[]}',
+                        ],
+                    ]),
+            ]);
+
+            $account = $this->accountWithOllamaSettings();
+            $user = User::factory()->create(['name' => 'Настя', 'phone' => '+380671112233']);
+            $account->addOwner($user);
+            $location = Location::factory()->for($account)->create(['name' => 'Charmpole']);
+            $trainer = Trainer::factory()->for($account)->create(['name' => 'Slastya']);
+            $classType = ClassType::factory()->for($account)->create([
+                'name' => 'Exot',
+                'schedule_kind' => ScheduleKind::GroupClass->value,
+            ]);
+            $scheduledClass = ScheduledClass::factory()
+                ->for($account)
+                ->for($location)
+                ->for($trainer)
+                ->for($classType)
+                ->create([
+                    'title' => 'Exot',
+                    'starts_at' => Carbon::parse('2026-07-02 10:00:00', 'Europe/Kyiv')->timezone('UTC'),
+                    'ends_at' => Carbon::parse('2026-07-02 11:00:00', 'Europe/Kyiv')->timezone('UTC'),
+                    'capacity' => 9,
+                ]);
+            $firstCustomer = Customer::factory()->for($account)->create(['name' => 'Анастасія Мошна']);
+            $secondCustomer = Customer::factory()->for($account)->create(['name' => 'Юлія Бойчук']);
+            ClassBooking::factory()
+                ->for($account)
+                ->for($scheduledClass)
+                ->for($firstCustomer, 'customer')
+                ->create(['status' => ClassBookingStatus::Booked->value]);
+            ClassBooking::factory()
+                ->for($account)
+                ->for($scheduledClass)
+                ->for($secondCustomer, 'customer')
+                ->create(['status' => ClassBookingStatus::Booked->value]);
+            $authorization = TelegramChatAuthorization::factory()->for($account)->create([
+                'user_id' => $user->id,
+                'trainer_id' => $trainer->id,
+                'profile' => TelegramBotProfile::Owner->value,
+                'phone' => $user->phone,
+            ]);
+
+            app(StudioAiInference::class)->respond($account, 'А хто записаний саме до мене Slastya на чт?', $authorization);
+
+            Http::assertSent(function (Request $request) use ($scheduledClass, $trainer): bool {
+                $payload = $request->data();
+                $system = $payload['messages'][0]['content'] ?? '';
+                $content = $payload['messages'][1]['content'] ?? '';
+
+                return str_contains($system, 'named weekdays')
+                    && str_contains($content, 'class_booking_details')
+                    && str_contains($content, 'available_to')
+                    && str_contains($content, 'day_after_tomorrow')
+                    && str_contains($content, '2026-07-02')
+                    && str_contains($content, (string) $scheduledClass->id)
+                    && str_contains($content, 'Exot')
+                    && str_contains($content, 'Slastya')
+                    && str_contains($content, 'Анастасія Мошна')
+                    && str_contains($content, 'Юлія Бойчук')
+                    && str_contains($content, 'Actor context JSON')
+                    && str_contains($content, '"trainer":{"id":'.$trainer->id);
+            });
+            Http::assertSentCount(2);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_prompt_injection_request_is_rejected_before_answer_request(): void
     {
         Http::fake([

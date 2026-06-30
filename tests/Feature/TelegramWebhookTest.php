@@ -735,6 +735,7 @@ class TelegramWebhookTest extends TestCase
     public function test_authorized_owner_text_uses_ai_when_ollama_provider_is_configured(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));
+        config(['services.telegram.typing_refresh_seconds' => 0]);
         Http::fake([
             'ollama.com/api/chat' => Http::sequence()
                 ->push([
@@ -804,12 +805,21 @@ class TelegramWebhookTest extends TestCase
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendChatAction')
             && $request['chat_id'] === '558'
             && $request['action'] === 'typing');
-        $this->assertCount(3, collect(Http::recorded())
+        $this->assertCount(4, collect(Http::recorded())
             ->filter(fn (array $record): bool => str_ends_with($record[0]->url(), '/sendChatAction')));
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendMessage')
             && $request['chat_id'] === '558'
             && $request['parse_mode'] === 'HTML'
             && $request['text'] === "<b>AI answer</b> for studio schedule.\n&#8226; First item");
+
+        $telegramMethods = collect(Http::recorded())
+            ->map(fn (array $record): Request => $record[0])
+            ->filter(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.telegram.org/'))
+            ->map(fn (Request $request): string => Str::afterLast($request->url(), '/'))
+            ->values();
+
+        $this->assertSame('sendChatAction', $telegramMethods->get($telegramMethods->count() - 2));
+        $this->assertSame('sendMessage', $telegramMethods->last());
 
         Carbon::setTestNow();
     }

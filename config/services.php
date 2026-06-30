@@ -39,6 +39,11 @@ return [
         'base_url' => env('OLLAMA_CLOUD_BASE_URL', 'https://ollama.com'),
     ],
 
+    'telegram' => [
+        'typing_pulse_enabled' => env('TELEGRAM_TYPING_PULSE_ENABLED', true),
+        'typing_refresh_seconds' => (float) env('TELEGRAM_TYPING_REFRESH_SECONDS', 4),
+    ],
+
     'openai' => [
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com'),
     ],
