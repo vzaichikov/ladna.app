@@ -103,13 +103,13 @@ class Account extends Model
             [
                 'key' => 'phone',
                 'label_key' => 'app.support_channel_phone',
-                'url' => $this->support_phone_url,
+                'url' => $this->publicPhoneHref($this->support_phone_url),
                 'icon_path' => 'assets/social/phone.svg',
             ],
             [
                 'key' => 'secondary_phone',
                 'label_key' => 'app.support_channel_secondary_phone',
-                'url' => $this->support_secondary_phone_url,
+                'url' => $this->publicPhoneHref($this->support_secondary_phone_url),
                 'icon_path' => 'assets/social/phone.svg',
             ],
         ];
@@ -122,6 +122,24 @@ class Account extends Model
             ])
             ->values()
             ->all();
+    }
+
+    private function publicPhoneHref(?string $phone): ?string
+    {
+        $phone = trim((string) $phone);
+        $phone = preg_replace('/^tel:(\/\/)?/i', '', $phone) ?? $phone;
+
+        if ($phone === '') {
+            return null;
+        }
+
+        $normalized = preg_replace('/(?!^\+)[^0-9]/', '', $phone);
+
+        if (! is_string($normalized) || $normalized === '') {
+            return null;
+        }
+
+        return 'tel://'.$normalized;
     }
 
     public function locations(): HasMany

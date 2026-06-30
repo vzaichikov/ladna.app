@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Rules\PublicSupportLink;
+use App\Rules\PublicSupportPhone;
 use App\Support\ScheduleKindRegistry;
 use App\Support\StudioRulesHtmlSanitizer;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -46,8 +47,8 @@ class UpdateAccountRequest extends FormRequest
             'support_telegram_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::telegram()],
             'support_viber_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::viber()],
             'support_whatsapp_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::whatsapp()],
-            'support_phone_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::phone()],
-            'support_secondary_phone_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::phone()],
+            'support_phone_url' => ['nullable', 'string', 'max:64', new PublicSupportPhone],
+            'support_secondary_phone_url' => ['nullable', 'string', 'max:64', new PublicSupportPhone],
             'enabled_schedule_kinds_present' => ['nullable', 'boolean'],
             'enabled_schedule_kinds' => ['required_if:enabled_schedule_kinds_present,1', 'array', 'min:1'],
             'enabled_schedule_kinds.*' => [Rule::in(ScheduleKindRegistry::defaultEnabledValues())],

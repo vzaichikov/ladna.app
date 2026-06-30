@@ -374,12 +374,12 @@
     @elseif ($activeTab === 'ai')
         @include('accounts.ai-telegram-settings')
     @else
-        <form method="POST" action="{{ route('dashboard.accounts.update', $account) }}" enctype="multipart/form-data" class="mt-6 max-w-2xl space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
+        <form method="POST" action="{{ route('dashboard.accounts.update', $account) }}" enctype="multipart/form-data" class="mt-6 max-w-6xl space-y-5">
             @csrf
             @method('PUT')
             <input type="hidden" name="brand_tab" value="business">
 
-            @include('accounts.form-fields')
+            @include('accounts.form-fields', ['splitContactPanel' => true])
 
             <x-ui.button type="submit">
                 <x-ui.icon name="edit" class="h-4 w-4" />

@@ -33,11 +33,6 @@ class PublicSupportLink implements ValidationRule
         return new self(['http', 'https', 'whatsapp']);
     }
 
-    public static function phone(): self
-    {
-        return new self(['tel']);
-    }
-
     /**
      * Run the validation rule.
      *
@@ -66,16 +61,6 @@ class PublicSupportLink implements ValidationRule
         $scheme = parse_url($url, PHP_URL_SCHEME);
 
         if (! is_string($scheme) || ! in_array(strtolower($scheme), $this->allowedProtocols, true)) {
-            $fail(__('app.public_support_link_invalid'));
-
-            return;
-        }
-
-        if (strtolower($scheme) === 'tel') {
-            if (preg_match('/^tel:\+?[0-9][0-9().-]{4,}(?:;[a-z0-9_-]+=[a-z0-9().+\-]+)*$/i', $url) === 1) {
-                return;
-            }
-
             $fail(__('app.public_support_link_invalid'));
 
             return;

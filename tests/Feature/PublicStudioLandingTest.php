@@ -26,8 +26,8 @@ class PublicStudioLandingTest extends TestCase
             'studio_slogan' => 'Move with confidence every day.',
             'support_instagram_url' => 'https://instagram.example/landing-studio',
             'support_telegram_url' => 'tg://resolve?domain=landingstudio',
-            'support_phone_url' => 'tel:+380501234567',
-            'support_secondary_phone_url' => 'tel:+380671234567',
+            'support_phone_url' => '+380501234567',
+            'support_secondary_phone_url' => '+380671234567',
         ]);
         $activeLocation = Location::factory()->for($account)->create([
             'name' => 'Main location',
@@ -53,8 +53,8 @@ class PublicStudioLandingTest extends TestCase
             ->assertSee(__('app.public_contact_title', ['studio' => $account->name]))
             ->assertSee('https://instagram.example/landing-studio', false)
             ->assertSee('tg://resolve?domain=landingstudio', false)
-            ->assertSee('tel:+380501234567', false)
-            ->assertSee('tel:+380671234567', false)
+            ->assertSee('tel://+380501234567', false)
+            ->assertSee('tel://+380671234567', false)
             ->assertSee('assets/social/instagram.svg', false)
             ->assertSee('assets/social/telegram.svg', false)
             ->assertSee('assets/social/phone.svg', false)

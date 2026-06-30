@@ -1,3 +1,12 @@
+@php
+    $splitContactPanel = $splitContactPanel ?? false;
+@endphp
+
+@if ($splitContactPanel)
+    <div class="grid gap-5 xl:grid-cols-[minmax(0,42rem)_minmax(21rem,0.82fr)] xl:items-start">
+        <section class="space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
+@endif
+
 <label class="block">
     <span class="crm-label">{{ __('app.name') }}</span>
     <input name="name" value="{{ old('name', $account->name) }}" required class="crm-field">
@@ -74,73 +83,79 @@
     </label>
 </div>
 
-<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.85fr)] lg:items-start">
-    <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
-        <legend class="crm-label px-1">{{ __('app.studio_branding') }}</legend>
-        <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.studio_branding_help') }}</p>
+<fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+    <legend class="crm-label px-1">{{ __('app.studio_branding') }}</legend>
+    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.studio_branding_help') }}</p>
 
-        <div class="mt-4 grid gap-4 sm:grid-cols-2">
-            <label class="block">
-                <span class="crm-label">{{ __('app.brand_color') }}</span>
-                <input name="brand_color" value="{{ old('brand_color', $account->brand_color) }}" placeholder="#3B223F" class="crm-field bg-white">
-                @error('brand_color') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <label class="block">
+            <span class="crm-label">{{ __('app.brand_color') }}</span>
+            <input name="brand_color" value="{{ old('brand_color', $account->brand_color) }}" placeholder="#3B223F" class="crm-field bg-white">
+            @error('brand_color') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
 
-            <label class="block">
-                <span class="crm-label">{{ __('app.studio_slogan') }}</span>
-                <input name="studio_slogan" value="{{ old('studio_slogan', $account->studio_slogan) }}" maxlength="255" class="crm-field bg-white" placeholder="{{ __('app.studio_slogan_placeholder') }}">
-                <span class="mt-1 block text-xs font-medium text-slate-500">{{ __('app.studio_slogan_help') }}</span>
-                @error('studio_slogan') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-        </div>
-    </fieldset>
-
-    <fieldset class="rounded-lg border border-stone-200 bg-white p-4">
-        <legend class="crm-label px-1">{{ __('app.public_support_links') }}</legend>
-        <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.public_support_links_help') }}</p>
-
-        <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-            <label class="block">
-                <span class="crm-label">{{ __('app.support_instagram_url') }}</span>
-                <input name="support_instagram_url" type="url" inputmode="url" value="{{ old('support_instagram_url', $account->support_instagram_url) }}" placeholder="https://instagram.com/studio" class="crm-field">
-                @error('support_instagram_url') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-
-            <label class="block">
-                <span class="crm-label">{{ __('app.support_telegram_url') }}</span>
-                <input name="support_telegram_url" type="url" inputmode="url" value="{{ old('support_telegram_url', $account->support_telegram_url) }}" placeholder="https://t.me/studio" class="crm-field">
-                @error('support_telegram_url') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-
-            <label class="block">
-                <span class="crm-label">{{ __('app.support_viber_url') }}</span>
-                <input name="support_viber_url" type="url" inputmode="url" value="{{ old('support_viber_url', $account->support_viber_url) }}" placeholder="viber://chat?number=%2B380501234567" class="crm-field">
-                @error('support_viber_url') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-
-            <label class="block">
-                <span class="crm-label">{{ __('app.support_whatsapp_url') }}</span>
-                <input name="support_whatsapp_url" type="url" inputmode="url" value="{{ old('support_whatsapp_url', $account->support_whatsapp_url) }}" placeholder="https://wa.me/380501234567" class="crm-field">
-                @error('support_whatsapp_url') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-
-            <label class="block">
-                <span class="crm-label">{{ __('app.support_phone_url') }}</span>
-                <input name="support_phone_url" type="url" inputmode="tel" value="{{ old('support_phone_url', $account->support_phone_url) }}" placeholder="tel:+380501234567" class="crm-field">
-                @error('support_phone_url') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-
-            <label class="block">
-                <span class="crm-label">{{ __('app.support_secondary_phone_url') }}</span>
-                <input name="support_secondary_phone_url" type="url" inputmode="tel" value="{{ old('support_secondary_phone_url', $account->support_secondary_phone_url) }}" placeholder="tel:+380671234567" class="crm-field">
-                @error('support_secondary_phone_url') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-        </div>
-    </fieldset>
-</div>
+        <label class="block">
+            <span class="crm-label">{{ __('app.studio_slogan') }}</span>
+            <input name="studio_slogan" value="{{ old('studio_slogan', $account->studio_slogan) }}" maxlength="255" class="crm-field bg-white" placeholder="{{ __('app.studio_slogan_placeholder') }}">
+            <span class="mt-1 block text-xs font-medium text-slate-500">{{ __('app.studio_slogan_help') }}</span>
+            @error('studio_slogan') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+    </div>
+</fieldset>
 
 <label class="block">
     <span class="crm-label">{{ __('app.timezone') }}</span>
     <input name="timezone" value="{{ old('timezone', $account->timezone) }}" placeholder="Europe/Kyiv" class="crm-field">
     @error('timezone') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
+
+@if ($splitContactPanel)
+        </section>
+@endif
+
+<fieldset class="{{ $splitContactPanel ? 'rounded-xl border border-stone-200 bg-white p-6 shadow-crm xl:sticky xl:top-6' : 'rounded-lg border border-stone-200 bg-white p-4' }}">
+    <legend class="crm-label px-1">{{ __('app.public_support_links') }}</legend>
+    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.public_support_links_help') }}</p>
+
+    <div class="mt-4 grid gap-4 sm:grid-cols-2 {{ $splitContactPanel ? 'xl:grid-cols-1' : '' }}">
+        <label class="block">
+            <span class="crm-label">{{ __('app.support_instagram_url') }}</span>
+            <input name="support_instagram_url" type="url" inputmode="url" value="{{ old('support_instagram_url', $account->support_instagram_url) }}" placeholder="https://instagram.com/studio" class="crm-field">
+            @error('support_instagram_url') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+
+        <label class="block">
+            <span class="crm-label">{{ __('app.support_telegram_url') }}</span>
+            <input name="support_telegram_url" type="url" inputmode="url" value="{{ old('support_telegram_url', $account->support_telegram_url) }}" placeholder="https://t.me/studio" class="crm-field">
+            @error('support_telegram_url') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+
+        <label class="block">
+            <span class="crm-label">{{ __('app.support_viber_url') }}</span>
+            <input name="support_viber_url" type="url" inputmode="url" value="{{ old('support_viber_url', $account->support_viber_url) }}" placeholder="viber://chat?number=%2B380501234567" class="crm-field">
+            @error('support_viber_url') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+
+        <label class="block">
+            <span class="crm-label">{{ __('app.support_whatsapp_url') }}</span>
+            <input name="support_whatsapp_url" type="url" inputmode="url" value="{{ old('support_whatsapp_url', $account->support_whatsapp_url) }}" placeholder="https://wa.me/380501234567" class="crm-field">
+            @error('support_whatsapp_url') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+
+        <label class="block">
+            <span class="crm-label">{{ __('app.support_phone_url') }}</span>
+            <input name="support_phone_url" type="tel" inputmode="tel" autocomplete="tel" value="{{ old('support_phone_url', $account->support_phone_url) }}" placeholder="+380501234567" class="crm-field">
+            @error('support_phone_url') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+
+        <label class="block">
+            <span class="crm-label">{{ __('app.support_secondary_phone_url') }}</span>
+            <input name="support_secondary_phone_url" type="tel" inputmode="tel" autocomplete="tel" value="{{ old('support_secondary_phone_url', $account->support_secondary_phone_url) }}" placeholder="+380671234567" class="crm-field">
+            @error('support_secondary_phone_url') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+    </div>
+</fieldset>
+
+@if ($splitContactPanel)
+    </div>
+@endif

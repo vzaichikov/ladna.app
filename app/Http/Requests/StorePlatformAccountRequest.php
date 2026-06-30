@@ -7,6 +7,7 @@ use App\Enums\SubscriptionStatus;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Rules\PublicSupportLink;
+use App\Rules\PublicSupportPhone;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -47,8 +48,8 @@ class StorePlatformAccountRequest extends FormRequest
             'support_telegram_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::telegram()],
             'support_viber_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::viber()],
             'support_whatsapp_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::whatsapp()],
-            'support_phone_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::phone()],
-            'support_secondary_phone_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::phone()],
+            'support_phone_url' => ['nullable', 'string', 'max:64', new PublicSupportPhone],
+            'support_secondary_phone_url' => ['nullable', 'string', 'max:64', new PublicSupportPhone],
             'subscription_plan_id' => ['nullable', Rule::exists((new SubscriptionPlan)->getTable(), 'id')],
             'subscription_status' => ['required', Rule::enum(SubscriptionStatus::class)],
             'subscription_ends_at' => ['nullable', 'date'],

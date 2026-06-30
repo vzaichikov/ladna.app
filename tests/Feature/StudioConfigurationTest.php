@@ -344,8 +344,8 @@ class StudioConfigurationTest extends TestCase
                 'support_telegram_url' => 'tg://resolve?domain=studio',
                 'support_viber_url' => 'viber://chat?number=%2B380501234567',
                 'support_whatsapp_url' => 'whatsapp://send?phone=380501234567',
-                'support_phone_url' => ' tel:+380501234567 ',
-                'support_secondary_phone_url' => 'tel:+380671234567',
+                'support_phone_url' => ' +380501234567 ',
+                'support_secondary_phone_url' => '+380671234567',
                 'timezone' => 'Europe/Kyiv',
             ])
             ->assertRedirect(route('dashboard.accounts.general-settings.edit', $account));
@@ -357,8 +357,8 @@ class StudioConfigurationTest extends TestCase
         $this->assertSame('tg://resolve?domain=studio', $account->support_telegram_url);
         $this->assertSame('viber://chat?number=%2B380501234567', $account->support_viber_url);
         $this->assertSame('whatsapp://send?phone=380501234567', $account->support_whatsapp_url);
-        $this->assertSame('tel:+380501234567', $account->support_phone_url);
-        $this->assertSame('tel:+380671234567', $account->support_secondary_phone_url);
+        $this->assertSame('+380501234567', $account->support_phone_url);
+        $this->assertSame('+380671234567', $account->support_secondary_phone_url);
         $this->assertSame(['instagram', 'telegram', 'viber', 'whatsapp', 'phone', 'secondary_phone'], array_column($account->publicSupportLinks(), 'key'));
 
         $this->actingAs($owner)
@@ -402,7 +402,7 @@ class StudioConfigurationTest extends TestCase
                 'default_currency' => 'UAH',
                 'brand_color' => '#3B223F',
                 'support_instagram_url' => 'javascript:alert(1)',
-                'support_phone_url' => 'tel:studio',
+                'support_phone_url' => 'not-a-phone',
                 'timezone' => 'Europe/Kyiv',
             ])
             ->assertRedirect(route('dashboard.accounts.general-settings.edit', $account))

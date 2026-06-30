@@ -215,7 +215,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('Скопіюйте посилання на сторінку студії', false)
             ->assertSee('Як налаштувати вигляд сторінки студії', false)
             ->assertSee('слоган студії', false)
-            ->assertSee('Instagram, Telegram, Viber, WhatsApp і до двох телефонних посилань', false)
+            ->assertSee('Телефон вводиться як звичайний номер', false)
             ->assertSee('Є питання - звʼяжіться з назвою студії', false)
             ->assertSee('Google Maps embed URL', false)
             ->assertSee('assets/help/screenshots/public-studio-page.png', false)
