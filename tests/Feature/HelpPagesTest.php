@@ -128,7 +128,8 @@ class HelpPagesTest extends TestCase
             ->assertSee('Подивитися приклад', false)
             ->assertSee('name, phone, email', false)
             ->assertSee('Телефон порівнюється за цифрами', false)
-            ->assertSee('Вже існує', false)
+            ->assertSee('скільки оновлено', false)
+            ->assertSee('Порожній телефон або email у файлі не стирає наявний контакт', false)
             ->assertSee('assets/help/screenshots/customer-import.png', false)
             ->assertDontSee('tenant', false)
             ->assertDontSee('endpoint', false);

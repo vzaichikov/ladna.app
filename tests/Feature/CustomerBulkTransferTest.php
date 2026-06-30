@@ -72,15 +72,15 @@ class CustomerBulkTransferTest extends TestCase
         $this->assertSame('+38(063)123-12-12', $rows[1][1]);
     }
 
-    public function test_xlsx_import_creates_new_customers_and_reports_weird_rows(): void
+    public function test_xlsx_import_creates_and_updates_customers_and_reports_weird_rows(): void
     {
         [$owner, $account] = $this->accountWithOwner();
-        Customer::factory()->for($account)->create([
+        $storedPhone = Customer::factory()->for($account)->create([
             'name' => 'Stored Phone',
             'phone' => '+38(063)123-12-12',
             'email' => 'stored-phone@example.com',
         ]);
-        Customer::factory()->for($account)->create([
+        $storedEmail = Customer::factory()->for($account)->create([
             'name' => 'Stored Email',
             'phone' => '+380991111111',
             'email' => 'existing@example.com',
@@ -102,10 +102,10 @@ class CustomerBulkTransferTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('summary.total_rows', 7)
             ->assertJsonPath('summary.inserted', 2)
-            ->assertJsonPath('summary.already_found', 2)
+            ->assertJsonPath('summary.updated', 2)
             ->assertJsonPath('summary.skipped', 3)
-            ->assertJsonFragment(['status' => 'already_found', 'reason' => 'phone'])
-            ->assertJsonFragment(['status' => 'already_found', 'reason' => 'email'])
+            ->assertJsonFragment(['status' => 'updated', 'reason' => 'phone'])
+            ->assertJsonFragment(['status' => 'updated', 'reason' => 'email'])
             ->assertJsonFragment(['status' => 'skipped', 'reason' => 'phone_not_numeric'])
             ->assertJsonFragment(['status' => 'skipped', 'reason' => 'invalid_email'])
             ->assertJsonFragment(['status' => 'skipped', 'reason' => 'missing_contact']);
@@ -118,7 +118,16 @@ class CustomerBulkTransferTest extends TestCase
         $this->assertSame($account->default_language, $newCustomer->default_language);
         $this->assertSame('Email Only', $emailOnlyCustomer->name);
         $this->assertNull($emailOnlyCustomer->phone);
-        $this->assertSame(1, Customer::whereBelongsTo($account)->where('email', 'existing@example.com')->count());
+
+        $storedPhone->refresh();
+        $storedEmail->refresh();
+
+        $this->assertSame('Existing Phone', $storedPhone->name);
+        $this->assertSame('+380631231212', $storedPhone->phone);
+        $this->assertSame('phone-match@example.com', $storedPhone->email);
+        $this->assertSame('Existing Email', $storedEmail->name);
+        $this->assertSame('+380661111111', $storedEmail->phone);
+        $this->assertSame('existing@example.com', $storedEmail->email);
 
         $activityLog = AccountActivityLog::whereBelongsTo($account)
             ->where('route_name', 'dashboard.accounts.customers.import')
@@ -147,12 +156,93 @@ class CustomerBulkTransferTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('summary.inserted', 1)
-            ->assertJsonPath('summary.already_found', 0)
+            ->assertJsonPath('summary.updated', 0)
             ->assertJsonPath('summary.skipped', 0);
 
         $customer = Customer::whereBelongsTo($account)->where('email', 'same@example.com')->firstOrFail();
 
         $this->assertSame('+380501234567', $customer->phone);
+    }
+
+    public function test_import_does_not_merge_different_customers_when_phone_and_email_conflict(): void
+    {
+        [$owner, $account] = $this->accountWithOwner();
+        $phoneCustomer = Customer::factory()->for($account)->create([
+            'name' => 'Phone Owner',
+            'phone' => '+380501111111',
+            'email' => 'phone-owner@example.com',
+        ]);
+        $emailCustomer = Customer::factory()->for($account)->create([
+            'name' => 'Email Owner',
+            'phone' => '+380502222222',
+            'email' => 'email-owner@example.com',
+        ]);
+
+        $file = $this->uploadedCsv([
+            ['name', 'phone', 'email'],
+            ['Conflicting Person', '380501111111', 'email-owner@example.com'],
+        ]);
+
+        $response = $this->postImport($owner, $account, $file);
+
+        $response->assertOk()
+            ->assertJsonPath('summary.inserted', 0)
+            ->assertJsonPath('summary.updated', 0)
+            ->assertJsonPath('summary.skipped', 1)
+            ->assertJsonFragment(['status' => 'skipped', 'reason' => 'conflicting_match']);
+
+        $this->assertSame('Phone Owner', $phoneCustomer->refresh()->name);
+        $this->assertSame('phone-owner@example.com', $phoneCustomer->email);
+        $this->assertSame('Email Owner', $emailCustomer->refresh()->name);
+        $this->assertSame('+380502222222', $emailCustomer->phone);
+    }
+
+    public function test_import_updates_existing_customer_without_erasing_blank_contact_fields(): void
+    {
+        [$owner, $account] = $this->accountWithOwner();
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Old Name',
+            'phone' => '+380501111111',
+            'email' => 'existing@example.com',
+        ]);
+
+        $file = $this->uploadedCsv([
+            ['name', 'phone', 'email'],
+            ['Updated Name', '', 'existing@example.com'],
+        ]);
+
+        $response = $this->postImport($owner, $account, $file);
+
+        $response->assertOk()
+            ->assertJsonPath('summary.updated', 1)
+            ->assertJsonFragment(['status' => 'updated', 'reason' => 'email']);
+
+        $customer->refresh();
+
+        $this->assertSame('Updated Name', $customer->name);
+        $this->assertSame('+380501111111', $customer->phone);
+        $this->assertSame('existing@example.com', $customer->email);
+    }
+
+    public function test_import_header_validation_endpoint_alerts_without_importing(): void
+    {
+        [$owner, $account] = $this->accountWithOwner();
+        $file = $this->uploadedCsv([
+            ['full_name', 'phone', 'email'],
+            ['Wrong Header', '+380501234567', 'wrong@example.com'],
+        ]);
+
+        $response = $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customers.import.validate', $account), [
+                'file' => $file,
+            ], [
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ]);
+
+        $response->assertUnprocessable();
+        $this->assertArrayHasKey('file', $response->json('errors'));
+        $this->assertSame(0, Customer::whereBelongsTo($account)->where('email', 'wrong@example.com')->count());
     }
 
     public function test_import_rejects_wrong_headers(): void

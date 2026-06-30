@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Support\PhoneNumberNormalizer;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
@@ -23,7 +24,7 @@ class ImportCustomers
 
     /**
      * @return array{
-     *     summary: array{total_rows: int, inserted: int, already_found: int, skipped: int},
+     *     summary: array{total_rows: int, inserted: int, updated: int, skipped: int},
      *     rows: array<int, array<string, mixed>>
      * }
      *
@@ -31,43 +32,45 @@ class ImportCustomers
      */
     public function execute(Account $account, UploadedFile $file): array
     {
-        $rows = $this->readRows($file);
-        $header = array_shift($rows);
+        return DB::transaction(function () use ($account, $file): array {
+            $rows = $this->readRowsAfterValidHeader($file);
+            $lookups = $this->customerLookups($account);
+            $summary = [
+                'total_rows' => 0,
+                'inserted' => 0,
+                'updated' => 0,
+                'skipped' => 0,
+            ];
+            $results = [];
 
-        if (! $header || ! $this->validHeader($header['values'])) {
-            throw ValidationException::withMessages([
-                'file' => __('app.customer_import_invalid_header'),
-            ]);
-        }
+            foreach ($rows as $row) {
+                if ($this->rowIsBlank($row['values'])) {
+                    continue;
+                }
 
-        $lookups = $this->customerLookups($account);
-        $summary = [
-            'total_rows' => 0,
-            'inserted' => 0,
-            'already_found' => 0,
-            'skipped' => 0,
-        ];
-        $results = [];
-
-        foreach ($rows as $row) {
-            if ($this->rowIsBlank($row['values'])) {
-                continue;
+                $summary['total_rows']++;
+                $result = $this->importRow($account, $row['number'], $row['values'], $lookups);
+                $summary[$result['status']]++;
+                $results[] = $result;
             }
 
-            $summary['total_rows']++;
-            $result = $this->importRow($account, $row['number'], $row['values'], $lookups);
-            $summary[$result['status']]++;
-            $results[] = $result;
-        }
-
-        return [
-            'summary' => $summary,
-            'rows' => $results,
-        ];
+            return [
+                'summary' => $summary,
+                'rows' => $results,
+            ];
+        });
     }
 
     /**
-     * @param  array{emails: array<string, array<string, mixed>>, phones: array<string, array<string, mixed>>}  $lookups
+     * @throws ValidationException
+     */
+    public function validateFile(UploadedFile $file): void
+    {
+        $this->readRowsAfterValidHeader($file);
+    }
+
+    /**
+     * @param  array{emails: array<string, Customer>, phones: array<string, Customer>}  $lookups
      * @return array<string, mixed>
      */
     private function importRow(Account $account, int $rowNumber, array $values, array &$lookups): array
@@ -112,12 +115,25 @@ class ImportCustomers
             return $this->skippedRow($rowNumber, $values, 'missing_contact', name: $name);
         }
 
-        if ($phoneDigits && isset($lookups['phones'][$phoneDigits])) {
-            return $this->alreadyFoundRow($rowNumber, $name, $phone, $email, 'phone', $lookups['phones'][$phoneDigits]);
+        $phoneMatch = $phoneDigits ? ($lookups['phones'][$phoneDigits] ?? null) : null;
+        $emailMatch = $email !== '' ? ($lookups['emails'][$email] ?? null) : null;
+
+        if ($phoneMatch && $emailMatch && $phoneMatch->id !== $emailMatch->id) {
+            return $this->skippedRow($rowNumber, $values, 'conflicting_match', name: $name, email: $email, phone: $phone);
         }
 
-        if ($email !== '' && isset($lookups['emails'][$email])) {
-            return $this->alreadyFoundRow($rowNumber, $name, $phone, $email, 'email', $lookups['emails'][$email]);
+        $matchedCustomer = $phoneMatch ?? $emailMatch;
+
+        if ($matchedCustomer) {
+            return $this->updatedRow(
+                $rowNumber,
+                $name,
+                $phone,
+                $email,
+                $this->matchedBy($phoneMatch, $emailMatch),
+                $matchedCustomer,
+                $lookups,
+            );
         }
 
         try {
@@ -132,7 +148,7 @@ class ImportCustomers
                 throw $exception;
             }
 
-            return $this->alreadyFoundRow($rowNumber, $name, $phone, $email, 'database', null);
+            return $this->skippedRow($rowNumber, $values, 'conflicting_match', name: $name, email: $email, phone: $phone);
         }
 
         $this->addCustomerToLookups($lookups, $customer);
@@ -145,6 +161,25 @@ class ImportCustomers
             'email' => $email === '' ? null : $email,
             'message' => __('app.customer_import_row_inserted'),
         ];
+    }
+
+    /**
+     * @return array<int, array{number: int, values: array<int, string>}>
+     *
+     * @throws ValidationException
+     */
+    private function readRowsAfterValidHeader(UploadedFile $file): array
+    {
+        $rows = $this->readRows($file);
+        $header = array_shift($rows);
+
+        if (! $header || ! $this->validHeader($header['values'])) {
+            throw ValidationException::withMessages([
+                'file' => __('app.customer_import_invalid_header'),
+            ]);
+        }
+
+        return $rows;
     }
 
     /**
@@ -251,7 +286,7 @@ class ImportCustomers
     }
 
     /**
-     * @return array{emails: array<string, array<string, mixed>>, phones: array<string, array<string, mixed>>}
+     * @return array{emails: array<string, Customer>, phones: array<string, Customer>}
      */
     private function customerLookups(Account $account): array
     {
@@ -271,28 +306,19 @@ class ImportCustomers
     }
 
     /**
-     * @param  array{emails: array<string, array<string, mixed>>, phones: array<string, array<string, mixed>>}  $lookups
+     * @param  array{emails: array<string, Customer>, phones: array<string, Customer>}  $lookups
      */
-    private function addCustomerToLookups(array &$lookups, Customer $customer): array
+    private function addCustomerToLookups(array &$lookups, Customer $customer): void
     {
-        $payload = [
-            'id' => $customer->id,
-            'name' => $customer->name,
-            'email' => $customer->email,
-            'phone' => $customer->phone,
-        ];
-
         if (filled($customer->email)) {
-            $lookups['emails'][mb_strtolower($customer->email)] = $payload;
+            $lookups['emails'][mb_strtolower($customer->email)] = $customer;
         }
 
         $phoneDigits = $this->phoneDigits($customer->phone);
 
         if ($phoneDigits !== '') {
-            $lookups['phones'][$phoneDigits] = $payload;
+            $lookups['phones'][$phoneDigits] = $customer;
         }
-
-        return $lookups;
     }
 
     private function validHeader(array $values): bool
@@ -348,6 +374,88 @@ class ImportCustomers
     }
 
     /**
+     * @param  array{emails: array<string, Customer>, phones: array<string, Customer>}  $lookups
+     * @return array<string, mixed>
+     */
+    private function updatedRow(int $rowNumber, string $name, ?string $phone, string $email, string $matchedBy, Customer $customer, array &$lookups): array
+    {
+        $originalAttributes = $customer->only(['name', 'phone', 'email']);
+
+        $customer->name = $name;
+
+        if ($phone !== null) {
+            $customer->phone = $phone;
+        }
+
+        if ($email !== '') {
+            $customer->email = $email;
+        }
+
+        try {
+            $customer->save();
+        } catch (QueryException $exception) {
+            if (! $this->isUniqueConstraintException($exception)) {
+                throw $exception;
+            }
+
+            $customer->forceFill($originalAttributes);
+
+            return $this->skippedRow($rowNumber, [$name, $phone, $email], 'conflicting_match', name: $name, email: $email, phone: $phone);
+        }
+
+        $this->refreshCustomerLookups($lookups, $customer);
+
+        return [
+            'row' => $rowNumber,
+            'status' => 'updated',
+            'reason' => $matchedBy,
+            'name' => $customer->name,
+            'phone' => $customer->phone,
+            'email' => $customer->email,
+            'matched_customer' => $this->customerPayload($customer),
+            'message' => __('app.customer_import_row_updated'),
+        ];
+    }
+
+    /**
+     * @param  array{emails: array<string, Customer>, phones: array<string, Customer>}  $lookups
+     */
+    private function refreshCustomerLookups(array &$lookups, Customer $customer): void
+    {
+        foreach (['emails', 'phones'] as $group) {
+            foreach ($lookups[$group] as $key => $lookupCustomer) {
+                if ($lookupCustomer->id === $customer->id) {
+                    unset($lookups[$group][$key]);
+                }
+            }
+        }
+
+        $this->addCustomerToLookups($lookups, $customer);
+    }
+
+    private function matchedBy(?Customer $phoneMatch, ?Customer $emailMatch): string
+    {
+        if ($phoneMatch && $emailMatch) {
+            return 'phone_email';
+        }
+
+        return $phoneMatch ? 'phone' : 'email';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function customerPayload(Customer $customer): array
+    {
+        return [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function skippedRow(int $rowNumber, array $values, string $reason, ?string $name = null, ?string $email = null, ?string $phone = null): array
@@ -362,24 +470,6 @@ class ImportCustomers
             'phone' => $phone ?? $this->cellText($values[1]),
             'email' => ($email ?? mb_strtolower($this->cellText($values[2]))) ?: null,
             'message' => __('app.customer_import_reason_'.$reason),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>|null  $customer
-     * @return array<string, mixed>
-     */
-    private function alreadyFoundRow(int $rowNumber, string $name, ?string $phone, string $email, string $matchedBy, ?array $customer): array
-    {
-        return [
-            'row' => $rowNumber,
-            'status' => 'already_found',
-            'reason' => $matchedBy,
-            'name' => $name,
-            'phone' => $phone,
-            'email' => $email === '' ? null : $email,
-            'matched_customer' => $customer,
-            'message' => __('app.customer_import_row_already_found'),
         ];
     }
 

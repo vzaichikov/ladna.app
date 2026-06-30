@@ -338,6 +338,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.customers.export');
         Route::get('accounts/{account}/customers/import-example', [CustomerBulkTransferController::class, 'example'])
             ->name('accounts.customers.example');
+        Route::post('accounts/{account}/customers/import/validate', [CustomerBulkTransferController::class, 'validateImport'])
+            ->name('accounts.customers.import.validate');
         Route::post('accounts/{account}/customers/import', [CustomerBulkTransferController::class, 'import'])
             ->name('accounts.customers.import');
         Route::resource('accounts.customers', CustomerController::class)

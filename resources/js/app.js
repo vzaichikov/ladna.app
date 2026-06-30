@@ -2084,7 +2084,7 @@ function importStatusClasses(status) {
         return 'border-emerald-200 bg-emerald-50 text-emerald-700';
     }
 
-    if (status === 'already_found') {
+    if (status === 'updated') {
         return 'border-amber-200 bg-amber-50 text-amber-700';
     }
 
@@ -2096,8 +2096,8 @@ function importStatusLabel(form, status) {
         return form.dataset.insertedLabel || 'Inserted';
     }
 
-    if (status === 'already_found') {
-        return form.dataset.alreadyFoundLabel || 'Already found';
+    if (status === 'updated') {
+        return form.dataset.updatedLabel || 'Updated';
     }
 
     return form.dataset.skippedLabel || 'Skipped';
@@ -2224,10 +2224,12 @@ function selectedCustomerImportFile(input) {
     return input?.files?.[0] ?? null;
 }
 
-function setCustomerImportFile(form, file) {
+function setCustomerImportFile(form, file = null, options = {}) {
     const input = form.querySelector('[data-customer-import-input]');
     const fileName = form.querySelector('[data-customer-import-file-name]');
     const submit = form.querySelector('[data-customer-import-submit]');
+    const validate = options.validate ?? true;
+    const resetValidation = options.resetValidation ?? true;
 
     if (file && input) {
         const dataTransfer = new DataTransfer();
@@ -2244,15 +2246,110 @@ function setCustomerImportFile(form, file) {
         fileName.classList.toggle('hidden', !selectedFile);
     }
 
-    if (submit) {
-        submit.disabled = !selectedFile;
+    if (resetValidation) {
+        form.dataset.customerImportHeaderValid = 'false';
+        setCustomerImportError(form);
+        setCustomerImportProgress(form, false);
+        resetCustomerImportResults(form);
     }
+
+    if (submit) {
+        submit.disabled = !selectedFile || form.dataset.customerImportHeaderValid !== 'true';
+    }
+
+    if (selectedFile && validate) {
+        validateCustomerImportFile(form);
+    }
+}
+
+function customerImportValidationMessage(form, payload) {
+    return payload.errors?.file?.[0] || payload.message || form.dataset.failed || 'Could not import this file.';
+}
+
+function validateCustomerImportFile(form) {
+    const file = selectedCustomerImportFile(form.querySelector('[data-customer-import-input]'));
+    const submit = form.querySelector('[data-customer-import-submit]');
+
+    if (!file || !form.dataset.validateAction) {
+        return;
+    }
+
+    form.dataset.customerImportHeaderValid = 'false';
+    form.dataset.customerImportValidationToken = String(Date.now());
+    const validationToken = form.dataset.customerImportValidationToken;
+
+    if (submit) {
+        submit.disabled = true;
+    }
+
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    const csrfToken = form.querySelector('input[name="_token"]')?.value;
+
+    formData.append('file', file);
+
+    if (csrfToken) {
+        formData.append('_token', csrfToken);
+    }
+
+    setCustomerImportError(form);
+    setCustomerImportProgress(form, true, 0, form.dataset.validating || 'Checking columns...');
+
+    xhr.upload.addEventListener('progress', (event) => {
+        if (!event.lengthComputable) {
+            return;
+        }
+
+        setCustomerImportProgress(form, true, Math.min(95, (event.loaded / event.total) * 100), form.dataset.validating || 'Checking columns...');
+    });
+
+    xhr.addEventListener('load', () => {
+        if (form.dataset.customerImportValidationToken !== validationToken) {
+            return;
+        }
+
+        let payload = {};
+
+        try {
+            payload = JSON.parse(xhr.responseText || '{}');
+        } catch {
+            payload = {};
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+            form.dataset.customerImportHeaderValid = 'true';
+            setCustomerImportProgress(form, false);
+
+            if (submit) {
+                submit.disabled = false;
+            }
+
+            return;
+        }
+
+        setCustomerImportError(form, customerImportValidationMessage(form, payload));
+        setCustomerImportProgress(form, false);
+    });
+
+    xhr.addEventListener('error', () => {
+        if (form.dataset.customerImportValidationToken !== validationToken) {
+            return;
+        }
+
+        setCustomerImportError(form, form.dataset.failed || 'Could not import this file.');
+        setCustomerImportProgress(form, false);
+    });
+
+    xhr.open('POST', form.dataset.validateAction);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.send(formData);
 }
 
 function submitCustomerImportForm(form) {
     const file = selectedCustomerImportFile(form.querySelector('[data-customer-import-input]'));
 
-    if (!file) {
+    if (!file || form.dataset.customerImportHeaderValid !== 'true') {
         return;
     }
 
@@ -2300,7 +2397,7 @@ function submitCustomerImportForm(form) {
 
     xhr.addEventListener('loadend', () => {
         setFormDisabled(form, false);
-        setCustomerImportFile(form);
+        setCustomerImportFile(form, null, { validate: false, resetValidation: false });
     });
 
     xhr.open(form.method.toUpperCase(), form.action);
@@ -2361,7 +2458,7 @@ function initCustomerTransferModals() {
         const browse = form.querySelector('[data-customer-import-browse]');
 
         form.dataset.customerImportReady = 'true';
-        setCustomerImportFile(form);
+        setCustomerImportFile(form, null, { validate: false, resetValidation: false });
         resetCustomerImportResults(form);
 
         browse?.addEventListener('click', () => input?.click());

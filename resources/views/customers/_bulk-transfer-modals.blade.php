@@ -66,13 +66,15 @@
             enctype="multipart/form-data"
             class="flex min-h-0 flex-1 flex-col"
             data-customer-import-form
+            data-validate-action="{{ route('dashboard.accounts.customers.import.validate', $account) }}"
             data-file-ready-template="{{ __('app.customer_import_file_ready', ['name' => '__name__']) }}"
             data-uploading="{{ __('app.customer_import_uploading') }}"
+            data-validating="{{ __('app.customer_import_validating') }}"
             data-processing="{{ __('app.customer_import_processing') }}"
             data-failed="{{ __('app.customer_import_upload_failed') }}"
             data-empty="{{ __('app.customer_import_empty_results') }}"
             data-inserted-label="{{ __('app.customer_import_inserted') }}"
-            data-already-found-label="{{ __('app.customer_import_already_found') }}"
+            data-updated-label="{{ __('app.customer_import_updated') }}"
             data-skipped-label="{{ __('app.customer_import_skipped') }}"
         >
             @csrf
@@ -136,8 +138,8 @@
                                 <div class="text-lg font-semibold text-emerald-900" data-customer-import-summary="inserted">0</div>
                             </div>
                             <div class="rounded-lg bg-amber-50 px-3 py-2">
-                                <div class="text-xs font-semibold text-amber-700">{{ __('app.customer_import_already_found') }}</div>
-                                <div class="text-lg font-semibold text-amber-900" data-customer-import-summary="already_found">0</div>
+                                <div class="text-xs font-semibold text-amber-700">{{ __('app.customer_import_updated') }}</div>
+                                <div class="text-lg font-semibold text-amber-900" data-customer-import-summary="updated">0</div>
                             </div>
                             <div class="rounded-lg bg-rose-50 px-3 py-2">
                                 <div class="text-xs font-semibold text-rose-700">{{ __('app.customer_import_skipped') }}</div>

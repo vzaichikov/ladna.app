@@ -37,4 +37,18 @@ class CustomerBulkTransferController extends Controller
             ], $exception->status);
         }
     }
+
+    public function validateImport(ImportCustomersRequest $request, Account $account, ImportCustomers $importCustomers): JsonResponse
+    {
+        try {
+            $importCustomers->validateFile($request->file('file'));
+
+            return response()->json(['valid' => true]);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'errors' => $exception->errors(),
+            ], $exception->status);
+        }
+    }
 }

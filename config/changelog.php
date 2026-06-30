@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.55.0',
+                'date' => '2026-06-30',
+                'title' => 'Customer import updates',
+                'items' => ['Improved customer bulk import so files with incorrect name, phone, and email columns show an alert before importing, and existing customers found by phone or email are updated from the file instead of skipped. Updated owner help for the revised import flow.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.54.0',
                 'date' => '2026-06-30',
                 'title' => 'Public studio landing pages',
@@ -492,6 +499,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.55.0',
+                'date' => '2026-06-30',
+                'title' => 'Оновлення імпорту клієнтів',
+                'items' => ['Покращено масовий імпорт клієнтів: якщо у файлі неправильні колонки name, phone і email, Ladna показує попередження до імпорту, а знайдені за телефоном або email клієнти оновлюються з файлу замість пропуску. Оновлено допомогу для власниць щодо нового сценарію імпорту.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.54.0',
                 'date' => '2026-06-30',
