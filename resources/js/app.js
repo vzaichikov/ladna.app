@@ -2934,6 +2934,111 @@ function initAssistantChat() {
     });
 }
 
+function initAppUpdatePrompt() {
+    const prompt = document.querySelector('[data-app-update]');
+
+    if (!prompt) {
+        return;
+    }
+
+    const versionUrl = prompt.dataset.versionUrl;
+    const currentRevision = prompt.dataset.currentRevision;
+    const serviceWorkerUrl = prompt.dataset.serviceWorkerUrl;
+    const reloadButton = prompt.querySelector('[data-app-update-reload]');
+    const pollIntervalMs = 5 * 60 * 1000;
+    let pendingServiceWorker = null;
+    let reloading = false;
+
+    const showPrompt = () => {
+        prompt.classList.remove('hidden');
+    };
+
+    const reloadPage = () => {
+        if (reloading) {
+            return;
+        }
+
+        reloading = true;
+
+        if (reloadButton) {
+            reloadButton.disabled = true;
+        }
+
+        if (pendingServiceWorker) {
+            pendingServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+            window.setTimeout(() => window.location.reload(), 700);
+
+            return;
+        }
+
+        window.location.reload();
+    };
+
+    const checkVersion = () => {
+        if (!versionUrl || !currentRevision) {
+            return Promise.resolve();
+        }
+
+        return fetch(versionUrl, {
+            cache: 'no-store',
+            headers: {
+                Accept: 'application/json',
+            },
+        })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((payload) => {
+                if (payload?.revision && payload.revision !== currentRevision) {
+                    showPrompt();
+                }
+            })
+            .catch(() => {});
+    };
+
+    reloadButton?.addEventListener('click', reloadPage);
+
+    checkVersion();
+    window.setInterval(checkVersion, pollIntervalMs);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            checkVersion();
+        }
+    });
+
+    if (!('serviceWorker' in navigator) || !serviceWorkerUrl || !window.isSecureContext) {
+        return;
+    }
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading) {
+            window.location.reload();
+
+            return;
+        }
+
+        showPrompt();
+    });
+
+    navigator.serviceWorker.register(serviceWorkerUrl)
+        .then((registration) => {
+            if (registration.waiting && navigator.serviceWorker.controller) {
+                pendingServiceWorker = registration.waiting;
+                showPrompt();
+            }
+
+            registration.addEventListener('updatefound', () => {
+                const installingWorker = registration.installing;
+
+                installingWorker?.addEventListener('statechange', () => {
+                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        pendingServiceWorker = installingWorker;
+                        showPrompt();
+                    }
+                });
+            });
+        })
+        .catch(() => {});
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
     initSlugAutofill();
@@ -2955,6 +3060,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCopyButtons();
     initActiveScrollTargets();
     initAssistantChat();
+    initAppUpdatePrompt();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {
         window.history.replaceState({ publicSchedule: true }, '', window.location.href);

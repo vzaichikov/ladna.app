@@ -247,6 +247,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>@yield('title', __('app.app_name'))</title>
         <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+        <link rel="manifest" href="{{ route('pwa.manifest') }}">
+        <link rel="apple-touch-icon" href="{{ asset('pwa/apple-touch-icon.png') }}">
+        <meta name="theme-color" content="#3B223F">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-title" content="{{ __('app.app_name') }}">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link rel="stylesheet" href="{{ $systemAppearance['google_fonts_url'] }}">
@@ -477,6 +482,8 @@
                 <x-ui.app-footer :version="$applicationVersion" />
             </div>
         </div>
+
+        <x-ui.update-reload-toast :revision="$applicationRevision" desktop-offset />
 
         @if ($showAssistantWidget)
             <div
