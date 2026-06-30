@@ -60,7 +60,8 @@ class AppServiceProvider extends ServiceProvider
         View::composer(['layouts.app', 'layouts.public'], function (ViewInstance $view): void {
             $view
                 ->with('systemAppearance', SystemAppearance::current())
-                ->with('applicationVersion', ApplicationVersion::current());
+                ->with('applicationVersion', ApplicationVersion::current())
+                ->with('applicationRevision', ApplicationVersion::revision());
         });
 
         RateLimiter::for('login', function (Request $request): Limit {

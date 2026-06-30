@@ -48,6 +48,7 @@ use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\PublicStudioLandingController;
 use App\Http\Controllers\PublicStudioRulesController;
+use App\Http\Controllers\PwaController;
 use App\Http\Controllers\QuickBookingController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\ScheduledClassCancellationController;
@@ -64,13 +65,17 @@ use App\Http\Middleware\EnsureCustomerProfileIsComplete;
 use App\Http\Middleware\EnsurePublicSubscriptionIsActive;
 use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Http\Middleware\RecordAccountActivity;
+use App\Http\Middleware\SetLocale;
 use App\Models\Account;
 use App\Support\SaasBilling\SaasBillingPlans;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Illuminate\View\View;
 
 $landingPlans = static function (): array {
@@ -113,6 +118,13 @@ Route::get('/privacy.en.html', [LegalPageController::class, 'privacyEnglish'])->
 Route::get('/privacy.ua.html', [LegalPageController::class, 'privacyUkrainian'])->name('privacy.ua');
 Route::get('/api-docs', [ApiDocumentationController::class, 'show'])->name('api-docs.show');
 Route::get('/api-docs/openapi.json', [ApiDocumentationController::class, 'openApi'])->name('api-docs.openapi');
+Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class, SetLocale::class])
+    ->group(function (): void {
+        Route::get('/app-version.json', [PwaController::class, 'version'])->name('pwa.version');
+        Route::get('/manifest.webmanifest', [PwaController::class, 'manifest'])->name('pwa.manifest');
+        Route::get('/offline.html', [PwaController::class, 'offline'])->name('pwa.offline');
+        Route::get('/service-worker', [PwaController::class, 'serviceWorker'])->name('pwa.service-worker');
+    });
 Route::get('/help', [HelpController::class, 'index'])->name('help.index');
 Route::get('/help/{slug}', [HelpController::class, 'show'])
     ->where('slug', '[A-Za-z0-9-]+')

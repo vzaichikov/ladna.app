@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.56.0',
+                'date' => '2026-06-30',
+                'title' => 'PWA install and update prompt',
+                'items' => ['Added install-ready Ladna PWA metadata, branded app screenshots, a minimal offline page, Google Fonts caching, and a reload prompt that appears when an open tab is using an older interface after a deploy.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.55.0',
                 'date' => '2026-06-30',
                 'title' => 'Customer import updates',
@@ -499,6 +506,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.56.0',
+                'date' => '2026-06-30',
+                'title' => 'PWA-встановлення та підказка оновлення',
+                'items' => ['Додано метадані Ladna для встановлення як застосунку, брендовані скріншоти, мінімальну offline-сторінку, кешування Google Fonts та підказку перезавантаження, коли відкрита вкладка працює зі старим інтерфейсом після deploy.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.55.0',
                 'date' => '2026-06-30',
