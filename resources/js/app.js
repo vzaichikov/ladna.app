@@ -2948,6 +2948,7 @@ function initAppUpdatePrompt() {
     const pollIntervalMs = 5 * 60 * 1000;
     let pendingServiceWorker = null;
     let reloading = false;
+    let hadServiceWorkerController = Boolean(navigator.serviceWorker?.controller);
 
     const showPrompt = () => {
         prompt.classList.remove('hidden');
@@ -3015,7 +3016,11 @@ function initAppUpdatePrompt() {
             return;
         }
 
-        showPrompt();
+        if (hadServiceWorkerController) {
+            showPrompt();
+        }
+
+        hadServiceWorkerController = true;
     });
 
     navigator.serviceWorker.register(serviceWorkerUrl)

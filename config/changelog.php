@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.56.1',
+                'date' => '2026-06-30',
+                'title' => 'PWA update prompt fix',
+                'items' => ['Fixed the new reload prompt so it does not appear during first-time app setup when the page is already current.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.56.0',
                 'date' => '2026-06-30',
                 'title' => 'PWA install and update prompt',
@@ -506,6 +513,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.56.1',
+                'date' => '2026-06-30',
+                'title' => 'Виправлення підказки оновлення PWA',
+                'items' => ['Виправлено нову підказку перезавантаження: вона більше не зʼявляється під час першого налаштування застосунку, якщо сторінка вже актуальна.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.56.0',
                 'date' => '2026-06-30',
