@@ -43,6 +43,7 @@ use App\Http\Controllers\Platform\ScheduledTaskController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SystemSettingsController;
 use App\Http\Controllers\Platform\TelegramSupportController as PlatformTelegramSupportController;
+use App\Http\Controllers\PublicBookingController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicDemoSignupController;
 use App\Http\Controllers\PublicPriceController;
@@ -421,6 +422,12 @@ Route::get('/{accountSlug}/{locationSlug}/schedule', [PublicScheduleController::
 Route::get('/{accountSlug}/{locationSlug}/schedule/embed', [PublicScheduleController::class, 'embed'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.schedule.embed');
+Route::get('/{accountSlug}/{locationSlug}/schedule/book', [PublicBookingController::class, 'show'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->name('public.booking.show');
+Route::post('/{accountSlug}/{locationSlug}/schedule/book', [PublicBookingController::class, 'store'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:public-booking'])
+    ->name('public.booking.store');
 Route::get('/{accountSlug}/{locationSlug}/price', [PublicPriceController::class, 'show'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.price');

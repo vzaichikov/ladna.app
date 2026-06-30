@@ -42,6 +42,12 @@
             {{ __('app.class_pass_rules') }}
         </a>
         <a
+            href="{{ route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'schedule_view']) }}"
+            class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'schedule_view' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
+        >
+            {{ __('app.public_schedule_view') }}
+        </a>
+        <a
             href="{{ route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'qr']) }}"
             class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'qr' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
         >
@@ -363,6 +369,18 @@
             @method('PUT')
 
             @include('accounts.class-pass-cancellation-rules-fields')
+
+            <x-ui.button type="submit">
+                <x-ui.icon name="edit" class="h-4 w-4" />
+                {{ __('app.save') }}
+            </x-ui.button>
+        </form>
+    @elseif ($activeTab === 'schedule_view')
+        <form method="POST" action="{{ route('dashboard.accounts.update', [$account, 'tab' => 'schedule_view']) }}" class="mt-6 max-w-4xl space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
+            @csrf
+            @method('PUT')
+
+            @include('accounts.schedule-view-fields')
 
             <x-ui.button type="submit">
                 <x-ui.icon name="edit" class="h-4 w-4" />
