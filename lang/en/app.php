@@ -4,6 +4,31 @@ return [
     'app_name' => 'Ladna',
     'app_tagline' => 'Bring your studio into order',
     'auth_intro' => 'Log in to manage schedules, passes, customers, and classes.',
+    'error_pages' => [
+        'status' => 'Error :status',
+        'home' => 'Back to home',
+        '403' => [
+            'eyebrow' => 'Access forbidden',
+            'title' => 'This area is protected',
+            'lead' => 'You do not have access to this page. Check the account you are using, or ask the studio owner to invite you.',
+            'hint' => 'If you reached this from a saved link, log in with the correct account and try again.',
+            'image_alt' => 'Ladna mascot holding a stop sign to block access',
+        ],
+        '404' => [
+            'eyebrow' => 'Page not found',
+            'title' => 'We could not find that page',
+            'lead' => 'The link may be old, moved, or typed with a mistake. Ladna looked through the schedule and nothing matched.',
+            'hint' => 'Return to the main page and continue from the current studio links.',
+            'image_alt' => 'Ladna mascot searching for a missing page with a magnifying glass',
+        ],
+        '500' => [
+            'eyebrow' => 'Server error',
+            'title' => 'Something needs a quick repair',
+            'lead' => 'The server ran into a problem while opening this page. You can try again in a moment.',
+            'hint' => 'If this keeps happening, send the page link to support so we can inspect it.',
+            'image_alt' => 'Ladna mascot repairing a dashboard panel',
+        ],
+    ],
     'landing' => [
         'nav_schedule' => 'Schedule',
         'nav_passes' => 'Passes',

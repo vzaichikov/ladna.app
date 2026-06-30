@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.57.0',
+                'date' => '2026-06-30',
+                'title' => 'Branded error pages',
+                'items' => ['Added Ladna-branded 403, 404, and 500 error pages with localized text and new mascot illustrations for forbidden access, missing pages, and server repairs.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.56.1',
                 'date' => '2026-06-30',
                 'title' => 'PWA update prompt fix',
@@ -513,6 +520,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.57.0',
+                'date' => '2026-06-30',
+                'title' => 'Брендовані сторінки помилок',
+                'items' => ['Додано брендовані сторінки помилок 403, 404 і 500 з локалізованим текстом та новими ілюстраціями маскота для забороненого доступу, загубленої сторінки й ремонту сервера.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.56.1',
                 'date' => '2026-06-30',

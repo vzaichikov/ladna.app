@@ -134,6 +134,9 @@ Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::get('/en/login', [LoginController::class, 'createEnglish'])->name('login.en');
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
+    Route::any('/register', function (): void {
+        abort(404);
+    });
     Route::get('/demo', [PublicDemoSignupController::class, 'create'])->name('demo.signup.create');
     Route::post('/demo', [PublicDemoSignupController::class, 'store'])->middleware('throttle:demo-signup')->name('demo.signup.store');
 });
