@@ -252,6 +252,10 @@ class TelegramWebhookManager
                 'command' => 'book',
                 'description' => __('app.telegram_command_book_description'),
             ],
+            [
+                'command' => 'restart',
+                'description' => __('app.telegram_command_restart_description'),
+            ],
         ];
     }
 }

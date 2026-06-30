@@ -169,7 +169,7 @@ class TelegramContactAuthorizer
             })
             ->filter();
 
-        return $memberships
+        return collect($memberships->all())
             ->merge($trainerMemberships)
             ->sortBy([
                 ['account_id', 'asc'],

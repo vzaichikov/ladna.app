@@ -42,6 +42,7 @@ use App\Http\Controllers\Platform\ProfileController as PlatformProfileController
 use App\Http\Controllers\Platform\ScheduledTaskController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SystemSettingsController;
+use App\Http\Controllers\Platform\TelegramSupportController as PlatformTelegramSupportController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicDemoSignupController;
 use App\Http\Controllers\PublicPriceController;
@@ -198,6 +199,9 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::get('settings/owner-telegram-bot/webhook-status', [PlatformOwnerTelegramWebhookController::class, 'show'])->name('settings.owner-telegram-bot.webhook-status');
         Route::post('settings/owner-telegram-bot/register-webhook', [PlatformOwnerTelegramWebhookController::class, 'store'])->name('settings.owner-telegram-bot.register-webhook');
         Route::delete('settings/owner-telegram-bot/webhook', [PlatformOwnerTelegramWebhookController::class, 'destroy'])->name('settings.owner-telegram-bot.delete-webhook');
+        Route::get('telegram-support', [PlatformTelegramSupportController::class, 'index'])->name('telegram-support.index');
+        Route::post('telegram-support/authorizations/{telegramAuthorization}/reset', [PlatformTelegramSupportController::class, 'reset'])->name('telegram-support.authorizations.reset');
+        Route::delete('telegram-support/authorizations/{telegramAuthorization}', [PlatformTelegramSupportController::class, 'revoke'])->name('telegram-support.authorizations.revoke');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::get('scheduled-tasks', ScheduledTaskController::class)->name('scheduled-tasks.index');

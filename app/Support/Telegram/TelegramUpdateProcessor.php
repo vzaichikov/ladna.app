@@ -32,6 +32,7 @@ class TelegramUpdateProcessor
         private readonly TelegramOwnerResponder $ownerResponder,
         private readonly StudioAssistantActionPlanner $actionPlanner,
         private readonly StudioAssistantActionExecutor $actionExecutor,
+        private readonly TelegramConversationResetter $conversationResetter,
     ) {}
 
     public function process(int $telegramUpdateId): void
@@ -102,6 +103,13 @@ class TelegramUpdateProcessor
         $authorization = $this->resolveAuthorizedTrainer($authorization);
 
         $telegramUpdate->update(['account_id' => $authorization->account_id]);
+
+        if ($data === 'tg_restart') {
+            $this->conversationResetter->reset($authorization);
+            $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_conversation_restarted'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+
+            return true;
+        }
 
         if (preg_match('/^tg_follow:(\d+):(\d+)$/', $data, $matches) === 1) {
             return $this->processFollowUpCallback($telegramUpdate, $authorization, $chatId, (int) $matches[1], (int) $matches[2], $callbackQuery);
@@ -232,6 +240,14 @@ class TelegramUpdateProcessor
     private function processAuthorizedOwnerText(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, TelegramMessage $inboundMessage, string $chatId, string $text): bool
     {
         $account = $authorization->account;
+
+        if ($this->isRestartShortcut($text)) {
+            $this->conversationResetter->reset($authorization);
+            $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_conversation_restarted'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+
+            return true;
+        }
+
         $this->sendTyping($telegramUpdate, $chatId);
         $conversation = $this->conversationFor($authorization);
         $conversation->messages()->create([
@@ -455,6 +471,14 @@ class TelegramUpdateProcessor
 
         return $normalized === Str::of(__('app.telegram_quick_action_create_booking'))->lower()->squish()->toString()
             || preg_match('/^\/book(?:@\w+)?(?:\s|$)/u', $normalized) === 1;
+    }
+
+    private function isRestartShortcut(string $text): bool
+    {
+        $normalized = Str::of($text)->lower()->squish()->toString();
+
+        return preg_match('/^\/(?:start|restart)(?:@\w+)?(?:\s|$)/u', $normalized) === 1
+            || in_array($normalized, ['restart', 'start over', 'reset', 'почати спочатку', 'почнемо спочатку', 'давай почнемо спочатку', 'спочатку', 'перезапусти', 'перезапустити', 'начать сначала', 'давай начнем сначала', 'заново'], true);
     }
 
     private function resolveAuthorizedTrainer(TelegramChatAuthorization $authorization): TelegramChatAuthorization

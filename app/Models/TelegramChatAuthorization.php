@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['account_id', 'telegram_bot_installation_id', 'user_id', 'trainer_id', 'profile', 'telegram_chat_id', 'telegram_user_id', 'telegram_username', 'phone', 'status', 'authorized_at', 'revoked_at'])]
 class TelegramChatAuthorization extends Model
@@ -45,5 +46,10 @@ class TelegramChatAuthorization extends Model
     public function trainer(): BelongsTo
     {
         return $this->belongsTo(Trainer::class);
+    }
+
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
     }
 }

@@ -5,11 +5,16 @@ namespace Tests\Feature;
 use App\Enums\AiProvider;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
+use App\Models\AiConversation;
+use App\Models\AiPendingAction;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\SubscriptionPlan;
 use App\Models\SystemSetting;
 use App\Models\TelegramBotInstallation;
+use App\Models\TelegramChatAuthorization;
+use App\Models\TelegramMessage;
+use App\Models\TelegramUpdate;
 use App\Models\User;
 use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
@@ -231,6 +236,9 @@ class PlatformAdminTest extends TestCase
             && $request['commands'] === [[
                 'command' => 'book',
                 'description' => __('app.telegram_command_book_description'),
+            ], [
+                'command' => 'restart',
+                'description' => __('app.telegram_command_restart_description'),
             ]]);
     }
 
@@ -368,6 +376,109 @@ class PlatformAdminTest extends TestCase
             ->assertJsonPath('status.local.status', 'webhook_failed');
 
         $this->assertSame('webhook_failed', $installation->fresh()->status);
+    }
+
+    public function test_platform_admin_can_view_paginated_telegram_support_page(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $account = Account::factory()->create(['name' => 'Telegram Studio', 'slug' => 'telegram-studio']);
+        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+            'bot_username' => 'ladna_owner_bot',
+        ]);
+
+        foreach (range(1, 16) as $index) {
+            $linkedUser = User::factory()->create([
+                'name' => 'Linked Owner '.$index,
+                'phone' => '+3806711122'.str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+            ]);
+
+            TelegramChatAuthorization::factory()->for($account)->for($linkedUser, 'user')->create([
+                'telegram_bot_installation_id' => $installation->id,
+                'telegram_chat_id' => '700'.$index,
+                'telegram_user_id' => '900'.$index,
+                'telegram_username' => 'linked_owner_'.$index,
+                'phone' => $linkedUser->phone,
+            ]);
+        }
+
+        $authorization = TelegramChatAuthorization::where('telegram_username', 'linked_owner_1')->firstOrFail();
+
+        foreach (range(1, 26) as $index) {
+            TelegramMessage::factory()->for($account)->create([
+                'telegram_bot_installation_id' => $installation->id,
+                'telegram_chat_authorization_id' => $authorization->id,
+                'telegram_chat_id' => $authorization->telegram_chat_id,
+                'direction' => $index % 2 === 0 ? 'outbound' : 'inbound',
+                'text' => 'Support log '.$index,
+                'sent_at' => now()->subMinutes($index),
+            ]);
+        }
+
+        foreach (range(1, 16) as $index) {
+            TelegramUpdate::factory()->for($account)->create([
+                'telegram_bot_installation_id' => $installation->id,
+                'update_id' => 500000 + $index,
+                'status' => 'failed',
+                'error_message' => 'Support error '.$index,
+                'received_at' => now()->subMinutes($index),
+            ]);
+        }
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.telegram-support.index'))
+            ->assertOk()
+            ->assertSee(__('app.telegram_linked_users'))
+            ->assertSee('Linked Owner 1')
+            ->assertSee('Support log 1')
+            ->assertSee('Support error 1')
+            ->assertSee('authorizations_page=2', false)
+            ->assertSee('messages_page=2', false)
+            ->assertSee('updates_page=2', false);
+    }
+
+    public function test_platform_admin_can_restart_and_unlink_telegram_user(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $account = Account::factory()->create();
+        $installation = TelegramBotInstallation::factory()->platformOwner()->create();
+        $linkedUser = User::factory()->create();
+        $authorization = TelegramChatAuthorization::factory()->for($account)->for($linkedUser, 'user')->create([
+            'telegram_bot_installation_id' => $installation->id,
+        ]);
+        $conversation = AiConversation::factory()->for($account)->create([
+            'telegram_chat_authorization_id' => $authorization->id,
+            'user_id' => $linkedUser->id,
+            'channel' => 'telegram_owner',
+            'status' => AiConversation::StatusActive,
+        ]);
+        $action = AiPendingAction::factory()->for($account)->for($conversation, 'conversation')->for($linkedUser, 'user')->create([
+            'status' => AiPendingAction::StatusPending,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->post(route('platform.telegram-support.authorizations.reset', $authorization))
+            ->assertRedirect()
+            ->assertSessionHas('status', __('app.telegram_support_conversation_reset'));
+
+        $this->assertSame(AiConversation::StatusCleared, $conversation->fresh()->status);
+        $this->assertSame(AiPendingAction::StatusCancelled, $action->fresh()->status);
+        $this->assertSame('authorized', $authorization->fresh()->status->value);
+
+        $newConversation = AiConversation::factory()->for($account)->create([
+            'telegram_chat_authorization_id' => $authorization->id,
+            'user_id' => $linkedUser->id,
+            'channel' => 'telegram_owner',
+            'status' => AiConversation::StatusActive,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->delete(route('platform.telegram-support.authorizations.revoke', $authorization))
+            ->assertRedirect()
+            ->assertSessionHas('status', __('app.telegram_support_authorization_revoked'));
+
+        $this->assertSame(AiConversation::StatusCleared, $newConversation->fresh()->status);
+        $this->assertSame('revoked', $authorization->fresh()->status->value);
+        $this->assertNotNull($authorization->fresh()->revoked_at);
     }
 
     public function test_platform_admin_can_lazy_load_saved_provider_models(): void

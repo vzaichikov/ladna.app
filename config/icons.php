@@ -37,6 +37,7 @@ return [
         'snowflake' => 'snowflake',
         'sparkles' => 'sparkles',
         'sun' => 'sun',
+        'telegram' => 'send',
         'trash' => 'trash-2',
         'trainer-levels' => 'medal',
         'trainers' => 'user-round',

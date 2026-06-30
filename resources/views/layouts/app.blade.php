@@ -229,6 +229,12 @@
             'active' => request()->routeIs('platform.integrations.*'),
         ],
         [
+            'label' => __('app.telegram_support'),
+            'icon' => 'telegram',
+            'href' => route('platform.telegram-support.index'),
+            'active' => request()->routeIs('platform.telegram-support.*'),
+        ],
+        [
             'label' => __('app.scheduled_tasks'),
             'icon' => 'scheduled-tasks',
             'href' => route('platform.scheduled-tasks.index'),
