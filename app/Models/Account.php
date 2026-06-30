@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\AccountRole;
 use App\Enums\AccountStatus;
+use App\Enums\PublicScheduleView;
 use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
 use App\Support\ScheduleKindRegistry;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -32,6 +33,8 @@ class Account extends Model
         'default_language' => 'uk',
         'country_code' => 'UA',
         'default_currency' => 'UAH',
+        'public_schedule_view' => 'classic',
+        'allow_guest_public_booking' => false,
     ];
 
     /**
@@ -45,6 +48,7 @@ class Account extends Model
             'schedule_kind_colors' => 'array',
             'opening_hours' => 'array',
             'class_pass_cancellation_rules' => 'array',
+            'allow_guest_public_booking' => 'boolean',
         ];
     }
 
@@ -240,6 +244,16 @@ class Account extends Model
         $value = $scheduleKind instanceof ScheduleKind ? $scheduleKind->value : $scheduleKind;
 
         return in_array($value, $this->enabledScheduleKindValues(), true);
+    }
+
+    public function publicScheduleView(): PublicScheduleView
+    {
+        return PublicScheduleView::fromValue($this->public_schedule_view);
+    }
+
+    public function allowsGuestPublicBooking(): bool
+    {
+        return (bool) $this->allow_guest_public_booking;
     }
 
     /**

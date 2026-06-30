@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\PublicScheduleView;
 use App\Models\Account;
 use App\Models\ActivityDirection;
 use App\Models\ClassType;
@@ -269,6 +270,71 @@ class StudioConfigurationTest extends TestCase
         $this->assertSame('#FF00AA', $account->scheduleKindColor('group_class'));
         $this->assertSame('#00AAFF', $account->scheduleKindColor('private_lesson'));
         $this->assertSame('#AAFF00', $account->scheduleKindColor('room_rental'));
+    }
+
+    public function test_owner_can_choose_public_schedule_view_and_guest_booking_policy(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'schedule_view']))
+            ->assertOk()
+            ->assertSee(__('app.public_schedule_view'))
+            ->assertSee(__('app.public_schedule_view_classic'))
+            ->assertSee(__('app.public_schedule_view_compact_booking'));
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'schedule_view',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+                'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+            ])
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'schedule_view']));
+
+        $account->refresh();
+
+        $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
+        $this->assertFalse($account->allowsGuestPublicBooking());
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']))
+            ->assertOk()
+            ->assertSee(__('app.public_booking_policy'))
+            ->assertSee(__('app.allow_guest_public_booking'));
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'pass_rules',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+                'class_pass_cancellation_rules_present' => '1',
+                'class_pass_cancellation_rules' => [
+                    'return_sessions_enabled' => '0',
+                    'return_sessions_count' => '1',
+                    'extend_days_enabled' => '0',
+                    'extend_days_count' => '1',
+                ],
+                'allow_guest_public_booking' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']));
+
+        $account->refresh();
+
+        $this->assertTrue($account->allowsGuestPublicBooking());
+        $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
     }
 
     public function test_brand_settings_persist_opening_hours(): void

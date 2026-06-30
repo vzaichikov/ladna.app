@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\ClassBookingStatus;
+use App\Enums\PublicScheduleView;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
@@ -16,6 +17,7 @@ use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
+use App\Models\TrainerType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -103,6 +105,134 @@ class PublicScheduleTest extends TestCase
             ->assertDontSee('Private Staff Class')
             ->assertDontSee('Cancelled Public Class')
             ->assertDontSee('Other Location Class');
+    }
+
+    public function test_public_schedule_defaults_to_classic_view_for_existing_studios(): void
+    {
+        $account = Account::factory()->create([
+            'slug' => 'test-default-classic-studio',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+
+        $this->assertSame(PublicScheduleView::Classic, $account->publicScheduleView());
+
+        $this->get('/test-default-classic-studio/main/schedule')
+            ->assertOk()
+            ->assertSee(__('app.schedule_period_week'))
+            ->assertDontSee(__('app.schedule_kind'));
+    }
+
+    public function test_public_schedule_compact_view_renders_filters_and_booking_link(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-compact-public-schedule-studio',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Small Hall']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Compact Pole',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'price_cents' => 40000,
+            'currency' => 'UAH',
+        ]);
+        $classPassPlan->classTypes()->attach($classType);
+        $trainerType = TrainerType::factory()->for($account)->create([
+            'name' => 'TOP Trainer',
+            'icon' => 'user-round',
+            'color' => '#3B223F',
+        ]);
+        $trainer = Trainer::factory()->for($account)->for($trainerType)->create([
+            'name' => 'Nastya',
+            'photo_path' => 'trainer-photos/nastya.png',
+        ]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'Compact Public Class',
+                'starts_at' => Carbon::parse('2026-06-18 10:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-06-18 11:00:00', 'UTC'),
+                'capacity' => 10,
+            ]);
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'August Compact Class',
+                'starts_at' => Carbon::parse('2026-08-03 10:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-08-03 11:00:00', 'UTC'),
+                'capacity' => 10,
+            ]);
+
+        $this->get('/test-compact-public-schedule-studio/main/schedule?date=2026-06-18')
+            ->assertOk()
+            ->assertDontSee(__('app.schedule_kind'))
+            ->assertSee(__('app.public_booking_private_lesson_cta'))
+            ->assertSee(__('app.public_booking_room_rental_cta'))
+            ->assertSee('August')
+            ->assertDontSee('July')
+            ->assertSee(__('app.choose_class_type'))
+            ->assertSee(__('app.any_option'))
+            ->assertSee('Compact Public Class')
+            ->assertSee('Small Hall')
+            ->assertSee('trainer-photos/nastya.png')
+            ->assertSee('TOP Trainer')
+            ->assertSee('10 free')
+            ->assertDontSee('From 400')
+            ->assertSee('schedule/book?schedule_kind=group_class&amp;scheduled_class_id='.$scheduledClass->id, false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_public_schedule_compact_manual_service_selector_links_to_confirmation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-compact-manual-service-studio',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Private Room']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Nastya']);
+
+        $this->get('/test-compact-manual-service-studio/main/schedule?kind=private_lesson&date=2026-06-18&class_type='.$classType->id.'&trainer='.$trainer->id.'&room='.$room->id)
+            ->assertOk()
+            ->assertSee(__('app.public_booking_private_lesson_cta'))
+            ->assertSee(__('app.class_type').': Private 60')
+            ->assertSee(__('app.trainer').': Nastya')
+            ->assertSee(__('app.room').': Private Room')
+            ->assertSee('08:00')
+            ->assertSee('schedule/book?schedule_kind=private_lesson', false)
+            ->assertSee('starts_at=2026-06-18T08%3A00', false)
+            ->assertSee('class_type_id='.$classType->id, false)
+            ->assertSee('trainer_id='.$trainer->id, false)
+            ->assertSee('room_id='.$room->id, false);
+
+        Carbon::setTestNow();
     }
 
     public function test_public_schedule_xhr_returns_only_schedule_fragment(): void

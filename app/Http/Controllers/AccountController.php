@@ -9,6 +9,7 @@ use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
 use App\Models\Location;
+use App\Support\PublicScheduleViewRegistry;
 use App\Support\SlugGenerator;
 use App\Support\StudioDashboardData;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -100,11 +101,12 @@ class AccountController extends Controller
         $this->authorize('update', $account);
         $studioLandingUrl = route('public.studio', $account->slug);
         $customerLoginUrl = route('customer.studio.login', $account->slug);
-        $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'rules', 'pass_rules', 'qr', 'api', 'ai'], true) ? $request->query('tab') : 'business';
+        $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view', 'qr', 'api', 'ai'], true) ? $request->query('tab') : 'business';
 
         return view('accounts.brand-edit', [
             'account' => $account,
             'activeTab' => $activeTab,
+            'publicScheduleViewOptions' => PublicScheduleViewRegistry::options(),
             'studioLandingUrl' => $studioLandingUrl,
             'studioLandingQrSvg' => $this->qrCodeSvg($studioLandingUrl),
             'customerLoginUrl' => $customerLoginUrl,
@@ -146,6 +148,7 @@ class AccountController extends Controller
             'opening_hours' => [$account, 'tab' => 'opening_hours'],
             'rules' => [$account, 'tab' => 'rules'],
             'pass_rules' => [$account, 'tab' => 'pass_rules'],
+            'schedule_view' => [$account, 'tab' => 'schedule_view'],
             default => [$account],
         };
 

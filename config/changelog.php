@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.58.0',
+                'date' => '2026-06-30',
+                'title' => 'Public schedule v2 and booking',
+                'items' => ['Added a compact public schedule view with mobile-first filters, private lesson and room rental booking selectors, customer login-first booking with optional guest-lite booking, and owner settings to choose the public schedule template.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.57.0',
                 'date' => '2026-06-30',
                 'title' => 'Branded error pages',
@@ -520,6 +527,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.58.0',
+                'date' => '2026-06-30',
+                'title' => 'Публічний розклад v2 і запис',
+                'items' => ['Додано компактний вигляд публічного розкладу з мобільними фільтрами, вибором індивідуального заняття й оренди залу, входом клієнта перед записом за замовчуванням, опційним гостьовим записом та налаштуванням шаблону публічного розкладу для власника студії.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.57.0',
                 'date' => '2026-06-30',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\PublicScheduleView;
 use App\Models\Account;
 use App\Rules\PublicSupportLink;
 use App\Rules\PublicSupportPhone;
@@ -31,7 +32,7 @@ class UpdateAccountRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'brand_tab' => ['nullable', Rule::in(['business', 'formats', 'opening_hours', 'rules', 'pass_rules'])],
+            'brand_tab' => ['nullable', Rule::in(['business', 'formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view'])],
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'default_language' => ['required', Rule::in(['uk', 'en'])],
@@ -68,6 +69,8 @@ class UpdateAccountRequest extends FormRequest
             'class_pass_cancellation_rules.return_sessions_count' => ['nullable', 'integer', 'min:1', 'max:999'],
             'class_pass_cancellation_rules.extend_days_enabled' => ['nullable', 'boolean'],
             'class_pass_cancellation_rules.extend_days_count' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'public_schedule_view' => ['nullable', Rule::in(PublicScheduleView::values())],
+            'allow_guest_public_booking' => ['nullable', 'boolean'],
         ];
     }
 
@@ -129,6 +132,7 @@ class UpdateAccountRequest extends FormRequest
 
         $this->merge([
             'country_code' => $this->input('country_code') ?: ($account?->country_code ?? 'UA'),
+            'allow_guest_public_booking' => filter_var($this->input('allow_guest_public_booking', $account?->allow_guest_public_booking ?? false), FILTER_VALIDATE_BOOLEAN),
             ...$this->normalizedOptionalPublicFields(),
         ]);
 
