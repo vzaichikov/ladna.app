@@ -36,6 +36,8 @@ class AccountFactory extends Factory
             'support_telegram_url' => null,
             'support_viber_url' => null,
             'support_whatsapp_url' => null,
+            'support_phone_url' => null,
+            'support_secondary_phone_url' => null,
         ];
     }
 }

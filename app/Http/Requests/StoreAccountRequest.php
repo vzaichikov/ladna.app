@@ -41,6 +41,8 @@ class StoreAccountRequest extends FormRequest
             'support_telegram_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::telegram()],
             'support_viber_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::viber()],
             'support_whatsapp_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::whatsapp()],
+            'support_phone_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::phone()],
+            'support_secondary_phone_url' => ['nullable', 'string', 'max:2048', PublicSupportLink::phone()],
         ];
     }
 
@@ -59,7 +61,7 @@ class StoreAccountRequest extends FormRequest
     {
         $normalized = [];
 
-        foreach (['studio_slogan', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url'] as $field) {
+        foreach (['studio_slogan', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url'] as $field) {
             if (! $this->has($field)) {
                 continue;
             }

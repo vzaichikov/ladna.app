@@ -18,7 +18,18 @@
 
             <div class="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end">
                 @foreach ($supportLinks as $supportLink)
-                    <a href="{{ $supportLink['url'] }}" target="_blank" rel="noopener" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-brand-100 hover:bg-brand-50 hover:text-brand-700">
+                    @php
+                        $opensInNewWindow = ! str_starts_with(strtolower($supportLink['url']), 'tel:');
+                    @endphp
+
+                    <a
+                        href="{{ $supportLink['url'] }}"
+                        @if ($opensInNewWindow)
+                            target="_blank"
+                            rel="noopener"
+                        @endif
+                        class="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-brand-100 hover:bg-brand-50 hover:text-brand-700"
+                    >
                         <img src="{{ asset($supportLink['icon_path']) }}" alt="" class="h-5 w-5 shrink-0">
                         <span>{{ __($supportLink['label_key']) }}</span>
                     </a>

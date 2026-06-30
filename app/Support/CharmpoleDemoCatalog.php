@@ -35,6 +35,7 @@ class CharmpoleDemoCatalog
             'logo_path' => 'brand/charmpole-icon.svg',
             'brand_color' => '#d80a7d',
             'studio_slogan' => 'Pole Dance, Exotic, Stretching і тренування для вашого ритму.',
+            'support_phone_url' => 'tel:+380939470278',
             'timezone' => 'Europe/Kyiv',
             'enabled_schedule_kinds' => [
                 0 => 'group_class',
