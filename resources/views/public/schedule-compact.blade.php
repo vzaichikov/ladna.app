@@ -84,7 +84,7 @@
                                 <a
                                     href="{{ $manualAction['url'] }}"
                                     data-public-schedule-link
-                                    class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition {{ $manualAction['active'] ? 'border-violet-crm-600 bg-violet-crm-600 text-white shadow-sm shadow-violet-crm-600/20' : 'border-violet-crm-500 bg-violet-crm-500 text-white shadow-sm shadow-violet-crm-500/20 hover:bg-brand-600' }}"
+                                    class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition {{ $manualAction['active'] ? 'border-brand-700 bg-brand-700 text-white shadow-sm shadow-brand-700/20 ring-2 ring-brand-100' : 'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700' }}"
                                 >
                                     <x-ui.icon :name="$manualAction['icon']" class="h-4 w-4" />
                                     {{ $manualAction['label'] }}
@@ -207,9 +207,9 @@
                                                 ], fn ($value) => $value !== null && $value !== '');
                                                 $bookingUrl = route('public.booking.show', $bookingParams);
                                             @endphp
-                                            <a href="{{ $bookingUrl }}" class="inline-flex min-h-12 items-center gap-3 rounded-lg border border-violet-crm-100 bg-violet-crm-50 px-3 py-2 text-sm font-semibold text-violet-crm-800 transition hover:border-violet-crm-300 hover:bg-violet-crm-100">
-                                                <span class="text-base text-slate-950">{{ $slot['time'] }}</span>
-                                                <span class="text-xs text-slate-500">{{ $slot['ends_time'] }} · {{ __('app.available_slots') }}</span>
+                                            <a href="{{ $bookingUrl }}" class="inline-flex min-h-12 items-center gap-3 rounded-lg border border-brand-600 bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700">
+                                                <span class="text-base text-white">{{ $slot['time'] }}</span>
+                                                <span class="text-xs text-white/75">{{ $slot['ends_time'] }} · {{ __('app.available_slots') }}</span>
                                             </a>
                                         @empty
                                             <div class="rounded-lg border border-stone-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
@@ -370,7 +370,7 @@
                                                     {{ $capacity > 0 ? __('app.available_slots_short', ['count' => $availableSpots]) : __('app.capacity_not_set') }}
                                                 </span>
                                                 @if ($canBook)
-                                                    <x-ui.button :href="$bookingUrl" variant="brand" size="sm" class="w-full">
+                                                    <x-ui.button :href="$bookingUrl" variant="primary" size="sm" class="w-full">
                                                         {{ __('app.book_this_class') }}
                                                     </x-ui.button>
                                                 @else

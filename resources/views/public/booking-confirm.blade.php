@@ -84,7 +84,7 @@
                     @error($field) <span class="crm-help">{{ $message }}</span> @enderror
                 @endforeach
 
-                <x-ui.button type="submit" variant="brand" class="w-full">
+                <x-ui.button type="submit" variant="primary" class="w-full">
                     <x-ui.icon name="check" class="h-4 w-4" />
                     {{ __('app.confirm_booking') }}
                 </x-ui.button>
