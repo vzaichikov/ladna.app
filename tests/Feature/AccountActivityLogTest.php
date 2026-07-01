@@ -7,6 +7,16 @@ use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AccountActivityLog;
 use App\Models\AccountMembership;
+use App\Models\AiConversation;
+use App\Models\AiConversationMessage;
+use App\Models\AiPendingAction;
+use App\Models\McpToolInvocation;
+use App\Models\TelegramAuthorizationSelection;
+use App\Models\TelegramAuthorizationSelectionCandidate;
+use App\Models\TelegramBotInstallation;
+use App\Models\TelegramChatAuthorization;
+use App\Models\TelegramMessage;
+use App\Models\TelegramUpdate;
 use App\Models\User;
 use App\Support\AccountActivityLogSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -199,18 +209,152 @@ class AccountActivityLogTest extends TestCase
         AccountActivityLogSettings::setRetentionDays(45);
         Carbon::setTestNow(Carbon::parse('2026-06-27 10:00:00'));
         $account = Account::factory()->create();
+        $user = User::factory()->create();
+        $installation = TelegramBotInstallation::factory()->platformOwner()->create();
+        $authorization = TelegramChatAuthorization::factory()->for($account)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'user_id' => $user->id,
+            'telegram_chat_id' => 'retention-chat',
+        ]);
         $oldActivityLog = AccountActivityLog::factory()
             ->for($account)
             ->create(['occurred_at' => now()->subDays(46)]);
         $recentActivityLog = AccountActivityLog::factory()
             ->for($account)
             ->create(['occurred_at' => now()->subDays(44)]);
+        $oldUpdate = TelegramUpdate::factory()->for($account)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'received_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $recentUpdate = TelegramUpdate::factory()->for($account)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'received_at' => now()->subDays(44),
+            'created_at' => now()->subDays(44),
+        ]);
+        $oldMessage = TelegramMessage::factory()->for($account)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'telegram_chat_authorization_id' => $authorization->id,
+            'telegram_update_id' => $oldUpdate->id,
+            'sent_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $recentMessage = TelegramMessage::factory()->for($account)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'telegram_chat_authorization_id' => $authorization->id,
+            'telegram_update_id' => $recentUpdate->id,
+            'sent_at' => now()->subDays(44),
+            'created_at' => now()->subDays(44),
+        ]);
+        $telegramConversation = AiConversation::factory()->for($account)->create([
+            'telegram_chat_authorization_id' => $authorization->id,
+            'user_id' => $user->id,
+            'channel' => 'telegram_owner',
+            'last_message_at' => now(),
+        ]);
+        $staleTelegramConversation = AiConversation::factory()->for($account)->create([
+            'telegram_chat_authorization_id' => $authorization->id,
+            'user_id' => $user->id,
+            'channel' => 'telegram_owner',
+            'last_message_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $dashboardConversation = AiConversation::factory()->for($account)->create([
+            'channel' => 'dashboard_chat',
+            'last_message_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $oldAiMessage = AiConversationMessage::factory()->for($account)->for($telegramConversation, 'conversation')->create([
+            'telegram_message_id' => $oldMessage->id,
+            'occurred_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $recentAiMessage = AiConversationMessage::factory()->for($account)->for($telegramConversation, 'conversation')->create([
+            'telegram_message_id' => $recentMessage->id,
+            'occurred_at' => now()->subDays(44),
+            'created_at' => now()->subDays(44),
+        ]);
+        $dashboardAiMessage = AiConversationMessage::factory()->for($account)->for($dashboardConversation, 'conversation')->create([
+            'occurred_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $oldPendingAction = AiPendingAction::factory()->for($account)->for($telegramConversation, 'conversation')->create([
+            'user_id' => $user->id,
+            'expires_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+            'updated_at' => now()->subDays(46),
+        ]);
+        $recentPendingAction = AiPendingAction::factory()->for($account)->for($telegramConversation, 'conversation')->create([
+            'user_id' => $user->id,
+            'expires_at' => now()->addMinutes(20),
+            'created_at' => now()->subDays(44),
+            'updated_at' => now()->subDays(44),
+        ]);
+        $oldMcpInvocation = McpToolInvocation::factory()->for($account)->for($telegramConversation, 'conversation')->for($oldAiMessage, 'conversationMessage')->create([
+            'account_api_token_id' => null,
+            'started_at' => now()->subDays(46),
+            'finished_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $recentMcpInvocation = McpToolInvocation::factory()->for($account)->for($telegramConversation, 'conversation')->for($recentAiMessage, 'conversationMessage')->create([
+            'account_api_token_id' => null,
+            'started_at' => now()->subDays(44),
+            'finished_at' => now()->subDays(44),
+            'created_at' => now()->subDays(44),
+        ]);
+        $dashboardMcpInvocation = McpToolInvocation::factory()->for($account)->for($dashboardConversation, 'conversation')->for($dashboardAiMessage, 'conversationMessage')->create([
+            'account_api_token_id' => null,
+            'started_at' => now()->subDays(46),
+            'finished_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $oldSelection = TelegramAuthorizationSelection::factory()->for($installation, 'installation')->create([
+            'expires_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $oldSelectionCandidate = TelegramAuthorizationSelectionCandidate::factory()
+            ->for($oldSelection, 'selection')
+            ->for($account)
+            ->for($user)
+            ->create();
+        $recentSelection = TelegramAuthorizationSelection::factory()->for($installation, 'installation')->create([
+            'expires_at' => now()->subDays(44),
+            'created_at' => now()->subDays(44),
+        ]);
 
         $this->artisan('account-activity-logs:prune')
+            ->expectsOutput(__('app.account_activity_logs_pruned', ['count' => 1]))
+            ->expectsOutput(__('app.telegram_logs_pruned', [
+                'messages' => 1,
+                'updates' => 1,
+                'conversation_messages' => 1,
+                'conversations' => 1,
+                'pending_actions' => 1,
+                'tool_invocations' => 1,
+                'authorization_selections' => 1,
+            ]))
             ->assertSuccessful();
 
         $this->assertModelMissing($oldActivityLog);
         $this->assertModelExists($recentActivityLog);
+        $this->assertModelMissing($oldUpdate);
+        $this->assertModelExists($recentUpdate);
+        $this->assertModelMissing($oldMessage);
+        $this->assertModelExists($recentMessage);
+        $this->assertModelMissing($oldAiMessage);
+        $this->assertModelExists($recentAiMessage);
+        $this->assertModelMissing($staleTelegramConversation);
+        $this->assertModelExists($telegramConversation);
+        $this->assertModelExists($dashboardConversation);
+        $this->assertModelExists($dashboardAiMessage);
+        $this->assertModelMissing($oldPendingAction);
+        $this->assertModelExists($recentPendingAction);
+        $this->assertModelMissing($oldMcpInvocation);
+        $this->assertModelExists($recentMcpInvocation);
+        $this->assertModelExists($dashboardMcpInvocation);
+        $this->assertModelMissing($oldSelection);
+        $this->assertModelMissing($oldSelectionCandidate);
+        $this->assertModelExists($recentSelection);
 
         Carbon::setTestNow();
     }
