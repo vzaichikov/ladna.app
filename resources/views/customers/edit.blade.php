@@ -26,6 +26,12 @@
         $classPassBackfillPreview ??= null;
         $locations ??= collect();
         $selectedIssueLocationId = old('issued_location_id');
+        $classPassTab = ($classPassTab ?? 'active') === 'history' ? 'history' : 'active';
+        $classPassTabQuery = request()->except('class_pass_tab', 'class_passes_page', 'class_pass_history_page', 'class_pass_backfill_preview');
+        $activeClassPassTabUrl = route('dashboard.accounts.customers.edit', [$account, $customer, ...$classPassTabQuery, 'class_pass_tab' => 'active']);
+        $historyClassPassTabUrl = route('dashboard.accounts.customers.edit', [$account, $customer, ...$classPassTabQuery, 'class_pass_tab' => 'history']);
+        $displayedCustomerClassPasses = $classPassTab === 'history' ? $customerClassPassHistory : $customerClassPasses;
+        $emptyCustomerClassPassTitle = $classPassTab === 'history' ? __('app.no_customer_class_pass_history') : __('app.no_customer_class_passes');
     @endphp
 
     <h1 class="crm-page-title">{{ __('app.edit') }} {{ $customer->name }}</h1>
@@ -104,7 +110,7 @@
         <div class="space-y-6">
             <x-ui.panel padding="none" class="overflow-hidden">
                 <div class="flex flex-col gap-3 border-b border-stone-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_class_passes') }}</h2>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_class_passes_panel') }}</h2>
                     @if ($canManageCustomerClassPasses && $customerClassPasses->total() > 0)
                         <x-ui.button
                             :href="route('dashboard.accounts.customers.edit', [$account, $customer, 'class_pass_backfill_preview' => 1])"
@@ -116,51 +122,81 @@
                         </x-ui.button>
                     @endif
                 </div>
-                @forelse ($customerClassPasses as $customerClassPass)
-                    @php
-                        $statusClass = match ($customerClassPass->status) {
-                            \App\Enums\CustomerClassPassStatus::Active => 'crm-status-active',
-                            \App\Enums\CustomerClassPassStatus::Freezed => 'crm-status-warning',
-                            default => 'crm-status-muted',
-                        };
-                    @endphp
-                    <div class="border-b border-stone-100 px-5 py-4 last:border-b-0">
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                                <div class="font-semibold text-slate-950">{{ $customerClassPass->plan_name }}</div>
-                                <div class="mt-1 text-sm text-slate-500">{{ $customerClassPass->code }} · {{ $formatMoney($customerClassPass->price_cents, $customerClassPass->currency) }}</div>
-                            </div>
-                            <div class="flex flex-wrap gap-2 sm:justify-end">
-                                <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
-                                <span class="{{ $statusClass }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
-                            </div>
-                        </div>
-                        <div class="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-3">
-                            <div>{{ __('app.remaining_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->remainingSessionsCount() }}</span></div>
-                            <div>{{ __('app.reserved_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->reserved_sessions_count }}</span></div>
-                            <div>{{ __('app.used_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->used_sessions_count }}</span></div>
-                        </div>
-                        <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                            <span>{{ __('app.purchased_at') }}: {{ $formatDate($customerClassPass->purchased_at) }}</span>
-                            @if ($customerClassPass->issuedLocation)
-                                <span>{{ __('app.issued_location') }}: {{ $customerClassPass->issuedLocation->name }}</span>
-                            @endif
-                            <span>{{ __('app.opened_at') }}: {{ $formatDate($customerClassPass->opened_at) }}</span>
-                            <span>{{ __('app.expires_after_first_class') }}: {{ $formatDate($customerClassPass->expires_at) }}</span>
-                            <span>{{ __('app.usable_until_at') }}: {{ $formatDate($customerClassPass->usableUntilAt()) }}</span>
-                        </div>
-                        @if ($canManageCustomerClassPasses)
-                            <div class="mt-3">
-                                <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
-                            </div>
-                        @endif
+                <div class="border-b border-stone-100 px-5 py-3">
+                    <div class="grid gap-1 rounded-lg bg-stone-100 p-1 sm:inline-grid sm:grid-flow-col" role="tablist" aria-label="{{ __('app.customer_class_passes_panel') }}">
+                        <a
+                            href="{{ $activeClassPassTabUrl }}"
+                            id="customer-class-passes-tab-active"
+                            class="crm-tab justify-start sm:justify-center"
+                            role="tab"
+                            aria-controls="customer-class-passes-panel"
+                            aria-selected="{{ $classPassTab === 'active' ? 'true' : 'false' }}"
+                            tabindex="{{ $classPassTab === 'active' ? '0' : '-1' }}"
+                        >
+                            {{ __('app.customer_class_passes') }}
+                            <span class="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-xs text-slate-600">{{ $customerClassPasses->total() }}</span>
+                        </a>
+                        <a
+                            href="{{ $historyClassPassTabUrl }}"
+                            id="customer-class-passes-tab-history"
+                            class="crm-tab justify-start sm:justify-center"
+                            role="tab"
+                            aria-controls="customer-class-passes-panel"
+                            aria-selected="{{ $classPassTab === 'history' ? 'true' : 'false' }}"
+                            tabindex="{{ $classPassTab === 'history' ? '0' : '-1' }}"
+                        >
+                            {{ __('app.class_pass_history') }}
+                            <span class="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-xs text-slate-600">{{ $customerClassPassHistory->total() }}</span>
+                        </a>
                     </div>
-                @empty
-                    <x-ui.empty-state :title="__('app.no_customer_class_passes')" icon="class-pass-plans" class="m-5" />
-                @endforelse
-                @if ($customerClassPasses->hasPages())
+                </div>
+                <div id="customer-class-passes-panel" role="tabpanel" aria-labelledby="customer-class-passes-tab-{{ $classPassTab }}">
+                    @forelse ($displayedCustomerClassPasses as $customerClassPass)
+                        @php
+                            $statusClass = match ($customerClassPass->status) {
+                                \App\Enums\CustomerClassPassStatus::Active => 'crm-status-active',
+                                \App\Enums\CustomerClassPassStatus::Freezed => 'crm-status-warning',
+                                default => 'crm-status-muted',
+                            };
+                        @endphp
+                        <div class="border-b border-stone-100 px-5 py-4 last:border-b-0">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <div class="font-semibold text-slate-950">{{ $customerClassPass->plan_name }}</div>
+                                    <div class="mt-1 text-sm text-slate-500">{{ $customerClassPass->code }} · {{ $formatMoney($customerClassPass->price_cents, $customerClassPass->currency) }}</div>
+                                </div>
+                                <div class="flex flex-wrap gap-2 sm:justify-end">
+                                    <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
+                                    <span class="{{ $statusClass }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
+                                </div>
+                            </div>
+                            <div class="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-3">
+                                <div>{{ __('app.remaining_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->remainingSessionsCount() }}</span></div>
+                                <div>{{ __('app.reserved_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->reserved_sessions_count }}</span></div>
+                                <div>{{ __('app.used_sessions') }}: <span class="font-semibold text-slate-950">{{ $customerClassPass->used_sessions_count }}</span></div>
+                            </div>
+                            <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                                <span>{{ __('app.purchased_at') }}: {{ $formatDate($customerClassPass->purchased_at) }}</span>
+                                @if ($customerClassPass->issuedLocation)
+                                    <span>{{ __('app.issued_location') }}: {{ $customerClassPass->issuedLocation->name }}</span>
+                                @endif
+                                <span>{{ __('app.opened_at') }}: {{ $formatDate($customerClassPass->opened_at) }}</span>
+                                <span>{{ __('app.expires_after_first_class') }}: {{ $formatDate($customerClassPass->expires_at) }}</span>
+                                <span>{{ __('app.usable_until_at') }}: {{ $formatDate($customerClassPass->usableUntilAt()) }}</span>
+                            </div>
+                            @if ($canManageCustomerClassPasses)
+                                <div class="mt-3">
+                                    <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
+                                </div>
+                            @endif
+                        </div>
+                    @empty
+                        <x-ui.empty-state :title="$emptyCustomerClassPassTitle" icon="class-pass-plans" class="m-5" />
+                    @endforelse
+                </div>
+                @if ($displayedCustomerClassPasses->hasPages())
                     <div class="border-t border-stone-100 px-5 py-4">
-                        {{ $customerClassPasses->onEachSide(1)->links() }}
+                        {{ $displayedCustomerClassPasses->onEachSide(1)->links() }}
                     </div>
                 @endif
             </x-ui.panel>

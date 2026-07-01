@@ -324,7 +324,7 @@ class CustomerClassPassTest extends TestCase
             ->assertDontSee('app.class_pass');
     }
 
-    public function test_customer_page_paginates_current_class_passes_and_hides_inactive_ones(): void
+    public function test_customer_page_paginates_current_class_passes_and_archived_history_separately(): void
     {
         [$owner, $account, $customer, $plan, , $location] = $this->passContext();
 
@@ -342,17 +342,20 @@ class CustomerClassPassTest extends TestCase
                 ]);
         }
 
-        CustomerClassPass::factory()
-            ->for($account)
-            ->for($customer)
-            ->for($plan, 'classPassPlan')
-            ->create([
-                'code' => 'USED-0001',
-                'issued_location_id' => $location->id,
-                'status' => CustomerClassPassStatus::UsedUp->value,
-                'is_active' => false,
-                'purchased_at' => Carbon::parse('2026-06-07 10:00:00'),
-            ]);
+        foreach (range(1, 6) as $day) {
+            CustomerClassPass::factory()
+                ->for($account)
+                ->for($customer)
+                ->for($plan, 'classPassPlan')
+                ->create([
+                    'code' => sprintf('HIST-%03d', $day),
+                    'issued_location_id' => $location->id,
+                    'status' => CustomerClassPassStatus::UsedUp->value,
+                    'is_active' => false,
+                    'purchased_at' => Carbon::parse(sprintf('2026-05-%02d 10:00:00', $day)),
+                    'closed_at' => Carbon::parse(sprintf('2026-06-%02d 10:00:00', $day + 10)),
+                ]);
+        }
 
         CustomerClassPass::factory()
             ->for($account)
@@ -364,23 +367,42 @@ class CustomerClassPassTest extends TestCase
                 'status' => CustomerClassPassStatus::Active->value,
                 'is_active' => false,
                 'purchased_at' => Carbon::parse('2026-06-08 10:00:00'),
+                'closed_at' => Carbon::parse('2026-06-20 10:00:00'),
             ]);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customers.edit', [$account, $customer]))
             ->assertOk()
+            ->assertSee(__('app.customer_class_passes'))
+            ->assertSee(__('app.class_pass_history'))
             ->assertSee('ACTIVE-006')
             ->assertSee('class_passes_page=2', false)
+            ->assertSee('class_pass_tab=history', false)
             ->assertDontSee('ACTIVE-001')
-            ->assertDontSee('USED-0001')
+            ->assertDontSee('HIST-006')
             ->assertDontSee('CANCEL-001');
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customers.edit', [$account, $customer]).'?class_passes_page=2')
             ->assertOk()
             ->assertSee('ACTIVE-001')
-            ->assertDontSee('USED-0001')
+            ->assertDontSee('HIST-001')
             ->assertDontSee('CANCEL-001');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customers.edit', [$account, $customer, 'class_pass_tab' => 'history']))
+            ->assertOk()
+            ->assertSee('CANCEL-001')
+            ->assertSee('HIST-006')
+            ->assertSee('class_pass_history_page=2', false)
+            ->assertDontSee('HIST-001')
+            ->assertDontSee('ACTIVE-006');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customers.edit', [$account, $customer, 'class_pass_tab' => 'history', 'class_pass_history_page' => 2]))
+            ->assertOk()
+            ->assertSee('HIST-001')
+            ->assertDontSee('ACTIVE-006');
     }
 
     public function test_customer_class_pass_index_filters_by_payment_status_and_links_unpaid_notice(): void
