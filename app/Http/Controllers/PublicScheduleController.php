@@ -248,6 +248,19 @@ class PublicScheduleController extends Controller
         );
         $groupQuery = $this->compactGroupQuery($selectedManualKind, $selectedDate, $selectedGroupClassTypeId, $selectedGroupTrainerId, $selectedGroupRoomId);
         $manualQuery = $this->compactManualQuery($selectedManualKind, $selectedDate, $selectedManualClassTypeId, $selectedManualTrainerId, $selectedManualRoomId);
+        $groupPanel = $this->selectedCompactPanel($request->query('group_panel'), ['class_type', 'trainer', 'room']);
+        $manualPanel = $selectedManualKind
+            ? $this->selectedCompactPanel($request->query('manual_panel'), ['service', 'date', 'trainer', 'room'])
+            : null;
+
+        if ($selectedManualKind !== ScheduleKind::PrivateLesson && $manualPanel === 'trainer') {
+            $manualPanel = null;
+        }
+
+        if ($selectedManualKind) {
+            $groupPanel = null;
+        }
+
         $groupClasses = $this->compactGroupClasses(
             $account,
             $location,
@@ -286,8 +299,12 @@ class PublicScheduleController extends Controller
             'selectedManualRoomId' => $selectedManualRoomId,
             'selectedQuery' => $groupQuery,
             'manualQuery' => $manualQuery,
+            'groupPanel' => $groupPanel,
+            'manualPanel' => $manualPanel,
             'monthOptions' => $this->compactMonthOptions($account, $location, $isEmbed, $groupQuery, $selectedMonth, $scheduledMonths),
             'dateOptions' => $this->compactDateOptions($account, $location, $isEmbed, $groupQuery, $selectedDate, $selectedMonth, $timezone),
+            'manualMonthOptions' => $selectedManualKind ? $this->compactManualMonthOptions($account, $location, $isEmbed, $manualQuery, $selectedMonth, $timezone) : [],
+            'manualDateOptions' => $selectedManualKind ? $this->compactDateOptions($account, $location, $isEmbed, $manualQuery, $selectedDate, $selectedMonth, $timezone) : [],
             'manualActionOptions' => $this->compactManualActionOptions($account, $location, $isEmbed, $manualKinds, $selectedManualKind, $selectedDate, $groupQuery),
             'classTypeOptions' => $this->compactFilterOptions($account, $location, $isEmbed, $groupQuery, 'group_class_type', $groupClassTypes, $selectedGroupClassTypeId),
             'trainerOptions' => $this->compactFilterOptions($account, $location, $isEmbed, $groupQuery, 'group_trainer', $trainers, $selectedGroupTrainerId),
@@ -317,6 +334,16 @@ class PublicScheduleController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<int, string>  $allowedPanels
+     */
+    private function selectedCompactPanel(mixed $value, array $allowedPanels): ?string
+    {
+        $panel = (string) $value;
+
+        return in_array($panel, $allowedPanels, true) ? $panel : null;
     }
 
     /**
@@ -529,6 +556,44 @@ class PublicScheduleController extends Controller
                         ...$monthQuery,
                         'date' => $date->toDateString(),
                         'month' => $month->format('Y-m'),
+                    ]),
+                    'active' => $month->isSameMonth($selectedMonth),
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     * @return array<int, array{month: string, label: string, year: string, url: string, active: bool}>
+     */
+    private function compactManualMonthOptions(Account $account, Location $location, bool $isEmbed, array $query, Carbon $selectedMonth, string $timezone): array
+    {
+        $today = now($timezone)->startOfDay();
+        $startMonth = $today->copy()->startOfMonth();
+        $manualMonthQuery = $query;
+        unset($manualMonthQuery['date']);
+
+        return collect(range(0, 5))
+            ->map(fn (int $offset): Carbon => $startMonth->copy()->addMonths($offset))
+            ->when(
+                ! collect(range(0, 5))->contains(fn (int $offset): bool => $startMonth->copy()->addMonths($offset)->isSameMonth($selectedMonth)),
+                fn (SupportCollection $months): SupportCollection => $months->push($selectedMonth->copy()->startOfMonth()),
+            )
+            ->sortBy(fn (Carbon $month): int => $month->getTimestamp())
+            ->values()
+            ->map(function (Carbon $month) use ($account, $location, $isEmbed, $manualMonthQuery, $selectedMonth, $today): array {
+                $date = $month->isSameMonth($today) ? $today : $month->copy()->startOfMonth();
+
+                return [
+                    'month' => $month->format('Y-m'),
+                    'label' => $month->translatedFormat('F'),
+                    'year' => $month->format('Y'),
+                    'url' => $this->scheduleUrl($account, $location, $isEmbed, [
+                        ...$manualMonthQuery,
+                        'date' => $date->toDateString(),
+                        'month' => $month->format('Y-m'),
+                        'manual_panel' => 'date',
                     ]),
                     'active' => $month->isSameMonth($selectedMonth),
                 ];
