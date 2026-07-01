@@ -18,11 +18,14 @@
         $selectedManualClassType = $compact['manualClassTypes']->firstWhere('id', $compact['selectedManualClassTypeId']);
         $selectedManualTrainer = $compact['trainers']->firstWhere('id', $compact['selectedManualTrainerId']);
         $selectedManualRoom = $compact['rooms']->firstWhere('id', $compact['selectedManualRoomId']);
+        $selectedGroupPanel = $compact['groupPanel'];
+        $selectedManualPanel = $compact['manualPanel'];
         $routeName = $isEmbed ? 'public.schedule.embed' : 'public.schedule';
         $routeParams = ['accountSlug' => $account->slug, 'locationSlug' => $location->slug];
         $compactUrl = static fn (array $query): string => route($routeName, [...$routeParams, ...array_filter($query, fn ($value) => $value !== null && $value !== '')]);
         $withoutQuery = static fn (array $query, string $key): array => array_diff_key($query, [$key => true]);
         $customerDisplayName = $customer?->name ?? $customer?->phone ?? $customer?->email;
+        $manualDateLabel = $compact['selectedDate']->translatedFormat('D, j F');
     @endphp
 
     <main class="min-h-[calc(100vh-8rem)] bg-canvas text-slate-950">
@@ -94,130 +97,209 @@
                     @endif
 
                     @if ($selectedManualKind)
-                        <section class="mt-3 rounded-xl border border-violet-crm-100 bg-white p-3 shadow-xs">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <h2 class="text-base font-semibold text-slate-950">{{ __('app.public_booking_'.$selectedManualKind->value.'_cta') }}</h2>
-                                    <p class="mt-1 text-sm text-slate-500">{{ __('app.public_booking_service_help') }}</p>
-                                </div>
-                                <a href="{{ $compactUrl($withoutQuery($selectedQuery, 'kind')) }}" data-public-schedule-link class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700" aria-label="{{ __('app.close') }}">
-                                    <x-ui.icon name="close" class="h-4 w-4" />
-                                </a>
-                            </div>
-
-                            <div class="mt-3 grid gap-2 md:grid-cols-3">
-                                <details class="group rounded-lg border border-stone-200 bg-slate-50">
-                                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                                        <span class="min-w-0">
-                                            <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_class_type') }}</span>
-                                            <span class="block truncate text-sm font-semibold text-slate-950">{{ __('app.class_type') }}: {{ $selectedManualClassType?->name ?? __('app.any_option') }}</span>
-                                        </span>
-                                        <x-ui.icon name="chevron-down" class="h-4 w-4 shrink-0 text-slate-400" />
-                                    </summary>
-                                    <div class="space-y-2 border-t border-stone-200 p-2">
-                                        <a href="{{ $compactUrl($withoutQuery($manualQuery, 'class_type')) }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $compact['selectedManualClassTypeId'] ? 'text-slate-700 hover:bg-white' : 'bg-violet-crm-600 text-white' }}">
-                                            {{ __('app.any_option') }}
-                                        </a>
-                                        @foreach ($compact['manualClassTypeOptions'] as $option)
-                                            <a href="{{ $option['url'] }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $option['active'] ? 'bg-violet-crm-600 text-white' : 'text-slate-700 hover:bg-white' }}">
-                                                {{ $option['name'] }}
-                                            </a>
-                                        @endforeach
-                                    </div>
-                                </details>
-
-                                @if ($selectedManualKind === \App\Enums\ScheduleKind::PrivateLesson)
-                                    <details class="group rounded-lg border border-stone-200 bg-slate-50">
-                                        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                                            <span class="min-w-0">
-                                                <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_trainer') }}</span>
-                                                <span class="block truncate text-sm font-semibold text-slate-950">{{ __('app.trainer') }}: {{ $selectedManualTrainer?->name ?? __('app.any_option') }}</span>
-                                            </span>
-                                            <x-ui.icon name="chevron-down" class="h-4 w-4 shrink-0 text-slate-400" />
-                                        </summary>
-                                        <div class="space-y-2 border-t border-stone-200 p-2">
-                                            <a href="{{ $compactUrl($withoutQuery($manualQuery, 'trainer')) }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $compact['selectedManualTrainerId'] ? 'text-slate-700 hover:bg-white' : 'bg-violet-crm-600 text-white' }}">
-                                                {{ __('app.any_option') }}
-                                            </a>
-                                            @foreach ($compact['manualTrainerOptions'] as $option)
-                                                @php
-                                                    $optionTrainer = $compact['trainers']->firstWhere('id', $option['id']);
-                                                @endphp
-                                                <a href="{{ $option['url'] }}" data-public-schedule-link class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $option['active'] ? 'bg-violet-crm-600 text-white' : 'text-slate-700 hover:bg-white' }}">
-                                                    @if ($optionTrainer?->photoUrl())
-                                                        <img src="{{ $optionTrainer->photoUrl() }}" alt="" class="h-8 w-8 rounded-full object-cover">
+                        @php
+                            $manualCloseUrl = $compactUrl($withoutQuery($selectedQuery, 'kind'));
+                            $manualMainUrl = $compactUrl($manualQuery);
+                            $manualBookLabel = $selectedManualKind === \App\Enums\ScheduleKind::RoomRental
+                                ? __('app.book_this_room_rental')
+                                : __('app.book_this_private_lesson');
+                        @endphp
+                        <section class="fixed inset-0 z-50 overflow-y-auto bg-ink-950/45 px-3 py-4 sm:px-6" role="dialog" aria-modal="true" aria-labelledby="manual-booking-title">
+                            <div class="mx-auto min-h-full max-w-xl">
+                                <div class="rounded-xl bg-white shadow-2xl shadow-ink-950/20">
+                                    <header class="sticky top-0 z-10 rounded-t-xl border-b border-stone-200 bg-white px-4 py-3">
+                                        <div class="flex items-center justify-between gap-3">
+                                            <div class="min-w-0">
+                                                @if ($selectedManualPanel)
+                                                    <a href="{{ $manualMainUrl }}" data-public-schedule-link class="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500">
+                                                        <x-ui.icon name="arrow-left" class="h-4 w-4" />
+                                                        {{ __('app.back_to_booking_options') }}
+                                                    </a>
+                                                @endif
+                                                <h2 id="manual-booking-title" class="truncate text-lg font-semibold text-slate-950">
+                                                    @if ($selectedManualPanel === 'service')
+                                                        {{ __('app.choose_class_type') }}
+                                                    @elseif ($selectedManualPanel === 'date')
+                                                        {{ __('app.choose_date_and_time') }}
+                                                    @elseif ($selectedManualPanel === 'trainer')
+                                                        {{ __('app.choose_trainer') }}
+                                                    @elseif ($selectedManualPanel === 'room')
+                                                        {{ __('app.choose_room') }}
                                                     @else
-                                                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-violet-crm-100 text-violet-crm-700">
-                                                            <x-ui.icon name="trainers" class="h-4 w-4" />
-                                                        </span>
+                                                        {{ __('app.public_booking_'.$selectedManualKind->value.'_cta') }}
                                                     @endif
-                                                    <span class="min-w-0 flex-1 truncate">{{ $option['name'] }}</span>
-                                                    @if ($optionTrainer?->trainerType)
-                                                        <x-ui.trainer-type-badge :trainer-type="$optionTrainer->trainerType" class="{{ $option['active'] ? 'border-white/30 bg-white/15 text-white' : '' }}" />
-                                                    @endif
-                                                </a>
-                                            @endforeach
-                                        </div>
-                                    </details>
-                                @endif
-
-                                <details class="group rounded-lg border border-stone-200 bg-slate-50">
-                                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                                        <span class="min-w-0">
-                                            <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_room') }}</span>
-                                            <span class="block truncate text-sm font-semibold text-slate-950">{{ __('app.room') }}: {{ $selectedManualRoom?->name ?? __('app.any_option') }}</span>
-                                        </span>
-                                        <x-ui.icon name="chevron-down" class="h-4 w-4 shrink-0 text-slate-400" />
-                                    </summary>
-                                    <div class="space-y-2 border-t border-stone-200 p-2">
-                                        <a href="{{ $compactUrl($withoutQuery($manualQuery, 'room')) }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $compact['selectedManualRoomId'] ? 'text-slate-700 hover:bg-white' : 'bg-violet-crm-600 text-white' }}">
-                                            {{ __('app.any_option') }}
-                                        </a>
-                                        @foreach ($compact['manualRoomOptions'] as $option)
-                                            <a href="{{ $option['url'] }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $option['active'] ? 'bg-violet-crm-600 text-white' : 'text-slate-700 hover:bg-white' }}">
-                                                {{ $option['name'] }}
-                                            </a>
-                                        @endforeach
-                                    </div>
-                                </details>
-                            </div>
-
-                            <div class="mt-3">
-                                @if ($compact['manualRequiredFilters'] !== [])
-                                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-                                        {{ __('app.public_booking_choose_filters', ['filters' => implode(', ', $compact['manualRequiredFilters'])]) }}
-                                    </div>
-                                @elseif (($compact['manualAvailability']['closed'] ?? false) === true)
-                                    <div class="rounded-lg border border-stone-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
-                                        {{ __('app.studio_closed_on_date') }}
-                                    </div>
-                                @else
-                                    <div class="flex flex-wrap gap-2">
-                                        @forelse (($compact['manualAvailability']['slots'] ?? []) as $slot)
-                                            @php
-                                                $bookingParams = array_filter([
-                                                    'accountSlug' => $account->slug,
-                                                    'locationSlug' => $location->slug,
-                                                    'schedule_kind' => $selectedManualKind->value,
-                                                    'date' => $compact['selectedDate']->toDateString(),
-                                                    'starts_at' => $slot['starts_at'],
-                                                    'class_type_id' => $selectedManualClassType?->id,
-                                                    'trainer_id' => $selectedManualTrainer?->id,
-                                                    'room_id' => $selectedManualRoom?->id,
-                                                ], fn ($value) => $value !== null && $value !== '');
-                                                $bookingUrl = route('public.booking.show', $bookingParams);
-                                            @endphp
-                                            <a href="{{ $bookingUrl }}" class="inline-flex min-h-12 items-center gap-3 rounded-lg border border-brand-600 bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-600/20 transition hover:bg-brand-700">
-                                                <span class="text-base text-white">{{ $slot['time'] }}</span>
-                                                <span class="text-xs text-white/75">{{ $slot['ends_time'] }} · {{ __('app.available_slots') }}</span>
-                                            </a>
-                                        @empty
-                                            <div class="rounded-lg border border-stone-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
-                                                {{ __('app.no_available_manual_slots') }}
+                                                </h2>
+                                                @unless ($selectedManualPanel)
+                                                    <p class="mt-1 text-sm leading-5 text-slate-500">{{ __('app.public_booking_service_help') }}</p>
+                                                @endunless
                                             </div>
-                                        @endforelse
+                                            <a href="{{ $manualCloseUrl }}" data-public-schedule-link class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700" aria-label="{{ __('app.close') }}">
+                                                <x-ui.icon name="close" class="h-5 w-5" />
+                                            </a>
+                                        </div>
+                                    </header>
+
+                                    <div class="p-4">
+                                        @if (! $selectedManualPanel)
+                                            <div class="space-y-2">
+                                                <a href="{{ $compactUrl([...$manualQuery, 'manual_panel' => 'service']) }}" data-public-schedule-link class="flex min-h-16 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                        <x-ui.icon name="class-pass-plans" class="h-5 w-5" />
+                                                    </span>
+                                                    <span class="min-w-0 flex-1">
+                                                        <span class="block text-sm font-semibold text-slate-950">{{ __('app.choose_class_type') }}</span>
+                                                        <span class="mt-0.5 block truncate text-sm text-slate-500">{{ __('app.class_type') }}: {{ $selectedManualClassType?->name ?? __('app.any_option') }}</span>
+                                                    </span>
+                                                    <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-400" />
+                                                </a>
+
+                                                <a href="{{ $compactUrl([...$manualQuery, 'manual_panel' => 'date']) }}" data-public-schedule-link class="flex min-h-16 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                        <x-ui.icon name="calendar" class="h-5 w-5" />
+                                                    </span>
+                                                    <span class="min-w-0 flex-1">
+                                                        <span class="block text-sm font-semibold text-slate-950">{{ __('app.choose_date_and_time') }}</span>
+                                                        <span class="mt-0.5 block truncate text-sm text-slate-500">{{ $manualDateLabel }}</span>
+                                                    </span>
+                                                    <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-400" />
+                                                </a>
+
+                                                @if ($selectedManualKind === \App\Enums\ScheduleKind::PrivateLesson)
+                                                    <a href="{{ $compactUrl([...$manualQuery, 'manual_panel' => 'trainer']) }}" data-public-schedule-link class="flex min-h-16 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                            <x-ui.icon name="trainers" class="h-5 w-5" />
+                                                        </span>
+                                                        <span class="min-w-0 flex-1">
+                                                            <span class="block text-sm font-semibold text-slate-950">{{ __('app.choose_trainer') }}</span>
+                                                            <span class="mt-0.5 block truncate text-sm text-slate-500">{{ $selectedManualTrainer?->name ?? __('app.choose_trainer') }}</span>
+                                                        </span>
+                                                        <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-400" />
+                                                    </a>
+                                                @endif
+
+                                                <a href="{{ $compactUrl([...$manualQuery, 'manual_panel' => 'room']) }}" data-public-schedule-link class="flex min-h-16 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                        <x-ui.icon name="rooms" class="h-5 w-5" />
+                                                    </span>
+                                                    <span class="min-w-0 flex-1">
+                                                        <span class="block text-sm font-semibold text-slate-950">{{ __('app.choose_room') }}</span>
+                                                        <span class="mt-0.5 block truncate text-sm text-slate-500">{{ $selectedManualRoom?->name ?? __('app.choose_room') }}</span>
+                                                    </span>
+                                                    <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-400" />
+                                                </a>
+                                            </div>
+
+                                            <div class="mt-4">
+                                                @if ($compact['manualRequiredFilters'] !== [])
+                                                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                                                        {{ __('app.public_booking_choose_filters', ['filters' => implode(', ', $compact['manualRequiredFilters'])]) }}
+                                                    </div>
+                                                @elseif (($compact['manualAvailability']['closed'] ?? false) === true)
+                                                    <div class="rounded-lg border border-stone-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
+                                                        {{ __('app.studio_closed_on_date') }}
+                                                    </div>
+                                                @else
+                                                    <div class="space-y-2">
+                                                        @forelse (($compact['manualAvailability']['slots'] ?? []) as $slot)
+                                                            @php
+                                                                $bookingParams = array_filter([
+                                                                    'accountSlug' => $account->slug,
+                                                                    'locationSlug' => $location->slug,
+                                                                    'schedule_kind' => $selectedManualKind->value,
+                                                                    'date' => $compact['selectedDate']->toDateString(),
+                                                                    'starts_at' => $slot['starts_at'],
+                                                                    'class_type_id' => $selectedManualClassType?->id,
+                                                                    'trainer_id' => $selectedManualTrainer?->id,
+                                                                    'room_id' => $selectedManualRoom?->id,
+                                                                ], fn ($value) => $value !== null && $value !== '');
+                                                                $bookingUrl = route('public.booking.show', $bookingParams);
+                                                            @endphp
+                                                            <a href="{{ $bookingUrl }}" class="flex min-h-14 items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                                <span>
+                                                                    <span class="block text-base font-semibold text-slate-950">{{ $slot['time'] }}</span>
+                                                                    <span class="mt-0.5 block text-xs font-semibold text-slate-500">{{ $slot['ends_time'] }} · {{ __('app.available_slots') }}</span>
+                                                                </span>
+                                                                <span class="inline-flex min-h-10 items-center justify-center rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white shadow-sm shadow-brand-600/20">
+                                                                    {{ $manualBookLabel }}
+                                                                </span>
+                                                            </a>
+                                                        @empty
+                                                            <div class="rounded-lg border border-stone-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
+                                                                {{ __('app.no_available_manual_slots') }}
+                                                            </div>
+                                                        @endforelse
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        @elseif ($selectedManualPanel === 'service')
+                                            <div class="space-y-2">
+                                                @foreach ($compact['manualClassTypeOptions'] as $option)
+                                                    <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
+                                                        <span>{{ $option['name'] }}</span>
+                                                        @if ($option['active'])
+                                                            <x-ui.icon name="check" class="h-4 w-4" />
+                                                        @endif
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        @elseif ($selectedManualPanel === 'date')
+                                            @if ($compact['manualMonthOptions'] !== [])
+                                                <nav class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2" aria-label="{{ __('app.schedule_months') }}">
+                                                    @foreach ($compact['manualMonthOptions'] as $monthOption)
+                                                        <a href="{{ $monthOption['url'] }}" data-public-schedule-link class="flex h-11 min-w-28 shrink-0 flex-col items-center justify-center rounded-lg border px-4 text-center transition {{ $monthOption['active'] ? 'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20' : 'border-stone-200 bg-white text-slate-700 hover:border-brand-100' }}">
+                                                            <span class="text-sm font-semibold leading-none">{{ $monthOption['label'] }}</span>
+                                                            <span class="mt-1 text-[11px] font-semibold leading-none {{ $monthOption['active'] ? 'text-white/80' : 'text-slate-500' }}">{{ $monthOption['year'] }}</span>
+                                                        </a>
+                                                    @endforeach
+                                                </nav>
+                                            @endif
+
+                                            <div class="grid grid-cols-5 gap-2">
+                                                @foreach ($compact['manualDateOptions'] as $dateOption)
+                                                    <a href="{{ $dateOption['url'] }}" data-public-schedule-link class="flex h-14 flex-col items-center justify-center rounded-lg border text-center transition {{ $dateOption['active'] ? 'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20' : 'border-stone-200 bg-white text-slate-700 hover:border-brand-100' }}">
+                                                        <span class="text-[11px] font-semibold leading-none {{ $dateOption['active'] ? 'text-white/80' : 'text-slate-500' }}">{{ $dateOption['label'] }}</span>
+                                                        <span class="mt-1 text-lg font-semibold leading-none">{{ $dateOption['day'] }}</span>
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        @elseif ($selectedManualPanel === 'trainer')
+                                            <div class="space-y-2">
+                                                @foreach ($compact['manualTrainerOptions'] as $option)
+                                                    @php
+                                                        $optionTrainer = $compact['trainers']->firstWhere('id', $option['id']);
+                                                    @endphp
+                                                    <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
+                                                        @if ($optionTrainer?->photoUrl())
+                                                            <img src="{{ $optionTrainer->photoUrl() }}" alt="" class="h-9 w-9 rounded-full object-cover">
+                                                        @else
+                                                            <span class="flex h-9 w-9 items-center justify-center rounded-full {{ $option['active'] ? 'bg-white/15 text-white' : 'bg-violet-crm-100 text-violet-crm-700' }}">
+                                                                <x-ui.icon name="trainers" class="h-4 w-4" />
+                                                            </span>
+                                                        @endif
+                                                        <span class="min-w-0 flex-1 truncate">{{ $option['name'] }}</span>
+                                                        @if ($optionTrainer?->trainerType)
+                                                            <x-ui.trainer-type-badge :trainer-type="$optionTrainer->trainerType" class="{{ $option['active'] ? 'border-white/30 bg-white/15 text-white' : '' }}" />
+                                                        @endif
+                                                        @if ($option['active'])
+                                                            <x-ui.icon name="check" class="h-4 w-4 shrink-0" />
+                                                        @endif
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        @elseif ($selectedManualPanel === 'room')
+                                            <div class="space-y-2">
+                                                @foreach ($compact['manualRoomOptions'] as $option)
+                                                    <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
+                                                        <span>{{ $option['name'] }}</span>
+                                                        @if ($option['active'])
+                                                            <x-ui.icon name="check" class="h-4 w-4" />
+                                                        @endif
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </div>
-                                @endif
+                                </div>
                             </div>
                         </section>
                     @endif
@@ -251,79 +333,132 @@
                     </nav>
 
                     <section class="mt-3 grid gap-2 md:grid-cols-3">
-                        <details class="group rounded-lg border border-stone-200 bg-white shadow-xs">
-                            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                                <span class="min-w-0">
-                                    <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_class_type') }}</span>
-                                    <span class="block truncate text-sm font-semibold text-slate-950">{{ __('app.class_type') }}: {{ $selectedClassType?->name ?? __('app.any_option') }}</span>
-                                </span>
-                                <x-ui.icon name="chevron-down" class="h-4 w-4 shrink-0 text-slate-400" />
-                            </summary>
-                            <div class="space-y-2 border-t border-stone-100 p-2">
-                                <a href="{{ $compactUrl($withoutQuery($selectedQuery, 'group_class_type')) }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $compact['selectedClassTypeId'] ? 'text-slate-700 hover:bg-slate-50' : 'bg-violet-crm-600 text-white' }}">
-                                    {{ __('app.any_option') }}
-                                </a>
-                                @foreach ($compact['classTypeOptions'] as $option)
-                                    <a href="{{ $option['url'] }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $option['active'] ? 'bg-violet-crm-600 text-white' : 'text-slate-700 hover:bg-slate-50' }}">
-                                        {{ $option['name'] }}
-                                    </a>
-                                @endforeach
-                            </div>
-                        </details>
+                        <a href="{{ $compactUrl([...$selectedQuery, 'group_panel' => 'class_type']) }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                <x-ui.icon name="class-pass-plans" class="h-4 w-4" />
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_class_type') }}</span>
+                                <span class="block text-sm font-semibold leading-snug text-slate-950">{{ __('app.class_type') }}: {{ $selectedClassType?->name ?? __('app.any_option') }}</span>
+                            </span>
+                            <x-ui.icon name="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" />
+                        </a>
 
-                        <details class="group rounded-lg border border-stone-200 bg-white shadow-xs">
-                            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                                <span class="min-w-0">
-                                    <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_trainer') }}</span>
-                                    <span class="block truncate text-sm font-semibold text-slate-950">{{ __('app.trainer') }}: {{ $selectedTrainer?->name ?? __('app.any_option') }}</span>
-                                </span>
-                                <x-ui.icon name="chevron-down" class="h-4 w-4 shrink-0 text-slate-400" />
-                            </summary>
-                            <div class="space-y-2 border-t border-stone-100 p-2">
-                                <a href="{{ $compactUrl($withoutQuery($selectedQuery, 'group_trainer')) }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $compact['selectedTrainerId'] ? 'text-slate-700 hover:bg-slate-50' : 'bg-violet-crm-600 text-white' }}">
-                                    {{ __('app.any_option') }}
-                                </a>
-                                @foreach ($compact['trainerOptions'] as $option)
-                                    @php
-                                        $optionTrainer = $compact['trainers']->firstWhere('id', $option['id']);
-                                    @endphp
-                                    <a href="{{ $option['url'] }}" data-public-schedule-link class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $option['active'] ? 'bg-violet-crm-600 text-white' : 'text-slate-700 hover:bg-slate-50' }}">
-                                        @if ($optionTrainer?->photoUrl())
-                                            <img src="{{ $optionTrainer->photoUrl() }}" alt="" class="h-8 w-8 rounded-full object-cover">
-                                        @else
-                                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-violet-crm-100 text-violet-crm-700">
-                                                <x-ui.icon name="trainers" class="h-4 w-4" />
-                                            </span>
-                                        @endif
-                                        <span class="min-w-0 flex-1 truncate">{{ $option['name'] }}</span>
-                                        @if ($optionTrainer?->trainerType)
-                                            <x-ui.trainer-type-badge :trainer-type="$optionTrainer->trainerType" class="{{ $option['active'] ? 'border-white/30 bg-white/15 text-white' : '' }}" />
-                                        @endif
-                                    </a>
-                                @endforeach
-                            </div>
-                        </details>
+                        <a href="{{ $compactUrl([...$selectedQuery, 'group_panel' => 'trainer']) }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                <x-ui.icon name="trainers" class="h-4 w-4" />
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_trainer') }}</span>
+                                <span class="block text-sm font-semibold leading-snug text-slate-950">{{ __('app.trainer') }}: {{ $selectedTrainer?->name ?? __('app.any_option') }}</span>
+                            </span>
+                            <x-ui.icon name="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" />
+                        </a>
 
-                        <details class="group rounded-lg border border-stone-200 bg-white shadow-xs">
-                            <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                                <span class="min-w-0">
-                                    <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_room') }}</span>
-                                    <span class="block truncate text-sm font-semibold text-slate-950">{{ __('app.room') }}: {{ $selectedRoom?->name ?? __('app.any_option') }}</span>
-                                </span>
-                                <x-ui.icon name="chevron-down" class="h-4 w-4 shrink-0 text-slate-400" />
-                            </summary>
-                            <div class="space-y-2 border-t border-stone-100 p-2">
-                                <a href="{{ $compactUrl($withoutQuery($selectedQuery, 'group_room')) }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $compact['selectedRoomId'] ? 'text-slate-700 hover:bg-slate-50' : 'bg-violet-crm-600 text-white' }}">
-                                    {{ __('app.any_option') }}
-                                </a>
-                                @foreach ($compact['roomOptions'] as $option)
-                                    <a href="{{ $option['url'] }}" data-public-schedule-link class="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold {{ $option['active'] ? 'bg-violet-crm-600 text-white' : 'text-slate-700 hover:bg-slate-50' }}">
-                                        {{ $option['name'] }}
-                                    </a>
-                                @endforeach
-                            </div>
-                        </details>
+                        <a href="{{ $compactUrl([...$selectedQuery, 'group_panel' => 'room']) }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                <x-ui.icon name="rooms" class="h-4 w-4" />
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_room') }}</span>
+                                <span class="block text-sm font-semibold leading-snug text-slate-950">{{ __('app.room') }}: {{ $selectedRoom?->name ?? __('app.any_option') }}</span>
+                            </span>
+                            <x-ui.icon name="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" />
+                        </a>
                     </section>
+
+                    @if ($selectedGroupPanel)
+                        @php
+                            $groupPanelCloseUrl = $compactUrl($selectedQuery);
+                        @endphp
+                        <section class="fixed inset-0 z-50 overflow-y-auto bg-ink-950/45 px-3 py-4 sm:px-6" role="dialog" aria-modal="true" aria-labelledby="group-filter-title">
+                            <div class="mx-auto min-h-full max-w-xl">
+                                <div class="rounded-xl bg-white shadow-2xl shadow-ink-950/20">
+                                    <header class="sticky top-0 z-10 rounded-t-xl border-b border-stone-200 bg-white px-4 py-3">
+                                        <div class="flex items-center justify-between gap-3">
+                                            <h2 id="group-filter-title" class="truncate text-lg font-semibold text-slate-950">
+                                                @if ($selectedGroupPanel === 'class_type')
+                                                    {{ __('app.choose_class_type') }}
+                                                @elseif ($selectedGroupPanel === 'trainer')
+                                                    {{ __('app.choose_trainer') }}
+                                                @else
+                                                    {{ __('app.choose_room') }}
+                                                @endif
+                                            </h2>
+                                            <a href="{{ $groupPanelCloseUrl }}" data-public-schedule-link class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-700" aria-label="{{ __('app.close') }}">
+                                                <x-ui.icon name="close" class="h-5 w-5" />
+                                            </a>
+                                        </div>
+                                    </header>
+
+                                    <div class="space-y-2 p-4">
+                                        @if ($selectedGroupPanel === 'class_type')
+                                            <a href="{{ $compactUrl($withoutQuery($selectedQuery, 'group_class_type')) }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $compact['selectedClassTypeId'] ? 'bg-slate-50 text-slate-800 hover:bg-brand-50' : 'bg-brand-600 text-white' }}">
+                                                <span>{{ __('app.any_option') }}</span>
+                                                @unless ($compact['selectedClassTypeId'])
+                                                    <x-ui.icon name="check" class="h-4 w-4" />
+                                                @endunless
+                                            </a>
+                                            @foreach ($compact['classTypeOptions'] as $option)
+                                                <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
+                                                    <span>{{ $option['name'] }}</span>
+                                                    @if ($option['active'])
+                                                        <x-ui.icon name="check" class="h-4 w-4" />
+                                                    @endif
+                                                </a>
+                                            @endforeach
+                                        @elseif ($selectedGroupPanel === 'trainer')
+                                            <a href="{{ $compactUrl($withoutQuery($selectedQuery, 'group_trainer')) }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $compact['selectedTrainerId'] ? 'bg-slate-50 text-slate-800 hover:bg-brand-50' : 'bg-brand-600 text-white' }}">
+                                                <span class="flex h-9 w-9 items-center justify-center rounded-full {{ $compact['selectedTrainerId'] ? 'bg-violet-crm-100 text-violet-crm-700' : 'bg-white/15 text-white' }}">
+                                                    <x-ui.icon name="trainers" class="h-4 w-4" />
+                                                </span>
+                                                <span class="min-w-0 flex-1 truncate">{{ __('app.any_option') }}</span>
+                                                @unless ($compact['selectedTrainerId'])
+                                                    <x-ui.icon name="check" class="h-4 w-4 shrink-0" />
+                                                @endunless
+                                            </a>
+                                            @foreach ($compact['trainerOptions'] as $option)
+                                                @php
+                                                    $optionTrainer = $compact['trainers']->firstWhere('id', $option['id']);
+                                                @endphp
+                                                <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
+                                                    @if ($optionTrainer?->photoUrl())
+                                                        <img src="{{ $optionTrainer->photoUrl() }}" alt="" class="h-9 w-9 rounded-full object-cover">
+                                                    @else
+                                                        <span class="flex h-9 w-9 items-center justify-center rounded-full {{ $option['active'] ? 'bg-white/15 text-white' : 'bg-violet-crm-100 text-violet-crm-700' }}">
+                                                            <x-ui.icon name="trainers" class="h-4 w-4" />
+                                                        </span>
+                                                    @endif
+                                                    <span class="min-w-0 flex-1 truncate">{{ $option['name'] }}</span>
+                                                    @if ($optionTrainer?->trainerType)
+                                                        <x-ui.trainer-type-badge :trainer-type="$optionTrainer->trainerType" class="{{ $option['active'] ? 'border-white/30 bg-white/15 text-white' : '' }}" />
+                                                    @endif
+                                                    @if ($option['active'])
+                                                        <x-ui.icon name="check" class="h-4 w-4 shrink-0" />
+                                                    @endif
+                                                </a>
+                                            @endforeach
+                                        @else
+                                            <a href="{{ $compactUrl($withoutQuery($selectedQuery, 'group_room')) }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $compact['selectedRoomId'] ? 'bg-slate-50 text-slate-800 hover:bg-brand-50' : 'bg-brand-600 text-white' }}">
+                                                <span>{{ __('app.any_option') }}</span>
+                                                @unless ($compact['selectedRoomId'])
+                                                    <x-ui.icon name="check" class="h-4 w-4" />
+                                                @endunless
+                                            </a>
+                                            @foreach ($compact['roomOptions'] as $option)
+                                                <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
+                                                    <span>{{ $option['name'] }}</span>
+                                                    @if ($option['active'])
+                                                        <x-ui.icon name="check" class="h-4 w-4" />
+                                                    @endif
+                                                </a>
+                                            @endforeach
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    @endif
 
                     <section class="mt-3 space-y-3">
                         @forelse ($compact['classes'] as $scheduledClass)

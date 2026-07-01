@@ -189,6 +189,9 @@ class PublicScheduleTest extends TestCase
             ->assertDontSee('July')
             ->assertSee(__('app.choose_class_type'))
             ->assertSee(__('app.any_option'))
+            ->assertSee('group_panel=class_type', false)
+            ->assertSee('group_panel=trainer', false)
+            ->assertSee('group_panel=room', false)
             ->assertSee('Compact Public Class')
             ->assertSee('Small Hall')
             ->assertSee('trainer-photos/nastya.png')
@@ -196,6 +199,14 @@ class PublicScheduleTest extends TestCase
             ->assertSee('10 free')
             ->assertDontSee('From 400')
             ->assertSee('schedule/book?schedule_kind=group_class&amp;scheduled_class_id='.$scheduledClass->id, false);
+
+        $this->get('/test-compact-public-schedule-studio/main/schedule?date=2026-06-18&group_panel=trainer')
+            ->assertOk()
+            ->assertSee('id="group-filter-title"', false)
+            ->assertSee(__('app.choose_trainer'))
+            ->assertSee('Nastya')
+            ->assertSee('trainer-photos/nastya.png')
+            ->assertSee('TOP Trainer');
 
         Carbon::setTestNow();
     }
@@ -222,15 +233,25 @@ class PublicScheduleTest extends TestCase
         $this->get('/test-compact-manual-service-studio/main/schedule?kind=private_lesson&date=2026-06-18&class_type='.$classType->id.'&trainer='.$trainer->id.'&room='.$room->id)
             ->assertOk()
             ->assertSee(__('app.public_booking_private_lesson_cta'))
-            ->assertSee(__('app.class_type').': Private 60')
-            ->assertSee(__('app.trainer').': Nastya')
-            ->assertSee(__('app.room').': Private Room')
+            ->assertSee(__('app.choose_class_type'))
+            ->assertSee(__('app.choose_date_and_time'))
+            ->assertSee('Private 60')
+            ->assertSee('Nastya')
+            ->assertSee('Private Room')
             ->assertSee('08:00')
+            ->assertSee(__('app.book_this_private_lesson'))
             ->assertSee('schedule/book?schedule_kind=private_lesson', false)
             ->assertSee('starts_at=2026-06-18T08%3A00', false)
             ->assertSee('class_type_id='.$classType->id, false)
             ->assertSee('trainer_id='.$trainer->id, false)
             ->assertSee('room_id='.$room->id, false);
+
+        $this->get('/test-compact-manual-service-studio/main/schedule?kind=private_lesson&manual_panel=date&date=2026-06-18&class_type='.$classType->id.'&trainer='.$trainer->id.'&room='.$room->id)
+            ->assertOk()
+            ->assertSee(__('app.choose_date_and_time'))
+            ->assertSee(__('app.back_to_booking_options'))
+            ->assertSee('June')
+            ->assertSee('18');
 
         Carbon::setTestNow();
     }
