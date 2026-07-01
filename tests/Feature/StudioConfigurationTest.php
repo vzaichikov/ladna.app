@@ -307,6 +307,8 @@ class StudioConfigurationTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']))
             ->assertOk()
+            ->assertSee(__('app.class_passes_and_classes'))
+            ->assertSee(__('app.schedule_generation_policy'))
             ->assertSee(__('app.public_booking_policy'))
             ->assertSee(__('app.allow_guest_public_booking'));
 
@@ -327,6 +329,7 @@ class StudioConfigurationTest extends TestCase
                     'extend_days_enabled' => '0',
                     'extend_days_count' => '1',
                 ],
+                'schedule_generation_weeks' => '6',
                 'allow_guest_public_booking' => '1',
             ])
             ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']));
@@ -334,6 +337,7 @@ class StudioConfigurationTest extends TestCase
         $account->refresh();
 
         $this->assertTrue($account->allowsGuestPublicBooking());
+        $this->assertSame(6, $account->scheduleGenerationWeeks());
         $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
     }
 

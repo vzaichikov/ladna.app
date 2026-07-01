@@ -18,7 +18,7 @@ class SyncTrainerSubstitutions
     {
         $timezone = $this->timezone($account);
         $from = CarbonImmutable::now($timezone)->startOfDay();
-        $until = $from->addWeeks((int) config('ladna.schedule_generation_weeks', 8))->endOfDay();
+        $until = $from->addWeeks($account->scheduleGenerationWeeks())->endOfDay();
 
         $this->syncWindow($account, $from, $until);
     }
@@ -32,7 +32,7 @@ class SyncTrainerSubstitutions
         $from = CarbonImmutable::now($timezone)->subDays(2)->startOfDay();
         $until = CarbonImmutable::now($timezone)
             ->startOfDay()
-            ->addWeeks((int) config('ladna.schedule_generation_weeks', 8))
+            ->addWeeks($account->scheduleGenerationWeeks())
             ->endOfDay();
 
         if ($scheduledClassIds !== []) {

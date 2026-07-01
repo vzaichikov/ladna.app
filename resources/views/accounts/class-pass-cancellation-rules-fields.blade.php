@@ -15,12 +15,12 @@
 <input type="hidden" name="class_pass_cancellation_rules_present" value="1">
 <input type="hidden" name="allow_guest_public_booking" value="0">
 
-<fieldset>
-    <legend class="crm-label">{{ __('app.class_pass_rules_on_delete') }}</legend>
+<fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+    <legend class="crm-label px-1">{{ __('app.class_pass_rules_on_delete') }}</legend>
     <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.class_pass_rules_on_delete_help') }}</p>
 
     <div class="mt-4 space-y-3">
-        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
             <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end">
                 <label class="flex min-w-0 items-start gap-3 text-sm font-medium text-slate-700">
                     <input type="hidden" name="class_pass_cancellation_rules[return_sessions_enabled]" value="0">
@@ -51,7 +51,7 @@
             </div>
         </div>
 
-        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
             <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end">
                 <label class="flex min-w-0 items-start gap-3 text-sm font-medium text-slate-700">
                     <input type="hidden" name="class_pass_cancellation_rules[extend_days_enabled]" value="0">
@@ -84,6 +84,29 @@
     </div>
 
     @error('class_pass_cancellation_rules') <span class="crm-help">{{ $message }}</span> @enderror
+</fieldset>
+
+<fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+    <legend class="crm-label px-1">{{ __('app.schedule_generation_policy') }}</legend>
+    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.schedule_generation_policy_help') }}</p>
+
+    <div class="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end">
+        <div class="text-sm leading-6 text-slate-500">
+            {{ __('app.schedule_generation_weeks_default', ['weeks' => \App\Models\Account::defaultScheduleGenerationWeeks()]) }}
+        </div>
+        <label class="block">
+            <span class="crm-label">{{ __('app.schedule_generation_weeks') }}</span>
+            <input
+                name="schedule_generation_weeks"
+                type="number"
+                min="{{ \App\Models\Account::MIN_SCHEDULE_GENERATION_WEEKS }}"
+                max="{{ \App\Models\Account::MAX_SCHEDULE_GENERATION_WEEKS }}"
+                value="{{ old('schedule_generation_weeks', $account->scheduleGenerationWeeks()) }}"
+                class="crm-field"
+            >
+            @error('schedule_generation_weeks') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+    </div>
 </fieldset>
 
 <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">

@@ -23,7 +23,7 @@ class GenerateScheduleOccurrences
                 ?? config('app.timezone');
 
             $from = CarbonImmutable::now($timezone)->startOfDay();
-            $until = $from->addWeeks((int) config('ladna.schedule_generation_weeks', 8))->endOfDay();
+            $until = $from->addWeeks($series->account->scheduleGenerationWeeks())->endOfDay();
 
             if ($series->end_date && $series->end_date->copy()->timezone($timezone)->endOfDay()->lessThan($until)) {
                 $until = CarbonImmutable::parse($series->end_date->toDateString(), $timezone)->endOfDay();

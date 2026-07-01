@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.59.0',
+                'date' => '2026-07-01',
+                'title' => 'Studio class generation settings',
+                'items' => ['Added a studio-level setting for how many weeks of classes are generated and rebuilt from the weekly schedule, and renamed the owner settings tab to cover both class passes and classes.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.58.0',
                 'date' => '2026-06-30',
                 'title' => 'Public schedule v2 and booking',
@@ -527,6 +534,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.59.0',
+                'date' => '2026-07-01',
+                'title' => 'Налаштування генерації занять студії',
+                'items' => ['Додали налаштування студії для кількості тижнів, на які система створює та перебудовує заняття з тижневого розкладу, і перейменували вкладку налаштувань для абонементів та занять.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.58.0',
                 'date' => '2026-06-30',

@@ -18,11 +18,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking', 'schedule_generation_weeks'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
     use HasFactory;
+
+    public const MIN_SCHEDULE_GENERATION_WEEKS = 1;
+
+    public const MAX_SCHEDULE_GENERATION_WEEKS = 52;
 
     private const DEFAULT_OPENING_TIME = '08:00';
 
@@ -49,6 +53,7 @@ class Account extends Model
             'opening_hours' => 'array',
             'class_pass_cancellation_rules' => 'array',
             'allow_guest_public_booking' => 'boolean',
+            'schedule_generation_weeks' => 'integer',
         ];
     }
 
@@ -256,6 +261,26 @@ class Account extends Model
         return (bool) $this->allow_guest_public_booking;
     }
 
+    public static function defaultScheduleGenerationWeeks(): int
+    {
+        return self::integerInRange(
+            config('ladna.schedule_generation_weeks', 8),
+            8,
+            self::MIN_SCHEDULE_GENERATION_WEEKS,
+            self::MAX_SCHEDULE_GENERATION_WEEKS,
+        );
+    }
+
+    public function scheduleGenerationWeeks(): int
+    {
+        return self::integerInRange(
+            $this->schedule_generation_weeks,
+            self::defaultScheduleGenerationWeeks(),
+            self::MIN_SCHEDULE_GENERATION_WEEKS,
+            self::MAX_SCHEDULE_GENERATION_WEEKS,
+        );
+    }
+
     /**
      * @return array<string, string>
      */
@@ -396,6 +421,13 @@ class Account extends Model
         $integer = filter_var($value, FILTER_VALIDATE_INT);
 
         return is_int($integer) && $integer > 0 ? $integer : $default;
+    }
+
+    private static function integerInRange(mixed $value, int $default, int $min, int $max): int
+    {
+        $integer = filter_var($value, FILTER_VALIDATE_INT);
+
+        return is_int($integer) && $integer >= $min && $integer <= $max ? $integer : $default;
     }
 
     public function classPassPlans(): HasMany

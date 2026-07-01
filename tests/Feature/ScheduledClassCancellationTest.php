@@ -37,13 +37,14 @@ class ScheduledClassCancellationTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']))
             ->assertOk()
-            ->assertSee(__('app.class_pass_rules'))
+            ->assertSee(__('app.class_passes_and_classes'))
             ->assertSee(__('app.return_cancelled_class_sessions'))
             ->assertSee(__('app.return_cancelled_class_sessions_help'))
             ->assertSee(__('app.bonus_sessions_count'))
             ->assertSee(__('app.extend_cancelled_class_pass_days'))
             ->assertSee(__('app.extend_cancelled_class_pass_days_help'))
             ->assertSee(__('app.extension_days_count'))
+            ->assertSee(__('app.schedule_generation_policy'))
             ->assertDontSee('Return X classes')
             ->assertDontSee('Повернути X занять')
             ->assertSee('class_pass_cancellation_rules_present', false);
@@ -64,6 +65,7 @@ class ScheduledClassCancellationTest extends TestCase
                     'extend_days_enabled' => '1',
                     'extend_days_count' => '5',
                 ],
+                'schedule_generation_weeks' => '4',
             ])
             ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']));
 
@@ -73,6 +75,7 @@ class ScheduledClassCancellationTest extends TestCase
             'extend_days_enabled' => true,
             'extend_days_count' => 5,
         ], $account->fresh()->classPassCancellationRules());
+        $this->assertSame(4, $account->fresh()->scheduleGenerationWeeks());
     }
 
     public function test_owner_can_cancel_and_restore_class_with_pass_compensation(): void

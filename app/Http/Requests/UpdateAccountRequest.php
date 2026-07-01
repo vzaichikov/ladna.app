@@ -71,6 +71,7 @@ class UpdateAccountRequest extends FormRequest
             'class_pass_cancellation_rules.extend_days_count' => ['nullable', 'integer', 'min:1', 'max:3650'],
             'public_schedule_view' => ['nullable', Rule::in(PublicScheduleView::values())],
             'allow_guest_public_booking' => ['nullable', 'boolean'],
+            'schedule_generation_weeks' => ['nullable', 'integer', 'min:'.Account::MIN_SCHEDULE_GENERATION_WEEKS, 'max:'.Account::MAX_SCHEDULE_GENERATION_WEEKS],
         ];
     }
 

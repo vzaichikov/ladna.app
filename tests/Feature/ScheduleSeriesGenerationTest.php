@@ -85,6 +85,34 @@ class ScheduleSeriesGenerationTest extends TestCase
         $this->assertSame(8, $firstClass->capacity);
     }
 
+    public function test_account_schedule_generation_weeks_controls_generation_window(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'schedule_generation_weeks' => 1,
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $series = ScheduleSeries::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'weekday' => now('UTC')->isoWeekday(),
+            'start_time' => '14:00',
+            'start_date' => now('UTC')->toDateString(),
+        ]);
+
+        $created = app(GenerateScheduleOccurrences::class)->execute($series);
+
+        $this->assertSame(2, $created);
+        $this->assertSame(2, $series->scheduledClasses()->count());
+        $this->assertSame('2026-06-24', $series->fresh()->generated_until->toDateString());
+
+        Carbon::setTestNow();
+    }
+
     public function test_regeneration_syncs_booked_future_generated_capacity_from_class_type_without_deleting_bookings(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));

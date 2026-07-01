@@ -39,7 +39,7 @@
             href="{{ route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']) }}"
             class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'pass_rules' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
         >
-            {{ __('app.class_pass_rules') }}
+            {{ __('app.class_passes_and_classes') }}
         </a>
         <a
             href="{{ route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'schedule_view']) }}"
