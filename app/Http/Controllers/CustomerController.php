@@ -77,24 +77,46 @@ class CustomerController extends Controller
             $classPassBackfillPreview = $reconcileUnreservedCustomerBookings->previewForCustomer($customer);
         }
 
+        $currentClassPassStatuses = [
+            CustomerClassPassStatus::Active->value,
+            CustomerClassPassStatus::Freezed->value,
+        ];
+        $classPassRelations = [
+            'classPassPlan.classTypes',
+            'classPassPlan.trainerTypes',
+            'classPassPlan.rooms',
+            'issuedLocation',
+            'reservations.classBooking.scheduledClass.classType',
+        ];
+        $classPassTab = $request->query('class_pass_tab') === 'history' || $request->has('class_pass_history_page')
+            ? 'history'
+            : 'active';
+
         $customerClassPasses = $customer->customerClassPasses()
-            ->with([
-                'classPassPlan.classTypes',
-                'classPassPlan.trainerTypes',
-                'classPassPlan.rooms',
-                'issuedLocation',
-                'reservations.classBooking.scheduledClass.classType',
-            ])
+            ->with($classPassRelations)
             ->where('is_active', true)
-            ->whereIn('status', [
-                CustomerClassPassStatus::Active->value,
-                CustomerClassPassStatus::Freezed->value,
-            ])
+            ->whereIn('status', $currentClassPassStatuses)
             ->orderByRaw('CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END')
             ->orderByDesc('opened_at')
             ->orderByDesc('purchased_at')
             ->paginate(5, ['*'], 'class_passes_page')
-            ->withQueryString();
+            ->withQueryString()
+            ->appends(['class_pass_tab' => 'active']);
+
+        $customerClassPassHistory = $customer->customerClassPasses()
+            ->with($classPassRelations)
+            ->where(function ($query) use ($currentClassPassStatuses): void {
+                $query
+                    ->where('is_active', false)
+                    ->orWhereNotIn('status', $currentClassPassStatuses);
+            })
+            ->orderByDesc('closed_at')
+            ->orderByRaw('CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('opened_at')
+            ->orderByDesc('purchased_at')
+            ->paginate(5, ['*'], 'class_pass_history_page')
+            ->withQueryString()
+            ->appends(['class_pass_tab' => 'history']);
 
         return view('customers.edit', [
             'account' => $account,
@@ -105,6 +127,8 @@ class CustomerController extends Controller
                 'classBookings.classPassReservation.customerClassPass',
             ]),
             'customerClassPasses' => $customerClassPasses,
+            'customerClassPassHistory' => $customerClassPassHistory,
+            'classPassTab' => $classPassTab,
             'classPassPlans' => $account->classPassPlans()
                 ->active()
                 ->with(['classTypes', 'trainerTypes', 'rooms'])
