@@ -85,6 +85,22 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('endpoint', false);
     }
 
+    public function test_passes_prices_help_explains_cancelling_mistaken_customer_pass(): void
+    {
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('Як скасувати помилково виданий абонемент', false)
+            ->assertSee('поставте статус Скасовано', false)
+            ->assertSee('зніміть Активний', false)
+            ->assertSee('заповніть Закрито', false)
+            ->assertSee('зніміть Оплачено', false)
+            ->assertSee('не стирається з історії студії', false)
+            ->assertSee('не буде підбиратися для нових записів', false)
+            ->assertSee('Нормалізувати записи', false)
+            ->assertDontSee('database', false)
+            ->assertDontSee('destroy', false);
+    }
+
     public function test_passes_prices_help_explains_freeze_and_day_adjustments(): void
     {
         $this->get(route('help.show', 'passes-prices', false))
