@@ -52,6 +52,7 @@ use App\Http\Controllers\PublicStudioLandingController;
 use App\Http\Controllers\PublicStudioRulesController;
 use App\Http\Controllers\PwaController;
 use App\Http\Controllers\QuickBookingController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
@@ -59,6 +60,7 @@ use App\Http\Controllers\ScheduledClassHistoryController;
 use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\TrainerReportController;
 use App\Http\Controllers\TrainerSubstitutionController;
 use App\Http\Controllers\TrainerTypeController;
 use App\Http\Controllers\WebsiteLeadController;
@@ -237,6 +239,10 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.tariff-payments.pay-now');
         Route::get('accounts/{account}/payments', [AccountPaymentController::class, 'index'])
             ->name('accounts.payments.index');
+        Route::get('accounts/{account}/reports', [ReportController::class, 'index'])
+            ->name('accounts.reports.index');
+        Route::get('accounts/{account}/reports/trainers', TrainerReportController::class)
+            ->name('accounts.reports.trainers');
         Route::get('accounts/{account}/activity-logs', [AccountActivityLogController::class, 'index'])
             ->name('accounts.activity-logs.index');
         Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])

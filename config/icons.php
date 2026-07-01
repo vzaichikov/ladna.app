@@ -30,6 +30,7 @@ return [
         'payments' => 'credit-card',
         'plus' => 'plus',
         'refresh' => 'refresh-cw',
+        'reports' => 'chart-column',
         'rooms' => 'building',
         'schedule' => 'calendar-days',
         'scheduled-tasks' => 'terminal',
