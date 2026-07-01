@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.60.0',
+                'date' => '2026-07-01',
+                'title' => 'Studio reports and trainer activity',
+                'items' => ['Added a studio reports section with a trainer report that shows non-cancelled class totals and visitor counts by period, location, and booking status.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.59.0',
                 'date' => '2026-07-01',
                 'title' => 'Studio class generation settings',
@@ -534,6 +541,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.60.0',
+                'date' => '2026-07-01',
+                'title' => 'Звіти студії та активність тренерів',
+                'items' => ['Додано розділ звітів студії зі звітом по тренерах: він показує кількість нескасованих занять і відвідувачів за періодом, локацією та статусами записів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.59.0',
                 'date' => '2026-07-01',

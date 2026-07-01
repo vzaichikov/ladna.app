@@ -54,6 +54,7 @@
     $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
     $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
+    $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
     $canViewTariffPayments = $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
@@ -122,6 +123,12 @@
             'icon' => 'payments',
             'href' => route('dashboard.accounts.payments.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.payments.*'),
+        ]] : []),
+        ...($canViewReports ? [[
+            'label' => __('app.reports'),
+            'icon' => 'reports',
+            'href' => route('dashboard.accounts.reports.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.reports.*'),
         ]] : []),
     ] : [];
 
