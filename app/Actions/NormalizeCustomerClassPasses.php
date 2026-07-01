@@ -50,15 +50,17 @@ class NormalizeCustomerClassPasses
             $isUsedUp = $usedCount >= $customerClassPass->sessions_count;
             $wasActivePass = $customerClassPass->is_active && $customerClassPass->status === CustomerClassPassStatus::Active;
             $wasFreezedPass = $customerClassPass->is_active && $customerClassPass->status === CustomerClassPassStatus::Freezed;
+            $releasedReservations = false;
 
             if (($wasActivePass || $wasFreezedPass) && $isTotalExpired) {
-                $customerClassPass->reservations()
-                    ->where('status', CustomerClassPassReservationStatus::Reserved->value)
-                    ->update([
-                        'status' => CustomerClassPassReservationStatus::Released->value,
-                        'released_at' => $now,
-                    ]);
+                $releasedReservations = $this->releaseReservedReservations($customerClassPass, $now);
+            }
 
+            if (! $wasActivePass && ! $wasFreezedPass) {
+                $releasedReservations = $this->releaseReservedReservations($customerClassPass, $now) || $releasedReservations;
+            }
+
+            if ($releasedReservations) {
                 $customerClassPass->load('reservations');
             }
 
@@ -78,6 +80,10 @@ class NormalizeCustomerClassPasses
                 $isActive = true;
                 $closedAt = null;
             } elseif (! $wasActivePass) {
+                if ($status === CustomerClassPassStatus::Active && ! $customerClassPass->is_active) {
+                    $status = CustomerClassPassStatus::Cancelled;
+                }
+
                 $isActive = false;
                 $closedAt = $closedAt ?? ($status === CustomerClassPassStatus::Active ? null : $now);
             } elseif ($isUsedUp) {
@@ -121,5 +127,16 @@ class NormalizeCustomerClassPasses
                     'released_at' => null,
                 ])->save();
             });
+    }
+
+    private function releaseReservedReservations(CustomerClassPass $customerClassPass, Carbon $releasedAt): bool
+    {
+        return $customerClassPass->reservations()
+            ->where('status', CustomerClassPassReservationStatus::Reserved->value)
+            ->update([
+                'status' => CustomerClassPassReservationStatus::Released->value,
+                'released_at' => $releasedAt,
+                'used_at' => null,
+            ]) > 0;
     }
 }
