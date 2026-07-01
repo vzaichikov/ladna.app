@@ -6,9 +6,12 @@ use App\Actions\AdjustCustomerClassPassSessions;
 use App\Actions\AdjustCustomerClassPassValidityDays;
 use App\Actions\FreezeCustomerClassPass;
 use App\Actions\IssueCustomerClassPass;
+use App\Actions\NormalizeCustomerClassPasses;
 use App\Actions\ReconcileUnreservedCustomerBookingsForIssuedClassPass;
 use App\Actions\SyncManualCustomerClassPassPayment;
 use App\Actions\UnfreezeCustomerClassPass;
+use App\Enums\CustomerClassPassReservationStatus;
+use App\Enums\CustomerClassPassStatus;
 use App\Http\Requests\StoreCustomerClassPassAdjustmentRequest;
 use App\Http\Requests\StoreCustomerClassPassRequest;
 use App\Http\Requests\StoreCustomerClassPassValidityAdjustmentRequest;
@@ -131,6 +134,8 @@ class CustomerClassPassController extends Controller
         Account $account,
         CustomerClassPass $customerClassPass,
         SyncManualCustomerClassPassPayment $syncManualCustomerClassPassPayment,
+        NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
+        ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings,
     ): RedirectResponse {
         $this->ensureBelongsToAccount($account, $customerClassPass);
 
@@ -149,6 +154,16 @@ class CustomerClassPassController extends Controller
             ->addDays($customerClassPass->total_validity_days)
             ->timezone((string) config('app.timezone', 'UTC'));
 
+        $requestedStatus = CustomerClassPassStatus::from((string) $validated['status']);
+
+        if ($requestedStatus === CustomerClassPassStatus::Freezed) {
+            $validated['is_active'] = true;
+        } elseif ($requestedStatus === CustomerClassPassStatus::Active && ! $validated['is_active']) {
+            $validated['status'] = CustomerClassPassStatus::Cancelled->value;
+        } elseif ($requestedStatus !== CustomerClassPassStatus::Active) {
+            $validated['is_active'] = false;
+        }
+
         if (! $validated['is_active'] && blank($validated['closed_at'] ?? null)) {
             $validated['closed_at'] = now();
         }
@@ -157,8 +172,25 @@ class CustomerClassPassController extends Controller
             $validated['closed_at'] = null;
         }
 
-        DB::transaction(function () use ($account, $customerClassPass, $syncManualCustomerClassPassPayment, $validated, $wasLocationId, $wasPaid): void {
+        $customerWithReleasedReservations = null;
+
+        DB::transaction(function () use ($account, $customerClassPass, $normalizeCustomerClassPasses, $syncManualCustomerClassPassPayment, $validated, $wasLocationId, $wasPaid, &$customerWithReleasedReservations): void {
             $customerClassPass->update($validated);
+
+            if (! $customerClassPass->is_active) {
+                $releasedReservations = $customerClassPass->reservations()
+                    ->where('status', CustomerClassPassReservationStatus::Reserved->value)
+                    ->update([
+                        'status' => CustomerClassPassReservationStatus::Released->value,
+                        'released_at' => now(),
+                        'used_at' => null,
+                    ]);
+
+                if ($releasedReservations > 0) {
+                    $normalizeCustomerClassPasses->forPass($customerClassPass->refresh());
+                    $customerWithReleasedReservations = $customerClassPass->customer()->first();
+                }
+            }
 
             if ($customerClassPass->source !== 'manual') {
                 return;
@@ -172,6 +204,10 @@ class CustomerClassPassController extends Controller
                 $syncManualCustomerClassPassPayment->execute($account, $customerClassPass, (bool) $customerClassPass->is_paid);
             }
         });
+
+        if ($customerWithReleasedReservations) {
+            $reconcileUnreservedCustomerBookings->executeForCustomer($customerWithReleasedReservations);
+        }
 
         return redirect()->route('dashboard.accounts.customer-class-passes.index', $account)
             ->with('status', __('app.customer_class_pass_updated'));

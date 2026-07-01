@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\ReconcileUnreservedCustomerBookingsForIssuedClassPass;
+use App\Enums\CustomerClassPassStatus;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Account;
@@ -76,19 +77,34 @@ class CustomerController extends Controller
             $classPassBackfillPreview = $reconcileUnreservedCustomerBookings->previewForCustomer($customer);
         }
 
+        $customerClassPasses = $customer->customerClassPasses()
+            ->with([
+                'classPassPlan.classTypes',
+                'classPassPlan.trainerTypes',
+                'classPassPlan.rooms',
+                'issuedLocation',
+                'reservations.classBooking.scheduledClass.classType',
+            ])
+            ->where('is_active', true)
+            ->whereIn('status', [
+                CustomerClassPassStatus::Active->value,
+                CustomerClassPassStatus::Freezed->value,
+            ])
+            ->orderByRaw('CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('opened_at')
+            ->orderByDesc('purchased_at')
+            ->paginate(5, ['*'], 'class_passes_page')
+            ->withQueryString();
+
         return view('customers.edit', [
             'account' => $account,
             'customer' => $customer->load([
-                'customerClassPasses.classPassPlan.classTypes',
-                'customerClassPasses.classPassPlan.trainerTypes',
-                'customerClassPasses.classPassPlan.rooms',
-                'customerClassPasses.issuedLocation',
-                'customerClassPasses.reservations.classBooking.scheduledClass.classType',
                 'classBookings.scheduledClass.account',
                 'classBookings.scheduledClass.classType',
                 'classBookings.scheduledClass.location',
                 'classBookings.classPassReservation.customerClassPass',
             ]),
+            'customerClassPasses' => $customerClassPasses,
             'classPassPlans' => $account->classPassPlans()
                 ->active()
                 ->with(['classTypes', 'trainerTypes', 'rooms'])

@@ -557,6 +557,46 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_normalizer_closes_inactive_pass_left_with_active_status(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 4);
+        $customerClassPass = app(IssueCustomerClassPass::class)
+            ->execute($context['account'], $context['customer'], $plan, purchasedAt: Carbon::parse('2026-06-19 10:00:00'));
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $booking = ClassBooking::factory()
+            ->for($context['account'])
+            ->for($scheduledClass)
+            ->for($context['customer'])
+            ->create();
+        $reservation = $customerClassPass->reservations()->create([
+            'account_id' => $context['account']->id,
+            'class_booking_id' => $booking->id,
+            'scheduled_class_id' => $scheduledClass->id,
+            'status' => CustomerClassPassReservationStatus::Reserved->value,
+            'reserved_at' => Carbon::parse('2026-06-19 11:00:00'),
+        ]);
+        $customerClassPass->update([
+            'status' => CustomerClassPassStatus::Active->value,
+            'is_active' => false,
+            'reserved_sessions_count' => 1,
+            'closed_at' => null,
+        ]);
+
+        app(NormalizeCustomerClassPasses::class)->execute();
+
+        $customerClassPass->refresh();
+        $this->assertSame(CustomerClassPassStatus::Cancelled, $customerClassPass->status);
+        $this->assertFalse($customerClassPass->is_active);
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertTrue($customerClassPass->closed_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->fresh()->status);
+        $this->assertTrue($reservation->fresh()->released_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+
+        Carbon::setTestNow();
+    }
+
     /**
      * @return array<string, mixed>
      */

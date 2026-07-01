@@ -11,8 +11,6 @@
 
             return \App\Support\MoneyFormatter::format($priceCents, $currency);
         };
-        $customerClassPasses = $customer->customerClassPasses
-            ->sortByDesc(fn ($customerClassPass) => ($customerClassPass->is_active ? '1' : '0').($customerClassPass->opened_at?->timestamp ?? $customerClassPass->purchased_at?->timestamp ?? 0));
         $bookings = $customer->classBookings
             ->sortByDesc(fn ($booking) => $booking->scheduledClass?->starts_at?->timestamp ?? $booking->created_at?->timestamp ?? 0);
         $formatBookingDate = static function ($booking) use ($account): string {
@@ -107,7 +105,7 @@
             <x-ui.panel padding="none" class="overflow-hidden">
                 <div class="flex flex-col gap-3 border-b border-stone-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_class_passes') }}</h2>
-                    @if ($canManageCustomerClassPasses && $customerClassPasses->isNotEmpty())
+                    @if ($canManageCustomerClassPasses && $customerClassPasses->total() > 0)
                         <x-ui.button
                             :href="route('dashboard.accounts.customers.edit', [$account, $customer, 'class_pass_backfill_preview' => 1])"
                             variant="secondary"
@@ -160,6 +158,11 @@
                 @empty
                     <x-ui.empty-state :title="__('app.no_customer_class_passes')" icon="class-pass-plans" class="m-5" />
                 @endforelse
+                @if ($customerClassPasses->hasPages())
+                    <div class="border-t border-stone-100 px-5 py-4">
+                        {{ $customerClassPasses->onEachSide(1)->links() }}
+                    </div>
+                @endif
             </x-ui.panel>
 
             <x-ui.panel padding="none" class="overflow-hidden">

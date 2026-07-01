@@ -167,6 +167,81 @@ class CustomerClassPassTest extends TestCase
         $this->assertSame(1, CustomerPurchase::whereKey($purchase->id)->count());
     }
 
+    public function test_deactivating_active_customer_class_pass_marks_it_cancelled(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan, $scheduledClass, $location] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create();
+        $reservation = $customerClassPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $booking->id,
+            'scheduled_class_id' => $scheduledClass->id,
+            'status' => CustomerClassPassReservationStatus::Reserved->value,
+            'reserved_at' => Carbon::parse('2026-06-20 09:00:00'),
+        ]);
+
+        $this->actingAs($owner)
+            ->put(
+                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
+                [...$this->classPassUpdatePayload($customerClassPass, $location, isPaid: false), 'is_active' => '0'],
+            )
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+
+        $customerClassPass->refresh();
+
+        $this->assertSame(CustomerClassPassStatus::Cancelled, $customerClassPass->status);
+        $this->assertFalse($customerClassPass->is_active);
+        $this->assertTrue($customerClassPass->closed_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->fresh()->status);
+        $this->assertTrue($reservation->fresh()->released_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_new_pass_can_take_booking_released_from_deactivated_pass(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan, $scheduledClass, $location] = $this->passContext();
+        $oldPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create();
+        $reservation = $oldPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $booking->id,
+            'scheduled_class_id' => $scheduledClass->id,
+            'status' => CustomerClassPassReservationStatus::Reserved->value,
+            'reserved_at' => Carbon::parse('2026-06-20 09:00:00'),
+        ]);
+
+        $this->actingAs($owner)
+            ->put(
+                route('dashboard.accounts.customer-class-passes.update', [$account, $oldPass]),
+                [...$this->classPassUpdatePayload($oldPass, $location, isPaid: false), 'is_active' => '0'],
+            )
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->fresh()->status);
+
+        $newPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
+        $reservation->refresh();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->status);
+        $this->assertSame($newPass->id, $reservation->customer_class_pass_id);
+        $this->assertSame(0, $oldPass->fresh()->reserved_sessions_count);
+        $this->assertSame(1, $newPass->fresh()->reserved_sessions_count);
+
+        Carbon::setTestNow();
+    }
+
     public function test_trial_class_pass_is_blocked_after_multiple_bookings(): void
     {
         [$owner, $account, $customer, $plan, $scheduledClass, $location] = $this->passContext(isTrial: true);
@@ -247,6 +322,65 @@ class CustomerClassPassTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.class_pass').': '.$customerClassPass->code)
             ->assertDontSee('app.class_pass');
+    }
+
+    public function test_customer_page_paginates_current_class_passes_and_hides_inactive_ones(): void
+    {
+        [$owner, $account, $customer, $plan, , $location] = $this->passContext();
+
+        foreach (range(1, 6) as $day) {
+            CustomerClassPass::factory()
+                ->for($account)
+                ->for($customer)
+                ->for($plan, 'classPassPlan')
+                ->create([
+                    'code' => sprintf('ACTIVE-%03d', $day),
+                    'issued_location_id' => $location->id,
+                    'status' => CustomerClassPassStatus::Active->value,
+                    'is_active' => true,
+                    'purchased_at' => Carbon::parse(sprintf('2026-06-%02d 10:00:00', $day)),
+                ]);
+        }
+
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($plan, 'classPassPlan')
+            ->create([
+                'code' => 'USED-0001',
+                'issued_location_id' => $location->id,
+                'status' => CustomerClassPassStatus::UsedUp->value,
+                'is_active' => false,
+                'purchased_at' => Carbon::parse('2026-06-07 10:00:00'),
+            ]);
+
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($plan, 'classPassPlan')
+            ->create([
+                'code' => 'CANCEL-001',
+                'issued_location_id' => $location->id,
+                'status' => CustomerClassPassStatus::Active->value,
+                'is_active' => false,
+                'purchased_at' => Carbon::parse('2026-06-08 10:00:00'),
+            ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customers.edit', [$account, $customer]))
+            ->assertOk()
+            ->assertSee('ACTIVE-006')
+            ->assertSee('class_passes_page=2', false)
+            ->assertDontSee('ACTIVE-001')
+            ->assertDontSee('USED-0001')
+            ->assertDontSee('CANCEL-001');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customers.edit', [$account, $customer]).'?class_passes_page=2')
+            ->assertOk()
+            ->assertSee('ACTIVE-001')
+            ->assertDontSee('USED-0001')
+            ->assertDontSee('CANCEL-001');
     }
 
     public function test_customer_class_pass_index_filters_by_payment_status_and_links_unpaid_notice(): void
