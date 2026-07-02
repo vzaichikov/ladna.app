@@ -13,10 +13,15 @@
         };
         $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
         $unpaidActiveClassPassesCount ??= 0;
+        $partialActiveClassPassesCount ??= 0;
         $paymentStatus ??= '';
         $unpaidFilterUrl = route('dashboard.accounts.customer-class-passes.index', array_merge(['account' => $account], request()->except('page'), [
             'state' => 'active',
             'payment_status' => 'unpaid',
+        ]));
+        $partialFilterUrl = route('dashboard.accounts.customer-class-passes.index', array_merge(['account' => $account], request()->except('page'), [
+            'state' => 'active',
+            'payment_status' => 'partial',
         ]));
     @endphp
 
@@ -32,6 +37,14 @@
             <div class="font-medium">{{ __('app.unpaid_class_passes_notice', ['count' => $unpaidActiveClassPassesCount]) }}</div>
             <x-ui.button :href="$unpaidFilterUrl" variant="secondary" size="sm">
                 {{ __('app.show_unpaid_class_passes') }}
+            </x-ui.button>
+        </div>
+    @endif
+    @if ($partialActiveClassPassesCount > 0 && ! ($state === 'active' && $paymentStatus === 'partial'))
+        <div class="mt-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+            <div class="font-medium">{{ __('app.partial_class_passes_notice', ['count' => $partialActiveClassPassesCount]) }}</div>
+            <x-ui.button :href="$partialFilterUrl" variant="secondary" size="sm">
+                {{ __('app.show_partial_class_passes') }}
             </x-ui.button>
         </div>
     @endif
@@ -56,6 +69,7 @@
                 <select name="payment_status" class="crm-field">
                     <option value="" @selected($paymentStatus === '')>{{ __('app.all_payment_statuses') }}</option>
                     <option value="paid" @selected($paymentStatus === 'paid')>{{ __('app.class_pass_paid') }}</option>
+                    <option value="partial" @selected($paymentStatus === 'partial')>{{ __('app.class_pass_partial') }}</option>
                     <option value="unpaid" @selected($paymentStatus === 'unpaid')>{{ __('app.class_pass_unpaid') }}</option>
                 </select>
             </label>
@@ -81,6 +95,12 @@
                     \App\Enums\CustomerClassPassStatus::Freezed => 'crm-status-warning',
                     default => 'crm-status-muted',
                 };
+                $currentPaymentStatus = $customerClassPass->paymentStatus();
+                $paymentStatusClass = match ($currentPaymentStatus) {
+                    'paid' => 'crm-status-active',
+                    'partial' => 'crm-status-warning',
+                    default => 'crm-status-danger',
+                };
             @endphp
             <div class="crm-row xl:grid-cols-[1fr_1fr_0.8fr_0.9fr_0.9fr_auto] xl:items-center">
                 <div>
@@ -93,6 +113,10 @@
                 </div>
                 <div class="text-sm text-slate-600">
                     <div>{{ $formatMoney($customerClassPass->price_cents, $customerClassPass->currency) }}</div>
+                    @if ($customerClassPass->paidAmountCents() > 0 && ! $customerClassPass->is_paid)
+                        <div class="mt-1">{{ __('app.class_pass_paid_amount') }}: {{ $formatMoney($customerClassPass->paidAmountCents(), $customerClassPass->currency) }}</div>
+                        <div class="mt-1">{{ __('app.class_pass_remaining_amount') }}: {{ $formatMoney($customerClassPass->remainingPaymentCents(), $customerClassPass->currency) }}</div>
+                    @endif
                     <div class="mt-1">{{ $customerClassPass->remainingSessionsCount() }} / {{ $customerClassPass->sessions_count }} {{ __('app.classes_count') }}</div>
                 </div>
                 <div class="text-sm text-slate-600">
@@ -111,7 +135,7 @@
                     <div class="mt-1">{{ __('app.reserved_sessions') }}: {{ $customerClassPass->reserved_sessions_count }}</div>
                 </div>
                 <div class="flex flex-wrap gap-2 xl:justify-end">
-                    <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
+                    <span class="{{ $paymentStatusClass }}">{{ __('app.class_pass_'.$currentPaymentStatus) }}</span>
                     <span class="{{ $statusClass }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
                     <x-ui.action-button :href="route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])" icon="edit" :label="__('app.edit')" />
                 </div>

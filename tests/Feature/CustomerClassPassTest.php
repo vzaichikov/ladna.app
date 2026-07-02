@@ -53,6 +53,7 @@ class CustomerClassPassTest extends TestCase
         $this->assertSame('owner', $customerClassPass->issued_by_actor_role);
         $this->assertSame($location->id, $customerClassPass->issued_location_id);
         $this->assertFalse($customerClassPass->is_paid);
+        $this->assertSame(0, $customerClassPass->paid_amount_cents);
         $this->assertSame(0, CustomerPurchase::whereBelongsTo($customerClassPass)->count());
         $this->assertTrue($customerClassPass->purchased_at->equalTo(Carbon::parse('2026-06-20 10:00:00')));
         $this->assertTrue($customerClassPass->usable_until_at->equalTo(Carbon::parse('2026-10-18 10:00:00')));
@@ -89,6 +90,7 @@ class CustomerClassPassTest extends TestCase
         $purchase = CustomerPurchase::whereBelongsTo($customerClassPass)->firstOrFail();
 
         $this->assertTrue($customerClassPass->is_paid);
+        $this->assertSame($plan->price_cents, $customerClassPass->paid_amount_cents);
         $this->assertSame($location->id, $customerClassPass->issued_location_id);
         $this->assertSame(CustomerPurchase::ProviderStudioCash, $purchase->provider);
         $this->assertSame(CustomerPurchase::SourceManualCashClassPass, $purchase->payment_source);
@@ -101,39 +103,49 @@ class CustomerClassPassTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_manual_class_pass_payment_toggle_creates_and_removes_only_manual_cash_purchase(): void
+    public function test_manual_class_pass_partial_prepay_and_later_payment_create_separate_cash_rows(): void
     {
         [$owner, $account, $customer, $plan, , $location] = $this->passContext();
-        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
+        $plan->update(['price_cents' => 100000]);
 
         $this->actingAs($owner)
-            ->put(
-                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
-                $this->classPassUpdatePayload($customerClassPass, $location, isPaid: true),
-            )
-            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+            ->post(route('dashboard.accounts.customers.class-passes.store', [$account, $customer]), [
+                'class_pass_plan_id' => $plan->id,
+                'issued_location_id' => $location->id,
+                'paid_amount' => '400',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customers.edit', [$account, $customer]));
 
-        $customerClassPass->refresh();
-        $manualPurchase = CustomerPurchase::whereBelongsTo($customerClassPass)
+        $customerClassPass = $customer->customerClassPasses()->firstOrFail();
+        $prepay = CustomerPurchase::whereBelongsTo($customerClassPass)
             ->where('payment_source', CustomerPurchase::SourceManualCashClassPass)
             ->firstOrFail();
 
-        $this->assertTrue($customerClassPass->is_paid);
-        $this->assertSame(CustomerPurchase::ProviderStudioCash, $manualPurchase->provider);
-        $this->assertSame($location->id, $manualPurchase->location_id);
+        $this->assertFalse($customerClassPass->is_paid);
+        $this->assertTrue($customerClassPass->isPartiallyPaid());
+        $this->assertSame(40000, $customerClassPass->paid_amount_cents);
+        $this->assertSame(60000, $customerClassPass->remainingPaymentCents());
+        $this->assertSame(CustomerPurchase::ProviderStudioCash, $prepay->provider);
+        $this->assertSame($location->id, $prepay->location_id);
+        $this->assertSame(40000, $prepay->amount_cents);
 
         $this->actingAs($owner)
-            ->put(
-                route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]),
-                $this->classPassUpdatePayload($customerClassPass, $location, isPaid: false),
-            )
-            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+            ->post(route('dashboard.accounts.customer-class-passes.payments.store', [$account, $customerClassPass]), [
+                'location_id' => $location->id,
+                'amount' => '600',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]));
 
-        $this->assertFalse($customerClassPass->fresh()->is_paid);
-        $this->assertSame(0, CustomerPurchase::whereKey($manualPurchase->id)->count());
+        $customerClassPass->refresh();
+
+        $this->assertTrue($customerClassPass->is_paid);
+        $this->assertSame(100000, $customerClassPass->paid_amount_cents);
+        $this->assertSame(0, $customerClassPass->remainingPaymentCents());
+        $this->assertSame(2, CustomerPurchase::whereBelongsTo($customerClassPass)->count());
+        $this->assertSame(100000, (int) CustomerPurchase::whereBelongsTo($customerClassPass)->sum('amount_cents'));
     }
 
-    public function test_online_purchase_is_not_deleted_when_paid_flag_is_removed_from_pass(): void
+    public function test_online_purchase_payment_state_is_not_changed_by_pass_lifecycle_update(): void
     {
         [$owner, $account, $customer, $plan, , $location] = $this->passContext();
         $customerClassPass = CustomerClassPass::factory()
@@ -144,6 +156,7 @@ class CustomerClassPassTest extends TestCase
                 'source' => 'online_payment',
                 'issued_location_id' => $location->id,
                 'is_paid' => true,
+                'paid_amount_cents' => $plan->price_cents,
             ]);
         $purchase = CustomerPurchase::factory()
             ->for($account)
@@ -163,7 +176,8 @@ class CustomerClassPassTest extends TestCase
             )
             ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
 
-        $this->assertFalse($customerClassPass->fresh()->is_paid);
+        $this->assertTrue($customerClassPass->fresh()->is_paid);
+        $this->assertSame($plan->price_cents, $customerClassPass->fresh()->paid_amount_cents);
         $this->assertSame(1, CustomerPurchase::whereKey($purchase->id)->count());
     }
 
@@ -409,6 +423,7 @@ class CustomerClassPassTest extends TestCase
     {
         [$owner, $account, $customer, $plan, , $location] = $this->passContext();
         $paidPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location, isPaid: true);
+        $partialPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location, paidAmountCents: (int) floor($plan->price_cents / 2));
         $unpaidPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
 
         $this->actingAs($owner)
@@ -416,7 +431,10 @@ class CustomerClassPassTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.unpaid_class_passes_notice', ['count' => 1]))
             ->assertSee(__('app.show_unpaid_class_passes'))
+            ->assertSee(__('app.partial_class_passes_notice', ['count' => 1]))
+            ->assertSee(__('app.show_partial_class_passes'))
             ->assertSee($paidPass->code)
+            ->assertSee($partialPass->code)
             ->assertSee($unpaidPass->code);
 
         $this->actingAs($owner)
@@ -428,6 +446,17 @@ class CustomerClassPassTest extends TestCase
             ->assertSee($unpaidPass->code)
             ->assertSee(__('app.class_pass_unpaid'))
             ->assertDontSee($paidPass->code);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.index', [
+                'account' => $account,
+                'payment_status' => 'partial',
+            ]))
+            ->assertOk()
+            ->assertSee($partialPass->code)
+            ->assertSee(__('app.class_pass_partial'))
+            ->assertDontSee($paidPass->code)
+            ->assertDontSee($unpaidPass->code);
     }
 
     public function test_manual_class_pass_issue_form_requires_confirmation(): void

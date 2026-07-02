@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Actions\IssueCustomerClassPass;
+use App\Actions\RecordManualCustomerClassPassPayment;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\CustomerPurchaseStatus;
@@ -18,6 +20,7 @@ use App\Models\IntegrationSetting;
 use App\Models\Location;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Support\MoneyFormatter;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -90,6 +93,39 @@ class PaymentHistoryTest extends TestCase
             ->assertSee('Podil cash desk')
             ->assertSee(__('app.manual_cash_not_fiscalized'))
             ->assertDontSee(__('app.fiscal_status_pending'));
+    }
+
+    public function test_partial_cash_class_pass_payments_appear_as_separate_rows_and_sum_actual_cash(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['name' => 'Studio Partial', 'default_currency' => 'UAH']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['name' => 'Main cash desk']);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Partial Client']);
+        $plan = ClassPassPlan::factory()->for($account)->create([
+            'name' => 'Partial plan',
+            'price_cents' => 100000,
+            'currency' => 'UAH',
+        ]);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute(
+            $account,
+            $customer,
+            $plan,
+            issuedLocation: $location,
+            paidAmountCents: 40000,
+        );
+
+        app(RecordManualCustomerClassPassPayment::class)->execute($account, $customerClassPass, $location, 60000);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', $account))
+            ->assertOk()
+            ->assertSee('Partial plan')
+            ->assertSee('Partial Client')
+            ->assertSee(MoneyFormatter::format(40000, 'UAH'))
+            ->assertSee(MoneyFormatter::format(60000, 'UAH'))
+            ->assertSee(MoneyFormatter::format(100000, 'UAH'))
+            ->assertSee('Main cash desk');
     }
 
     public function test_studio_owner_can_filter_payment_history_by_location(): void

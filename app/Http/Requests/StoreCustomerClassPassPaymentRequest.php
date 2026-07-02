@@ -2,17 +2,20 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\CustomerClassPassStatus;
 use App\Models\Account;
 use App\Models\CustomerClassPass;
 use App\Models\Location;
+use App\Support\Payments\PaymentAmounts;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-class UpdateCustomerClassPassRequest extends FormRequest
+class StoreCustomerClassPassPaymentRequest extends FormRequest
 {
+    /**
+     * Determine if the user is authorized to make this request.
+     */
     public function authorize(): bool
     {
         $account = $this->route('account');
@@ -21,6 +24,8 @@ class UpdateCustomerClassPassRequest extends FormRequest
     }
 
     /**
+     * Get the validation rules that apply to the request.
+     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
@@ -28,18 +33,13 @@ class UpdateCustomerClassPassRequest extends FormRequest
         $account = $this->route('account');
 
         return [
-            'status' => ['required', Rule::enum(CustomerClassPassStatus::class)],
-            'issued_location_id' => [
+            'location_id' => [
                 'required',
                 'integer',
                 Rule::exists((new Location)->getTable(), 'id')
                     ->where('account_id', $account?->id),
             ],
-            'purchased_at' => ['required', 'date'],
-            'opened_at' => ['nullable', 'date'],
-            'expires_at' => ['nullable', 'date'],
-            'closed_at' => ['nullable', 'date'],
-            'is_active' => ['nullable', 'boolean'],
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
         ];
     }
 
@@ -56,18 +56,15 @@ class UpdateCustomerClassPassRequest extends FormRequest
                     return;
                 }
 
-                $requestedStatus = (string) $this->input('status');
-                $isCurrentlyFreezed = $customerClassPass->status === CustomerClassPassStatus::Freezed;
-                $isRequestingFreezed = $requestedStatus === CustomerClassPassStatus::Freezed->value;
-
-                if ($isCurrentlyFreezed !== $isRequestingFreezed) {
-                    $validator->errors()->add('status', __('app.class_pass_freeze_status_requires_action'));
-                }
-
-                if ($isCurrentlyFreezed && ! $this->boolean('is_active')) {
-                    $validator->errors()->add('is_active', __('app.class_pass_freeze_active_requires_action'));
+                if ($this->amountCents() > $customerClassPass->remainingPaymentCents()) {
+                    $validator->errors()->add('amount', __('app.class_pass_payment_amount_too_high'));
                 }
             },
         ];
+    }
+
+    public function amountCents(): int
+    {
+        return PaymentAmounts::decimalToCents($this->input('amount')) ?? 0;
     }
 }

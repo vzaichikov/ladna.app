@@ -42,6 +42,7 @@ class CustomerClassPassFactory extends Factory
             'plan_name' => fake()->randomElement(['START', 'BASE', 'Private 1h']),
             'plan_slug' => fake()->slug(),
             'price_cents' => fake()->numberBetween(50000, 500000),
+            'paid_amount_cents' => 0,
             'currency' => 'UAH',
             'sessions_count' => fake()->randomElement([1, 4, 8, 12]),
             'validity_days' => 30,

@@ -116,6 +116,18 @@ class StudioDashboardTest extends TestCase
             ->for(Customer::factory()->for($account))
             ->for(ClassPassPlan::factory()->for($account), 'classPassPlan')
             ->create([
+                'code' => 'PARTIAL-001',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 40000,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Active->value,
+                'is_active' => true,
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for(Customer::factory()->for($account))
+            ->for(ClassPassPlan::factory()->for($account), 'classPassPlan')
+            ->create([
                 'code' => 'FROZEN-001',
                 'is_paid' => true,
                 'status' => CustomerClassPassStatus::Freezed->value,
@@ -128,12 +140,18 @@ class StudioDashboardTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.studio_problem_moments'))
             ->assertSee(__('app.problem_unpaid_class_passes'))
+            ->assertSee(__('app.problem_partial_class_passes'))
             ->assertSee(__('app.problem_unreserved_bookings'))
             ->assertSee(__('app.problem_freezed_class_passes'))
             ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
                 'account' => $account,
                 'state' => 'active',
                 'payment_status' => 'unpaid',
+            ]))
+            ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
+                'account' => $account,
+                'state' => 'active',
+                'payment_status' => 'partial',
             ]))
             ->assertSee(route('dashboard.accounts.trainers.index', $account), false)
             ->assertSee(route('dashboard.accounts.customer-class-passes.index', [

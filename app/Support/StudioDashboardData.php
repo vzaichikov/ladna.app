@@ -131,6 +131,17 @@ class StudioDashboardData
                 'accent' => 'danger',
             ],
             [
+                'key' => 'partial_class_passes',
+                'count' => $account->customerClassPasses()->active()->partiallyPaid()->count(),
+                'label' => __('app.problem_partial_class_passes'),
+                'url' => route('dashboard.accounts.customer-class-passes.index', [
+                    'account' => $account,
+                    'state' => 'active',
+                    'payment_status' => 'partial',
+                ]),
+                'accent' => 'warning',
+            ],
+            [
                 'key' => 'unreserved_bookings',
                 'count' => $this->unreservedClassPassBookingIssues->countForAccount($account),
                 'label' => __('app.problem_unreserved_bookings'),

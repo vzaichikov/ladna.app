@@ -23,7 +23,7 @@ class IssueCustomerClassPass
         private readonly ActorSnapshot $actorSnapshot,
         private readonly TransactionalMailDispatcher $mailDispatcher,
         private readonly ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookingsForIssuedClassPass,
-        private readonly SyncManualCustomerClassPassPayment $syncManualCustomerClassPassPayment,
+        private readonly RecordManualCustomerClassPassPayment $recordManualCustomerClassPassPayment,
     ) {}
 
     /**
@@ -39,6 +39,7 @@ class IssueCustomerClassPass
         ?User $issuedBy = null,
         ?Location $issuedLocation = null,
         bool $isPaid = false,
+        ?int $paidAmountCents = null,
     ): CustomerClassPass {
         if ($customer->account_id !== $account->id || $classPassPlan->account_id !== $account->id) {
             abort(404);
@@ -52,21 +53,35 @@ class IssueCustomerClassPass
 
         $purchasedAt ??= now();
         $totalValidityDays = (int) ($snapshot['total_validity_days'] ?? $classPassPlan->total_validity_days);
-        $isPaid = $source === 'online_payment' || $isPaid;
+        $priceCents = (int) ($snapshot['price_cents'] ?? $classPassPlan->price_cents);
+        $paidAmountCents = match (true) {
+            $source === 'online_payment' => $priceCents,
+            $isPaid => $priceCents,
+            $paidAmountCents !== null => min(max(0, $paidAmountCents), $priceCents),
+            default => 0,
+        };
+        $isPaid = $priceCents <= 0 || $paidAmountCents >= $priceCents;
 
-        $classPass = DB::transaction(function () use ($account, $customer, $classPassPlan, $source, $issuedBy, $issuedLocation, $isPaid, $snapshot, $purchasedAt, $totalValidityDays): CustomerClassPass {
+        if ($source === 'manual' && $paidAmountCents > 0 && ! $issuedLocation) {
+            throw ValidationException::withMessages([
+                'issued_location_id' => __('app.class_pass_payment_location_required'),
+            ]);
+        }
+
+        $classPass = DB::transaction(function () use ($account, $customer, $classPassPlan, $source, $issuedBy, $issuedLocation, $isPaid, $paidAmountCents, $priceCents, $snapshot, $purchasedAt, $totalValidityDays): CustomerClassPass {
             $classPass = $account->customerClassPasses()->create([
                 'customer_id' => $customer->id,
                 'class_pass_plan_id' => $classPassPlan->id,
                 'code' => $this->codeGenerator->unique(),
                 'source' => $source,
                 'issued_location_id' => $issuedLocation?->id,
-                'is_paid' => $isPaid,
+                'is_paid' => $source === 'manual' ? $priceCents <= 0 : $isPaid,
                 ...$this->actorSnapshot->prefixed($account, $issuedBy, 'issued_by_actor'),
                 'status' => 'active',
                 'plan_name' => $snapshot['plan_name'] ?? $classPassPlan->name,
                 'plan_slug' => $snapshot['plan_slug'] ?? $classPassPlan->slug,
-                'price_cents' => $snapshot['price_cents'] ?? $classPassPlan->price_cents,
+                'price_cents' => $priceCents,
+                'paid_amount_cents' => $source === 'manual' ? 0 : $paidAmountCents,
                 'currency' => $snapshot['currency'] ?? $classPassPlan->currency,
                 'sessions_count' => $snapshot['sessions_count'] ?? $classPassPlan->sessions_count,
                 'validity_days' => $snapshot['validity_days'] ?? $classPassPlan->validity_days,
@@ -80,8 +95,9 @@ class IssueCustomerClassPass
 
             $classPass = $classPass->refresh();
 
-            if ($source === 'manual') {
-                $this->syncManualCustomerClassPassPayment->execute($account, $classPass, $isPaid);
+            if ($source === 'manual' && $paidAmountCents > 0 && $issuedLocation) {
+                $this->recordManualCustomerClassPassPayment->execute($account, $classPass, $issuedLocation, $paidAmountCents, $purchasedAt);
+                $classPass = $classPass->refresh();
             }
 
             return $classPass;

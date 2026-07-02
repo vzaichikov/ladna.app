@@ -11,6 +11,18 @@
 
             return \App\Support\MoneyFormatter::format($priceCents, $currency);
         };
+        $formatMoneyInput = static function (?int $priceCents): string {
+            if ($priceCents === null) {
+                return '';
+            }
+
+            $whole = intdiv($priceCents, 100);
+            $fraction = $priceCents % 100;
+
+            return $fraction === 0
+                ? (string) $whole
+                : number_format($priceCents / 100, 2, '.', '');
+        };
         $bookings = $customer->classBookings
             ->sortByDesc(fn ($booking) => $booking->scheduledClass?->starts_at?->timestamp ?? $booking->created_at?->timestamp ?? 0);
         $formatBookingDate = static function ($booking) use ($account): string {
@@ -92,10 +104,11 @@
                                 @error('issued_location_id') <span class="crm-help">{{ $message }}</span> @enderror
                             </label>
                         @endif
-                        <label class="flex items-center gap-3 text-sm font-medium text-slate-700">
-                            <input type="hidden" name="is_paid" value="0">
-                            <input name="is_paid" type="checkbox" value="1" @checked(old('is_paid')) class="crm-checkbox">
-                            {{ __('app.class_pass_mark_paid') }}
+                        <input type="hidden" name="is_paid" value="0">
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.class_pass_paid_today') }}</span>
+                            <input name="paid_amount" value="{{ old('paid_amount') }}" inputmode="decimal" placeholder="{{ $formatMoneyInput(0) }}" class="crm-field">
+                            @error('paid_amount') <span class="crm-help">{{ $message }}</span> @enderror
                         </label>
                         @error('is_paid') <span class="crm-help">{{ $message }}</span> @enderror
                         <x-ui.button type="submit">
@@ -158,15 +171,27 @@
                                 \App\Enums\CustomerClassPassStatus::Freezed => 'crm-status-warning',
                                 default => 'crm-status-muted',
                             };
+                            $currentPaymentStatus = $customerClassPass->paymentStatus();
+                            $paymentStatusClass = match ($currentPaymentStatus) {
+                                'paid' => 'crm-status-active',
+                                'partial' => 'crm-status-warning',
+                                default => 'crm-status-danger',
+                            };
                         @endphp
                         <div class="border-b border-stone-100 px-5 py-4 last:border-b-0">
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
                                     <div class="font-semibold text-slate-950">{{ $customerClassPass->plan_name }}</div>
                                     <div class="mt-1 text-sm text-slate-500">{{ $customerClassPass->code }} · {{ $formatMoney($customerClassPass->price_cents, $customerClassPass->currency) }}</div>
+                                    @if ($customerClassPass->isPartiallyPaid())
+                                        <div class="mt-1 text-xs font-semibold text-amber-700">
+                                            {{ __('app.class_pass_paid_amount') }}: {{ $formatMoney($customerClassPass->paidAmountCents(), $customerClassPass->currency) }} ·
+                                            {{ __('app.class_pass_remaining_amount') }}: {{ $formatMoney($customerClassPass->remainingPaymentCents(), $customerClassPass->currency) }}
+                                        </div>
+                                    @endif
                                 </div>
                                 <div class="flex flex-wrap gap-2 sm:justify-end">
-                                    <span class="{{ $customerClassPass->is_paid ? 'crm-status-active' : 'crm-status-danger' }}">{{ $customerClassPass->is_paid ? __('app.class_pass_paid') : __('app.class_pass_unpaid') }}</span>
+                                    <span class="{{ $paymentStatusClass }}">{{ __('app.class_pass_'.$currentPaymentStatus) }}</span>
                                     <span class="{{ $statusClass }}">{{ __('app.'.$customerClassPass->status->value) }}</span>
                                 </div>
                             </div>

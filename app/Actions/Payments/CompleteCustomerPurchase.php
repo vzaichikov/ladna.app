@@ -68,6 +68,7 @@ class CompleteCustomerPurchase
                 } else {
                     $customerClassPass->forceFill([
                         'is_paid' => true,
+                        'paid_amount_cents' => $lockedPurchase->amount_cents,
                         'issued_location_id' => $customerClassPass->issued_location_id ?? $lockedPurchase->location_id,
                     ])->save();
                 }

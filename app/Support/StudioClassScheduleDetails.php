@@ -85,7 +85,7 @@ class StudioClassScheduleDetails
                         ->with([
                             'customer:id,account_id,name',
                             'classPassReservation:id,account_id,class_booking_id,customer_class_pass_id,status',
-                            'classPassReservation.customerClassPass:id,account_id,customer_id,code,plan_name,status,is_paid,sessions_count,reserved_sessions_count,used_sessions_count',
+                            'classPassReservation.customerClassPass:id,account_id,customer_id,code,plan_name,status,is_paid,price_cents,paid_amount_cents,sessions_count,reserved_sessions_count,used_sessions_count',
                         ])
                         ->orderBy('id');
                 },
@@ -161,6 +161,10 @@ class StudioClassScheduleDetails
                 'plan_name' => $classPass->plan_name,
                 'status' => $classPass->status->value,
                 'is_paid' => $classPass->is_paid,
+                'payment_status' => $classPass->paymentStatus(),
+                'price_cents' => $classPass->price_cents,
+                'paid_amount_cents' => $classPass->paidAmountCents(),
+                'remaining_payment_cents' => $classPass->remainingPaymentCents(),
                 'sessions_count' => $classPass->sessions_count,
                 'reserved_sessions_count' => $classPass->reserved_sessions_count,
                 'used_sessions_count' => $classPass->used_sessions_count,

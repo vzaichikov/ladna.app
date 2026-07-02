@@ -52,7 +52,13 @@ class StudioAiContextBuilder
                     ->whereBelongsTo($account)
                     ->where('status', CustomerClassPassStatus::Active->value)
                     ->where('is_active', true)
-                    ->where('is_paid', false)
+                    ->unpaid()
+                    ->count(),
+                'partial_active_class_passes' => CustomerClassPass::query()
+                    ->whereBelongsTo($account)
+                    ->where('status', CustomerClassPassStatus::Active->value)
+                    ->where('is_active', true)
+                    ->partiallyPaid()
                     ->count(),
                 'open_website_leads' => WebsiteLead::query()
                     ->whereBelongsTo($account)

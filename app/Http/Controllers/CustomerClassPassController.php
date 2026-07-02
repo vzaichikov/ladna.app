@@ -8,11 +8,12 @@ use App\Actions\FreezeCustomerClassPass;
 use App\Actions\IssueCustomerClassPass;
 use App\Actions\NormalizeCustomerClassPasses;
 use App\Actions\ReconcileUnreservedCustomerBookingsForIssuedClassPass;
-use App\Actions\SyncManualCustomerClassPassPayment;
+use App\Actions\RecordManualCustomerClassPassPayment;
 use App\Actions\UnfreezeCustomerClassPass;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Http\Requests\StoreCustomerClassPassAdjustmentRequest;
+use App\Http\Requests\StoreCustomerClassPassPaymentRequest;
 use App\Http\Requests\StoreCustomerClassPassRequest;
 use App\Http\Requests\StoreCustomerClassPassValidityAdjustmentRequest;
 use App\Http\Requests\UpdateCustomerClassPassRequest;
@@ -38,10 +39,14 @@ class CustomerClassPassController extends Controller
         $requestedScheduleKind = (string) $request->query('schedule_kind', '');
         $scheduleKind = in_array($requestedScheduleKind, $enabledScheduleKinds, true) ? $requestedScheduleKind : '';
         $requestedPaymentStatus = (string) $request->query('payment_status', '');
-        $paymentStatus = in_array($requestedPaymentStatus, ['paid', 'unpaid'], true) ? $requestedPaymentStatus : '';
+        $paymentStatus = in_array($requestedPaymentStatus, ['paid', 'partial', 'unpaid'], true) ? $requestedPaymentStatus : '';
         $unpaidActiveClassPassesCount = $account->customerClassPasses()
             ->active()
             ->unpaid()
+            ->count();
+        $partialActiveClassPassesCount = $account->customerClassPasses()
+            ->active()
+            ->partiallyPaid()
             ->count();
 
         $customerClassPasses = $account->customerClassPasses()
@@ -60,6 +65,7 @@ class CustomerClassPassController extends Controller
             ->when($state === 'inactive', fn ($query) => $query->where('is_active', false))
             ->when($state === 'freezed', fn ($query) => $query->freezed())
             ->when($paymentStatus === 'paid', fn ($query) => $query->paid())
+            ->when($paymentStatus === 'partial', fn ($query) => $query->partiallyPaid())
             ->when($paymentStatus === 'unpaid', fn ($query) => $query->unpaid())
             ->when($scheduleKind !== '', function ($query) use ($scheduleKind): void {
                 $query->whereHas('classPassPlan', fn ($query) => $query->where('schedule_kind', $scheduleKind));
@@ -78,6 +84,7 @@ class CustomerClassPassController extends Controller
             'paymentStatus' => $paymentStatus,
             'enabledScheduleKinds' => $enabledScheduleKinds,
             'unpaidActiveClassPassesCount' => $unpaidActiveClassPassesCount,
+            'partialActiveClassPassesCount' => $partialActiveClassPassesCount,
         ]);
     }
 
@@ -94,6 +101,7 @@ class CustomerClassPassController extends Controller
             issuedBy: $request->user(),
             issuedLocation: $issuedLocation,
             isPaid: $request->boolean('is_paid'),
+            paidAmountCents: $request->paidAmountCents(),
         );
 
         return redirect()->route('dashboard.accounts.customers.edit', [$account, $customer])
@@ -120,7 +128,7 @@ class CustomerClassPassController extends Controller
         $this->ensureBelongsToAccount($account, $customerClassPass);
         $this->authorize('manageCustomerClassPasses', $account);
 
-        $customerClassPass->load(['customer', 'issuedLocation', 'classPassPlan.classTypes', 'reservations.classBooking.scheduledClass', 'adjustments.user']);
+        $customerClassPass->load(['customer', 'issuedLocation', 'classPassPlan.classTypes', 'reservations.classBooking.scheduledClass', 'adjustments.user', 'purchases.location']);
 
         return view('customer-class-passes.edit', [
             'account' => $account,
@@ -133,22 +141,18 @@ class CustomerClassPassController extends Controller
         UpdateCustomerClassPassRequest $request,
         Account $account,
         CustomerClassPass $customerClassPass,
-        SyncManualCustomerClassPassPayment $syncManualCustomerClassPassPayment,
         NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
         ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings,
     ): RedirectResponse {
         $this->ensureBelongsToAccount($account, $customerClassPass);
 
         $validated = $request->validated();
-        $wasPaid = (bool) $customerClassPass->is_paid;
-        $wasLocationId = $customerClassPass->issued_location_id;
 
         foreach (['purchased_at', 'opened_at', 'expires_at', 'closed_at'] as $dateField) {
             $validated[$dateField] = DateTimePresenter::parseAccountDateTime($validated[$dateField] ?? null, $account);
         }
 
         $validated['is_active'] = $request->boolean('is_active');
-        $validated['is_paid'] = $request->boolean('is_paid');
         $validated['usable_until_at'] = $validated['purchased_at']
             ->timezone(DateTimePresenter::accountTimezone($account))
             ->addDays($customerClassPass->total_validity_days)
@@ -174,7 +178,7 @@ class CustomerClassPassController extends Controller
 
         $customerWithReleasedReservations = null;
 
-        DB::transaction(function () use ($account, $customerClassPass, $normalizeCustomerClassPasses, $syncManualCustomerClassPassPayment, $validated, $wasLocationId, $wasPaid, &$customerWithReleasedReservations): void {
+        DB::transaction(function () use ($customerClassPass, $normalizeCustomerClassPasses, $validated, &$customerWithReleasedReservations): void {
             $customerClassPass->update($validated);
 
             if (! $customerClassPass->is_active) {
@@ -192,17 +196,6 @@ class CustomerClassPassController extends Controller
                 }
             }
 
-            if ($customerClassPass->source !== 'manual') {
-                return;
-            }
-
-            $paymentChanged = $wasPaid !== (bool) $customerClassPass->is_paid;
-            $paidLocationChanged = $customerClassPass->is_paid && $wasLocationId !== $customerClassPass->issued_location_id;
-
-            if ($paymentChanged || $paidLocationChanged) {
-                $customerClassPass->load('classPassPlan');
-                $syncManualCustomerClassPassPayment->execute($account, $customerClassPass, (bool) $customerClassPass->is_paid);
-            }
         });
 
         if ($customerWithReleasedReservations) {
@@ -211,6 +204,29 @@ class CustomerClassPassController extends Controller
 
         return redirect()->route('dashboard.accounts.customer-class-passes.index', $account)
             ->with('status', __('app.customer_class_pass_updated'));
+    }
+
+    public function storePayment(
+        StoreCustomerClassPassPaymentRequest $request,
+        Account $account,
+        CustomerClassPass $customerClassPass,
+        RecordManualCustomerClassPassPayment $recordManualCustomerClassPassPayment,
+    ): RedirectResponse {
+        $this->ensureBelongsToAccount($account, $customerClassPass);
+        $this->authorize('manageCustomerClassPasses', $account);
+
+        $location = $account->locations()->whereKey($request->validated('location_id'))->firstOrFail();
+
+        $recordManualCustomerClassPassPayment->execute(
+            $account,
+            $customerClassPass,
+            $location,
+            $request->amountCents(),
+        );
+
+        return redirect()
+            ->route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])
+            ->with('status', __('app.class_pass_payment_recorded'));
     }
 
     public function storeAdjustment(StoreCustomerClassPassAdjustmentRequest $request, Account $account, CustomerClassPass $customerClassPass, AdjustCustomerClassPassSessions $adjustCustomerClassPassSessions): RedirectResponse

@@ -336,6 +336,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.customer-class-passes.edit');
         Route::put('accounts/{account}/customer-class-passes/{customerClassPass}', [CustomerClassPassController::class, 'update'])
             ->name('accounts.customer-class-passes.update');
+        Route::post('accounts/{account}/customer-class-passes/{customerClassPass}/payments', [CustomerClassPassController::class, 'storePayment'])
+            ->name('accounts.customer-class-passes.payments.store');
         Route::post('accounts/{account}/customer-class-passes/{customerClassPass}/adjustments', [CustomerClassPassController::class, 'storeAdjustment'])
             ->name('accounts.customer-class-passes.adjustments.store');
         Route::post('accounts/{account}/customer-class-passes/{customerClassPass}/validity-adjustments', [CustomerClassPassController::class, 'storeValidityAdjustment'])

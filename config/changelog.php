@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.61.0',
+                'date' => '2026-07-02',
+                'title' => 'Partial class-pass payments',
+                'items' => ['Added partial studio-cash payments for manually issued class passes, with paid and remaining amounts, separate cash-flow rows for each prepayment or balance payment, partial-payment alerts and filters, and updated owner help.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.60.0',
                 'date' => '2026-07-01',
                 'title' => 'Studio reports and trainer activity',
@@ -541,6 +548,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.61.0',
+                'date' => '2026-07-02',
+                'title' => 'Часткова оплата абонементів',
+                'items' => ['Додано часткові готівкові оплати для абонементів, виданих вручну: видно оплачену суму й залишок, кожна передоплата або доплата потрапляє в історію платежів окремим рядком, а для частково оплачених абонементів є окремі підказки, фільтри та оновлена допомога.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.60.0',
                 'date' => '2026-07-01',
