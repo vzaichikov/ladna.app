@@ -29,6 +29,7 @@ class RoomFactory extends Factory
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 9999),
             'description' => fake()->sentence(),
             'capacity' => fake()->numberBetween(6, 16),
+            'color' => null,
             'is_active' => true,
         ];
     }

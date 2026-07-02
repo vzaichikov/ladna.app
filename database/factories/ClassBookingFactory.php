@@ -35,6 +35,7 @@ class ClassBookingFactory extends Factory
             'status' => ClassBookingStatus::Booked->value,
             'attended_at' => null,
             'notes' => null,
+            'skip_class_pass_reservation' => false,
         ];
     }
 }

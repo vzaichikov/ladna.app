@@ -38,6 +38,7 @@ class UnreservedClassPassBookingIssues
                 fn (ClassBookingStatus $status): string => $status->value,
                 ClassBookingStatus::cases(),
             ))
+            ->where("{$classBookingTable}.skip_class_pass_reservation", false)
             ->where("{$scheduledClassTable}.account_id", $accountId)
             ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)
             ->whereDoesntHave('classPassReservation', fn ($query) => $query->whereIn('status', [

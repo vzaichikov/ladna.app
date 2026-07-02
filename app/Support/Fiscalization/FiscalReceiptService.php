@@ -31,8 +31,8 @@ class FiscalReceiptService
             return 'payment amount is zero';
         }
 
-        if ($payment instanceof CustomerPurchase && $payment->isManualCashClassPassPayment()) {
-            return 'manual studio cash class pass payments are not fiscalized';
+        if ($payment instanceof CustomerPurchase && $payment->isManualCashStudioPayment()) {
+            return 'manual studio cash payments are not fiscalized';
         }
 
         if (! $this->availability->methodForPayment($payment)) {

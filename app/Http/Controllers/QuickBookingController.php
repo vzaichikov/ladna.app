@@ -108,6 +108,7 @@ class QuickBookingController extends Controller
             'room_id' => (int) $validated['room_id'],
             'class_type_id' => (int) $validated['class_type_id'],
             'trainer_id' => filled($validated['trainer_id'] ?? null) ? (int) $validated['trainer_id'] : null,
+            'allow_past' => $scheduleKind === ScheduleKind::RoomRental,
         ]);
 
         return response()->json([

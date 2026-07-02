@@ -13,6 +13,7 @@ use App\Models\WebsiteLead;
 use App\Support\ActorSnapshot;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\ManualQuickBookingAvailability;
+use App\Support\Payments\PaymentAmounts;
 use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,7 @@ class CreateQuickBooking
         private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
         private readonly ActorSnapshot $actorSnapshot,
         private readonly TransactionalMailDispatcher $mailDispatcher,
+        private readonly RecordManualClassBookingPayment $recordManualClassBookingPayment,
     ) {}
 
     /**
@@ -39,6 +41,7 @@ class CreateQuickBooking
             $scheduledClass = $scheduleKind === ScheduleKind::GroupClass
                 ? $this->groupScheduledClass($account, (int) $validated['scheduled_class_id'], $customer->id)
                 : $this->createManualScheduledClass($account, $scheduleKind, $validated);
+            $skipClassPassReservation = $this->shouldSkipClassPassReservation($scheduleKind, $validated);
 
             $classBooking = $scheduledClass->classBookings()->updateOrCreate(
                 ['customer_id' => $customer->id],
@@ -49,9 +52,15 @@ class CreateQuickBooking
                     'status' => ClassBookingStatus::Booked->value,
                     'attended_at' => null,
                     'notes' => $validated['notes'] ?? null,
+                    'skip_class_pass_reservation' => $skipClassPassReservation,
                 ],
             );
-            $this->reserveCustomerClassPassForBooking->execute($classBooking);
+
+            if (! $skipClassPassReservation) {
+                $this->reserveCustomerClassPassForBooking->execute($classBooking);
+            }
+
+            $this->recordManualPaymentIfNeeded($account, $scheduleKind, $classBooking, $validated);
 
             $this->markLeadBooked($account, $validated, $customer->id, $classBooking->id);
 
@@ -99,15 +108,27 @@ class CreateQuickBooking
             : null;
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['starts_at'], $timezone);
-        $durationMinutes = (int) ($classType->default_duration_minutes ?: 60);
-        $endsAt = $startsAt->addMinutes($durationMinutes);
+        $isAnytimeRental = $this->shouldSkipClassPassReservation($scheduleKind, $validated);
+        $endsAt = $isAnytimeRental
+            ? CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['ends_at'], $timezone)
+            : $startsAt->addMinutes((int) ($classType->default_duration_minutes ?: 60));
+        $isAvailable = $isAnytimeRental
+            ? $this->manualQuickBookingAvailability->hasRange($account, $scheduleKind, (string) $validated['starts_at'], (string) $validated['ends_at'], [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer?->id,
+                'allow_past' => true,
+            ])
+            : $this->manualQuickBookingAvailability->hasStart($account, $scheduleKind, (string) $validated['starts_at'], [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer?->id,
+                'allow_past' => $scheduleKind === ScheduleKind::RoomRental,
+            ]);
 
-        if (! $this->manualQuickBookingAvailability->hasStart($account, $scheduleKind, (string) $validated['starts_at'], [
-            'location_id' => $location->id,
-            'room_id' => $room->id,
-            'class_type_id' => $classType->id,
-            'trainer_id' => $trainer?->id,
-        ])) {
+        if (! $isAvailable) {
             throw ValidationException::withMessages([
                 'starts_at' => __('app.manual_slot_unavailable'),
             ]);
@@ -131,10 +152,39 @@ class CreateQuickBooking
             'metadata' => [
                 'source' => 'quick_booking',
                 'schedule_kind' => $scheduleKind->value,
+                'rental_mode' => $isAnytimeRental ? 'anytime' : null,
+                'skip_class_pass_reservation' => $isAnytimeRental,
             ],
             'is_public' => (bool) ScheduleKindRegistry::get($scheduleKind)['default_is_public'],
             'status' => ScheduledClassStatus::Scheduled->value,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function shouldSkipClassPassReservation(ScheduleKind $scheduleKind, array $validated): bool
+    {
+        return $scheduleKind === ScheduleKind::RoomRental
+            && ($validated['rental_mode'] ?? 'preset') === 'anytime';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function recordManualPaymentIfNeeded(Account $account, ScheduleKind $scheduleKind, ClassBooking $classBooking, array $validated): void
+    {
+        if ($scheduleKind !== ScheduleKind::RoomRental || blank($validated['payment_amount'] ?? null)) {
+            return;
+        }
+
+        $amountCents = PaymentAmounts::decimalToCents($validated['payment_amount']);
+
+        if ($amountCents === null || $amountCents <= 0) {
+            return;
+        }
+
+        $this->recordManualClassBookingPayment->execute($account, $classBooking, $amountCents);
     }
 
     private function ensureGroupCapacity(ScheduledClass $scheduledClass, int $customerId): void

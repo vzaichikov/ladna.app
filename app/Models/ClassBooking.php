@@ -27,10 +27,12 @@ class ClassBooking extends Model
         'status',
         'attended_at',
         'notes',
+        'skip_class_pass_reservation',
     ];
 
     protected $attributes = [
         'status' => 'booked',
+        'skip_class_pass_reservation' => false,
     ];
 
     /**
@@ -41,6 +43,7 @@ class ClassBooking extends Model
         return [
             'status' => ClassBookingStatus::class,
             'attended_at' => 'datetime',
+            'skip_class_pass_reservation' => 'boolean',
         ];
     }
 
@@ -67,5 +70,11 @@ class ClassBooking extends Model
     public function classPassReservation(): HasOne
     {
         return $this->hasOne(CustomerClassPassReservation::class);
+    }
+
+    public function manualCashPayment(): HasOne
+    {
+        return $this->hasOne(CustomerPurchase::class)
+            ->where('payment_source', CustomerPurchase::SourceManualCashBooking);
     }
 }

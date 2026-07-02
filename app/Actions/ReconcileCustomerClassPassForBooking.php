@@ -20,6 +20,11 @@ class ReconcileCustomerClassPassForBooking
     {
         return DB::transaction(function () use ($classBooking): ?CustomerClassPassReservation {
             $classBooking->loadMissing('classPassReservation.customerClassPass', 'scheduledClass');
+
+            if ($classBooking->skip_class_pass_reservation) {
+                return null;
+            }
+
             $reservation = $classBooking->classPassReservation;
 
             if ($classBooking->status === ClassBookingStatus::Booked) {

@@ -29,7 +29,7 @@ class AccountPaymentController extends Controller
             ->when($locationId, fn (Builder $query): Builder => $query->where('location_id', $locationId));
 
         $payments = (clone $baseQuery)
-            ->with(['customer', 'location', 'classPassPlan', 'customerClassPass', 'fiscalReceipt'])
+            ->with(['customer', 'location', 'classPassPlan', 'customerClassPass', 'classBooking.scheduledClass.room', 'fiscalReceipt'])
             ->newestFirst()
             ->paginate(20)
             ->withQueryString();

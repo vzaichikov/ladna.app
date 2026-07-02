@@ -52,6 +52,9 @@ class StoreQuickBookingRequest extends FormRequest
             'class_type_id' => [Rule::requiredIf((bool) $isManual), 'nullable', Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account?->id)],
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account?->id)],
             'starts_at' => [Rule::requiredIf((bool) $isManual), 'nullable', 'date_format:Y-m-d\TH:i'],
+            'ends_at' => [Rule::requiredIf($scheduleKind === ScheduleKind::RoomRental && $this->input('rental_mode') === 'anytime'), 'nullable', 'date_format:Y-m-d\TH:i'],
+            'rental_mode' => ['nullable', Rule::in(['preset', 'anytime'])],
+            'payment_amount' => ['nullable', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
         ];
     }
 
@@ -102,6 +105,16 @@ class StoreQuickBookingRequest extends FormRequest
                 if ($scheduleKind === ScheduleKind::PrivateLesson && blank($this->input('trainer_id'))) {
                     $validator->errors()->add('trainer_id', __('app.private_lesson_trainer_required'));
                 }
+
+                if ($this->input('rental_mode') === 'anytime' && $scheduleKind !== ScheduleKind::RoomRental) {
+                    $validator->errors()->add('rental_mode', __('app.rental_mode_anytime_only'));
+                }
+
+                if ($scheduleKind === ScheduleKind::RoomRental && $this->input('rental_mode') === 'anytime' && filled($this->input('starts_at')) && filled($this->input('ends_at'))) {
+                    if ((string) $this->input('ends_at') <= (string) $this->input('starts_at')) {
+                        $validator->errors()->add('ends_at', __('app.anytime_rental_end_after_start'));
+                    }
+                }
             },
         ];
     }
@@ -116,6 +129,9 @@ class StoreQuickBookingRequest extends FormRequest
             'customer_id' => blank($this->input('customer_id')) ? null : $this->input('customer_id'),
             'trainer_id' => blank($this->input('trainer_id')) ? null : $this->input('trainer_id'),
             'website_lead_id' => blank($this->input('website_lead_id')) ? null : $this->input('website_lead_id'),
+            'rental_mode' => $this->input('rental_mode') ?: 'preset',
+            'ends_at' => blank($this->input('ends_at')) ? null : $this->input('ends_at'),
+            'payment_amount' => blank($this->input('payment_amount')) ? null : $this->input('payment_amount'),
         ]);
     }
 }

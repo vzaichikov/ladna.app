@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
+#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'class_booking_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
 #[Hidden(['gateway_checkout_payload', 'last_callback_payload'])]
 class CustomerPurchase extends Model
 {
@@ -25,6 +25,8 @@ class CustomerPurchase extends Model
     public const SourceOnlineCheckout = 'online_checkout';
 
     public const SourceManualCashClassPass = 'manual_cash_class_pass';
+
+    public const SourceManualCashBooking = 'manual_cash_booking';
 
     protected $attributes = [
         'status' => 'payment_started',
@@ -79,6 +81,11 @@ class CustomerPurchase extends Model
         return $this->belongsTo(CustomerClassPass::class);
     }
 
+    public function classBooking(): BelongsTo
+    {
+        return $this->belongsTo(ClassBooking::class);
+    }
+
     public function fiscalReceipts(): MorphMany
     {
         return $this->morphMany(FiscalReceipt::class, 'payment');
@@ -97,5 +104,18 @@ class CustomerPurchase extends Model
     public function isManualCashClassPassPayment(): bool
     {
         return $this->payment_source === self::SourceManualCashClassPass;
+    }
+
+    public function isManualCashBookingPayment(): bool
+    {
+        return $this->payment_source === self::SourceManualCashBooking;
+    }
+
+    public function isManualCashStudioPayment(): bool
+    {
+        return in_array($this->payment_source, [
+            self::SourceManualCashClassPass,
+            self::SourceManualCashBooking,
+        ], true);
     }
 }

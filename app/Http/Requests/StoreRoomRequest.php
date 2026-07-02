@@ -32,6 +32,7 @@ class StoreRoomRequest extends FormRequest
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'capacity' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'is_active' => ['nullable', 'boolean'],
         ];
     }

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.62.0',
+                'date' => '2026-07-02',
+                'title' => 'Direct anytime room rentals',
+                'items' => ['Added direct anytime room rental for studio teams: owners can manually add past or current rental ranges without linking them to rental class passes, record studio cash for the booking, use room colors in the schedule, and see clearer cancelled-class styling. Updated owner help for the new rental workflow.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.61.0',
                 'date' => '2026-07-02',
                 'title' => 'Partial class-pass payments',
@@ -548,6 +555,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.62.0',
+                'date' => '2026-07-02',
+                'title' => 'Пряма оренда залу на довільний час',
+                'items' => ['Додано пряму оренду залу на довільний час для команди студії: можна вручну внести минулу або поточну оренду без привʼязки до орендного абонемента, зафіксувати готівку за запис, бачити кольори залів у розкладі та чіткіше розрізняти скасовані заняття. Оновлено допомогу для власниці щодо нового процесу оренди.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.61.0',
                 'date' => '2026-07-02',

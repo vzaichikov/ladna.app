@@ -18,17 +18,29 @@
         default => 'crm-status-scheduled',
     };
     $scheduleKind = $scheduledClass->classType?->schedule_kind;
-    $directionColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
+    $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
+    $isCancelledClass = $scheduledClass->status === \App\Enums\ScheduledClassStatus::Cancelled;
+    $directionColor = $isRoomRental
+        ? $scheduledClass->room?->colorAccent($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
+        : ($scheduledClass->classType?->colorAccent($scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F') ?? '#3B223F');
     $formatColor = $account->scheduleKindColor($scheduleKind);
     $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
     $showRoster = $showRoster ?? false;
+    $classBorderColor = $isCancelledClass ? '#94A3B8' : $directionColor;
 @endphp
 
-<article class="rounded-xl border border-stone-200 bg-white p-4 shadow-xs" style="border-top-color: {{ $directionColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;">
+<article
+    @class([
+        'rounded-xl border p-4 shadow-xs',
+        'border-stone-200 bg-white' => ! $isCancelledClass,
+        'border-slate-300 bg-slate-50' => $isCancelledClass,
+    ])
+    style="border-top-color: {{ $classBorderColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;"
+>
     <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-            <div class="text-sm font-semibold text-brand-600">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
-            <h3 class="mt-1 text-lg font-semibold leading-tight text-slate-950">{{ $scheduledClass->title }}</h3>
+            <div @class(['text-sm font-semibold', 'text-brand-600' => ! $isCancelledClass, 'text-slate-500 line-through' => $isCancelledClass])>{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
+            <h3 @class(['mt-1 text-lg font-semibold leading-tight', 'text-slate-950' => ! $isCancelledClass, 'text-slate-500 line-through' => $isCancelledClass])>{{ $scheduledClass->title }}</h3>
             <p class="mt-1 text-sm text-slate-500">{{ $scheduledClass->location?->name }} · {{ $scheduledClass->room?->name ?? __('app.room') }}</p>
         </div>
         <span class="{{ $statusClass }}">{{ __('app.'.$scheduledClass->status->value) }}</span>

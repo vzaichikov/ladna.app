@@ -15,6 +15,7 @@ use App\Http\Controllers\ApiDocumentationController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ClassBookingController;
+use App\Http\Controllers\ClassBookingPaymentController;
 use App\Http\Controllers\ClassPassPlanController;
 use App\Http\Controllers\ClassPassSegmentController;
 use App\Http\Controllers\ClassTypeController;
@@ -414,6 +415,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.scheduled-classes.bookings.store');
         Route::patch('accounts/{account}/bookings/{classBooking}', [ClassBookingController::class, 'update'])
             ->name('accounts.bookings.update');
+        Route::post('accounts/{account}/bookings/{classBooking}/payment', [ClassBookingPaymentController::class, 'store'])
+            ->name('accounts.bookings.payment.store');
         Route::delete('accounts/{account}/bookings/{classBooking}', [ClassBookingController::class, 'destroy'])
             ->name('accounts.bookings.destroy');
     });

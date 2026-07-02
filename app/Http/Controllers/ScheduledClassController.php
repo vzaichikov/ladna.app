@@ -61,6 +61,7 @@ class ScheduledClassController extends Controller
                 'scheduleSeries',
                 'activeCancellation.effects',
                 'classBookings.customer',
+                'classBookings.manualCashPayment',
                 'classBookings.classPassReservation.customerClassPass.classPassPlan',
             ])
             ->whereBetween('starts_at', [

@@ -4,8 +4,11 @@
     $endsAt = $scheduledClass->ends_at->copy()->timezone($timezone);
     $statusClass = $scheduledClass->displayStatusBadgeClass();
     $scheduleKind = $scheduledClass->classType?->schedule_kind;
+    $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
     $displayTypeLabels = $scheduledClass->displayTypeLabels();
-    $directionColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
+    $directionColor = $isRoomRental
+        ? $scheduledClass->room?->colorAccent($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
+        : ($scheduledClass->classType?->colorAccent($scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F') ?? '#3B223F');
     $formatColor = $account->scheduleKindColor($scheduleKind);
     $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
     $cancellationWindow = app(\App\Support\ClassBookingCancellationWindow::class);
@@ -20,13 +23,24 @@
     $readonly = $readonly ?? false;
     $canManageClassCancellation = auth()->user()?->can('manageSchedule', $account) && auth()->user()?->can('manageBookings', $account);
     $canCancelClass = $canManageClassCancellation && ! $isCancelledClass && $scheduledClass->isStudioCancellationOpen();
+    $classBorderColor = $isCancelledClass ? '#94A3B8' : $directionColor;
 @endphp
 
-<article id="scheduled-class-{{ $scheduledClass->id }}" data-scheduled-class-card data-scheduled-class-id="{{ $scheduledClass->id }}" class="scroll-mt-24 rounded-xl border border-stone-200 bg-white p-4 shadow-xs" style="border-top-color: {{ $directionColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;">
+<article
+    id="scheduled-class-{{ $scheduledClass->id }}"
+    data-scheduled-class-card
+    data-scheduled-class-id="{{ $scheduledClass->id }}"
+    @class([
+        'scroll-mt-24 rounded-xl border p-4 shadow-xs',
+        'border-stone-200 bg-white' => ! $isCancelledClass,
+        'border-slate-300 bg-slate-50' => $isCancelledClass,
+    ])
+    style="border-top-color: {{ $classBorderColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;"
+>
     <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-            <div class="text-sm font-semibold text-brand-600">{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
-            <h3 class="mt-2 text-lg font-semibold leading-tight text-slate-950">{{ $scheduledClass->title }}</h3>
+            <div @class(['text-sm font-semibold', 'text-brand-600' => ! $isCancelledClass, 'text-slate-500 line-through' => $isCancelledClass])>{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
+            <h3 @class(['mt-2 text-lg font-semibold leading-tight', 'text-slate-950' => ! $isCancelledClass, 'text-slate-500 line-through' => $isCancelledClass])>{{ $scheduledClass->title }}</h3>
             <div class="mt-2 flex flex-wrap gap-2">
                 @foreach ($displayTypeLabels as $displayTypeLabel)
                     <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">{{ $displayTypeLabel }}</span>
@@ -161,9 +175,15 @@
                                     <span>{{ __('app.'.$booking->classPassReservation->status->value) }}</span>
                                 </div>
                             @elseif (! $isCancelledClass && in_array($booking->status->value, ['booked', 'attended', 'cancelled', 'no_show'], true))
+                                @if (! $booking->skip_class_pass_reservation)
                                 <div class="mt-2 inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
                                     {{ __('app.no_matching_class_pass_alert') }}
                                 </div>
+                                @else
+                                    <div class="mt-2 inline-flex rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-800">
+                                        {{ __('app.direct_rental_payment') }}
+                                    </div>
+                                @endif
                             @endif
                             @if ($bookingCancellationLocked)
                                 <div class="mt-2 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
@@ -173,6 +193,40 @@
                         </div>
                         <span class="{{ $bookingStatusClass }}">{{ __('app.'.$booking->status->value) }}</span>
                     </div>
+                    @php
+                        $hasActivePassReservation = $booking->classPassReservation
+                            && in_array($booking->classPassReservation->status->value, ['reserved', 'used'], true);
+                        $canRecordBookingPayment = ! $readonly
+                            && ! $isCancelledClass
+                            && $isRoomRental
+                            && ! $hasActivePassReservation
+                            && in_array($booking->status->value, ['booked', 'attended'], true);
+                        $manualCashPayment = $booking->manualCashPayment;
+                    @endphp
+                    @if ($isRoomRental && $manualCashPayment)
+                        <div class="mt-3 inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+                            {{ __('app.class_booking_payment') }}: {{ \App\Support\MoneyFormatter::format($manualCashPayment->amount_cents, $manualCashPayment->currency) }}
+                        </div>
+                    @endif
+                    @if ($canRecordBookingPayment)
+                        <form method="POST" action="{{ route('dashboard.accounts.bookings.payment.store', [$account, $booking]) }}" data-async-form class="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-sky-100 bg-sky-50 p-3">
+                            @csrf
+                            <label class="min-w-40 grow">
+                                <span class="crm-label">{{ __('app.class_booking_payment_amount') }}</span>
+                                <input
+                                    name="amount"
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    inputmode="decimal"
+                                    value="{{ $manualCashPayment ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $manualCashPayment->amount_cents) : '' }}"
+                                    class="crm-field"
+                                    placeholder="0.00"
+                                >
+                            </label>
+                            <x-ui.button type="submit" variant="secondary" size="sm">{{ $manualCashPayment ? __('app.update_payment') : __('app.record_payment') }}</x-ui.button>
+                        </form>
+                    @endif
                     @unless ($isCancelledClass || $readonly)
                     <div class="mt-3 flex flex-wrap gap-2">
                         @can('markAttendance', $account)

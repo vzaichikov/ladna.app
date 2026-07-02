@@ -56,6 +56,9 @@
                     <input type="hidden" name="website_lead_id" value="{{ $quickBookingPrefill['website_lead_id'] ?? '' }}" data-quick-booking-lead-id>
                     @unless ($isGroupQuickBooking)
                         <input type="hidden" name="starts_at" value="" data-manual-booking-starts-at>
+                        @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental)
+                            <input type="hidden" name="ends_at" value="" data-anytime-rental-ends-at>
+                        @endif
                     @endunless
 
                     <div class="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
@@ -81,6 +84,22 @@
                                 </div>
                                 @error('scheduled_class_id') <span class="crm-help">{{ $message }}</span> @enderror
                             @else
+                                @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental)
+                                    <fieldset class="mt-4">
+                                        <legend class="crm-label">{{ __('app.rental_mode') }}</legend>
+                                        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                                            <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-stone-200 bg-white p-3 text-sm font-semibold text-slate-700 transition hover:border-brand-100 hover:bg-brand-50">
+                                                <input type="radio" name="rental_mode" value="preset" checked class="crm-checkbox" data-rental-mode-choice>
+                                                <span>{{ __('app.rental_mode_preset') }}</span>
+                                            </label>
+                                            <label class="flex cursor-pointer items-center gap-3 rounded-lg border border-stone-200 bg-white p-3 text-sm font-semibold text-slate-700 transition hover:border-brand-100 hover:bg-brand-50">
+                                                <input type="radio" name="rental_mode" value="anytime" class="crm-checkbox" data-rental-mode-choice>
+                                                <span>{{ __('app.rental_mode_anytime') }}</span>
+                                            </label>
+                                        </div>
+                                    </fieldset>
+                                @endif
+
                                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                                     @if ($singleLocation)
                                         <input type="hidden" name="location_id" value="{{ $singleLocation->id }}" data-quick-booking-location>
@@ -105,9 +124,9 @@
                                     </label>
                                 </div>
 
-                                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                                <div class="mt-4 grid gap-4 sm:grid-cols-2" @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental) data-rental-preset-fields @endif>
                                     <label class="block">
-                                        <span class="crm-label">{{ __('app.class_type') }}</span>
+                                        <span class="crm-label">{{ $quickBookingKind === \App\Enums\ScheduleKind::RoomRental ? __('app.rental_type') : __('app.class_type') }}</span>
                                         <select name="class_type_id" required class="crm-field" data-manual-booking-class-type>
                                             @foreach ($quickBookingOption['classTypes'] as $classType)
                                                 <option value="{{ $classType->id }}">{{ $classType->name }}</option>
@@ -142,16 +161,26 @@
                                             data-closed="{{ __('app.studio_closed_on_date') }}"
                                         >
                                     </label>
-                                    <label class="block">
+                                    <label class="block" @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental) data-anytime-rental-start-time @endif>
                                         <span class="crm-label">{{ __('app.start_time') }}</span>
                                         <input type="time" required class="crm-field" data-manual-booking-time>
                                     </label>
                                 </div>
 
-                                <div class="mt-4 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-slate-50 p-2" data-manual-booking-results data-empty="{{ __('app.no_available_manual_slots') }}" data-closed="{{ __('app.studio_closed_on_date') }}">
+                                @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental)
+                                    <div class="mt-4 hidden" data-anytime-rental-fields>
+                                        <label class="block">
+                                            <span class="crm-label">{{ __('app.end_time') }}</span>
+                                            <input type="time" class="crm-field" data-anytime-rental-end-time>
+                                        </label>
+                                    </div>
+                                @endif
+
+                                <div class="mt-4 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-slate-50 p-2" data-manual-booking-results data-preset-rental-slots data-empty="{{ __('app.no_available_manual_slots') }}" data-closed="{{ __('app.studio_closed_on_date') }}">
                                     <p class="px-2 py-3 text-sm text-slate-500">{{ __('app.choose_date_for_manual_slots') }}</p>
                                 </div>
                                 @error('starts_at') <span class="crm-help">{{ $message }}</span> @enderror
+                                @error('ends_at') <span class="crm-help">{{ $message }}</span> @enderror
                             @endif
                         </section>
 
@@ -203,6 +232,13 @@
                                 <span class="crm-label">{{ __('app.notes') }}</span>
                                 <input name="notes" class="crm-field">
                             </label>
+
+                            @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental)
+                                <label class="mt-4 block hidden" data-anytime-rental-payment>
+                                    <span class="crm-label">{{ __('app.class_booking_payment_amount') }}</span>
+                                    <input name="payment_amount" type="number" min="0.01" step="0.01" inputmode="decimal" class="crm-field" placeholder="0.00" disabled>
+                                </label>
+                            @endif
                         </section>
                     </div>
 

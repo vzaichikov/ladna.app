@@ -29,6 +29,7 @@ class CustomerPurchaseFactory extends Factory
             'customer_id' => Customer::factory()->for($account),
             'location_id' => null,
             'class_pass_plan_id' => ClassPassPlan::factory()->for($account),
+            'class_booking_id' => null,
             'provider' => 'liqpay',
             'payment_source' => CustomerPurchase::SourceOnlineCheckout,
             'order_id' => 'LP-'.Str::upper(Str::random(16)),

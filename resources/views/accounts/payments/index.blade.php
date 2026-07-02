@@ -89,7 +89,7 @@
                     default => 'crm-status-muted',
                 };
                 $currentProviderLabel = $providerLabelResolver($payment->provider);
-                $showFiscalStatus = $fiscalizationEnabled && ! $payment->isManualCashClassPassPayment();
+                $showFiscalStatus = $fiscalizationEnabled && ! $payment->isManualCashStudioPayment();
             @endphp
 
             <article class="crm-row lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_130px_140px_160px] lg:items-center">
@@ -104,6 +104,14 @@
                     <div class="mt-1 text-slate-500">{{ $payment->customer?->phone ?? $payment->customer?->email ?? __('app.not_set') }}</div>
                     @if ($payment->customerClassPass)
                         <div class="mt-1 text-xs font-semibold text-slate-500">{{ __('app.class_pass_code') }}: {{ $payment->customerClassPass->code }}</div>
+                    @endif
+                    @if ($payment->classBooking?->scheduledClass)
+                        <div class="mt-1 text-xs font-semibold text-slate-500">
+                            {{ __('app.booking') }}: {{ $payment->classBooking->scheduledClass->starts_at->copy()->timezone($payment->classBooking->scheduledClass->displayTimezone())->format('Y-m-d H:i') }}
+                            @if ($payment->classBooking->scheduledClass->room)
+                                · {{ $payment->classBooking->scheduledClass->room->name }}
+                            @endif
+                        </div>
                     @endif
                 </div>
 
@@ -129,7 +137,7 @@
                                 <div class="mt-1 text-rose-700">{{ __('app.fiscalization_contact_checkbox') }}</div>
                             @endif
                         </div>
-                    @elseif ($payment->isManualCashClassPassPayment())
+                    @elseif ($payment->isManualCashStudioPayment())
                         <div class="text-xs leading-5 text-slate-500">{{ __('app.manual_cash_not_fiscalized') }}</div>
                     @endif
                 </div>

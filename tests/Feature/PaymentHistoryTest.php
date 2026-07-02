@@ -10,14 +10,19 @@ use App\Enums\CustomerPurchaseStatus;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
+use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\AccountSubscriptionPayment;
+use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
+use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
+use App\Models\Room;
+use App\Models\ScheduledClass;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\MoneyFormatter;
@@ -93,6 +98,69 @@ class PaymentHistoryTest extends TestCase
             ->assertSee('Podil cash desk')
             ->assertSee(__('app.manual_cash_not_fiscalized'))
             ->assertDontSee(__('app.fiscal_status_pending'));
+    }
+
+    public function test_studio_cash_booking_payment_appears_in_schedule_and_payment_history_without_fiscal_status(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-23 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['name' => 'Studio Rent Cash', 'default_currency' => 'UAH', 'timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $this->enableAccountFiscalization($account);
+        $location = Location::factory()->for($account)->create(['name' => 'Main desk', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Small Hall']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Room rental',
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+        ]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => 'Room rental',
+                'starts_at' => '2026-06-23 10:00:00',
+                'ends_at' => '2026-06-23 11:00:00',
+            ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Rent Client']);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create(['skip_class_pass_reservation' => true]);
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.bookings.payment.store', [$account, $booking]), [
+                'amount' => '350.50',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', __('app.class_booking_payment_recorded'))
+            ->assertJsonPath('scheduled_class_id', $scheduledClass->id);
+
+        $this->assertStringContainsString(__('app.class_booking_payment'), $response->json('card_html'));
+        $this->assertStringContainsString(MoneyFormatter::format(35050, 'UAH'), $response->json('card_html'));
+
+        $payment = CustomerPurchase::whereBelongsTo($account)->where('class_booking_id', $booking->id)->firstOrFail();
+
+        $this->assertSame(CustomerPurchase::ProviderStudioCash, $payment->provider);
+        $this->assertSame(CustomerPurchase::SourceManualCashBooking, $payment->payment_source);
+        $this->assertSame(CustomerPurchaseStatus::PaymentPaid, $payment->status);
+        $this->assertSame(35050, $payment->amount_cents);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', $account))
+            ->assertOk()
+            ->assertSee('Room rental')
+            ->assertSee('Rent Client')
+            ->assertSee('Small Hall')
+            ->assertSee(__('app.booking'))
+            ->assertSee(__('app.provider_studio_cash'))
+            ->assertSee(__('app.manual_cash_not_fiscalized'))
+            ->assertDontSee(__('app.fiscal_status_pending'));
+
+        Carbon::setTestNow();
     }
 
     public function test_partial_cash_class_pass_payments_appear_as_separate_rows_and_sum_actual_cash(): void

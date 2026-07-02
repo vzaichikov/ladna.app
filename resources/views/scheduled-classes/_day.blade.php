@@ -54,14 +54,27 @@
                         $widthPercent = min(100 - $leftPercent, max(6, ($durationMinutes / $timelineTotalMinutes) * 100));
                         $timelineTop = 14 + ($loop->index % 2) * 34;
                         $scheduleKind = $scheduledClass->classType?->schedule_kind;
+                        $isCancelledClass = $scheduledClass->status === \App\Enums\ScheduledClassStatus::Cancelled;
+                        $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
                         $displayTypeLabels = $scheduledClass->displayTypeLabels();
-                        $timelineColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
-                        $timelineTextColor = $scheduledClass->classType?->activityDirection?->colorText('#3B223F') ?? '#FFFFFF';
+                        $timelineColor = $isCancelledClass
+                            ? '#CBD5E1'
+                            : ($isRoomRental
+                                ? $scheduledClass->room?->colorAccent($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
+                                : ($scheduledClass->classType?->colorAccent($scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F') ?? '#3B223F'));
+                        $timelineTextColor = $isCancelledClass
+                            ? '#475569'
+                            : ($isRoomRental
+                                ? $scheduledClass->room?->colorText($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
+                                : ($scheduledClass->classType?->colorText($scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F') ?? '#FFFFFF'));
                         $timelineKindColor = $account->scheduleKindColor($scheduleKind);
                     @endphp
                     <a
                         href="#scheduled-class-{{ $scheduledClass->id }}"
-                        class="absolute flex h-8 items-center gap-2 overflow-hidden rounded-lg border px-2 text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                        @class([
+                            'absolute flex h-8 items-center gap-2 overflow-hidden rounded-lg border px-2 text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2',
+                            'line-through opacity-80' => $isCancelledClass,
+                        ])
                         style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; border-right-color: {{ $timelineKindColor }}; border-right-width: 5px; color: {{ $timelineTextColor }};"
                         title="{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }} · {{ $scheduledClass->title }}"
                     >

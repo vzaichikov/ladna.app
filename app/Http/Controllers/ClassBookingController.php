@@ -165,6 +165,7 @@ class ClassBookingController extends Controller
             'scheduleSeries',
             'activeCancellation.effects',
             'classBookings.customer',
+            'classBookings.manualCashPayment',
             'classBookings.classPassReservation.customerClassPass.classPassPlan',
         ]);
 

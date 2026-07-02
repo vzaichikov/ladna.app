@@ -1124,12 +1124,18 @@ function updateManualBookingStartsAt(form) {
     const dateInput = form?.querySelector('[data-manual-booking-date]');
     const timeInput = form?.querySelector('[data-manual-booking-time]');
     const startsAtInput = form?.querySelector('[data-manual-booking-starts-at]');
+    const endTimeInput = form?.querySelector('[data-anytime-rental-end-time]');
+    const endsAtInput = form?.querySelector('[data-anytime-rental-ends-at]');
 
     if (!dateInput || !timeInput || !startsAtInput) {
         return;
     }
 
     startsAtInput.value = dateInput.value && timeInput.value ? `${dateInput.value}T${timeInput.value}` : '';
+
+    if (endsAtInput) {
+        endsAtInput.value = dateInput.value && endTimeInput?.value ? `${dateInput.value}T${endTimeInput.value}` : '';
+    }
 }
 
 function resetManualBookingTime(form) {
@@ -1139,6 +1145,52 @@ function resetManualBookingTime(form) {
         timeInput.value = '';
     }
 
+    const endTimeInput = form?.querySelector('[data-anytime-rental-end-time]');
+
+    if (endTimeInput) {
+        endTimeInput.value = '';
+    }
+
+    updateManualBookingStartsAt(form);
+}
+
+function isAnytimeRental(form) {
+    return form?.querySelector('[data-rental-mode-choice]:checked')?.value === 'anytime';
+}
+
+function syncRentalModeFields(form) {
+    const anytime = isAnytimeRental(form);
+    const anytimeFields = form?.querySelector('[data-anytime-rental-fields]');
+    const anytimeStartTime = form?.querySelector('[data-anytime-rental-start-time]');
+    const anytimePayment = form?.querySelector('[data-anytime-rental-payment]');
+    const endTimeInput = form?.querySelector('[data-anytime-rental-end-time]');
+    const paymentInput = form?.querySelector('input[name="payment_amount"]');
+    const presetFields = form?.querySelector('[data-rental-preset-fields]');
+    const results = form?.querySelector('[data-manual-booking-results]');
+    const timeInput = form?.querySelector('[data-manual-booking-time]');
+
+    anytimeFields?.classList.toggle('hidden', !anytime);
+    anytimeStartTime?.classList.toggle('hidden', !anytime);
+    anytimePayment?.classList.toggle('hidden', !anytime);
+    presetFields?.classList.toggle('hidden', anytime);
+
+    if (endTimeInput) {
+        endTimeInput.required = anytime;
+    }
+
+    if (timeInput && form?.querySelector('[data-rental-mode-choice]')) {
+        timeInput.required = anytime;
+    }
+
+    if (paymentInput) {
+        paymentInput.disabled = !anytime;
+
+        if (!anytime) {
+            paymentInput.value = '';
+        }
+    }
+
+    results?.classList.toggle('hidden', anytime);
     updateManualBookingStartsAt(form);
 }
 
@@ -1201,6 +1253,12 @@ function loadManualBookingAvailability(form) {
     const classTypeId = form.querySelector('[data-manual-booking-class-type]')?.value;
     const trainerInput = form.querySelector('[data-manual-booking-trainer]');
     const trainerId = trainerInput?.value || '';
+    const anytimeRental = isAnytimeRental(form);
+
+    if (anytimeRental) {
+        syncRentalModeFields(form);
+        return;
+    }
 
     resetManualBookingTime(form);
 
@@ -1754,7 +1812,22 @@ function initQuickBookingModals() {
         input.addEventListener('change', () => loadManualBookingAvailability(input.closest('form')));
     });
 
-    document.querySelectorAll('[data-manual-booking-time]').forEach((input) => {
+    document.querySelectorAll('[data-rental-mode-choice]').forEach((input) => {
+        if (input.dataset.rentalModeReady === 'true') {
+            return;
+        }
+
+        input.dataset.rentalModeReady = 'true';
+        input.addEventListener('change', () => {
+            const form = input.closest('form');
+
+            syncRentalModeFields(form);
+            loadManualBookingAvailability(form);
+        });
+        syncRentalModeFields(input.closest('form'));
+    });
+
+    document.querySelectorAll('[data-manual-booking-time], [data-anytime-rental-end-time]').forEach((input) => {
         if (input.dataset.manualTimeReady === 'true') {
             return;
         }

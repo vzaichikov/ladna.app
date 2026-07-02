@@ -15,6 +15,10 @@ class ReserveCustomerClassPassForBooking
     {
         $classBooking->loadMissing(['scheduledClass.classType', 'scheduledClass.trainer', 'scheduledClass.room', 'customer']);
 
+        if ($classBooking->skip_class_pass_reservation) {
+            return null;
+        }
+
         if (! in_array($classBooking->status, ClassBookingStatus::cases(), true)) {
             return null;
         }

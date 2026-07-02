@@ -13,7 +13,7 @@ class ManualQuickBookingAvailability
     private const SLOT_STEP_MINUTES = 30;
 
     /**
-     * @param  array{date: string, location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null}  $input
+     * @param  array{date: string, location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, allow_past?: bool}  $input
      * @return array{
      *     date: string,
      *     timezone: string,
@@ -42,6 +42,7 @@ class ManualQuickBookingAvailability
         $localDate = CarbonImmutable::createFromFormat('Y-m-d H:i:s', $input['date'].' 00:00:00', $timezone);
         $openingHours = $account->openingHoursForIsoWeekday($localDate->isoWeekday());
         $durationMinutes = (int) ($classType->default_duration_minutes ?: 60);
+        $allowPast = (bool) ($input['allow_past'] ?? false);
 
         if (! $openingHours) {
             return [
@@ -71,7 +72,7 @@ class ManualQuickBookingAvailability
         for ($slotStart = $opensAt; $slotStart->addMinutes($durationMinutes)->lessThanOrEqualTo($closesAt); $slotStart = $slotStart->addMinutes(self::SLOT_STEP_MINUTES)) {
             $slotEnd = $slotStart->addMinutes($durationMinutes);
 
-            if ($slotStart->lessThan($now) || $this->hasOverlap($blockers, $slotStart, $slotEnd)) {
+            if ((! $allowPast && $slotStart->lessThan($now)) || $this->hasOverlap($blockers, $slotStart, $slotEnd)) {
                 continue;
             }
 
@@ -94,7 +95,7 @@ class ManualQuickBookingAvailability
     }
 
     /**
-     * @param  array{location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null}  $input
+     * @param  array{location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, allow_past?: bool}  $input
      */
     public function hasStart(Account $account, ScheduleKind $scheduleKind, string $startsAt, array $input): bool
     {
@@ -111,6 +112,60 @@ class ManualQuickBookingAvailability
 
         return collect($availability['slots'])
             ->contains(fn (array $slot): bool => $slot['starts_at'] === $startsAt);
+    }
+
+    /**
+     * @param  array{location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, allow_past?: bool}  $input
+     */
+    public function hasRange(Account $account, ScheduleKind $scheduleKind, string $startsAt, string $endsAt, array $input): bool
+    {
+        if ($scheduleKind !== ScheduleKind::RoomRental) {
+            return false;
+        }
+
+        $location = $account->locations()->whereKey($input['location_id'])->firstOrFail();
+        $room = $account->rooms()
+            ->whereKey($input['room_id'])
+            ->where('location_id', $location->id)
+            ->firstOrFail();
+        $account->classTypes()
+            ->whereKey($input['class_type_id'])
+            ->where('schedule_kind', $scheduleKind->value)
+            ->firstOrFail();
+
+        $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
+        $slotStart = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $startsAt, $timezone);
+        $slotEnd = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $endsAt, $timezone);
+        $allowPast = (bool) ($input['allow_past'] ?? false);
+
+        if ($slotEnd->lessThanOrEqualTo($slotStart) || (! $allowPast && $slotStart->lessThan(CarbonImmutable::now($timezone)))) {
+            return false;
+        }
+
+        $localDate = $slotStart->startOfDay();
+
+        if (! $slotEnd->isSameDay($slotStart)) {
+            return false;
+        }
+
+        $openingHours = $account->openingHoursForIsoWeekday($localDate->isoWeekday());
+
+        if (! $openingHours) {
+            return false;
+        }
+
+        $opensAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $slotStart->format('Y-m-d').' '.$openingHours['opens_at'], $timezone);
+        $closesAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $slotStart->format('Y-m-d').' '.$openingHours['closes_at'], $timezone);
+
+        if ($closesAt->lessThanOrEqualTo($opensAt) || $slotStart->lessThan($opensAt) || $slotEnd->greaterThan($closesAt)) {
+            return false;
+        }
+
+        return ! $this->hasOverlap(
+            $this->blockers($account, $room->id, null, $slotStart, $slotEnd),
+            $slotStart,
+            $slotEnd,
+        );
     }
 
     /**

@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Actions\IssueCustomerClassPass;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\WebsiteLeadStatus;
 use App\Models\Account;
 use App\Models\ClassBooking;
+use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
+use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -289,6 +292,41 @@ class QuickBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_room_rental_manual_availability_includes_past_slots_for_owner_entry(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 11:15:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'opening_hours' => [
+                1 => ['enabled' => true, 'opens_at' => '10:00', 'closes_at' => '12:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'default_duration_minutes' => 60,
+        ]);
+
+        $response = $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::RoomRental->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+            ]))
+            ->assertOk();
+
+        $this->assertSame(['10:00', '10:30', '11:00'], array_column($response->json('data'), 'time'));
+
+        Carbon::setTestNow();
+    }
+
     public function test_manual_availability_returns_closed_day_without_slots(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
@@ -458,6 +496,126 @@ class QuickBookingTest extends TestCase
             ->assertSessionHasErrors('starts_at');
 
         $this->assertSame(1, ScheduledClass::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_can_quick_book_anytime_room_rental_without_linking_matching_rental_pass(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-23 15:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'default_currency' => 'UAH',
+            'opening_hours' => [
+                1 => ['enabled' => true, 'opens_at' => '10:00', 'closes_at' => '18:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Small Hall']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Rental',
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'default_duration_minutes' => 60,
+            'default_capacity' => 1,
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Rental Client']);
+        $plan = ClassPassPlan::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'name' => 'Rental Pass',
+            'sessions_count' => 5,
+            'total_validity_days' => 60,
+        ]);
+        $plan->classTypes()->sync([$classType->id]);
+        $plan->rooms()->sync([$room->id]);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute(
+            $account,
+            $customer,
+            $plan,
+            purchasedAt: Carbon::parse('2026-06-01 10:00:00', 'UTC'),
+        );
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::RoomRental->value,
+                'rental_mode' => 'anytime',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'starts_at' => '2026-06-22T14:10',
+                'ends_at' => '2026-06-22T15:40',
+                'customer_id' => $customer->id,
+                'payment_amount' => '550.25',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', __('app.quick_booking_created'));
+
+        $scheduledClass = ScheduledClass::whereBelongsTo($account)->where('title', 'Rental')->firstOrFail();
+        $booking = ClassBooking::whereBelongsTo($account)->whereBelongsTo($customer)->firstOrFail();
+        $payment = CustomerPurchase::whereBelongsTo($account)->where('class_booking_id', $booking->id)->firstOrFail();
+
+        $this->assertSame($scheduledClass->id, $booking->scheduled_class_id);
+        $this->assertTrue($booking->skip_class_pass_reservation);
+        $this->assertSame('anytime', $scheduledClass->metadata['rental_mode']);
+        $this->assertSame(90, (int) $scheduledClass->starts_at->diffInMinutes($scheduledClass->ends_at));
+        $this->assertSame(0, $booking->classPassReservation()->count());
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(CustomerPurchase::SourceManualCashBooking, $payment->payment_source);
+        $this->assertSame(55025, $payment->amount_cents);
+        $this->assertNull($payment->class_pass_plan_id);
+        $this->assertNull($payment->customer_class_pass_id);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_anytime_room_rental_rejects_ranges_that_overlap_existing_room_booking(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'opening_hours' => [
+                1 => ['enabled' => true, 'opens_at' => '10:00', 'closes_at' => '18:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'default_duration_minutes' => 60,
+        ]);
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'starts_at' => '2026-06-22 14:00:00',
+                'ends_at' => '2026-06-22 15:00:00',
+            ]);
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->post(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::RoomRental->value,
+                'rental_mode' => 'anytime',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'starts_at' => '2026-06-22T14:30',
+                'ends_at' => '2026-06-22T15:30',
+                'customer_phone' => '+380671112244',
+                'customer_name' => 'Overlap Client',
+            ])
+            ->assertRedirect(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertSessionHasErrors('starts_at');
+
+        $this->assertSame(1, ScheduledClass::whereBelongsTo($account)->count());
+        $this->assertSame(0, ClassBooking::whereBelongsTo($account)->count());
 
         Carbon::setTestNow();
     }
