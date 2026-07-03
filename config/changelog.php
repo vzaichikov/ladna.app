@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.62.1',
+                'date' => '2026-07-03',
+                'title' => 'Quick booking validation fixes',
+                'items' => ['Improved quick booking validation for room rentals, private lessons, and custom classes: missing customer or time data and occupied slots now show clear errors inside the modal, and the anytime rental form keeps its money and time fields easier to use on mobile.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.62.0',
                 'date' => '2026-07-02',
                 'title' => 'Direct anytime room rentals',
@@ -555,6 +562,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.62.1',
+                'date' => '2026-07-03',
+                'title' => 'Виправлення перевірок швидкого запису',
+                'items' => ['Покращено перевірки у швидкому записі для оренди залу, індивідуальних занять і довільних занять: якщо не вибрано клієнта, не заповнено час або слот зайнятий, помилка тепер показується прямо в модальному вікні, а форма довільної оренди стала зручнішою на мобільному.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.62.0',
                 'date' => '2026-07-02',

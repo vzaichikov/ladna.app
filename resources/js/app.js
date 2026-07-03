@@ -1161,6 +1161,7 @@ function isAnytimeRental(form) {
 function syncRentalModeFields(form) {
     const anytime = isAnytimeRental(form);
     const anytimeFields = form?.querySelector('[data-anytime-rental-fields]');
+    const anytimeTimeRow = form?.querySelector('[data-anytime-rental-time-row]');
     const anytimeStartTime = form?.querySelector('[data-anytime-rental-start-time]');
     const anytimePayment = form?.querySelector('[data-anytime-rental-payment]');
     const endTimeInput = form?.querySelector('[data-anytime-rental-end-time]');
@@ -1170,6 +1171,7 @@ function syncRentalModeFields(form) {
     const timeInput = form?.querySelector('[data-manual-booking-time]');
 
     anytimeFields?.classList.toggle('hidden', !anytime);
+    anytimeTimeRow?.classList.toggle('hidden', !anytime);
     anytimeStartTime?.classList.toggle('hidden', !anytime);
     anytimePayment?.classList.toggle('hidden', !anytime);
     presetFields?.classList.toggle('hidden', anytime);
@@ -1923,12 +1925,12 @@ function initCopyButtons() {
     });
 }
 
-function asyncStatusElement() {
-    return document.querySelector('[data-async-status]');
+function asyncStatusElement(form = null) {
+    return form?.querySelector('[data-async-form-status]') ?? document.querySelector('[data-async-status]');
 }
 
-function setAsyncStatus(message, type = 'success') {
-    const status = asyncStatusElement();
+function setAsyncStatus(message, type = 'success', form = null) {
+    const status = asyncStatusElement(form);
 
     if (!status || !message) {
         return;
@@ -1941,8 +1943,8 @@ function setAsyncStatus(message, type = 'success') {
     status.classList.remove('hidden');
 }
 
-function fallbackAsyncMessage(type = 'error') {
-    const status = asyncStatusElement();
+function fallbackAsyncMessage(type = 'error', form = null) {
+    const status = asyncStatusElement(form);
 
     if (!status) {
         return 'Request failed.';
@@ -1966,10 +1968,32 @@ function clearAsyncFormErrors(form) {
         field.removeAttribute('data-async-invalid');
         field.classList.remove('border-rose-300', 'focus:border-rose-500', 'focus:ring-rose-100');
     });
+    form.querySelectorAll('[data-async-form-status]').forEach((status) => {
+        status.textContent = '';
+        status.classList.add('hidden');
+    });
+}
+
+function formFieldSelector(attribute, name) {
+    const escapedName = window.CSS?.escape
+        ? window.CSS.escape(name)
+        : String(name).replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+
+    return `[${attribute}="${escapedName}"]`;
 }
 
 function formControlByName(form, name) {
-    return Array.from(form.elements).find((element) => element.name === name);
+    return form.querySelector(formFieldSelector('data-async-field', name))
+        ?? Array.from(form.elements).find((element) => element.name === name && element.type !== 'hidden')
+        ?? Array.from(form.elements).find((element) => element.name === name);
+}
+
+function asyncErrorContainer(form, name, control) {
+    return form.querySelector(formFieldSelector('data-async-error-for', name))
+        ?? control?.closest('[data-customer-autocomplete]')
+        ?? control?.closest('label')
+        ?? control?.parentElement
+        ?? form;
 }
 
 function renderAsyncFormErrors(form, errors) {
@@ -1977,7 +2001,7 @@ function renderAsyncFormErrors(form, errors) {
 
     Object.entries(errors).forEach(([field, messages]) => {
         const control = formControlByName(form, field);
-        const container = control?.closest('[data-customer-autocomplete]') ?? control?.closest('label') ?? control?.parentElement ?? form;
+        const container = asyncErrorContainer(form, field, control);
         const message = Array.isArray(messages) ? messages[0] : messages;
 
         if (control) {
@@ -1998,7 +2022,19 @@ function renderAsyncFormErrors(form, errors) {
         .flat()
         .find(Boolean);
 
-    setAsyncStatus(firstMessage ?? fallbackAsyncMessage('validation'), 'error');
+    setAsyncStatus(firstMessage ?? fallbackAsyncMessage('validation', form), 'error', form);
+
+    const firstInvalidControl = form.querySelector('[data-async-invalid]');
+    const firstError = form.querySelector('[data-async-error]');
+    const visibleInvalidControl = firstInvalidControl instanceof HTMLElement && firstInvalidControl.offsetParent !== null
+        ? firstInvalidControl
+        : null;
+
+    if (visibleInvalidControl) {
+        visibleInvalidControl.focus({ preventScroll: true });
+    }
+
+    (visibleInvalidControl ?? firstError)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 function replaceScheduledClassCard(cardHtml, fallbackCard) {
@@ -2125,8 +2161,14 @@ async function submitAsyncForm(form) {
                 }
             }
 
+            setAsyncStatus(payload.message, 'success', form);
+
+            if (payload.reload || form.dataset.asyncSuccess === 'reload') {
+                window.setTimeout(() => window.location.reload(), 50);
+                return;
+            }
+
             replaceScheduledClassCard(payload.card_html ?? '', fallbackCard);
-            setAsyncStatus(payload.message);
             return;
         }
 
@@ -2135,9 +2177,9 @@ async function submitAsyncForm(form) {
             return;
         }
 
-        setAsyncStatus(payload.message ?? fallbackAsyncMessage(), 'error');
+        setAsyncStatus(payload.message ?? fallbackAsyncMessage('error', form), 'error', form);
     } catch {
-        setAsyncStatus(fallbackAsyncMessage(), 'error');
+        setAsyncStatus(fallbackAsyncMessage('error', form), 'error', form);
     } finally {
         delete form.dataset.confirmed;
 

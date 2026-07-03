@@ -19,22 +19,44 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class QuickBookingController extends Controller
 {
     public function store(StoreQuickBookingRequest $request, Account $account, CreateQuickBooking $createQuickBooking): RedirectResponse|JsonResponse
     {
-        $classBooking = $createQuickBooking->execute($account, $request->user(), $request->validated());
+        try {
+            $classBooking = $createQuickBooking->execute($account, $request->user(), $request->validated());
+        } catch (ValidationException $exception) {
+            if ($this->expectsJsonValidationResponse($request)) {
+                return response()->json([
+                    'message' => collect($exception->errors())->flatten()->first() ?: __('app.async_validation_failed'),
+                    'errors' => $exception->errors(),
+                ], 422);
+            }
+
+            throw $exception;
+        }
 
         if ($request->expectsJson()) {
+            $request->session()->flash('status', __('app.quick_booking_created'));
+
             return response()->json([
                 'message' => __('app.quick_booking_created'),
                 'booking_id' => $classBooking->id,
                 'scheduled_class_id' => $classBooking->scheduled_class_id,
+                'reload' => true,
             ], 201);
         }
 
         return back()->with('status', __('app.quick_booking_created'));
+    }
+
+    private function expectsJsonValidationResponse(Request $request): bool
+    {
+        return $request->expectsJson()
+            || $request->ajax()
+            || str_contains((string) $request->header('Accept'), 'json');
     }
 
     public function groupAvailability(Request $request, Account $account): JsonResponse

@@ -500,6 +500,179 @@ class QuickBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_quick_booking_json_rejects_anytime_room_rental_without_customer_details(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'opening_hours' => [
+                1 => ['enabled' => true, 'opens_at' => '10:00', 'closes_at' => '18:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'default_duration_minutes' => 60,
+        ]);
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::RoomRental->value,
+                'rental_mode' => 'anytime',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'starts_at' => '2026-06-22T14:00',
+                'ends_at' => '2026-06-22T15:00',
+            ]);
+
+        $this->assertSame(422, $response->status(), $response->getContent());
+        $this->assertSame(__('app.quick_booking_customer_required'), $response->json('errors.customer_name.0'));
+        $this->assertSame(__('app.quick_booking_customer_required'), $response->json('errors.customer_phone.0'));
+
+        $this->assertSame(0, ScheduledClass::whereBelongsTo($account)->count());
+        $this->assertSame(0, ClassBooking::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_quick_booking_json_rejects_anytime_room_rental_without_end_time(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'opening_hours' => [
+                1 => ['enabled' => true, 'opens_at' => '10:00', 'closes_at' => '18:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::RoomRental->value,
+                'rental_mode' => 'anytime',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'starts_at' => '2026-06-22T14:00',
+                'customer_id' => $customer->id,
+            ]);
+
+        $this->assertSame(422, $response->status(), $response->getContent());
+        $this->assertSame(__('app.quick_booking_end_time_required'), $response->json('errors.ends_at.0'));
+
+        $this->assertSame(0, ScheduledClass::whereBelongsTo($account)->count());
+        $this->assertSame(0, ClassBooking::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_quick_booking_json_rejects_unavailable_private_lesson_slot(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'opening_hours' => [
+                1 => ['enabled' => true, 'opens_at' => '10:00', 'closes_at' => '18:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create();
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'starts_at' => '2026-06-22 14:30:00',
+                'ends_at' => '2026-06-22 15:30:00',
+            ]);
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'starts_at' => '2026-06-22T14:00',
+                'customer_id' => $customer->id,
+            ]);
+
+        $this->assertSame(422, $response->status(), $response->getContent());
+        $this->assertSame(__('app.manual_slot_unavailable'), $response->json('errors.starts_at.0'));
+
+        $this->assertSame(1, ScheduledClass::whereBelongsTo($account)->count());
+        $this->assertSame(0, ClassBooking::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_quick_booking_json_rejects_full_group_class_slot(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'starts_at' => '2026-06-22 14:00:00',
+                'ends_at' => '2026-06-22 15:00:00',
+                'capacity' => 1,
+            ]);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for(Customer::factory()->for($account))
+            ->create(['status' => ClassBookingStatus::Booked->value]);
+        $customer = Customer::factory()->for($account)->create();
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::GroupClass->value,
+                'scheduled_class_id' => $scheduledClass->id,
+                'customer_id' => $customer->id,
+            ]);
+
+        $this->assertSame(422, $response->status(), $response->getContent());
+        $this->assertSame(__('app.no_available_group_slots'), $response->json('errors.scheduled_class_id.0'));
+
+        $this->assertSame(1, ClassBooking::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_owner_can_quick_book_anytime_room_rental_without_linking_matching_rental_pass(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-23 15:00:00', 'UTC'));
@@ -566,6 +739,56 @@ class QuickBookingTest extends TestCase
         $this->assertSame(55025, $payment->amount_cents);
         $this->assertNull($payment->class_pass_plan_id);
         $this->assertNull($payment->customer_class_pass_id);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_quick_booking_json_creates_anytime_room_rental_and_requests_reload(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-23 15:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'default_currency' => 'UAH',
+            'opening_hours' => [
+                2 => ['enabled' => true, 'opens_at' => '10:00', 'closes_at' => '18:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Direct rental',
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::RoomRental->value,
+                'rental_mode' => 'anytime',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'starts_at' => '2026-06-23T14:15',
+                'ends_at' => '2026-06-23T15:45',
+                'customer_id' => $customer->id,
+            ]);
+
+        $this->assertSame(201, $response->status(), $response->getContent());
+        $this->assertSame(__('app.quick_booking_created'), $response->json('message'));
+        $this->assertTrue($response->json('reload'));
+
+        $booking = ClassBooking::whereBelongsTo($account)->whereBelongsTo($customer)->firstOrFail();
+
+        $response->assertJsonPath('booking_id', $booking->id)
+            ->assertJsonPath('scheduled_class_id', $booking->scheduled_class_id)
+            ->assertSessionHas('status', __('app.quick_booking_created'));
+
+        $this->assertTrue($booking->skip_class_pass_reservation);
+        $this->assertSame(1, ScheduledClass::whereBelongsTo($account)->count());
 
         Carbon::setTestNow();
     }

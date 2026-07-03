@@ -50,7 +50,7 @@
                     </div>
                 </div>
             @else
-                <form method="POST" action="{{ route('dashboard.accounts.quick-bookings.store', $account) }}" class="flex min-h-0 flex-1 flex-col">
+                <form method="POST" action="{{ route('dashboard.accounts.quick-bookings.store', $account) }}" class="flex min-h-0 flex-1 flex-col" data-async-form data-async-success="reload" novalidate>
                     @csrf
                     <input type="hidden" name="schedule_kind" value="{{ $quickBookingKind->value }}">
                     <input type="hidden" name="website_lead_id" value="{{ $quickBookingPrefill['website_lead_id'] ?? '' }}" data-quick-booking-lead-id>
@@ -62,6 +62,13 @@
                     @endunless
 
                     <div class="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
+                        <div
+                            data-async-form-status
+                            data-error-message="{{ __('app.async_request_failed') }}"
+                            data-validation-message="{{ __('app.async_validation_failed') }}"
+                            class="hidden rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 shadow-xs"
+                        ></div>
+
                         <section class="rounded-lg border border-stone-200 bg-white p-4">
                             <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">{{ __('app.booking_section') }}</h3>
 
@@ -82,6 +89,7 @@
                                 <div class="mt-4 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-slate-50 p-2" data-group-class-results>
                                     <p class="px-2 py-3 text-sm text-slate-500">{{ __('app.choose_date_for_group_classes') }}</p>
                                 </div>
+                                <div data-async-error-for="scheduled_class_id"></div>
                                 @error('scheduled_class_id') <span class="crm-help">{{ $message }}</span> @enderror
                             @else
                                 @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental)
@@ -97,6 +105,7 @@
                                                 <span>{{ __('app.rental_mode_anytime') }}</span>
                                             </label>
                                         </div>
+                                        <div data-async-error-for="rental_mode"></div>
                                     </fieldset>
                                 @endif
 
@@ -161,19 +170,30 @@
                                             data-closed="{{ __('app.studio_closed_on_date') }}"
                                         >
                                     </label>
-                                    <label class="block" @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental) data-anytime-rental-start-time @endif>
-                                        <span class="crm-label">{{ __('app.start_time') }}</span>
-                                        <input type="time" required class="crm-field" data-manual-booking-time>
-                                    </label>
+                                    @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental)
+                                        <div class="hidden grid grid-cols-2 gap-3" data-anytime-rental-time-row>
+                                            <label class="block" data-anytime-rental-start-time>
+                                                <span class="crm-label">{{ __('app.start_time') }}</span>
+                                                <input type="time" required class="crm-field" data-manual-booking-time data-async-field="starts_at">
+                                            </label>
+                                            <label class="block" data-anytime-rental-fields>
+                                                <span class="crm-label">{{ __('app.end_time') }}</span>
+                                                <input type="time" class="crm-field" data-anytime-rental-end-time data-async-field="ends_at">
+                                            </label>
+                                        </div>
+                                    @else
+                                        <label class="block">
+                                            <span class="crm-label">{{ __('app.start_time') }}</span>
+                                            <input type="time" required class="crm-field" data-manual-booking-time data-async-field="starts_at">
+                                        </label>
+                                    @endif
                                 </div>
 
                                 @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental)
-                                    <div class="mt-4 hidden" data-anytime-rental-fields>
-                                        <label class="block">
-                                            <span class="crm-label">{{ __('app.end_time') }}</span>
-                                            <input type="time" class="crm-field" data-anytime-rental-end-time>
-                                        </label>
-                                    </div>
+                                    <label class="mt-4 block hidden" data-anytime-rental-payment>
+                                        <span class="crm-label">{{ __('app.class_booking_payment_amount') }}</span>
+                                        <input name="payment_amount" type="number" min="0.01" step="0.01" inputmode="decimal" class="crm-field" placeholder="0.00" disabled>
+                                    </label>
                                 @endif
 
                                 <div class="mt-4 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-stone-200 bg-slate-50 p-2" data-manual-booking-results data-preset-rental-slots data-empty="{{ __('app.no_available_manual_slots') }}" data-closed="{{ __('app.studio_closed_on_date') }}">
@@ -232,13 +252,6 @@
                                 <span class="crm-label">{{ __('app.notes') }}</span>
                                 <input name="notes" class="crm-field">
                             </label>
-
-                            @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental)
-                                <label class="mt-4 block hidden" data-anytime-rental-payment>
-                                    <span class="crm-label">{{ __('app.class_booking_payment_amount') }}</span>
-                                    <input name="payment_amount" type="number" min="0.01" step="0.01" inputmode="decimal" class="crm-field" placeholder="0.00" disabled>
-                                </label>
-                            @endif
                         </section>
                     </div>
 

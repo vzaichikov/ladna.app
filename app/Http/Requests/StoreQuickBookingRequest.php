@@ -15,6 +15,7 @@ use App\Support\ScheduleKindRegistry;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
 
 class StoreQuickBookingRequest extends FormRequest
@@ -55,6 +56,35 @@ class StoreQuickBookingRequest extends FormRequest
             'ends_at' => [Rule::requiredIf($scheduleKind === ScheduleKind::RoomRental && $this->input('rental_mode') === 'anytime'), 'nullable', 'date_format:Y-m-d\TH:i'],
             'rental_mode' => ['nullable', Rule::in(['preset', 'anytime'])],
             'payment_amount' => ['nullable', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'customer_name.required_without' => __('app.quick_booking_customer_required'),
+            'customer_phone.required_without' => __('app.quick_booking_customer_required'),
+            'starts_at.required' => __('app.quick_booking_start_time_required'),
+            'ends_at.required' => __('app.quick_booking_end_time_required'),
+            'payment_amount.regex' => __('app.quick_booking_payment_amount_invalid'),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function attributes(): array
+    {
+        return [
+            'customer_name' => __('app.person_name'),
+            'customer_phone' => __('app.phone'),
+            'scheduled_class_id' => __('app.booking_section'),
+            'starts_at' => __('app.start_time'),
+            'ends_at' => __('app.end_time'),
+            'payment_amount' => __('app.class_booking_payment_amount'),
         ];
     }
 
@@ -133,5 +163,24 @@ class StoreQuickBookingRequest extends FormRequest
             'ends_at' => blank($this->input('ends_at')) ? null : $this->input('ends_at'),
             'payment_amount' => blank($this->input('payment_amount')) ? null : $this->input('payment_amount'),
         ]);
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        if ($this->expectsJsonValidationResponse()) {
+            throw new HttpResponseException(response()->json([
+                'message' => $validator->errors()->first() ?: __('app.async_validation_failed'),
+                'errors' => $validator->errors(),
+            ], 422));
+        }
+
+        parent::failedValidation($validator);
+    }
+
+    private function expectsJsonValidationResponse(): bool
+    {
+        return $this->expectsJson()
+            || $this->ajax()
+            || str_contains((string) $this->header('Accept'), 'json');
     }
 }
