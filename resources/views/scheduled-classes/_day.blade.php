@@ -56,6 +56,7 @@
                         $scheduleKind = $scheduledClass->classType?->schedule_kind;
                         $isCancelledClass = $scheduledClass->status === \App\Enums\ScheduledClassStatus::Cancelled;
                         $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
+                        $displayTitle = $scheduledClass->displayTitle();
                         $displayTypeLabels = $scheduledClass->displayTypeLabels();
                         $timelineColor = $isCancelledClass
                             ? '#CBD5E1'
@@ -76,10 +77,10 @@
                             'line-through opacity-80' => $isCancelledClass,
                         ])
                         style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; border-right-color: {{ $timelineKindColor }}; border-right-width: 5px; color: {{ $timelineTextColor }};"
-                        title="{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }} · {{ $scheduledClass->title }}"
+                        title="{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }} · {{ $displayTitle }}"
                     >
                         <span class="shrink-0">{{ $startsAt->format('H:i') }}</span>
-                        <span class="truncate">{{ $scheduledClass->title }}</span>
+                        <span class="truncate">{{ $displayTitle }}</span>
                         @foreach ($displayTypeLabels as $displayTypeLabel)
                             <span class="shrink-0 rounded-md border border-current/30 bg-white/20 px-1.5 py-0.5 text-[10px] leading-none opacity-90">{{ $displayTypeLabel }}</span>
                         @endforeach

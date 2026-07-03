@@ -7,6 +7,7 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\WebsiteLeadStatus;
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
@@ -791,6 +792,65 @@ class QuickBookingTest extends TestCase
         $this->assertSame(1, ScheduledClass::whereBelongsTo($account)->count());
 
         Carbon::setTestNow();
+    }
+
+    public function test_anytime_room_rental_card_header_uses_actual_range_duration(): void
+    {
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $activityDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Room rental']);
+        $classType = ClassType::factory()
+            ->for($account)
+            ->for($activityDirection, 'activityDirection')
+            ->create([
+                'name' => 'Rental 120 min',
+                'schedule_kind' => ScheduleKind::RoomRental->value,
+                'default_duration_minutes' => 120,
+            ]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => 'Rental 120 min',
+                'starts_at' => '2026-06-23 10:00:00',
+                'ends_at' => '2026-06-23 14:00:00',
+                'metadata' => [
+                    'source' => 'quick_booking',
+                    'schedule_kind' => ScheduleKind::RoomRental->value,
+                    'rental_mode' => 'anytime',
+                    'skip_class_pass_reservation' => true,
+                ],
+            ]);
+
+        $scheduledClass->load([
+            'location',
+            'room',
+            'classType.activityDirection',
+            'trainer',
+            'activeCancellation.effects',
+            'classBookings.customer',
+            'classBookings.manualCashPayment',
+            'classBookings.classPassReservation.customerClassPass.classPassPlan',
+        ]);
+
+        $displayTitle = __('app.room_rental_duration_title', ['minutes' => 240]);
+
+        $this->assertSame($displayTitle, $scheduledClass->displayTitle());
+        $this->assertSame(['Room rental'], $scheduledClass->displayTypeLabels());
+
+        $this->view('scheduled-classes._card', [
+            'account' => $account,
+            'scheduledClass' => $scheduledClass,
+            'customerSearchUrl' => '#',
+            'bookingStatuses' => ClassBookingStatus::cases(),
+            'readonly' => true,
+        ])
+            ->assertSee('10:00 - 14:00')
+            ->assertSee($displayTitle)
+            ->assertDontSee('Rental 120 min');
     }
 
     public function test_anytime_room_rental_rejects_ranges_that_overlap_existing_room_booking(): void

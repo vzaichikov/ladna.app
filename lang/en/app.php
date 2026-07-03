@@ -675,6 +675,7 @@ return [
     'rental_mode_anytime_only' => 'Anytime rental is available only for room rentals.',
     'anytime_rental_end_after_start' => 'End time must be after start time.',
     'direct_rental_payment' => 'Direct rental payment',
+    'room_rental_duration_title' => 'Rental :minutes min',
     'class_booking_payment' => 'Payment',
     'record_payment' => 'Record payment',
     'update_payment' => 'Update payment',

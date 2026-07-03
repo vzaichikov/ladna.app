@@ -2,6 +2,7 @@
     $timezone = $scheduledClass->displayTimezone();
     $startsAt = $scheduledClass->starts_at->copy()->timezone($timezone);
     $endsAt = $scheduledClass->ends_at->copy()->timezone($timezone);
+    $displayTitle = $scheduledClass->displayTitle();
     $statusClass = $scheduledClass->displayStatusBadgeClass();
     $scheduleKind = $scheduledClass->classType?->schedule_kind;
     $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
@@ -40,7 +41,7 @@
     <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
             <div @class(['text-sm font-semibold', 'text-brand-600' => ! $isCancelledClass, 'text-slate-500 line-through' => $isCancelledClass])>{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }}</div>
-            <h3 @class(['mt-2 text-lg font-semibold leading-tight', 'text-slate-950' => ! $isCancelledClass, 'text-slate-500 line-through' => $isCancelledClass])>{{ $scheduledClass->title }}</h3>
+            <h3 @class(['mt-2 text-lg font-semibold leading-tight', 'text-slate-950' => ! $isCancelledClass, 'text-slate-500 line-through' => $isCancelledClass])>{{ $displayTitle }}</h3>
             <div class="mt-2 flex flex-wrap gap-2">
                 @foreach ($displayTypeLabels as $displayTypeLabel)
                     <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">{{ $displayTypeLabel }}</span>

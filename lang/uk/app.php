@@ -675,6 +675,7 @@ return [
     'rental_mode_anytime_only' => 'Довільний час доступний лише для оренди залу.',
     'anytime_rental_end_after_start' => 'Час завершення має бути пізніше часу початку.',
     'direct_rental_payment' => 'Пряма оплата оренди',
+    'room_rental_duration_title' => 'Оренда :minutes хв',
     'class_booking_payment' => 'Оплата',
     'record_payment' => 'Внести оплату',
     'update_payment' => 'Оновити оплату',

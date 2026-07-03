@@ -135,6 +135,21 @@ class ScheduledClass extends Model
         return (int) $this->starts_at->diffInMinutes($this->ends_at);
     }
 
+    public function displayTitle(): string
+    {
+        if ($this->isAnytimeRoomRental()) {
+            return __('app.room_rental_duration_title', ['minutes' => $this->durationMinutes()]);
+        }
+
+        return $this->title;
+    }
+
+    public function isAnytimeRoomRental(): bool
+    {
+        return $this->classType?->schedule_kind === ScheduleKind::RoomRental
+            && ($this->metadata['rental_mode'] ?? null) === 'anytime';
+    }
+
     public function displayStatusValue(): string
     {
         if ($this->status !== ScheduledClassStatus::Scheduled) {
@@ -174,13 +189,15 @@ class ScheduledClass extends Model
      */
     public function displayTypeLabels(): array
     {
-        $title = $this->normalizeDisplayLabel($this->title);
+        $title = $this->normalizeDisplayLabel($this->displayTitle());
         $seen = [$title => true];
+        $labels = [$this->classType?->activityDirection?->name];
 
-        return collect([
-            $this->classType?->activityDirection?->name,
-            $this->classType?->name,
-        ])
+        if (! $this->isAnytimeRoomRental()) {
+            $labels[] = $this->classType?->name;
+        }
+
+        return collect($labels)
             ->filter(fn (?string $label): bool => filled($label))
             ->map(fn (string $label): string => trim($label))
             ->filter(function (string $label) use (&$seen): bool {

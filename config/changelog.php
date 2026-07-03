@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.62.2',
+                'date' => '2026-07-03',
+                'title' => 'Direct rental duration header fix',
+                'items' => ['Fixed direct anytime room rentals in the studio schedule so the class card title shows the actual booked time range duration instead of the selected rental template duration.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.62.1',
                 'date' => '2026-07-03',
                 'title' => 'Quick booking validation fixes',
@@ -562,6 +569,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.62.2',
+                'date' => '2026-07-03',
+                'title' => 'Виправлення тривалості прямої оренди',
+                'items' => ['Виправлено картки прямої оренди залу в розкладі: заголовок тепер показує фактичну тривалість вибраного діапазону, а не тривалість обраного шаблону оренди.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.62.1',
                 'date' => '2026-07-03',
