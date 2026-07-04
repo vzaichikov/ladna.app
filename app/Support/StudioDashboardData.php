@@ -239,6 +239,7 @@ class StudioDashboardData
             'classType.activityDirection',
             'trainer.trainerType',
             'classBookings' => fn ($query) => $query
+                ->notCorrectedRemoved()
                 ->whereIn('status', $bookingStatuses)
                 ->with('customer:id,name,phone,email')
                 ->orderBy('created_at'),

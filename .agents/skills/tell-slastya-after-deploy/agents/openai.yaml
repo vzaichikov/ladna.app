@@ -1,0 +1,6 @@
+interface:
+  display_name: "Tell Slastya After Deploy"
+  short_description: "Notify Slastya only after explicit deploy requests"
+  default_prompt: "Use $tell-slastya-after-deploy to message Slastya about the deployed Ladna changes."
+policy:
+  allow_implicit_invocation: false

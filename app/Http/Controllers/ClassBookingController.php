@@ -145,6 +145,7 @@ class ClassBookingController extends Controller
         }
 
         $hasAnotherActiveBooking = $scheduledClass->classBookings()
+            ->notCorrectedRemoved()
             ->where('customer_id', '!=', $customerId)
             ->whereIn('status', [
                 ClassBookingStatus::Booked->value,
@@ -164,9 +165,9 @@ class ClassBookingController extends Controller
             'trainer',
             'scheduleSeries',
             'activeCancellation.effects',
-            'classBookings.customer',
-            'classBookings.manualCashPayment',
-            'classBookings.classPassReservation.customerClassPass.classPassPlan',
+            'classBookings' => fn ($query) => $query
+                ->notCorrectedRemoved()
+                ->with(['customer', 'manualCashPayment', 'classPassReservation.customerClassPass.classPassPlan']),
         ]);
 
         return response()->json([

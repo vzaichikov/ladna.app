@@ -24,7 +24,7 @@ class CustomerController extends Controller
             'account' => $account,
             'customers' => $account->customers()
                 ->withCount([
-                    'classBookings',
+                    'classBookings' => fn ($query) => $query->notCorrectedRemoved(),
                     'customerClassPasses as active_class_passes_count' => fn ($query) => $query->active(),
                 ])
                 ->when($term !== '', function ($query) use ($term): void {
@@ -121,10 +121,14 @@ class CustomerController extends Controller
         return view('customers.edit', [
             'account' => $account,
             'customer' => $customer->load([
-                'classBookings.scheduledClass.account',
-                'classBookings.scheduledClass.classType',
-                'classBookings.scheduledClass.location',
-                'classBookings.classPassReservation.customerClassPass',
+                'classBookings' => fn ($query) => $query
+                    ->notCorrectedRemoved()
+                    ->with([
+                        'scheduledClass.account',
+                        'scheduledClass.classType',
+                        'scheduledClass.location',
+                        'classPassReservation.customerClassPass',
+                    ]),
             ]),
             'customerClassPasses' => $customerClassPasses,
             'customerClassPassHistory' => $customerClassPassHistory,

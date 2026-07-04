@@ -30,7 +30,7 @@ class GenerateScheduleOccurrences
             }
 
             $futureGeneratedClasses = $series->scheduledClasses()
-                ->withCount('classBookings')
+                ->withCount(['classBookings' => fn ($query) => $query->notCorrectedRemoved()])
                 ->where('is_generated', true)
                 ->where('starts_at', '>=', $from->timezone(config('app.timezone')))
                 ->orderBy('starts_at')

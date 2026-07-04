@@ -83,6 +83,16 @@ class ScheduledClass extends Model
         return $this->hasMany(ClassBooking::class);
     }
 
+    public function visibleClassBookings(): HasMany
+    {
+        return $this->classBookings()->notCorrectedRemoved();
+    }
+
+    public function classBookingCorrections(): HasMany
+    {
+        return $this->hasMany(ClassBookingCorrection::class);
+    }
+
     public function cancellations(): HasMany
     {
         return $this->hasMany(ScheduledClassCancellation::class);

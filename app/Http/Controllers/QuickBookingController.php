@@ -77,7 +77,9 @@ class QuickBookingController extends Controller
         $classes = $account->scheduledClasses()
             ->with(['location', 'classType', 'trainer'])
             ->withCount([
-                'classBookings as active_bookings_count' => fn ($query) => $query->whereIn('status', $activeStatuses),
+                'classBookings as active_bookings_count' => fn ($query) => $query
+                    ->notCorrectedRemoved()
+                    ->whereIn('status', $activeStatuses),
             ])
             ->whereBetween('starts_at', [
                 $startsAt->timezone(config('app.timezone')),

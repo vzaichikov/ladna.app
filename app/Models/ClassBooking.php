@@ -4,9 +4,11 @@ namespace App\Models;
 
 use App\Enums\ClassBookingStatus;
 use Database\Factories\ClassBookingFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ClassBooking extends Model
@@ -28,6 +30,8 @@ class ClassBooking extends Model
         'attended_at',
         'notes',
         'skip_class_pass_reservation',
+        'corrected_removed_at',
+        'corrected_removed_by_user_id',
     ];
 
     protected $attributes = [
@@ -44,7 +48,18 @@ class ClassBooking extends Model
             'status' => ClassBookingStatus::class,
             'attended_at' => 'datetime',
             'skip_class_pass_reservation' => 'boolean',
+            'corrected_removed_at' => 'datetime',
         ];
+    }
+
+    public function scopeNotCorrectedRemoved(Builder $query): Builder
+    {
+        return $query->whereNull('corrected_removed_at');
+    }
+
+    public function isCorrectedRemoved(): bool
+    {
+        return $this->corrected_removed_at !== null;
     }
 
     public function account(): BelongsTo
@@ -76,5 +91,10 @@ class ClassBooking extends Model
     {
         return $this->hasOne(CustomerPurchase::class)
             ->where('payment_source', CustomerPurchase::SourceManualCashBooking);
+    }
+
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(ClassBookingCorrection::class);
     }
 }

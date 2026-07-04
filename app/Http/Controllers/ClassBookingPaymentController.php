@@ -58,9 +58,9 @@ class ClassBookingPaymentController extends Controller
             'trainer',
             'scheduleSeries',
             'activeCancellation.effects',
-            'classBookings.customer',
-            'classBookings.manualCashPayment',
-            'classBookings.classPassReservation.customerClassPass.classPassPlan',
+            'classBookings' => fn ($query) => $query
+                ->notCorrectedRemoved()
+                ->with(['customer', 'manualCashPayment', 'classPassReservation.customerClassPass.classPassPlan']),
         ]);
 
         return response()->json([

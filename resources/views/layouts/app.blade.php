@@ -53,10 +53,12 @@
     $canMarkAttendance = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::MarkAttendance);
     $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
+    $canManageStudioCashflow = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioCashflow);
     $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
+    $canViewPayments = $showAccountNav && $authUser && ($activeAccount->isOwnedBy($authUser) || $canManageStudioCashflow);
     $canViewTariffPayments = $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
     $subscriptionAccess = $showAccountNav ? app(\App\Support\SaasBilling\AccountSubscriptionAccess::class) : null;
     $subscriptionWarning = $showAccountNav && $subscriptionAccess?->shouldShowWarning($activeAccount);
@@ -118,7 +120,7 @@
             'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customer-class-passes.*'),
         ]] : []),
-        ...($canViewTariffPayments ? [[
+        ...($canViewPayments ? [[
             'label' => __('app.payments'),
             'icon' => 'payments',
             'href' => route('dashboard.accounts.payments.index', $activeAccount),

@@ -262,9 +262,13 @@ class CustomerAuthController extends Controller
             'customerClassPasses.classPassPlan.classTypes',
             'customerClassPasses.classPassPlan.trainerTypes',
             'customerClassPasses.classPassPlan.rooms',
-            'classBookings.scheduledClass.classType',
-            'classBookings.scheduledClass.trainer',
-            'classBookings.classPassReservation.customerClassPass',
+            'classBookings' => fn ($query) => $query
+                ->notCorrectedRemoved()
+                ->with([
+                    'scheduledClass.classType',
+                    'scheduledClass.trainer',
+                    'classPassReservation.customerClassPass',
+                ]),
         ]);
 
         return view('customer-auth.dashboard', [

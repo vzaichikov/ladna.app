@@ -153,6 +153,7 @@ class StorePublicBookingRequest extends FormRequest
         ];
         $customer = $this->currentCustomerFor($account);
         $hasExistingActiveBooking = $customer && $scheduledClass->classBookings()
+            ->notCorrectedRemoved()
             ->where('customer_id', $customer->id)
             ->whereIn('status', $activeStatuses)
             ->exists();
@@ -163,6 +164,7 @@ class StorePublicBookingRequest extends FormRequest
 
         $capacity = (int) ($scheduledClass->capacity ?? 0);
         $activeBookingsCount = $scheduledClass->classBookings()
+            ->notCorrectedRemoved()
             ->whereIn('status', $activeStatuses)
             ->count();
 

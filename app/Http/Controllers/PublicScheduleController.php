@@ -111,7 +111,9 @@ class PublicScheduleController extends Controller
             ->when($request->query('room'), fn ($query, $roomSlug) => $query->whereHas('room', fn ($query) => $query->where('slug', $roomSlug)))
             ->with(['account', 'location', 'room', 'classType.activityDirection', 'trainer'])
             ->withCount([
-                'classBookings as active_bookings_count' => fn ($query) => $query->whereIn('status', $activeStatuses),
+                'classBookings as active_bookings_count' => fn ($query) => $query
+                    ->notCorrectedRemoved()
+                    ->whereIn('status', $activeStatuses),
             ])
             ->whereBetween('starts_at', [
                 $periodRange['start']->copy()->timezone(config('app.timezone')),
@@ -441,7 +443,9 @@ class PublicScheduleController extends Controller
             ->publicUpcoming()
             ->with(['account', 'location', 'room', 'classType.activityDirection', 'trainer.trainerType'])
             ->withCount([
-                'classBookings as active_bookings_count' => fn ($query) => $query->whereIn('status', $activeStatuses),
+                'classBookings as active_bookings_count' => fn ($query) => $query
+                    ->notCorrectedRemoved()
+                    ->whereIn('status', $activeStatuses),
             ])
             ->whereBetween('starts_at', [
                 $dayStart->copy()->timezone(config('app.timezone')),

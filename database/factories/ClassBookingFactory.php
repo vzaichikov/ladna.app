@@ -36,6 +36,8 @@ class ClassBookingFactory extends Factory
             'attended_at' => null,
             'notes' => null,
             'skip_class_pass_reservation' => false,
+            'corrected_removed_at' => null,
+            'corrected_removed_by_user_id' => null,
         ];
     }
 }

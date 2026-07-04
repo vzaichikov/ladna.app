@@ -24,6 +24,9 @@
     $readonly = $readonly ?? false;
     $canManageClassCancellation = auth()->user()?->can('manageSchedule', $account) && auth()->user()?->can('manageBookings', $account);
     $canCancelClass = $canManageClassCancellation && ! $isCancelledClass && $scheduledClass->isStudioCancellationOpen();
+    $isClosedClass = ! $isCancelledClass && $scheduledClass->ends_at->lessThanOrEqualTo(now());
+    $canCorrectClosedClass = (auth()->user()?->can('correctClosedClasses', $account) ?? false) && $isClosedClass;
+    $canOpenCustomerPage = auth()->user()?->can('manageClients', $account) ?? false;
     $classBorderColor = $isCancelledClass ? '#94A3B8' : $directionColor;
 @endphp
 
@@ -120,7 +123,7 @@
 
     @if (! $readonly)
         @can('manageBookings', $account)
-        @unless ($isCancelledClass)
+        @unless ($isCancelledClass || $isClosedClass)
         <form method="POST" action="{{ route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]) }}" data-async-form class="mt-4 space-y-3 rounded-lg bg-slate-50 p-3">
             @csrf
             <div
@@ -150,6 +153,115 @@
         @endcan
     @endif
 
+    @if ($canCorrectClosedClass)
+        <details class="mt-4 text-sm">
+            <summary class="inline-flex w-fit cursor-pointer items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 font-semibold text-rose-900 transition hover:bg-rose-100">
+                {{ __('app.unlock_closed_class_corrections') }}
+            </summary>
+            <div class="mt-3 space-y-4 rounded-lg border border-rose-200 bg-rose-50 p-3">
+                <div class="rounded-md bg-white/70 p-3 text-rose-900">{{ __('app.closed_class_correction_warning') }}</div>
+
+                <form
+                    method="POST"
+                    action="{{ route('dashboard.accounts.scheduled-classes.corrections.bookings.store', [$account, $scheduledClass]) }}"
+                    data-async-form
+                    data-confirm-action
+                    data-confirm-title="{{ __('app.confirm_closed_class_correction_title') }}"
+                    data-confirm-body="{{ __('app.confirm_closed_class_add_body') }}"
+                    data-confirm-accept="{{ __('app.apply_correction') }}"
+                    data-confirm-icon="triangle-alert"
+                    data-confirm-variant="danger"
+                    data-class-pass-preview-url="{{ route('dashboard.accounts.scheduled-classes.corrections.pass-preview', [$account, $scheduledClass]) }}"
+                    class="space-y-3 rounded-lg border border-rose-100 bg-white p-3"
+                >
+                    @csrf
+                    <div class="font-semibold text-slate-950">{{ __('app.add_correct_customer') }}</div>
+                    <div
+                        class="relative"
+                        data-customer-autocomplete
+                        data-search-url="{{ $customerSearchUrl }}"
+                        data-no-results="{{ __('app.no_customers_found') }}"
+                    >
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.search_customer') }}</span>
+                            <input
+                                type="text"
+                                class="crm-field"
+                                autocomplete="off"
+                                placeholder="{{ __('app.customer_search_placeholder') }}"
+                                data-customer-autocomplete-input
+                            >
+                        </label>
+                        <input type="hidden" name="customer_id" data-customer-autocomplete-id>
+                        <div class="absolute z-20 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-lg border border-stone-200 bg-white py-1 shadow-lg" data-customer-autocomplete-results></div>
+                    </div>
+                    <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600" data-class-pass-preview>
+                        {{ __('app.closed_class_correction_pass_preview_empty') }}
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.booking_status') }}</span>
+                            <select name="status" class="crm-field">
+                                @foreach ($bookingStatuses as $status)
+                                    <option value="{{ $status->value }}" @selected($status === \App\Enums\ClassBookingStatus::Attended)>{{ __('app.'.$status->value) }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.notes') }}</span>
+                            <input name="notes" class="crm-field" placeholder="{{ __('app.notes') }}">
+                        </label>
+                    </div>
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.reason') }}</span>
+                        <textarea name="reason" rows="3" class="crm-field" required placeholder="{{ __('app.closed_class_correction_reason_placeholder') }}"></textarea>
+                    </label>
+                    <x-ui.button type="submit" variant="danger" size="sm" class="w-fit">{{ __('app.add_correct_customer') }}</x-ui.button>
+                </form>
+
+                @if ($scheduledClass->classBookings->isNotEmpty())
+                    <div class="space-y-3">
+                        <div class="font-semibold text-slate-950">{{ __('app.remove_wrong_customer') }}</div>
+                        @foreach ($scheduledClass->classBookings as $booking)
+                            <form
+                                method="POST"
+                                action="{{ route('dashboard.accounts.bookings.corrections.remove', [$account, $booking]) }}"
+                                data-async-form
+                                data-confirm-action
+                                data-confirm-title="{{ __('app.confirm_closed_class_correction_title') }}"
+                                data-confirm-body="{{ __('app.confirm_closed_class_remove_body') }}"
+                                data-confirm-accept="{{ __('app.apply_correction') }}"
+                                data-confirm-icon="triangle-alert"
+                                data-confirm-variant="danger"
+                                class="space-y-3 rounded-lg border border-rose-100 bg-white p-3"
+                            >
+                                @csrf
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div class="font-semibold text-slate-950">{{ $booking->customer->name }}</div>
+                                    @if ($booking->manualCashPayment)
+                                        <span class="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">{{ __('app.linked_cash_payment_unchanged') }}</span>
+                                    @endif
+                                </div>
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.pass_effect') }}</span>
+                                    <select name="pass_effect" class="crm-field">
+                                        <option value="{{ \App\Models\ClassBookingCorrection::PassEffectReturnSession }}">{{ __('app.pass_effect_return_session') }}</option>
+                                        <option value="{{ \App\Models\ClassBookingCorrection::PassEffectKeepConsumed }}">{{ __('app.pass_effect_keep_consumed') }}</option>
+                                    </select>
+                                </label>
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.reason') }}</span>
+                                    <textarea name="reason" rows="3" class="crm-field" required placeholder="{{ __('app.closed_class_correction_reason_placeholder') }}"></textarea>
+                                </label>
+                                <x-ui.button type="submit" variant="danger" size="sm" class="w-fit">{{ __('app.remove_wrong_customer') }}</x-ui.button>
+                            </form>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </details>
+    @endif
+
     @if ($scheduledClass->classBookings->isNotEmpty())
         <div class="mt-4 space-y-2">
             @foreach ($scheduledClass->classBookings as $booking)
@@ -164,7 +276,19 @@
                 <div class="rounded-lg border border-slate-200 p-3 text-sm">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <div class="font-semibold text-slate-950">{{ $booking->customer->name }}</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div class="font-semibold text-slate-950">{{ $booking->customer->name }}</div>
+                                @if ($canOpenCustomerPage)
+                                    <x-ui.action-button
+                                        :href="route('dashboard.accounts.customers.edit', [$account, $booking->customer])"
+                                        target="_blank"
+                                        rel="noopener"
+                                        variant="ghost"
+                                        icon="external-link"
+                                        :label="__('app.open_customer')"
+                                    />
+                                @endif
+                            </div>
                             <div class="mt-1 text-slate-500">{{ $booking->customer->phone ?? $booking->customer->email ?? __('app.no_contact') }}</div>
                             @if ($booking->classPassReservation?->customerClassPass && ($booking->classPassReservation->status->value !== 'released' || $isCancelledClass))
                                 @php
@@ -199,6 +323,7 @@
                             && in_array($booking->classPassReservation->status->value, ['reserved', 'used'], true);
                         $canRecordBookingPayment = ! $readonly
                             && ! $isCancelledClass
+                            && ! $isClosedClass
                             && $isRoomRental
                             && ! $hasActivePassReservation
                             && in_array($booking->status->value, ['booked', 'attended'], true);
@@ -228,7 +353,7 @@
                             <x-ui.button type="submit" variant="secondary" size="sm">{{ $manualCashPayment ? __('app.update_payment') : __('app.record_payment') }}</x-ui.button>
                         </form>
                     @endif
-                    @unless ($isCancelledClass || $readonly)
+                    @unless ($isCancelledClass || $readonly || $isClosedClass)
                     <div class="mt-3 flex flex-wrap gap-2">
                         @can('markAttendance', $account)
                             <form method="POST" action="{{ route('dashboard.accounts.bookings.update', [$account, $booking]) }}" data-async-form class="flex grow gap-2">

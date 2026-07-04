@@ -455,6 +455,16 @@ class Account extends Model
         return $this->hasMany(CustomerPurchase::class);
     }
 
+    public function customerPurchaseCorrections(): HasMany
+    {
+        return $this->hasMany(CustomerPurchaseCorrection::class);
+    }
+
+    public function studioCashEntries(): HasMany
+    {
+        return $this->hasMany(StudioCashEntry::class);
+    }
+
     public function subscriptionPayments(): HasMany
     {
         return $this->hasMany(AccountSubscriptionPayment::class);
@@ -531,6 +541,11 @@ class Account extends Model
     public function classBookings(): HasMany
     {
         return $this->hasMany(ClassBooking::class);
+    }
+
+    public function classBookingCorrections(): HasMany
+    {
+        return $this->hasMany(ClassBookingCorrection::class);
     }
 
     public function scheduleSeries(): HasMany

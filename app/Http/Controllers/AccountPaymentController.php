@@ -6,9 +6,11 @@ use App\Enums\CustomerPurchaseStatus;
 use App\Enums\FiscalReceiptStatus;
 use App\Models\Account;
 use App\Models\CustomerPurchase;
+use App\Models\StudioCashEntry;
 use App\Support\Fiscalization\FiscalizationAvailability;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class AccountPaymentController extends Controller
@@ -16,7 +18,9 @@ class AccountPaymentController extends Controller
     public function index(Request $request, Account $account, FiscalizationAvailability $fiscalization): View
     {
         $this->authorize('view', $account);
-        abort_unless($account->isOwnedBy($request->user()), 403);
+        $canManageStudioCashflow = $account->isOwnedBy($request->user())
+            || ($request->user()?->can('manageStudioCashflow', $account) ?? false);
+        abort_unless($canManageStudioCashflow, 403);
 
         $status = $this->statusFilter($request->query('status'));
         $provider = $this->providerFilter($request->query('provider'), $account);
@@ -29,14 +33,33 @@ class AccountPaymentController extends Controller
             ->when($locationId, fn (Builder $query): Builder => $query->where('location_id', $locationId));
 
         $payments = (clone $baseQuery)
-            ->with(['customer', 'location', 'classPassPlan', 'customerClassPass', 'classBooking.scheduledClass.room', 'fiscalReceipt'])
+            ->with([
+                'customer',
+                'location',
+                'classPassPlan',
+                'customerClassPass',
+                'classBooking.scheduledClass.location',
+                'classBooking.scheduledClass.room',
+                'fiscalReceipt',
+                'fiscalReceipts',
+                'corrections.previousLocation',
+                'corrections.newLocation',
+            ])
             ->newestFirst()
             ->paginate(20)
             ->withQueryString();
+        $cashEntries = $account->studioCashEntries()
+            ->with('location')
+            ->when($locationId, fn (Builder $query): Builder => $query->where('location_id', $locationId))
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->take(20)
+            ->get();
 
         return view('accounts.payments.index', [
             'account' => $account,
             'payments' => $payments,
+            'cashEntries' => $cashEntries,
             'status' => $status,
             'provider' => $provider,
             'locationId' => $locationId,
@@ -44,7 +67,9 @@ class AccountPaymentController extends Controller
             'providers' => $this->providerOptions($account),
             'statuses' => CustomerPurchaseStatus::cases(),
             'fiscalizationEnabled' => $fiscalizationEnabled,
-            'stats' => $this->stats($baseQuery, $account, $fiscalizationEnabled),
+            'canManageStudioCashflow' => $canManageStudioCashflow,
+            'cashBalances' => $this->cashBalances($account, $locationId),
+            'stats' => $this->stats($baseQuery, $account, $fiscalizationEnabled, $locationId),
         ]);
     }
 
@@ -108,10 +133,12 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * @return array{total: int, paid_amount_cents: int, pending: int, failed: int, fiscal_failed: int}
+     * @return array{total: int, paid_amount_cents: int, pending: int, failed: int, fiscal_failed: int, cash_balance_cents: int}
      */
-    private function stats(Builder $baseQuery, Account $account, bool $fiscalizationEnabled): array
+    private function stats(Builder $baseQuery, Account $account, bool $fiscalizationEnabled, ?int $locationId): array
     {
+        $cashBalances = $this->cashBalances($account, $locationId);
+
         return [
             'total' => (clone $baseQuery)->count(),
             'paid_amount_cents' => (clone $baseQuery)
@@ -133,6 +160,50 @@ class AccountPaymentController extends Controller
             'fiscal_failed' => $fiscalizationEnabled
                 ? $account->fiscalReceipts()->where('status', FiscalReceiptStatus::Failed->value)->count()
                 : 0,
+            'cash_balance_cents' => $cashBalances->sum('balance_cents'),
         ];
+    }
+
+    /**
+     * @return Collection<int, array{location: mixed, manual_cash_cents: int, cash_in_cents: int, cash_out_cents: int, balance_cents: int}>
+     */
+    private function cashBalances(Account $account, ?int $locationId): Collection
+    {
+        $locations = $account->locations()
+            ->when($locationId, fn (Builder $query): Builder => $query->whereKey($locationId))
+            ->orderBy('name')
+            ->get();
+        $locationIds = $locations->pluck('id');
+        $manualCashByLocation = $account->customerPurchases()
+            ->whereIn('location_id', $locationIds)
+            ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
+            ->whereIn('payment_source', [
+                CustomerPurchase::SourceManualCashClassPass,
+                CustomerPurchase::SourceManualCashBooking,
+            ])
+            ->selectRaw('location_id, SUM(amount_cents) as amount_cents')
+            ->groupBy('location_id')
+            ->pluck('amount_cents', 'location_id');
+        $cashEntriesByLocation = $account->studioCashEntries()
+            ->whereIn('location_id', $locationIds)
+            ->selectRaw('location_id, direction, SUM(amount_cents) as amount_cents')
+            ->groupBy('location_id', 'direction')
+            ->get()
+            ->groupBy('location_id');
+
+        return $locations->map(function ($location) use ($manualCashByLocation, $cashEntriesByLocation): array {
+            $entries = $cashEntriesByLocation->get($location->id, collect());
+            $cashInCents = (int) ($entries->firstWhere('direction', StudioCashEntry::DirectionIn)?->amount_cents ?? 0);
+            $cashOutCents = (int) ($entries->firstWhere('direction', StudioCashEntry::DirectionOut)?->amount_cents ?? 0);
+            $manualCashCents = (int) ($manualCashByLocation[$location->id] ?? 0);
+
+            return [
+                'location' => $location,
+                'manual_cash_cents' => $manualCashCents,
+                'cash_in_cents' => $cashInCents,
+                'cash_out_cents' => $cashOutCents,
+                'balance_cents' => $manualCashCents + $cashInCents - $cashOutCents,
+            ];
+        });
     }
 }

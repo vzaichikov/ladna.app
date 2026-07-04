@@ -16,7 +16,11 @@ enum AccountRole: string
     public function defaultPermissions(): array
     {
         return match ($this) {
-            self::Owner, self::Admin => StudioPermission::cases(),
+            self::Owner => StudioPermission::cases(),
+            self::Admin => array_values(array_filter(
+                StudioPermission::cases(),
+                fn (StudioPermission $permission): bool => ! $permission->isCritical(),
+            )),
             self::Manager => [
                 StudioPermission::ManageSchedule,
                 StudioPermission::ManageClients,

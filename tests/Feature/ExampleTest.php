@@ -64,13 +64,15 @@ class ExampleTest extends TestCase
     public function test_changelog_pages_render_release_history(): void
     {
         $version = trim((string) file_get_contents(base_path('VERSION')));
+        $englishLatestTitle = config('changelog.releases.en.0.title');
+        $ukrainianLatestTitle = config('changelog.releases.uk.0.title');
         $englishLastPage = (int) ceil(count(config('changelog.releases.en')) / 20);
         $ukrainianLastPage = (int) ceil(count(config('changelog.releases.uk')) / 20);
 
         $this->get('/changelog.en.html')
             ->assertStatus(200)
             ->assertSee("Current version {$version}")
-            ->assertSee('Trainer substitutions')
+            ->assertSee($englishLatestTitle)
             ->assertSee('?page=2', false)
             ->assertDontSee('Initial application baseline');
 
@@ -81,7 +83,7 @@ class ExampleTest extends TestCase
         $this->get('/changelog.ua.html')
             ->assertStatus(200)
             ->assertSee("Поточна версія {$version}")
-            ->assertSee('Заміни тренерів')
+            ->assertSee($ukrainianLatestTitle)
             ->assertSee('?page=2', false)
             ->assertDontSee('Початкова база застосунку');
 

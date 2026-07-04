@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.63.0',
+                'date' => '2026-07-04',
+                'title' => 'Closed-class corrections and cash controls',
+                'items' => ['Added critical owner-controlled workflows for correcting already-ended classes, adding or removing customers with explicit class-pass effects, editing eligible manual cash payments with history, recording cash-in and cash-out entries, seeing cashdesk balances by location, and assigning sensitive staff permissions with clearer explanations. Updated owner help for the new correction and cashflow processes.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.62.2',
                 'date' => '2026-07-03',
                 'title' => 'Direct rental duration header fix',
@@ -569,6 +576,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.63.0',
+                'date' => '2026-07-04',
+                'title' => 'Виправлення завершених занять і контроль каси',
+                'items' => ['Додано критичні процеси під контролем власниці: виправлення вже завершених занять, додавання або прибирання клієнтів із вибором впливу на абонемент, редагування дозволених ручних готівкових оплат з історією, внесення і вилучення готівки, баланс каси за локаціями та зрозуміліші чутливі права для команди. Оновлено допомогу для власниці щодо нових процесів виправлень і каси.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.62.2',
                 'date' => '2026-07-03',

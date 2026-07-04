@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
@@ -96,6 +97,11 @@ class CustomerPurchase extends Model
         return $this->morphOne(FiscalReceipt::class, 'payment')->latestOfMany();
     }
 
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(CustomerPurchaseCorrection::class);
+    }
+
     public function isPaid(): bool
     {
         return $this->status === CustomerPurchaseStatus::PaymentPaid;
@@ -117,5 +123,16 @@ class CustomerPurchase extends Model
             self::SourceManualCashClassPass,
             self::SourceManualCashBooking,
         ], true);
+    }
+
+    public function canBeCorrectedAsStudioCash(): bool
+    {
+        $hasFiscalReceipts = $this->relationLoaded('fiscalReceipts')
+            ? $this->fiscalReceipts->isNotEmpty()
+            : $this->fiscalReceipts()->exists();
+
+        return $this->isManualCashStudioPayment()
+            && $this->isPaid()
+            && ! $hasFiscalReceipts;
     }
 }

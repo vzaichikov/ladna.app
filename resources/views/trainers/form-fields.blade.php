@@ -82,15 +82,34 @@
         <div class="crm-label">{{ __('app.permissions') }}</div>
         <div class="mt-2 grid gap-2 sm:grid-cols-2">
             @foreach ($studioPermissions as $permission)
-                <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                @php
+                    $sensitivity = $permission->sensitivity();
+                    $permissionCardClass = match ($sensitivity) {
+                        'critical' => 'border-rose-200 bg-rose-50 text-rose-900',
+                        'high' => 'border-amber-200 bg-amber-50 text-amber-900',
+                        default => 'border-slate-200 bg-white text-slate-700',
+                    };
+                    $badgeClass = match ($sensitivity) {
+                        'critical' => 'border-rose-200 bg-white text-rose-700',
+                        'high' => 'border-amber-200 bg-white text-amber-700',
+                        default => 'border-slate-200 bg-slate-50 text-slate-600',
+                    };
+                @endphp
+                <label class="flex items-start gap-3 rounded-lg border px-3 py-3 text-sm font-medium {{ $permissionCardClass }}">
                     <input
                         name="permissions[]"
                         type="checkbox"
                         value="{{ $permission->value }}"
                         @checked(in_array($permission->value, old('permissions', $selectedPermissions), true))
-                        class="crm-checkbox"
+                        class="crm-checkbox mt-1"
                     >
-                    {{ __('app.permission_'.$permission->value) }}
+                    <span class="min-w-0">
+                        <span class="flex flex-wrap items-center gap-2">
+                            <span class="font-semibold">{{ __($permission->labelKey()) }}</span>
+                            <span class="rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase {{ $badgeClass }}">{{ __('app.permission_sensitivity_'.$sensitivity) }}</span>
+                        </span>
+                        <span class="mt-1 block text-xs leading-5 opacity-80">{{ __($permission->descriptionKey()) }}</span>
+                    </span>
                 </label>
             @endforeach
         </div>

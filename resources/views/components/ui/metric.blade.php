@@ -12,6 +12,7 @@
         'violet' => 'bg-violet-crm-100 text-brand-700',
         'brand' => 'bg-brand-100 text-brand-700',
         'emerald' => 'bg-emerald-50 text-emerald-700',
+        'amber' => 'bg-amber-50 text-amber-700',
         'slate' => 'bg-slate-100 text-slate-700',
     ];
     $wrapper = 'group block rounded-xl border border-stone-200 bg-white p-4 shadow-crm transition hover:-translate-y-0.5 hover:border-violet-crm-100 hover:shadow-lg';

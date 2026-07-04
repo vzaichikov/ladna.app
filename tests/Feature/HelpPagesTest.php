@@ -208,6 +208,35 @@ class HelpPagesTest extends TestCase
             ->assertSee('Правила абонементів', false);
     }
 
+    public function test_help_documents_closed_class_corrections_cashflow_and_sensitive_trainer_rights(): void
+    {
+        $this->get(route('help.show', 'schedule', false))
+            ->assertStatus(200)
+            ->assertSee('Як виправити записи у вже завершеному занятті', false)
+            ->assertSee('Розблокувати виправлення', false)
+            ->assertSee('повернути заняття в абонемент або залишити заняття списаним', false)
+            ->assertSee('Готівкова оплата, яка вже була привʼязана до помилкового запису, не змінюється автоматично', false)
+            ->assertSee('assets/help/screenshots/closed-class-corrections.png', false);
+
+        $this->get(route('help.show', 'integrations-payments', false))
+            ->assertStatus(200)
+            ->assertSee('Як виправляти готівкові оплати і вести касу', false)
+            ->assertSee('Внесення готівки', false)
+            ->assertSee('Вилучення готівки', false)
+            ->assertSee('Онлайн-оплати, платежі через платіжний сервіс і фіскалізовані платежі не редагуються вручну', false)
+            ->assertSee('assets/help/screenshots/studio-cashflow.png', false);
+
+        $this->get(route('help.show', 'trainers', false))
+            ->assertStatus(200)
+            ->assertSee('кольоровий рівень чутливості', false)
+            ->assertSee('Коригувати закриті заняття', false)
+            ->assertSee('Керувати касою студії', false)
+            ->assertSee('всі інші ролі отримують чутливі дії тільки явно', false)
+            ->assertSee('assets/help/screenshots/trainer-permissions.png', false)
+            ->assertDontSee('correct_closed_classes', false)
+            ->assertDontSee('manage_studio_cashflow', false);
+    }
+
     public function test_start_help_explains_dashboard_rules_and_assistant(): void
     {
         $this->get(route('help.show', 'start', false))

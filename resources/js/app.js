@@ -320,6 +320,10 @@ function initCustomerAutocomplete(root = document) {
                     selectedLabel = customer.label;
                     input.value = customer.label;
                     hiddenInput.value = customer.id;
+                    container.dispatchEvent(new CustomEvent('customer:selected', {
+                        bubbles: true,
+                        detail: { customer },
+                    }));
 
                     if (nameTarget && customer.name) {
                         nameTarget.value = customer.name;
@@ -373,6 +377,63 @@ function initCustomerAutocomplete(root = document) {
         document.addEventListener('click', (event) => {
             if (!container.contains(event.target)) {
                 hideResults();
+            }
+        });
+    });
+}
+
+function initClassPassPreviews(root = document) {
+    root.querySelectorAll('[data-class-pass-preview-url]').forEach((form) => {
+        if (form.dataset.classPassPreviewReady === 'true') {
+            return;
+        }
+
+        const output = form.querySelector('[data-class-pass-preview]');
+        const previewUrl = form.dataset.classPassPreviewUrl;
+
+        if (!output || !previewUrl) {
+            return;
+        }
+
+        form.dataset.classPassPreviewReady = 'true';
+
+        form.addEventListener('customer:selected', async (event) => {
+            const customerId = event.detail?.customer?.id;
+
+            if (!customerId) {
+                return;
+            }
+
+            const url = new URL(previewUrl, window.location.origin);
+            url.searchParams.set('customer_id', customerId);
+            output.textContent = output.dataset.loading || 'Checking class pass...';
+            output.classList.remove('border-rose-200', 'bg-rose-50', 'text-rose-700', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-800');
+            output.classList.add('border-slate-200', 'bg-slate-50', 'text-slate-600');
+
+            try {
+                const response = await fetch(url, {
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const payload = await response.json();
+
+                output.classList.remove('border-slate-200', 'bg-slate-50', 'text-slate-600');
+
+                if (response.ok && payload.pass) {
+                    output.textContent = `${payload.message}: ${payload.pass.code} · ${payload.pass.plan_name} · ${payload.pass.remaining_sessions}`;
+                    output.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-800');
+                    return;
+                }
+
+                output.textContent = payload.message || 'No matching class pass.';
+                output.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-700');
+            } catch {
+                output.textContent = output.dataset.error || 'Could not check class pass.';
+                output.classList.remove('border-slate-200', 'bg-slate-50', 'text-slate-600');
+                output.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-700');
             }
         });
     });
@@ -2049,6 +2110,7 @@ function replaceScheduledClassCard(cardHtml, fallbackCard) {
     const target = document.getElementById(replacement.id) ?? fallbackCard;
     target?.replaceWith(replacement);
     initCustomerAutocomplete(replacement);
+    initClassPassPreviews(replacement);
     initPhoneMasks(replacement);
     createIcons({ icons });
 }
@@ -3165,6 +3227,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initColorPickers();
     initStudioRulesEditors();
     initCustomerAutocomplete();
+    initClassPassPreviews();
     initCustomerAuthTabs();
     initPlatformSettingsTabs();
     initAiProviderModels();

@@ -50,6 +50,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('interactWithTelegramBot', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::InteractWithTelegramBot));
         Gate::define('issueCustomerClassPasses', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::IssueCustomerClassPasses));
         Gate::define('manageCustomerClassPasses', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageCustomerClassPasses));
+        Gate::define('correctClosedClasses', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::CorrectClosedClasses));
+        Gate::define('manageStudioCashflow', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageStudioCashflow));
         Gate::define('viewActivityLog', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ViewActivityLog));
         Gate::define('markAttendance', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::MarkAttendance));
         Gate::define('manageTrainers', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageTrainers));

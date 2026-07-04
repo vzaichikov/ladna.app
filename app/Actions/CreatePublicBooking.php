@@ -176,6 +176,7 @@ class CreatePublicBooking
             ClassBookingStatus::Attended->value,
         ];
         $hasExistingActiveBooking = $scheduledClass->classBookings()
+            ->notCorrectedRemoved()
             ->where('customer_id', $customerId)
             ->whereIn('status', $activeStatuses)
             ->exists();
@@ -185,6 +186,7 @@ class CreatePublicBooking
         }
 
         $activeBookingsCount = $scheduledClass->classBookings()
+            ->notCorrectedRemoved()
             ->whereIn('status', $activeStatuses)
             ->count();
         $capacity = (int) ($scheduledClass->capacity ?? 0);

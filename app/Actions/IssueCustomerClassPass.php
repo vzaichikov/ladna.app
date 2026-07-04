@@ -117,6 +117,7 @@ class IssueCustomerClassPass
         }
 
         $bookings = $customer->classBookings()
+            ->notCorrectedRemoved()
             ->where('account_id', $account->id);
 
         if ($source !== 'manual') {

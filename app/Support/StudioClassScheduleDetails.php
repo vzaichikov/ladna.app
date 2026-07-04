@@ -81,6 +81,7 @@ class StudioClassScheduleDetails
                 'classBookings' => function ($query) use ($account, $includeCancelledBookings): void {
                     $query
                         ->whereBelongsTo($account)
+                        ->notCorrectedRemoved()
                         ->when(! $includeCancelledBookings, fn ($query) => $query->where('status', ClassBookingStatus::Booked->value))
                         ->with([
                             'customer:id,account_id,name',

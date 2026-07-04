@@ -505,7 +505,9 @@ class StudioAssistantActionPlanner
                 ->where('schedule_kind', ScheduleKind::GroupClass->value))
             ->with(['location:id,account_id,name,timezone', 'room:id,account_id,location_id,name', 'classType:id,account_id,name,schedule_kind', 'trainer:id,account_id,name'])
             ->withCount([
-                'classBookings as active_bookings_count' => fn ($query) => $query->whereIn('status', $activeStatuses),
+                'classBookings as active_bookings_count' => fn ($query) => $query
+                    ->notCorrectedRemoved()
+                    ->whereIn('status', $activeStatuses),
             ])
             ->orderBy('starts_at')
             ->limit(12)

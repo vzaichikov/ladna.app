@@ -19,11 +19,13 @@ use App\Http\Controllers\ClassBookingPaymentController;
 use App\Http\Controllers\ClassPassPlanController;
 use App\Http\Controllers\ClassPassSegmentController;
 use App\Http\Controllers\ClassTypeController;
+use App\Http\Controllers\ClosedClassBookingCorrectionController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\CustomerBookingCancellationController;
 use App\Http\Controllers\CustomerBulkTransferController;
 use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerPurchaseCorrectionController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
@@ -59,6 +61,7 @@ use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
 use App\Http\Controllers\ScheduledClassHistoryController;
 use App\Http\Controllers\ScheduleSeriesController;
+use App\Http\Controllers\StudioCashEntryController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
 use App\Http\Controllers\TrainerReportController;
@@ -240,6 +243,10 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.tariff-payments.pay-now');
         Route::get('accounts/{account}/payments', [AccountPaymentController::class, 'index'])
             ->name('accounts.payments.index');
+        Route::post('accounts/{account}/cash-entries', [StudioCashEntryController::class, 'store'])
+            ->name('accounts.cash-entries.store');
+        Route::post('accounts/{account}/payments/{customerPurchase}/corrections', [CustomerPurchaseCorrectionController::class, 'store'])
+            ->name('accounts.payments.corrections.store');
         Route::get('accounts/{account}/reports', [ReportController::class, 'index'])
             ->name('accounts.reports.index');
         Route::get('accounts/{account}/reports/trainers', TrainerReportController::class)
@@ -411,10 +418,16 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.scheduled-classes.cancel');
         Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/restore', [ScheduledClassCancellationController::class, 'restore'])
             ->name('accounts.scheduled-classes.restore');
+        Route::get('accounts/{account}/scheduled-classes/{scheduledClass}/corrections/pass-preview', [ClosedClassBookingCorrectionController::class, 'preview'])
+            ->name('accounts.scheduled-classes.corrections.pass-preview');
+        Route::post('accounts/{account}/scheduled-classes/{scheduledClass}/corrections/bookings', [ClosedClassBookingCorrectionController::class, 'store'])
+            ->name('accounts.scheduled-classes.corrections.bookings.store');
         Route::post('accounts/{account}/scheduled-classes/{scheduledClass}/bookings', [ClassBookingController::class, 'store'])
             ->name('accounts.scheduled-classes.bookings.store');
         Route::patch('accounts/{account}/bookings/{classBooking}', [ClassBookingController::class, 'update'])
             ->name('accounts.bookings.update');
+        Route::post('accounts/{account}/bookings/{classBooking}/corrections/remove', [ClosedClassBookingCorrectionController::class, 'remove'])
+            ->name('accounts.bookings.corrections.remove');
         Route::post('accounts/{account}/bookings/{classBooking}/payment', [ClassBookingPaymentController::class, 'store'])
             ->name('accounts.bookings.payment.store');
         Route::delete('accounts/{account}/bookings/{classBooking}', [ClassBookingController::class, 'destroy'])
