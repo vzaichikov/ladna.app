@@ -1,5 +1,12 @@
 <?php
 
+$appUrl = rtrim((string) env('APP_URL', 'http://localhost'), '/');
+$appUrl = $appUrl !== '' ? $appUrl : 'http://localhost';
+$appHost = parse_url($appUrl, PHP_URL_HOST);
+$mediaMtxPublicUrl = is_string($appHost) && $appHost !== ''
+    ? str_replace('://'.$appHost, '://'.(str_starts_with($appHost, 'cam.') ? $appHost : 'cam.'.$appHost), $appUrl)
+    : $appUrl;
+
 return [
 
     /*
@@ -50,7 +57,7 @@ return [
 
     'mediamtx' => [
         'api_url' => env('MEDIAMTX_API_URL', 'http://127.0.0.1:9997'),
-        'public_url' => env('MEDIAMTX_PUBLIC_URL', 'https://cam.ladna.app'),
+        'public_url' => env('MEDIAMTX_PUBLIC_URL', $mediaMtxPublicUrl),
         'playback' => env('MEDIAMTX_PLAYBACK', 'webrtc'),
         'hls_prefix' => env('MEDIAMTX_HLS_PREFIX', '/hls'),
         'webrtc_prefix' => env('MEDIAMTX_WEBRTC_PREFIX', '/webrtc'),

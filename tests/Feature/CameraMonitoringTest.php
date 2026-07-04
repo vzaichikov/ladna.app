@@ -17,6 +17,48 @@ class CameraMonitoringTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_default_mediamtx_public_url_is_derived_from_app_url(): void
+    {
+        $previousAppUrl = $_ENV['APP_URL'] ?? null;
+        $previousServerAppUrl = $_SERVER['APP_URL'] ?? null;
+        $previousMediaMtxPublicUrl = $_ENV['MEDIAMTX_PUBLIC_URL'] ?? null;
+        $previousServerMediaMtxPublicUrl = $_SERVER['MEDIAMTX_PUBLIC_URL'] ?? null;
+
+        try {
+            $_ENV['APP_URL'] = 'https://studio.example.test';
+            $_SERVER['APP_URL'] = 'https://studio.example.test';
+            unset($_ENV['MEDIAMTX_PUBLIC_URL'], $_SERVER['MEDIAMTX_PUBLIC_URL']);
+
+            $services = require base_path('config/services.php');
+
+            $this->assertSame('https://cam.studio.example.test', $services['mediamtx']['public_url']);
+        } finally {
+            if ($previousAppUrl === null) {
+                unset($_ENV['APP_URL']);
+            } else {
+                $_ENV['APP_URL'] = $previousAppUrl;
+            }
+
+            if ($previousServerAppUrl === null) {
+                unset($_SERVER['APP_URL']);
+            } else {
+                $_SERVER['APP_URL'] = $previousServerAppUrl;
+            }
+
+            if ($previousMediaMtxPublicUrl === null) {
+                unset($_ENV['MEDIAMTX_PUBLIC_URL']);
+            } else {
+                $_ENV['MEDIAMTX_PUBLIC_URL'] = $previousMediaMtxPublicUrl;
+            }
+
+            if ($previousServerMediaMtxPublicUrl === null) {
+                unset($_SERVER['MEDIAMTX_PUBLIC_URL']);
+            } else {
+                $_SERVER['MEDIAMTX_PUBLIC_URL'] = $previousServerMediaMtxPublicUrl;
+            }
+        }
+    }
+
     public function test_platform_admin_can_toggle_camera_features_near_otp(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
