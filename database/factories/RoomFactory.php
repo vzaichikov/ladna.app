@@ -31,6 +31,8 @@ class RoomFactory extends Factory
             'capacity' => fake()->numberBetween(6, 16),
             'color' => null,
             'is_active' => true,
+            'rtsp_url' => null,
+            'rtsp_enabled' => false,
         ];
     }
 }

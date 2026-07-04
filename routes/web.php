@@ -13,6 +13,7 @@ use App\Http\Controllers\AccountTariffPaymentController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\ApiDocumentationController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\CameraController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ClassBookingController;
 use App\Http\Controllers\ClassBookingPaymentController;
@@ -56,6 +57,7 @@ use App\Http\Controllers\PublicStudioRulesController;
 use App\Http\Controllers\PwaController;
 use App\Http\Controllers\QuickBookingController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RoomCameraTestController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
@@ -251,6 +253,10 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.reports.index');
         Route::get('accounts/{account}/reports/trainers', TrainerReportController::class)
             ->name('accounts.reports.trainers');
+        Route::get('accounts/{account}/reports/cameras', [CameraController::class, 'index'])
+            ->name('accounts.reports.cameras');
+        Route::get('accounts/{account}/reports/cameras/{room}/stream', [CameraController::class, 'stream'])
+            ->name('accounts.reports.cameras.stream');
         Route::get('accounts/{account}/activity-logs', [AccountActivityLogController::class, 'index'])
             ->name('accounts.activity-logs.index');
         Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])
@@ -274,6 +280,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
         Route::resource('accounts.locations', LocationController::class)
             ->except(['show'])
             ->scoped();
+        Route::match(['post', 'put', 'patch'], 'accounts/{account}/rooms/test-camera', RoomCameraTestController::class)
+            ->name('accounts.rooms.test-camera');
         Route::resource('accounts.rooms', RoomController::class)
             ->except(['show'])
             ->scoped();

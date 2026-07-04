@@ -44,6 +44,7 @@ return [
         'trainer-levels' => 'medal',
         'trainers' => 'user-round',
         'user' => 'user-round',
+        'video' => 'video',
         'website-leads' => 'inbox',
     ],
 

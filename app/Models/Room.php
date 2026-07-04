@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'location_id', 'name', 'slug', 'description', 'capacity', 'color', 'is_active'])]
+#[Fillable(['account_id', 'location_id', 'name', 'slug', 'description', 'capacity', 'color', 'is_active', 'rtsp_url', 'rtsp_enabled'])]
 class Room extends Model
 {
     /** @use HasFactory<RoomFactory> */
@@ -19,6 +19,14 @@ class Room extends Model
 
     protected $attributes = [
         'is_active' => true,
+        'rtsp_enabled' => false,
+    ];
+
+    /**
+     * @var array<int, string>
+     */
+    protected $hidden = [
+        'rtsp_url',
     ];
 
     /**
@@ -28,12 +36,25 @@ class Room extends Model
     {
         return [
             'is_active' => 'boolean',
+            'rtsp_url' => 'encrypted',
+            'rtsp_enabled' => 'boolean',
         ];
     }
 
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeRtspEnabled(Builder $query): Builder
+    {
+        return $query->where('rtsp_enabled', true)
+            ->whereNotNull('rtsp_url');
+    }
+
+    public function hasEnabledRtspCamera(): bool
+    {
+        return (bool) $this->rtsp_enabled && filled($this->rtsp_url);
     }
 
     public function colorAccent(string $fallback = '#3B223F'): string

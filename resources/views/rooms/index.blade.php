@@ -16,7 +16,7 @@
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($rooms as $room)
-            <div class="crm-row lg:grid-cols-[1fr_150px_140px_auto] lg:items-center">
+            <div class="crm-row lg:grid-cols-[1fr_150px_140px_140px_auto] lg:items-center">
                 <div class="flex items-center gap-4">
                     <span class="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
                         <x-ui.icon name="rooms" class="h-5 w-5" />
@@ -30,6 +30,13 @@
                     {{ $room->is_active ? __('app.active') : __('app.inactive') }}
                 </span>
                 <div class="text-sm font-medium text-slate-500">{{ __('app.capacity') }}: {{ $room->capacity ?? __('app.capacity_not_set') }}</div>
+                @if ($account->allowsRtspCameras())
+                    <span class="{{ $room->hasEnabledRtspCamera() ? 'crm-status-active' : 'crm-status-muted' }}">
+                        {{ $room->hasEnabledRtspCamera() ? __('app.camera_enabled') : __('app.camera_disabled') }}
+                    </span>
+                @else
+                    <span class="hidden lg:block"></span>
+                @endif
                 <div class="flex flex-wrap gap-2 lg:justify-end">
                     <x-ui.action-button :href="route('dashboard.accounts.rooms.edit', [$account, $room])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.rooms.destroy', [$account, $room]) }}" data-confirm-delete>

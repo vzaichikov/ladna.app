@@ -65,3 +65,46 @@
         {{ __('app.active') }}
     </label>
 </div>
+
+@if ($account->allowsRtspCameras())
+    @php
+        $cameraTest = session('rtsp_camera_test');
+    @endphp
+
+    <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+        <legend class="crm-label px-1">{{ __('app.rtsp_camera') }}</legend>
+        <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.rtsp_camera_help') }}</p>
+
+        <div class="mt-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+            <label class="block">
+                <span class="crm-label">{{ __('app.rtsp_address') }}</span>
+                <input name="rtsp_url" type="text" inputmode="url" value="{{ old('rtsp_url', $room->rtsp_url) }}" placeholder="rtsp://user:password@camera-host:554/stream" class="crm-field bg-white">
+                @error('rtsp_url') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+
+            <x-ui.button
+                type="submit"
+                variant="secondary"
+                formaction="{{ route('dashboard.accounts.rooms.test-camera', $account) }}"
+                formmethod="POST"
+            >
+                <x-ui.icon name="video" class="h-4 w-4" />
+                {{ __('app.test') }}
+            </x-ui.button>
+        </div>
+
+        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label class="flex items-center gap-3 text-sm font-medium text-slate-700">
+                <input type="hidden" name="rtsp_enabled" value="0">
+                <input name="rtsp_enabled" type="checkbox" value="1" @checked(old('rtsp_enabled', $room->rtsp_enabled)) class="crm-checkbox">
+                {{ __('app.enable_camera') }}
+            </label>
+
+            @if (is_array($cameraTest))
+                <span class="{{ $cameraTest['ok'] ?? false ? 'text-emerald-700' : 'text-rose-700' }} text-sm font-semibold">
+                    {{ $cameraTest['message'] ?? '' }}
+                </span>
+            @endif
+        </div>
+    </fieldset>
+@endif

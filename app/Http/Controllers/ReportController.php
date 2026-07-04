@@ -10,17 +10,27 @@ class ReportController extends Controller
     public function index(Account $account): View
     {
         $this->authorize('viewReports', $account);
+        $reports = [
+            [
+                'title' => __('app.trainer_report_title'),
+                'copy' => __('app.trainer_report_card_copy'),
+                'icon' => 'trainers',
+                'href' => route('dashboard.accounts.reports.trainers', $account),
+            ],
+        ];
+
+        if ($account->allowsRtspCameras()) {
+            $reports[] = [
+                'title' => __('app.cameras'),
+                'copy' => __('app.cameras_report_card_copy'),
+                'icon' => 'video',
+                'href' => route('dashboard.accounts.reports.cameras', $account),
+            ];
+        }
 
         return view('reports.index', [
             'account' => $account,
-            'reports' => [
-                [
-                    'title' => __('app.trainer_report_title'),
-                    'copy' => __('app.trainer_report_card_copy'),
-                    'icon' => 'trainers',
-                    'href' => route('dashboard.accounts.reports.trainers', $account),
-                ],
-            ],
+            'reports' => $reports,
         ]);
     }
 }

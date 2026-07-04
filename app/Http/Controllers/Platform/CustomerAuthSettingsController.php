@@ -30,6 +30,8 @@ class CustomerAuthSettingsController extends Controller
 
     public function update(UpdateCustomerAuthSettingsRequest $request, Account $account): RedirectResponse
     {
+        $account->update($request->accountFeaturePayload());
+
         $account->customerAuthSetting()->updateOrCreate(
             ['account_id' => $account->id],
             $request->payload(),

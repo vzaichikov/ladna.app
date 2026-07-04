@@ -42,6 +42,17 @@
                 <input name="allow_otp" type="checkbox" value="1" @checked(old('allow_otp', $settings->allow_otp)) class="crm-checkbox">
                 {{ __('app.enable_customer_otp_tariff') }}
             </label>
+            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
+                <input type="hidden" name="allow_rtsp_cameras" value="0">
+                <input name="allow_rtsp_cameras" type="checkbox" value="1" @checked(old('allow_rtsp_cameras', $account->allow_rtsp_cameras)) class="crm-checkbox">
+                {{ __('app.enable_rtsp_camera_support') }}
+            </label>
+            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
+                <input type="hidden" name="enable_people_counter" value="0">
+                <input name="enable_people_counter" type="checkbox" value="1" @checked(old('enable_people_counter', $account->enable_people_counter)) class="crm-checkbox">
+                {{ __('app.enable_people_counter') }}
+            </label>
+            <p class="text-sm leading-6 text-slate-500">{{ __('app.rtsp_camera_support_hint') }}</p>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">

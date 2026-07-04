@@ -38,6 +38,8 @@ class AccountFactory extends Factory
             'support_whatsapp_url' => null,
             'support_phone_url' => null,
             'support_secondary_phone_url' => null,
+            'allow_rtsp_cameras' => false,
+            'enable_people_counter' => false,
         ];
     }
 }

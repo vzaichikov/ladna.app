@@ -22,6 +22,8 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
     {
         return [
             'allow_otp' => ['nullable', 'boolean'],
+            'allow_rtsp_cameras' => ['nullable', 'boolean'],
+            'enable_people_counter' => ['nullable', 'boolean'],
             'otp_sender_scope' => ['required', Rule::enum(CustomerOtpSenderScope::class)],
             'otp_provider' => [
                 'nullable',
@@ -43,6 +45,17 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
             'allow_otp' => $this->boolean('allow_otp'),
             'otp_sender_scope' => (string) $this->validated('otp_sender_scope'),
             'otp_provider' => $this->validated('otp_provider'),
+        ];
+    }
+
+    /**
+     * @return array{allow_rtsp_cameras: bool, enable_people_counter: bool}
+     */
+    public function accountFeaturePayload(): array
+    {
+        return [
+            'allow_rtsp_cameras' => $this->boolean('allow_rtsp_cameras'),
+            'enable_people_counter' => $this->boolean('enable_people_counter'),
         ];
     }
 }
