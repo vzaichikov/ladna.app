@@ -17,7 +17,7 @@ class CameraController extends Controller
         $this->authorize('viewReports', $account);
         abort_unless($account->allowsRtspCameras(), 404);
 
-        return view('reports.cameras', [
+        return view('cameras.index', [
             'account' => $account,
             'ffmpegAvailable' => $cameras->ffmpegAvailable(),
             'rooms' => $account->rooms()

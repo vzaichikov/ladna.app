@@ -19,15 +19,6 @@ class ReportController extends Controller
             ],
         ];
 
-        if ($account->allowsRtspCameras()) {
-            $reports[] = [
-                'title' => __('app.cameras'),
-                'copy' => __('app.cameras_report_card_copy'),
-                'icon' => 'video',
-                'href' => route('dashboard.accounts.reports.cameras', $account),
-            ];
-        }
-
         return view('reports.index', [
             'account' => $account,
             'reports' => $reports,

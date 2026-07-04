@@ -815,7 +815,6 @@ return [
     'trainer_report_card_copy' => 'Shows every trainer with class totals and people count for selected booking statuses.',
     'cameras' => 'Cameras',
     'cameras_copy' => 'Live monitoring from enabled hall cameras.',
-    'cameras_report_card_copy' => 'Shows live streams for halls with enabled RTSP cameras.',
     'trainer_report_total_classes' => 'Total classes',
     'trainer_report_people_count' => 'People count',
     'booking_statuses' => 'Booking statuses',

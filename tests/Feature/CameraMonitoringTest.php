@@ -128,7 +128,7 @@ class CameraMonitoringTest extends TestCase
             ->assertSessionHasErrors('rtsp_url');
     }
 
-    public function test_camera_report_is_gated_by_rtsp_allowance_and_lists_enabled_rooms(): void
+    public function test_camera_page_is_standalone_and_gated_by_rtsp_allowance(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create(['allow_rtsp_cameras' => false]);
@@ -139,13 +139,15 @@ class CameraMonitoringTest extends TestCase
             ->get(route('dashboard.accounts.reports.index', $account))
             ->assertOk()
             ->assertDontSee(__('app.cameras'), false)
-            ->assertDontSee(route('dashboard.accounts.reports.cameras', $account), false);
+            ->assertDontSee(route('dashboard.accounts.cameras.index', $account), false);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.reports.cameras', $account))
+            ->get(route('dashboard.accounts.cameras.index', $account))
             ->assertNotFound();
 
         $account->update(['allow_rtsp_cameras' => true]);
+
+        $this->assertStringNotContainsString('/reports/', route('dashboard.accounts.cameras.index', $account));
 
         $enabledRoom = Room::factory()
             ->for($account)
@@ -168,21 +170,21 @@ class CameraMonitoringTest extends TestCase
             ->get(route('dashboard.accounts.show', $account))
             ->assertOk()
             ->assertSee(__('app.cameras'), false)
-            ->assertSee(route('dashboard.accounts.reports.cameras', $account), false);
+            ->assertSee(route('dashboard.accounts.cameras.index', $account), false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.reports.index', $account))
             ->assertOk()
-            ->assertSee(__('app.cameras'), false)
-            ->assertSee(__('app.cameras_report_card_copy'), false);
+            ->assertSee(__('app.trainer_report_title'), false)
+            ->assertDontSee(__('app.cameras_copy'), false);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.reports.cameras', $account))
+            ->get(route('dashboard.accounts.cameras.index', $account))
             ->assertOk()
             ->assertSee($enabledRoom->name)
             ->assertSee($location->name)
             ->assertDontSee($disabledRoom->name)
-            ->assertSee(route('dashboard.accounts.reports.cameras.stream', [$account, $enabledRoom]), false)
+            ->assertSee(route('dashboard.accounts.cameras.stream', [$account, $enabledRoom]), false)
             ->assertDontSee('rtsp://', false);
     }
 }

@@ -8,9 +8,6 @@
             <h1 class="crm-page-title">{{ __('app.cameras') }}</h1>
             <p class="crm-page-copy">{{ __('app.cameras_copy') }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.reports.index', $account)" variant="secondary">
-            {{ __('app.reports') }}
-        </x-ui.button>
     </div>
 
     @unless ($ffmpegAvailable)
@@ -35,7 +32,7 @@
                 <div class="aspect-video bg-slate-950">
                     @if ($ffmpegAvailable)
                         <img
-                            src="{{ route('dashboard.accounts.reports.cameras.stream', [$account, $room]) }}"
+                            src="{{ route('dashboard.accounts.cameras.stream', [$account, $room]) }}"
                             alt="{{ $room->name }}"
                             class="h-full w-full object-contain"
                         >

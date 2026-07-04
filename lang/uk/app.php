@@ -815,7 +815,6 @@ return [
     'trainer_report_card_copy' => 'Показує кожного тренера із загальною кількістю занять та людей в обраних статусах запису.',
     'cameras' => 'Камери',
     'cameras_copy' => 'Live-моніторинг з увімкнених камер залів.',
-    'cameras_report_card_copy' => 'Показує live-потоки для залів, де увімкнені RTSP-камери.',
     'trainer_report_total_classes' => 'Усього занять',
     'trainer_report_people_count' => 'Кількість людей',
     'booking_statuses' => 'Статуси записів',

@@ -135,8 +135,8 @@
         ...($canViewReports && $activeAccount->allowsRtspCameras() ? [[
             'label' => __('app.cameras'),
             'icon' => 'video',
-            'href' => route('dashboard.accounts.reports.cameras', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.reports.cameras*'),
+            'href' => route('dashboard.accounts.cameras.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.cameras.*'),
         ]] : []),
     ] : [];
 
