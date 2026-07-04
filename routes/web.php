@@ -255,8 +255,6 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.reports.trainers');
         Route::get('accounts/{account}/cameras', [CameraController::class, 'index'])
             ->name('accounts.cameras.index');
-        Route::get('accounts/{account}/cameras/{room}/stream', [CameraController::class, 'stream'])
-            ->name('accounts.cameras.stream');
         Route::get('accounts/{account}/activity-logs', [AccountActivityLogController::class, 'index'])
             ->name('accounts.activity-logs.index');
         Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])

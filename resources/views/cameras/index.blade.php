@@ -10,14 +10,15 @@
         </div>
     </div>
 
-    @unless ($ffmpegAvailable)
+    @unless ($gatewayConfigured)
         <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-            {{ __('app.rtsp_camera_ffmpeg_unavailable') }}
+            {{ __('app.rtsp_camera_gateway_unavailable') }}
         </div>
     @endunless
 
     <section class="mt-6 grid gap-5 xl:grid-cols-2">
-        @forelse ($rooms as $room)
+        @forelse ($streams as $stream)
+            @php($room = $stream['room'])
             <article class="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-crm">
                 <div class="border-b border-stone-100 px-5 py-4">
                     <div class="flex items-start justify-between gap-4">
@@ -30,12 +31,14 @@
                 </div>
 
                 <div class="aspect-video bg-slate-950">
-                    @if ($ffmpegAvailable)
-                        <img
-                            src="{{ route('dashboard.accounts.cameras.stream', [$account, $room]) }}"
-                            alt="{{ $room->name }}"
-                            class="h-full w-full object-contain"
-                        >
+                    @if ($gatewayConfigured && $stream['available'])
+                        <iframe
+                            src="{{ $stream['playerUrl'] }}"
+                            title="{{ $room->name }}"
+                            allow="autoplay; fullscreen; picture-in-picture"
+                            class="h-full w-full border-0"
+                            loading="lazy"
+                        ></iframe>
                     @else
                         <div class="flex h-full items-center justify-center px-6 text-center text-sm font-semibold text-white">
                             {{ __('app.rtsp_camera_stream_unavailable') }}

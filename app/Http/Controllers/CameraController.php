@@ -4,46 +4,58 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\Room;
-use App\Support\RtspCameraService;
-use Illuminate\Http\Response;
-use Illuminate\Http\StreamedResponse;
+use App\Support\MediaMtxCameraGateway;
 use Illuminate\View\View;
-use RuntimeException;
+use Throwable;
 
 class CameraController extends Controller
 {
-    public function index(Account $account, RtspCameraService $cameras): View
+    public function index(Account $account, MediaMtxCameraGateway $gateway): View
     {
         $this->authorize('viewReports', $account);
         abort_unless($account->allowsRtspCameras(), 404);
 
+        $gatewayConfigured = $gateway->configured();
+
+        $rooms = $account->rooms()
+            ->with('location')
+            ->active()
+            ->rtspEnabled()
+            ->orderBy('name')
+            ->get()
+            ->map(function (Room $room) use ($gateway, $gatewayConfigured): array {
+                if (! $gatewayConfigured) {
+                    return [
+                        'room' => $room,
+                        'playerUrl' => null,
+                        'available' => false,
+                    ];
+                }
+
+                try {
+                    $gateway->ensurePath($room);
+
+                    return [
+                        'room' => $room,
+                        'playerUrl' => $gateway->playerUrl($room),
+                        'available' => true,
+                    ];
+                } catch (Throwable $exception) {
+                    report($exception);
+
+                    return [
+                        'room' => $room,
+                        'playerUrl' => null,
+                        'available' => false,
+                    ];
+                }
+            });
+
         return view('cameras.index', [
             'account' => $account,
-            'ffmpegAvailable' => $cameras->ffmpegAvailable(),
-            'rooms' => $account->rooms()
-                ->with('location')
-                ->active()
-                ->rtspEnabled()
-                ->orderBy('name')
-                ->get(),
+            'gatewayConfigured' => $gatewayConfigured,
+            'playback' => $gateway->playback(),
+            'streams' => $rooms,
         ]);
-    }
-
-    public function stream(Account $account, Room $room, RtspCameraService $cameras): StreamedResponse|Response
-    {
-        $this->ensureBelongsToAccount($account, $room);
-        $this->authorize('viewReports', $account);
-        abort_unless($account->allowsRtspCameras() && $room->hasEnabledRtspCamera(), 404);
-
-        try {
-            return $cameras->stream($room);
-        } catch (RuntimeException) {
-            return response(__('app.rtsp_camera_stream_unavailable'), 503);
-        }
-    }
-
-    private function ensureBelongsToAccount(Account $account, Room $room): void
-    {
-        abort_unless($room->account_id === $account->id, 404);
     }
 }

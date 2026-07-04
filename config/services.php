@@ -48,4 +48,16 @@ return [
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com'),
     ],
 
+    'mediamtx' => [
+        'api_url' => env('MEDIAMTX_API_URL', 'http://127.0.0.1:9997'),
+        'public_url' => env('MEDIAMTX_PUBLIC_URL', 'https://cam.ladna.app'),
+        'playback' => env('MEDIAMTX_PLAYBACK', 'webrtc'),
+        'hls_prefix' => env('MEDIAMTX_HLS_PREFIX', '/hls'),
+        'webrtc_prefix' => env('MEDIAMTX_WEBRTC_PREFIX', '/webrtc'),
+        'source_on_demand' => env('MEDIAMTX_SOURCE_ON_DEMAND', true),
+        'source_on_demand_start_timeout' => env('MEDIAMTX_SOURCE_ON_DEMAND_START_TIMEOUT', '20s'),
+        'source_on_demand_close_after' => env('MEDIAMTX_SOURCE_ON_DEMAND_CLOSE_AFTER', '30s'),
+        'rtsp_transport' => env('MEDIAMTX_RTSP_TRANSPORT', 'tcp'),
+    ],
+
 ];

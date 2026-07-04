@@ -7,7 +7,10 @@ use App\Models\Account;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\User;
+use App\Support\MediaMtxCameraGateway;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class CameraMonitoringTest extends TestCase
@@ -130,6 +133,18 @@ class CameraMonitoringTest extends TestCase
 
     public function test_camera_page_is_standalone_and_gated_by_rtsp_allowance(): void
     {
+        config([
+            'services.mediamtx.api_url' => 'http://mediamtx.test',
+            'services.mediamtx.public_url' => 'https://cam.example.test',
+            'services.mediamtx.webrtc_prefix' => '/webrtc',
+            'services.mediamtx.source_on_demand' => true,
+        ]);
+        Http::preventStrayRequests();
+        Http::fake([
+            'http://mediamtx.test/v3/config/paths/get/*' => Http::response(['status' => 'error'], 404),
+            'http://mediamtx.test/v3/config/paths/add/*' => Http::response(['status' => 'ok']),
+        ]);
+
         $owner = User::factory()->create();
         $account = Account::factory()->create(['allow_rtsp_cameras' => false]);
         $account->addOwner($owner);
@@ -165,6 +180,7 @@ class CameraMonitoringTest extends TestCase
                 'rtsp_url' => 'rtsp://camera.example.test/disabled',
                 'rtsp_enabled' => false,
             ]);
+        $pathName = app(MediaMtxCameraGateway::class)->pathName($enabledRoom);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.show', $account))
@@ -184,7 +200,47 @@ class CameraMonitoringTest extends TestCase
             ->assertSee($enabledRoom->name)
             ->assertSee($location->name)
             ->assertDontSee($disabledRoom->name)
-            ->assertSee(route('dashboard.accounts.cameras.stream', [$account, $enabledRoom]), false)
+            ->assertSee('https://cam.example.test/webrtc/'.$pathName.'/', false)
             ->assertDontSee('rtsp://', false);
+
+        Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+            && $request->url() === 'http://mediamtx.test/v3/config/paths/add/'.$pathName
+            && $request['source'] === 'rtsp://user:secret@camera.example.test/live'
+            && $request['sourceOnDemand'] === true
+            && $request['rtspTransport'] === 'tcp');
+        Http::assertSentCount(2);
+    }
+
+    public function test_camera_gateway_patches_existing_mediamtx_path(): void
+    {
+        config([
+            'services.mediamtx.api_url' => 'http://mediamtx.test',
+            'services.mediamtx.public_url' => 'https://cam.example.test',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake([
+            'http://mediamtx.test/v3/config/paths/get/*' => Http::response(['source' => 'rtsp://old-camera/live']),
+            'http://mediamtx.test/v3/config/paths/patch/*' => Http::response(['status' => 'ok']),
+        ]);
+
+        $account = Account::factory()->create(['allow_rtsp_cameras' => true]);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()
+            ->for($account)
+            ->for($location)
+            ->create([
+                'rtsp_url' => 'rtsp://new-camera.example.test/live',
+                'rtsp_enabled' => true,
+            ]);
+        $gateway = app(MediaMtxCameraGateway::class);
+        $pathName = $gateway->pathName($room);
+
+        $gateway->ensurePath($room);
+
+        Http::assertSent(fn (Request $request): bool => $request->method() === 'PATCH'
+            && $request->url() === 'http://mediamtx.test/v3/config/paths/patch/'.$pathName
+            && $request['source'] === 'rtsp://new-camera.example.test/live'
+            && $request['sourceOnDemand'] === true);
+        Http::assertSentCount(2);
     }
 }
