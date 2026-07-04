@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Actions\CancelScheduledClassForStudio;
 use App\Actions\RestoreScheduledClassCancellation;
 use App\Enums\ClassBookingStatus;
+use App\Http\Requests\CancelClosedScheduledClassRequest;
 use App\Models\Account;
 use App\Models\ScheduledClass;
+use App\Models\ScheduledClassCancellation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -53,6 +55,27 @@ class ScheduledClassCancellationController extends Controller
 
         return redirect()->route('dashboard.accounts.scheduled-classes.index', $account)
             ->with('status', __('app.scheduled_class_restored'));
+    }
+
+    public function cancelClosed(CancelClosedScheduledClassRequest $request, Account $account, ScheduledClass $scheduledClass, CancelScheduledClassForStudio $cancelScheduledClass): RedirectResponse|JsonResponse
+    {
+        $this->ensureClassBelongsToAccount($account, $scheduledClass);
+
+        try {
+            $cancelScheduledClass->execute($account, $scheduledClass, $request->user(), [
+                'mode' => ScheduledClassCancellation::ModeClosedCorrection,
+                'pass_effect' => $request->string('pass_effect')->toString(),
+                'reason' => $request->string('reason')->toString(),
+            ]);
+        } catch (ValidationException $exception) {
+            return $this->validationErrorResponse($request, $exception);
+        }
+
+        if ($this->wantsJsonResponse($request)) {
+            return $this->scheduledClassJsonResponse($account, $scheduledClass, __('app.scheduled_class_closed_cancelled'));
+        }
+
+        return back()->with('status', __('app.scheduled_class_closed_cancelled'));
     }
 
     private function ensureClassBelongsToAccount(Account $account, ScheduledClass $scheduledClass): void

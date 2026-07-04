@@ -15,6 +15,7 @@
     $cancellationWindow = app(\App\Support\ClassBookingCancellationWindow::class);
     $isCancelledClass = $scheduledClass->status === \App\Enums\ScheduledClassStatus::Cancelled;
     $activeCancellation = $scheduledClass->activeCancellation;
+    $isClosedCorrectionCancellation = $activeCancellation?->isClosedCorrection() ?? false;
     $cancellationEffects = $activeCancellation?->effects ?? collect();
     $cancellationBookingsCount = $cancellationEffects->count();
     $releasedReservationsCount = $cancellationEffects->where('new_reservation_status', \App\Enums\CustomerClassPassReservationStatus::Released->value)->count();
@@ -24,6 +25,7 @@
     $readonly = $readonly ?? false;
     $canManageClassCancellation = auth()->user()?->can('manageSchedule', $account) && auth()->user()?->can('manageBookings', $account);
     $canCancelClass = $canManageClassCancellation && ! $isCancelledClass && $scheduledClass->isStudioCancellationOpen();
+    $canRestoreClass = $canManageClassCancellation && $isCancelledClass && ! $isClosedCorrectionCancellation;
     $isClosedClass = ! $isCancelledClass && $scheduledClass->ends_at->lessThanOrEqualTo(now());
     $canCorrectClosedClass = (auth()->user()?->can('correctClosedClasses', $account) ?? false) && $isClosedClass;
     $canOpenCustomerPage = auth()->user()?->can('manageClients', $account) ?? false;
@@ -73,7 +75,7 @@
                         @method('PATCH')
                         <x-ui.action-button type="submit" variant="danger" icon="ban" :label="__('app.cancel_class')" />
                     </form>
-                @elseif ($isCancelledClass)
+                @elseif ($canRestoreClass)
                     <form
                         method="POST"
                         action="{{ route('dashboard.accounts.scheduled-classes.restore', [$account, $scheduledClass]) }}"
@@ -160,6 +162,38 @@
             </summary>
             <div class="mt-3 space-y-4 rounded-lg border border-rose-200 bg-rose-50 p-3">
                 <div class="rounded-md bg-white/70 p-3 text-rose-900">{{ __('app.closed_class_correction_warning') }}</div>
+
+                <form
+                    method="POST"
+                    action="{{ route('dashboard.accounts.scheduled-classes.cancel-closed', [$account, $scheduledClass]) }}"
+                    data-confirm-action
+                    data-confirm-title="{{ __('app.confirm_cancel_closed_class_title') }}"
+                    data-confirm-body="{{ __('app.confirm_cancel_closed_class_body') }}"
+                    data-confirm-accept="{{ __('app.cancel_closed_class') }}"
+                    data-confirm-icon="triangle-alert"
+                    data-confirm-variant="danger"
+                    class="space-y-3 rounded-lg border border-rose-100 bg-white p-3"
+                >
+                    @csrf
+                    @method('PATCH')
+                    <div>
+                        <div class="font-semibold text-slate-950">{{ __('app.cancel_closed_class') }}</div>
+                        <p class="mt-1 text-xs leading-5 text-slate-600">{{ __('app.cancel_closed_class_warning') }}</p>
+                    </div>
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.pass_effect') }}</span>
+                        <select name="pass_effect" class="crm-field">
+                            <option value="{{ \App\Models\ScheduledClassCancellation::PassEffectReturnSession }}">{{ __('app.pass_effect_return_session') }}</option>
+                            <option value="{{ \App\Models\ScheduledClassCancellation::PassEffectKeepConsumed }}">{{ __('app.pass_effect_keep_consumed') }}</option>
+                        </select>
+                    </label>
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.reason') }}</span>
+                        <textarea name="reason" rows="3" class="crm-field" required placeholder="{{ __('app.closed_class_cancellation_reason_placeholder') }}"></textarea>
+                    </label>
+                    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">{{ __('app.cancel_closed_class_cash_warning') }}</div>
+                    <x-ui.button type="submit" variant="danger" size="sm" class="w-fit">{{ __('app.cancel_closed_class') }}</x-ui.button>
+                </form>
 
                 <form
                     method="POST"

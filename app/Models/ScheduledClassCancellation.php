@@ -7,9 +7,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'scheduled_class_id', 'cancelled_by_user_id', 'restored_by_user_id', 'previous_scheduled_class_status', 'rules_snapshot', 'cancelled_at', 'restored_at'])]
+#[Fillable(['account_id', 'scheduled_class_id', 'cancelled_by_user_id', 'restored_by_user_id', 'previous_scheduled_class_status', 'cancellation_mode', 'pass_effect', 'reason', 'rules_snapshot', 'cancelled_at', 'restored_at'])]
 class ScheduledClassCancellation extends Model
 {
+    public const ModeStandard = 'standard';
+
+    public const ModeClosedCorrection = 'closed_correction';
+
+    public const PassEffectReturnSession = 'return_session';
+
+    public const PassEffectKeepConsumed = 'keep_consumed';
+
     /**
      * @return array<string, string>
      */
@@ -45,5 +53,10 @@ class ScheduledClassCancellation extends Model
     public function effects(): HasMany
     {
         return $this->hasMany(ScheduledClassCancellationEffect::class);
+    }
+
+    public function isClosedCorrection(): bool
+    {
+        return $this->cancellation_mode === self::ModeClosedCorrection;
     }
 }

@@ -416,6 +416,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.scheduled-classes.manual.store');
         Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/cancel', [ScheduledClassCancellationController::class, 'cancel'])
             ->name('accounts.scheduled-classes.cancel');
+        Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/cancel-closed', [ScheduledClassCancellationController::class, 'cancelClosed'])
+            ->name('accounts.scheduled-classes.cancel-closed');
         Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/restore', [ScheduledClassCancellationController::class, 'restore'])
             ->name('accounts.scheduled-classes.restore');
         Route::get('accounts/{account}/scheduled-classes/{scheduledClass}/corrections/pass-preview', [ClosedClassBookingCorrectionController::class, 'preview'])

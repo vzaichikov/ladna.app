@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.64.0',
+                'date' => '2026-07-04',
+                'title' => 'Closed-class cancellation and hall timelines',
+                'items' => ['Added an owner-controlled correction action for cancelling already-ended classes with an explicit reason and class-pass effect, while keeping cashflow changes separate and auditable. Schedule timelines now show separate hall lanes so classes in different rooms are easier to scan.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.63.0',
                 'date' => '2026-07-04',
                 'title' => 'Closed-class corrections and cash controls',
@@ -576,6 +583,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.64.0',
+                'date' => '2026-07-04',
+                'title' => 'Скасування завершених занять і таймлайн за залами',
+                'items' => ['Додано контрольоване виправлення для скасування вже завершеного заняття з обовʼязковою причиною та вибором впливу на абонемент, при цьому грошові зміни залишаються окремими й аудованими. Таймлайн розкладу тепер показує окремі рядки залів, щоб заняття в різних кімнатах було легше читати.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.63.0',
                 'date' => '2026-07-04',

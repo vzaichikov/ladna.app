@@ -7,12 +7,16 @@ use App\Actions\NormalizeCustomerClassPasses;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\ScheduleKind;
+use App\Enums\StudioPermission;
 use App\Models\Account;
+use App\Models\AccountMembership;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
+use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -380,6 +384,139 @@ class ScheduledClassCancellationTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_owner_can_cancel_closed_private_lesson_with_return_session_and_cash_unchanged(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-21 09:00:00', 'UTC'));
+
+        $context = $this->privateLessonContext();
+        $customerClassPass = $this->issuePass($context, sessions: 1);
+        $cashPayment = $this->manualCashPassPayment($context, $customerClassPass);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $booking = $this->bookCustomer($context, $scheduledClass);
+
+        Carbon::setTestNow(Carbon::parse('2026-06-21 10:30:00', 'UTC'));
+        $this->actingAs($context['owner'])
+            ->patchJson(route('dashboard.accounts.bookings.update', [$context['account'], $booking]), [
+                'status' => ClassBookingStatus::Attended->value,
+            ])
+            ->assertOk();
+
+        $reservation = $booking->classPassReservation()->firstOrFail();
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->fresh()->status);
+        $this->assertSame(1, $customerClassPass->fresh()->used_sessions_count);
+
+        Carbon::setTestNow(Carbon::parse('2026-06-21 12:30:00', 'UTC'));
+
+        $response = $this->actingAs($context['owner'])
+            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel-closed', [$context['account'], $scheduledClass]), [
+                'pass_effect' => ScheduledClassCancellation::PassEffectReturnSession,
+                'reason' => 'Private lesson was created for the wrong real appointment.',
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', __('app.scheduled_class_closed_cancelled'));
+
+        $scheduledClass->refresh();
+        $booking->refresh();
+        $reservation->refresh();
+        $customerClassPass->refresh();
+        $cashPayment->refresh();
+
+        $this->assertSame(ScheduledClassStatus::Cancelled, $scheduledClass->status);
+        $this->assertSame(ClassBookingStatus::Cancelled, $booking->status);
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->status);
+        $this->assertNull($reservation->used_at);
+        $this->assertNotNull($reservation->released_at);
+        $this->assertSame(0, $customerClassPass->used_sessions_count);
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(1, $customerClassPass->remainingSessionsCount());
+        $this->assertSame(CustomerPurchase::ProviderStudioCash, $cashPayment->provider);
+        $this->assertSame(CustomerPurchase::SourceManualCashClassPass, $cashPayment->payment_source);
+        $this->assertSame($customerClassPass->price_cents, $cashPayment->amount_cents);
+        $this->assertSame('payment_paid', $cashPayment->status->value);
+
+        $cancellation = ScheduledClassCancellation::whereBelongsTo($scheduledClass, 'scheduledClass')->firstOrFail();
+        $this->assertTrue($cancellation->isClosedCorrection());
+        $this->assertSame(ScheduledClassCancellation::PassEffectReturnSession, $cancellation->pass_effect);
+        $this->assertSame('Private lesson was created for the wrong real appointment.', $cancellation->reason);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_closed_private_lesson_cancellation_can_keep_session_consumed(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-21 09:00:00', 'UTC'));
+
+        $context = $this->privateLessonContext();
+        $customerClassPass = $this->issuePass($context, sessions: 1);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $booking = $this->bookCustomer($context, $scheduledClass);
+
+        Carbon::setTestNow(Carbon::parse('2026-06-21 10:30:00', 'UTC'));
+        $this->actingAs($context['owner'])
+            ->patchJson(route('dashboard.accounts.bookings.update', [$context['account'], $booking]), [
+                'status' => ClassBookingStatus::Attended->value,
+            ])
+            ->assertOk();
+
+        Carbon::setTestNow(Carbon::parse('2026-06-21 12:30:00', 'UTC'));
+
+        $this->actingAs($context['owner'])
+            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel-closed', [$context['account'], $scheduledClass]), [
+                'pass_effect' => ScheduledClassCancellation::PassEffectKeepConsumed,
+                'reason' => 'Studio cancelled the past private lesson but kept the service charged.',
+            ])
+            ->assertOk();
+
+        $reservation = $booking->classPassReservation()->firstOrFail();
+        $this->assertSame(ScheduledClassStatus::Cancelled, $scheduledClass->fresh()->status);
+        $this->assertSame(ClassBookingStatus::Cancelled, $booking->fresh()->status);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->fresh()->status);
+        $this->assertSame(1, $customerClassPass->fresh()->used_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->remainingSessionsCount());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_staff_needs_critical_permission_to_cancel_closed_class(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-21 12:30:00', 'UTC'));
+
+        $context = $this->privateLessonContext();
+        $staff = User::factory()->create();
+        AccountMembership::factory()
+            ->for($context['account'])
+            ->for($staff)
+            ->create([
+                'role' => 'trainer',
+                'permissions' => [],
+            ]);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+
+        $this->actingAs($staff)
+            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel-closed', [$context['account'], $scheduledClass]), [
+                'pass_effect' => ScheduledClassCancellation::PassEffectReturnSession,
+                'reason' => 'No permission.',
+            ])
+            ->assertForbidden();
+
+        $context['account']->membershipFor($staff)?->update([
+            'permissions' => [StudioPermission::CorrectClosedClasses->value],
+        ]);
+
+        $this->actingAs($staff)
+            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel-closed', [$context['account'], $scheduledClass]), [
+                'pass_effect' => ScheduledClassCancellation::PassEffectReturnSession,
+                'reason' => 'Trainer has explicit critical correction permission.',
+            ])
+            ->assertOk();
+
+        $this->assertSame(ScheduledClassStatus::Cancelled, $scheduledClass->fresh()->status);
+
+        Carbon::setTestNow();
+    }
+
     /**
      * @param  array<string, mixed>  $accountAttributes
      * @return array<string, mixed>
@@ -400,11 +537,26 @@ class ScheduledClassCancellationTest extends TestCase
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function privateLessonContext(): array
+    {
+        $context = $this->context();
+        $context['classType']->forceFill([
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_capacity' => 1,
+        ])->save();
+
+        return $context;
+    }
+
+    /**
      * @param  array<string, mixed>  $context
      */
     private function issuePass(array $context, int $sessions): CustomerClassPass
     {
         $plan = ClassPassPlan::factory()->for($context['account'])->create([
+            'schedule_kind' => $context['classType']->schedule_kind->value,
             'sessions_count' => $sessions,
             'validity_days' => 30,
             'total_validity_days' => 180,
@@ -413,6 +565,34 @@ class ScheduledClassCancellationTest extends TestCase
         $plan->trainerTypes()->sync([$context['trainerType']->id]);
 
         return app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function manualCashPassPayment(array $context, CustomerClassPass $customerClassPass): CustomerPurchase
+    {
+        $customerClassPass->forceFill([
+            'paid_amount_cents' => $customerClassPass->price_cents,
+            'is_paid' => true,
+            'issued_location_id' => $context['location']->id,
+        ])->save();
+
+        return CustomerPurchase::factory()
+            ->for($context['account'])
+            ->for($context['customer'])
+            ->for($context['location'])
+            ->for($customerClassPass->classPassPlan, 'classPassPlan')
+            ->for($customerClassPass, 'customerClassPass')
+            ->create([
+                'provider' => CustomerPurchase::ProviderStudioCash,
+                'payment_source' => CustomerPurchase::SourceManualCashClassPass,
+                'status' => 'payment_paid',
+                'amount_cents' => $customerClassPass->price_cents,
+                'currency' => $customerClassPass->currency,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'paid_at' => now(),
+            ]);
     }
 
     /**

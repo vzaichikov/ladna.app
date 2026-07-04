@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class CancelScheduledClassForStudio
@@ -27,9 +28,18 @@ class CancelScheduledClassForStudio
         private readonly TransactionalMailDispatcher $mailDispatcher,
     ) {}
 
-    public function execute(Account $account, ScheduledClass $scheduledClass, ?User $user): ScheduledClassCancellation
+    /**
+     * @param  array{mode?: string, pass_effect?: string|null, reason?: string|null}  $options
+     */
+    public function execute(Account $account, ScheduledClass $scheduledClass, ?User $user, array $options = []): ScheduledClassCancellation
     {
-        $cancellation = DB::transaction(function () use ($account, $scheduledClass, $user): ScheduledClassCancellation {
+        $mode = $options['mode'] ?? ScheduledClassCancellation::ModeStandard;
+        $passEffect = $options['pass_effect'] ?? null;
+        $reason = $options['reason'] ?? null;
+
+        $this->validateOptions($mode, $passEffect, $reason);
+
+        $cancellation = DB::transaction(function () use ($account, $scheduledClass, $user, $mode, $passEffect, $reason): ScheduledClassCancellation {
             $lockedClass = ScheduledClass::query()
                 ->whereBelongsTo($account)
                 ->whereKey($scheduledClass->id)
@@ -42,7 +52,9 @@ class CancelScheduledClassForStudio
                 ]);
             }
 
-            if (! $lockedClass->isStudioCancellationOpen()) {
+            if ($mode === ScheduledClassCancellation::ModeClosedCorrection) {
+                $this->ensureClosedCorrectionIsAvailable($lockedClass);
+            } elseif (! $lockedClass->isStudioCancellationOpen()) {
                 throw ValidationException::withMessages([
                     'scheduled_class' => __('app.scheduled_class_cancel_unavailable'),
                 ]);
@@ -53,18 +65,25 @@ class CancelScheduledClassForStudio
                 'account_id' => $account->id,
                 'cancelled_by_user_id' => $user?->id,
                 'previous_scheduled_class_status' => $lockedClass->status->value,
+                'cancellation_mode' => $mode,
+                'pass_effect' => $passEffect,
+                'reason' => $reason,
                 'rules_snapshot' => $rules,
                 'cancelled_at' => now(),
             ]);
 
+            $bookingStatuses = $mode === ScheduledClassCancellation::ModeClosedCorrection
+                ? [ClassBookingStatus::Booked->value, ClassBookingStatus::Attended->value]
+                : [ClassBookingStatus::Booked->value];
+
             ClassBooking::query()
                 ->whereBelongsTo($account)
                 ->where('scheduled_class_id', $lockedClass->id)
-                ->where('status', ClassBookingStatus::Booked->value)
+                ->whereIn('status', $bookingStatuses)
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get()
-                ->each(fn (ClassBooking $booking): ScheduledClassCancellationEffect => $this->cancelBooking($cancellation, $booking, $lockedClass, $rules));
+                ->each(fn (ClassBooking $booking): ScheduledClassCancellationEffect => $this->cancelBooking($cancellation, $booking, $lockedClass, $rules, $passEffect));
 
             $lockedClass->forceFill([
                 'status' => ScheduledClassStatus::Cancelled->value,
@@ -82,7 +101,7 @@ class CancelScheduledClassForStudio
     /**
      * @param  array{return_sessions_enabled: bool, return_sessions_count: int, extend_days_enabled: bool, extend_days_count: int}  $rules
      */
-    private function cancelBooking(ScheduledClassCancellation $cancellation, ClassBooking $booking, ScheduledClass $scheduledClass, array $rules): ScheduledClassCancellationEffect
+    private function cancelBooking(ScheduledClassCancellation $cancellation, ClassBooking $booking, ScheduledClass $scheduledClass, array $rules, ?string $passEffect): ScheduledClassCancellationEffect
     {
         $reservation = $booking->classPassReservation()->lockForUpdate()->first();
         $customerClassPass = $reservation
@@ -96,7 +115,9 @@ class CancelScheduledClassForStudio
         ])->save();
 
         if ($reservation && $customerClassPass) {
-            $effectAttributes += $this->applyReservationAndPassRules($reservation, $customerClassPass, $scheduledClass, $rules);
+            $effectAttributes += $passEffect
+                ? $this->applyExplicitReservationPassEffect($reservation, $scheduledClass, $passEffect)
+                : $this->applyReservationAndPassRules($reservation, $customerClassPass, $scheduledClass, $rules);
             $this->normalizeCustomerClassPasses->forPass($customerClassPass->refresh());
         }
 
@@ -107,6 +128,78 @@ class CancelScheduledClassForStudio
             'customer_class_pass_reservation_id' => $reservation?->id,
             'new_booking_status' => ClassBookingStatus::Cancelled->value,
         ]);
+    }
+
+    private function validateOptions(string $mode, ?string $passEffect, ?string $reason): void
+    {
+        validator(
+            [
+                'mode' => $mode,
+                'pass_effect' => $passEffect,
+                'reason' => $reason,
+            ],
+            [
+                'mode' => ['required', Rule::in([
+                    ScheduledClassCancellation::ModeStandard,
+                    ScheduledClassCancellation::ModeClosedCorrection,
+                ])],
+                'pass_effect' => [
+                    Rule::requiredIf($mode === ScheduledClassCancellation::ModeClosedCorrection),
+                    'nullable',
+                    Rule::in([
+                        ScheduledClassCancellation::PassEffectReturnSession,
+                        ScheduledClassCancellation::PassEffectKeepConsumed,
+                    ]),
+                ],
+                'reason' => [
+                    Rule::requiredIf($mode === ScheduledClassCancellation::ModeClosedCorrection),
+                    'nullable',
+                    'string',
+                    'max:1000',
+                ],
+            ],
+        )->validate();
+    }
+
+    private function ensureClosedCorrectionIsAvailable(ScheduledClass $scheduledClass): void
+    {
+        if ($scheduledClass->ends_at->greaterThan(now())) {
+            throw ValidationException::withMessages([
+                'scheduled_class' => __('app.closed_class_cancellation_not_available'),
+            ]);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function applyExplicitReservationPassEffect(CustomerClassPassReservation $reservation, ScheduledClass $scheduledClass, string $passEffect): array
+    {
+        $now = now();
+
+        if ($passEffect === ScheduledClassCancellation::PassEffectReturnSession) {
+            $reservation->forceFill([
+                'status' => CustomerClassPassReservationStatus::Released->value,
+                'used_at' => null,
+                'released_at' => $now,
+            ])->save();
+        } else {
+            $usedAt = $scheduledClass->starts_at instanceof Carbon ? $scheduledClass->starts_at : $now;
+            $reservation->forceFill([
+                'status' => CustomerClassPassReservationStatus::Used->value,
+                'used_at' => $reservation->used_at ?? $usedAt,
+                'released_at' => null,
+            ])->save();
+        }
+
+        $reservation->refresh();
+
+        return [
+            'new_reservation_status' => $reservation->status->value,
+            'new_reserved_at' => $reservation->reserved_at,
+            'new_used_at' => $reservation->used_at,
+            'new_released_at' => $reservation->released_at,
+        ];
     }
 
     /**

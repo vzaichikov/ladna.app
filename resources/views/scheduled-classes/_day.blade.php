@@ -14,6 +14,24 @@
 
     $timelineHours = range($timelineStartHour, $timelineEndHour);
     $timelineTotalMinutes = max(60, ($timelineEndHour - $timelineStartHour) * 60);
+    $timelineLanes = $classes
+        ->sortBy(fn ($scheduledClass): string => implode('|', [
+            $scheduledClass->location?->name ?? '',
+            $scheduledClass->room?->name ?? '',
+            (string) $scheduledClass->starts_at?->getTimestamp(),
+            (string) $scheduledClass->id,
+        ]))
+        ->groupBy(fn ($scheduledClass): string => $scheduledClass->room_id ? 'room-'.$scheduledClass->room_id : 'room-unassigned')
+        ->map(function ($laneClasses) {
+            $laneClass = $laneClasses->first();
+
+            return [
+                'label' => $laneClass?->room?->name ?? __('app.room_not_assigned'),
+                'location' => $laneClass?->location?->name,
+                'classes' => $laneClasses->sortBy('starts_at')->values(),
+            ];
+        })
+        ->values();
 @endphp
 
 <section data-scheduled-class-day="{{ $date }}">
@@ -27,67 +45,78 @@
     </div>
 
     <div class="mb-5 overflow-x-auto rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
-        <div class="min-w-[720px]">
-            <div class="flex justify-between text-[11px] font-semibold text-slate-500">
-                @foreach ($timelineHours as $hour)
-                    <span>{{ sprintf('%02d:00', $hour) }}</span>
-                @endforeach
-            </div>
-            <div class="relative mt-2 h-24 rounded-lg border border-stone-200 bg-slate-50">
-                <div class="absolute left-0 right-0 top-1/2 h-px bg-stone-300"></div>
-                @foreach ($timelineHours as $hour)
-                    @php
-                        $tickLeft = (($hour - $timelineStartHour) * 60 / $timelineTotalMinutes) * 100;
-                    @endphp
-                    <span class="absolute inset-y-0 w-px bg-stone-200" style="left: {{ number_format($tickLeft, 4, '.', '') }}%"></span>
-                @endforeach
+        <div class="min-w-[820px]">
+            <div class="grid grid-cols-[9rem_minmax(0,1fr)] gap-3">
+                <div></div>
+                <div class="flex justify-between text-[11px] font-semibold text-slate-500">
+                    @foreach ($timelineHours as $hour)
+                        <span>{{ sprintf('%02d:00', $hour) }}</span>
+                    @endforeach
+                </div>
 
-                @foreach ($classes as $scheduledClass)
-                    @php
-                        $timelineTimezone = $scheduledClass->displayTimezone();
-                        $timelineStartsAt = \Illuminate\Support\Carbon::parse($date, $timelineTimezone)->setTime($timelineStartHour, 0);
-                        $startsAt = $scheduledClass->starts_at->copy()->timezone($timelineTimezone);
-                        $endsAt = $scheduledClass->ends_at->copy()->timezone($timelineTimezone);
-                        $offsetMinutes = max(0, (int) round(($startsAt->getTimestamp() - $timelineStartsAt->getTimestamp()) / 60));
-                        $durationMinutes = max(15, (int) $startsAt->diffInMinutes($endsAt));
-                        $leftPercent = min(100, max(0, ($offsetMinutes / $timelineTotalMinutes) * 100));
-                        $widthPercent = min(100 - $leftPercent, max(6, ($durationMinutes / $timelineTotalMinutes) * 100));
-                        $timelineTop = 14 + ($loop->index % 2) * 34;
-                        $scheduleKind = $scheduledClass->classType?->schedule_kind;
-                        $isCancelledClass = $scheduledClass->status === \App\Enums\ScheduledClassStatus::Cancelled;
-                        $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
-                        $displayTitle = $scheduledClass->displayTitle();
-                        $displayTypeLabels = $scheduledClass->displayTypeLabels();
-                        $timelineColor = $isCancelledClass
-                            ? '#CBD5E1'
-                            : ($isRoomRental
-                                ? $scheduledClass->room?->colorAccent($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
-                                : ($scheduledClass->classType?->colorAccent($scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F') ?? '#3B223F'));
-                        $timelineTextColor = $isCancelledClass
-                            ? '#475569'
-                            : ($isRoomRental
-                                ? $scheduledClass->room?->colorText($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
-                                : ($scheduledClass->classType?->colorText($scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F') ?? '#FFFFFF'));
-                        $timelineKindColor = $account->scheduleKindColor($scheduleKind);
-                    @endphp
-                    <a
-                        href="#scheduled-class-{{ $scheduledClass->id }}"
-                        @class([
-                            'absolute flex h-8 items-center gap-2 overflow-hidden rounded-lg border px-2 text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2',
-                            'line-through opacity-80' => $isCancelledClass,
-                        ])
-                        style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; top: {{ $timelineTop }}px; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; border-right-color: {{ $timelineKindColor }}; border-right-width: 5px; color: {{ $timelineTextColor }};"
-                        title="{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }} · {{ $displayTitle }}"
-                    >
-                        <span class="shrink-0">{{ $startsAt->format('H:i') }}</span>
-                        <span class="truncate">{{ $displayTitle }}</span>
-                        @foreach ($displayTypeLabels as $displayTypeLabel)
-                            <span class="shrink-0 rounded-md border border-current/30 bg-white/20 px-1.5 py-0.5 text-[10px] leading-none opacity-90">{{ $displayTypeLabel }}</span>
-                        @endforeach
-                        @if ($scheduleKind)
-                            <span class="ml-auto shrink-0 opacity-80">{{ __('app.'.$scheduledClass->classType->schedule_kind->value) }}</span>
+                @foreach ($timelineLanes as $timelineLane)
+                    <div class="sticky left-0 z-10 flex min-h-14 flex-col justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs shadow-xs">
+                        <span class="font-semibold text-slate-950">{{ $timelineLane['label'] }}</span>
+                        @if ($timelineLane['location'])
+                            <span class="mt-0.5 truncate text-slate-500">{{ $timelineLane['location'] }}</span>
                         @endif
-                    </a>
+                    </div>
+                    <div class="relative h-14 rounded-lg border border-stone-200 bg-slate-50" data-room-timeline-lane="{{ $timelineLane['label'] }}">
+                        <div class="absolute left-0 right-0 top-1/2 h-px bg-stone-300"></div>
+                        @foreach ($timelineHours as $hour)
+                            @php
+                                $tickLeft = (($hour - $timelineStartHour) * 60 / $timelineTotalMinutes) * 100;
+                            @endphp
+                            <span class="absolute inset-y-0 w-px bg-stone-200" style="left: {{ number_format($tickLeft, 4, '.', '') }}%"></span>
+                        @endforeach
+
+                        @foreach ($timelineLane['classes'] as $scheduledClass)
+                            @php
+                                $timelineTimezone = $scheduledClass->displayTimezone();
+                                $timelineStartsAt = \Illuminate\Support\Carbon::parse($date, $timelineTimezone)->setTime($timelineStartHour, 0);
+                                $startsAt = $scheduledClass->starts_at->copy()->timezone($timelineTimezone);
+                                $endsAt = $scheduledClass->ends_at->copy()->timezone($timelineTimezone);
+                                $offsetMinutes = max(0, (int) round(($startsAt->getTimestamp() - $timelineStartsAt->getTimestamp()) / 60));
+                                $durationMinutes = max(15, (int) $startsAt->diffInMinutes($endsAt));
+                                $leftPercent = min(100, max(0, ($offsetMinutes / $timelineTotalMinutes) * 100));
+                                $widthPercent = min(100 - $leftPercent, max(6, ($durationMinutes / $timelineTotalMinutes) * 100));
+                                $scheduleKind = $scheduledClass->classType?->schedule_kind;
+                                $isCancelledClass = $scheduledClass->status === \App\Enums\ScheduledClassStatus::Cancelled;
+                                $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
+                                $displayTitle = $scheduledClass->displayTitle();
+                                $displayTypeLabels = $scheduledClass->displayTypeLabels();
+                                $timelineColor = $isCancelledClass
+                                    ? '#CBD5E1'
+                                    : ($isRoomRental
+                                        ? $scheduledClass->room?->colorAccent($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
+                                        : ($scheduledClass->classType?->colorAccent($scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F') ?? '#3B223F'));
+                                $timelineTextColor = $isCancelledClass
+                                    ? '#475569'
+                                    : ($isRoomRental
+                                        ? $scheduledClass->room?->colorText($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
+                                        : ($scheduledClass->classType?->colorText($scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F') ?? '#FFFFFF'));
+                                $timelineKindColor = $account->scheduleKindColor($scheduleKind);
+                            @endphp
+                            <a
+                                href="#scheduled-class-{{ $scheduledClass->id }}"
+                                @class([
+                                    'absolute top-3 flex h-8 items-center gap-2 overflow-hidden rounded-lg border px-2 text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2',
+                                    'line-through opacity-80' => $isCancelledClass,
+                                ])
+                                style="left: {{ number_format($leftPercent, 4, '.', '') }}%; width: {{ number_format($widthPercent, 4, '.', '') }}%; background-color: {{ $timelineColor }}; border-color: {{ $timelineColor }}; border-right-color: {{ $timelineKindColor }}; border-right-width: 5px; color: {{ $timelineTextColor }};"
+                                title="{{ $startsAt->format('H:i') }} - {{ $endsAt->format('H:i') }} · {{ $displayTitle }}"
+                            >
+                                <span class="shrink-0">{{ $startsAt->format('H:i') }}</span>
+                                <span class="truncate">{{ $displayTitle }}</span>
+                                @foreach ($displayTypeLabels as $displayTypeLabel)
+                                    <span class="shrink-0 rounded-md border border-current/30 bg-white/20 px-1.5 py-0.5 text-[10px] leading-none opacity-90">{{ $displayTypeLabel }}</span>
+                                @endforeach
+                                @if ($scheduleKind)
+                                    <span class="ml-auto shrink-0 opacity-80">{{ __('app.'.$scheduledClass->classType->schedule_kind->value) }}</span>
+                                @endif
+                            </a>
+                        @endforeach
+                    </div>
                 @endforeach
             </div>
         </div>

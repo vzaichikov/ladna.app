@@ -44,6 +44,12 @@ class RestoreScheduledClassCancellation
                 ]);
             }
 
+            if ($cancellation->isClosedCorrection()) {
+                throw ValidationException::withMessages([
+                    'scheduled_class' => __('app.scheduled_class_restore_closed_correction_unavailable'),
+                ]);
+            }
+
             $effects = $cancellation->effects()
                 ->orderBy('id')
                 ->lockForUpdate()

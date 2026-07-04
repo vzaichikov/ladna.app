@@ -87,6 +87,38 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_schedule_timeline_groups_classes_by_room_lanes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['name' => 'Studio Center', 'timezone' => 'UTC']);
+        $bigRoom = Room::factory()->for($account)->for($location)->create(['name' => 'Big Hall']);
+        $smallRoom = Room::factory()->for($account)->for($location)->create(['name' => 'Small Hall']);
+        $classType = ClassType::factory()->for($account)->create();
+
+        $this->scheduledClass($account, $location, $smallRoom, $classType, 'Small Hall Lesson', '2026-06-17 10:00:00');
+        $this->scheduledClass($account, $location, $bigRoom, $classType, 'Big Hall Lesson', '2026-06-17 10:30:00');
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account));
+
+        $response
+            ->assertOk()
+            ->assertSee('data-room-timeline-lane="Big Hall"', false)
+            ->assertSee('data-room-timeline-lane="Small Hall"', false)
+            ->assertSeeInOrder([
+                'data-room-timeline-lane="Big Hall"',
+                'Big Hall Lesson',
+                'data-room-timeline-lane="Small Hall"',
+                'Small Hall Lesson',
+            ], false);
+
+        Carbon::setTestNow();
+    }
+
     public function test_scheduled_classes_index_shows_temporal_status_badges(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 12:00:00', 'UTC'));
@@ -960,9 +992,9 @@ class CustomerBookingTest extends TestCase
             ->assertDontSee('Different Date Class')
             ->assertDontSee('Future Date Class')
             ->assertDontSee('Other Account Class')
-            ->assertDontSee(route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $firstClass]), false)
-            ->assertDontSee(route('dashboard.accounts.bookings.update', [$account, $booking]), false)
-            ->assertDontSee(route('dashboard.accounts.scheduled-classes.cancel', [$account, $firstClass]), false);
+            ->assertDontSee('action="'.route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $firstClass]).'"', false)
+            ->assertDontSee('action="'.route('dashboard.accounts.bookings.update', [$account, $booking]).'"', false)
+            ->assertDontSee('action="'.route('dashboard.accounts.scheduled-classes.cancel', [$account, $firstClass]).'"', false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.scheduled-classes-history.index', [
