@@ -321,6 +321,30 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('database', false);
     }
 
+    public function test_real_workflows_submenu_is_collapsed_until_question_page_is_opened(): void
+    {
+        $closedSubmenuPattern = '/<details[^>]*data-help-submenu="real-workflows"[^>]*>/';
+        $openSubmenuPattern = '/<details[^>]*data-help-submenu="real-workflows"[^>]*\sopen\b/';
+
+        $indexResponse = $this->get(route('help.index', [], false))
+            ->assertStatus(200)
+            ->assertSee('Питання в темі', false);
+
+        $this->assertMatchesRegularExpression($closedSubmenuPattern, $indexResponse->getContent());
+        $this->assertDoesNotMatchRegularExpression($openSubmenuPattern, $indexResponse->getContent());
+
+        $parentResponse = $this->get(route('help.show', 'real-workflows', false))
+            ->assertStatus(200);
+
+        $this->assertMatchesRegularExpression($closedSubmenuPattern, $parentResponse->getContent());
+        $this->assertDoesNotMatchRegularExpression($openSubmenuPattern, $parentResponse->getContent());
+
+        $questionResponse = $this->get(route('help.show', 'case-no-show-with-pass', false))
+            ->assertStatus(200);
+
+        $this->assertMatchesRegularExpression($openSubmenuPattern, $questionResponse->getContent());
+    }
+
     public function test_real_workflows_help_answers_trainer_questions(): void
     {
         $this->get(route('help.show', 'case-no-show-with-pass', false))

@@ -83,17 +83,24 @@
                                 </a>
                                 <p class="text-sm leading-6 text-slate-500">{{ $page['summary'] }}</p>
 
-                                <div class="grid gap-2 border-t border-stone-100 pt-3">
-                                    @foreach ($childPages as $childSlug => $childPage)
-                                        <a href="{{ route('help.show', $childSlug) }}" class="group flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 transition hover:bg-brand-50">
-                                            <span>
-                                                <span class="block text-sm font-semibold leading-5 text-slate-950">{{ $childPage['title'] }}</span>
-                                                <span class="mt-1 block text-xs leading-5 text-slate-500">{{ $childPage['summary'] }}</span>
-                                            </span>
-                                            <x-ui.icon name="chevron-right" class="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-brand-600" />
-                                        </a>
-                                    @endforeach
-                                </div>
+                                <details data-help-submenu="{{ $pageSlug }}" class="group/help-menu border-t border-stone-100 pt-3">
+                                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-brand-50 hover:text-brand-700 [&::-webkit-details-marker]:hidden">
+                                        <span>{{ $copy['subtopics_label'] }}</span>
+                                        <x-ui.icon name="chevron-down" class="h-4 w-4 shrink-0 text-slate-400 transition group-open/help-menu:rotate-180 group-open/help-menu:text-brand-600" />
+                                    </summary>
+
+                                    <div class="mt-2 grid gap-2">
+                                        @foreach ($childPages as $childSlug => $childPage)
+                                            <a href="{{ route('help.show', $childSlug) }}" class="group flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 transition hover:bg-brand-50">
+                                                <span>
+                                                    <span class="block text-sm font-semibold leading-5 text-slate-950">{{ $childPage['title'] }}</span>
+                                                    <span class="mt-1 block text-xs leading-5 text-slate-500">{{ $childPage['summary'] }}</span>
+                                                </span>
+                                                <x-ui.icon name="chevron-right" class="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-brand-600" />
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                </details>
                             </article>
                         @endif
                     @endforeach

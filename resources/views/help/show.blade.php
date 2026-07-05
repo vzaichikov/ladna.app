@@ -30,28 +30,46 @@
                         @foreach ($topLevelPages as $pageSlug => $navPage)
                             @php
                                 $childPages = $childPagesByParent->get($pageSlug, collect());
-                                $isActiveGroup = $slug === $pageSlug || $activeParentSlug === $pageSlug;
+                                $isExpandedGroup = $activeParentSlug === $pageSlug;
+                                $isActiveGroup = $slug === $pageSlug || $isExpandedGroup;
                             @endphp
 
-                            <a
-                                href="{{ route('help.show', $pageSlug) }}"
-                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition {{ $isActiveGroup ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950' }}"
-                            >
-                                <x-ui.icon :name="$navPage['icon']" class="h-4 w-4 shrink-0" />
-                                <span>{{ $navPage['title'] }}</span>
-                            </a>
+                            @if ($childPages->isEmpty())
+                                <a
+                                    href="{{ route('help.show', $pageSlug) }}"
+                                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition {{ $isActiveGroup ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950' }}"
+                                >
+                                    <x-ui.icon :name="$navPage['icon']" class="h-4 w-4 shrink-0" />
+                                    <span>{{ $navPage['title'] }}</span>
+                                </a>
+                            @else
+                                <details data-help-submenu="{{ $pageSlug }}" @if ($isExpandedGroup) open @endif class="group/help-menu grid gap-1">
+                                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition {{ $isActiveGroup ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950' }} [&::-webkit-details-marker]:hidden">
+                                        <span class="flex items-center gap-3">
+                                            <x-ui.icon :name="$navPage['icon']" class="h-4 w-4 shrink-0" />
+                                            <span>{{ $navPage['title'] }}</span>
+                                        </span>
+                                        <x-ui.icon name="chevron-down" class="h-4 w-4 shrink-0 text-slate-400 transition group-open/help-menu:rotate-180 group-open/help-menu:text-brand-600" />
+                                    </summary>
 
-                            @if ($childPages->isNotEmpty())
-                                <div class="grid gap-1 pl-7">
-                                    @foreach ($childPages as $childSlug => $childPage)
+                                    <div class="grid gap-1 pl-7">
                                         <a
-                                            href="{{ route('help.show', $childSlug) }}"
-                                            class="rounded-lg px-3 py-2 text-xs font-semibold leading-5 transition {{ $slug === $childSlug ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-950' }}"
+                                            href="{{ route('help.show', $pageSlug) }}"
+                                            class="rounded-lg px-3 py-2 text-xs font-semibold leading-5 transition {{ $slug === $pageSlug ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-950' }}"
                                         >
-                                            {{ $childPage['title'] }}
+                                            {{ $copy['open_page'] }}
                                         </a>
-                                    @endforeach
-                                </div>
+
+                                        @foreach ($childPages as $childSlug => $childPage)
+                                            <a
+                                                href="{{ route('help.show', $childSlug) }}"
+                                                class="rounded-lg px-3 py-2 text-xs font-semibold leading-5 transition {{ $slug === $childSlug ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-950' }}"
+                                            >
+                                                {{ $childPage['title'] }}
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                </details>
                             @endif
                         @endforeach
                     </nav>
