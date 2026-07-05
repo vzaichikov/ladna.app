@@ -1593,6 +1593,8 @@ return [
     'people_counter_snapshot_failed' => 'Could not capture a camera snapshot: :message',
     'people_counter_snapshot_required' => 'Capture a camera snapshot first.',
     'people_counter_mask_polygon_invalid' => 'Each mask zone must have 3 to 50 points inside the snapshot.',
+    'people_counter_capture_delay_seconds' => 'Capture delay, seconds',
+    'people_counter_capture_delay_help' => 'Seconds to wait before saving a camera frame. Leave blank to use the :seconds s default.',
     'capture_snapshot' => 'Capture snapshot',
     'finish_zone' => 'Finish zone',
     'undo' => 'Undo',

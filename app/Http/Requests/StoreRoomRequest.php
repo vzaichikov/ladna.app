@@ -39,6 +39,7 @@ class StoreRoomRequest extends FormRequest
         if ($account?->allowsRtspCameras()) {
             $rules['rtsp_url'] = [Rule::requiredIf($this->boolean('rtsp_enabled')), 'nullable', 'string', 'max:2048', new RtspUrl];
             $rules['rtsp_enabled'] = ['nullable', 'boolean'];
+            $rules['people_counter_capture_delay_seconds'] = ['nullable', 'integer', 'min:0', 'max:30'];
         }
 
         return $rules;
@@ -46,12 +47,20 @@ class StoreRoomRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if (! $this->has('rtsp_url')) {
-            return;
+        $values = [];
+
+        if ($this->has('rtsp_url')) {
+            $values['rtsp_url'] = blank($this->input('rtsp_url')) ? null : trim((string) $this->input('rtsp_url'));
         }
 
-        $this->merge([
-            'rtsp_url' => blank($this->input('rtsp_url')) ? null : trim((string) $this->input('rtsp_url')),
-        ]);
+        if ($this->has('people_counter_capture_delay_seconds')) {
+            $values['people_counter_capture_delay_seconds'] = blank($this->input('people_counter_capture_delay_seconds'))
+                ? null
+                : $this->input('people_counter_capture_delay_seconds');
+        }
+
+        if ($values !== []) {
+            $this->merge($values);
+        }
     }
 }

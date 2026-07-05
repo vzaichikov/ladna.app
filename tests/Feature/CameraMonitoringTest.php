@@ -108,7 +108,8 @@ class CameraMonitoringTest extends TestCase
             ->get(route('dashboard.accounts.rooms.create', $account))
             ->assertOk()
             ->assertDontSee('name="rtsp_url"', false)
-            ->assertDontSee('name="rtsp_enabled"', false);
+            ->assertDontSee('name="rtsp_enabled"', false)
+            ->assertDontSee('name="people_counter_capture_delay_seconds"', false);
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.rooms.store', $account), [
@@ -119,6 +120,7 @@ class CameraMonitoringTest extends TestCase
                 'is_active' => '1',
                 'rtsp_url' => 'rtsp://camera.example.test/live',
                 'rtsp_enabled' => '1',
+                'people_counter_capture_delay_seconds' => '9',
             ])
             ->assertRedirect(route('dashboard.accounts.rooms.index', $account));
 
@@ -126,6 +128,7 @@ class CameraMonitoringTest extends TestCase
 
         $this->assertNull($room->rtsp_url);
         $this->assertFalse($room->rtsp_enabled);
+        $this->assertNull($room->people_counter_capture_delay_seconds);
 
         $account->update(['allow_rtsp_cameras' => true]);
         $cameraUrl = 'rtsp://user:secret@camera.example.test:554/live';
@@ -135,6 +138,7 @@ class CameraMonitoringTest extends TestCase
             ->assertOk()
             ->assertSee('name="rtsp_url"', false)
             ->assertSee('name="rtsp_enabled"', false)
+            ->assertSee('name="people_counter_capture_delay_seconds"', false)
             ->assertSee(route('dashboard.accounts.rooms.test-camera', $account), false);
 
         $this->actingAs($owner)
@@ -146,6 +150,7 @@ class CameraMonitoringTest extends TestCase
                 'is_active' => '1',
                 'rtsp_url' => $cameraUrl,
                 'rtsp_enabled' => '1',
+                'people_counter_capture_delay_seconds' => '4',
             ])
             ->assertRedirect(route('dashboard.accounts.rooms.index', $account));
 
@@ -153,6 +158,35 @@ class CameraMonitoringTest extends TestCase
 
         $this->assertSame($cameraUrl, $room->rtsp_url);
         $this->assertTrue($room->rtsp_enabled);
+        $this->assertSame(4, $room->people_counter_capture_delay_seconds);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.rooms.update', [$account, $room]), [
+                'location_id' => $location->id,
+                'name' => 'Big Hall',
+                'slug' => 'big-hall',
+                'capacity' => 12,
+                'is_active' => '1',
+                'rtsp_url' => $cameraUrl,
+                'rtsp_enabled' => '1',
+                'people_counter_capture_delay_seconds' => '',
+            ])
+            ->assertRedirect(route('dashboard.accounts.rooms.index', $account));
+
+        $this->assertNull($room->refresh()->people_counter_capture_delay_seconds);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.rooms.update', [$account, $room]), [
+                'location_id' => $location->id,
+                'name' => 'Big Hall',
+                'slug' => 'big-hall',
+                'capacity' => 12,
+                'is_active' => '1',
+                'rtsp_url' => $cameraUrl,
+                'rtsp_enabled' => '1',
+                'people_counter_capture_delay_seconds' => '31',
+            ])
+            ->assertSessionHasErrors('people_counter_capture_delay_seconds');
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.rooms.update', [$account, $room]), [

@@ -74,6 +74,7 @@ return [
         'timeout' => env('PEOPLE_COUNTER_TIMEOUT', 30),
         'connect_timeout' => env('PEOPLE_COUNTER_CONNECT_TIMEOUT', 2),
         'capture_timeout' => env('PEOPLE_COUNTER_CAPTURE_TIMEOUT', 20),
+        'capture_delay_seconds' => env('PEOPLE_COUNTER_CAPTURE_DELAY_SECONDS', 3),
         'ffmpeg_binary' => env('PEOPLE_COUNTER_FFMPEG_BINARY', 'ffmpeg'),
         'retention_days' => env('PEOPLE_COUNTER_RETENTION_DAYS', 14),
     ],

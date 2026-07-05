@@ -1593,6 +1593,8 @@ return [
     'people_counter_snapshot_failed' => 'Не вдалося зробити знімок з камери: :message',
     'people_counter_snapshot_required' => 'Спочатку зробіть знімок з камери.',
     'people_counter_mask_polygon_invalid' => 'Кожна зона маски має містити від 3 до 50 точок у межах знімка.',
+    'people_counter_capture_delay_seconds' => 'Затримка знімка, секунди',
+    'people_counter_capture_delay_help' => 'Скільки секунд чекати перед збереженням кадру з камери. Якщо порожньо — використовується дефолт :seconds с.',
     'capture_snapshot' => 'Зробити знімок',
     'finish_zone' => 'Завершити зону',
     'undo' => 'Назад',

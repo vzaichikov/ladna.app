@@ -8,7 +8,7 @@ use Symfony\Component\Process\Process;
 
 class PeopleCounterFrameCapture
 {
-    public function capture(string $pathName, string $storagePath): PeopleCounterCaptureResult
+    public function capture(string $pathName, string $storagePath, ?int $captureDelaySeconds = null): PeopleCounterCaptureResult
     {
         $disk = Storage::disk('local');
         $directory = dirname($storagePath);
@@ -19,27 +19,7 @@ class PeopleCounterFrameCapture
 
         $absolutePath = $disk->path($storagePath);
         $streamUrl = $this->streamUrl($pathName);
-        $command = [
-            $this->ffmpegBinary(),
-            '-hide_banner',
-            '-loglevel',
-            'error',
-            '-i',
-            $streamUrl,
-            '-frames:v',
-            '1',
-            '-q:v',
-            '2',
-            '-y',
-            $absolutePath,
-        ];
-
-        if (str_starts_with($streamUrl, 'rtsp://') || str_starts_with($streamUrl, 'rtsps://')) {
-            array_splice($command, 4, 0, [
-                '-rtsp_transport',
-                (string) config('services.mediamtx.rtsp_transport', 'tcp'),
-            ]);
-        }
+        $command = $this->command($streamUrl, $absolutePath, $captureDelaySeconds);
 
         $process = new Process($command, base_path());
         $process->setTimeout($this->timeoutSeconds());
@@ -64,6 +44,46 @@ class PeopleCounterFrameCapture
         );
     }
 
+    /**
+     * @return list<string>
+     */
+    private function command(string $streamUrl, string $absolutePath, ?int $captureDelaySeconds = null): array
+    {
+        $command = [
+            $this->ffmpegBinary(),
+            '-hide_banner',
+            '-loglevel',
+            'error',
+        ];
+
+        if (str_starts_with($streamUrl, 'rtsp://') || str_starts_with($streamUrl, 'rtsps://')) {
+            $command[] = '-rtsp_transport';
+            $command[] = (string) config('services.mediamtx.rtsp_transport', 'tcp');
+        }
+
+        array_push($command,
+            '-i',
+            $streamUrl,
+        );
+
+        $delaySeconds = $this->captureDelaySeconds($captureDelaySeconds);
+
+        if ($delaySeconds > 0) {
+            array_push($command, '-ss', (string) $delaySeconds);
+        }
+
+        array_push($command,
+            '-frames:v',
+            '1',
+            '-q:v',
+            '2',
+            '-y',
+            $absolutePath,
+        );
+
+        return $command;
+    }
+
     private function streamUrl(string $pathName): string
     {
         $template = trim((string) config('services.mediamtx.capture_url_template', ''));
@@ -78,6 +98,13 @@ class PeopleCounterFrameCapture
     private function timeoutSeconds(): int
     {
         return max(5, (int) config('services.people_counter.capture_timeout', 20));
+    }
+
+    private function captureDelaySeconds(?int $captureDelaySeconds): int
+    {
+        $delaySeconds = $captureDelaySeconds ?? (int) config('services.people_counter.capture_delay_seconds', 3);
+
+        return max(0, min(30, $delaySeconds));
     }
 
     private function ffmpegBinary(): string

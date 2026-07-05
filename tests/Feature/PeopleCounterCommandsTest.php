@@ -376,7 +376,7 @@ class PeopleCounterCommandsTest extends TestCase
         {
             public function __construct(private readonly bool $throws) {}
 
-            public function capture(string $pathName, string $storagePath): PeopleCounterCaptureResult
+            public function capture(string $pathName, string $storagePath, ?int $captureDelaySeconds = null): PeopleCounterCaptureResult
             {
                 if ($this->throws) {
                     throw new RuntimeException('Camera offline.');

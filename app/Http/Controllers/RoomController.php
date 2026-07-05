@@ -42,6 +42,7 @@ class RoomController extends Controller
         if ($account->allowsRtspCameras()) {
             $validated['rtsp_enabled'] = $request->boolean('rtsp_enabled');
             $validated['rtsp_url'] = blank($validated['rtsp_url'] ?? null) ? null : $validated['rtsp_url'];
+            $validated['people_counter_capture_delay_seconds'] = $validated['people_counter_capture_delay_seconds'] ?? null;
         }
 
         $account->rooms()->create($validated);
@@ -78,6 +79,7 @@ class RoomController extends Controller
         if ($account->allowsRtspCameras()) {
             $validated['rtsp_enabled'] = $request->boolean('rtsp_enabled');
             $validated['rtsp_url'] = blank($validated['rtsp_url'] ?? null) ? null : $validated['rtsp_url'];
+            $validated['people_counter_capture_delay_seconds'] = $validated['people_counter_capture_delay_seconds'] ?? null;
         }
 
         $room->update($validated);

@@ -69,6 +69,7 @@
 @if ($account->allowsRtspCameras())
     @php
         $cameraTest = session('rtsp_camera_test');
+        $captureDelayDefault = (int) config('services.people_counter.capture_delay_seconds', 3);
     @endphp
 
     <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
@@ -113,5 +114,22 @@
                 </x-ui.button>
             @endif
         </div>
+
+        <label class="mt-4 block max-w-xs">
+            <span class="crm-label">{{ __('app.people_counter_capture_delay_seconds') }}</span>
+            <input
+                name="people_counter_capture_delay_seconds"
+                type="number"
+                min="0"
+                max="30"
+                step="1"
+                inputmode="numeric"
+                value="{{ old('people_counter_capture_delay_seconds', $room->people_counter_capture_delay_seconds) }}"
+                placeholder="{{ $captureDelayDefault }}"
+                class="crm-field bg-white"
+            >
+            <span class="crm-help">{{ __('app.people_counter_capture_delay_help', ['seconds' => $captureDelayDefault]) }}</span>
+            @error('people_counter_capture_delay_seconds') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
     </fieldset>
 @endif

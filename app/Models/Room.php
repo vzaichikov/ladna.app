@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['account_id', 'location_id', 'name', 'slug', 'description', 'capacity', 'color', 'is_active', 'rtsp_url', 'rtsp_enabled', 'people_counter_mask_polygons', 'people_counter_snapshot_path', 'people_counter_snapshot_width', 'people_counter_snapshot_height', 'people_counter_snapshot_taken_at'])]
+#[Fillable(['account_id', 'location_id', 'name', 'slug', 'description', 'capacity', 'color', 'is_active', 'rtsp_url', 'rtsp_enabled', 'people_counter_mask_polygons', 'people_counter_snapshot_path', 'people_counter_snapshot_width', 'people_counter_snapshot_height', 'people_counter_snapshot_taken_at', 'people_counter_capture_delay_seconds'])]
 class Room extends Model
 {
     /** @use HasFactory<RoomFactory> */
@@ -43,6 +43,7 @@ class Room extends Model
             'people_counter_snapshot_width' => 'integer',
             'people_counter_snapshot_height' => 'integer',
             'people_counter_snapshot_taken_at' => 'datetime',
+            'people_counter_capture_delay_seconds' => 'integer',
         ];
     }
 
@@ -60,6 +61,17 @@ class Room extends Model
     public function hasEnabledRtspCamera(): bool
     {
         return (bool) $this->rtsp_enabled && filled($this->rtsp_url);
+    }
+
+    public function peopleCounterCaptureDelaySeconds(): int
+    {
+        $seconds = $this->people_counter_capture_delay_seconds;
+
+        if ($seconds === null) {
+            $seconds = (int) config('services.people_counter.capture_delay_seconds', 3);
+        }
+
+        return max(0, min(30, (int) $seconds));
     }
 
     public function colorAccent(string $fallback = '#3B223F'): string

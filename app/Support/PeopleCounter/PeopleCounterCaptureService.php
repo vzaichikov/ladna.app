@@ -94,7 +94,7 @@ class PeopleCounterCaptureService
 
         try {
             $this->gateway->ensurePath($room);
-            $capturedFrame = $this->frameCapture->capture($this->gateway->pathName($room), $originalPath);
+            $capturedFrame = $this->frameCapture->capture($this->gateway->pathName($room), $originalPath, $room->peopleCounterCaptureDelaySeconds());
         } catch (Throwable $throwable) {
             return $this->failedSample($scheduledClass, $capturedAt, PeopleCounterSample::StatusCaptureFailed, $throwable, $capturedFrame, $maskedFrame, $debug);
         }
@@ -144,7 +144,7 @@ class PeopleCounterCaptureService
         $displayTimezone = $this->roomTimezone($room);
         $this->gateway->ensurePath($room);
         $path = $this->imagePath($room->account_id, $room->id, $capturedAt, 'calibration', $displayTimezone);
-        $result = $this->frameCapture->capture($this->gateway->pathName($room), $path);
+        $result = $this->frameCapture->capture($this->gateway->pathName($room), $path, $room->peopleCounterCaptureDelaySeconds());
 
         $oldPath = $room->people_counter_snapshot_path;
         $room->update([

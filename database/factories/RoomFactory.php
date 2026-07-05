@@ -33,6 +33,7 @@ class RoomFactory extends Factory
             'is_active' => true,
             'rtsp_url' => null,
             'rtsp_enabled' => false,
+            'people_counter_capture_delay_seconds' => null,
         ];
     }
 }
