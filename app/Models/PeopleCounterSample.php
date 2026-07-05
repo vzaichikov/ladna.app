@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'scheduled_class_id', 'location_id', 'room_id', 'captured_at', 'status', 'failure_reason', 'original_image_path', 'masked_image_path', 'image_width', 'image_height', 'detected_count', 'average_confidence', 'detections', 'response_payload'])]
+#[Fillable(['account_id', 'scheduled_class_id', 'unknown_presence_interval_id', 'location_id', 'room_id', 'captured_at', 'status', 'failure_reason', 'original_image_path', 'masked_image_path', 'image_width', 'image_height', 'detected_count', 'average_confidence', 'detections', 'response_payload'])]
 class PeopleCounterSample extends Model
 {
     use HasFactory;
@@ -40,6 +40,11 @@ class PeopleCounterSample extends Model
     public function scheduledClass(): BelongsTo
     {
         return $this->belongsTo(ScheduledClass::class);
+    }
+
+    public function unknownPresenceInterval(): BelongsTo
+    {
+        return $this->belongsTo(UnknownPresenceInterval::class);
     }
 
     public function location(): BelongsTo

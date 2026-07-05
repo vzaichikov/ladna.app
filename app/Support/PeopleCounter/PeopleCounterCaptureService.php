@@ -6,8 +6,10 @@ use App\Enums\ScheduledClassStatus;
 use App\Models\PeopleCounterSample;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\UnknownPresenceInterval;
 use App\Support\MediaMtxCameraGateway;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -28,6 +30,17 @@ class PeopleCounterCaptureService
     public function captureDueClasses(?Carbon $now = null, int $limit = 100, ?callable $debug = null): int
     {
         $now ??= now();
+        $classCount = $this->captureDueClassSamples($now, $limit, $debug);
+        $unknownPresenceCount = $this->captureUnknownPresenceSamples($now, $limit, $debug);
+
+        return $classCount + $unknownPresenceCount;
+    }
+
+    /**
+     * @param  callable(string, array<string, mixed>): void|null  $debug
+     */
+    private function captureDueClassSamples(Carbon $now, int $limit, ?callable $debug = null): int
+    {
         $latestStartAt = $now->copy()->subMinutes(PeopleCounterSamplingWindow::StartBufferMinutes);
         $earliestEndAt = $now->copy()->addMinutes(PeopleCounterSamplingWindow::EndBufferMinutes);
         $openAccountIds = $this->studioHours->openAccountIds($now, requireRtspCameras: true);
@@ -69,6 +82,49 @@ class PeopleCounterCaptureService
     /**
      * @param  callable(string, array<string, mixed>): void|null  $debug
      */
+    private function captureUnknownPresenceSamples(Carbon $now, int $limit, ?callable $debug = null): int
+    {
+        $openAccountIds = $this->studioHours->openAccountIds($now, requireRtspCameras: true);
+        $protectedAfter = $now->copy()->subMinutes(PeopleCounterSamplingWindow::UnknownPresenceGraceMinutes);
+        $candidateCount = Room::query()
+            ->whereIn('account_id', $openAccountIds)
+            ->active()
+            ->rtspEnabled()
+            ->count();
+        $rooms = Room::query()
+            ->whereIn('account_id', $openAccountIds)
+            ->active()
+            ->rtspEnabled()
+            ->whereDoesntHave('scheduledClasses', fn ($query) => $query
+                ->where('status', ScheduledClassStatus::Scheduled->value)
+                ->where('starts_at', '<=', $now)
+                ->where('ends_at', '>=', $protectedAfter))
+            ->with(['account:id,status,allow_rtsp_cameras,enable_people_counter,timezone,opening_hours', 'location:id,account_id,name,timezone'])
+            ->orderBy('account_id')
+            ->orderBy('location_id')
+            ->orderBy('name')
+            ->limit($limit)
+            ->get();
+
+        $debug?->__invoke('capture.unknown.selection', [
+            'now' => $now->toDateTimeString(),
+            'post_class_grace_minutes' => PeopleCounterSamplingWindow::UnknownPresenceGraceMinutes,
+            'protected_after_or_at' => $protectedAfter->toDateTimeString(),
+            'limit' => $limit,
+            'candidate_rooms' => $candidateCount,
+            'open_people_counter_studios' => count($openAccountIds),
+            'eligible_rooms' => $rooms->count(),
+        ]);
+
+        return $rooms
+            ->map(fn (Room $room): ?PeopleCounterSample => $this->captureUnknownPresence($room, $now, $debug))
+            ->filter()
+            ->count();
+    }
+
+    /**
+     * @param  callable(string, array<string, mixed>): void|null  $debug
+     */
     public function captureClass(ScheduledClass $scheduledClass, ?Carbon $capturedAt = null, ?callable $debug = null): PeopleCounterSample
     {
         $capturedAt ??= now();
@@ -104,6 +160,12 @@ class PeopleCounterCaptureService
         try {
             $maskedFrame = $this->masker->mask($capturedFrame->path, $maskedPath, $room->people_counter_mask_polygons ?? []);
             $detection = $this->client->count(Storage::disk('local')->path($maskedFrame->path));
+            $this->deleteFrame($maskedFrame);
+            $storedOriginalPath = $detection->count > 0 ? $capturedFrame->path : null;
+
+            if ($storedOriginalPath === null) {
+                $this->deleteFrame($capturedFrame);
+            }
 
             $sample = PeopleCounterSample::create([
                 'account_id' => $scheduledClass->account_id,
@@ -112,10 +174,10 @@ class PeopleCounterCaptureService
                 'room_id' => $scheduledClass->room_id,
                 'captured_at' => $capturedAt,
                 'status' => PeopleCounterSample::StatusSucceeded,
-                'original_image_path' => $capturedFrame->path,
-                'masked_image_path' => $maskedFrame->path,
-                'image_width' => $maskedFrame->width,
-                'image_height' => $maskedFrame->height,
+                'original_image_path' => $storedOriginalPath,
+                'masked_image_path' => null,
+                'image_width' => $storedOriginalPath === null ? null : $capturedFrame->width,
+                'image_height' => $storedOriginalPath === null ? null : $capturedFrame->height,
                 'detected_count' => $detection->count,
                 'average_confidence' => $detection->averageConfidence,
                 'detections' => $detection->detections,
@@ -129,13 +191,82 @@ class PeopleCounterCaptureService
                 'average_confidence' => $sample->average_confidence,
                 'image_width' => $sample->image_width,
                 'image_height' => $sample->image_height,
-                'original_image_path' => $sample->original_image_path,
-                'masked_image_path' => $sample->masked_image_path,
+                'stored_original_image' => $sample->original_image_path !== null,
+                'stored_masked_image' => $sample->masked_image_path !== null,
             ]);
 
             return $sample;
         } catch (Throwable $throwable) {
             return $this->failedSample($scheduledClass, $capturedAt, PeopleCounterSample::StatusDetectionFailed, $throwable, $capturedFrame, $maskedFrame, $debug);
+        }
+    }
+
+    /**
+     * @param  callable(string, array<string, mixed>): void|null  $debug
+     */
+    public function captureUnknownPresence(Room $room, ?Carbon $capturedAt = null, ?callable $debug = null): ?PeopleCounterSample
+    {
+        $capturedAt ??= now();
+        $room->loadMissing(['account', 'location']);
+        $displayTimezone = $this->roomTimezone($room);
+        $originalPath = $this->imagePath($room->account_id, $room->id, $capturedAt, 'unknown-original', $displayTimezone);
+        $maskedPath = $this->imagePath($room->account_id, $room->id, $capturedAt, 'unknown-masked', $displayTimezone);
+        $capturedFrame = null;
+        $maskedFrame = null;
+
+        $debug?->__invoke('capture.unknown.started', [
+            'account_id' => $room->account_id,
+            'location_id' => $room->location_id,
+            'room_id' => $room->id,
+            'display_timezone' => $displayTimezone,
+            'captured_at_local' => $capturedAt->copy()->timezone($displayTimezone)->toDateTimeString(),
+            'mask_polygons' => is_array($room->people_counter_mask_polygons) ? count($room->people_counter_mask_polygons) : 0,
+        ]);
+
+        try {
+            $this->gateway->ensurePath($room);
+            $capturedFrame = $this->frameCapture->capture($this->gateway->pathName($room), $originalPath, $room->peopleCounterCaptureDelaySeconds());
+            $maskedFrame = $this->masker->mask($capturedFrame->path, $maskedPath, $room->people_counter_mask_polygons ?? []);
+            $detection = $this->client->count(Storage::disk('local')->path($maskedFrame->path));
+            $this->deleteFrame($maskedFrame);
+
+            if ($detection->count < 1) {
+                $this->deleteFrame($capturedFrame);
+                $debug?->__invoke('capture.unknown.empty', [
+                    'account_id' => $room->account_id,
+                    'location_id' => $room->location_id,
+                    'room_id' => $room->id,
+                    'detected_count' => $detection->count,
+                ]);
+
+                return null;
+            }
+
+            $sample = $this->recordUnknownPresenceSample($room, $capturedAt, $capturedFrame, $detection);
+
+            $debug?->__invoke('capture.unknown.succeeded', [
+                'account_id' => $room->account_id,
+                'location_id' => $room->location_id,
+                'room_id' => $room->id,
+                'interval_id' => $sample->unknown_presence_interval_id,
+                'sample_id' => $sample->id,
+                'detected_count' => $sample->detected_count,
+                'average_confidence' => $sample->average_confidence,
+                'stored_original_image' => $sample->original_image_path !== null,
+            ]);
+
+            return $sample;
+        } catch (Throwable $throwable) {
+            $this->deleteFrame($capturedFrame);
+            $this->deleteFrame($maskedFrame);
+            $debug?->__invoke('capture.unknown.failed', [
+                'account_id' => $room->account_id,
+                'location_id' => $room->location_id,
+                'room_id' => $room->id,
+                'failure_reason' => Str::limit($throwable->getMessage(), 2000),
+            ]);
+
+            return null;
         }
     }
 
@@ -172,6 +303,9 @@ class PeopleCounterCaptureService
         ?PeopleCounterCaptureResult $maskedFrame,
         ?callable $debug = null,
     ): PeopleCounterSample {
+        $this->deleteFrame($capturedFrame);
+        $this->deleteFrame($maskedFrame);
+
         $sample = PeopleCounterSample::create([
             'account_id' => $scheduledClass->account_id,
             'scheduled_class_id' => $scheduledClass->id,
@@ -180,10 +314,10 @@ class PeopleCounterCaptureService
             'captured_at' => $capturedAt,
             'status' => $status,
             'failure_reason' => Str::limit($throwable->getMessage(), 2000),
-            'original_image_path' => $capturedFrame?->path,
-            'masked_image_path' => $maskedFrame?->path,
-            'image_width' => $maskedFrame?->width ?? $capturedFrame?->width,
-            'image_height' => $maskedFrame?->height ?? $capturedFrame?->height,
+            'original_image_path' => null,
+            'masked_image_path' => null,
+            'image_width' => null,
+            'image_height' => null,
         ]);
 
         $debug?->__invoke('capture.class.failed', [
@@ -191,11 +325,71 @@ class PeopleCounterCaptureService
             'sample_id' => $sample->id,
             'status' => $sample->status,
             'failure_reason' => $sample->failure_reason,
-            'original_image_path' => $sample->original_image_path,
-            'masked_image_path' => $sample->masked_image_path,
+            'stored_original_image' => $sample->original_image_path !== null,
+            'stored_masked_image' => $sample->masked_image_path !== null,
         ]);
 
         return $sample;
+    }
+
+    private function recordUnknownPresenceSample(
+        Room $room,
+        Carbon $capturedAt,
+        PeopleCounterCaptureResult $capturedFrame,
+        PeopleCounterDetectionResult $detection,
+    ): PeopleCounterSample {
+        return DB::transaction(function () use ($room, $capturedAt, $capturedFrame, $detection): PeopleCounterSample {
+            $interval = UnknownPresenceInterval::query()
+                ->where('account_id', $room->account_id)
+                ->where('room_id', $room->id)
+                ->where('ended_at', '>=', $capturedAt->copy()->subMinutes(PeopleCounterSamplingWindow::UnknownPresenceGraceMinutes))
+                ->orderByDesc('ended_at')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $interval) {
+                $interval = UnknownPresenceInterval::create([
+                    'account_id' => $room->account_id,
+                    'location_id' => $room->location_id,
+                    'room_id' => $room->id,
+                    'started_at' => $capturedAt,
+                    'ended_at' => $capturedAt,
+                    'sample_count' => 0,
+                    'peak_detected_count' => 0,
+                ]);
+            }
+
+            $interval->update([
+                'ended_at' => $capturedAt->greaterThan($interval->ended_at) ? $capturedAt : $interval->ended_at,
+                'sample_count' => $interval->sample_count + 1,
+                'peak_detected_count' => max($interval->peak_detected_count, $detection->count),
+            ]);
+
+            return PeopleCounterSample::create([
+                'account_id' => $room->account_id,
+                'scheduled_class_id' => null,
+                'unknown_presence_interval_id' => $interval->id,
+                'location_id' => $room->location_id,
+                'room_id' => $room->id,
+                'captured_at' => $capturedAt,
+                'status' => PeopleCounterSample::StatusSucceeded,
+                'original_image_path' => $capturedFrame->path,
+                'masked_image_path' => null,
+                'image_width' => $capturedFrame->width,
+                'image_height' => $capturedFrame->height,
+                'detected_count' => $detection->count,
+                'average_confidence' => $detection->averageConfidence,
+                'detections' => $detection->detections,
+                'response_payload' => $detection->payload,
+            ]);
+        });
+    }
+
+    private function deleteFrame(?PeopleCounterCaptureResult $frame): void
+    {
+        if ($frame) {
+            Storage::disk('local')->delete($frame->path);
+        }
     }
 
     private function imagePath(int $accountId, ?int $roomId, Carbon $capturedAt, string $variant, ?string $timezone = null): string

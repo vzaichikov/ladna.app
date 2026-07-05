@@ -54,7 +54,7 @@ class ScheduledTaskRegistry
             [
                 'key' => 'people_counter_capture',
                 'command' => 'people-counter:capture',
-                'expression' => '*/5 * * * *',
+                'expression' => '*/7 * * * *',
                 'frequency_key' => 'scheduled_task_frequency_every_seven_minutes',
                 'description_key' => 'scheduled_task_people_counter_capture_description',
                 'overlap_minutes' => 10,

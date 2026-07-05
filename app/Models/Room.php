@@ -125,6 +125,22 @@ class Room extends Model
             ->latestOfMany('captured_at');
     }
 
+    public function latestPositivePeopleCounterSample(): HasOne
+    {
+        return $this->hasOne(PeopleCounterSample::class)
+            ->ofMany(
+                ['captured_at' => 'max', 'id' => 'max'],
+                fn ($query) => $query
+                    ->where('status', PeopleCounterSample::StatusSucceeded)
+                    ->where('detected_count', '>', 0),
+            );
+    }
+
+    public function unknownPresenceIntervals(): HasMany
+    {
+        return $this->hasMany(UnknownPresenceInterval::class);
+    }
+
     public function scheduledClassPeopleCounts(): HasMany
     {
         return $this->hasMany(ScheduledClassPeopleCount::class);

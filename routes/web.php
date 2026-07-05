@@ -73,6 +73,7 @@ use App\Http\Controllers\TrainerController;
 use App\Http\Controllers\TrainerReportController;
 use App\Http\Controllers\TrainerSubstitutionController;
 use App\Http\Controllers\TrainerTypeController;
+use App\Http\Controllers\UnknownPresenceReportController;
 use App\Http\Controllers\WebsiteLeadController;
 use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
@@ -259,6 +260,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.reports.trainers');
         Route::get('accounts/{account}/reports/people-counter', PeopleCounterReportController::class)
             ->name('accounts.reports.people-counter');
+        Route::get('accounts/{account}/reports/unknown-presence', UnknownPresenceReportController::class)
+            ->name('accounts.reports.unknown-presence');
         Route::get('accounts/{account}/people-counter-samples/{peopleCounterSample}/{variant}', PeopleCounterScreenshotController::class)
             ->whereIn('variant', ['original', 'masked'])
             ->name('accounts.people-counter-samples.image');

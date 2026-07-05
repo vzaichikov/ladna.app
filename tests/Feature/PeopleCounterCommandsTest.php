@@ -14,7 +14,9 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\ScheduledClassPeopleCount;
 use App\Models\Trainer;
+use App\Models\UnknownPresenceInterval;
 use App\Support\PeopleCounter\PeopleCounterCaptureResult;
+use App\Support\PeopleCounter\PeopleCounterCaptureService;
 use App\Support\PeopleCounter\PeopleCounterClient;
 use App\Support\PeopleCounter\PeopleCounterDetectionResult;
 use App\Support\PeopleCounter\PeopleCounterFrameCapture;
@@ -61,7 +63,30 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertSame(4, $sample->detected_count);
         $this->assertSame($scheduledClass->account_id, $sample->account_id);
         $this->assertTrue(Storage::disk('local')->exists($sample->original_image_path));
-        $this->assertTrue(Storage::disk('local')->exists($sample->masked_image_path));
+        $this->assertNull($sample->masked_image_path);
+    }
+
+    public function test_capture_command_keeps_class_zero_count_without_screenshots(): void
+    {
+        Carbon::setTestNow('2026-07-04 12:30:00');
+        Storage::fake('local');
+        $this->fakeMediaMtxGateway();
+        $this->bindFrameCapture();
+        $this->bindDetector(count: 0);
+        $scheduledClass = $this->scheduledClass(
+            startsAt: Carbon::parse('2026-07-04 12:00:00'),
+            endsAt: Carbon::parse('2026-07-04 13:00:00'),
+        );
+
+        $this->artisan('people-counter:capture')
+            ->assertExitCode(0);
+
+        $sample = PeopleCounterSample::query()->whereBelongsTo($scheduledClass)->firstOrFail();
+
+        $this->assertSame(PeopleCounterSample::StatusSucceeded, $sample->status);
+        $this->assertSame(0, $sample->detected_count);
+        $this->assertNull($sample->original_image_path);
+        $this->assertNull($sample->masked_image_path);
     }
 
     public function test_capture_command_records_camera_failures_without_zero_counts(): void
@@ -86,7 +111,7 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertStringContainsString('Camera offline', (string) $sample->failure_reason);
     }
 
-    public function test_capture_command_records_detection_failures_with_captured_images(): void
+    public function test_capture_command_records_detection_failures_without_screenshots(): void
     {
         Carbon::setTestNow('2026-07-04 12:30:00');
         Storage::fake('local');
@@ -105,8 +130,8 @@ class PeopleCounterCommandsTest extends TestCase
 
         $this->assertSame(PeopleCounterSample::StatusDetectionFailed, $sample->status);
         $this->assertNull($sample->detected_count);
-        $this->assertTrue(Storage::disk('local')->exists($sample->original_image_path));
-        $this->assertTrue(Storage::disk('local')->exists($sample->masked_image_path));
+        $this->assertNull($sample->original_image_path);
+        $this->assertNull($sample->masked_image_path);
     }
 
     public function test_capture_command_skips_classes_when_studio_is_closed(): void
@@ -153,7 +178,7 @@ class PeopleCounterCommandsTest extends TestCase
         $sample = PeopleCounterSample::query()->whereBelongsTo($scheduledClass)->firstOrFail();
 
         $this->assertStringContainsString('/2026/07/05/20260705003000-original-', $sample->original_image_path);
-        $this->assertStringContainsString('/2026/07/05/20260705003000-masked-', $sample->masked_image_path);
+        $this->assertNull($sample->masked_image_path);
         $this->assertSame('2026-07-04 21:30:00', $sample->captured_at->toDateTimeString());
     }
 
@@ -178,6 +203,100 @@ class PeopleCounterCommandsTest extends TestCase
 
         $this->assertTrue(PeopleCounterSample::query()->whereBelongsTo($includedClass)->exists());
         $this->assertFalse(PeopleCounterSample::query()->whereBelongsTo($skippedClass)->exists());
+    }
+
+    public function test_capture_command_records_unknown_presence_interval_only_when_people_are_detected(): void
+    {
+        Carbon::setTestNow('2026-07-04 12:30:00');
+        Storage::fake('local');
+        $this->fakeMediaMtxGateway();
+        $this->bindFrameCapture();
+        $this->bindDetector(count: 2);
+        $room = $this->peopleCounterRoom();
+
+        $this->artisan('people-counter:capture', ['--debug' => true])
+            ->expectsOutputToContain('[people-counter] capture.unknown.selection')
+            ->expectsOutputToContain('[people-counter] capture.unknown.started')
+            ->expectsOutputToContain('[people-counter] capture.unknown.succeeded')
+            ->assertExitCode(0);
+
+        $interval = UnknownPresenceInterval::query()->whereBelongsTo($room)->firstOrFail();
+        $sample = PeopleCounterSample::query()->whereBelongsTo($interval, 'unknownPresenceInterval')->firstOrFail();
+
+        $this->assertNull($sample->scheduled_class_id);
+        $this->assertSame($room->account_id, $sample->account_id);
+        $this->assertSame($room->location_id, $sample->location_id);
+        $this->assertSame($room->id, $sample->room_id);
+        $this->assertSame(2, $sample->detected_count);
+        $this->assertTrue(Storage::disk('local')->exists($sample->original_image_path));
+        $this->assertNull($sample->masked_image_path);
+        $this->assertSame(1, $interval->sample_count);
+        $this->assertSame(2, $interval->peak_detected_count);
+    }
+
+    public function test_capture_command_discards_empty_unknown_presence_without_database_rows_or_screenshots(): void
+    {
+        Carbon::setTestNow('2026-07-04 12:30:00');
+        Storage::fake('local');
+        $this->fakeMediaMtxGateway();
+        $this->bindFrameCapture();
+        $this->bindDetector(count: 0);
+        $room = $this->peopleCounterRoom();
+
+        $this->artisan('people-counter:capture', ['--debug' => true])
+            ->expectsOutputToContain('[people-counter] capture.unknown.empty')
+            ->assertExitCode(0);
+
+        $this->assertFalse(PeopleCounterSample::query()->whereBelongsTo($room)->exists());
+        $this->assertFalse(UnknownPresenceInterval::query()->whereBelongsTo($room)->exists());
+    }
+
+    public function test_capture_command_skips_unknown_presence_during_class_and_post_class_grace(): void
+    {
+        Carbon::setTestNow('2026-07-04 11:10:00');
+        Storage::fake('local');
+        $this->fakeMediaMtxGateway();
+        $this->bindFrameCapture();
+        $this->bindDetector(count: 3);
+        $room = $this->peopleCounterRoom();
+        $this->scheduledClassForRoom(
+            room: $room,
+            startsAt: Carbon::parse('2026-07-04 10:00:00'),
+            endsAt: Carbon::parse('2026-07-04 11:00:00'),
+        );
+
+        $this->artisan('people-counter:capture', ['--debug' => true])
+            ->expectsOutputToContain('"eligible_rooms":0')
+            ->assertExitCode(0);
+
+        $this->assertFalse(PeopleCounterSample::query()->whereBelongsTo($room)->exists());
+        $this->assertFalse(UnknownPresenceInterval::query()->whereBelongsTo($room)->exists());
+    }
+
+    public function test_unknown_presence_samples_extend_intervals_within_grace_and_split_after_gap(): void
+    {
+        Storage::fake('local');
+        $this->fakeMediaMtxGateway();
+        $this->bindFrameCapture();
+        $this->bindDetector(count: 4);
+        $room = $this->peopleCounterRoom();
+        $service = app(PeopleCounterCaptureService::class);
+
+        $service->captureUnknownPresence($room, Carbon::parse('2026-07-04 12:00:00'));
+        $service->captureUnknownPresence($room, Carbon::parse('2026-07-04 12:10:00'));
+        $service->captureUnknownPresence($room, Carbon::parse('2026-07-04 12:26:00'));
+
+        $intervals = UnknownPresenceInterval::query()
+            ->whereBelongsTo($room)
+            ->orderBy('started_at')
+            ->get();
+
+        $this->assertCount(2, $intervals);
+        $this->assertSame(2, $intervals[0]->sample_count);
+        $this->assertSame('2026-07-04 12:00:00', $intervals[0]->started_at->toDateTimeString());
+        $this->assertSame('2026-07-04 12:10:00', $intervals[0]->ended_at->toDateTimeString());
+        $this->assertSame(1, $intervals[1]->sample_count);
+        $this->assertSame('2026-07-04 12:26:00', $intervals[1]->started_at->toDateTimeString());
     }
 
     public function test_summarizer_uses_trimmed_75th_percentile_and_adds_trainer_for_group_classes(): void
@@ -344,10 +463,12 @@ class PeopleCounterCommandsTest extends TestCase
         $room = $scheduledClass->room;
         $oldOriginal = 'people-counter/old/original.jpg';
         $oldMasked = 'people-counter/old/masked.jpg';
+        $oldUnknownOriginal = 'people-counter/old/unknown-original.jpg';
         $oldSnapshot = 'people-counter/old/snapshot.jpg';
 
         Storage::disk('local')->put($oldOriginal, 'old-original');
         Storage::disk('local')->put($oldMasked, 'old-masked');
+        Storage::disk('local')->put($oldUnknownOriginal, 'old-unknown-original');
         Storage::disk('local')->put($oldSnapshot, 'old-snapshot');
 
         $sample = PeopleCounterSample::factory()->for($scheduledClass)->create([
@@ -365,6 +486,21 @@ class PeopleCounterCommandsTest extends TestCase
             'trainer_id' => $scheduledClass->trainer_id,
             'summarized_at' => Carbon::parse('2026-06-15 11:05:00'),
         ]);
+        $unknownInterval = UnknownPresenceInterval::factory()->for($scheduledClass->account)->for($scheduledClass->location)->for($room)->create([
+            'started_at' => Carbon::parse('2026-06-15 12:00:00'),
+            'ended_at' => Carbon::parse('2026-06-15 12:07:00'),
+            'sample_count' => 1,
+            'peak_detected_count' => 2,
+        ]);
+        $unknownSample = PeopleCounterSample::factory()->for($unknownInterval, 'unknownPresenceInterval')->create([
+            'account_id' => $scheduledClass->account_id,
+            'scheduled_class_id' => null,
+            'location_id' => $scheduledClass->location_id,
+            'room_id' => $scheduledClass->room_id,
+            'captured_at' => Carbon::parse('2026-06-15 12:00:00'),
+            'original_image_path' => $oldUnknownOriginal,
+            'masked_image_path' => null,
+        ]);
         $room->update([
             'people_counter_snapshot_path' => $oldSnapshot,
             'people_counter_snapshot_width' => 20,
@@ -376,14 +512,18 @@ class PeopleCounterCommandsTest extends TestCase
             ->expectsOutputToContain('[people-counter] prune.started')
             ->expectsOutputToContain('[people-counter] prune.sample.deleted')
             ->expectsOutputToContain('[people-counter] prune.summaries.deleted')
+            ->expectsOutputToContain('[people-counter] prune.unknown_presence_intervals.deleted')
             ->expectsOutputToContain('[people-counter] prune.room_snapshot.deleted')
             ->expectsOutputToContain('[people-counter] prune.finished')
             ->assertExitCode(0);
 
         $this->assertDatabaseMissing('people_counter_samples', ['id' => $sample->id]);
+        $this->assertDatabaseMissing('people_counter_samples', ['id' => $unknownSample->id]);
         $this->assertDatabaseMissing('scheduled_class_people_counts', ['id' => $summary->id]);
+        $this->assertDatabaseMissing('unknown_presence_intervals', ['id' => $unknownInterval->id]);
         $this->assertFalse(Storage::disk('local')->exists($oldOriginal));
         $this->assertFalse(Storage::disk('local')->exists($oldMasked));
+        $this->assertFalse(Storage::disk('local')->exists($oldUnknownOriginal));
         $this->assertFalse(Storage::disk('local')->exists($oldSnapshot));
         $this->assertNull($room->refresh()->people_counter_snapshot_path);
     }
@@ -458,6 +598,59 @@ class PeopleCounterCommandsTest extends TestCase
                 );
             }
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $accountAttributes
+     * @param  array<string, mixed>  $locationAttributes
+     */
+    private function peopleCounterRoom(array $accountAttributes = [], array $locationAttributes = []): Room
+    {
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'allow_rtsp_cameras' => true,
+            'enable_people_counter' => true,
+            ...$accountAttributes,
+        ]);
+        $location = Location::factory()->for($account)->create([
+            'timezone' => 'UTC',
+            ...$locationAttributes,
+        ]);
+
+        return Room::factory()->for($account)->for($location)->create([
+            'rtsp_url' => 'rtsp://camera.example.test/live',
+            'rtsp_enabled' => true,
+            'people_counter_mask_polygons' => [
+                [
+                    'points' => [
+                        ['x' => 0, 'y' => 0],
+                        ['x' => 0.2, 'y' => 0],
+                        ['x' => 0.2, 'y' => 1],
+                        ['x' => 0, 'y' => 1],
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    private function scheduledClassForRoom(Room $room, Carbon $startsAt, Carbon $endsAt): ScheduledClass
+    {
+        $account = $room->account;
+        $location = $room->location;
+        $direction = ActivityDirection::factory()->for($account)->create();
+        $classType = ClassType::factory()->for($account)->for($direction, 'activityDirection')->create();
+        $trainer = Trainer::factory()->for($account)->create();
+
+        return ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'starts_at' => $startsAt,
+                'ends_at' => $endsAt,
+            ]);
     }
 
     /**

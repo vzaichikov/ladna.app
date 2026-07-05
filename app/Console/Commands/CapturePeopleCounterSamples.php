@@ -8,8 +8,8 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
-#[Signature('people-counter:capture {--limit=100 : Maximum active classes to sample in one run} {--debug : Print selection and per-class diagnostics}')]
-#[Description('Capture active class camera frames and send them to the people counter service.')]
+#[Signature('people-counter:capture {--limit=100 : Maximum active classes and unknown-presence rooms to sample in one run} {--debug : Print selection and per-sample diagnostics}')]
+#[Description('Capture camera frames for active classes and unknown presence monitoring.')]
 class CapturePeopleCounterSamples extends Command
 {
     use OutputsPeopleCounterDebug;

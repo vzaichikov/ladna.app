@@ -175,6 +175,11 @@ class Account extends Model
         return $this->hasMany(PeopleCounterSample::class);
     }
 
+    public function unknownPresenceIntervals(): HasMany
+    {
+        return $this->hasMany(UnknownPresenceInterval::class);
+    }
+
     public function scheduledClassPeopleCounts(): HasMany
     {
         return $this->hasMany(ScheduledClassPeopleCount::class);

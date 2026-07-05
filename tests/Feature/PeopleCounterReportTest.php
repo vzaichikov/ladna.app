@@ -15,6 +15,7 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\ScheduledClassPeopleCount;
 use App\Models\Trainer;
+use App\Models\UnknownPresenceInterval;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
@@ -46,22 +47,30 @@ class PeopleCounterReportTest extends TestCase
             ->get(route('dashboard.accounts.reports.index', $account))
             ->assertOk()
             ->assertSee(__('app.people_counter_report_title'), false)
-            ->assertSee(route('dashboard.accounts.reports.people-counter', $account), false);
+            ->assertSee(route('dashboard.accounts.reports.people-counter', $account), false)
+            ->assertSee(__('app.unknown_presence_report_title'), false)
+            ->assertSee(route('dashboard.accounts.reports.unknown-presence', $account), false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.show', $account))
             ->assertOk()
-            ->assertDontSee(route('dashboard.accounts.reports.people-counter', $account), false);
+            ->assertDontSee(route('dashboard.accounts.reports.people-counter', $account), false)
+            ->assertDontSee(route('dashboard.accounts.reports.unknown-presence', $account), false);
 
         $account->update(['enable_people_counter' => false]);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.reports.index', $account))
             ->assertOk()
-            ->assertDontSee(__('app.people_counter_report_title'), false);
+            ->assertDontSee(__('app.people_counter_report_title'), false)
+            ->assertDontSee(__('app.unknown_presence_report_title'), false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.reports.people-counter', $account))
+            ->assertNotFound();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.unknown-presence', $account))
             ->assertNotFound();
     }
 
@@ -282,6 +291,92 @@ class PeopleCounterReportTest extends TestCase
             ->assertDontSee('Kyiv Previous Day Pole');
     }
 
+    public function test_unknown_presence_report_shows_intervals_with_filters_and_original_screenshot_gallery(): void
+    {
+        Carbon::setTestNow('2026-07-04 12:00:00');
+        Storage::fake('local');
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'allow_rtsp_cameras' => true,
+            'enable_people_counter' => true,
+        ]);
+        $account->addOwner($owner);
+        $center = Location::factory()->for($account)->create(['name' => 'Center Studio', 'timezone' => 'UTC']);
+        $suburb = Location::factory()->for($account)->create(['name' => 'Suburb Studio', 'timezone' => 'UTC']);
+        $centerRoom = Room::factory()->for($account)->for($center)->create(['name' => 'Mirror Hall']);
+        $suburbRoom = Room::factory()->for($account)->for($suburb)->create(['name' => 'Other Hall']);
+        $firstPath = 'people-counter/testing/unknown-first.jpg';
+        $secondPath = 'people-counter/testing/unknown-second.jpg';
+        $otherPath = 'people-counter/testing/unknown-other.jpg';
+
+        Storage::disk('local')->put($firstPath, 'first');
+        Storage::disk('local')->put($secondPath, 'second');
+        Storage::disk('local')->put($otherPath, 'other');
+
+        $interval = UnknownPresenceInterval::factory()->for($account)->for($center)->for($centerRoom)->create([
+            'started_at' => Carbon::parse('2026-07-04 10:00:00'),
+            'ended_at' => Carbon::parse('2026-07-04 10:14:00'),
+            'sample_count' => 2,
+            'peak_detected_count' => 3,
+        ]);
+        $otherInterval = UnknownPresenceInterval::factory()->for($account)->for($suburb)->for($suburbRoom)->create([
+            'started_at' => Carbon::parse('2026-07-04 11:00:00'),
+            'ended_at' => Carbon::parse('2026-07-04 11:00:00'),
+            'sample_count' => 1,
+            'peak_detected_count' => 1,
+        ]);
+        $firstSample = PeopleCounterSample::factory()->for($interval, 'unknownPresenceInterval')->create([
+            'account_id' => $account->id,
+            'scheduled_class_id' => null,
+            'location_id' => $center->id,
+            'room_id' => $centerRoom->id,
+            'captured_at' => Carbon::parse('2026-07-04 10:00:00'),
+            'detected_count' => 2,
+            'original_image_path' => $firstPath,
+            'masked_image_path' => null,
+        ]);
+        $secondSample = PeopleCounterSample::factory()->for($interval, 'unknownPresenceInterval')->create([
+            'account_id' => $account->id,
+            'scheduled_class_id' => null,
+            'location_id' => $center->id,
+            'room_id' => $centerRoom->id,
+            'captured_at' => Carbon::parse('2026-07-04 10:07:00'),
+            'detected_count' => 3,
+            'original_image_path' => $secondPath,
+            'masked_image_path' => null,
+        ]);
+        PeopleCounterSample::factory()->for($otherInterval, 'unknownPresenceInterval')->create([
+            'account_id' => $account->id,
+            'scheduled_class_id' => null,
+            'location_id' => $suburb->id,
+            'room_id' => $suburbRoom->id,
+            'captured_at' => Carbon::parse('2026-07-04 11:00:00'),
+            'detected_count' => 1,
+            'original_image_path' => $otherPath,
+            'masked_image_path' => null,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.unknown-presence', [
+                'account' => $account,
+                'date' => '2026-07-04',
+                'location_id' => $center->id,
+            ]))
+            ->assertOk()
+            ->assertSee(__('app.unknown_presence_report_title'))
+            ->assertSee('Center Studio')
+            ->assertSee('Mirror Hall')
+            ->assertSee('10:00 - 10:14')
+            ->assertSee('data-unknown-presence-row="'.$interval->id.':2:3"', false)
+            ->assertSee(__('app.open_screenshot_gallery_with_count', ['count' => 2]))
+            ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $firstSample, 'original']), false)
+            ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $secondSample, 'original']), false)
+            ->assertDontSee(route('dashboard.accounts.people-counter-samples.image', [$account, $firstSample, 'masked']), false)
+            ->assertDontSee('Other Hall')
+            ->assertDontSee('target="_blank"', false);
+    }
+
     public function test_people_counter_report_requires_report_permission(): void
     {
         $account = Account::factory()->create([
@@ -299,6 +394,10 @@ class PeopleCounterReportTest extends TestCase
 
         $this->actingAs($staff)
             ->get(route('dashboard.accounts.reports.people-counter', $account))
+            ->assertForbidden();
+
+        $this->actingAs($staff)
+            ->get(route('dashboard.accounts.reports.unknown-presence', $account))
             ->assertForbidden();
     }
 

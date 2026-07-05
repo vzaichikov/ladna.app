@@ -26,6 +26,12 @@ class ReportController extends Controller
                 'icon' => 'video',
                 'href' => route('dashboard.accounts.reports.people-counter', $account),
             ];
+            $reports[] = [
+                'title' => __('app.unknown_presence_report_title'),
+                'copy' => __('app.unknown_presence_report_card_copy'),
+                'icon' => 'video',
+                'href' => route('dashboard.accounts.reports.unknown-presence', $account),
+            ];
         }
 
         return view('reports.index', [

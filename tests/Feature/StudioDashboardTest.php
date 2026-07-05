@@ -222,6 +222,16 @@ class StudioDashboardTest extends TestCase
         PeopleCounterSample::factory()
             ->for($account)
             ->for($location)
+            ->for($room)
+            ->create([
+                'scheduled_class_id' => null,
+                'captured_at' => Carbon::parse('2026-07-05 08:05:00', 'UTC'),
+                'detected_count' => 0,
+                'original_image_path' => null,
+            ]);
+        PeopleCounterSample::factory()
+            ->for($account)
+            ->for($location)
             ->for($disabledRoom)
             ->create([
                 'scheduled_class_id' => null,

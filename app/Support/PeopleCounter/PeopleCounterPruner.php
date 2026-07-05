@@ -5,6 +5,7 @@ namespace App\Support\PeopleCounter;
 use App\Models\PeopleCounterSample;
 use App\Models\Room;
 use App\Models\ScheduledClassPeopleCount;
+use App\Models\UnknownPresenceInterval;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -26,6 +27,9 @@ class PeopleCounterPruner
         $oldSummariesCount = ScheduledClassPeopleCount::query()
             ->where('summarized_at', '<', $cutoff)
             ->count();
+        $oldUnknownIntervalsCount = UnknownPresenceInterval::query()
+            ->where('ended_at', '<', $cutoff)
+            ->count();
         $staleSnapshotsCount = Room::query()
             ->whereNotNull('people_counter_snapshot_path')
             ->where('people_counter_snapshot_taken_at', '<', $cutoff)
@@ -37,6 +41,7 @@ class PeopleCounterPruner
             'cutoff' => $cutoff->toDateTimeString(),
             'old_samples' => $oldSamplesCount,
             'old_summaries' => $oldSummariesCount,
+            'old_unknown_presence_intervals' => $oldUnknownIntervalsCount,
             'stale_room_snapshots' => $staleSnapshotsCount,
         ]);
 
@@ -67,6 +72,15 @@ class PeopleCounterPruner
 
         $debug?->__invoke('prune.summaries.deleted', [
             'count' => $deletedSummaries,
+        ]);
+
+        $deletedUnknownIntervals = UnknownPresenceInterval::query()
+            ->where('ended_at', '<', $cutoff)
+            ->delete();
+        $deleted += $deletedUnknownIntervals;
+
+        $debug?->__invoke('prune.unknown_presence_intervals.deleted', [
+            'count' => $deletedUnknownIntervals,
         ]);
 
         Room::query()

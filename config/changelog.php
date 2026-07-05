@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.70.0',
+                'date' => '2026-07-05',
+                'title' => 'Unknown presence monitoring',
+                'items' => ['Added People Counter monitoring for halls where nobody is expected, with a new Unknown presence report, interval screenshot galleries, 15-minute post-class grace periods, latest positive detection on the owner dashboard, and reduced screenshot storage for zero-count captures.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.69.0',
                 'date' => '2026-07-05',
                 'title' => 'Filtered class history and attendance checks',
@@ -625,6 +632,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.70.0',
+                'date' => '2026-07-05',
+                'title' => 'Моніторинг невідомої присутності',
+                'items' => ['Додано моніторинг People Counter для залів, де за розкладом нікого не має бути: новий звіт «Невідома присутність», галереї скріншотів інтервалів, 15-хвилинний буфер після занять, останню позитивну детекцію на головній сторінці власника та менше збереження скріншотів для нульових детекцій.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.69.0',
                 'date' => '2026-07-05',

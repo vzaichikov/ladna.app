@@ -9,4 +9,6 @@ final class PeopleCounterSamplingWindow
     public const int EndBufferMinutes = 2;
 
     public const int SummarizeDelayMinutes = 5;
+
+    public const int UnknownPresenceGraceMinutes = 15;
 }
