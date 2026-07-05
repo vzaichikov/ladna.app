@@ -110,8 +110,16 @@ class StudioDashboardTest extends TestCase
         $account->addOwner($owner);
         $context = $this->classContext($account, trainerName: 'Problem Trainer');
         $scheduledClass = $this->scheduledClass($context, 'Unreserved Pole', '2026-06-25 10:00:00', '2026-06-25 11:00:00', 8);
+        $this->scheduledClass($context, 'No Attendance Pole', '2026-06-23 10:00:00', '2026-06-23 11:00:00', 8);
+        $bookedPastClass = $this->scheduledClass($context, 'Booked Past Pole', '2026-06-23 12:00:00', '2026-06-23 13:00:00', 8);
+        $this->scheduledClass($context, 'Cancelled Empty Pole', '2026-06-23 14:00:00', '2026-06-23 15:00:00', 8, ScheduledClassStatus::Cancelled);
+        $this->scheduledClass($context, 'Draft Empty Pole', '2026-06-23 16:00:00', '2026-06-23 17:00:00', 8, ScheduledClassStatus::Draft);
+        $this->scheduledClass($context, 'Old Empty Pole', '2026-05-20 10:00:00', '2026-05-20 11:00:00', 8);
+        $this->scheduledClass($context, 'Future Empty Pole', '2026-06-24 12:00:00', '2026-06-24 13:00:00', 8);
+        $this->scheduledClass($this->classContext(Account::factory()->create(['timezone' => 'UTC'])), 'Other Account Empty Pole', '2026-06-23 10:00:00', '2026-06-23 11:00:00', 8);
 
         $this->booking($account, $scheduledClass, ClassBookingStatus::Booked, 'Без резерву');
+        $this->booking($account, $bookedPastClass, ClassBookingStatus::Booked, 'Booked Customer');
         $this->activePass($account, 'UNPAID-001');
         CustomerClassPass::factory()
             ->for($account)
@@ -145,6 +153,7 @@ class StudioDashboardTest extends TestCase
             ->assertSee(__('app.problem_partial_class_passes'))
             ->assertSee(__('app.problem_unreserved_bookings'))
             ->assertSee(__('app.problem_freezed_class_passes'))
+            ->assertSee(__('app.problem_classes_without_attendance'))
             ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
                 'account' => $account,
                 'state' => 'active',
@@ -159,7 +168,13 @@ class StudioDashboardTest extends TestCase
             ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
                 'account' => $account,
                 'state' => 'freezed',
-            ]), false);
+            ]), false)
+            ->assertSee(route('dashboard.accounts.scheduled-classes-history.index', [
+                'account' => $account,
+                'date_from' => '2026-05-25',
+                'date_to' => '2026-06-24',
+                'without_attendance' => 1,
+            ]));
 
         Carbon::setTestNow();
     }

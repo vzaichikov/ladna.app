@@ -219,7 +219,7 @@
                     </div>
                     <span class="crm-status-warning">{{ $problemItems->sum('count') }}</span>
                 </div>
-                <div class="grid gap-3 p-5 md:grid-cols-3">
+                <div class="grid gap-3 p-5 md:grid-cols-3 xl:grid-cols-5">
                     @foreach ($problemItems as $problem)
                         <a href="{{ $problem['url'] }}" class="rounded-lg border px-4 py-3 transition hover:-translate-y-0.5 hover:shadow-xs {{ $problemAccentClasses[$problem['accent']] ?? 'border-stone-200 bg-slate-50 text-slate-950' }}">
                             <div class="text-2xl font-semibold">{{ $problem['count'] }}</div>

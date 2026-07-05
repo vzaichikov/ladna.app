@@ -100,7 +100,7 @@ class StudioDashboardData
                     ->count(),
                 'todayLoad' => $this->loadFor($todayScheduledClasses),
             ],
-            'problems' => $this->problems($account),
+            'problems' => $this->problems($account, $timezone),
             'liveClasses' => $todayClasses
                 ->filter(fn (ScheduledClass $scheduledClass): bool => $scheduledClass->starts_at->lessThanOrEqualTo($now->timezone(config('app.timezone')))
                     && $scheduledClass->ends_at->greaterThanOrEqualTo($now->timezone(config('app.timezone'))))
@@ -120,8 +120,10 @@ class StudioDashboardData
     /**
      * @return array<int, array{key: string, count: int, label: string, url: string, accent: string}>
      */
-    private function problems(Account $account): array
+    private function problems(Account $account, string $timezone): array
     {
+        $classesWithoutAttendanceRange = $this->classesWithoutAttendanceRange($timezone);
+
         return [
             [
                 'key' => 'unpaid_class_passes',
@@ -162,7 +164,39 @@ class StudioDashboardData
                 ]),
                 'accent' => 'scheduled',
             ],
+            [
+                'key' => 'classes_without_attendance',
+                'count' => $this->classesWithoutAttendanceCount($account, $classesWithoutAttendanceRange[0], $classesWithoutAttendanceRange[1]),
+                'label' => __('app.problem_classes_without_attendance'),
+                'url' => route('dashboard.accounts.scheduled-classes-history.index', [
+                    'account' => $account,
+                    'date_from' => $classesWithoutAttendanceRange[0]->toDateString(),
+                    'date_to' => $classesWithoutAttendanceRange[1]->toDateString(),
+                    'without_attendance' => 1,
+                ]),
+                'accent' => 'warning',
+            ],
         ];
+    }
+
+    /**
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
+     */
+    private function classesWithoutAttendanceRange(string $timezone): array
+    {
+        $today = CarbonImmutable::now($timezone)->startOfDay();
+
+        return [$today->subDays(30), $today];
+    }
+
+    private function classesWithoutAttendanceCount(Account $account, CarbonImmutable $startsAt, CarbonImmutable $endsAt): int
+    {
+        return $account->scheduledClasses()
+            ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->where('ends_at', '<=', now())
+            ->whereBetween('starts_at', $this->databaseRange($startsAt, $endsAt->endOfDay()))
+            ->whereDoesntHave('classBookings', fn ($query) => $query->notCorrectedRemoved())
+            ->count();
     }
 
     /**

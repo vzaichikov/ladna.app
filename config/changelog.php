@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.69.0',
+                'date' => '2026-07-05',
+                'title' => 'Filtered class history and attendance checks',
+                'items' => ['Expanded class history with date-range, trainer, class type, class format, room, location, and without-attendance filters, added pagination for long history periods, and added an owner dashboard problem card for past classes without customer attendance.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.68.1',
                 'date' => '2026-07-05',
                 'title' => 'People Counter booked comparison',
@@ -618,6 +625,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.69.0',
+                'date' => '2026-07-05',
+                'title' => 'Фільтри історії занять і перевірка відвідувань',
+                'items' => ['Розширено історію занять фільтрами за періодом, тренерами, типами занять, форматами занять, залами, локаціями та заняттями без відвідування, додано пагінацію для довгих періодів і нову картку проблем на панелі власника для минулих занять без клієнтів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.68.1',
                 'date' => '2026-07-05',
