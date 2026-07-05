@@ -23,6 +23,8 @@ use App\Models\CustomerClassPass;
 use App\Support\DateTimePresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -128,11 +130,22 @@ class CustomerClassPassController extends Controller
         $this->ensureBelongsToAccount($account, $customerClassPass);
         $this->authorize('manageCustomerClassPasses', $account);
 
-        $customerClassPass->load(['customer', 'issuedLocation', 'classPassPlan.classTypes', 'reservations.classBooking.scheduledClass', 'adjustments.user', 'purchases.location']);
+        $customerClassPass->load([
+            'customer',
+            'issuedLocation',
+            'classPassPlan.classTypes',
+            'reservations.classBooking.scheduledClass.classType',
+            'reservations.classBooking.scheduledClass.location',
+            'reservations.classBooking.scheduledClass.room',
+            'reservations.classBooking.scheduledClass.trainer',
+            'adjustments.user',
+            'purchases.location',
+        ]);
 
         return view('customer-class-passes.edit', [
             'account' => $account,
             'customerClassPass' => $customerClassPass,
+            'classPassHistoryEntries' => $this->classPassHistoryEntries($customerClassPass),
             'locations' => $account->locations()->orderBy('name')->get(),
         ]);
     }
@@ -285,6 +298,64 @@ class CustomerClassPassController extends Controller
         return redirect()
             ->route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])
             ->with('status', __('app.customer_class_pass_unfreezed'));
+    }
+
+    /**
+     * @return Collection<int, array{type: string, source: object, occurred_at: ?Carbon, context: array<string, mixed>, sort_key: string}>
+     */
+    private function classPassHistoryEntries(CustomerClassPass $customerClassPass): Collection
+    {
+        $entries = collect();
+        $sequence = 0;
+        $addEntry = function (string $type, object $source, ?Carbon $occurredAt, array $context = []) use ($entries, &$sequence): void {
+            $entries->push([
+                'type' => $type,
+                'source' => $source,
+                'occurred_at' => $occurredAt,
+                'context' => $context,
+                'sort_key' => sprintf('%013d-%06d', $occurredAt?->getTimestamp() ?? 0, $sequence++),
+            ]);
+        };
+
+        $addEntry('issued', $customerClassPass, $customerClassPass->purchased_at ?? $customerClassPass->created_at);
+
+        if ($customerClassPass->opened_at) {
+            $addEntry('opened', $customerClassPass, $customerClassPass->opened_at);
+        }
+
+        if ($customerClassPass->closed_at) {
+            $addEntry('closed', $customerClassPass, $customerClassPass->closed_at);
+        }
+
+        foreach ($customerClassPass->purchases as $purchase) {
+            $addEntry('payment', $purchase, $purchase->paid_at ?? $purchase->failed_at ?? $purchase->started_at ?? $purchase->created_at);
+        }
+
+        foreach ($customerClassPass->adjustments as $adjustment) {
+            $addEntry('adjustment', $adjustment, $adjustment->created_at);
+        }
+
+        foreach ($customerClassPass->reservations as $reservation) {
+            if ($reservation->reserved_at) {
+                $addEntry('reservation_reserved', $reservation, $reservation->reserved_at);
+            }
+
+            if ($reservation->used_at) {
+                $addEntry('reservation_used', $reservation, $reservation->used_at);
+            }
+
+            if ($reservation->released_at) {
+                $addEntry('reservation_released', $reservation, $reservation->released_at);
+            }
+
+            if (! $reservation->reserved_at && ! $reservation->used_at && ! $reservation->released_at) {
+                $addEntry('reservation_'.$reservation->status->value, $reservation, $reservation->created_at);
+            }
+        }
+
+        return $entries
+            ->sortByDesc('sort_key')
+            ->values();
     }
 
     private function ensureBelongsToAccount(Account $account, CustomerClassPass $customerClassPass): void

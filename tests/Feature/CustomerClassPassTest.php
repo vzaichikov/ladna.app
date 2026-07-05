@@ -565,6 +565,85 @@ class CustomerClassPassTest extends TestCase
         $this->assertStringContainsString('data-confirm-variant="danger"', $html);
     }
 
+    public function test_customer_class_pass_edit_shows_customer_link_and_full_history(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan, $scheduledClass, $location] = $this->passContext();
+        $scheduledClass->update(['title' => 'Morning history class']);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute(
+            $account,
+            $customer,
+            $plan,
+            issuedBy: $owner,
+            issuedLocation: $location,
+        );
+        CustomerPurchase::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($plan, 'classPassPlan')
+            ->for($customerClassPass, 'customerClassPass')
+            ->create([
+                'location_id' => $location->id,
+                'provider' => CustomerPurchase::ProviderStudioCash,
+                'payment_source' => CustomerPurchase::SourceManualCashClassPass,
+                'order_id' => 'CASH-HISTORY-001',
+                'status' => 'payment_paid',
+                'amount_cents' => 50000,
+                'currency' => 'UAH',
+                'started_at' => Carbon::parse('2026-06-20 10:30:00'),
+                'paid_at' => Carbon::parse('2026-06-20 10:30:00'),
+            ]);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create([
+                'status' => 'attended',
+                'attended_at' => Carbon::parse('2026-06-21 10:00:00'),
+            ]);
+        $customerClassPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $booking->id,
+            'scheduled_class_id' => $scheduledClass->id,
+            'status' => CustomerClassPassReservationStatus::Used->value,
+            'reserved_at' => Carbon::parse('2026-06-20 11:00:00'),
+            'used_at' => Carbon::parse('2026-06-21 10:00:00'),
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
+                'sessions_delta' => 1,
+                'reason' => 'History timeline adjustment',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]));
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertOk()
+            ->assertSee(route('dashboard.accounts.customers.edit', [$account, $customer]), false)
+            ->assertSee(__('app.class_pass_full_history'))
+            ->assertSee(__('app.class_pass_history_event_issued'))
+            ->assertSee(__('app.class_pass_history_event_payment'))
+            ->assertSee(__('app.class_pass_history_event_reservation_reserved'))
+            ->assertSee(__('app.class_pass_history_event_reservation_used'))
+            ->assertSee(__('app.class_pass_history_event_adjustment'))
+            ->assertSee('CASH-HISTORY-001')
+            ->assertSee('Morning history class')
+            ->assertSee('History timeline adjustment');
+
+        $html = $response->getContent();
+        $historyPosition = strpos($html, __('app.class_pass_full_history'));
+        $statusFieldPosition = strpos($html, 'name="status"');
+
+        $this->assertStringContainsString('xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]', $html);
+        $this->assertNotFalse($historyPosition);
+        $this->assertNotFalse($statusFieldPosition);
+        $this->assertLessThan($statusFieldPosition, $historyPosition);
+
+        Carbon::setTestNow();
+    }
+
     public function test_owner_can_add_sessions_to_customer_class_pass_and_history_is_stored(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));

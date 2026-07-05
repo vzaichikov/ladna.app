@@ -7,6 +7,13 @@
         $formatDateTimeLocal = static fn ($date): ?string => \App\Support\DateTimePresenter::dateTimeLocal($date, $account);
         $formatDateTime = static fn ($date): string => \App\Support\DateTimePresenter::format($date, $account) ?? __('app.not_set');
         $formatMoney = static fn (?int $priceCents, ?string $currency = null): string => \App\Support\MoneyFormatter::format($priceCents ?? 0, $currency ?: $account->default_currency);
+        $formatScheduledClassDateTime = static function ($scheduledClass) use ($account): string {
+            if (! $scheduledClass) {
+                return __('app.not_set');
+            }
+
+            return \App\Support\DateTimePresenter::formatInTimezone($scheduledClass->starts_at, $scheduledClass->displayTimezone() ?? $account->timezone ?? config('app.timezone')) ?? __('app.not_set');
+        };
         $formatMoneyInput = static function (?int $priceCents): string {
             if ($priceCents === null) {
                 return '';
@@ -34,12 +41,27 @@
         $manualCashPayments = $customerClassPass->purchases
             ->where('payment_source', \App\Models\CustomerPurchase::SourceManualCashClassPass)
             ->sortByDesc(fn ($payment) => $payment->paid_at?->timestamp ?? $payment->created_at?->timestamp ?? 0);
+        $classPassHistoryEntries ??= collect();
+        $canManageClients = auth()->user()?->can('manageClients', $account) ?? false;
+        $historyEventClass = static fn (string $type): string => match ($type) {
+            'payment', 'reservation_used', 'opened' => 'crm-status-active',
+            'adjustment', 'reservation_reserved' => 'crm-status-scheduled',
+            'closed', 'reservation_released' => 'crm-status-muted',
+            default => 'crm-status-warning',
+        };
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ $customerClassPass->code }}</h1>
-            <p class="crm-page-copy">{{ $customerClassPass->customer?->name }} · {{ $customerClassPass->plan_name }}</p>
+            <p class="crm-page-copy">
+                @if ($customerClassPass->customer && $canManageClients)
+                    <a href="{{ route('dashboard.accounts.customers.edit', [$account, $customerClassPass->customer]) }}" class="font-semibold text-brand-700 hover:text-brand-800">{{ $customerClassPass->customer->name }}</a>
+                @else
+                    {{ $customerClassPass->customer?->name ?? __('app.not_set') }}
+                @endif
+                · {{ $customerClassPass->plan_name }}
+            </p>
         </div>
         <div class="flex flex-wrap gap-3">
             @if ($customerClassPass->status === \App\Enums\CustomerClassPassStatus::Active && $customerClassPass->is_active)
@@ -81,7 +103,133 @@
         </div>
     </div>
 
-    <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]) }}" class="mt-6 max-w-3xl space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
+    <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start">
+        <div class="space-y-6">
+            <x-ui.panel padding="none" class="overflow-hidden">
+                <div class="border-b border-stone-100 px-5 py-4">
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_full_history') }}</h2>
+                </div>
+                @forelse ($classPassHistoryEntries as $entry)
+                    @php
+                        $entryType = $entry['type'];
+                        $entrySource = $entry['source'];
+                    @endphp
+                    <div class="border-b border-stone-100 px-5 py-4 text-sm last:border-b-0">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <span class="{{ $historyEventClass($entryType) }}">{{ __('app.class_pass_history_event_'.$entryType) }}</span>
+                            <div class="text-xs font-medium text-slate-500 sm:text-right">{{ $formatDateTime($entry['occurred_at']) }}</div>
+                        </div>
+
+                        @if ($entryType === 'issued')
+                            <div class="mt-3 font-semibold text-slate-950">{{ $entrySource->plan_name }}</div>
+                            <div class="mt-1 text-slate-500">
+                                {{ __('app.sessions_count') }}: {{ $entrySource->sessions_count }} ·
+                                {{ __('app.class_pass_price') }}: {{ $formatMoney($entrySource->price_cents, $entrySource->currency) }}
+                            </div>
+                            <div class="mt-1 text-xs text-slate-500">
+                                {{ __('app.issued_location') }}: {{ $entrySource->issuedLocation?->name ?? __('app.not_set') }} ·
+                                {{ __('app.issued_by') }}: {{ $entrySource->issued_by_actor_name ?? __('app.system') }}
+                            </div>
+                        @elseif ($entryType === 'opened')
+                            <div class="mt-3 font-semibold text-slate-950">{{ __('app.opened_at') }}</div>
+                            <div class="mt-1 text-slate-500">{{ __('app.status') }}: {{ __('app.'.$entrySource->status->value) }}</div>
+                        @elseif ($entryType === 'closed')
+                            <div class="mt-3 font-semibold text-slate-950">{{ __('app.closed_at') }}</div>
+                            <div class="mt-1 text-slate-500">{{ __('app.status') }}: {{ __('app.'.$entrySource->status->value) }}</div>
+                        @elseif ($entryType === 'payment')
+                            @php
+                                $providerLabel = $entrySource->provider === \App\Models\CustomerPurchase::ProviderStudioCash
+                                    ? __('app.provider_studio_cash')
+                                    : \Illuminate\Support\Str::headline((string) $entrySource->provider);
+                            @endphp
+                            <div class="mt-3 font-semibold text-slate-950">{{ $formatMoney($entrySource->amount_cents, $entrySource->currency) }}</div>
+                            <div class="mt-1 text-slate-500">
+                                {{ $providerLabel }} · {{ __('app.'.$entrySource->status->value) }}
+                            </div>
+                            <div class="mt-1 text-xs text-slate-500">
+                                {{ __('app.payment_location') }}: {{ $entrySource->location?->name ?? __('app.not_set') }}
+                                @if ($entrySource->order_id)
+                                    · {{ $entrySource->order_id }}
+                                @endif
+                            </div>
+                        @elseif (in_array($entryType, ['reservation_reserved', 'reservation_used', 'reservation_released'], true))
+                            @php
+                                $reservation = $entrySource;
+                                $booking = $reservation->classBooking;
+                                $scheduledClass = $booking?->scheduledClass ?? $reservation->scheduledClass;
+                                $classTitle = $scheduledClass?->displayTitle() ?? $scheduledClass?->title ?? __('app.booking');
+                                $classTypeName = $scheduledClass?->classType?->name;
+                            @endphp
+                            <div class="mt-3 font-semibold text-slate-950">{{ $classTitle }}</div>
+                            <div class="mt-1 text-slate-500">
+                                {{ $formatScheduledClassDateTime($scheduledClass) }}
+                                @if ($classTypeName)
+                                    · {{ $classTypeName }}
+                                @endif
+                            </div>
+                            <div class="mt-1 text-xs text-slate-500">
+                                @if ($booking)
+                                    {{ __('app.booking') }}: {{ __('app.'.$booking->status->value) }} ·
+                                @endif
+                                {{ __('app.status') }}: {{ __('app.'.$reservation->status->value) }}
+                            </div>
+                        @elseif ($entryType === 'adjustment')
+                            @php
+                                $adjustment = $entrySource;
+                                $adjustmentType = $adjustment->adjustment_type;
+                                $adjustmentTypeLabel = __('app.adjustment_'.$adjustmentType->value);
+                                $adjustmentTypeClass = match ($adjustmentType) {
+                                    \App\Enums\CustomerClassPassAdjustmentType::Sessions => 'crm-status-active',
+                                    \App\Enums\CustomerClassPassAdjustmentType::ValidityDays => 'crm-status-scheduled',
+                                    \App\Enums\CustomerClassPassAdjustmentType::Freeze => 'crm-status-warning',
+                                    \App\Enums\CustomerClassPassAdjustmentType::Unfreeze => 'crm-status-active',
+                                };
+                                $sessionsDelta = $adjustment->sessions_delta;
+                                $daysDelta = $adjustment->days_delta;
+                                $sessionsDeltaLabel = $sessionsDelta !== null ? (($sessionsDelta > 0 ? '+' : '').$sessionsDelta.' '.__('app.classes_count')) : null;
+                                $daysDeltaLabel = $daysDelta !== null ? (($daysDelta > 0 ? '+' : '').$daysDelta.' '.__('app.days')) : null;
+                                $primaryLabel = match ($adjustmentType) {
+                                    \App\Enums\CustomerClassPassAdjustmentType::Sessions => $sessionsDeltaLabel,
+                                    \App\Enums\CustomerClassPassAdjustmentType::ValidityDays,
+                                    \App\Enums\CustomerClassPassAdjustmentType::Unfreeze => $daysDeltaLabel,
+                                    \App\Enums\CustomerClassPassAdjustmentType::Freeze => __('app.freeze_class_pass'),
+                                };
+                            @endphp
+                            <div class="mt-3 flex flex-wrap items-center gap-2">
+                                <span class="{{ $adjustmentTypeClass }}">{{ $adjustmentTypeLabel }}</span>
+                                @if ($primaryLabel)
+                                    <span class="font-semibold text-slate-950">{{ $primaryLabel }}</span>
+                                @endif
+                            </div>
+                            <div class="mt-2 space-y-1 text-slate-500">
+                                @if ($adjustment->previous_sessions_count !== null || $adjustment->new_sessions_count !== null)
+                                    <div>{{ __('app.sessions_count') }}: {{ $adjustment->previous_sessions_count ?? __('app.not_set') }} -> {{ $adjustment->new_sessions_count ?? __('app.not_set') }}</div>
+                                @endif
+                                @if ($adjustment->previous_validity_days !== null || $adjustment->new_validity_days !== null)
+                                    <div>{{ __('app.validity_days_delta') }}: {{ $adjustment->previous_validity_days ?? __('app.not_set') }} -> {{ $adjustment->new_validity_days ?? __('app.not_set') }}</div>
+                                @endif
+                                @if ($adjustment->previous_status || $adjustment->new_status)
+                                    <div>{{ __('app.status') }}: {{ __('app.status_change', ['from' => $formatStatus($adjustment->previous_status), 'to' => $formatStatus($adjustment->new_status)]) }}</div>
+                                @endif
+                                @if ($adjustment->freeze_started_at || $adjustment->freeze_finished_at)
+                                    <div>{{ __('app.freeze_period') }}: {{ $formatDateTime($adjustment->freeze_started_at) }} -> {{ $formatDateTime($adjustment->freeze_finished_at) }}</div>
+                                @endif
+                                @if ($adjustment->freeze_days_count !== null)
+                                    <div>{{ __('app.freeze_days_count', ['count' => $adjustment->freeze_days_count]) }}</div>
+                                @endif
+                            </div>
+                            <div class="mt-2 text-slate-600">{{ $adjustment->reason }}</div>
+                            <div class="mt-1 text-xs text-slate-500">{{ __('app.adjusted_by') }}: {{ $adjustment->actor_name ?? $adjustment->user?->name ?? __('app.system') }}</div>
+                        @endif
+                    </div>
+                @empty
+                    <x-ui.empty-state :title="__('app.no_class_pass_history_entries')" icon="class-pass-plans" class="m-5" />
+                @endforelse
+            </x-ui.panel>
+        </div>
+
+        <div class="space-y-6">
+            <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]) }}" class="space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
         @csrf
         @method('PUT')
 
@@ -168,7 +316,7 @@
         <x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
     </form>
 
-    <x-ui.panel class="mt-6 max-w-3xl">
+    <x-ui.panel>
         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_payment') }}</h2>
         <div class="mt-4 grid gap-3 sm:grid-cols-4">
             <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
@@ -232,7 +380,7 @@
         @endif
     </x-ui.panel>
 
-    <x-ui.panel class="mt-6 max-w-3xl">
+    <x-ui.panel>
         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_session_adjustment') }}</h2>
         <form
             method="POST"
@@ -289,7 +437,7 @@
         </form>
     </x-ui.panel>
 
-    <x-ui.panel class="mt-6 max-w-3xl">
+    <x-ui.panel>
         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_validity_days_adjustment') }}</h2>
         <form
             method="POST"
@@ -346,65 +494,6 @@
         </form>
     </x-ui.panel>
 
-    <x-ui.panel padding="none" class="mt-6 max-w-5xl overflow-hidden">
-        <div class="border-b border-stone-100 px-5 py-4">
-            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_adjustments') }}</h2>
         </div>
-        @forelse ($customerClassPass->adjustments->sortByDesc('created_at') as $adjustment)
-            @php
-                $adjustmentType = $adjustment->adjustment_type;
-                $adjustmentTypeLabel = __('app.adjustment_'.$adjustmentType->value);
-                $adjustmentTypeClass = match ($adjustmentType) {
-                    \App\Enums\CustomerClassPassAdjustmentType::Sessions => 'crm-status-active',
-                    \App\Enums\CustomerClassPassAdjustmentType::ValidityDays => 'crm-status-scheduled',
-                    \App\Enums\CustomerClassPassAdjustmentType::Freeze => 'crm-status-warning',
-                    \App\Enums\CustomerClassPassAdjustmentType::Unfreeze => 'crm-status-active',
-                };
-                $sessionsDelta = $adjustment->sessions_delta;
-                $daysDelta = $adjustment->days_delta;
-                $sessionsDeltaLabel = $sessionsDelta !== null ? (($sessionsDelta > 0 ? '+' : '').$sessionsDelta.' '.__('app.classes_count')) : null;
-                $daysDeltaLabel = $daysDelta !== null ? (($daysDelta > 0 ? '+' : '').$daysDelta.' '.__('app.days')) : null;
-                $primaryLabel = match ($adjustmentType) {
-                    \App\Enums\CustomerClassPassAdjustmentType::Sessions => $sessionsDeltaLabel,
-                    \App\Enums\CustomerClassPassAdjustmentType::ValidityDays,
-                    \App\Enums\CustomerClassPassAdjustmentType::Unfreeze => $daysDeltaLabel,
-                    \App\Enums\CustomerClassPassAdjustmentType::Freeze => __('app.freeze_class_pass'),
-                };
-            @endphp
-            <div class="border-b border-stone-100 px-5 py-4 text-sm last:border-b-0">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="{{ $adjustmentTypeClass }}">{{ $adjustmentTypeLabel }}</span>
-                            @if ($primaryLabel)
-                                <span class="font-semibold text-slate-950">{{ $primaryLabel }}</span>
-                            @endif
-                        </div>
-                        <div class="mt-2 space-y-1 text-slate-500">
-                            @if ($adjustment->previous_sessions_count !== null || $adjustment->new_sessions_count !== null)
-                                <div>{{ __('app.sessions_count') }}: {{ $adjustment->previous_sessions_count ?? __('app.not_set') }} -> {{ $adjustment->new_sessions_count ?? __('app.not_set') }}</div>
-                            @endif
-                            @if ($adjustment->previous_validity_days !== null || $adjustment->new_validity_days !== null)
-                                <div>{{ __('app.validity_days_delta') }}: {{ $adjustment->previous_validity_days ?? __('app.not_set') }} -> {{ $adjustment->new_validity_days ?? __('app.not_set') }}</div>
-                            @endif
-                            @if ($adjustment->previous_status || $adjustment->new_status)
-                                <div>{{ __('app.status') }}: {{ __('app.status_change', ['from' => $formatStatus($adjustment->previous_status), 'to' => $formatStatus($adjustment->new_status)]) }}</div>
-                            @endif
-                            @if ($adjustment->freeze_started_at || $adjustment->freeze_finished_at)
-                                <div>{{ __('app.freeze_period') }}: {{ $formatDateTime($adjustment->freeze_started_at) }} -> {{ $formatDateTime($adjustment->freeze_finished_at) }}</div>
-                            @endif
-                            @if ($adjustment->freeze_days_count !== null)
-                                <div>{{ __('app.freeze_days_count', ['count' => $adjustment->freeze_days_count]) }}</div>
-                            @endif
-                        </div>
-                    </div>
-                    <div class="text-slate-500">{{ $formatDateTime($adjustment->created_at) }}</div>
-                </div>
-                <div class="mt-2 text-slate-600">{{ $adjustment->reason }}</div>
-                <div class="mt-1 text-xs text-slate-500">{{ __('app.adjusted_by') }}: {{ $adjustment->actor_name ?? $adjustment->user?->name ?? __('app.system') }}</div>
-            </div>
-        @empty
-            <x-ui.empty-state :title="__('app.no_class_pass_adjustments')" icon="class-pass-plans" class="m-5" />
-        @endforelse
-    </x-ui.panel>
+    </div>
 @endsection

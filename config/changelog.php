@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.66.0',
+                'date' => '2026-07-05',
+                'title' => 'Full class-pass history',
+                'items' => ['Added a full two-column class-pass history view with issued, opened, closed, payment, adjustment, and reservation events on the class-pass page, plus a direct link from the customer name to the customer edit page.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.65.0',
                 'date' => '2026-07-05',
                 'title' => 'People Counter reports and camera masks',
@@ -590,6 +597,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.66.0',
+                'date' => '2026-07-05',
+                'title' => 'Повна історія абонемента',
+                'items' => ['Додано повну двоколонкову історію абонемента на сторінці абонемента: видача, відкриття, закриття, оплати, коригування та події резервів занять. Імʼя клієнта тепер веде прямо на сторінку редагування клієнта.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.65.0',
                 'date' => '2026-07-05',
