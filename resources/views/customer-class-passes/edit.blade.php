@@ -103,8 +103,8 @@
         </div>
     </div>
 
-    <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start">
-        <div class="space-y-6">
+    <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:items-start">
+        <div class="order-2 space-y-6">
             <x-ui.panel padding="none" class="overflow-hidden">
                 <div class="border-b border-stone-100 px-5 py-4">
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_full_history') }}</h2>
@@ -228,7 +228,7 @@
             </x-ui.panel>
         </div>
 
-        <div class="space-y-6">
+        <div class="order-1 space-y-6">
             <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]) }}" class="space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
         @csrf
         @method('PUT')

@@ -636,7 +636,9 @@ class CustomerClassPassTest extends TestCase
         $historyPosition = strpos($html, __('app.class_pass_full_history'));
         $statusFieldPosition = strpos($html, 'name="status"');
 
-        $this->assertStringContainsString('xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]', $html);
+        $this->assertStringContainsString('xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]', $html);
+        $this->assertStringContainsString('order-1 space-y-6', $html);
+        $this->assertStringContainsString('order-2 space-y-6', $html);
         $this->assertNotFalse($historyPosition);
         $this->assertNotFalse($statusFieldPosition);
         $this->assertLessThan($statusFieldPosition, $historyPosition);
