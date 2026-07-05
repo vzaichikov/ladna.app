@@ -4,6 +4,7 @@ namespace App\Support\PeopleCounter;
 
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\ScheduleKind;
 use App\Models\PeopleCounterSample;
 use App\Models\ScheduledClass;
 use App\Models\ScheduledClassPeopleCount;
@@ -32,7 +33,7 @@ class PeopleCounterSummarizer
             ->where('ends_at', '<=', $endedBefore)
             ->whereDoesntHave('peopleCount')
             ->whereIn('account_id', $openAccountIds)
-            ->with(['account:id,status,enable_people_counter,timezone,opening_hours', 'room'])
+            ->with(['account:id,status,enable_people_counter,timezone,opening_hours', 'classType:id,account_id,schedule_kind', 'room'])
             ->orderBy('ends_at')
             ->limit($limit)
             ->get();
@@ -56,7 +57,7 @@ class PeopleCounterSummarizer
      */
     public function summarizeClass(ScheduledClass $scheduledClass, ?callable $debug = null): ScheduledClassPeopleCount
     {
-        $scheduledClass->loadMissing(['room']);
+        $scheduledClass->loadMissing(['classType', 'room']);
         $trimStart = $scheduledClass->starts_at->copy()->addMinutes(5);
         $trimEnd = $scheduledClass->ends_at->copy()->subMinutes(5);
         $samples = $trimStart->lessThanOrEqualTo($trimEnd)
@@ -73,6 +74,7 @@ class PeopleCounterSummarizer
             ->notCorrectedRemoved()
             ->where('status', ClassBookingStatus::Attended->value)
             ->count();
+        $expectedPeopleCount = $this->expectedPeopleCount($scheduledClass, $attendedCount);
 
         $detectedCount = null;
         $delta = null;
@@ -82,7 +84,7 @@ class PeopleCounterSummarizer
             $status = ScheduledClassPeopleCount::StatusNoCamera;
         } elseif ($successfulSamples->isNotEmpty()) {
             $detectedCount = $this->percentile75($successfulSamples->pluck('detected_count'));
-            $delta = $detectedCount - $attendedCount;
+            $delta = $detectedCount - $expectedPeopleCount;
             $status = $delta === 0
                 ? ScheduledClassPeopleCount::StatusMatched
                 : ScheduledClassPeopleCount::StatusMismatch;
@@ -116,6 +118,8 @@ class PeopleCounterSummarizer
             'trim_end' => $trimEnd->toDateTimeString(),
             'status' => $summary->status,
             'attended_count' => $summary->attended_count,
+            'expected_people_count' => $expectedPeopleCount,
+            'trainer_adjustment' => $expectedPeopleCount - $attendedCount,
             'detected_count' => $summary->detected_count,
             'delta' => $summary->delta,
             'successful_samples_count' => $summary->successful_samples_count,
@@ -125,6 +129,15 @@ class PeopleCounterSummarizer
         ]);
 
         return $summary;
+    }
+
+    private function expectedPeopleCount(ScheduledClass $scheduledClass, int $attendedCount): int
+    {
+        if ($scheduledClass->classType?->schedule_kind === ScheduleKind::GroupClass) {
+            return $attendedCount + 1;
+        }
+
+        return $attendedCount;
     }
 
     /**

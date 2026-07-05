@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['account_id', 'location_id', 'name', 'slug', 'description', 'capacity', 'color', 'is_active', 'rtsp_url', 'rtsp_enabled', 'people_counter_mask_polygons', 'people_counter_snapshot_path', 'people_counter_snapshot_width', 'people_counter_snapshot_height', 'people_counter_snapshot_taken_at'])]
 class Room extends Model
@@ -104,6 +105,12 @@ class Room extends Model
     public function peopleCounterSamples(): HasMany
     {
         return $this->hasMany(PeopleCounterSample::class);
+    }
+
+    public function latestPeopleCounterSample(): HasOne
+    {
+        return $this->hasOne(PeopleCounterSample::class)
+            ->latestOfMany('captured_at');
     }
 
     public function scheduledClassPeopleCounts(): HasMany

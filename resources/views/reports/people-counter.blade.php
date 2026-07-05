@@ -3,6 +3,13 @@
 @section('title', __('app.people_counter_report_title').' - '.$account->name)
 
 @section('content')
+    @php
+        $selectedDate = $filters['date'];
+        $selectedLocationId = $filters['location_id'];
+        $selectedRoomId = $filters['room_id'];
+        $selectedTrainerId = $filters['trainer_id'];
+    @endphp
+
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.people_counter_report_title') }}</h1>
@@ -12,6 +19,59 @@
             {{ __('app.reports') }}
         </x-ui.button>
     </div>
+
+    <form method="GET" action="{{ route('dashboard.accounts.reports.people-counter', $account) }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-5 shadow-crm">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <label class="block">
+                <span class="crm-label">{{ __('app.filter_date') }}</span>
+                <input type="date" name="date" value="{{ $selectedDate }}" class="crm-field">
+                @error('date') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+
+            <label class="block">
+                <span class="crm-label">{{ __('app.location') }}</span>
+                <select name="location_id" class="crm-field">
+                    <option value="">{{ __('app.all_locations') }}</option>
+                    @foreach ($locations as $location)
+                        <option value="{{ $location->id }}" @selected($selectedLocationId === $location->id)>{{ $location->name }}</option>
+                    @endforeach
+                </select>
+                @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+
+            <label class="block">
+                <span class="crm-label">{{ __('app.room') }}</span>
+                <select name="room_id" class="crm-field">
+                    <option value="">{{ __('app.all_rooms') }}</option>
+                    @foreach ($rooms as $room)
+                        <option value="{{ $room->id }}" @selected($selectedRoomId === $room->id)>
+                            {{ $room->location?->name ? $room->location->name.' - '.$room->name : $room->name }}
+                        </option>
+                    @endforeach
+                </select>
+                @error('room_id') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+
+            <label class="block">
+                <span class="crm-label">{{ __('app.trainer') }}</span>
+                <select name="trainer_id" class="crm-field">
+                    <option value="">{{ __('app.all_trainers') }}</option>
+                    @foreach ($trainers as $trainer)
+                        <option value="{{ $trainer->id }}" @selected($selectedTrainerId === $trainer->id)>{{ $trainer->name }}</option>
+                    @endforeach
+                </select>
+                @error('trainer_id') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+            <x-ui.button type="submit" size="sm">
+                <x-ui.icon name="search" class="h-4 w-4" />
+                {{ __('app.apply_filters') }}
+            </x-ui.button>
+            <x-ui.button :href="route('dashboard.accounts.reports.people-counter', $account)" variant="secondary" size="sm">{{ __('app.reset_filters') }}</x-ui.button>
+        </div>
+    </form>
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         <div class="overflow-x-auto">

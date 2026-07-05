@@ -82,6 +82,12 @@ class PeopleCounterReportTest extends TestCase
             endsAt: Carbon::parse('2026-07-04 11:00:00'),
             title: 'Morning Pole',
         );
+        $currentClass = $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-04 11:30:00'),
+            endsAt: Carbon::parse('2026-07-04 12:30:00'),
+            title: 'Current Pole',
+        );
         $futureClass = $this->scheduledClass(
             account: $account,
             startsAt: Carbon::parse('2026-07-04 13:00:00'),
@@ -127,11 +133,107 @@ class PeopleCounterReportTest extends TestCase
             ->get(route('dashboard.accounts.reports.people-counter', $account))
             ->assertOk()
             ->assertSee('Morning Pole')
+            ->assertSee('Current Pole')
             ->assertDontSee('Future Pole')
             ->assertSee('data-people-counter-row', false)
             ->assertSee('data-class-counts="'.$scheduledClass->id.':6:8:mismatch"', false)
+            ->assertSee('data-class-counts="'.$currentClass->id.':0:none:insufficient_data"', false)
+            ->assertDontSee('data-class-counts="'.$futureClass->id, false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'masked']), false);
+    }
+
+    public function test_people_counter_report_filters_by_location_room_and_trainer(): void
+    {
+        Carbon::setTestNow('2026-07-04 12:00:00');
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'allow_rtsp_cameras' => true,
+            'enable_people_counter' => true,
+        ]);
+        $account->addOwner($owner);
+        $center = Location::factory()->for($account)->create(['name' => 'Center Studio', 'timezone' => 'UTC']);
+        $suburb = Location::factory()->for($account)->create(['name' => 'Suburb Studio', 'timezone' => 'UTC']);
+        $centerRoom = Room::factory()->for($account)->for($center)->create(['name' => 'Center Hall']);
+        $suburbRoom = Room::factory()->for($account)->for($suburb)->create(['name' => 'Suburb Hall']);
+        $centerTrainer = Trainer::factory()->for($account)->create(['name' => 'Center Trainer']);
+        $suburbTrainer = Trainer::factory()->for($account)->create(['name' => 'Suburb Trainer']);
+
+        $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-04 10:00:00'),
+            endsAt: Carbon::parse('2026-07-04 11:00:00'),
+            title: 'Filtered Pole',
+            location: $center,
+            room: $centerRoom,
+            trainer: $centerTrainer,
+        );
+        $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-04 10:00:00'),
+            endsAt: Carbon::parse('2026-07-04 11:00:00'),
+            title: 'Other Pole',
+            location: $suburb,
+            room: $suburbRoom,
+            trainer: $suburbTrainer,
+        );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.people-counter', ['account' => $account, 'location_id' => $center->id]))
+            ->assertOk()
+            ->assertSee('Filtered Pole')
+            ->assertDontSee('Other Pole');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.people-counter', ['account' => $account, 'room_id' => $centerRoom->id]))
+            ->assertOk()
+            ->assertSee('Filtered Pole')
+            ->assertDontSee('Other Pole');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.people-counter', ['account' => $account, 'trainer_id' => $centerTrainer->id]))
+            ->assertOk()
+            ->assertSee('Filtered Pole')
+            ->assertDontSee('Other Pole');
+    }
+
+    public function test_people_counter_report_date_filter_uses_account_timezone_and_includes_current_class(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-04 21:30:00', 'UTC'));
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'Europe/Kyiv',
+            'allow_rtsp_cameras' => true,
+            'enable_people_counter' => true,
+        ]);
+        $account->addOwner($owner);
+
+        $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-05 00:15:00', 'Europe/Kyiv')->timezone('UTC'),
+            endsAt: Carbon::parse('2026-07-05 01:15:00', 'Europe/Kyiv')->timezone('UTC'),
+            title: 'Kyiv Current Pole',
+        );
+        $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-05 00:45:00', 'Europe/Kyiv')->timezone('UTC'),
+            endsAt: Carbon::parse('2026-07-05 01:45:00', 'Europe/Kyiv')->timezone('UTC'),
+            title: 'Kyiv Future Pole',
+        );
+        $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-04 20:00:00', 'Europe/Kyiv')->timezone('UTC'),
+            endsAt: Carbon::parse('2026-07-04 21:00:00', 'Europe/Kyiv')->timezone('UTC'),
+            title: 'Kyiv Previous Day Pole',
+        );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.people-counter', ['account' => $account, 'date' => '2026-07-05']))
+            ->assertOk()
+            ->assertSee('Kyiv Current Pole')
+            ->assertDontSee('Kyiv Future Pole')
+            ->assertDontSee('Kyiv Previous Day Pole');
     }
 
     public function test_people_counter_report_requires_report_permission(): void
@@ -206,16 +308,23 @@ class PeopleCounterReportTest extends TestCase
         ], $room->refresh()->people_counter_mask_polygons);
     }
 
-    private function scheduledClass(Account $account, Carbon $startsAt, Carbon $endsAt, string $title): ScheduledClass
-    {
-        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
-        $room = Room::factory()->for($account)->for($location)->create([
+    private function scheduledClass(
+        Account $account,
+        Carbon $startsAt,
+        Carbon $endsAt,
+        string $title,
+        ?Location $location = null,
+        ?Room $room = null,
+        ?Trainer $trainer = null,
+    ): ScheduledClass {
+        $location ??= Location::factory()->for($account)->create(['timezone' => $account->timezone ?? 'UTC']);
+        $room ??= Room::factory()->for($account)->for($location)->create([
             'rtsp_url' => 'rtsp://camera.example.test/live',
             'rtsp_enabled' => true,
         ]);
         $direction = ActivityDirection::factory()->for($account)->create();
         $classType = ClassType::factory()->for($account)->for($direction, 'activityDirection')->create();
-        $trainer = Trainer::factory()->for($account)->create(['name' => 'Report Trainer']);
+        $trainer ??= Trainer::factory()->for($account)->create(['name' => 'Report Trainer']);
 
         return ScheduledClass::factory()
             ->for($account)

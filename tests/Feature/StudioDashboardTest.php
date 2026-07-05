@@ -18,6 +18,7 @@ use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\Location;
+use App\Models\PeopleCounterSample;
 use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
@@ -25,6 +26,7 @@ use App\Models\User;
 use App\Models\WebsiteLead;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class StudioDashboardTest extends TestCase
@@ -158,6 +160,72 @@ class StudioDashboardTest extends TestCase
                 'account' => $account,
                 'state' => 'freezed',
             ]), false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_owner_dashboard_shows_latest_people_counter_counts_for_enabled_camera_rooms(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-05 08:10:00', 'UTC'));
+        Storage::fake('local');
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'allow_rtsp_cameras' => true,
+            'enable_people_counter' => true,
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create([
+            'name' => 'Center Studio',
+            'timezone' => 'Europe/Kyiv',
+        ]);
+        $room = Room::factory()->for($account)->for($location)->create([
+            'name' => 'Mirror Hall',
+            'rtsp_enabled' => true,
+            'rtsp_url' => 'rtsp://camera.example.test/live',
+        ]);
+        $disabledRoom = Room::factory()->for($account)->for($location)->create([
+            'name' => 'Disabled Hall',
+            'rtsp_enabled' => false,
+            'rtsp_url' => 'rtsp://camera.example.test/disabled',
+        ]);
+        $originalPath = 'people-counter/testing/dashboard-original.jpg';
+
+        Storage::disk('local')->put($originalPath, 'image');
+
+        $sample = PeopleCounterSample::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->create([
+                'scheduled_class_id' => null,
+                'captured_at' => Carbon::parse('2026-07-05 07:50:00', 'UTC'),
+                'detected_count' => 7,
+                'original_image_path' => $originalPath,
+            ]);
+        PeopleCounterSample::factory()
+            ->for($account)
+            ->for($location)
+            ->for($disabledRoom)
+            ->create([
+                'scheduled_class_id' => null,
+                'captured_at' => Carbon::parse('2026-07-05 07:55:00', 'UTC'),
+                'detected_count' => 12,
+            ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee(__('app.people_counter_live_title'))
+            ->assertSee('Mirror Hall')
+            ->assertSee('Center Studio')
+            ->assertSee(__('app.people_counter_live_last_updated_at', ['time' => '10:50']))
+            ->assertSee('Europe/Kyiv')
+            ->assertSee('data-people-counter-live-room="'.$room->id.':7:succeeded"', false)
+            ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)
+            ->assertDontSee('Disabled Hall')
+            ->assertDontSee('data-people-counter-live-room="'.$disabledRoom->id.':12:succeeded"', false);
 
         Carbon::setTestNow();
     }

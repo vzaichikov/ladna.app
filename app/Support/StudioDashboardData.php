@@ -8,12 +8,15 @@ use App\Enums\ScheduledClassStatus;
 use App\Enums\WebsiteLeadStatus;
 use App\Models\Account;
 use App\Models\ClassBooking;
+use App\Models\PeopleCounterSample;
+use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 class StudioDashboardData
 {
@@ -110,6 +113,7 @@ class StudioDashboardData
             'roomLoad' => $this->loadBy($outlookClasses, 'room_id', 'room'),
             'outlookDays' => $this->outlookDays($outlookClasses, $todayStartsAt, $timezone),
             'activeTrainerSubstitutions' => $this->activeTrainerSubstitutions($account, $todayStartsAt),
+            'peopleCounterRooms' => $this->peopleCounterRooms($account),
         ];
     }
 
@@ -360,6 +364,61 @@ class StudioDashboardData
             ->orderByDesc('created_at')
             ->take(8)
             ->get();
+    }
+
+    /**
+     * @return Collection<int, array{room: Room, location_name: ?string, timezone: string, sample: ?PeopleCounterSample, detected_count: ?int, captured_at: ?CarbonInterface, image_url: ?string}>
+     */
+    private function peopleCounterRooms(Account $account): Collection
+    {
+        if (! $account->allowsRtspCameras() || ! $account->peopleCounterEnabled()) {
+            return collect();
+        }
+
+        $samplesTable = (new PeopleCounterSample)->getTable();
+
+        return $account->rooms()
+            ->active()
+            ->rtspEnabled()
+            ->with([
+                'location:id,account_id,name,timezone',
+                'latestPeopleCounterSample' => fn ($query) => $query->select([
+                    $samplesTable.'.id',
+                    $samplesTable.'.account_id',
+                    $samplesTable.'.room_id',
+                    $samplesTable.'.location_id',
+                    $samplesTable.'.captured_at',
+                    $samplesTable.'.status',
+                    $samplesTable.'.detected_count',
+                    $samplesTable.'.original_image_path',
+                    $samplesTable.'.image_width',
+                    $samplesTable.'.image_height',
+                ]),
+            ])
+            ->orderBy('location_id')
+            ->orderBy('name')
+            ->get(['id', 'account_id', 'location_id', 'name', 'rtsp_enabled', 'rtsp_url'])
+            ->map(function (Room $room) use ($account): array {
+                /** @var PeopleCounterSample|null $sample */
+                $sample = $room->latestPeopleCounterSample;
+                $timezone = $room->location?->timezone ?: $this->timezone($account);
+                $capturedAt = $sample?->captured_at?->copy()->timezone($timezone);
+                $imageUrl = null;
+
+                if ($sample && is_string($sample->original_image_path) && Storage::disk('local')->exists($sample->original_image_path)) {
+                    $imageUrl = route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']);
+                }
+
+                return [
+                    'room' => $room,
+                    'location_name' => $room->location?->name,
+                    'timezone' => $timezone,
+                    'sample' => $sample,
+                    'detected_count' => $sample?->status === PeopleCounterSample::StatusSucceeded ? $sample->detected_count : null,
+                    'captured_at' => $capturedAt,
+                    'image_url' => $imageUrl,
+                ];
+            });
     }
 
     /**

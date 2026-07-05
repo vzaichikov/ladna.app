@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\ClassBookingStatus;
+use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
@@ -17,6 +18,7 @@ use App\Support\PeopleCounter\PeopleCounterCaptureResult;
 use App\Support\PeopleCounter\PeopleCounterClient;
 use App\Support\PeopleCounter\PeopleCounterDetectionResult;
 use App\Support\PeopleCounter\PeopleCounterFrameCapture;
+use App\Support\PeopleCounter\PeopleCounterSummarizer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -155,7 +157,7 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertSame('2026-07-04 21:30:00', $sample->captured_at->toDateTimeString());
     }
 
-    public function test_summarize_command_uses_trimmed_75th_percentile_and_attended_count(): void
+    public function test_summarizer_uses_trimmed_75th_percentile_and_adds_trainer_for_group_classes(): void
     {
         Carbon::setTestNow('2026-07-04 11:10:00');
         $scheduledClass = $this->scheduledClass(
@@ -210,19 +212,71 @@ class PeopleCounterCommandsTest extends TestCase
             'corrected_removed_at' => Carbon::parse('2026-07-04 11:05:00'),
         ]);
 
-        $this->artisan('people-counter:summarize', ['--debug' => true])
-            ->expectsOutputToContain('[people-counter] summarize.selection')
-            ->expectsOutputToContain('[people-counter] summarize.class.finished')
-            ->assertExitCode(0);
+        $debugContext = null;
+
+        app(PeopleCounterSummarizer::class)->summarizeClass(
+            $scheduledClass,
+            function (string $event, array $context) use (&$debugContext): void {
+                if ($event === 'summarize.class.finished') {
+                    $debugContext = $context;
+                }
+            },
+        );
 
         $summary = ScheduledClassPeopleCount::query()->whereBelongsTo($scheduledClass)->firstOrFail();
 
-        $this->assertSame(ScheduledClassPeopleCount::StatusMismatch, $summary->status);
+        $this->assertSame(8, $debugContext['expected_people_count'] ?? null);
+        $this->assertSame(1, $debugContext['trainer_adjustment'] ?? null);
+        $this->assertSame(ScheduledClassPeopleCount::StatusMatched, $summary->status);
         $this->assertSame(7, $summary->attended_count);
         $this->assertSame(8, $summary->detected_count);
-        $this->assertSame(1, $summary->delta);
+        $this->assertSame(0, $summary->delta);
         $this->assertSame(4, $summary->successful_samples_count);
         $this->assertSame(1, $summary->failed_samples_count);
+    }
+
+    public function test_summarizer_does_not_add_trainer_for_non_group_classes(): void
+    {
+        Carbon::setTestNow('2026-07-04 11:10:00');
+        $scheduledClass = $this->scheduledClass(
+            startsAt: Carbon::parse('2026-07-04 10:00:00'),
+            endsAt: Carbon::parse('2026-07-04 11:00:00'),
+            classTypeAttributes: ['schedule_kind' => ScheduleKind::PrivateLesson->value],
+        );
+
+        PeopleCounterSample::factory()->for($scheduledClass)->create([
+            'account_id' => $scheduledClass->account_id,
+            'location_id' => $scheduledClass->location_id,
+            'room_id' => $scheduledClass->room_id,
+            'captured_at' => Carbon::parse('2026-07-04 10:30:00'),
+            'status' => PeopleCounterSample::StatusSucceeded,
+            'detected_count' => 1,
+        ]);
+        ClassBooking::factory()->for($scheduledClass)->create([
+            'account_id' => $scheduledClass->account_id,
+            'status' => ClassBookingStatus::Attended->value,
+            'attended_at' => Carbon::parse('2026-07-04 11:00:00'),
+        ]);
+
+        $debugContext = null;
+
+        app(PeopleCounterSummarizer::class)->summarizeClass(
+            $scheduledClass,
+            function (string $event, array $context) use (&$debugContext): void {
+                if ($event === 'summarize.class.finished') {
+                    $debugContext = $context;
+                }
+            },
+        );
+
+        $summary = ScheduledClassPeopleCount::query()->whereBelongsTo($scheduledClass)->firstOrFail();
+
+        $this->assertSame(1, $debugContext['expected_people_count'] ?? null);
+        $this->assertSame(0, $debugContext['trainer_adjustment'] ?? null);
+        $this->assertSame(ScheduledClassPeopleCount::StatusMatched, $summary->status);
+        $this->assertSame(1, $summary->attended_count);
+        $this->assertSame(1, $summary->detected_count);
+        $this->assertSame(0, $summary->delta);
     }
 
     public function test_summarize_command_skips_classes_when_studio_is_closed(): void
@@ -378,9 +432,15 @@ class PeopleCounterCommandsTest extends TestCase
     /**
      * @param  array<string, mixed>  $accountAttributes
      * @param  array<string, mixed>  $locationAttributes
+     * @param  array<string, mixed>  $classTypeAttributes
      */
-    private function scheduledClass(Carbon $startsAt, Carbon $endsAt, array $accountAttributes = [], array $locationAttributes = []): ScheduledClass
-    {
+    private function scheduledClass(
+        Carbon $startsAt,
+        Carbon $endsAt,
+        array $accountAttributes = [],
+        array $locationAttributes = [],
+        array $classTypeAttributes = [],
+    ): ScheduledClass {
         $account = Account::factory()->create([
             'timezone' => 'UTC',
             'allow_rtsp_cameras' => true,
@@ -406,7 +466,7 @@ class PeopleCounterCommandsTest extends TestCase
             ],
         ]);
         $direction = ActivityDirection::factory()->for($account)->create();
-        $classType = ClassType::factory()->for($account)->for($direction, 'activityDirection')->create();
+        $classType = ClassType::factory()->for($account)->for($direction, 'activityDirection')->create($classTypeAttributes);
         $trainer = Trainer::factory()->for($account)->create();
 
         return ScheduledClass::factory()

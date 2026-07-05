@@ -126,6 +126,71 @@
         </section>
 
         @php
+            $peopleCounterRooms = $ownerDashboard['peopleCounterRooms'] ?? collect();
+            $peopleCounterTotal = $peopleCounterRooms->sum(fn (array $row): int => (int) ($row['detected_count'] ?? 0));
+        @endphp
+        @if ($peopleCounterRooms->isNotEmpty())
+            <x-ui.panel padding="none" class="mt-6 overflow-hidden" data-people-counter-live-card>
+                <div class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.people_counter_live_title') }}</h2>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('app.people_counter_live_copy') }}</p>
+                    </div>
+                    <span class="crm-status-active">{{ $peopleCounterTotal }}</span>
+                </div>
+                <div class="grid gap-4 p-5 lg:grid-cols-2">
+                    @foreach ($peopleCounterRooms as $counterRoom)
+                        @php
+                            $sample = $counterRoom['sample'];
+                            $detectedCount = $counterRoom['detected_count'];
+                            $sampleStatus = $sample?->status;
+                            $statusClass = match ($sampleStatus) {
+                                \App\Models\PeopleCounterSample::StatusSucceeded => 'crm-status-active',
+                                \App\Models\PeopleCounterSample::StatusCaptureFailed,
+                                \App\Models\PeopleCounterSample::StatusDetectionFailed => 'crm-status-danger',
+                                default => 'crm-status-muted',
+                            };
+                            $statusLabel = $sampleStatus
+                                ? __('app.people_counter_live_status_'.$sampleStatus)
+                                : __('app.people_counter_live_no_capture');
+                        @endphp
+                        <article
+                            class="grid gap-4 rounded-lg border border-stone-200 bg-white p-4 sm:grid-cols-[7rem_1fr_auto] sm:items-center"
+                            data-people-counter-live-room="{{ $counterRoom['room']->id }}:{{ $detectedCount ?? 'none' }}:{{ $sampleStatus ?? 'none' }}"
+                        >
+                            @if ($counterRoom['image_url'])
+                                <a href="{{ $counterRoom['image_url'] }}" target="_blank" rel="noopener" class="block overflow-hidden rounded-lg border border-stone-200 bg-slate-50">
+                                    <img src="{{ $counterRoom['image_url'] }}" alt="" class="h-20 w-full object-cover sm:w-28">
+                                </a>
+                            @else
+                                <div class="flex h-20 w-full items-center justify-center rounded-lg border border-stone-200 bg-slate-50 text-slate-400 sm:w-28">
+                                    <x-ui.icon name="video" class="h-6 w-6" />
+                                </div>
+                            @endif
+
+                            <div class="min-w-0">
+                                <div class="font-semibold text-slate-950">{{ $counterRoom['room']->name }}</div>
+                                <div class="mt-1 text-sm text-slate-500">{{ $counterRoom['location_name'] ?? __('app.not_set') }}</div>
+                                <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                                    <span class="{{ $statusClass }}">{{ $statusLabel }}</span>
+                                    @if ($counterRoom['captured_at'])
+                                        <span>{{ __('app.people_counter_live_last_updated_at', ['time' => $counterRoom['captured_at']->format('H:i')]) }}</span>
+                                        <span>{{ $counterRoom['timezone'] }}</span>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <div class="text-left sm:text-right">
+                                <div class="text-3xl font-semibold text-slate-950">{{ $detectedCount ?? '—' }}</div>
+                                <div class="mt-1 text-xs font-semibold uppercase text-slate-500">{{ __('app.people_counter_live_count_label') }}</div>
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+            </x-ui.panel>
+        @endif
+
+        @php
             $problemItems = collect($ownerDashboard['problems'] ?? []);
             $problemAccentClasses = [
                 'danger' => 'border-rose-200 bg-rose-50 text-rose-900',
