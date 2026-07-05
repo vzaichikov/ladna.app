@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.68.0',
+                'date' => '2026-07-05',
+                'title' => 'Camera-only service rooms',
+                'items' => ['Added service rooms for camera-only areas such as reception or corridors. Studio owners can manage RTSP cameras for these spaces separately from schedulable halls, and the Cameras page now shows both hall and service-room streams while schedules, bookings, filters, reports, and People Counter stay limited to regular halls.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.67.0',
                 'date' => '2026-07-05',
                 'title' => 'People Counter screenshot gallery',
@@ -604,6 +611,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.68.0',
+                'date' => '2026-07-05',
+                'title' => 'Службові кімнати тільки для камер',
+                'items' => ['Додано службові кімнати для зон тільки з камерами, наприклад рецепції або коридорів. Власники студій можуть керувати RTSP-камерами цих просторів окремо від залів для занять, а сторінка камер показує потоки із залів і службових кімнат без додавання службових кімнат до розкладу, записів, фільтрів, звітів чи People Counter.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.67.0',
                 'date' => '2026-07-05',

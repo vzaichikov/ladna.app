@@ -66,6 +66,7 @@ use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
 use App\Http\Controllers\ScheduledClassHistoryController;
 use App\Http\Controllers\ScheduleSeriesController;
+use App\Http\Controllers\ServiceRoomController;
 use App\Http\Controllers\StudioCashEntryController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
@@ -288,6 +289,11 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->scoped();
         Route::match(['post', 'put', 'patch'], 'accounts/{account}/rooms/test-camera', RoomCameraTestController::class)
             ->name('accounts.rooms.test-camera');
+        Route::match(['post', 'put', 'patch'], 'accounts/{account}/service-rooms/test-camera', RoomCameraTestController::class)
+            ->name('accounts.service-rooms.test-camera');
+        Route::resource('accounts.service-rooms', ServiceRoomController::class)
+            ->except(['show'])
+            ->scoped();
         Route::get('accounts/{account}/rooms/{room}/people-counter-mask', [RoomPeopleCounterMaskController::class, 'edit'])
             ->name('accounts.rooms.people-counter-mask.edit');
         Route::post('accounts/{account}/rooms/{room}/people-counter-mask/snapshot', [RoomPeopleCounterMaskController::class, 'capture'])

@@ -16,6 +16,7 @@ use App\Models\CustomerClassPass;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\ServiceRoom;
 use App\Models\Trainer;
 use App\Models\TrainerType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -64,6 +65,7 @@ class PublicScheduleTest extends TestCase
         $location = Location::factory()->for($account)->create(['slug' => 'test-location-1', 'name' => 'Location 1']);
         $otherLocation = Location::factory()->for($account)->create(['slug' => 'test-location-2']);
         $room = Room::factory()->for($account)->for($location)->create(['name' => 'Big Hall']);
+        $serviceRoom = ServiceRoom::factory()->for($account)->for($location)->create(['name' => 'Reception Only']);
         $otherRoom = Room::factory()->for($account)->for($otherLocation)->create();
         $classType = ClassType::factory()->for($account)->create(['schedule_kind' => 'group_class']);
         $trainer = Trainer::factory()->for($account)->create(['name' => 'Nastya']);
@@ -104,7 +106,8 @@ class PublicScheduleTest extends TestCase
             ->assertDontSee(__('app.terms_of_service'))
             ->assertDontSee('Private Staff Class')
             ->assertDontSee('Cancelled Public Class')
-            ->assertDontSee('Other Location Class');
+            ->assertDontSee('Other Location Class')
+            ->assertDontSee($serviceRoom->name);
     }
 
     public function test_public_schedule_defaults_to_classic_view_for_existing_studios(): void

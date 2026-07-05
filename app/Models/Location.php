@@ -45,6 +45,11 @@ class Location extends Model
         return $this->hasMany(Room::class);
     }
 
+    public function serviceRooms(): HasMany
+    {
+        return $this->hasMany(ServiceRoom::class);
+    }
+
     public function customerPurchases(): HasMany
     {
         return $this->hasMany(CustomerPurchase::class);

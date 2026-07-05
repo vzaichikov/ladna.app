@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Room;
+use App\Models\ServiceRoom;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -15,19 +16,19 @@ class MediaMtxCameraGateway
         return $this->apiUrl() !== '' && $this->publicUrl() !== '';
     }
 
-    public function ensurePath(Room $room): void
+    public function ensurePath(Room|ServiceRoom $camera): void
     {
         if (! $this->configured()) {
             throw new RuntimeException('MediaMTX camera gateway is not configured.');
         }
 
-        $rtspUrl = $room->rtsp_url;
+        $rtspUrl = $camera->rtsp_url;
 
         if (! is_string($rtspUrl) || trim($rtspUrl) === '') {
             throw new RuntimeException('RTSP URL is not configured.');
         }
 
-        $pathName = $this->pathName($room);
+        $pathName = $this->pathName($camera);
         $response = $this->request()->get('/v3/config/paths/get/'.$pathName);
 
         if ($response->notFound()) {
@@ -45,14 +46,20 @@ class MediaMtxCameraGateway
             ->throw();
     }
 
-    public function pathName(Room $room): string
+    public function pathName(Room|ServiceRoom $camera): string
     {
-        $signature = substr(hash_hmac('sha256', $room->account_id.':'.$room->id, (string) config('app.key')), 0, 16);
+        if ($camera instanceof ServiceRoom) {
+            $signature = substr(hash_hmac('sha256', $camera->account_id.':service-room:'.$camera->id, (string) config('app.key')), 0, 16);
 
-        return 'ladna-a'.$room->account_id.'-r'.$room->id.'-'.$signature;
+            return 'ladna-a'.$camera->account_id.'-sr'.$camera->id.'-'.$signature;
+        }
+
+        $signature = substr(hash_hmac('sha256', $camera->account_id.':'.$camera->id, (string) config('app.key')), 0, 16);
+
+        return 'ladna-a'.$camera->account_id.'-r'.$camera->id.'-'.$signature;
     }
 
-    public function playerUrl(Room $room): string
+    public function playerUrl(Room|ServiceRoom $camera): string
     {
         $prefix = $this->playback() === 'webrtc'
             ? $this->webrtcPrefix()
@@ -60,7 +67,7 @@ class MediaMtxCameraGateway
 
         return Str::finish($this->publicUrl(), '/')
             .ltrim($prefix, '/').'/'
-            .rawurlencode($this->pathName($room)).'/';
+            .rawurlencode($this->pathName($camera)).'/';
     }
 
     public function playback(): string

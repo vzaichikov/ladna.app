@@ -18,15 +18,18 @@
 
     <section class="mt-6 grid gap-5 xl:grid-cols-2">
         @forelse ($streams as $stream)
-            @php($room = $stream['room'])
+            @php($camera = $stream['camera'])
             <article class="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-crm">
                 <div class="border-b border-stone-100 px-5 py-4">
                     <div class="flex items-start justify-between gap-4">
                         <div>
-                            <h2 class="text-lg font-semibold text-slate-950">{{ $room->name }}</h2>
-                            <p class="mt-1 text-sm text-slate-500">{{ $room->location?->name }}</p>
+                            <h2 class="text-lg font-semibold text-slate-950">{{ $camera->name }}</h2>
+                            <p class="mt-1 text-sm text-slate-500">{{ $camera->location?->name }}</p>
                         </div>
-                        <span class="crm-status-active">{{ __('app.live') }}</span>
+                        <div class="flex flex-col items-end gap-2">
+                            <span class="crm-status-active">{{ __('app.live') }}</span>
+                            <span class="crm-status-muted">{{ $stream['type'] === 'service_room' ? __('app.service_room') : __('app.room') }}</span>
+                        </div>
                     </div>
                 </div>
 
@@ -34,7 +37,7 @@
                     @if ($gatewayConfigured && $stream['available'])
                         <iframe
                             src="{{ $stream['playerUrl'] }}"
-                            title="{{ $room->name }}"
+                            title="{{ $camera->name }}"
                             allow="autoplay; fullscreen; picture-in-picture"
                             class="h-full w-full border-0"
                             loading="lazy"

@@ -165,6 +165,11 @@ class Account extends Model
         return $this->hasMany(Room::class);
     }
 
+    public function serviceRooms(): HasMany
+    {
+        return $this->hasMany(ServiceRoom::class);
+    }
+
     public function peopleCounterSamples(): HasMany
     {
         return $this->hasMany(PeopleCounterSample::class);

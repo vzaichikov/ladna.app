@@ -8,10 +8,18 @@
             <h1 class="crm-page-title">{{ __('app.rooms') }}</h1>
             <p class="crm-page-copy">{{ __('app.rooms_copy') }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.rooms.create', $account)">
-            <x-ui.icon name="plus" class="h-4 w-4" />
-            {{ __('app.create_room') }}
-        </x-ui.button>
+        <div class="flex flex-wrap gap-2">
+            @if ($account->allowsRtspCameras())
+                <x-ui.button :href="route('dashboard.accounts.service-rooms.index', $account)" variant="secondary">
+                    <x-ui.icon name="video" class="h-4 w-4" />
+                    {{ __('app.service_rooms') }}
+                </x-ui.button>
+            @endif
+            <x-ui.button :href="route('dashboard.accounts.rooms.create', $account)">
+                <x-ui.icon name="plus" class="h-4 w-4" />
+                {{ __('app.create_room') }}
+            </x-ui.button>
+        </div>
     </div>
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
