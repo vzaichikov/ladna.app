@@ -157,6 +157,29 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertSame('2026-07-04 21:30:00', $sample->captured_at->toDateTimeString());
     }
 
+    public function test_capture_command_uses_two_minute_end_buffer_for_active_classes(): void
+    {
+        Carbon::setTestNow('2026-07-04 12:58:00');
+        Storage::fake('local');
+        $this->fakeMediaMtxGateway();
+        $this->bindFrameCapture();
+        $this->bindDetector(count: 4);
+        $includedClass = $this->scheduledClass(
+            startsAt: Carbon::parse('2026-07-04 12:00:00'),
+            endsAt: Carbon::parse('2026-07-04 13:00:00'),
+        );
+        $skippedClass = $this->scheduledClass(
+            startsAt: Carbon::parse('2026-07-04 12:00:00'),
+            endsAt: Carbon::parse('2026-07-04 12:59:00'),
+        );
+
+        $this->artisan('people-counter:capture')
+            ->assertExitCode(0);
+
+        $this->assertTrue(PeopleCounterSample::query()->whereBelongsTo($includedClass)->exists());
+        $this->assertFalse(PeopleCounterSample::query()->whereBelongsTo($skippedClass)->exists());
+    }
+
     public function test_summarizer_uses_trimmed_75th_percentile_and_adds_trainer_for_group_classes(): void
     {
         Carbon::setTestNow('2026-07-04 11:10:00');
@@ -189,6 +212,14 @@ class PeopleCounterCommandsTest extends TestCase
             'location_id' => $scheduledClass->location_id,
             'room_id' => $scheduledClass->room_id,
             'captured_at' => Carbon::parse('2026-07-04 10:56:00'),
+            'status' => PeopleCounterSample::StatusSucceeded,
+            'detected_count' => 8,
+        ]);
+        PeopleCounterSample::factory()->for($scheduledClass)->create([
+            'account_id' => $scheduledClass->account_id,
+            'location_id' => $scheduledClass->location_id,
+            'room_id' => $scheduledClass->room_id,
+            'captured_at' => Carbon::parse('2026-07-04 10:59:00'),
             'status' => PeopleCounterSample::StatusSucceeded,
             'detected_count' => 99,
         ]);
@@ -231,7 +262,7 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertSame(7, $summary->attended_count);
         $this->assertSame(8, $summary->detected_count);
         $this->assertSame(0, $summary->delta);
-        $this->assertSame(4, $summary->successful_samples_count);
+        $this->assertSame(5, $summary->successful_samples_count);
         $this->assertSame(1, $summary->failed_samples_count);
     }
 

@@ -21,7 +21,7 @@ class PeopleCounterSummarizer
     public function summarizeEndedClasses(?Carbon $now = null, int $limit = 200, ?callable $debug = null): int
     {
         $now ??= now();
-        $endedBefore = $now->copy()->subMinutes(5);
+        $endedBefore = $now->copy()->subMinutes(PeopleCounterSamplingWindow::SummarizeDelayMinutes);
         $openAccountIds = $this->studioHours->openAccountIds($now);
         $candidateCount = ScheduledClass::query()
             ->where('status', ScheduledClassStatus::Scheduled->value)
@@ -41,6 +41,7 @@ class PeopleCounterSummarizer
         $debug?->__invoke('summarize.selection', [
             'now' => $now->toDateTimeString(),
             'ended_before_or_at' => $endedBefore->toDateTimeString(),
+            'summarize_delay_minutes' => PeopleCounterSamplingWindow::SummarizeDelayMinutes,
             'limit' => $limit,
             'candidate_classes' => $candidateCount,
             'open_people_counter_studios' => count($openAccountIds),
@@ -58,8 +59,8 @@ class PeopleCounterSummarizer
     public function summarizeClass(ScheduledClass $scheduledClass, ?callable $debug = null): ScheduledClassPeopleCount
     {
         $scheduledClass->loadMissing(['classType', 'room']);
-        $trimStart = $scheduledClass->starts_at->copy()->addMinutes(5);
-        $trimEnd = $scheduledClass->ends_at->copy()->subMinutes(5);
+        $trimStart = $scheduledClass->starts_at->copy()->addMinutes(PeopleCounterSamplingWindow::StartBufferMinutes);
+        $trimEnd = $scheduledClass->ends_at->copy()->subMinutes(PeopleCounterSamplingWindow::EndBufferMinutes);
         $samples = $trimStart->lessThanOrEqualTo($trimEnd)
             ? $scheduledClass->peopleCounterSamples()
                 ->whereBetween('captured_at', [$trimStart, $trimEnd])
@@ -116,6 +117,8 @@ class PeopleCounterSummarizer
             'room_id' => $scheduledClass->room_id,
             'trim_start' => $trimStart->toDateTimeString(),
             'trim_end' => $trimEnd->toDateTimeString(),
+            'start_buffer_minutes' => PeopleCounterSamplingWindow::StartBufferMinutes,
+            'end_buffer_minutes' => PeopleCounterSamplingWindow::EndBufferMinutes,
             'status' => $summary->status,
             'attended_count' => $summary->attended_count,
             'expected_people_count' => $expectedPeopleCount,

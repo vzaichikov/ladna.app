@@ -28,8 +28,8 @@ class PeopleCounterCaptureService
     public function captureDueClasses(?Carbon $now = null, int $limit = 100, ?callable $debug = null): int
     {
         $now ??= now();
-        $latestStartAt = $now->copy()->subMinutes(5);
-        $earliestEndAt = $now->copy()->addMinutes(5);
+        $latestStartAt = $now->copy()->subMinutes(PeopleCounterSamplingWindow::StartBufferMinutes);
+        $earliestEndAt = $now->copy()->addMinutes(PeopleCounterSamplingWindow::EndBufferMinutes);
         $openAccountIds = $this->studioHours->openAccountIds($now, requireRtspCameras: true);
         $candidateCount = ScheduledClass::query()
             ->where('status', ScheduledClassStatus::Scheduled->value)
@@ -53,6 +53,8 @@ class PeopleCounterCaptureService
             'now' => $now->toDateTimeString(),
             'latest_start_at' => $latestStartAt->toDateTimeString(),
             'earliest_end_at' => $earliestEndAt->toDateTimeString(),
+            'start_buffer_minutes' => PeopleCounterSamplingWindow::StartBufferMinutes,
+            'end_buffer_minutes' => PeopleCounterSamplingWindow::EndBufferMinutes,
             'limit' => $limit,
             'candidate_classes' => $candidateCount,
             'open_people_counter_studios' => count($openAccountIds),
