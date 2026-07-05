@@ -45,21 +45,57 @@
                     <x-ui.icon name="sparkles" class="hidden h-6 w-6 text-brand-600 sm:block" />
                 </div>
 
+                @php
+                    $topLevelPages = collect($pages)->reject(fn (array $page): bool => filled($page['parent'] ?? null));
+                    $childPagesByParent = collect($pages)
+                        ->filter(fn (array $page): bool => filled($page['parent'] ?? null))
+                        ->groupBy(fn (array $page): string => (string) $page['parent'], true);
+                @endphp
+
                 <div class="mt-5 grid gap-4 md:grid-cols-2">
-                    @foreach ($pages as $pageSlug => $page)
-                        <a href="{{ route('help.show', $pageSlug) }}" class="group grid gap-4 rounded-xl border border-stone-200 bg-white/90 p-5 shadow-xs transition hover:border-brand-300 hover:bg-white hover:shadow-crm">
-                            <div class="flex items-start justify-between gap-4">
-                                <div class="flex items-center gap-3">
-                                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-                                        <x-ui.icon :name="$page['icon']" class="h-5 w-5" />
-                                    </span>
-                                    <h3 class="text-lg font-semibold leading-tight text-slate-950">{{ $page['title'] }}</h3>
+                    @foreach ($topLevelPages as $pageSlug => $page)
+                        @php($childPages = $childPagesByParent->get($pageSlug, collect()))
+
+                        @if ($childPages->isEmpty())
+                            <a href="{{ route('help.show', $pageSlug) }}" class="group grid gap-4 rounded-xl border border-stone-200 bg-white/90 p-5 shadow-xs transition hover:border-brand-300 hover:bg-white hover:shadow-crm">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div class="flex items-center gap-3">
+                                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                                            <x-ui.icon :name="$page['icon']" class="h-5 w-5" />
+                                        </span>
+                                        <h3 class="text-lg font-semibold leading-tight text-slate-950">{{ $page['title'] }}</h3>
+                                    </div>
+                                    <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-brand-600" />
                                 </div>
-                                <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-brand-600" />
-                            </div>
-                            <p class="text-sm leading-6 text-slate-500">{{ $page['summary'] }}</p>
-                            <span class="text-sm font-semibold text-brand-600">{{ $copy['open_page'] }}</span>
-                        </a>
+                                <p class="text-sm leading-6 text-slate-500">{{ $page['summary'] }}</p>
+                                <span class="text-sm font-semibold text-brand-600">{{ $copy['open_page'] }}</span>
+                            </a>
+                        @else
+                            <article class="grid gap-4 rounded-xl border border-stone-200 bg-white/90 p-5 shadow-xs">
+                                <a href="{{ route('help.show', $pageSlug) }}" class="group flex items-start justify-between gap-4">
+                                    <div class="flex items-center gap-3">
+                                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                                            <x-ui.icon :name="$page['icon']" class="h-5 w-5" />
+                                        </span>
+                                        <h3 class="text-lg font-semibold leading-tight text-slate-950">{{ $page['title'] }}</h3>
+                                    </div>
+                                    <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-300 transition group-hover:text-brand-600" />
+                                </a>
+                                <p class="text-sm leading-6 text-slate-500">{{ $page['summary'] }}</p>
+
+                                <div class="grid gap-2 border-t border-stone-100 pt-3">
+                                    @foreach ($childPages as $childSlug => $childPage)
+                                        <a href="{{ route('help.show', $childSlug) }}" class="group flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 transition hover:bg-brand-50">
+                                            <span>
+                                                <span class="block text-sm font-semibold leading-5 text-slate-950">{{ $childPage['title'] }}</span>
+                                                <span class="mt-1 block text-xs leading-5 text-slate-500">{{ $childPage['summary'] }}</span>
+                                            </span>
+                                            <x-ui.icon name="chevron-right" class="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-brand-600" />
+                                        </a>
+                                    @endforeach
+                                </div>
+                            </article>
+                        @endif
                     @endforeach
                 </div>
             </section>

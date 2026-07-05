@@ -29,6 +29,21 @@ Maintain the public `/help` section for studio owners. Keep it useful for a danc
 - Explain relationships by business flow: brand and locations -> rooms and directions -> formats -> schedule -> classes -> bookings -> passes -> public pages.
 - Keep steps concrete and short. Each step should start with an action the owner can perform on screen.
 
+## Business Case Pages
+
+Use this pattern when the user asks to document real trainer/studio-owner questions such as `що робити, якщо ...`.
+
+- Keep the chapter menu-structured: one concrete question gets one help page with its own `/help/{slug}` route.
+- If the question belongs to a recurring case chapter, create or reuse a parent page and mark child pages with `parent`.
+- Phrase the visible title as the owner-facing question, but translate studio shorthand into product terms: `дівчата` means `клієнти`.
+- Put the original trainer wording in `questions` or `keywords` so the owner assistant and MCP help search can find it.
+- Each answer page must include:
+  - `Шлях у Ladna: ...` with visible screen/button names.
+  - Numbered steps in the order a trainer or owner should perform them.
+  - `business_logic` explaining what changes automatically, for example booking status, pass reservation/use, warnings, payments, or correction history.
+  - Relevant screenshots from `public/assets/help/screenshots/`, or new screenshots if existing ones would mislead.
+- For assistant coverage, update or add a focused test proving `OwnerHelpIndex`, `StudioAiInference`, or MCP `search-owner-help` returns the new page for the real wording.
+
 ## Screenshots
 
 - Use Charmpole demo data unless the user explicitly asks for another studio.

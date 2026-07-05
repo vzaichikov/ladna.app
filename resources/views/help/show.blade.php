@@ -19,14 +19,40 @@
             <div class="mt-10 grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
                 <aside class="lg:sticky lg:top-8">
                     <nav class="grid gap-2 rounded-xl border border-stone-200 bg-white/85 p-3 shadow-xs" aria-label="{{ $copy['choose_page'] }}">
-                        @foreach ($pages as $pageSlug => $navPage)
+                        @php
+                            $topLevelPages = collect($pages)->reject(fn (array $navPage): bool => filled($navPage['parent'] ?? null));
+                            $childPagesByParent = collect($pages)
+                                ->filter(fn (array $navPage): bool => filled($navPage['parent'] ?? null))
+                                ->groupBy(fn (array $navPage): string => (string) $navPage['parent'], true);
+                            $activeParentSlug = $page['parent'] ?? null;
+                        @endphp
+
+                        @foreach ($topLevelPages as $pageSlug => $navPage)
+                            @php
+                                $childPages = $childPagesByParent->get($pageSlug, collect());
+                                $isActiveGroup = $slug === $pageSlug || $activeParentSlug === $pageSlug;
+                            @endphp
+
                             <a
                                 href="{{ route('help.show', $pageSlug) }}"
-                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition {{ $slug === $pageSlug ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950' }}"
+                                class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition {{ $isActiveGroup ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950' }}"
                             >
                                 <x-ui.icon :name="$navPage['icon']" class="h-4 w-4 shrink-0" />
                                 <span>{{ $navPage['title'] }}</span>
                             </a>
+
+                            @if ($childPages->isNotEmpty())
+                                <div class="grid gap-1 pl-7">
+                                    @foreach ($childPages as $childSlug => $childPage)
+                                        <a
+                                            href="{{ route('help.show', $childSlug) }}"
+                                            class="rounded-lg px-3 py-2 text-xs font-semibold leading-5 transition {{ $slug === $childSlug ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-950' }}"
+                                        >
+                                            {{ $childPage['title'] }}
+                                        </a>
+                                    @endforeach
+                                </div>
+                            @endif
                         @endforeach
                     </nav>
                 </aside>

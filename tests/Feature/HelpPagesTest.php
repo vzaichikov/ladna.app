@@ -302,6 +302,53 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('database', false);
     }
 
+    public function test_real_workflows_help_uses_submenu_and_question_pages(): void
+    {
+        $this->get(route('help.index', [], false))
+            ->assertStatus(200)
+            ->assertSee('Робочі ситуації: що робити, якщо...', false)
+            ->assertSee(route('help.show', 'case-no-show-with-pass', false), false)
+            ->assertSee(route('help.show', 'case-new-customer-before-booking', false), false);
+
+        $this->get(route('help.show', 'case-no-show-with-pass', false))
+            ->assertStatus(200)
+            ->assertSee('Робочі ситуації: що робити, якщо...', false)
+            ->assertSee('Що робити, якщо клієнт не прийшов, а заняття має списатися?', false)
+            ->assertSee('Шлях у Ladna', false)
+            ->assertSee('assets/help/screenshots/classes-calendar.png', false)
+            ->assertSee('assets/help/screenshots/active-passes.png', false)
+            ->assertDontSee('CRM', false)
+            ->assertDontSee('database', false);
+    }
+
+    public function test_real_workflows_help_answers_trainer_questions(): void
+    {
+        $this->get(route('help.show', 'case-no-show-with-pass', false))
+            ->assertStatus(200)
+            ->assertSee('Не прийшов/прийшла', false)
+            ->assertSee('не видаляйте запис', false)
+            ->assertSee('заняття за правилами студії згоріло', false);
+
+        $this->get(route('help.show', 'case-no-show-without-pass', false))
+            ->assertStatus(200)
+            ->assertSee('не має що списати автоматично', false)
+            ->assertSee('видайте відповідний разовий або пакетний абонемент', false)
+            ->assertSee('Нормалізувати записи', false);
+
+        $this->get(route('help.show', 'case-walk-in-after-training', false))
+            ->assertStatus(200)
+            ->assertSee('клієнт прийшов без запису', false)
+            ->assertSee('Розблокувати виправлення', false)
+            ->assertSee('Додати правильного клієнта', false)
+            ->assertSee('статус Відвідано', false);
+
+        $this->get(route('help.show', 'case-new-customer-before-booking', false))
+            ->assertStatus(200)
+            ->assertSee('якщо клієнта ще немає в базі студії, його треба додати', false)
+            ->assertSee('Клієнти -&gt; Додати клієнта -&gt; Зберегти', false)
+            ->assertSee('Запис на заняття привʼязується до картки клієнта', false);
+    }
+
     public function test_public_footer_links_to_help(): void
     {
         $response = $this->get('/');

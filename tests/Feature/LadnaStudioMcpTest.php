@@ -294,6 +294,14 @@ class LadnaStudioMcpTest extends TestCase
 
         $this->withToken($apiToken->tokenValue())
             ->postJson('/mcp/ladna-studio', $this->toolPayload('search-owner-help', [
+                'query' => 'дівчата приходять без запису їх потім додати після тренування',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.results.0.slug', 'case-walk-in-after-training')
+            ->assertJsonPath('result.structuredContent.results.0.matched_sections.0', 'Якщо клієнт прийшов без запису');
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('search-owner-help', [
                 'query' => 'рецепт пирога',
             ]))
             ->assertOk()
