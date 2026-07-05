@@ -833,7 +833,7 @@ return [
     'people_counter_sample_status_detection_failed' => 'Detection failed',
     'class' => 'Class',
     'detected' => 'Detected',
-    'people_counter_detected_help' => '-1 trainer',
+    'people_counter_detected_help' => 'camera / without trainer',
     'difference' => 'Difference',
     'samples' => 'Samples',
     'screenshots' => 'Screenshots',

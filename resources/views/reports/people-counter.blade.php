@@ -113,7 +113,8 @@
                             $endsAt = $scheduledClass->ends_at->copy()->timezone($displayTimezone);
                             $title = $scheduledClass->displayTitle() ?: ($scheduledClass->classType?->name ?? __('app.class'));
                             $sampleGallery = $scheduledClass->peopleCounterSamples
-                                ->flatMap(function (\App\Models\PeopleCounterSample $peopleCounterSample) use ($account, $displayTimezone, $title) {
+                                ->filter(fn (\App\Models\PeopleCounterSample $peopleCounterSample): bool => filled($peopleCounterSample->original_image_path))
+                                ->map(function (\App\Models\PeopleCounterSample $peopleCounterSample) use ($account, $displayTimezone, $title): array {
                                     $capturedAt = $peopleCounterSample->captured_at?->copy()->timezone($displayTimezone);
                                     $sampleMeta = collect([
                                         $capturedAt?->format('d.m.Y H:i'),
@@ -121,19 +122,15 @@
                                         __('app.people_counter_sample_status_'.$peopleCounterSample->status),
                                     ])->filter()->join(' · ');
 
-                                    return collect([
-                                        'original' => $peopleCounterSample->original_image_path,
-                                        'masked' => $peopleCounterSample->masked_image_path,
-                                    ])
-                                        ->filter()
-                                        ->map(fn (string $path, string $variant): array => [
-                                            'url' => route('dashboard.accounts.people-counter-samples.image', [$account, $peopleCounterSample, $variant]),
-                                            'thumbnail_url' => route('dashboard.accounts.people-counter-samples.image', [$account, $peopleCounterSample, $variant]),
-                                            'title' => $title.' · '.__('app.'.$variant),
-                                            'meta' => $sampleMeta,
-                                            'alt' => $title.' · '.__('app.'.$variant),
-                                        ])
-                                        ->values();
+                                    $imageUrl = route('dashboard.accounts.people-counter-samples.image', [$account, $peopleCounterSample, 'original']);
+
+                                    return [
+                                        'url' => $imageUrl,
+                                        'thumbnail_url' => $imageUrl,
+                                        'title' => $title.' · '.__('app.original'),
+                                        'meta' => $sampleMeta,
+                                        'alt' => $title.' · '.__('app.original'),
+                                    ];
                                 })
                                 ->values();
                             $statusClass = match ($reportStatus) {
@@ -164,7 +161,15 @@
                             <td class="px-4 py-4 text-slate-700">{{ $scheduledClass->trainer?->name ?? __('app.not_set') }}</td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">{{ $assigned }}</td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">{{ $attended }}</td>
-                            <td class="px-4 py-4 text-center font-semibold text-slate-950">{{ $detected ?? '—' }}</td>
+                            <td class="px-4 py-4 text-center font-semibold text-slate-950">
+                                @if ($rawDetected === null)
+                                    —
+                                @else
+                                    <span>{{ $rawDetected }}</span>
+                                    <span class="text-slate-400">/</span>
+                                    <span>{{ $detected }}</span>
+                                @endif
+                            </td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">
                                 {{ $delta === null ? '—' : sprintf('%+d', $delta) }}
                             </td>

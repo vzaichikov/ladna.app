@@ -175,15 +175,16 @@ class PeopleCounterReportTest extends TestCase
             ->assertDontSee('Future Pole')
             ->assertSeeTextInOrder([__('app.booked'), __('app.attended'), __('app.detected')])
             ->assertSee(__('app.people_counter_detected_help'))
+            ->assertSeeText('8 / 7')
             ->assertSee('data-people-counter-row', false)
             ->assertSee('data-class-counts="'.$scheduledClass->id.':7:5:7:matched"', false)
             ->assertSee('data-class-counts="'.$currentClass->id.':0:0:none:insufficient_data"', false)
             ->assertDontSee('data-class-counts="'.$futureClass->id, false)
             ->assertSee('data-people-counter-screenshot-trigger', false)
-            ->assertSee(__('app.open_screenshot_gallery_with_count', ['count' => 3]))
+            ->assertSee(__('app.open_screenshot_gallery_with_count', ['count' => 2]))
             ->assertSee('data-people-counter-screenshot-modal', false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)
-            ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'masked']), false)
+            ->assertDontSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'masked']), false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $olderSample, 'original']), false)
             ->assertDontSee('target="_blank"', false);
     }

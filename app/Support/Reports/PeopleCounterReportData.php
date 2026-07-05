@@ -39,14 +39,10 @@ class PeopleCounterReportData
                         'captured_at',
                         'status',
                         'original_image_path',
-                        'masked_image_path',
                         'detected_count',
                         'average_confidence',
                     ])
-                    ->where(function ($query): void {
-                        $query->whereNotNull('original_image_path')
-                            ->orWhereNotNull('masked_image_path');
-                    })
+                    ->whereNotNull('original_image_path')
                     ->orderBy('captured_at'),
             ])
             ->withCount([

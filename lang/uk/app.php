@@ -833,7 +833,7 @@ return [
     'people_counter_sample_status_detection_failed' => 'Помилка детекції',
     'class' => 'Заняття',
     'detected' => 'Виявлено',
-    'people_counter_detected_help' => '-1 тренер',
+    'people_counter_detected_help' => 'камера / без тренера',
     'difference' => 'Різниця',
     'samples' => 'Семпли',
     'screenshots' => 'Скріншоти',
