@@ -18,13 +18,18 @@ class PeopleCounterReportData
     {
         $filters = $this->normalizeFilters($filters);
         $dateRange = $filters['date'] === null ? null : $this->databaseDateRange($account, $filters['date']);
+        $assignedBookingStatuses = [
+            ClassBookingStatus::Booked->value,
+            ClassBookingStatus::Attended->value,
+            ClassBookingStatus::NoShow->value,
+        ];
 
         return $account->scheduledClasses()
             ->with([
                 'location:id,account_id,name,timezone',
                 'room:id,account_id,location_id,name,rtsp_enabled,rtsp_url',
                 'trainer:id,account_id,name',
-                'classType:id,account_id,name',
+                'classType:id,account_id,name,schedule_kind',
                 'peopleCount',
                 'peopleCounterSamples' => fn ($query) => $query
                     ->select([
@@ -45,6 +50,9 @@ class PeopleCounterReportData
                     ->orderBy('captured_at'),
             ])
             ->withCount([
+                'classBookings as assigned_bookings_count' => fn ($query) => $query
+                    ->notCorrectedRemoved()
+                    ->whereIn('status', $assignedBookingStatuses),
                 'classBookings as attended_bookings_count' => fn ($query) => $query
                     ->notCorrectedRemoved()
                     ->where('status', ClassBookingStatus::Attended->value),

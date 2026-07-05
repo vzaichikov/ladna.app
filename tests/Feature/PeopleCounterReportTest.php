@@ -108,9 +108,9 @@ class PeopleCounterReportTest extends TestCase
             'room_id' => $scheduledClass->room_id,
             'trainer_id' => $scheduledClass->trainer_id,
             'status' => ScheduledClassPeopleCount::StatusMismatch,
-            'attended_count' => 6,
+            'attended_count' => 5,
             'detected_count' => 8,
-            'delta' => 2,
+            'delta' => 3,
             'successful_samples_count' => 4,
             'failed_samples_count' => 1,
         ]);
@@ -133,6 +133,33 @@ class PeopleCounterReportTest extends TestCase
             'masked_image_path' => null,
         ]);
         ClassBooking::factory()
+            ->count(5)
+            ->for($scheduledClass)
+            ->create([
+                'account_id' => $account->id,
+                'status' => ClassBookingStatus::Attended->value,
+            ]);
+        ClassBooking::factory()
+            ->count(2)
+            ->for($scheduledClass)
+            ->create([
+                'account_id' => $account->id,
+                'status' => ClassBookingStatus::NoShow->value,
+            ]);
+        ClassBooking::factory()
+            ->for($scheduledClass)
+            ->create([
+                'account_id' => $account->id,
+                'status' => ClassBookingStatus::Cancelled->value,
+            ]);
+        ClassBooking::factory()
+            ->for($scheduledClass)
+            ->create([
+                'account_id' => $account->id,
+                'status' => ClassBookingStatus::Attended->value,
+                'corrected_removed_at' => now(),
+            ]);
+        ClassBooking::factory()
             ->count(2)
             ->for($futureClass)
             ->create([
@@ -146,9 +173,11 @@ class PeopleCounterReportTest extends TestCase
             ->assertSee('Morning Pole')
             ->assertSee('Current Pole')
             ->assertDontSee('Future Pole')
+            ->assertSeeTextInOrder([__('app.booked'), __('app.attended'), __('app.detected')])
+            ->assertSee(__('app.people_counter_detected_help'))
             ->assertSee('data-people-counter-row', false)
-            ->assertSee('data-class-counts="'.$scheduledClass->id.':6:8:mismatch"', false)
-            ->assertSee('data-class-counts="'.$currentClass->id.':0:none:insufficient_data"', false)
+            ->assertSee('data-class-counts="'.$scheduledClass->id.':7:5:7:matched"', false)
+            ->assertSee('data-class-counts="'.$currentClass->id.':0:0:none:insufficient_data"', false)
             ->assertDontSee('data-class-counts="'.$futureClass->id, false)
             ->assertSee('data-people-counter-screenshot-trigger', false)
             ->assertSee(__('app.open_screenshot_gallery_with_count', ['count' => 3]))

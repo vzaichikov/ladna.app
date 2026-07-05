@@ -81,8 +81,12 @@
                         <th class="px-4 py-3">{{ __('app.class') }}</th>
                         <th class="px-4 py-3">{{ __('app.location') }}</th>
                         <th class="px-4 py-3">{{ __('app.trainer') }}</th>
+                        <th class="px-4 py-3 text-center">{{ __('app.booked') }}</th>
                         <th class="px-4 py-3 text-center">{{ __('app.attended') }}</th>
-                        <th class="px-4 py-3 text-center">{{ __('app.detected') }}</th>
+                        <th class="px-4 py-3 text-center">
+                            <span>{{ __('app.detected') }}</span>
+                            <span class="mt-1 block text-[10px] font-medium normal-case tracking-normal text-slate-400">{{ __('app.people_counter_detected_help') }}</span>
+                        </th>
                         <th class="px-4 py-3 text-center">{{ __('app.difference') }}</th>
                         <th class="px-4 py-3">{{ __('app.status') }}</th>
                         <th class="px-4 py-3 text-center">{{ __('app.samples') }}</th>
@@ -94,9 +98,16 @@
                         @php
                             $summary = $scheduledClass->peopleCount;
                             $status = $summary?->status ?? \App\Models\ScheduledClassPeopleCount::StatusInsufficientData;
+                            $assigned = (int) $scheduledClass->assigned_bookings_count;
                             $attended = $summary?->attended_count ?? (int) $scheduledClass->attended_bookings_count;
-                            $detected = $summary?->detected_count;
-                            $delta = $summary?->delta;
+                            $rawDetected = $summary?->detected_count;
+                            $detected = $rawDetected === null ? null : max(0, $rawDetected - $scheduledClass->peopleCounterTrainerAdjustment());
+                            $delta = $detected === null ? null : $detected - $assigned;
+                            $reportStatus = $detected === null
+                                ? $status
+                                : ($delta === 0
+                                    ? \App\Models\ScheduledClassPeopleCount::StatusMatched
+                                    : \App\Models\ScheduledClassPeopleCount::StatusMismatch);
                             $displayTimezone = $scheduledClass->displayTimezone();
                             $startsAt = $scheduledClass->starts_at->copy()->timezone($displayTimezone);
                             $endsAt = $scheduledClass->ends_at->copy()->timezone($displayTimezone);
@@ -125,7 +136,7 @@
                                         ->values();
                                 })
                                 ->values();
-                            $statusClass = match ($status) {
+                            $statusClass = match ($reportStatus) {
                                 \App\Models\ScheduledClassPeopleCount::StatusMatched => 'crm-status-active',
                                 \App\Models\ScheduledClassPeopleCount::StatusMismatch => 'crm-status-danger',
                                 \App\Models\ScheduledClassPeopleCount::StatusNoCamera => 'crm-status-muted',
@@ -135,10 +146,10 @@
                         <tr
                             @class([
                                 'align-top',
-                                'bg-rose-50/60' => $status === \App\Models\ScheduledClassPeopleCount::StatusMismatch,
+                                'bg-rose-50/60' => $reportStatus === \App\Models\ScheduledClassPeopleCount::StatusMismatch,
                             ])
                             data-people-counter-row
-                            data-class-counts="{{ $scheduledClass->id }}:{{ $attended }}:{{ $detected ?? 'none' }}:{{ $status }}"
+                            data-class-counts="{{ $scheduledClass->id }}:{{ $assigned }}:{{ $attended }}:{{ $detected ?? 'none' }}:{{ $reportStatus }}"
                         >
                             <td class="px-4 py-4">
                                 <div class="font-semibold text-slate-950">{{ $title }}</div>
@@ -151,13 +162,14 @@
                                 <div class="mt-1 text-xs text-slate-500">{{ $scheduledClass->room?->name ?? __('app.not_set') }}</div>
                             </td>
                             <td class="px-4 py-4 text-slate-700">{{ $scheduledClass->trainer?->name ?? __('app.not_set') }}</td>
+                            <td class="px-4 py-4 text-center font-semibold text-slate-950">{{ $assigned }}</td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">{{ $attended }}</td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">{{ $detected ?? '—' }}</td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">
                                 {{ $delta === null ? '—' : sprintf('%+d', $delta) }}
                             </td>
                             <td class="px-4 py-4">
-                                <span class="{{ $statusClass }}">{{ __('app.people_counter_status_'.$status) }}</span>
+                                <span class="{{ $statusClass }}">{{ __('app.people_counter_status_'.$reportStatus) }}</span>
                             </td>
                             <td class="px-4 py-4 text-center text-slate-700">
                                 {{ $summary?->successful_samples_count ?? 0 }} / {{ $summary?->failed_samples_count ?? 0 }}
@@ -175,7 +187,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="px-4 py-8">
+                            <td colspan="10" class="px-4 py-8">
                                 <x-ui.empty-state :title="__('app.no_people_counter_rows')" icon="video" />
                             </td>
                         </tr>

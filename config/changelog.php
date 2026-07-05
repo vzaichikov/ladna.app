@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.68.1',
+                'date' => '2026-07-05',
+                'title' => 'People Counter booked comparison',
+                'items' => ['Updated the People Counter report to show booked clients before attended clients, compare camera detections against booked clients, and clarify that group-class trainer counts are subtracted from the detected value.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.68.0',
                 'date' => '2026-07-05',
                 'title' => 'Camera-only service rooms',
@@ -611,6 +618,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.68.1',
+                'date' => '2026-07-05',
+                'title' => 'Порівняння People Counter із записами',
+                'items' => ['Оновлено звіт People Counter: тепер він показує кількість записаних клієнтів перед відвідуваннями, порівнює підрахунок камерою із записаними клієнтами та пояснює, що для групових занять тренер віднімається з виявленої кількості.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.68.0',
                 'date' => '2026-07-05',

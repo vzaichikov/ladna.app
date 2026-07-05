@@ -157,6 +157,11 @@ class ScheduledClass extends Model
             ?? config('app.timezone');
     }
 
+    public function peopleCounterTrainerAdjustment(): int
+    {
+        return $this->classType?->schedule_kind === ScheduleKind::GroupClass ? 1 : 0;
+    }
+
     public function durationMinutes(): int
     {
         return (int) $this->starts_at->diffInMinutes($this->ends_at);
