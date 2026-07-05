@@ -105,6 +105,13 @@
                     {{ $cameraTest['message'] ?? '' }}
                 </span>
             @endif
+
+            @if ($account->peopleCounterEnabled() && $room->exists && $room->hasEnabledRtspCamera())
+                <x-ui.button :href="route('dashboard.accounts.rooms.people-counter-mask.edit', [$account, $room])" variant="secondary" size="sm">
+                    <x-ui.icon name="scan" class="h-4 w-4" />
+                    {{ __('app.configure_people_counter_mask') }}
+                </x-ui.button>
+            @endif
         </div>
     </fieldset>
 @endif

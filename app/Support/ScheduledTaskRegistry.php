@@ -51,6 +51,30 @@ class ScheduledTaskRegistry
                 'description_key' => 'scheduled_task_account_activity_logs_prune_description',
                 'overlap_minutes' => 30,
             ],
+            [
+                'key' => 'people_counter_capture',
+                'command' => 'people-counter:capture',
+                'expression' => '*/7 * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_seven_minutes',
+                'description_key' => 'scheduled_task_people_counter_capture_description',
+                'overlap_minutes' => 10,
+            ],
+            [
+                'key' => 'people_counter_summarize',
+                'command' => 'people-counter:summarize',
+                'expression' => '*/30 * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_thirty_minutes',
+                'description_key' => 'scheduled_task_people_counter_summarize_description',
+                'overlap_minutes' => 30,
+            ],
+            [
+                'key' => 'people_counter_prune',
+                'command' => 'people-counter:prune',
+                'expression' => '10 0 * * *',
+                'frequency_key' => 'scheduled_task_frequency_daily',
+                'description_key' => 'scheduled_task_people_counter_prune_description',
+                'overlap_minutes' => 30,
+            ],
         ];
     }
 

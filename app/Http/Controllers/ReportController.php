@@ -19,6 +19,15 @@ class ReportController extends Controller
             ],
         ];
 
+        if ($account->allowsRtspCameras() && $account->peopleCounterEnabled()) {
+            $reports[] = [
+                'title' => __('app.people_counter_report_title'),
+                'copy' => __('app.people_counter_report_card_copy'),
+                'icon' => 'video',
+                'href' => route('dashboard.accounts.reports.people-counter', $account),
+            ];
+        }
+
         return view('reports.index', [
             'account' => $account,
             'reports' => $reports,

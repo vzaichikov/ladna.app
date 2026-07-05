@@ -93,6 +93,23 @@ class ScheduledClass extends Model
         return $this->hasMany(ClassBookingCorrection::class);
     }
 
+    public function peopleCounterSamples(): HasMany
+    {
+        return $this->hasMany(PeopleCounterSample::class);
+    }
+
+    public function peopleCount(): HasOne
+    {
+        return $this->hasOne(ScheduledClassPeopleCount::class);
+    }
+
+    public function latestSuccessfulPeopleCounterSample(): HasOne
+    {
+        return $this->hasOne(PeopleCounterSample::class)
+            ->where('status', PeopleCounterSample::StatusSucceeded)
+            ->latestOfMany('captured_at');
+    }
+
     public function cancellations(): HasMany
     {
         return $this->hasMany(ScheduledClassCancellation::class);

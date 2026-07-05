@@ -35,6 +35,8 @@ use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ManualScheduledClassController;
+use App\Http\Controllers\PeopleCounterReportController;
+use App\Http\Controllers\PeopleCounterScreenshotController;
 use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
@@ -59,6 +61,7 @@ use App\Http\Controllers\QuickBookingController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoomCameraTestController;
 use App\Http\Controllers\RoomController;
+use App\Http\Controllers\RoomPeopleCounterMaskController;
 use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
 use App\Http\Controllers\ScheduledClassHistoryController;
@@ -253,6 +256,11 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.reports.index');
         Route::get('accounts/{account}/reports/trainers', TrainerReportController::class)
             ->name('accounts.reports.trainers');
+        Route::get('accounts/{account}/reports/people-counter', PeopleCounterReportController::class)
+            ->name('accounts.reports.people-counter');
+        Route::get('accounts/{account}/people-counter-samples/{peopleCounterSample}/{variant}', PeopleCounterScreenshotController::class)
+            ->whereIn('variant', ['original', 'masked'])
+            ->name('accounts.people-counter-samples.image');
         Route::get('accounts/{account}/cameras', [CameraController::class, 'index'])
             ->name('accounts.cameras.index');
         Route::get('accounts/{account}/activity-logs', [AccountActivityLogController::class, 'index'])
@@ -280,6 +288,14 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->scoped();
         Route::match(['post', 'put', 'patch'], 'accounts/{account}/rooms/test-camera', RoomCameraTestController::class)
             ->name('accounts.rooms.test-camera');
+        Route::get('accounts/{account}/rooms/{room}/people-counter-mask', [RoomPeopleCounterMaskController::class, 'edit'])
+            ->name('accounts.rooms.people-counter-mask.edit');
+        Route::post('accounts/{account}/rooms/{room}/people-counter-mask/snapshot', [RoomPeopleCounterMaskController::class, 'capture'])
+            ->name('accounts.rooms.people-counter-mask.capture');
+        Route::get('accounts/{account}/rooms/{room}/people-counter-mask/snapshot', [RoomPeopleCounterMaskController::class, 'snapshot'])
+            ->name('accounts.rooms.people-counter-mask.snapshot');
+        Route::put('accounts/{account}/rooms/{room}/people-counter-mask', [RoomPeopleCounterMaskController::class, 'update'])
+            ->name('accounts.rooms.people-counter-mask.update');
         Route::resource('accounts.rooms', RoomController::class)
             ->except(['show'])
             ->scoped();

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.65.0',
+                'date' => '2026-07-05',
+                'title' => 'People Counter reports and camera masks',
+                'items' => ['Added People Counter support for studio cameras: owners can configure room detection masks from live snapshots, scheduled jobs capture and summarize class samples during studio working hours, and the reports section shows one row per past class with attended count, detected count, sample status, and retained screenshot evidence.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.64.0',
                 'date' => '2026-07-04',
                 'title' => 'Closed-class cancellation and hall timelines',
@@ -583,6 +590,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.65.0',
+                'date' => '2026-07-05',
+                'title' => 'People Counter, звіт і маски камер',
+                'items' => ['Додано підтримку People Counter для камер студії: власники можуть налаштовувати маски зон підрахунку зі знімка залу, заплановані задачі роблять і підсумовують семпли занять тільки в робочий час студії, а розділ звітів показує один рядок на минуле заняття з відвідуваннями, підрахунком камерою, станом семплів і збереженими скріншотами.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.64.0',
                 'date' => '2026-07-04',

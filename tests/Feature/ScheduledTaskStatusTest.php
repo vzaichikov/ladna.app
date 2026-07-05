@@ -83,4 +83,14 @@ class ScheduledTaskStatusTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_people_counter_capture_runs_every_seven_minutes(): void
+    {
+        $definition = collect(app(ScheduledTaskRegistry::class)->definitions())
+            ->firstWhere('key', 'people_counter_capture');
+
+        $this->assertNotNull($definition);
+        $this->assertSame('*/7 * * * *', $definition['expression']);
+        $this->assertSame('scheduled_task_frequency_every_seven_minutes', $definition['frequency_key']);
+    }
 }

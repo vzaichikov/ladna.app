@@ -1034,6 +1034,233 @@ function initPrintButtons() {
     });
 }
 
+function initPeopleCounterMaskEditors(root = document) {
+    root.querySelectorAll('[data-people-counter-mask-editor]').forEach((editor) => {
+        if (editor.dataset.peopleCounterMaskReady === 'true') {
+            return;
+        }
+
+        const form = editor.closest('form');
+        const input = form?.querySelector('[data-people-counter-mask-input]');
+        const image = editor.querySelector('[data-people-counter-mask-image]');
+        const canvas = editor.querySelector('[data-people-counter-mask-canvas]');
+        const stage = editor.querySelector('[data-people-counter-mask-stage]');
+        const finishButton = editor.querySelector('[data-people-counter-mask-finish]');
+        const undoButton = editor.querySelector('[data-people-counter-mask-undo]');
+        const clearButton = editor.querySelector('[data-people-counter-mask-clear]');
+        const context = canvas?.getContext('2d');
+
+        if (!form || !input || !image || !canvas || !context || !stage) {
+            return;
+        }
+
+        editor.dataset.peopleCounterMaskReady = 'true';
+
+        const clamp = (value) => Math.max(0, Math.min(1, value));
+        const normalizePoint = (point) => ({
+            x: Number.parseFloat(clamp(point.x).toFixed(6)),
+            y: Number.parseFloat(clamp(point.y).toFixed(6)),
+        });
+        const parsePolygons = () => {
+            try {
+                const decoded = JSON.parse(input.value || '[]');
+
+                if (!Array.isArray(decoded)) {
+                    return [];
+                }
+
+                return decoded
+                    .map((polygon) => (Array.isArray(polygon?.points) ? polygon.points : polygon))
+                    .filter(Array.isArray)
+                    .map((points) => points
+                        .filter((point) => Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y)))
+                        .map((point) => normalizePoint({ x: Number(point.x), y: Number(point.y) })))
+                    .filter((points) => points.length >= 3);
+            } catch {
+                return [];
+            }
+        };
+
+        let polygons = parsePolygons();
+        let draft = [];
+
+        const syncInput = () => {
+            input.value = JSON.stringify(polygons.map((points) => ({ points })));
+        };
+
+        const canvasRect = () => canvas.getBoundingClientRect();
+        const pointToPixels = (point, rect = canvasRect()) => ({
+            x: point.x * rect.width,
+            y: point.y * rect.height,
+        });
+        const pointerPoint = (event) => {
+            const rect = canvasRect();
+
+            return normalizePoint({
+                x: (event.clientX - rect.left) / Math.max(1, rect.width),
+                y: (event.clientY - rect.top) / Math.max(1, rect.height),
+            });
+        };
+
+        const drawPoint = (point, radius = 4) => {
+            const pixel = pointToPixels(point);
+
+            context.beginPath();
+            context.arc(pixel.x, pixel.y, radius, 0, Math.PI * 2);
+            context.fillStyle = '#ffffff';
+            context.fill();
+            context.lineWidth = 2;
+            context.strokeStyle = '#dc2626';
+            context.stroke();
+        };
+
+        const drawPolygon = (points, closed) => {
+            if (points.length === 0) {
+                return;
+            }
+
+            context.beginPath();
+            points.forEach((point, index) => {
+                const pixel = pointToPixels(point);
+
+                if (index === 0) {
+                    context.moveTo(pixel.x, pixel.y);
+                    return;
+                }
+
+                context.lineTo(pixel.x, pixel.y);
+            });
+
+            if (closed) {
+                context.closePath();
+                context.fillStyle = 'rgba(220, 38, 38, 0.28)';
+                context.fill();
+            }
+
+            context.lineWidth = 2;
+            context.strokeStyle = closed ? '#dc2626' : '#f97316';
+            context.setLineDash(closed ? [] : [8, 6]);
+            context.stroke();
+            context.setLineDash([]);
+            points.forEach((point) => drawPoint(point, closed ? 4 : 5));
+        };
+
+        const draw = () => {
+            const rect = canvasRect();
+
+            context.clearRect(0, 0, rect.width, rect.height);
+            polygons.forEach((polygon) => drawPolygon(polygon, true));
+            drawPolygon(draft, false);
+        };
+
+        const resizeCanvas = () => {
+            const rect = image.getBoundingClientRect();
+            const ratio = window.devicePixelRatio || 1;
+            const width = Math.max(1, Math.round(rect.width * ratio));
+            const height = Math.max(1, Math.round(rect.height * ratio));
+
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            context.setTransform(ratio, 0, 0, ratio, 0, 0);
+            draw();
+        };
+
+        const finishDraft = () => {
+            if (draft.length < 3) {
+                return false;
+            }
+
+            polygons = [...polygons, draft];
+            draft = [];
+            syncInput();
+            draw();
+
+            return true;
+        };
+
+        const isClosingDraft = (point) => {
+            if (draft.length < 3) {
+                return false;
+            }
+
+            const first = pointToPixels(draft[0]);
+            const current = pointToPixels(point);
+
+            return Math.hypot(first.x - current.x, first.y - current.y) <= 16;
+        };
+
+        canvas.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) {
+                return;
+            }
+
+            event.preventDefault();
+            canvas.setPointerCapture?.(event.pointerId);
+
+            const point = pointerPoint(event);
+
+            if (isClosingDraft(point)) {
+                finishDraft();
+                return;
+            }
+
+            draft = [...draft, point];
+            draw();
+        });
+
+        canvas.addEventListener('dblclick', (event) => {
+            event.preventDefault();
+            finishDraft();
+        });
+
+        finishButton?.addEventListener('click', () => finishDraft());
+        undoButton?.addEventListener('click', () => {
+            if (draft.length > 0) {
+                draft = draft.slice(0, -1);
+            } else {
+                polygons = polygons.slice(0, -1);
+                syncInput();
+            }
+
+            draw();
+        });
+        clearButton?.addEventListener('click', () => {
+            polygons = [];
+            draft = [];
+            syncInput();
+            draw();
+        });
+        form.addEventListener('submit', () => {
+            if (!finishDraft()) {
+                draft = [];
+                draw();
+            }
+
+            syncInput();
+        });
+
+        if (image.complete) {
+            resizeCanvas();
+        } else {
+            image.addEventListener('load', resizeCanvas, { once: true });
+        }
+
+        if ('ResizeObserver' in window) {
+            new ResizeObserver(resizeCanvas).observe(stage);
+        } else {
+            window.addEventListener('resize', resizeCanvas);
+        }
+
+        syncInput();
+        draw();
+    });
+}
+
 window.addEventListener('beforeprint', () => {
     const hasSelectedPrintSection = Array.from(document.querySelectorAll('[data-print-section]'))
         .some((section) => section.dataset.printHidden === 'true');
@@ -3235,6 +3462,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPhoneMasks();
     initOtpCountdowns();
     initPrintButtons();
+    initPeopleCounterMaskEditors();
     initManualClassModals();
     initTrainerSubstitutionModals();
     initTrainerIssueModals();
