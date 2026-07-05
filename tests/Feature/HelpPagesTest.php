@@ -282,6 +282,26 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('tenant', false);
     }
 
+    public function test_reports_cameras_help_explains_rtsp_and_people_counter(): void
+    {
+        $this->get(route('help.show', 'reports-cameras', false))
+            ->assertStatus(200)
+            ->assertSee('Звіти, камери та People Counter', false)
+            ->assertSee('Що показує розділ Звіти', false)
+            ->assertSee('Як увімкнути RTSP-камери для студії', false)
+            ->assertSee('Підтримка RTSP-камер', false)
+            ->assertSee('службових кімнатах', false)
+            ->assertSee('не потрапляє в розклад, записи, фільтри чи звіти занять', false)
+            ->assertSee('Як читати звіт People Counter', false)
+            ->assertSee('Різниця рахується між Записано та Виявлено', false)
+            ->assertSee('віднімається один тренер', false)
+            ->assertSee('assets/help/screenshots/rooms.png', false)
+            ->assertSee('assets/help/screenshots/studio-dashboard.png', false)
+            ->assertDontSee('endpoint', false)
+            ->assertDontSee('payload', false)
+            ->assertDontSee('database', false);
+    }
+
     public function test_public_footer_links_to_help(): void
     {
         $response = $this->get('/');
