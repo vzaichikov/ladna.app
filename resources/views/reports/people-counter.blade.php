@@ -93,7 +93,6 @@
                     @forelse ($classes as $scheduledClass)
                         @php
                             $summary = $scheduledClass->peopleCount;
-                            $sample = $scheduledClass->latestSuccessfulPeopleCounterSample;
                             $status = $summary?->status ?? \App\Models\ScheduledClassPeopleCount::StatusInsufficientData;
                             $attended = $summary?->attended_count ?? (int) $scheduledClass->attended_bookings_count;
                             $detected = $summary?->detected_count;
@@ -102,6 +101,30 @@
                             $startsAt = $scheduledClass->starts_at->copy()->timezone($displayTimezone);
                             $endsAt = $scheduledClass->ends_at->copy()->timezone($displayTimezone);
                             $title = $scheduledClass->displayTitle() ?: ($scheduledClass->classType?->name ?? __('app.class'));
+                            $sampleGallery = $scheduledClass->peopleCounterSamples
+                                ->flatMap(function (\App\Models\PeopleCounterSample $peopleCounterSample) use ($account, $displayTimezone, $title) {
+                                    $capturedAt = $peopleCounterSample->captured_at?->copy()->timezone($displayTimezone);
+                                    $sampleMeta = collect([
+                                        $capturedAt?->format('d.m.Y H:i'),
+                                        $peopleCounterSample->detected_count === null ? null : __('app.detected').': '.$peopleCounterSample->detected_count,
+                                        __('app.people_counter_sample_status_'.$peopleCounterSample->status),
+                                    ])->filter()->join(' · ');
+
+                                    return collect([
+                                        'original' => $peopleCounterSample->original_image_path,
+                                        'masked' => $peopleCounterSample->masked_image_path,
+                                    ])
+                                        ->filter()
+                                        ->map(fn (string $path, string $variant): array => [
+                                            'url' => route('dashboard.accounts.people-counter-samples.image', [$account, $peopleCounterSample, $variant]),
+                                            'thumbnail_url' => route('dashboard.accounts.people-counter-samples.image', [$account, $peopleCounterSample, $variant]),
+                                            'title' => $title.' · '.__('app.'.$variant),
+                                            'meta' => $sampleMeta,
+                                            'alt' => $title.' · '.__('app.'.$variant),
+                                        ])
+                                        ->values();
+                                })
+                                ->values();
                             $statusClass = match ($status) {
                                 \App\Models\ScheduledClassPeopleCount::StatusMatched => 'crm-status-active',
                                 \App\Models\ScheduledClassPeopleCount::StatusMismatch => 'crm-status-danger',
@@ -140,19 +163,11 @@
                                 {{ $summary?->successful_samples_count ?? 0 }} / {{ $summary?->failed_samples_count ?? 0 }}
                             </td>
                             <td class="px-4 py-4">
-                                @if ($sample)
-                                    <div class="flex flex-wrap gap-2">
-                                        @if ($sample->original_image_path)
-                                            <a class="text-sm font-semibold text-brand-700 hover:text-brand-800" href="{{ route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']) }}" target="_blank" rel="noopener">
-                                                {{ __('app.original') }}
-                                            </a>
-                                        @endif
-                                        @if ($sample->masked_image_path)
-                                            <a class="text-sm font-semibold text-brand-700 hover:text-brand-800" href="{{ route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'masked']) }}" target="_blank" rel="noopener">
-                                                {{ __('app.masked') }}
-                                            </a>
-                                        @endif
-                                    </div>
+                                @if ($sampleGallery->isNotEmpty())
+                                    <x-people-counter.screenshot-trigger
+                                        :gallery="$sampleGallery->all()"
+                                        :label="__('app.open_screenshot_gallery_with_count', ['count' => $sampleGallery->count()])"
+                                    />
                                 @else
                                     <span class="text-slate-400">—</span>
                                 @endif

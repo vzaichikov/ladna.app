@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.67.0',
+                'date' => '2026-07-05',
+                'title' => 'People Counter screenshot gallery',
+                'items' => ['People Counter screenshots now open in an in-page zoomable modal instead of separate browser tabs. The owner dashboard opens the latest hall capture, and the People Counter report shows a gallery of all saved original and masked samples for each class.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.66.0',
                 'date' => '2026-07-05',
                 'title' => 'Full class-pass history',
@@ -597,6 +604,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.67.0',
+                'date' => '2026-07-05',
+                'title' => 'Галерея скріншотів People Counter',
+                'items' => ['Скріншоти People Counter тепер відкриваються у модальному вікні з масштабуванням, а не в окремих вкладках браузера. На головній сторінці власниці відкривається останній знімок залу, а у звіті People Counter доступна галерея всіх збережених оригінальних і замаскованих семплів заняття.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.66.0',
                 'date' => '2026-07-05',

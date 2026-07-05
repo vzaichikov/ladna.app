@@ -1,4 +1,5 @@
 import { createIcons, icons } from 'lucide';
+import Panzoom from '@panzoom/panzoom';
 import SimplePhoneMask from 'simple-phone-mask';
 import 'summernote/dist/summernote-lite.css';
 
@@ -3448,6 +3449,198 @@ function initAppUpdatePrompt() {
         .catch(() => {});
 }
 
+function initPeopleCounterScreenshotViewer() {
+    const modal = document.querySelector('[data-people-counter-screenshot-modal]');
+
+    if (!modal || modal.dataset.peopleCounterScreenshotReady === 'true') {
+        return;
+    }
+
+    const image = modal.querySelector('[data-people-counter-screenshot-image]');
+    const stage = modal.querySelector('[data-people-counter-screenshot-stage]');
+    const title = modal.querySelector('[data-people-counter-screenshot-title]');
+    const meta = modal.querySelector('[data-people-counter-screenshot-meta]');
+    const thumbs = modal.querySelector('[data-people-counter-screenshot-thumbs]');
+    const closeButtons = modal.querySelectorAll('[data-people-counter-screenshot-close]');
+    const previousButton = modal.querySelector('[data-people-counter-screenshot-prev]');
+    const nextButton = modal.querySelector('[data-people-counter-screenshot-next]');
+    const zoomInButton = modal.querySelector('[data-people-counter-screenshot-zoom-in]');
+    const zoomOutButton = modal.querySelector('[data-people-counter-screenshot-zoom-out]');
+    const resetButton = modal.querySelector('[data-people-counter-screenshot-reset]');
+    let gallery = [];
+    let currentIndex = 0;
+    let panzoom = null;
+
+    if (!image || !stage || !title || !meta || !thumbs) {
+        return;
+    }
+
+    modal.dataset.peopleCounterScreenshotReady = 'true';
+
+    const normalizeGallery = (items) => items
+        .filter((item) => item && typeof item.url === 'string' && item.url.trim() !== '')
+        .map((item) => ({
+            url: item.url,
+            thumbnailUrl: item.thumbnail_url || item.thumbnailUrl || item.url,
+            title: item.title || '',
+            meta: item.meta || '',
+            alt: item.alt || item.title || '',
+        }));
+
+    const destroyPanzoom = () => {
+        panzoom?.destroy();
+        panzoom = null;
+        image.style.transform = '';
+    };
+
+    const updateNavigationState = () => {
+        const hasMultipleItems = gallery.length > 1;
+
+        [previousButton, nextButton].forEach((button) => {
+            if (!button) {
+                return;
+            }
+
+            button.disabled = !hasMultipleItems;
+            button.classList.toggle('cursor-not-allowed', !hasMultipleItems);
+            button.classList.toggle('opacity-40', !hasMultipleItems);
+        });
+    };
+
+    const renderThumbs = () => {
+        thumbs.innerHTML = '';
+
+        gallery.forEach((item, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = [
+                'h-16 w-24 shrink-0 overflow-hidden rounded-md border bg-slate-900 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+                index === currentIndex ? 'border-brand-500 ring-2 ring-brand-500' : 'border-white/10 hover:border-white/40',
+            ].join(' ');
+            button.setAttribute('aria-label', item.title || `${index + 1}`);
+
+            if (index === currentIndex) {
+                button.setAttribute('aria-current', 'true');
+            }
+
+            const thumb = document.createElement('img');
+            thumb.src = item.thumbnailUrl;
+            thumb.alt = '';
+            thumb.loading = 'lazy';
+            thumb.className = 'h-full w-full object-cover';
+            button.append(thumb);
+            button.addEventListener('click', () => showImage(index));
+            thumbs.append(button);
+        });
+    };
+
+    function showImage(index) {
+        if (gallery.length === 0) {
+            return;
+        }
+
+        currentIndex = (index + gallery.length) % gallery.length;
+        const item = gallery[currentIndex];
+
+        destroyPanzoom();
+        title.textContent = item.title || '';
+        meta.textContent = item.meta || '';
+        meta.classList.toggle('hidden', item.meta === '');
+        image.alt = item.alt || item.title || '';
+        image.src = item.url;
+        renderThumbs();
+        updateNavigationState();
+    }
+
+    const close = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+        destroyPanzoom();
+        image.removeAttribute('src');
+        gallery = [];
+        thumbs.innerHTML = '';
+    };
+
+    const open = (trigger) => {
+        try {
+            gallery = normalizeGallery(JSON.parse(trigger.dataset.peopleCounterGallery || '[]'));
+        } catch {
+            gallery = [];
+        }
+
+        if (gallery.length === 0) {
+            return;
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+        showImage(Number.parseInt(trigger.dataset.peopleCounterStartIndex || '0', 10) || 0);
+        modal.querySelector('[data-people-counter-screenshot-close]')?.focus();
+    };
+
+    image.addEventListener('load', () => {
+        destroyPanzoom();
+        panzoom = Panzoom(image, {
+            contain: 'inside',
+            maxScale: 6,
+            minScale: 1,
+        });
+    });
+
+    stage.addEventListener('wheel', (event) => {
+        if (!panzoom) {
+            return;
+        }
+
+        event.preventDefault();
+        panzoom.zoomWithWheel(event);
+    }, { passive: false });
+
+    document.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-people-counter-screenshot-trigger]');
+
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        open(trigger);
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            close();
+        }
+    });
+
+    closeButtons.forEach((button) => button.addEventListener('click', close));
+    previousButton?.addEventListener('click', () => showImage(currentIndex - 1));
+    nextButton?.addEventListener('click', () => showImage(currentIndex + 1));
+    zoomInButton?.addEventListener('click', () => panzoom?.zoomIn());
+    zoomOutButton?.addEventListener('click', () => panzoom?.zoomOut());
+    resetButton?.addEventListener('click', () => panzoom?.reset());
+
+    document.addEventListener('keydown', (event) => {
+        if (modal.classList.contains('hidden')) {
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            close();
+        }
+
+        if (event.key === 'ArrowLeft') {
+            showImage(currentIndex - 1);
+        }
+
+        if (event.key === 'ArrowRight') {
+            showImage(currentIndex + 1);
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
     initSlugAutofill();
@@ -3472,6 +3665,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initActiveScrollTargets();
     initAssistantChat();
     initAppUpdatePrompt();
+    initPeopleCounterScreenshotViewer();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {
         window.history.replaceState({ publicSchedule: true }, '', window.location.href);

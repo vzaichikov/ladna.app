@@ -153,15 +153,27 @@
                             $statusLabel = $sampleStatus
                                 ? __('app.people_counter_live_status_'.$sampleStatus)
                                 : __('app.people_counter_live_no_capture');
+                            $imageGallery = $sample && $counterRoom['image_url'] ? [[
+                                'url' => $counterRoom['image_url'],
+                                'thumbnail_url' => $counterRoom['image_url'],
+                                'title' => $counterRoom['room']->name,
+                                'meta' => $counterRoom['captured_at']
+                                    ? __('app.people_counter_live_last_updated_at', ['time' => $counterRoom['captured_at']->format('H:i')]).' · '.$counterRoom['timezone']
+                                    : '',
+                                'alt' => $counterRoom['room']->name,
+                            ]] : [];
                         @endphp
                         <article
                             class="grid gap-4 rounded-lg border border-stone-200 bg-white p-4 sm:grid-cols-[7rem_1fr_auto] sm:items-center"
                             data-people-counter-live-room="{{ $counterRoom['room']->id }}:{{ $detectedCount ?? 'none' }}:{{ $sampleStatus ?? 'none' }}"
                         >
                             @if ($counterRoom['image_url'])
-                                <a href="{{ $counterRoom['image_url'] }}" target="_blank" rel="noopener" class="block overflow-hidden rounded-lg border border-stone-200 bg-slate-50">
-                                    <img src="{{ $counterRoom['image_url'] }}" alt="" class="h-20 w-full object-cover sm:w-28">
-                                </a>
+                                <x-people-counter.screenshot-trigger
+                                    :gallery="$imageGallery"
+                                    :thumbnail-url="$counterRoom['image_url']"
+                                    :label="__('app.open_screenshot_gallery')"
+                                    thumbnail-image-class="h-20 w-full object-cover sm:w-28"
+                                />
                             @else
                                 <div class="flex h-20 w-full items-center justify-center rounded-lg border border-stone-200 bg-slate-50 text-slate-400 sm:w-28">
                                     <x-ui.icon name="video" class="h-6 w-6" />

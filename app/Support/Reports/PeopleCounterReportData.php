@@ -26,7 +26,23 @@ class PeopleCounterReportData
                 'trainer:id,account_id,name',
                 'classType:id,account_id,name',
                 'peopleCount',
-                'latestSuccessfulPeopleCounterSample',
+                'peopleCounterSamples' => fn ($query) => $query
+                    ->select([
+                        'id',
+                        'account_id',
+                        'scheduled_class_id',
+                        'captured_at',
+                        'status',
+                        'original_image_path',
+                        'masked_image_path',
+                        'detected_count',
+                        'average_confidence',
+                    ])
+                    ->where(function ($query): void {
+                        $query->whereNotNull('original_image_path')
+                            ->orWhereNotNull('masked_image_path');
+                    })
+                    ->orderBy('captured_at'),
             ])
             ->withCount([
                 'classBookings as attended_bookings_count' => fn ($query) => $query

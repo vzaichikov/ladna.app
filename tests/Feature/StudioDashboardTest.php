@@ -223,7 +223,10 @@ class StudioDashboardTest extends TestCase
             ->assertSee(__('app.people_counter_live_last_updated_at', ['time' => '10:50']))
             ->assertSee('Europe/Kyiv')
             ->assertSee('data-people-counter-live-room="'.$room->id.':7:succeeded"', false)
+            ->assertSee('data-people-counter-screenshot-trigger', false)
+            ->assertSee('data-people-counter-screenshot-modal', false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)
+            ->assertDontSee('target="_blank"', false)
             ->assertDontSee('Disabled Hall')
             ->assertDontSee('data-people-counter-live-room="'.$disabledRoom->id.':12:succeeded"', false);
 

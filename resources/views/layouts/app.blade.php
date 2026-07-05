@@ -506,6 +506,8 @@
 
         <x-ui.update-reload-toast :revision="$applicationRevision" desktop-offset />
 
+        @stack('modals')
+
         @if ($showAssistantWidget)
             <div
                 data-assistant-chat

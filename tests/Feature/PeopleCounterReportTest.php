@@ -96,9 +96,11 @@ class PeopleCounterReportTest extends TestCase
         );
         $originalPath = 'people-counter/testing/original.jpg';
         $maskedPath = 'people-counter/testing/masked.jpg';
+        $olderOriginalPath = 'people-counter/testing/older-original.jpg';
 
         Storage::disk('local')->put($originalPath, 'original');
         Storage::disk('local')->put($maskedPath, 'masked');
+        Storage::disk('local')->put($olderOriginalPath, 'older-original');
 
         ScheduledClassPeopleCount::factory()->for($scheduledClass)->create([
             'account_id' => $account->id,
@@ -121,6 +123,15 @@ class PeopleCounterReportTest extends TestCase
             'original_image_path' => $originalPath,
             'masked_image_path' => $maskedPath,
         ]);
+        $olderSample = PeopleCounterSample::factory()->for($scheduledClass)->create([
+            'account_id' => $account->id,
+            'location_id' => $scheduledClass->location_id,
+            'room_id' => $scheduledClass->room_id,
+            'captured_at' => Carbon::parse('2026-07-04 10:15:00'),
+            'detected_count' => 6,
+            'original_image_path' => $olderOriginalPath,
+            'masked_image_path' => null,
+        ]);
         ClassBooking::factory()
             ->count(2)
             ->for($futureClass)
@@ -139,8 +150,13 @@ class PeopleCounterReportTest extends TestCase
             ->assertSee('data-class-counts="'.$scheduledClass->id.':6:8:mismatch"', false)
             ->assertSee('data-class-counts="'.$currentClass->id.':0:none:insufficient_data"', false)
             ->assertDontSee('data-class-counts="'.$futureClass->id, false)
+            ->assertSee('data-people-counter-screenshot-trigger', false)
+            ->assertSee(__('app.open_screenshot_gallery_with_count', ['count' => 3]))
+            ->assertSee('data-people-counter-screenshot-modal', false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)
-            ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'masked']), false);
+            ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'masked']), false)
+            ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $olderSample, 'original']), false)
+            ->assertDontSee('target="_blank"', false);
     }
 
     public function test_people_counter_report_filters_by_location_room_and_trainer(): void
