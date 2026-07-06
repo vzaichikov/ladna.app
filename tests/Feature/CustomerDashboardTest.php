@@ -4,9 +4,15 @@ namespace Tests\Feature;
 
 use App\Enums\CustomerClassPassStatus;
 use App\Models\Account;
+use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
+use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
+use App\Models\CustomerClassPassReservation;
+use App\Models\Location;
+use App\Models\Room;
+use App\Models\ScheduledClass;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -62,7 +68,18 @@ class CustomerDashboardTest extends TestCase
             ->get(route('customer.dashboard', $account->slug))
             ->assertOk()
             ->assertSee('Залишок занять', false)
-            ->assertSeeInOrder(['активних абонементів', '1', 'Залишок занять', '5', 'Записи', '0'], false)
+            ->assertSeeInOrder(['Записи', '0', 'Залишок занять', '5', 'активних абонементів', '1'], false)
+            ->assertSeeInOrder(['Мої заняття', '0', 'Мої абонементи', '1'], false)
+            ->assertDontSee('ACTIVE-001', false)
+            ->assertDontSee('CANCEL-001', false)
+            ->assertDontSee('Cancelled Pole', false)
+            ->assertDontSee('FLAG-001', false)
+            ->assertDontSee('Inactive Flag Pole', false);
+
+        $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'passes']))
+            ->assertOk()
             ->assertSee('ACTIVE-001', false)
             ->assertDontSee('CANCEL-001', false)
             ->assertDontSee('Cancelled Pole', false)
@@ -95,7 +112,7 @@ class CustomerDashboardTest extends TestCase
 
         $this->actingAs($customer, 'customer')
             ->withSession(['locale' => 'uk'])
-            ->get(route('customer.dashboard', $account->slug))
+            ->get(route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'passes']))
             ->assertOk()
             ->assertSeeInOrder(['Unopened Pole', 'Куплено', '2026-06-30', 'Відкрито', '—', 'Використати до', '2026-12-27'], false)
             ->assertDontSee('Строк з першого заняття до', false)
@@ -127,11 +144,89 @@ class CustomerDashboardTest extends TestCase
 
         $this->actingAs($customer, 'customer')
             ->withSession(['locale' => 'uk'])
-            ->get(route('customer.dashboard', $account->slug))
+            ->get(route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'passes']))
             ->assertOk()
             ->assertSeeInOrder(['Opened Pole', 'Куплено', '2026-06-30', 'Відкрито', '2026-07-01', 'Використати до', '2026-07-31'], false)
             ->assertDontSee('Строк з першого заняття до', false)
             ->assertDontSee('2026-12-27', false);
+    }
+
+    public function test_default_classes_tab_highlights_booking_without_active_class_pass(): void
+    {
+        app()->setLocale('uk');
+        Carbon::setTestNow(Carbon::parse('2026-07-06 08:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'slug' => 'customer-dashboard-bookings-tab',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Юлія',
+            'phone' => '+380501112236',
+        ]);
+        $customerClassPass = $this->classPass($account, $customer, [
+            'code' => 'PASS-001',
+            'plan_name' => 'Covered Pole',
+            'sessions_count' => 1,
+            'used_sessions_count' => 0,
+            'reserved_sessions_count' => 1,
+        ]);
+
+        $coveredClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => 'Covered Exot',
+                'starts_at' => Carbon::parse('2026-07-07 10:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-07 11:00:00', 'UTC'),
+            ]);
+        $coveredBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($coveredClass, 'scheduledClass')
+            ->for($customer)
+            ->create();
+        CustomerClassPassReservation::factory()->create([
+            'account_id' => $account->id,
+            'customer_class_pass_id' => $customerClassPass->id,
+            'class_booking_id' => $coveredBooking->id,
+            'scheduled_class_id' => $coveredClass->id,
+            'status' => 'reserved',
+            'reserved_at' => Carbon::parse('2026-07-06 08:10:00', 'UTC'),
+        ]);
+
+        $uncoveredClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => 'No Pass Tricks',
+                'starts_at' => Carbon::parse('2026-07-07 11:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-07 12:00:00', 'UTC'),
+            ]);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($uncoveredClass, 'scheduledClass')
+            ->for($customer)
+            ->create();
+
+        $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSeeInOrder(['Мої заняття', '2', 'Мої абонементи', '1'], false)
+            ->assertSee('No Pass Tricks', false)
+            ->assertSee('На це заняття немає активного абонемента.', false)
+            ->assertSee('Covered Exot', false)
+            ->assertSee('PASS-001', false);
+
+        Carbon::setTestNow();
     }
 
     /**

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.74.0',
+                'date' => '2026-07-06',
+                'title' => 'Customer cabinet booking alerts',
+                'items' => ['Updated the customer cabinet so classes come first in a tabbed view, active class passes move to a second tab, and any booking without an active pass reservation now shows a clear customer-facing alert.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.73.0',
                 'date' => '2026-07-06',
                 'title' => 'Telegram business alerts',
@@ -667,6 +674,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.74.0',
+                'date' => '2026-07-06',
+                'title' => 'Попередження про записи без абонемента',
+                'items' => ['Оновлено кабінет клієнта: заняття тепер відкриваються першими в окремій вкладці, активні абонементи перенесені в другу вкладку, а запис без активного резерву в абонементі показує зрозуміле попередження для клієнта.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.73.0',
                 'date' => '2026-07-06',
