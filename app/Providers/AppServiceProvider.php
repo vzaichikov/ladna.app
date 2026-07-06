@@ -89,5 +89,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('public-booking', function (Request $request): Limit {
             return Limit::perMinute(6)->by($request->string('customer_phone').$request->user('customer')?->getAuthIdentifier().'|'.$request->ip());
         });
+
+        RateLimiter::for('mobile-auth', function (Request $request): Limit {
+            return Limit::perMinute(10)->by($request->string('email')->lower().$request->string('phone').$request->ip());
+        });
+
+        RateLimiter::for('mobile-api', function (Request $request): Limit {
+            return Limit::perMinute(120)->by($request->bearerToken() ? hash('sha256', $request->bearerToken()) : $request->ip());
+        });
     }
 }

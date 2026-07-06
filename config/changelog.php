@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.72.0',
+                'date' => '2026-07-06',
+                'title' => 'Native mobile app API',
+                'items' => ['Added the first native mobile API for Ladna: studio lookup, staff and customer login, account-scoped mobile sessions, schedule and booking actions, customer profile, class-pass views, device-token registration, and OpenAPI documentation. Mobile access is tenant-scoped, rate-limited, and excludes platform-owner login.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.71.1',
                 'date' => '2026-07-06',
                 'title' => 'Past private lessons and class card capacity',
@@ -646,6 +653,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.72.0',
+                'date' => '2026-07-06',
+                'title' => 'API для нативного мобільного застосунку',
+                'items' => ['Додано перший API для нативного застосунку Ladna: пошук студії, вхід команди й клієнтів, мобільні сесії в межах студії, розклад і записи, профіль клієнта, абонементи, реєстрацію токенів пристрою та OpenAPI-документацію. Мобільний доступ обмежений студією, має rate limit і не підтримує вхід власника платформи.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.71.1',
                 'date' => '2026-07-06',

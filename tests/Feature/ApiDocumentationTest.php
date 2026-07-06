@@ -13,6 +13,8 @@ class ApiDocumentationTest extends TestCase
             ->assertSee(__('app.api_documentation'))
             ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/schedule')
             ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/price')
+            ->assertSee('/api/v1/mobile/auth/staff/login')
+            ->assertSee('/api/v1/mobile/schedule')
             ->assertSee('/api/v1/website-leads')
             ->assertSee('/mcp/ladna-studio')
             ->assertSee('describe-ladna-skills')
@@ -35,6 +37,13 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/schedule.get.responses.402.$ref', '#/components/responses/SubscriptionExpired')
             ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/price.get.tags.0', 'Public prices')
             ->assertJsonPath('paths./api/v1/public/{accountSlug}/{locationSlug}/price.get.responses.402.$ref', '#/components/responses/SubscriptionExpired')
+            ->assertJsonPath('paths./api/v1/mobile/auth/staff/login.post.tags.0', 'Mobile auth')
+            ->assertJsonPath('paths./api/v1/mobile/auth/staff/login.post.requestBody.content.application/json.schema.$ref', '#/components/schemas/MobileStaffLoginRequest')
+            ->assertJsonPath('paths./api/v1/mobile/me.get.security.0.MobileBearerToken', [])
+            ->assertJsonPath('paths./api/v1/mobile/schedule.get.tags.0', 'Mobile schedule')
+            ->assertJsonPath('paths./api/v1/mobile/schedule.get.security.0.MobileBearerToken', [])
+            ->assertJsonPath('paths./api/v1/mobile/classes/{scheduledClass}/customer-booking.post.responses.201.content.application/json.schema.properties.data.$ref', '#/components/schemas/MobileClassBooking')
+            ->assertJsonPath('paths./api/v1/mobile/device-tokens.post.requestBody.content.application/json.schema.$ref', '#/components/schemas/MobileDeviceTokenRequest')
             ->assertJsonPath('paths./api/v1/website-leads.post.tags.0', 'Website leads')
             ->assertJsonPath('paths./api/v1/website-leads.post.summary', 'Creates a website lead for the studio identified by the bearer token with the website_leads:create ability.')
             ->assertJsonPath('paths./api/v1/website-leads.post.security.0.AccountBearerToken', [])
@@ -61,6 +70,10 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.example', 'subscription_expired')
             ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.enum.1', 'demo_payment_required')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.scheme', 'bearer')
+            ->assertJsonPath('components.securitySchemes.MobileBearerToken.bearerFormat', 'Ladna native mobile session token')
+            ->assertJsonPath('components.schemas.MobileStaffLoginRequest.required.0', 'email')
+            ->assertJsonPath('components.schemas.MobileScheduledClass.properties.customer_booking.type.1', 'null')
+            ->assertJsonPath('components.schemas.MobileDeviceTokenRequest.properties.provider.enum.0', 'fcm')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token.');
 
         $toolNames = $response->json('components.schemas.McpToolCallRequest.properties.params.properties.name.enum');
