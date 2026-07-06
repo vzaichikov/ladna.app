@@ -1406,6 +1406,7 @@ return [
     'customer_booking_cancel_unavailable' => 'Цей запис вже не можна скасувати.',
     'booking_cancellation_cutoff_locked' => 'Скасування для цього заняття вже закрито.',
     'booking_cancellation_cutoff_marker' => 'Скасування закрито',
+    'customer_remaining_sessions' => 'Залишок занять',
     'remaining_sessions' => 'Залишок',
     'remaining_sessions_short' => 'залишилось',
     'reserved_sessions' => 'Зарезервовано',

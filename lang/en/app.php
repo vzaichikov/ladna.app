@@ -1406,6 +1406,7 @@ return [
     'customer_booking_cancel_unavailable' => 'This booking can no longer be cancelled.',
     'booking_cancellation_cutoff_locked' => 'Cancellation is closed for this class.',
     'booking_cancellation_cutoff_marker' => 'Cancellation closed',
+    'customer_remaining_sessions' => 'Remaining sessions',
     'remaining_sessions' => 'Remaining',
     'remaining_sessions_short' => 'left',
     'reserved_sessions' => 'Reserved',

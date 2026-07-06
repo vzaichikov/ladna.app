@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.72.1',
+                'date' => '2026-07-06',
+                'title' => 'Clearer customer class passes',
+                'items' => ['Improved the customer cabinet class-pass summary on mobile, renamed the remaining counter to “Remaining sessions”, and made active-pass totals count only active purchased passes. Class-pass cards now show labeled counters and simpler purchase, opening, and use-by dates.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.72.0',
                 'date' => '2026-07-06',
                 'title' => 'Native mobile app API',
@@ -653,6 +660,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.72.1',
+                'date' => '2026-07-06',
+                'title' => 'Зрозуміліші абонементи в кабінеті клієнта',
+                'items' => ['Покращено мобільний підсумок абонементів у кабінеті клієнта, перейменовано лічильник залишку на «Залишок занять» і виправлено підрахунок так, щоб враховувалися лише активні куплені абонементи. Картки абонементів тепер показують підписані лічильники й простіші дати покупки, відкриття та використання.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.72.0',
                 'date' => '2026-07-06',
