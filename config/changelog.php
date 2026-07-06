@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.71.1',
+                'date' => '2026-07-06',
+                'title' => 'Past private lessons and class card capacity',
+                'items' => ['Studio teams can now add previous-date private lessons through quick booking with the same availability checks as room rental: room, trainer, and customer must all be free. Group class cards in the studio schedule now also show booked clients against total capacity.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.71.0',
                 'date' => '2026-07-06',
                 'title' => 'Google phone linking for customers',
@@ -639,6 +646,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.71.1',
+                'date' => '2026-07-06',
+                'title' => 'Минулі індивідуальні заняття і місткість карток',
+                'items' => ['Команди студій тепер можуть додавати індивідуальні заняття за минулі дати через швидкий запис із тими самими перевірками доступності, що й для оренди: зал, тренер і клієнт мають бути вільні. У картках групових занять у розкладі студії тепер також видно кількість записаних клієнтів відносно загальної місткості.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.71.0',
                 'date' => '2026-07-06',

@@ -40,7 +40,7 @@ class CreateQuickBooking
             $scheduleKind = ScheduleKind::from((string) $validated['schedule_kind']);
             $scheduledClass = $scheduleKind === ScheduleKind::GroupClass
                 ? $this->groupScheduledClass($account, (int) $validated['scheduled_class_id'], $customer->id)
-                : $this->createManualScheduledClass($account, $scheduleKind, $validated);
+                : $this->createManualScheduledClass($account, $scheduleKind, $validated, $customer->id);
             $skipClassPassReservation = $this->shouldSkipClassPassReservation($scheduleKind, $validated);
 
             $classBooking = $scheduledClass->classBookings()->updateOrCreate(
@@ -89,7 +89,7 @@ class CreateQuickBooking
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function createManualScheduledClass(Account $account, ScheduleKind $scheduleKind, array $validated): ScheduledClass
+    private function createManualScheduledClass(Account $account, ScheduleKind $scheduleKind, array $validated, int $customerId): ScheduledClass
     {
         if (! in_array($scheduleKind, ScheduleKindRegistry::manualKinds(), true)) {
             throw ValidationException::withMessages([
@@ -118,6 +118,7 @@ class CreateQuickBooking
                 'room_id' => $room->id,
                 'class_type_id' => $classType->id,
                 'trainer_id' => $trainer?->id,
+                'customer_id' => $customerId,
                 'allow_past' => true,
             ])
             : $this->manualQuickBookingAvailability->hasStart($account, $scheduleKind, (string) $validated['starts_at'], [
@@ -125,7 +126,8 @@ class CreateQuickBooking
                 'room_id' => $room->id,
                 'class_type_id' => $classType->id,
                 'trainer_id' => $trainer?->id,
-                'allow_past' => $scheduleKind === ScheduleKind::RoomRental,
+                'customer_id' => $customerId,
+                'allow_past' => $this->allowsPastManualBooking($scheduleKind),
             ]);
 
         if (! $isAvailable) {
@@ -167,6 +169,11 @@ class CreateQuickBooking
     {
         return $scheduleKind === ScheduleKind::RoomRental
             && ($validated['rental_mode'] ?? 'preset') === 'anytime';
+    }
+
+    private function allowsPastManualBooking(ScheduleKind $scheduleKind): bool
+    {
+        return in_array($scheduleKind, [ScheduleKind::PrivateLesson, ScheduleKind::RoomRental], true);
     }
 
     /**

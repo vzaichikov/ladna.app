@@ -5,7 +5,18 @@
     $displayTitle = $scheduledClass->displayTitle();
     $statusClass = $scheduledClass->displayStatusBadgeClass();
     $scheduleKind = $scheduledClass->classType?->schedule_kind;
+    $isGroupClass = $scheduleKind === \App\Enums\ScheduleKind::GroupClass;
     $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
+    $activeBookingStatuses = [
+        \App\Enums\ClassBookingStatus::Booked->value,
+        \App\Enums\ClassBookingStatus::Attended->value,
+    ];
+    $activeBookings = $scheduledClass->classBookings->filter(
+        fn ($booking): bool => ! $booking->isCorrectedRemoved() && in_array($booking->status->value, $activeBookingStatuses, true),
+    );
+    $capacity = max(0, (int) ($scheduledClass->capacity ?? 0));
+    $loadPercent = $capacity > 0 ? (int) round(($activeBookings->count() / $capacity) * 100) : 0;
+    $barWidth = min(100, max(0, $loadPercent));
     $displayTypeLabels = $scheduledClass->displayTypeLabels();
     $directionColor = $isRoomRental
         ? $scheduledClass->room?->colorAccent($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
@@ -104,6 +115,18 @@
             <dd class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned') }}</dd>
         </div>
     </dl>
+
+    @if ($isGroupClass)
+        <div class="mt-4">
+            <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="font-semibold text-slate-700">{{ __('app.booked_capacity') }}</span>
+                <span class="font-semibold text-slate-950">{{ __('app.booked_of_capacity', ['booked' => $activeBookings->count(), 'capacity' => $capacity]) }}</span>
+            </div>
+            <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
+                <div class="h-full rounded-full bg-brand-600" style="width: {{ $barWidth }}%"></div>
+            </div>
+        </div>
+    @endif
 
     @if ($activeCancellation)
         <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">

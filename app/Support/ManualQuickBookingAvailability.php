@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
@@ -13,7 +14,7 @@ class ManualQuickBookingAvailability
     private const SLOT_STEP_MINUTES = 30;
 
     /**
-     * @param  array{date: string, location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, allow_past?: bool}  $input
+     * @param  array{date: string, location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool}  $input
      * @return array{
      *     date: string,
      *     timezone: string,
@@ -33,8 +34,9 @@ class ManualQuickBookingAvailability
             ->where('schedule_kind', $scheduleKind->value)
             ->firstOrFail();
         $trainerId = filled($input['trainer_id'] ?? null) ? (int) $input['trainer_id'] : null;
+        $customerId = $this->customerIdFor($account, $input['customer_id'] ?? null);
 
-        if ($scheduleKind === ScheduleKind::PrivateLesson && $trainerId) {
+        if ($trainerId) {
             $account->trainers()->whereKey($trainerId)->firstOrFail();
         }
 
@@ -65,7 +67,7 @@ class ManualQuickBookingAvailability
             ];
         }
 
-        $blockers = $this->blockers($account, $room->id, $trainerId, $opensAt, $closesAt);
+        $blockers = $this->blockers($account, $room->id, $trainerId, $customerId, $opensAt, $closesAt);
         $now = CarbonImmutable::now($timezone);
         $slots = [];
 
@@ -95,7 +97,7 @@ class ManualQuickBookingAvailability
     }
 
     /**
-     * @param  array{location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, allow_past?: bool}  $input
+     * @param  array{location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool}  $input
      */
     public function hasStart(Account $account, ScheduleKind $scheduleKind, string $startsAt, array $input): bool
     {
@@ -115,7 +117,7 @@ class ManualQuickBookingAvailability
     }
 
     /**
-     * @param  array{location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, allow_past?: bool}  $input
+     * @param  array{location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool}  $input
      */
     public function hasRange(Account $account, ScheduleKind $scheduleKind, string $startsAt, string $endsAt, array $input): bool
     {
@@ -132,6 +134,12 @@ class ManualQuickBookingAvailability
             ->whereKey($input['class_type_id'])
             ->where('schedule_kind', $scheduleKind->value)
             ->firstOrFail();
+        $trainerId = filled($input['trainer_id'] ?? null) ? (int) $input['trainer_id'] : null;
+        $customerId = $this->customerIdFor($account, $input['customer_id'] ?? null);
+
+        if ($trainerId) {
+            $account->trainers()->whereKey($trainerId)->firstOrFail();
+        }
 
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $slotStart = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $startsAt, $timezone);
@@ -162,7 +170,7 @@ class ManualQuickBookingAvailability
         }
 
         return ! $this->hasOverlap(
-            $this->blockers($account, $room->id, null, $slotStart, $slotEnd),
+            $this->blockers($account, $room->id, $trainerId, $customerId, $slotStart, $slotEnd),
             $slotStart,
             $slotEnd,
         );
@@ -171,20 +179,44 @@ class ManualQuickBookingAvailability
     /**
      * @return Collection<int, mixed>
      */
-    private function blockers(Account $account, int $roomId, ?int $trainerId, CarbonImmutable $opensAt, CarbonImmutable $closesAt): Collection
+    private function blockers(Account $account, int $roomId, ?int $trainerId, ?int $customerId, CarbonImmutable $opensAt, CarbonImmutable $closesAt): Collection
     {
+        $activeBookingStatuses = [
+            ClassBookingStatus::Booked->value,
+            ClassBookingStatus::Attended->value,
+        ];
+
         return $account->scheduledClasses()
             ->where('status', ScheduledClassStatus::Scheduled->value)
-            ->where(function ($query) use ($roomId, $trainerId): void {
+            ->where(function ($query) use ($roomId, $trainerId, $customerId, $activeBookingStatuses): void {
                 $query->where('room_id', $roomId);
 
                 if ($trainerId) {
                     $query->orWhere('trainer_id', $trainerId);
                 }
+
+                if ($customerId) {
+                    $query->orWhereHas('classBookings', fn ($query) => $query
+                        ->notCorrectedRemoved()
+                        ->where('customer_id', $customerId)
+                        ->whereIn('status', $activeBookingStatuses));
+                }
             })
             ->where('starts_at', '<', $closesAt->timezone(config('app.timezone')))
             ->where('ends_at', '>', $opensAt->timezone(config('app.timezone')))
             ->get(['id', 'starts_at', 'ends_at', 'room_id', 'trainer_id']);
+    }
+
+    private function customerIdFor(Account $account, mixed $customerId): ?int
+    {
+        if (blank($customerId)) {
+            return null;
+        }
+
+        $customerId = (int) $customerId;
+        $account->customers()->whereKey($customerId)->firstOrFail();
+
+        return $customerId;
     }
 
     /**
