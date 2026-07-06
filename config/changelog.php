@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.74.1',
+                'date' => '2026-07-06',
+                'title' => 'Web app installation help',
+                'items' => ['Added owner help for installing Ladna as a web app from Chrome on Android and from Safari or Chrome on iPhone, with clear wording that this is separate from the native mobile app in development.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.74.0',
                 'date' => '2026-07-06',
                 'title' => 'Customer cabinet booking alerts',
@@ -674,6 +681,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.74.1',
+                'date' => '2026-07-06',
+                'title' => 'Допомога зі встановлення веб-застосунку',
+                'items' => ['Додано довідку для власниць про встановлення Ladna як веб-застосунку з Chrome на Android та з Safari або Chrome на iPhone, з поясненням, що це окремо від нативного мобільного застосунку в розробці.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.74.0',
                 'date' => '2026-07-06',

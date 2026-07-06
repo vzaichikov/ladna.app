@@ -282,6 +282,25 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('tenant', false);
     }
 
+    public function test_install_web_app_help_explains_android_and_ios_pwa_installation(): void
+    {
+        $this->get(route('help.show', 'install-web-app', false))
+            ->assertStatus(200)
+            ->assertSee('Як встановити Ladna на телефон як веб-застосунок', false)
+            ->assertSee('Як додати Ladna в Chrome на Android', false)
+            ->assertSee('Встановити застосунок', false)
+            ->assertSee('Як додати Ladna в Safari на iPhone', false)
+            ->assertSee('На екран Додому', false)
+            ->assertSee('Як додати Ladna в Chrome на iPhone', false)
+            ->assertSee('скористайтесь Safari', false)
+            ->assertSee('Це не окремий Android-застосунок із магазину', false)
+            ->assertSee('застосунок ще в розробці', false)
+            ->assertSee('assets/help/screenshots/studio-dashboard.png', false)
+            ->assertDontSee('Flutter', false)
+            ->assertDontSee('endpoint', false)
+            ->assertDontSee('tenant', false);
+    }
+
     public function test_reports_cameras_help_explains_rtsp_and_people_counter(): void
     {
         $this->get(route('help.show', 'reports-cameras', false))
