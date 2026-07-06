@@ -11,6 +11,7 @@ use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\SubscriptionPlan;
 use App\Models\SystemSetting;
+use App\Models\TelegramAlert;
 use App\Models\TelegramBotInstallation;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
@@ -258,7 +259,7 @@ class PlatformAdminTest extends TestCase
 
         $normalUser = User::factory()->create();
         $platformAdmin = User::factory()->platformAdmin()->create();
-        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+        $installation = $this->platformOwnerTelegramBot([
             'encrypted_token' => '123456:owner-secret',
             'token_last_four' => 'cret',
             'webhook_url' => 'https://ladna.test/api/v1/telegram/webhooks/local-key',
@@ -312,7 +313,7 @@ class PlatformAdminTest extends TestCase
         ]);
 
         $platformAdmin = User::factory()->platformAdmin()->create();
-        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+        $installation = $this->platformOwnerTelegramBot([
             'encrypted_token' => '123456:owner-secret',
             'token_last_four' => 'cret',
             'webhook_url' => 'https://ladna.test/api/v1/telegram/webhooks/local-key',
@@ -360,7 +361,7 @@ class PlatformAdminTest extends TestCase
         ]);
 
         $platformAdmin = User::factory()->platformAdmin()->create();
-        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+        $installation = $this->platformOwnerTelegramBot([
             'encrypted_token' => '123456:owner-secret',
             'token_last_four' => 'cret',
             'webhook_url' => 'https://ladna.test/api/v1/telegram/webhooks/local-key',
@@ -382,7 +383,7 @@ class PlatformAdminTest extends TestCase
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
         $account = Account::factory()->create(['name' => 'Telegram Studio', 'slug' => 'telegram-studio']);
-        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+        $installation = $this->platformOwnerTelegramBot([
             'bot_username' => 'ladna_owner_bot',
         ]);
 
@@ -424,6 +425,18 @@ class PlatformAdminTest extends TestCase
             ]);
         }
 
+        foreach (range(1, 26) as $index) {
+            TelegramAlert::factory()->for($account)->create([
+                'telegram_bot_installation_id' => $installation->id,
+                'telegram_chat_authorization_id' => $authorization->id,
+                'telegram_chat_id' => $authorization->telegram_chat_id,
+                'status' => $index % 2 === 0 ? 'sent' : 'failed',
+                'text' => $index === 2 ? 'Sent alert only' : 'Alert log '.$index,
+                'last_error' => $index % 2 === 0 ? null : 'Alert error '.$index,
+                'created_at' => now()->subMinutes($index),
+            ]);
+        }
+
         $this->actingAs($platformAdmin)
             ->get(route('platform.telegram-support.index'))
             ->assertOk()
@@ -446,6 +459,23 @@ class PlatformAdminTest extends TestCase
             ->assertDontSee('Support error 1');
 
         $this->actingAs($platformAdmin)
+            ->get(route('platform.telegram-support.index', ['tab' => 'alerts']))
+            ->assertOk()
+            ->assertSee(__('app.telegram_alert_logs'))
+            ->assertSee(__('app.all_alert_types'))
+            ->assertSee('Alert log 1')
+            ->assertSee('Alert error 1')
+            ->assertSee('alerts_page=2', false)
+            ->assertDontSee('Support error 1');
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.telegram-support.index', ['tab' => 'alerts', 'alert_status' => 'failed']))
+            ->assertOk()
+            ->assertSee('Alert log 1')
+            ->assertSee('Alert error 1')
+            ->assertDontSee('Sent alert only');
+
+        $this->actingAs($platformAdmin)
             ->get(route('platform.telegram-support.index', ['tab' => 'webhooks']))
             ->assertOk()
             ->assertSee(__('app.telegram_update_logs'))
@@ -457,7 +487,7 @@ class PlatformAdminTest extends TestCase
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
         $account = Account::factory()->create();
-        $installation = TelegramBotInstallation::factory()->platformOwner()->create();
+        $installation = $this->platformOwnerTelegramBot();
         $linkedUser = User::factory()->create();
         $authorization = TelegramChatAuthorization::factory()->for($account)->for($linkedUser, 'user')->create([
             'telegram_bot_installation_id' => $installation->id,
@@ -529,6 +559,33 @@ class PlatformAdminTest extends TestCase
             return $request->url() === 'https://ollama.com/api/tags'
                 && $request->hasHeader('Authorization', 'Bearer stored-secret');
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function platformOwnerTelegramBot(array $attributes = []): TelegramBotInstallation
+    {
+        $installation = TelegramBotInstallation::query()
+            ->where('scope_type', 'platform')
+            ->where('scope_id', 0)
+            ->where('profile', TelegramBotProfile::Owner->value)
+            ->first();
+
+        if (! $installation) {
+            return TelegramBotInstallation::factory()->platformOwner()->create($attributes);
+        }
+
+        $installation->forceFill(array_merge([
+            'account_id' => null,
+            'scope_type' => 'platform',
+            'scope_id' => 0,
+            'profile' => TelegramBotProfile::Owner->value,
+            'status' => 'configured',
+            'is_enabled' => true,
+        ], $attributes))->save();
+
+        return $installation->refresh();
     }
 
     public function test_provider_model_discovery_requires_saved_secret(): void

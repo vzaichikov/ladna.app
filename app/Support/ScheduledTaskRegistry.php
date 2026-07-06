@@ -44,6 +44,14 @@ class ScheduledTaskRegistry
                 'overlap_minutes' => 30,
             ],
             [
+                'key' => 'telegram_alerts_send',
+                'command' => 'telegram-alerts:send --limit=50',
+                'expression' => '* * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_minute',
+                'description_key' => 'scheduled_task_telegram_alerts_send_description',
+                'overlap_minutes' => 5,
+            ],
+            [
                 'key' => 'account_activity_logs_prune',
                 'command' => 'account-activity-logs:prune',
                 'expression' => '0 0 * * *',

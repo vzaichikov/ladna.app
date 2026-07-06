@@ -138,6 +138,7 @@ class AccountTenancyTest extends TestCase
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
+        $this->platformOwnerTelegramBot(['is_enabled' => false]);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.show', $account))
@@ -191,7 +192,7 @@ class AccountTenancyTest extends TestCase
         $account = Account::factory()->create();
         $account->addOwner($owner);
 
-        TelegramBotInstallation::factory()->platformOwner()->create([
+        $this->platformOwnerTelegramBot([
             'bot_username' => '@ladna_owner_bot',
             'is_enabled' => true,
         ]);
@@ -211,7 +212,7 @@ class AccountTenancyTest extends TestCase
         $account = Account::factory()->create();
         $account->addOwner($owner);
 
-        TelegramBotInstallation::factory()->platformOwner()->create([
+        $this->platformOwnerTelegramBot([
             'bot_username' => 'disabled_owner_bot',
             'is_enabled' => false,
         ]);
@@ -222,6 +223,32 @@ class AccountTenancyTest extends TestCase
             ->assertSee('Лендінг студії')
             ->assertDontSee('TG-бот підтримки')
             ->assertDontSee('disabled_owner_bot');
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function platformOwnerTelegramBot(array $attributes): TelegramBotInstallation
+    {
+        $installation = TelegramBotInstallation::query()
+            ->where('scope_type', 'platform')
+            ->where('scope_id', 0)
+            ->where('profile', 'owner')
+            ->first();
+
+        if (! $installation) {
+            return TelegramBotInstallation::factory()->platformOwner()->create($attributes);
+        }
+
+        $installation->forceFill(array_merge([
+            'account_id' => null,
+            'scope_type' => 'platform',
+            'scope_id' => 0,
+            'profile' => 'owner',
+            'status' => 'configured',
+        ], $attributes))->save();
+
+        return $installation->refresh();
     }
 
     public function test_trainer_sidebar_only_shows_authorized_items_and_header_trainer_level(): void

@@ -15,6 +15,7 @@ use App\Models\ScheduledClass;
 use App\Support\ActorSnapshot;
 use App\Support\ClassBookingCancellationWindow;
 use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\Telegram\Alerts\QueueTrainerAssignmentTelegramAlert;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ use Illuminate\Http\Response;
 
 class ClassBookingController extends Controller
 {
-    public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass, ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking, TransactionalMailDispatcher $mailDispatcher, ActorSnapshot $actorSnapshot): RedirectResponse|JsonResponse
+    public function store(StoreClassBookingRequest $request, Account $account, ScheduledClass $scheduledClass, ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking, TransactionalMailDispatcher $mailDispatcher, ActorSnapshot $actorSnapshot, QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert): RedirectResponse|JsonResponse
     {
         $this->ensureClassBelongsToAccount($account, $scheduledClass);
         $scheduledClass->loadMissing('classType');
@@ -59,6 +60,7 @@ class ClassBookingController extends Controller
 
         if ($shouldNotifyCustomer) {
             $mailDispatcher->bookingCreated($classBooking);
+            $queueTrainerAssignmentTelegramAlert->execute($classBooking);
         }
 
         if ($request->expectsJson()) {
@@ -69,7 +71,7 @@ class ClassBookingController extends Controller
             ->with('status', __('app.booking_created'));
     }
 
-    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking, ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking, ClassBookingCancellationWindow $cancellationWindow, TransactionalMailDispatcher $mailDispatcher): RedirectResponse|JsonResponse
+    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking, ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking, ClassBookingCancellationWindow $cancellationWindow, TransactionalMailDispatcher $mailDispatcher, QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert): RedirectResponse|JsonResponse
     {
         $this->ensureBookingBelongsToAccount($account, $classBooking);
 
@@ -91,6 +93,7 @@ class ClassBookingController extends Controller
             $mailDispatcher->bookingCancelled($classBooking);
         } elseif ($status === ClassBookingStatus::Booked && $previousStatus !== ClassBookingStatus::Booked) {
             $mailDispatcher->bookingCreated($classBooking);
+            $queueTrainerAssignmentTelegramAlert->execute($classBooking);
         }
 
         if ($request->expectsJson()) {

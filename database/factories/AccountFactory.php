@@ -40,6 +40,7 @@ class AccountFactory extends Factory
             'support_secondary_phone_url' => null,
             'allow_rtsp_cameras' => false,
             'enable_people_counter' => false,
+            'enable_telegram_alerts' => true,
         ];
     }
 }

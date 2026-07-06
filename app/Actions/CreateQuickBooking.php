@@ -15,6 +15,7 @@ use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\ScheduleKindRegistry;
+use App\Support\Telegram\Alerts\QueueTrainerAssignmentTelegramAlert;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,7 @@ class CreateQuickBooking
         private readonly ActorSnapshot $actorSnapshot,
         private readonly TransactionalMailDispatcher $mailDispatcher,
         private readonly RecordManualClassBookingPayment $recordManualClassBookingPayment,
+        private readonly QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert,
     ) {}
 
     /**
@@ -68,6 +70,7 @@ class CreateQuickBooking
         });
 
         $this->mailDispatcher->bookingCreated($classBooking);
+        $this->queueTrainerAssignmentTelegramAlert->execute($classBooking);
 
         return $classBooking;
     }

@@ -37,6 +37,7 @@ class ScheduledTaskStatusTest extends TestCase
             ->assertSee('schedule:generate')
             ->assertSee('class-passes:normalize')
             ->assertSee('billing:reconcile')
+            ->assertSee('telegram-alerts:send --limit=50')
             ->assertSee('account-activity-logs:prune')
             ->assertSee('*/15 * * * *')
             ->assertSee(__('app.scheduled_task_status_succeeded'))
@@ -92,5 +93,16 @@ class ScheduledTaskStatusTest extends TestCase
         $this->assertNotNull($definition);
         $this->assertSame('*/7 * * * *', $definition['expression']);
         $this->assertSame('scheduled_task_frequency_every_seven_minutes', $definition['frequency_key']);
+    }
+
+    public function test_telegram_alert_sender_runs_every_minute(): void
+    {
+        $definition = collect(app(ScheduledTaskRegistry::class)->definitions())
+            ->firstWhere('key', 'telegram_alerts_send');
+
+        $this->assertNotNull($definition);
+        $this->assertSame('* * * * *', $definition['expression']);
+        $this->assertSame('scheduled_task_frequency_every_minute', $definition['frequency_key']);
+        $this->assertSame(5, $definition['overlap_minutes']);
     }
 }

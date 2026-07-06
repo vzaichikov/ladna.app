@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.73.0',
+                'date' => '2026-07-06',
+                'title' => 'Telegram business alerts',
+                'items' => ['Added a reusable Telegram business-alert outbox with one-minute sending, delivery attempts, retention pruning, and platform support logs. The first alert notifies the linked trainer when a private lesson is booked or when the first customer books a group class, and platform admins can enable or disable alert delivery per studio.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.72.1',
                 'date' => '2026-07-06',
                 'title' => 'Clearer customer class passes',
@@ -660,6 +667,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.73.0',
+                'date' => '2026-07-06',
+                'title' => 'Telegram бізнес-сповіщення',
+                'items' => ['Додано універсальну чергу Telegram бізнес-сповіщень із щохвилинною відправкою, повторними спробами, очищенням за строком зберігання та логами в підтримці платформи. Перше сповіщення повідомляє привʼязаного тренера, коли бронюють приватне заняття або коли перший клієнт записується на групове заняття, а адміністратори платформи можуть увімкнути чи вимкнути доставку для кожної студії.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.72.1',
                 'date' => '2026-07-06',

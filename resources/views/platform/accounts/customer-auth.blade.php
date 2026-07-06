@@ -52,6 +52,11 @@
                 <input name="enable_people_counter" type="checkbox" value="1" @checked(old('enable_people_counter', $account->enable_people_counter)) class="crm-checkbox">
                 {{ __('app.enable_people_counter') }}
             </label>
+            <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
+                <input type="hidden" name="enable_telegram_alerts" value="0">
+                <input name="enable_telegram_alerts" type="checkbox" value="1" @checked(old('enable_telegram_alerts', $account->enable_telegram_alerts)) class="crm-checkbox">
+                {{ __('app.enable_telegram_alerts') }}
+            </label>
             <p class="text-sm leading-6 text-slate-500">{{ __('app.rtsp_camera_support_hint') }}</p>
         </div>
 

@@ -72,6 +72,7 @@ class CameraMonitoringTest extends TestCase
                 'allow_otp' => '1',
                 'allow_rtsp_cameras' => '1',
                 'enable_people_counter' => '1',
+                'enable_telegram_alerts' => '0',
                 'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
                 'otp_provider' => null,
             ])
@@ -81,18 +82,21 @@ class CameraMonitoringTest extends TestCase
 
         $this->assertTrue($account->allow_rtsp_cameras);
         $this->assertTrue($account->enable_people_counter);
+        $this->assertFalse($account->enable_telegram_alerts);
 
         $this->actingAs($platformAdmin)
             ->get(route('platform.accounts.customer-auth.edit', $account))
             ->assertOk()
             ->assertSee(__('app.enable_customer_otp_tariff'), false)
             ->assertSee(__('app.enable_rtsp_camera_support'), false)
-            ->assertSee(__('app.enable_people_counter'), false);
+            ->assertSee(__('app.enable_people_counter'), false)
+            ->assertSee(__('app.enable_telegram_alerts'), false);
 
         $this->actingAs($owner)
             ->put(route('platform.accounts.customer-auth.update', $account), [
                 'allow_rtsp_cameras' => '0',
                 'enable_people_counter' => '0',
+                'enable_telegram_alerts' => '1',
                 'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
             ])
             ->assertForbidden();

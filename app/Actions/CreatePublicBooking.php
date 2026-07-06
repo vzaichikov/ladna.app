@@ -13,6 +13,7 @@ use App\Models\ScheduledClass;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
+use App\Support\Telegram\Alerts\QueueTrainerAssignmentTelegramAlert;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,7 @@ class CreatePublicBooking
         private readonly ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking,
         private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
         private readonly TransactionalMailDispatcher $mailDispatcher,
+        private readonly QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert,
     ) {}
 
     /**
@@ -63,6 +65,7 @@ class CreatePublicBooking
 
         if ($classBooking->wasRecentlyCreated || $classBooking->wasChanged('status')) {
             $this->mailDispatcher->bookingCreated($classBooking);
+            $this->queueTrainerAssignmentTelegramAlert->execute($classBooking);
         }
 
         return $classBooking;

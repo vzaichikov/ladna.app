@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Enums\AccountRole;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\TelegramAlertStatus;
+use App\Enums\TelegramAlertType;
 use App\Models\Account;
 use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
@@ -13,6 +15,7 @@ use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\ScheduleSeries;
+use App\Models\TelegramAlert;
 use App\Models\Trainer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -236,12 +239,21 @@ class CustomerBookingTest extends TestCase
     public function test_owner_can_create_customer_book_class_and_mark_attendance(): void
     {
         $owner = User::factory()->create();
-        $account = Account::factory()->create();
+        $account = Account::factory()->create([
+            'name' => 'Charmpole',
+            'default_language' => 'en',
+        ]);
         $account->addOwner($owner);
-        $location = Location::factory()->for($account)->create();
-        $room = Room::factory()->for($account)->for($location)->create();
-        $classType = ClassType::factory()->for($account)->create(['cancellation_cutoff_minutes' => null]);
-        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create();
+        $location = Location::factory()->for($account)->create(['name' => 'Podil Studio']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Blue Hall']);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Iryna']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Group Choreo',
+            'cancellation_cutoff_minutes' => null,
+        ]);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->for($trainer)->create([
+            'title' => 'Group Choreo',
+        ]);
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.customers.store', $account), [
@@ -262,6 +274,20 @@ class CustomerBookingTest extends TestCase
             ->assertRedirect(route('dashboard.accounts.scheduled-classes.index', $account));
 
         $booking = ClassBooking::whereBelongsTo($account)->whereBelongsTo($customer)->firstOrFail();
+        $alert = TelegramAlert::whereBelongsTo($account)
+            ->whereBelongsTo($scheduledClass, 'scheduledClass')
+            ->whereBelongsTo($booking, 'classBooking')
+            ->firstOrFail();
+
+        $this->assertSame(TelegramAlertType::TrainerAssignment, $alert->type);
+        $this->assertSame(TelegramAlertStatus::Pending, $alert->status);
+        $this->assertSame($trainer->id, $alert->trainer_id);
+        $this->assertStringContainsString('Iryna, you have a new booking in Charmpole', (string) $alert->text);
+        $this->assertStringContainsString('Charmpole', (string) $alert->text);
+        $this->assertStringContainsString('Podil Studio', (string) $alert->text);
+        $this->assertStringContainsString('Blue Hall', (string) $alert->text);
+        $this->assertStringContainsString('Group Choreo', (string) $alert->text);
+        $this->assertStringContainsString('Customer: Олена', (string) $alert->text);
 
         $this->actingAs($owner)
             ->patch(route('dashboard.accounts.bookings.update', [$account, $booking]), [

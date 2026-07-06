@@ -18,6 +18,7 @@ use App\Models\ScheduledClass;
 use App\Support\ActorSnapshot;
 use App\Support\ClassBookingCancellationWindow;
 use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\Telegram\Alerts\QueueTrainerAssignmentTelegramAlert;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -54,6 +55,7 @@ class MobileBookingController extends Controller
         ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking,
         ActorSnapshot $actorSnapshot,
         TransactionalMailDispatcher $mailDispatcher,
+        QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert,
     ): JsonResponse {
         $session = $this->staffSession($request);
         $this->ensureClassBelongsToSession($session, $scheduledClass);
@@ -86,6 +88,7 @@ class MobileBookingController extends Controller
 
         if ($booking->wasRecentlyCreated || $booking->wasChanged('status')) {
             $mailDispatcher->bookingCreated($booking);
+            $queueTrainerAssignmentTelegramAlert->execute($booking);
         }
 
         return $this->bookingResponse($booking, 201);
@@ -97,6 +100,7 @@ class MobileBookingController extends Controller
         ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
         ClassBookingCancellationWindow $cancellationWindow,
         TransactionalMailDispatcher $mailDispatcher,
+        QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert,
     ): JsonResponse {
         $session = $this->staffSession($request);
         $this->ensureBookingBelongsToSession($session, $classBooking);
@@ -125,6 +129,7 @@ class MobileBookingController extends Controller
             $mailDispatcher->bookingCancelled($classBooking);
         } elseif ($status === ClassBookingStatus::Booked && $previousStatus !== ClassBookingStatus::Booked) {
             $mailDispatcher->bookingCreated($classBooking);
+            $queueTrainerAssignmentTelegramAlert->execute($classBooking);
         }
 
         return $this->bookingResponse($classBooking);

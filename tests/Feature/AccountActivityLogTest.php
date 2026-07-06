@@ -11,6 +11,7 @@ use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiPendingAction;
 use App\Models\McpToolInvocation;
+use App\Models\TelegramAlert;
 use App\Models\TelegramAuthorizationSelection;
 use App\Models\TelegramAuthorizationSelectionCandidate;
 use App\Models\TelegramBotInstallation;
@@ -210,7 +211,7 @@ class AccountActivityLogTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-06-27 10:00:00'));
         $account = Account::factory()->create();
         $user = User::factory()->create();
-        $installation = TelegramBotInstallation::factory()->platformOwner()->create();
+        $installation = $this->platformOwnerTelegramBot();
         $authorization = TelegramChatAuthorization::factory()->for($account)->create([
             'telegram_bot_installation_id' => $installation->id,
             'user_id' => $user->id,
@@ -321,12 +322,21 @@ class AccountActivityLogTest extends TestCase
             'expires_at' => now()->subDays(44),
             'created_at' => now()->subDays(44),
         ]);
+        $oldAlert = TelegramAlert::factory()->for($account)->create([
+            'created_at' => now()->subDays(46),
+            'updated_at' => now()->subDays(46),
+        ]);
+        $recentAlert = TelegramAlert::factory()->for($account)->create([
+            'created_at' => now()->subDays(44),
+            'updated_at' => now()->subDays(44),
+        ]);
 
         $this->artisan('account-activity-logs:prune')
             ->expectsOutput(__('app.account_activity_logs_pruned', ['count' => 1]))
             ->expectsOutput(__('app.telegram_logs_pruned', [
                 'messages' => 1,
                 'updates' => 1,
+                'alerts' => 1,
                 'conversation_messages' => 1,
                 'conversations' => 1,
                 'pending_actions' => 1,
@@ -339,6 +349,8 @@ class AccountActivityLogTest extends TestCase
         $this->assertModelExists($recentActivityLog);
         $this->assertModelMissing($oldUpdate);
         $this->assertModelExists($recentUpdate);
+        $this->assertModelMissing($oldAlert);
+        $this->assertModelExists($recentAlert);
         $this->assertModelMissing($oldMessage);
         $this->assertModelExists($recentMessage);
         $this->assertModelMissing($oldAiMessage);
@@ -357,5 +369,29 @@ class AccountActivityLogTest extends TestCase
         $this->assertModelExists($recentSelection);
 
         Carbon::setTestNow();
+    }
+
+    private function platformOwnerTelegramBot(): TelegramBotInstallation
+    {
+        $installation = TelegramBotInstallation::query()
+            ->where('scope_type', 'platform')
+            ->where('scope_id', 0)
+            ->where('profile', 'owner')
+            ->first();
+
+        if (! $installation) {
+            return TelegramBotInstallation::factory()->platformOwner()->create();
+        }
+
+        $installation->forceFill([
+            'account_id' => null,
+            'scope_type' => 'platform',
+            'scope_id' => 0,
+            'profile' => 'owner',
+            'status' => 'configured',
+            'is_enabled' => true,
+        ])->save();
+
+        return $installation->refresh();
     }
 }
