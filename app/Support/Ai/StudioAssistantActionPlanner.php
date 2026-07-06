@@ -112,6 +112,12 @@ class StudioAssistantActionPlanner
             return $this->continueBookingDraft($account, $user, $trainer, $conversation, $text, $draft);
         }
 
+        if ($this->isDialogCancel($normalized)) {
+            return StudioAssistantActionPlan::message(__('app.assistant_booking_dialog_no_active'), [
+                'booking_dialog' => ['status' => 'none'],
+            ]);
+        }
+
         if (! $this->hasBookingIntent($normalized)) {
             return null;
         }
@@ -625,7 +631,21 @@ class StudioAssistantActionPlanner
 
     private function isDialogCancel(string $text): bool
     {
-        return in_array($text, ['cancel', 'скасувати', 'отмена', 'отменить', 'не треба'], true);
+        if (preg_match('/^\/(?:cancel_booking|cancel)(?:@\w+)?(?:\s|$)/u', $text) === 1) {
+            return true;
+        }
+
+        if (in_array($text, ['cancel', 'cancel booking', 'exit booking', 'stop booking', 'never mind', 'скасувати', 'відміна', 'отмена', 'отменить', 'не треба'], true)) {
+            return true;
+        }
+
+        return str_contains($text, 'передумала')
+            || str_contains($text, 'передумав')
+            || str_contains($text, 'завершимо запис')
+            || str_contains($text, 'завершити запис')
+            || str_contains($text, 'закінчити запис')
+            || str_contains($text, 'вийти з запису')
+            || str_contains($text, 'выйти из записи');
     }
 
     private function mentionsAuthorizedTrainer(string $text): bool

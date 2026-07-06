@@ -15,7 +15,7 @@ class TelegramOwnerResponder
     public function __construct(private readonly StudioAiInference $studioAiInference) {}
 
     /**
-     * @param  callable(): mixed|null  $beforeProviderRequest
+     * @param  callable(string): mixed|null  $beforeProviderRequest
      * @return array{response: string, rejected: bool, used_ai: bool, follow_up_actions: array<int, string>, help_sources: array<int, mixed>, provider: string|null, model: string|null, fallback_reason: string|null}
      */
     public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?callable $beforeProviderRequest = null): array

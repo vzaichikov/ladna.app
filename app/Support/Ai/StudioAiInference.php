@@ -22,7 +22,7 @@ class StudioAiInference
     ) {}
 
     /**
-     * @param  callable(): mixed|null  $beforeProviderRequest
+     * @param  callable(string): mixed|null  $beforeProviderRequest
      */
     public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?AiConversation $conversation = null, ?callable $beforeProviderRequest = null): StudioAiResult
     {
@@ -46,16 +46,16 @@ class StudioAiInference
             return StudioAiResult::fallback('missing_ollama_api_key');
         }
 
-        $notifyBeforeProviderRequest = function () use ($beforeProviderRequest): void {
+        $notifyBeforeProviderRequest = function (string $statusKey) use ($beforeProviderRequest): void {
             if (! $beforeProviderRequest) {
                 return;
             }
 
-            $beforeProviderRequest();
+            $beforeProviderRequest($statusKey);
         };
 
         try {
-            $notifyBeforeProviderRequest();
+            $notifyBeforeProviderRequest('assistant_status_checking_request');
 
             if (! $this->guard->isStudioScoped($account, $text, $apiKey, $setting->active_model)) {
                 return StudioAiResult::rejected(__('app.telegram_out_of_scope'));
@@ -71,7 +71,7 @@ class StudioAiInference
             $capabilityContext = $this->capabilities->isCapabilityQuestion($text)
                 ? $this->capabilities->forPrompt($this->channel($authorization, $conversation))
                 : null;
-            $notifyBeforeProviderRequest();
+            $notifyBeforeProviderRequest('assistant_status_thinking');
 
             $response = $this->ollamaCloudClient->chat(
                 $apiKey,

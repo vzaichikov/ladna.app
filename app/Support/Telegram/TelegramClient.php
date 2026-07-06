@@ -46,6 +46,28 @@ class TelegramClient
             ]);
     }
 
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    public function editMessageText(TelegramBotInstallation $installation, string|int $chatId, string|int $messageId, string $text, array $extra = []): ?Response
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token || (string) $chatId === '' || (string) $messageId === '') {
+            return null;
+        }
+
+        return Http::timeout(8)
+            ->connectTimeout(3)
+            ->retry([100, 300], throw: false)
+            ->post($this->methodUrl($token, 'editMessageText'), [
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'text' => $text,
+                ...$extra,
+            ]);
+    }
+
     public function setWebhook(TelegramBotInstallation $installation): ?Response
     {
         $token = $installation->tokenValue();

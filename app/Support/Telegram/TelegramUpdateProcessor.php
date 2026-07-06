@@ -104,24 +104,37 @@ class TelegramUpdateProcessor
 
         $telegramUpdate->update(['account_id' => $authorization->account_id]);
 
-        if ($data === 'tg_restart') {
-            $this->conversationResetter->reset($authorization);
-            $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_conversation_restarted'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+        $statusMessage = $this->startStatusMessage($telegramUpdate, $chatId);
+        $typing = $this->startTyping($telegramUpdate, $chatId);
+
+        try {
+            if ($data === 'tg_restart') {
+                $this->conversationResetter->reset($authorization);
+                $this->refreshTyping($typing, force: true);
+                $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_conversation_restarted'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
+
+                return true;
+            }
+
+            if (preg_match('/^tg_follow:(\d+):(\d+)$/', $data, $matches) === 1) {
+                return $this->processFollowUpCallback($telegramUpdate, $authorization, $chatId, (int) $matches[1], (int) $matches[2], $callbackQuery, $typing, $statusMessage);
+            }
+
+            if ($data === 'tg_booking:cancel') {
+                return $this->processBookingCancelCallback($telegramUpdate, $authorization, $chatId, $callbackQuery, $typing, $statusMessage);
+            }
+
+            if (preg_match('/^tg_action:(confirm|cancel):(\d+)$/', $data, $matches) === 1) {
+                return $this->processActionCallback($telegramUpdate, $authorization, $chatId, $matches[1], (int) $matches[2], $typing, $statusMessage);
+            }
+
+            $this->refreshTyping($typing, force: true);
+            $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_action_unknown'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
 
             return true;
+        } finally {
+            $this->stopTyping($typing);
         }
-
-        if (preg_match('/^tg_follow:(\d+):(\d+)$/', $data, $matches) === 1) {
-            return $this->processFollowUpCallback($telegramUpdate, $authorization, $chatId, (int) $matches[1], (int) $matches[2], $callbackQuery);
-        }
-
-        if (preg_match('/^tg_action:(confirm|cancel):(\d+)$/', $data, $matches) === 1) {
-            return $this->processActionCallback($telegramUpdate, $authorization, $chatId, $matches[1], (int) $matches[2]);
-        }
-
-        $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_action_unknown'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
-
-        return true;
     }
 
     private function processMessage(TelegramUpdate $telegramUpdate): bool
@@ -237,89 +250,103 @@ class TelegramUpdateProcessor
         return $this->processAuthorizedOwnerText($telegramUpdate, $authorization, $inboundMessage, $chatId, $text);
     }
 
-    private function processAuthorizedOwnerText(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, TelegramMessage $inboundMessage, string $chatId, string $text): bool
+    private function processAuthorizedOwnerText(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, TelegramMessage $inboundMessage, string $chatId, string $text, ?TelegramTypingIndicator $typing = null, ?TelegramStatusMessage $statusMessage = null): bool
     {
         $account = $authorization->account;
+        $statusMessage ??= $this->startStatusMessage($telegramUpdate, $chatId);
+        $typing ??= $this->startTyping($telegramUpdate, $chatId);
 
-        if ($this->isRestartShortcut($text)) {
-            $this->conversationResetter->reset($authorization);
-            $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_conversation_restarted'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+        try {
+            if ($this->isRestartShortcut($text)) {
+                $this->conversationResetter->reset($authorization);
+                $this->refreshTyping($typing, force: true);
+                $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_conversation_restarted'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
+
+                return true;
+            }
+
+            $conversation = $this->conversationFor($authorization);
+            $conversation->messages()->create([
+                'account_id' => $authorization->account_id,
+                'telegram_message_id' => $inboundMessage->id,
+                'role' => AiConversationMessageRole::User->value,
+                'content' => $text,
+                'occurred_at' => now(),
+            ]);
+
+            $this->updateStatus($statusMessage, 'assistant_status_checking_database');
+            $this->refreshTyping($typing, force: true);
+
+            $plan = $authorization->user
+                ? $this->actionPlanForText($account, $authorization, $conversation, $text)
+                : null;
+
+            if ($plan?->pendingAction || $plan?->handled) {
+                $this->updateStatus($statusMessage, $plan->pendingAction ? 'assistant_status_preparing_action' : 'assistant_status_checking_database');
+                $this->refreshTyping($typing, force: true);
+
+                $result = [
+                    'response' => $plan->message ?? __('app.assistant_pending_action_created'),
+                    'rejected' => false,
+                    'used_ai' => false,
+                    'metadata' => [
+                        'used_ai' => false,
+                        ...($plan->pendingAction ? ['pending_action_id' => $plan->pendingAction->id] : []),
+                        ...$plan->metadata,
+                    ],
+                ];
+            } else {
+                $result = $this->ownerResponder->respond(
+                    $account,
+                    $text,
+                    $authorization,
+                    function (string $statusKey) use ($typing, $statusMessage): ?Response {
+                        $response = $this->updateStatus($statusMessage, $statusKey);
+                        $this->refreshTyping($typing, force: true);
+
+                        return $response;
+                    },
+                );
+                $result['metadata'] = [
+                    'used_ai' => $result['used_ai'],
+                    'provider' => $result['provider'] ?? null,
+                    'model' => $result['model'] ?? null,
+                    'fallback_reason' => $result['fallback_reason'] ?? null,
+                    'follow_up_actions' => $result['follow_up_actions'] ?? [],
+                    'help_sources' => $result['help_sources'] ?? [],
+                ];
+            }
+
+            $assistantMessage = $conversation->messages()->create([
+                'account_id' => $authorization->account_id,
+                'role' => $result['rejected'] ? AiConversationMessageRole::RejectedIntent->value : AiConversationMessageRole::Assistant->value,
+                'content' => $result['response'],
+                'metadata' => $result['metadata'],
+                'occurred_at' => now(),
+            ]);
+
+            $this->refreshTyping($typing, force: true);
+            $this->stopTyping($typing);
+
+            $outboundMessage = $this->sendAndStore(
+                $telegramUpdate,
+                $chatId,
+                $result['response'],
+                $this->assistantTelegramReplyMarkup($assistantMessage),
+                $account->id,
+                $authorization,
+                $this->assistantTelegramText($result['response']),
+                $statusMessage,
+            );
+
+            $assistantMessage->update(['telegram_message_id' => $outboundMessage->id]);
+
+            $conversation->update(['last_message_at' => now()]);
 
             return true;
+        } finally {
+            $this->stopTyping($typing);
         }
-
-        $typing = $this->typingIndicator($telegramUpdate, $chatId);
-        $typing->start();
-
-        $conversation = $this->conversationFor($authorization);
-        $conversation->messages()->create([
-            'account_id' => $authorization->account_id,
-            'telegram_message_id' => $inboundMessage->id,
-            'role' => AiConversationMessageRole::User->value,
-            'content' => $text,
-            'occurred_at' => now(),
-        ]);
-
-        $plan = $authorization->user
-            ? $this->actionPlanForText($account, $authorization, $conversation, $text)
-            : null;
-
-        if ($plan?->pendingAction || $plan?->handled) {
-            $typing->refresh();
-
-            $result = [
-                'response' => $plan->message ?? __('app.assistant_pending_action_created'),
-                'rejected' => false,
-                'used_ai' => false,
-                'metadata' => [
-                    'used_ai' => false,
-                    ...($plan->pendingAction ? ['pending_action_id' => $plan->pendingAction->id] : []),
-                    ...$plan->metadata,
-                ],
-            ];
-        } else {
-            $result = $this->ownerResponder->respond(
-                $account,
-                $text,
-                $authorization,
-                fn (): ?Response => $typing->refresh(force: true),
-            );
-            $result['metadata'] = [
-                'used_ai' => $result['used_ai'],
-                'provider' => $result['provider'] ?? null,
-                'model' => $result['model'] ?? null,
-                'fallback_reason' => $result['fallback_reason'] ?? null,
-                'follow_up_actions' => $result['follow_up_actions'] ?? [],
-                'help_sources' => $result['help_sources'] ?? [],
-            ];
-        }
-
-        $assistantMessage = $conversation->messages()->create([
-            'account_id' => $authorization->account_id,
-            'role' => $result['rejected'] ? AiConversationMessageRole::RejectedIntent->value : AiConversationMessageRole::Assistant->value,
-            'content' => $result['response'],
-            'metadata' => $result['metadata'],
-            'occurred_at' => now(),
-        ]);
-
-        $typing->refresh();
-        $typing->stop();
-
-        $outboundMessage = $this->sendAndStore(
-            $telegramUpdate,
-            $chatId,
-            $result['response'],
-            $this->assistantTelegramReplyMarkup($assistantMessage),
-            $account->id,
-            $authorization,
-            $this->assistantTelegramText($result['response']),
-        );
-
-        $assistantMessage->update(['telegram_message_id' => $outboundMessage->id]);
-
-        $conversation->update(['last_message_at' => now()]);
-
-        return true;
     }
 
     private function typingIndicator(TelegramUpdate $telegramUpdate, string $chatId): TelegramTypingIndicator
@@ -329,15 +356,65 @@ class TelegramUpdateProcessor
             $telegramUpdate->installation,
             $chatId,
             $this->typingRefreshSeconds(),
+            $this->typingMaxSeconds(),
         );
+    }
+
+    private function startTyping(TelegramUpdate $telegramUpdate, string $chatId): ?TelegramTypingIndicator
+    {
+        if ($chatId === '') {
+            return null;
+        }
+
+        $typing = $this->typingIndicator($telegramUpdate, $chatId);
+        $typing->start();
+
+        return $typing;
+    }
+
+    private function refreshTyping(?TelegramTypingIndicator $typing, bool $force = false): ?Response
+    {
+        return $typing?->refresh($force);
+    }
+
+    private function stopTyping(?TelegramTypingIndicator $typing): void
+    {
+        $typing?->stop();
+    }
+
+    private function startStatusMessage(TelegramUpdate $telegramUpdate, string $chatId): ?TelegramStatusMessage
+    {
+        if ($chatId === '') {
+            return null;
+        }
+
+        $statusMessage = new TelegramStatusMessage(
+            $this->telegramClient,
+            $telegramUpdate->installation,
+            $chatId,
+            __('app.assistant_status_thinking'),
+        );
+        $statusMessage->start();
+
+        return $statusMessage;
+    }
+
+    private function updateStatus(?TelegramStatusMessage $statusMessage, string $statusKey): ?Response
+    {
+        return $statusMessage?->update(__('app.'.$statusKey));
     }
 
     private function typingRefreshSeconds(): float
     {
-        return max(0.0, (float) config('services.telegram.typing_refresh_seconds', 4.0));
+        return max(0.0, (float) config('services.telegram.typing_refresh_seconds', 2.0));
     }
 
-    private function processFollowUpCallback(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, int $messageId, int $index, array $callbackQuery): bool
+    private function typingMaxSeconds(): int
+    {
+        return max(1, (int) config('services.telegram.typing_max_seconds', 120));
+    }
+
+    private function processFollowUpCallback(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, int $messageId, int $index, array $callbackQuery, ?TelegramTypingIndicator $typing = null, ?TelegramStatusMessage $statusMessage = null): bool
     {
         $message = AiConversationMessage::query()
             ->whereKey($messageId)
@@ -352,7 +429,8 @@ class TelegramUpdateProcessor
         $text = is_array($followUps) ? ($followUps[$index] ?? null) : null;
 
         if (! is_string($text) || trim($text) === '') {
-            $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_action_unknown'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+            $this->refreshTyping($typing, force: true);
+            $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_action_unknown'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
 
             return true;
         }
@@ -372,11 +450,34 @@ class TelegramUpdateProcessor
             'sent_at' => now(),
         ]);
 
-        return $this->processAuthorizedOwnerText($telegramUpdate, $authorization, $inboundMessage, $chatId, $text);
+        return $this->processAuthorizedOwnerText($telegramUpdate, $authorization, $inboundMessage, $chatId, $text, $typing, $statusMessage);
     }
 
-    private function processActionCallback(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, string $mode, int $actionId): bool
+    private function processBookingCancelCallback(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, array $callbackQuery, ?TelegramTypingIndicator $typing = null, ?TelegramStatusMessage $statusMessage = null): bool
     {
+        $inboundMessage = TelegramMessage::create([
+            'account_id' => $authorization->account_id,
+            'telegram_bot_installation_id' => $telegramUpdate->telegram_bot_installation_id,
+            'telegram_chat_authorization_id' => $authorization->id,
+            'telegram_update_id' => $telegramUpdate->id,
+            'profile' => $telegramUpdate->profile->value,
+            'telegram_chat_id' => $chatId,
+            'telegram_user_id' => (string) data_get($callbackQuery, 'from.id'),
+            'direction' => 'inbound',
+            'message_type' => 'callback_query',
+            'text' => '/cancel_booking',
+            'payload' => $callbackQuery,
+            'sent_at' => now(),
+        ]);
+
+        return $this->processAuthorizedOwnerText($telegramUpdate, $authorization, $inboundMessage, $chatId, '/cancel_booking', $typing, $statusMessage);
+    }
+
+    private function processActionCallback(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, string $mode, int $actionId, ?TelegramTypingIndicator $typing = null, ?TelegramStatusMessage $statusMessage = null): bool
+    {
+        $this->updateStatus($statusMessage, 'assistant_status_checking_database');
+        $this->refreshTyping($typing, force: true);
+
         $action = AiPendingAction::query()
             ->whereKey($actionId)
             ->where('account_id', $authorization->account_id)
@@ -386,7 +487,8 @@ class TelegramUpdateProcessor
             ->first();
 
         if (! $action || ! $action->isPending()) {
-            $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_action_not_pending'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+            $this->refreshTyping($typing, force: true);
+            $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_action_not_pending'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
 
             return true;
         }
@@ -397,32 +499,40 @@ class TelegramUpdateProcessor
                 'cancelled_at' => now(),
             ]);
 
+            $this->updateStatus($statusMessage, 'assistant_status_preparing_action');
+            $this->refreshTyping($typing, force: true);
             $this->sendActionResult($telegramUpdate, $authorization, $chatId, $action, __('app.assistant_action_cancelled'), [
                 'action_id' => $action->id,
                 'action_name' => $action->action_name,
-            ]);
+            ], $statusMessage);
 
             return true;
         }
 
         if (! $authorization->user) {
-            $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_action_forbidden'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+            $this->refreshTyping($typing, force: true);
+            $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_action_forbidden'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
 
             return true;
         }
 
         try {
+            $this->updateStatus($statusMessage, 'assistant_status_executing_action');
+            $this->refreshTyping($typing, force: true);
             $result = $this->actionExecutor->execute($action, $authorization->user);
             $message = (string) ($result['message'] ?? __('app.assistant_action_executed'));
+            $this->refreshTyping($typing, force: true);
             $this->sendActionResult($telegramUpdate, $authorization, $chatId, $action->refresh(), $message, [
                 'action_id' => $action->id,
                 'action_name' => $action->action_name,
                 'result' => $result,
-            ]);
+            ], $statusMessage);
         } catch (AuthorizationException $exception) {
-            $this->sendAndStore($telegramUpdate, $chatId, $exception->getMessage() ?: __('app.assistant_action_forbidden'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+            $this->refreshTyping($typing, force: true);
+            $this->sendAndStore($telegramUpdate, $chatId, $exception->getMessage() ?: __('app.assistant_action_forbidden'), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
         } catch (ValidationException $exception) {
-            $this->sendAndStore($telegramUpdate, $chatId, $this->validationMessage($exception), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+            $this->refreshTyping($typing, force: true);
+            $this->sendAndStore($telegramUpdate, $chatId, $this->validationMessage($exception), $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
         }
 
         return true;
@@ -431,9 +541,9 @@ class TelegramUpdateProcessor
     /**
      * @param  array<string, mixed>  $metadata
      */
-    private function sendActionResult(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, AiPendingAction $action, string $message, array $metadata): void
+    private function sendActionResult(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, string $chatId, AiPendingAction $action, string $message, array $metadata, ?TelegramStatusMessage $statusMessage = null): void
     {
-        $outboundMessage = $this->sendAndStore($telegramUpdate, $chatId, $message, $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization);
+        $outboundMessage = $this->sendAndStore($telegramUpdate, $chatId, $message, $this->ownerQuickActionFormatting(), $authorization->account_id, $authorization, statusMessage: $statusMessage);
 
         $action->conversation?->messages()->create([
             'account_id' => $authorization->account_id,
@@ -525,9 +635,12 @@ class TelegramUpdateProcessor
     /**
      * @param  array<string, mixed>  $extra
      */
-    private function sendAndStore(TelegramUpdate $telegramUpdate, string $chatId, string $text, array $extra = [], ?int $accountId = null, ?TelegramChatAuthorization $authorization = null, ?string $telegramText = null): TelegramMessage
+    private function sendAndStore(TelegramUpdate $telegramUpdate, string $chatId, string $text, array $extra = [], ?int $accountId = null, ?TelegramChatAuthorization $authorization = null, ?string $telegramText = null, ?TelegramStatusMessage $statusMessage = null): TelegramMessage
     {
-        $this->telegramClient->sendMessage($telegramUpdate->installation, $chatId, $telegramText ?? $text, $extra);
+        $sentExtra = $statusMessage ? $this->editableMessageExtra($extra) : $extra;
+        $response = $statusMessage
+            ? $statusMessage->finalize($telegramText ?? $text, $sentExtra)
+            : $this->telegramClient->sendMessage($telegramUpdate->installation, $chatId, $telegramText ?? $text, $sentExtra);
 
         return TelegramMessage::create([
             'account_id' => $accountId ?? $telegramUpdate->account_id,
@@ -536,12 +649,35 @@ class TelegramUpdateProcessor
             'telegram_update_id' => $telegramUpdate->id,
             'profile' => $telegramUpdate->profile->value,
             'telegram_chat_id' => $chatId,
+            'telegram_message_id' => $this->telegramMessageId($response),
             'direction' => 'outbound',
             'message_type' => 'text',
             'text' => $text,
-            'payload' => $extra ?: null,
+            'payload' => $sentExtra ?: null,
             'sent_at' => now(),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function editableMessageExtra(array $extra): array
+    {
+        if (data_get($extra, 'reply_markup.inline_keyboard')) {
+            return $extra;
+        }
+
+        unset($extra['reply_markup']);
+
+        return $extra;
+    }
+
+    private function telegramMessageId(?Response $response): ?string
+    {
+        $messageId = data_get($response?->json(), 'result.message_id');
+
+        return filled($messageId) ? (string) $messageId : null;
     }
 
     /**
@@ -594,21 +730,36 @@ class TelegramUpdateProcessor
             ]];
         }
 
+        $keyboard = [];
         $followUps = data_get($message->metadata, 'follow_up_actions', []);
 
-        if (! is_array($followUps)) {
-            return [];
+        if (is_array($followUps)) {
+            $keyboard = collect($followUps)
+                ->filter(fn (mixed $followUp): bool => is_string($followUp) && trim($followUp) !== '')
+                ->take(3)
+                ->values()
+                ->map(fn (string $followUp, int $index): array => [[
+                    'text' => $this->telegramButtonText($followUp),
+                    'callback_data' => 'tg_follow:'.$message->id.':'.$index,
+                ]])
+                ->all();
         }
 
-        return collect($followUps)
-            ->filter(fn (mixed $followUp): bool => is_string($followUp) && trim($followUp) !== '')
-            ->take(3)
-            ->values()
-            ->map(fn (string $followUp, int $index): array => [[
-                'text' => $this->telegramButtonText($followUp),
-                'callback_data' => 'tg_follow:'.$message->id.':'.$index,
-            ]])
-            ->all();
+        if ($this->hasActiveBookingDialog($message)) {
+            $keyboard[] = [[
+                'text' => __('app.assistant_booking_dialog_cancel_button'),
+                'callback_data' => 'tg_booking:cancel',
+            ]];
+        }
+
+        return $keyboard;
+    }
+
+    private function hasActiveBookingDialog(AiConversationMessage $message): bool
+    {
+        $status = (string) data_get($message->metadata, 'booking_dialog.status', '');
+
+        return in_array($status, ['awaiting_customer', 'awaiting_trainer', 'awaiting_date', 'awaiting_class'], true);
     }
 
     private function telegramButtonText(string $text): string

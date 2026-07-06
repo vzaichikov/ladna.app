@@ -253,6 +253,10 @@ class TelegramWebhookManager
                 'description' => __('app.telegram_command_book_description'),
             ],
             [
+                'command' => 'cancel_booking',
+                'description' => __('app.telegram_command_cancel_booking_description'),
+            ],
+            [
                 'command' => 'restart',
                 'description' => __('app.telegram_command_restart_description'),
             ],
