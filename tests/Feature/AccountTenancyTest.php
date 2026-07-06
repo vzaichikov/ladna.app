@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\Location;
+use App\Models\TelegramBotInstallation;
 use App\Models\Trainer;
 use App\Models\TrainerType;
 use App\Models\User;
@@ -146,6 +147,9 @@ class AccountTenancyTest extends TestCase
                 'Актуальне',
                 'Заняття',
                 'Клієнти',
+                'Посилання',
+                'Лендінг студії',
+                'публічна сторінка студії',
                 'Налаштування студії',
                 'Локації',
                 'Зали',
@@ -164,6 +168,10 @@ class AccountTenancyTest extends TestCase
                 'Тариф та платежі',
                 'Журнал дій',
             ])
+            ->assertSee('працює на Ladna')
+            ->assertSee(route('public.studio', $account->slug), false)
+            ->assertSee('target="_blank"', false)
+            ->assertDontSee('TG-бот підтримки')
             ->assertDontSee('Мій бренд')
             ->assertDontSee('Брендінг')
             ->assertDontSee('Шаблон тижня')
@@ -175,6 +183,45 @@ class AccountTenancyTest extends TestCase
             ->assertSee(route('dashboard.accounts.activity-logs.index', $account), false)
             ->assertDontSee('tab=business', false)
             ->assertDontSee('tab=account', false);
+    }
+
+    public function test_studio_owner_sidebar_links_to_enabled_platform_owner_telegram_bot(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        TelegramBotInstallation::factory()->platformOwner()->create([
+            'bot_username' => '@ladna_owner_bot',
+            'is_enabled' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee('TG-бот підтримки')
+            ->assertSee('підпишись на сповіщення')
+            ->assertSee('href="https://t.me/ladna_owner_bot"', false)
+            ->assertSee('target="_blank"', false);
+    }
+
+    public function test_studio_owner_sidebar_hides_disabled_platform_owner_telegram_bot(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        TelegramBotInstallation::factory()->platformOwner()->create([
+            'bot_username' => 'disabled_owner_bot',
+            'is_enabled' => false,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee('Лендінг студії')
+            ->assertDontSee('TG-бот підтримки')
+            ->assertDontSee('disabled_owner_bot');
     }
 
     public function test_trainer_sidebar_only_shows_authorized_items_and_header_trainer_level(): void

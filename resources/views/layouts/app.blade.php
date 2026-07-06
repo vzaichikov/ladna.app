@@ -69,6 +69,26 @@
         default => __('app.subscription_expired_readonly'),
     };
     $supportUrl = \App\Models\SystemSetting::stringValue(\App\Models\SystemSetting::SupportUrlKey);
+    $ownerTelegramBotUsername = $showAccountNav
+        ? (string) \App\Models\TelegramBotInstallation::query()
+            ->where('scope_type', 'platform')
+            ->where('profile', \App\Enums\TelegramBotProfile::Owner->value)
+            ->where('is_enabled', true)
+            ->whereNotNull('bot_username')
+            ->latest('id')
+            ->value('bot_username')
+        : '';
+    $ownerTelegramBotUsername = trim($ownerTelegramBotUsername);
+    $ownerTelegramBotUrl = null;
+
+    if ($ownerTelegramBotUsername !== '') {
+        $ownerTelegramBotUrl = str_starts_with(strtolower($ownerTelegramBotUsername), 'http://')
+            || str_starts_with(strtolower($ownerTelegramBotUsername), 'https://')
+            || str_starts_with(strtolower($ownerTelegramBotUsername), 'tg://')
+            ? $ownerTelegramBotUsername
+            : 'https://t.me/'.ltrim($ownerTelegramBotUsername, '@');
+    }
+
     $classFormatNav = [];
 
     if ($showAccountNav && $canManageStudioSettings) {
@@ -137,6 +157,21 @@
             'icon' => 'video',
             'href' => route('dashboard.accounts.cameras.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.cameras.*'),
+        ]] : []),
+    ] : [];
+
+    $sidebarLinksNav = $showAccountNav ? [
+        [
+            'label' => __('app.studio_landing_link'),
+            'description' => __('app.studio_landing_link_help'),
+            'icon' => 'globe',
+            'href' => route('public.studio', $activeAccount->slug),
+        ],
+        ...($ownerTelegramBotUrl ? [[
+            'label' => __('app.telegram_support_bot_link'),
+            'description' => __('app.telegram_support_bot_link_help'),
+            'icon' => 'telegram',
+            'href' => $ownerTelegramBotUrl,
         ]] : []),
     ] : [];
 
@@ -295,13 +330,25 @@
                 class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col overflow-y-auto bg-[#3B223F] bg-[linear-gradient(180deg,#3B223F_0%,#2B1731_58%,#3B223F_100%)] px-4 py-5 text-white shadow-2xl transition-transform duration-200 lg:translate-x-0"
             >
                 <div class="flex items-center justify-between gap-3 px-1">
-                    <a href="{{ $isPlatformAdmin ? route('platform.index') : route('dashboard.index') }}" class="rounded-xl px-1 py-1 transition hover:bg-white/5">
-                        <x-ui.app-logo
-                            text-class="text-white"
-                            tagline-class="text-violet-crm-100/80"
-                            mark-wrapper-class="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#FAF8F5] p-2 shadow-[0_10px_24px_rgba(20,10,24,0.22)] ring-1 ring-white/60"
-                        />
-                    </a>
+                    @if ($sidebarAccount)
+                        <a href="{{ route('dashboard.accounts.show', $sidebarAccount) }}" class="flex min-w-0 items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-white/5">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[#FAF8F5] p-2 shadow-[0_10px_24px_rgba(20,10,24,0.22)] ring-1 ring-white/60">
+                                <img src="{{ $sidebarAccount->logoUrl() }}" alt="" class="max-h-full max-w-full object-contain">
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block truncate text-sm font-semibold leading-5 text-white">{{ $sidebarAccount->name }}</span>
+                                <span class="mt-0.5 block truncate text-xs font-medium leading-4 text-violet-crm-100/80">{{ __('app.works_on_ladna') }}</span>
+                            </span>
+                        </a>
+                    @else
+                        <a href="{{ $isPlatformAdmin ? route('platform.index') : route('dashboard.index') }}" class="rounded-xl px-1 py-1 transition hover:bg-white/5">
+                            <x-ui.app-logo
+                                text-class="text-white"
+                                tagline-class="text-violet-crm-100/80"
+                                mark-wrapper-class="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#FAF8F5] p-2 shadow-[0_10px_24px_rgba(20,10,24,0.22)] ring-1 ring-white/60"
+                            />
+                        </a>
+                    @endif
                     <button type="button" data-sidebar-close class="rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white lg:hidden">
                         <x-ui.icon name="close" class="h-5 w-5" />
                     </button>
@@ -330,6 +377,26 @@
                                     <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
                                         <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
                                         <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($sidebarLinksNav)
+                        <div>
+                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.links') }}</div>
+                            <div class="mt-3 space-y-1">
+                                @foreach ($sidebarLinksNav as $item)
+                                    <a href="{{ $item['href'] }}" target="_blank" rel="noopener" class="group flex items-start gap-3 rounded-lg px-3 py-2.5 transition text-slate-300 hover:bg-white/10 hover:text-white">
+                                        <x-ui.icon :name="$item['icon']" class="mt-0.5 h-5 w-5 text-slate-400 group-hover:text-brand-500" />
+                                        <span class="min-w-0 flex-1">
+                                            <span class="flex min-w-0 items-center gap-1">
+                                                <span class="truncate">{{ $item['label'] }}</span>
+                                                <x-ui.icon name="external" class="h-3.5 w-3.5 shrink-0 text-slate-500 group-hover:text-violet-crm-100" />
+                                            </span>
+                                            <span class="mt-0.5 block truncate text-[0.68rem] font-medium leading-4 text-violet-crm-100/65">{{ $item['description'] }}</span>
+                                        </span>
                                     </a>
                                 @endforeach
                             </div>
@@ -381,20 +448,13 @@
                     @endif
 
                     @if ($sidebarAccount)
-                        <div class="crm-studio-card">
-                            <div class="crm-studio-logo-panel flex aspect-[1.65] items-center justify-center">
-                                <img src="{{ $sidebarAccount->logoUrl() }}" alt="" class="max-h-24 max-w-28 object-contain opacity-95">
-                            </div>
-                            <div class="p-4">
-                                <div class="font-semibold text-white">{{ $sidebarAccount->name }}</div>
-                                <div class="mt-1 text-sm text-violet-crm-100/80">{{ $sidebarAccount->slug }}</div>
-                                <div class="mt-3">
-                                    <span class="{{ $subscriptionCanEdit ? 'crm-status-active' : 'crm-status-danger' }}">
-                                        {{ $subscriptionCanEdit ? __('app.active') : __('app.expired') }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                        <a href="{{ route('dashboard.index') }}" class="block rounded-xl border border-white/10 bg-white/10 p-3 transition hover:bg-white/15">
+                            <x-ui.app-logo
+                                text-class="text-white"
+                                tagline-class="text-violet-crm-100/80"
+                                mark-wrapper-class="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#FAF8F5] p-2 shadow-[0_10px_24px_rgba(20,10,24,0.22)] ring-1 ring-white/60"
+                            />
+                        </a>
                     @endif
 
                     <form method="POST" action="{{ route('locale.update') }}">
