@@ -87,6 +87,7 @@ class AccountAssistantTest extends TestCase
     {
         Http::fake([
             'ollama.com/api/chat' => Http::sequence()
+                ->push(['message' => ['role' => 'assistant', 'content' => '{"start_booking":false,"reason":"analytics question"}']])
                 ->push(['message' => ['role' => 'assistant', 'content' => '{"in_scope":true,"reason":"studio analytics question"}']])
                 ->push(['message' => ['role' => 'assistant', 'content' => json_encode([
                     'answer' => 'Tomorrow has 4 bookings.',
@@ -205,12 +206,19 @@ class AccountAssistantTest extends TestCase
     public function test_dashboard_booking_dialog_resolves_typo_and_requires_class_choice_confirmation(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-29 08:00:00', 'UTC'));
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"start_booking":true,"reason":"direct booking request"}',
+                ],
+            ]),
+        ]);
 
         $owner = User::factory()->create();
         $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
         $account->addOwner($owner);
-        PlatformAiSetting::query()->delete();
-        PlatformAiSetting::factory()->create(['owner_ai_assistant_enabled' => true]);
+        $this->configureGlobalOllama();
 
         $location = Location::factory()->for($account)->create(['name' => 'Podil']);
         $trainer = Trainer::factory()->for($account)->create(['name' => 'Катя']);

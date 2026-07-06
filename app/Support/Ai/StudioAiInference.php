@@ -24,6 +24,67 @@ class StudioAiInference
     /**
      * @param  callable(string): mixed|null  $beforeProviderRequest
      */
+    public function shouldStartBookingDialog(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?callable $beforeProviderRequest = null): bool
+    {
+        if (! $this->containsBookingLanguage($text)) {
+            return false;
+        }
+
+        $setting = PlatformAiSetting::current();
+
+        if (! $setting->owner_ai_assistant_enabled || ! $setting->active_provider || ! $setting->active_model) {
+            return false;
+        }
+
+        if ($setting->active_provider !== AiProvider::OllamaCloud) {
+            return false;
+        }
+
+        $credential = PlatformAiProviderCredential::query()
+            ->where('provider', AiProvider::OllamaCloud->value)
+            ->first();
+
+        $apiKey = $credential?->apiKey();
+
+        if (! $apiKey) {
+            return false;
+        }
+
+        try {
+            if ($beforeProviderRequest) {
+                $beforeProviderRequest('assistant_status_checking_request');
+            }
+
+            $response = $this->ollamaCloudClient->chat(
+                $apiKey,
+                $setting->active_model,
+                $this->bookingIntentMessages($text, $authorization),
+                format: 'json',
+            );
+            $decoded = $this->decodeJsonObject($response['content']);
+
+            return data_get($decoded, 'start_booking') === true;
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return false;
+        }
+    }
+
+    private function containsBookingLanguage(string $text): bool
+    {
+        $normalized = mb_strtolower($text);
+
+        return str_contains($normalized, 'запис')
+            || str_contains($normalized, 'запиш')
+            || str_contains($normalized, 'брон')
+            || str_contains($normalized, 'book')
+            || str_contains($normalized, 'booking');
+    }
+
+    /**
+     * @param  callable(string): mixed|null  $beforeProviderRequest
+     */
     public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?AiConversation $conversation = null, ?callable $beforeProviderRequest = null): StudioAiResult
     {
         $setting = PlatformAiSetting::current();
@@ -93,6 +154,34 @@ class StudioAiInference
 
             return StudioAiResult::fallback('provider_request_failed');
         }
+    }
+
+    /**
+     * @return array<int, array{role: string, content: string}>
+     */
+    private function bookingIntentMessages(string $text, ?TelegramChatAuthorization $authorization): array
+    {
+        $system = implode("\n", [
+            'Classify whether a Ladna studio owner message explicitly asks the assistant to start creating a customer booking now.',
+            'Return only JSON: {"start_booking": boolean, "reason": string}.',
+            'true only for direct requests to create/book/register a client/customer/person for a class or lesson now.',
+            'false for how-to questions, help requests, workflow questions, forgotten-booking questions, schedule questions, cancellation requests, or ambiguous text.',
+            'Examples:',
+            'Message: "Запиши Аліну завтра до Каті" => {"start_booking": true, "reason": "direct booking request"}',
+            'Message: "Можемо до мене завтра Аліну записати?" => {"start_booking": true, "reason": "direct booking request"}',
+            'Message: "А підкажи, що робити якщо я забула записати людину сьогодні на заняття?" => {"start_booking": false, "reason": "help/workflow question"}',
+            'Message: "Як записати людину на заняття?" => {"start_booking": false, "reason": "how-to question"}',
+        ]);
+
+        $userContent = array_filter([
+            $authorization ? "Actor context JSON:\n".json_encode($this->contextBuilder->actorContext($authorization), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+            "Owner message:\n".$text,
+        ]);
+
+        return [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => implode("\n\n", $userContent)],
+        ];
     }
 
     /**

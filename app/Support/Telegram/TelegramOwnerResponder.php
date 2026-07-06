@@ -16,6 +16,20 @@ class TelegramOwnerResponder
 
     /**
      * @param  callable(string): mixed|null  $beforeProviderRequest
+     */
+    public function shouldStartBookingDialog(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?callable $beforeProviderRequest = null): bool
+    {
+        $normalized = Str::of($text)->lower()->squish()->toString();
+
+        if (! $this->containsBookingLanguage($normalized)) {
+            return false;
+        }
+
+        return $this->studioAiInference->shouldStartBookingDialog($account, $text, $authorization, $beforeProviderRequest);
+    }
+
+    /**
+     * @param  callable(string): mixed|null  $beforeProviderRequest
      * @return array{response: string, rejected: bool, used_ai: bool, follow_up_actions: array<int, string>, help_sources: array<int, mixed>, provider: string|null, model: string|null, fallback_reason: string|null}
      */
     public function respond(Account $account, string $text, ?TelegramChatAuthorization $authorization = null, ?callable $beforeProviderRequest = null): array
@@ -86,6 +100,15 @@ class TelegramOwnerResponder
             'model' => null,
             'fallback_reason' => null,
         ];
+    }
+
+    private function containsBookingLanguage(string $text): bool
+    {
+        return str_contains($text, 'запис')
+            || str_contains($text, 'запиш')
+            || str_contains($text, 'брон')
+            || str_contains($text, 'book')
+            || str_contains($text, 'booking');
     }
 
     private function asksStudioProfile(string $text): bool

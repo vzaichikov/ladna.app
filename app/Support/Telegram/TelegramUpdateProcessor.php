@@ -278,7 +278,18 @@ class TelegramUpdateProcessor
             $this->refreshTyping($typing, force: true);
 
             $plan = $authorization->user
-                ? $this->actionPlanForText($account, $authorization, $conversation, $text)
+                ? $this->actionPlanForText(
+                    $account,
+                    $authorization,
+                    $conversation,
+                    $text,
+                    function (string $statusKey) use ($typing, $statusMessage): ?Response {
+                        $response = $this->updateStatus($statusMessage, $statusKey);
+                        $this->refreshTyping($typing, force: true);
+
+                        return $response;
+                    },
+                )
                 : null;
 
             if ($plan?->pendingAction || $plan?->handled) {
@@ -574,7 +585,7 @@ class TelegramUpdateProcessor
             ->first();
     }
 
-    private function actionPlanForText(Account $account, TelegramChatAuthorization $authorization, AiConversation $conversation, string $text): ?StudioAssistantActionPlan
+    private function actionPlanForText(Account $account, TelegramChatAuthorization $authorization, AiConversation $conversation, string $text, ?callable $beforeProviderRequest = null): ?StudioAssistantActionPlan
     {
         if (! $authorization->user) {
             return null;
@@ -584,7 +595,9 @@ class TelegramUpdateProcessor
             return $this->actionPlanner->startGroupBookingDialog($account, $authorization->user, $authorization->trainer, $conversation);
         }
 
-        return $this->actionPlanner->plan($account, $authorization->user, $authorization->trainer, $conversation, $text);
+        $allowNewBookingDialog = $this->ownerResponder->shouldStartBookingDialog($account, $text, $authorization, $beforeProviderRequest);
+
+        return $this->actionPlanner->plan($account, $authorization->user, $authorization->trainer, $conversation, $text, $allowNewBookingDialog);
     }
 
     private function isCreateBookingShortcut(string $text): bool

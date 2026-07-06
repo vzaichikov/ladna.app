@@ -27,7 +27,7 @@ class StudioAssistantActionPlanner
         ]);
     }
 
-    public function plan(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $text): StudioAssistantActionPlan
+    public function plan(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $text, bool $allowNewBookingDialog = true): StudioAssistantActionPlan
     {
         $normalized = Str::of($text)->lower()->squish()->toString();
 
@@ -37,13 +37,13 @@ class StudioAssistantActionPlanner
             );
         }
 
-        if ($arguments = $this->groupBookingArguments($normalized)) {
+        if ($allowNewBookingDialog && $arguments = $this->groupBookingArguments($normalized)) {
             return StudioAssistantActionPlan::pending(
                 $this->createPendingAction($account, $user, $trainer, $conversation, 'create-booking', $arguments, $this->createBookingPreview($account, $arguments)),
             );
         }
 
-        if ($bookingPlan = $this->conversationalGroupBookingPlan($account, $user, $trainer, $conversation, $text, $normalized)) {
+        if ($bookingPlan = $this->conversationalGroupBookingPlan($account, $user, $trainer, $conversation, $text, $normalized, $allowNewBookingDialog)) {
             return $bookingPlan;
         }
 
@@ -97,7 +97,7 @@ class StudioAssistantActionPlanner
         ];
     }
 
-    private function conversationalGroupBookingPlan(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $text, string $normalized): ?StudioAssistantActionPlan
+    private function conversationalGroupBookingPlan(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $text, string $normalized, bool $allowNewBookingDialog): ?StudioAssistantActionPlan
     {
         $draft = $this->activeBookingDraft($conversation);
 
@@ -116,6 +116,10 @@ class StudioAssistantActionPlanner
             return StudioAssistantActionPlan::message(__('app.assistant_booking_dialog_no_active'), [
                 'booking_dialog' => ['status' => 'none'],
             ]);
+        }
+
+        if (! $allowNewBookingDialog) {
+            return null;
         }
 
         if (! $this->hasBookingIntent($normalized)) {
@@ -620,13 +624,25 @@ class StudioAssistantActionPlanner
 
     private function hasBookingIntent(string $text): bool
     {
-        return preg_match('/\bbook\s+/u', $text) === 1
-            || preg_match('/^\/book(?:@\w+)?(?:\s|$)/u', $text) === 1
-            || str_contains($text, 'запиши')
-            || str_contains($text, 'запишіть')
-            || str_contains($text, 'записати')
-            || str_contains($text, 'записать')
-            || str_contains($text, 'додай запис');
+        if (preg_match('/^\/book(?:@\w+)?(?:\s|$)/u', $text) === 1) {
+            return true;
+        }
+
+        if ($this->asksAboutBookingWorkflow($text)) {
+            return false;
+        }
+
+        return preg_match('/\bbook\s+(?:customer|client)[^\d#]*(?:#\s*)?\d+.+\bclass[^\d#]*(?:#\s*)?\d+/u', $text) === 1
+            || preg_match('/(?:^|\s)(?:запиши|запишіть|запиши-но|запиши\s+будь\s+ласка)(?:\s|$)/u', $text) === 1
+            || preg_match('/(?:^|\s)(?:додай|добавь|створи|создай)\s+запис(?:\s|$)/u', $text) === 1
+            || preg_match('/(?:^|\s)(?:можеш|можете|можемо|можна|давай|будь\s+ласка|пожалуйста|can|could)\b.{0,120}\b(?:записати|записать|book)\b/u', $text) === 1;
+    }
+
+    private function asksAboutBookingWorkflow(string $text): bool
+    {
+        return preg_match('/(?:що|шо|что|what)\s+робити/u', $text) === 1
+            || preg_match('/(?:як|как|how)\s+.{0,80}(?:записати|записать|запис|book)/u', $text) === 1
+            || preg_match('/(?:забула|забув|забыл|забыла|forgot)\s+.{0,80}(?:записати|записать|book)/u', $text) === 1;
     }
 
     private function isDialogCancel(string $text): bool

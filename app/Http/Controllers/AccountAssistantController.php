@@ -50,7 +50,8 @@ class AccountAssistantController extends Controller
             'occurred_at' => now(),
         ]);
 
-        $plan = $planner->plan($account, $request->user(), $this->trainerFor($account, $request), $conversation, $text);
+        $allowNewBookingDialog = $inference->shouldStartBookingDialog($account, $text);
+        $plan = $planner->plan($account, $request->user(), $this->trainerFor($account, $request), $conversation, $text, $allowNewBookingDialog);
 
         if ($plan->pendingAction) {
             $assistantText = $plan->message ?? __('app.assistant_pending_action_created');
