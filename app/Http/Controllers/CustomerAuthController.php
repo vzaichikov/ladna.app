@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\LinkGoogleCustomerByVerifiedPhone;
 use App\Http\Requests\CustomerEmailLoginRequest;
+use App\Http\Requests\CustomerGooglePhoneOtpSendRequest;
 use App\Http\Requests\CustomerOtpSendRequest;
 use App\Http\Requests\CustomerOtpVerifyRequest;
 use App\Http\Requests\UpdateCustomerProfileRequest;
@@ -243,7 +245,144 @@ class CustomerAuthController extends Controller
 
         abort_unless($availability->methodsFor($account)->google, 404);
 
-        $customer = $this->customerFromGoogle($account, $googleUser);
+        $customer = $this->matchedCustomerFromGoogle($account, $googleUser);
+
+        if ($customer && filled($customer->phone)) {
+            return $this->loginCustomer($this->fillGoogleCustomer($customer, $googleUser), $account);
+        }
+
+        $this->storePendingGoogleCustomer($account, $googleUser, $customer);
+
+        return redirect()->route('customer.google.phone', $account->slug);
+    }
+
+    public function googlePhone(string $accountSlug): View|RedirectResponse
+    {
+        $account = $this->account($accountSlug);
+
+        if (! $this->pendingGoogleCustomer($account)) {
+            return redirect()->route('customer.studio.login', $account->slug);
+        }
+
+        return view('customer-auth.google-phone', [
+            'account' => $account,
+            'phone' => session($this->googlePhoneSessionKey($account)),
+        ]);
+    }
+
+    public function sendGooglePhoneOtp(
+        CustomerGooglePhoneOtpSendRequest $request,
+        string $accountSlug,
+        CustomerOtpService $otp,
+        PhoneNumberNormalizer $phones,
+    ): RedirectResponse {
+        $account = $this->account($accountSlug);
+
+        if (! $this->pendingGoogleCustomer($account)) {
+            return redirect()->route('customer.studio.login', $account->slug);
+        }
+
+        $result = $otp->send(
+            $account,
+            $request->validated('phone'),
+            (string) $request->ip(),
+            substr((string) $request->userAgent(), 0, 1000),
+        );
+
+        if (! $result->ok) {
+            throw ValidationException::withMessages([
+                'phone' => $result->message ?? __('app.customer_otp_send_failed'),
+            ]);
+        }
+
+        session()->put($this->googlePhoneSessionKey($account), $result->challenge?->phone ?? $phones->normalize($request->validated('phone'), $account->country_code));
+
+        return redirect()
+            ->route('customer.google.phone', $account->slug)
+            ->with('status', __('app.customer_otp_sent'))
+            ->with('otp_resend_seconds', $result->secondsUntilResend);
+    }
+
+    public function resendGooglePhoneOtp(
+        Request $request,
+        string $accountSlug,
+        CustomerOtpService $otp,
+    ): RedirectResponse {
+        $account = $this->account($accountSlug);
+
+        if (! $this->pendingGoogleCustomer($account)) {
+            return redirect()->route('customer.studio.login', $account->slug);
+        }
+
+        $phone = session($this->googlePhoneSessionKey($account));
+
+        if (! is_string($phone) || $phone === '') {
+            return redirect()->route('customer.google.phone', $account->slug);
+        }
+
+        $result = $otp->send($account, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
+
+        if (! $result->ok) {
+            return redirect()
+                ->route('customer.google.phone', $account->slug)
+                ->withErrors(['code' => $result->message ?? __('app.customer_otp_send_failed')])
+                ->with('otp_resend_seconds', $result->secondsUntilResend);
+        }
+
+        return redirect()
+            ->route('customer.google.phone', $account->slug)
+            ->with('status', __('app.customer_otp_sent'))
+            ->with('otp_resend_seconds', $result->secondsUntilResend);
+    }
+
+    public function changeGooglePhone(string $accountSlug): RedirectResponse
+    {
+        $account = $this->account($accountSlug);
+        session()->forget($this->googlePhoneSessionKey($account));
+
+        return redirect()->route('customer.google.phone', $account->slug);
+    }
+
+    public function verifyGooglePhoneOtp(
+        CustomerOtpVerifyRequest $request,
+        string $accountSlug,
+        CustomerOtpService $otp,
+        LinkGoogleCustomerByVerifiedPhone $linkCustomer,
+    ): RedirectResponse {
+        $account = $this->account($accountSlug);
+        $pendingGoogleCustomer = $this->pendingGoogleCustomer($account);
+
+        if (! $pendingGoogleCustomer) {
+            return redirect()->route('customer.studio.login', $account->slug);
+        }
+
+        $phone = session($this->googlePhoneSessionKey($account), $request->validated('phone'));
+
+        if ($phone !== $request->validated('phone')) {
+            throw ValidationException::withMessages([
+                'code' => __('app.customer_otp_invalid'),
+            ]);
+        }
+
+        $result = $otp->verify($account, $request->validated('phone'), $request->validated('code'));
+
+        if (! $result->ok || ! $result->challenge) {
+            throw ValidationException::withMessages([
+                'code' => $result->message ?? __('app.customer_otp_invalid'),
+            ]);
+        }
+
+        $customer = $linkCustomer->execute(
+            $account,
+            $pendingGoogleCustomer,
+            $result->challenge->phone,
+            $pendingGoogleCustomer['customer_id'] ?? null,
+        );
+
+        session()->forget([
+            $this->pendingGoogleCustomerSessionKey($account),
+            $this->googlePhoneSessionKey($account),
+        ]);
 
         return $this->loginCustomer($customer, $account);
     }
@@ -343,7 +482,7 @@ class CustomerAuthController extends Controller
         ]);
     }
 
-    private function customerFromGoogle(Account $account, GoogleUserData $googleUser): Customer
+    private function matchedCustomerFromGoogle(Account $account, GoogleUserData $googleUser): ?Customer
     {
         $customer = $account->customers()->where('google_id', $googleUser->id)->first();
 
@@ -351,16 +490,11 @@ class CustomerAuthController extends Controller
             $customer = $account->customers()->where('email', $googleUser->email)->first();
         }
 
-        if (! $customer) {
-            return $account->customers()->create([
-                'google_id' => $googleUser->id,
-                'email' => $googleUser->email,
-                'email_verified_at' => $googleUser->emailVerified ? now() : null,
-                'name' => $googleUser->name,
-                'default_language' => $account->default_language,
-            ]);
-        }
+        return $customer;
+    }
 
+    private function fillGoogleCustomer(Customer $customer, GoogleUserData $googleUser): Customer
+    {
         $customer->forceFill([
             'google_id' => $customer->google_id ?: $googleUser->id,
             'email_verified_at' => $customer->email_verified_at ?: ($googleUser->emailVerified ? now() : null),
@@ -368,6 +502,31 @@ class CustomerAuthController extends Controller
         ])->save();
 
         return $customer;
+    }
+
+    private function storePendingGoogleCustomer(Account $account, GoogleUserData $googleUser, ?Customer $customer): void
+    {
+        session()->put($this->pendingGoogleCustomerSessionKey($account), [
+            'customer_id' => $customer?->id,
+            'google_id' => $googleUser->id,
+            'email' => $googleUser->email,
+            'email_verified' => $googleUser->emailVerified,
+            'name' => $googleUser->name,
+        ]);
+    }
+
+    /**
+     * @return array{customer_id?: int|null, google_id: string, email?: string|null, email_verified?: bool, name?: string|null}|null
+     */
+    private function pendingGoogleCustomer(Account $account): ?array
+    {
+        $pending = session($this->pendingGoogleCustomerSessionKey($account));
+
+        if (! is_array($pending) || blank($pending['google_id'] ?? null)) {
+            return null;
+        }
+
+        return $pending;
     }
 
     private function loginCustomer(Customer $customer, Account $account): RedirectResponse
@@ -414,5 +573,15 @@ class CustomerAuthController extends Controller
     private function otpPhoneSessionKey(Account $account): string
     {
         return 'customer_otp_phone_'.$account->id;
+    }
+
+    private function pendingGoogleCustomerSessionKey(Account $account): string
+    {
+        return 'customer_google_pending_'.$account->id;
+    }
+
+    private function googlePhoneSessionKey(Account $account): string
+    {
+        return 'customer_google_phone_'.$account->id;
     }
 }

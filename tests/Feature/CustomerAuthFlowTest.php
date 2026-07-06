@@ -535,6 +535,127 @@ class CustomerAuthFlowTest extends TestCase
         $this->assertAuthenticatedAs($customer, 'customer');
     }
 
+    public function test_google_login_links_verified_phone_to_existing_customer(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'country_code' => 'UA',
+            'slug' => 'google-phone-link-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Olena Client',
+            'email' => null,
+            'phone' => '+380501112233',
+            'phone_verified_at' => null,
+            'google_id' => null,
+        ]);
+
+        $this->enableGooglePhoneOtp($account);
+
+        $redirect = $this->get(route('customer.google.redirect', $account->slug))
+            ->assertRedirect()
+            ->headers->get('Location');
+
+        parse_str(parse_url((string) $redirect, PHP_URL_QUERY) ?: '', $query);
+
+        Http::fake([
+            'oauth2.googleapis.com/token' => Http::response(['access_token' => 'google-access-token']),
+            'openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'sub' => 'google-subject-phone-link',
+                'email' => 'olena.google@example.com',
+                'email_verified' => true,
+                'name' => 'Olena Google',
+            ]),
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'otp-1']]]),
+        ]);
+
+        $this->get(route('customer.google.callback', [
+            'state' => $query['state'],
+            'code' => 'auth-code',
+        ]))->assertRedirect(route('customer.google.phone', $account->slug));
+
+        $this->assertGuest('customer');
+
+        $this->get(route('customer.google.phone', $account->slug))
+            ->assertOk()
+            ->assertSee('Enter your phone number', false);
+
+        $this->post(route('customer.google.phone.send', $account->slug), [
+            'phone' => '0501112233',
+        ])->assertRedirect(route('customer.google.phone', $account->slug));
+
+        $this->get(route('customer.google.phone', $account->slug))
+            ->assertOk()
+            ->assertSee('Enter the SMS code', false)
+            ->assertSee('+380501112233', false);
+
+        $this->post(route('customer.google.phone.verify', $account->slug), [
+            'phone' => '+380501112233',
+            'code' => '123456',
+        ])->assertRedirect(route('customer.dashboard', $account->slug));
+
+        $customer->refresh();
+
+        $this->assertSame('google-subject-phone-link', $customer->google_id);
+        $this->assertSame('olena.google@example.com', $customer->email);
+        $this->assertNotNull($customer->email_verified_at);
+        $this->assertNotNull($customer->phone_verified_at);
+        $this->assertSame(1, $account->customers()->count());
+        $this->assertAuthenticatedAs($customer, 'customer');
+    }
+
+    public function test_google_login_creates_customer_after_verified_phone_when_no_phone_match_exists(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'country_code' => 'UA',
+            'slug' => 'google-phone-create-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+
+        $this->enableGooglePhoneOtp($account);
+
+        $redirect = $this->get(route('customer.google.redirect', $account->slug))
+            ->assertRedirect()
+            ->headers->get('Location');
+
+        parse_str(parse_url((string) $redirect, PHP_URL_QUERY) ?: '', $query);
+
+        Http::fake([
+            'oauth2.googleapis.com/token' => Http::response(['access_token' => 'google-access-token']),
+            'openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'sub' => 'google-subject-phone-create',
+                'email' => 'new.google@example.com',
+                'email_verified' => true,
+                'name' => 'New Google',
+            ]),
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'otp-2']]]),
+        ]);
+
+        $this->get(route('customer.google.callback', [
+            'state' => $query['state'],
+            'code' => 'auth-code',
+        ]))->assertRedirect(route('customer.google.phone', $account->slug));
+
+        $this->post(route('customer.google.phone.send', $account->slug), [
+            'phone' => '0502223344',
+        ])->assertRedirect(route('customer.google.phone', $account->slug));
+
+        $this->post(route('customer.google.phone.verify', $account->slug), [
+            'phone' => '+380502223344',
+            'code' => '123456',
+        ])->assertRedirect(route('customer.dashboard', $account->slug));
+
+        $customer = Customer::whereBelongsTo($account)->where('phone', '+380502223344')->firstOrFail();
+
+        $this->assertSame('google-subject-phone-create', $customer->google_id);
+        $this->assertSame('new.google@example.com', $customer->email);
+        $this->assertSame('New Google', $customer->name);
+        $this->assertNotNull($customer->email_verified_at);
+        $this->assertNotNull($customer->phone_verified_at);
+        $this->assertAuthenticatedAs($customer, 'customer');
+    }
+
     public function test_customer_remember_cookie_slides_expiration_on_visit(): void
     {
         $account = Account::factory()->create([
@@ -593,6 +714,26 @@ class CustomerAuthFlowTest extends TestCase
             'category' => $category,
             'is_enabled' => true,
             'credentials' => $credentials,
+        ]);
+    }
+
+    private function enableGooglePhoneOtp(Account $account): void
+    {
+        CustomerAuthSetting::create([
+            'account_id' => $account->id,
+            'allow_otp' => true,
+            'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
+            'otp_provider' => 'turbosms',
+        ]);
+
+        $this->platformIntegration('google_oauth', IntegrationCategory::Authentication->value, [
+            'client_id' => 'google-client',
+            'client_secret' => 'google-secret',
+        ]);
+
+        $this->platformIntegration('turbosms', IntegrationCategory::Messaging->value, [
+            'api_token' => 'turbo-token',
+            'sms_sender' => 'Ladna',
         ]);
     }
 }

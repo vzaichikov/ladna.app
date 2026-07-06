@@ -1674,4 +1674,9 @@ return [
     'customer_otp_expired' => 'Код застарів. Надішліть новий код.',
     'customer_otp_too_many_attempts' => 'Забагато невдалих спроб. Надішліть новий код.',
     'customer_google_failed' => 'Не вдалося увійти через Google. Спробуйте ще раз.',
+    'customer_google_phone_title' => 'Підтвердження телефону',
+    'customer_google_phone_heading' => 'Введіть номер телефону',
+    'customer_google_phone_copy' => 'Ми надішлемо одноразовий SMS-код і привʼяжемо цей Google-вхід до профілю клієнта з таким номером.',
+    'customer_google_phone_code_copy' => 'Введіть код, надісланий на :phone. Після підтвердження ми привʼяжемо цей Google-вхід до відповідного профілю клієнта.',
+    'customer_google_phone_send_code' => 'Надіслати код',
 ];

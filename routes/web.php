@@ -178,6 +178,11 @@ Route::prefix('{accountSlug}/customer')
         Route::post('login/otp/change-phone', [CustomerAuthController::class, 'changeOtpPhone'])->name('otp.change-phone');
         Route::post('login/otp/verify', [CustomerAuthController::class, 'verifyOtp'])->middleware('throttle:customer-login')->name('otp.verify');
         Route::get('auth/google', [CustomerAuthController::class, 'googleRedirect'])->name('google.redirect');
+        Route::get('auth/google/phone', [CustomerAuthController::class, 'googlePhone'])->name('google.phone');
+        Route::post('auth/google/phone', [CustomerAuthController::class, 'sendGooglePhoneOtp'])->middleware('throttle:customer-otp')->name('google.phone.send');
+        Route::post('auth/google/phone/resend', [CustomerAuthController::class, 'resendGooglePhoneOtp'])->middleware('throttle:customer-otp')->name('google.phone.resend');
+        Route::post('auth/google/phone/change-phone', [CustomerAuthController::class, 'changeGooglePhone'])->name('google.phone.change');
+        Route::post('auth/google/phone/verify', [CustomerAuthController::class, 'verifyGooglePhoneOtp'])->middleware('throttle:customer-login')->name('google.phone.verify');
 
         Route::middleware(EnsureCustomerIsAuthenticated::class)->group(function (): void {
             Route::get('profile/complete', [CustomerAuthController::class, 'editProfile'])->name('profile.complete');

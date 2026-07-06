@@ -1674,4 +1674,9 @@ return [
     'customer_otp_expired' => 'The code has expired. Request a new code.',
     'customer_otp_too_many_attempts' => 'Too many failed attempts. Request a new code.',
     'customer_google_failed' => 'Google login failed. Please try again.',
+    'customer_google_phone_title' => 'Confirm phone',
+    'customer_google_phone_heading' => 'Enter your phone number',
+    'customer_google_phone_copy' => 'We will send a one-time SMS code and connect this Google login to the customer profile with that phone number.',
+    'customer_google_phone_code_copy' => 'Enter the code sent to :phone. After confirmation, we will connect this Google login to the matching customer profile.',
+    'customer_google_phone_send_code' => 'Send code',
 ];

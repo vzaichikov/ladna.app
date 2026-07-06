@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.71.0',
+                'date' => '2026-07-06',
+                'title' => 'Google phone linking for customers',
+                'items' => ['Improved customer Google login so customers who sign in with Google can confirm their phone with an SMS code and automatically connect to an existing studio customer profile with that phone number, or create a verified profile when no match exists.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.70.0',
                 'date' => '2026-07-05',
                 'title' => 'Unknown presence monitoring',
@@ -632,6 +639,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.71.0',
+                'date' => '2026-07-06',
+                'title' => 'Привʼязка телефону при вході через Google',
+                'items' => ['Покращено Google-вхід клієнтів: після входу через Google клієнт може підтвердити телефон SMS-кодом і автоматично привʼязатися до наявного профілю клієнта студії з таким номером або створити підтверджений профіль, якщо збігу немає.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.70.0',
                 'date' => '2026-07-05',
