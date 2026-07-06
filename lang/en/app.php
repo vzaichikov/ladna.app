@@ -211,6 +211,7 @@ return [
     'customer_created' => 'Customer created.',
     'customer_updated' => 'Customer updated.',
     'customer_deleted' => 'Customer deleted.',
+    'login_as_customer' => 'Log in as customer',
     'customer_import' => 'Import',
     'customer_export' => 'Export',
     'customer_export_title' => 'Export customers',

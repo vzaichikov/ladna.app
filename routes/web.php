@@ -11,6 +11,7 @@ use App\Http\Controllers\AccountOwnerProfileController;
 use App\Http\Controllers\AccountPaymentController;
 use App\Http\Controllers\AccountTariffPaymentController;
 use App\Http\Controllers\ActivityDirectionController;
+use App\Http\Controllers\AdminCustomerLoginController;
 use App\Http\Controllers\ApiDocumentationController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\CameraController;
@@ -171,6 +172,10 @@ Route::prefix('{accountSlug}/customer')
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->group(function (): void {
         Route::get('login', [CustomerAuthController::class, 'studioLogin'])->name('studio.login');
+        Route::get('admin-login/{token}', [AdminCustomerLoginController::class, 'consume'])
+            ->middleware(['signed', 'throttle:customer-login'])
+            ->where('token', '[A-Za-z0-9]+')
+            ->name('admin-login.consume');
         Route::post('login/email', [CustomerAuthController::class, 'emailLogin'])->middleware('throttle:customer-login')->name('email.login');
         Route::post('login/otp', [CustomerAuthController::class, 'sendOtp'])->middleware('throttle:customer-otp')->name('otp.send');
         Route::get('login/otp', [CustomerAuthController::class, 'otpChallenge'])->name('otp.challenge');
@@ -414,6 +419,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.customers.import.validate');
         Route::post('accounts/{account}/customers/import', [CustomerBulkTransferController::class, 'import'])
             ->name('accounts.customers.import');
+        Route::post('accounts/{account}/customers/{customer}/admin-login', [AdminCustomerLoginController::class, 'store'])
+            ->name('accounts.customers.admin-login.store');
         Route::resource('accounts.customers', CustomerController::class)
             ->except(['show'])
             ->scoped();

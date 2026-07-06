@@ -405,6 +405,7 @@ class CustomerAuthController extends Controller
                 ->notCorrectedRemoved()
                 ->with([
                     'scheduledClass.classType',
+                    'scheduledClass.location',
                     'scheduledClass.trainer',
                     'classPassReservation.customerClassPass',
                 ]),

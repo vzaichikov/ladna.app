@@ -35,6 +35,7 @@
         $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
         $canIssueCustomerClassPasses = auth()->user()?->can('issueCustomerClassPasses', $account) ?? false;
         $canManageCustomerClassPasses = auth()->user()?->can('manageCustomerClassPasses', $account) ?? false;
+        $canLoginAsCustomer = $account->isOwnedBy(auth()->user());
         $classPassBackfillPreview ??= null;
         $locations ??= collect();
         $selectedIssueLocationId = old('issued_location_id');
@@ -46,8 +47,21 @@
         $emptyCustomerClassPassTitle = $classPassTab === 'history' ? __('app.no_customer_class_pass_history') : __('app.no_customer_class_passes');
     @endphp
 
-    <h1 class="crm-page-title">{{ __('app.edit') }} {{ $customer->name }}</h1>
-    <p class="crm-page-copy">{{ $account->name }}</p>
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <h1 class="crm-page-title">{{ __('app.edit') }} {{ $customer->name }}</h1>
+            <p class="crm-page-copy">{{ $account->name }}</p>
+        </div>
+        @if ($canLoginAsCustomer)
+            <form method="POST" action="{{ route('dashboard.accounts.customers.admin-login.store', [$account, $customer]) }}">
+                @csrf
+                <x-ui.button type="submit" variant="secondary">
+                    <x-ui.icon name="log-in" class="h-4 w-4" />
+                    {{ __('app.login_as_customer') }}
+                </x-ui.button>
+            </form>
+        @endif
+    </div>
 
     <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div class="space-y-6">

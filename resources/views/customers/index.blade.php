@@ -3,6 +3,10 @@
 @section('title', __('app.customers').' - '.$account->name)
 
 @section('content')
+    @php
+        $canLoginAsCustomer = $account->isOwnedBy(auth()->user());
+    @endphp
+
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.customers') }}</h1>
@@ -45,6 +49,12 @@
                 <div class="text-sm font-medium text-slate-500">{{ $customer->class_bookings_count }} {{ __('app.bookings') }}</div>
                 <div class="text-sm font-medium text-slate-500">{{ $customer->active_class_passes_count }} {{ __('app.active_class_passes_short') }}</div>
                 <div class="flex flex-wrap gap-2 lg:justify-end">
+                    @if ($canLoginAsCustomer)
+                        <form method="POST" action="{{ route('dashboard.accounts.customers.admin-login.store', [$account, $customer]) }}">
+                            @csrf
+                            <x-ui.action-button type="submit" icon="log-in" :label="__('app.login_as_customer')" />
+                        </form>
+                    @endif
                     <x-ui.action-button :href="route('dashboard.accounts.customers.edit', [$account, $customer])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.customers.destroy', [$account, $customer]) }}" data-confirm-delete>
                         @csrf

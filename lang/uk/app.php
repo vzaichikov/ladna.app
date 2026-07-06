@@ -211,6 +211,7 @@ return [
     'customer_created' => 'Клієнта створено.',
     'customer_updated' => 'Клієнта оновлено.',
     'customer_deleted' => 'Клієнта видалено.',
+    'login_as_customer' => 'Увійти як клієнт',
     'customer_import' => 'Імпорт',
     'customer_export' => 'Експорт',
     'customer_export_title' => 'Експорт клієнтів',
