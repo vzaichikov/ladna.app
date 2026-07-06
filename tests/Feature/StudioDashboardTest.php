@@ -251,7 +251,7 @@ class StudioDashboardTest extends TestCase
             ->assertSee('data-people-counter-screenshot-trigger', false)
             ->assertSee('data-people-counter-screenshot-modal', false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)
-            ->assertDontSee('target="_blank"', false)
+            ->assertDontSee('href="'.route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']).'"', false)
             ->assertDontSee('Disabled Hall')
             ->assertDontSee('data-people-counter-live-room="'.$disabledRoom->id.':12:succeeded"', false);
 

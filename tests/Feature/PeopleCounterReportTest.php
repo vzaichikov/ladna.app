@@ -57,21 +57,27 @@ class PeopleCounterReportTest extends TestCase
             ->assertDontSee(route('dashboard.accounts.reports.people-counter', $account), false)
             ->assertDontSee(route('dashboard.accounts.reports.unknown-presence', $account), false);
 
-        $account->update(['enable_people_counter' => false]);
+        foreach ([
+            ['allow_rtsp_cameras' => true, 'enable_people_counter' => false],
+            ['allow_rtsp_cameras' => false, 'enable_people_counter' => true],
+            ['allow_rtsp_cameras' => false, 'enable_people_counter' => false],
+        ] as $disabledSettings) {
+            $account->update($disabledSettings);
 
-        $this->actingAs($owner)
-            ->get(route('dashboard.accounts.reports.index', $account))
-            ->assertOk()
-            ->assertDontSee(__('app.people_counter_report_title'), false)
-            ->assertDontSee(__('app.unknown_presence_report_title'), false);
+            $this->actingAs($owner)
+                ->get(route('dashboard.accounts.reports.index', $account))
+                ->assertOk()
+                ->assertDontSee(__('app.people_counter_report_title'), false)
+                ->assertDontSee(__('app.unknown_presence_report_title'), false);
 
-        $this->actingAs($owner)
-            ->get(route('dashboard.accounts.reports.people-counter', $account))
-            ->assertNotFound();
+            $this->actingAs($owner)
+                ->get(route('dashboard.accounts.reports.people-counter', $account))
+                ->assertNotFound();
 
-        $this->actingAs($owner)
-            ->get(route('dashboard.accounts.reports.unknown-presence', $account))
-            ->assertNotFound();
+            $this->actingAs($owner)
+                ->get(route('dashboard.accounts.reports.unknown-presence', $account))
+                ->assertNotFound();
+        }
     }
 
     public function test_people_counter_report_shows_one_row_per_past_class(): void
@@ -195,7 +201,7 @@ class PeopleCounterReportTest extends TestCase
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)
             ->assertDontSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'masked']), false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $olderSample, 'original']), false)
-            ->assertDontSee('target="_blank"', false);
+            ->assertDontSee('href="'.route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']).'"', false);
     }
 
     public function test_people_counter_report_filters_by_location_room_and_trainer(): void
@@ -374,7 +380,7 @@ class PeopleCounterReportTest extends TestCase
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $secondSample, 'original']), false)
             ->assertDontSee(route('dashboard.accounts.people-counter-samples.image', [$account, $firstSample, 'masked']), false)
             ->assertDontSee('Other Hall')
-            ->assertDontSee('target="_blank"', false);
+            ->assertDontSee('href="'.route('dashboard.accounts.people-counter-samples.image', [$account, $firstSample, 'original']).'"', false);
     }
 
     public function test_people_counter_report_requires_report_permission(): void
