@@ -36,7 +36,23 @@ class PwaTest extends TestCase
         $this->assertSame('standalone', $manifest['display']);
         $this->assertSame('#3B223F', $manifest['theme_color']);
         $this->assertCount(4, $manifest['icons']);
+        $this->assertSame([
+            'manifest-icon-192.png',
+            'manifest-icon-512.png',
+            'manifest-maskable-icon-192.png',
+            'manifest-maskable-icon-512.png',
+        ], array_map(
+            fn (array $icon): string => basename((string) parse_url($icon['src'], PHP_URL_PATH)),
+            $manifest['icons']
+        ));
         $this->assertCount(2, $manifest['shortcuts']);
+        $this->assertSame(
+            ['manifest-icon-192.png', 'manifest-icon-192.png'],
+            array_map(
+                fn (array $shortcut): string => basename((string) parse_url($shortcut['icons'][0]['src'], PHP_URL_PATH)),
+                $manifest['shortcuts']
+            )
+        );
         $this->assertCount(4, $manifest['screenshots']);
         $this->assertContains('wide', array_column($manifest['screenshots'], 'form_factor'));
         $this->assertContains('narrow', array_column($manifest['screenshots'], 'form_factor'));

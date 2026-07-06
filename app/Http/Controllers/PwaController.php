@@ -41,25 +41,25 @@ class PwaController extends Controller
                 'categories' => ['business', 'productivity', 'health', 'sports'],
                 'icons' => [
                     [
-                        'src' => $url('/pwa/icon-192.png'),
+                        'src' => $url('/pwa/manifest-icon-192.png'),
                         'sizes' => '192x192',
                         'type' => 'image/png',
                         'purpose' => 'any',
                     ],
                     [
-                        'src' => $url('/pwa/icon-512.png'),
+                        'src' => $url('/pwa/manifest-icon-512.png'),
                         'sizes' => '512x512',
                         'type' => 'image/png',
                         'purpose' => 'any',
                     ],
                     [
-                        'src' => $url('/pwa/maskable-icon-192.png'),
+                        'src' => $url('/pwa/manifest-maskable-icon-192.png'),
                         'sizes' => '192x192',
                         'type' => 'image/png',
                         'purpose' => 'maskable',
                     ],
                     [
-                        'src' => $url('/pwa/maskable-icon-512.png'),
+                        'src' => $url('/pwa/manifest-maskable-icon-512.png'),
                         'sizes' => '512x512',
                         'type' => 'image/png',
                         'purpose' => 'maskable',
@@ -71,14 +71,14 @@ class PwaController extends Controller
                         'short_name' => 'Dashboard',
                         'description' => 'Open the studio workspace.',
                         'url' => $url('/dashboard'),
-                        'icons' => [['src' => $url('/pwa/icon-192.png'), 'sizes' => '192x192']],
+                        'icons' => [['src' => $url('/pwa/manifest-icon-192.png'), 'sizes' => '192x192']],
                     ],
                     [
                         'name' => 'Help',
                         'short_name' => 'Help',
                         'description' => 'Open Ladna owner help.',
                         'url' => $url('/help'),
-                        'icons' => [['src' => $url('/pwa/icon-192.png'), 'sizes' => '192x192']],
+                        'icons' => [['src' => $url('/pwa/manifest-icon-192.png'), 'sizes' => '192x192']],
                     ],
                 ],
                 'screenshots' => [
