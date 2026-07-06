@@ -105,6 +105,70 @@
 
     <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:items-start">
         <div class="order-2 space-y-6">
+            <x-ui.panel>
+                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_payment') }}</h2>
+                <div class="mt-4 grid gap-3 sm:grid-cols-4">
+                    <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+                        <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_price') }}</div>
+                        <div class="mt-1 font-semibold text-slate-950">{{ $formatMoney($customerClassPass->price_cents, $customerClassPass->currency) }}</div>
+                    </div>
+                    <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+                        <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_paid_amount') }}</div>
+                        <div class="mt-1 font-semibold text-slate-950">{{ $formatMoney($customerClassPass->paidAmountCents(), $customerClassPass->currency) }}</div>
+                    </div>
+                    <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+                        <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_remaining_amount') }}</div>
+                        <div class="mt-1 font-semibold text-slate-950">{{ $formatMoney($customerClassPass->remainingPaymentCents(), $customerClassPass->currency) }}</div>
+                    </div>
+                    <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+                        <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_payment_status') }}</div>
+                        <div class="mt-1"><span class="{{ $paymentStatusClass }}">{{ __('app.class_pass_'.$paymentStatus) }}</span></div>
+                    </div>
+                </div>
+
+                @if ($customerClassPass->source === 'manual' && $customerClassPass->remainingPaymentCents() > 0)
+                    <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.payments.store', [$account, $customerClassPass]) }}" class="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                        @csrf
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.payment_location') }}</span>
+                            <select name="location_id" class="crm-field" required>
+                                @foreach ($locations as $location)
+                                    <option value="{{ $location->id }}" @selected((string) old('location_id', $customerClassPass->issued_location_id) === (string) $location->id)>{{ $location->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
+                        </label>
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.class_pass_payment_amount') }}</span>
+                            <input name="amount" value="{{ old('amount', $formatMoneyInput($customerClassPass->remainingPaymentCents())) }}" inputmode="decimal" class="crm-field" required>
+                            @error('amount') <span class="crm-help">{{ $message }}</span> @enderror
+                        </label>
+                        <x-ui.button type="submit">
+                            <x-ui.icon name="payments" class="h-4 w-4" />
+                            {{ __('app.class_pass_record_payment') }}
+                        </x-ui.button>
+                    </form>
+                @elseif ($customerClassPass->source !== 'manual')
+                    <div class="mt-5 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-slate-600">{{ __('app.class_pass_online_payment_locked') }}</div>
+                @else
+                    <div class="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">{{ __('app.class_pass_fully_paid') }}</div>
+                @endif
+
+                @if ($manualCashPayments->isNotEmpty())
+                    <div class="mt-5 divide-y divide-stone-100 rounded-lg border border-stone-200">
+                        @foreach ($manualCashPayments as $payment)
+                            <div class="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
+                                <div>
+                                    <div class="font-semibold text-slate-950">{{ $formatMoney($payment->amount_cents, $payment->currency) }}</div>
+                                    <div class="mt-1 text-xs text-slate-500">{{ $payment->order_id }} · {{ $payment->location?->name ?? __('app.not_set') }}</div>
+                                </div>
+                                <div class="text-xs font-medium text-slate-500 sm:text-right">{{ $formatDateTime($payment->paid_at ?? $payment->created_at) }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </x-ui.panel>
+
             <x-ui.panel padding="none" class="overflow-hidden">
                 <div class="border-b border-stone-100 px-5 py-4">
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_full_history') }}</h2>
@@ -315,70 +379,6 @@
 
         <x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
     </form>
-
-    <x-ui.panel>
-        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_payment') }}</h2>
-        <div class="mt-4 grid gap-3 sm:grid-cols-4">
-            <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
-                <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_price') }}</div>
-                <div class="mt-1 font-semibold text-slate-950">{{ $formatMoney($customerClassPass->price_cents, $customerClassPass->currency) }}</div>
-            </div>
-            <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
-                <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_paid_amount') }}</div>
-                <div class="mt-1 font-semibold text-slate-950">{{ $formatMoney($customerClassPass->paidAmountCents(), $customerClassPass->currency) }}</div>
-            </div>
-            <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
-                <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_remaining_amount') }}</div>
-                <div class="mt-1 font-semibold text-slate-950">{{ $formatMoney($customerClassPass->remainingPaymentCents(), $customerClassPass->currency) }}</div>
-            </div>
-            <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
-                <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_payment_status') }}</div>
-                <div class="mt-1"><span class="{{ $paymentStatusClass }}">{{ __('app.class_pass_'.$paymentStatus) }}</span></div>
-            </div>
-        </div>
-
-        @if ($customerClassPass->source === 'manual' && $customerClassPass->remainingPaymentCents() > 0)
-            <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.payments.store', [$account, $customerClassPass]) }}" class="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                @csrf
-                <label class="block">
-                    <span class="crm-label">{{ __('app.payment_location') }}</span>
-                    <select name="location_id" class="crm-field" required>
-                        @foreach ($locations as $location)
-                            <option value="{{ $location->id }}" @selected((string) old('location_id', $customerClassPass->issued_location_id) === (string) $location->id)>{{ $location->name }}</option>
-                        @endforeach
-                    </select>
-                    @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
-                </label>
-                <label class="block">
-                    <span class="crm-label">{{ __('app.class_pass_payment_amount') }}</span>
-                    <input name="amount" value="{{ old('amount', $formatMoneyInput($customerClassPass->remainingPaymentCents())) }}" inputmode="decimal" class="crm-field" required>
-                    @error('amount') <span class="crm-help">{{ $message }}</span> @enderror
-                </label>
-                <x-ui.button type="submit">
-                    <x-ui.icon name="payments" class="h-4 w-4" />
-                    {{ __('app.class_pass_record_payment') }}
-                </x-ui.button>
-            </form>
-        @elseif ($customerClassPass->source !== 'manual')
-            <div class="mt-5 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-slate-600">{{ __('app.class_pass_online_payment_locked') }}</div>
-        @else
-            <div class="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">{{ __('app.class_pass_fully_paid') }}</div>
-        @endif
-
-        @if ($manualCashPayments->isNotEmpty())
-            <div class="mt-5 divide-y divide-stone-100 rounded-lg border border-stone-200">
-                @foreach ($manualCashPayments as $payment)
-                    <div class="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
-                        <div>
-                            <div class="font-semibold text-slate-950">{{ $formatMoney($payment->amount_cents, $payment->currency) }}</div>
-                            <div class="mt-1 text-xs text-slate-500">{{ $payment->order_id }} · {{ $payment->location?->name ?? __('app.not_set') }}</div>
-                        </div>
-                        <div class="text-xs font-medium text-slate-500 sm:text-right">{{ $formatDateTime($payment->paid_at ?? $payment->created_at) }}</div>
-                    </div>
-                @endforeach
-            </div>
-        @endif
-    </x-ui.panel>
 
     <x-ui.panel>
         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_session_adjustment') }}</h2>
