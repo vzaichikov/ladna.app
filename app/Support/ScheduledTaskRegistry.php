@@ -52,6 +52,22 @@ class ScheduledTaskRegistry
                 'overlap_minutes' => 5,
             ],
             [
+                'key' => 'customer_notifications_send',
+                'command' => 'customer-notifications:send --limit=50',
+                'expression' => '* * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_minute',
+                'description_key' => 'scheduled_task_customer_notifications_send_description',
+                'overlap_minutes' => 5,
+            ],
+            [
+                'key' => 'customer_notifications_fill',
+                'command' => 'customer-notifications:fill --lookahead-hours=192 --limit=1000',
+                'expression' => '*/30 * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_thirty_minutes',
+                'description_key' => 'scheduled_task_customer_notifications_fill_description',
+                'overlap_minutes' => 10,
+            ],
+            [
                 'key' => 'account_activity_logs_prune',
                 'command' => 'account-activity-logs:prune',
                 'expression' => '0 0 * * *',

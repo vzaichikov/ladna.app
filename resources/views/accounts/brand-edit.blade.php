@@ -10,7 +10,7 @@
         </div>
     </div>
 
-    <nav class="mt-6 flex gap-2 overflow-x-auto border-b border-slate-200" aria-label="{{ __('app.my_brand') }}">
+    <nav class="mt-6 flex flex-wrap gap-2 border-b border-slate-200" aria-label="{{ __('app.my_brand') }}">
         <a
             href="{{ route('dashboard.accounts.general-settings.edit', $account) }}"
             class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'business' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
@@ -53,6 +53,14 @@
         >
             {{ __('app.login_qr_codes_and_links') }}
         </a>
+        @if ($account->customerNotificationsEnabled())
+            <a
+                href="{{ route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'customer_notifications']) }}"
+                class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'customer_notifications' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
+            >
+                {{ __('app.customer_notifications') }}
+            </a>
+        @endif
         <a
             href="{{ route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']) }}"
             class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'api' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
@@ -387,6 +395,8 @@
                 {{ __('app.save') }}
             </x-ui.button>
         </form>
+    @elseif ($activeTab === 'customer_notifications')
+        @include('accounts.customer-notification-settings')
     @elseif ($activeTab === 'api')
         @include('accounts.api-tokens', ['apiTokens' => $apiTokens])
     @elseif ($activeTab === 'ai')

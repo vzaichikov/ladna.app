@@ -17,8 +17,7 @@ use App\Models\MobileSession;
 use App\Models\ScheduledClass;
 use App\Support\ActorSnapshot;
 use App\Support\ClassBookingCancellationWindow;
-use App\Support\Mail\TransactionalMailDispatcher;
-use App\Support\Telegram\Alerts\QueueTrainerAssignmentTelegramAlert;
+use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -54,8 +53,7 @@ class MobileBookingController extends Controller
         ScheduledClass $scheduledClass,
         ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking,
         ActorSnapshot $actorSnapshot,
-        TransactionalMailDispatcher $mailDispatcher,
-        QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert,
+        ClassBookingNotificationCoordinator $notifications,
     ): JsonResponse {
         $session = $this->staffSession($request);
         $this->ensureClassBelongsToSession($session, $scheduledClass);
@@ -87,8 +85,7 @@ class MobileBookingController extends Controller
         $reserveCustomerClassPassForBooking->execute($booking);
 
         if ($booking->wasRecentlyCreated || $booking->wasChanged('status')) {
-            $mailDispatcher->bookingCreated($booking);
-            $queueTrainerAssignmentTelegramAlert->execute($booking);
+            $notifications->bookingCreated($booking);
         }
 
         return $this->bookingResponse($booking, 201);
@@ -99,8 +96,7 @@ class MobileBookingController extends Controller
         ClassBooking $classBooking,
         ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
         ClassBookingCancellationWindow $cancellationWindow,
-        TransactionalMailDispatcher $mailDispatcher,
-        QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert,
+        ClassBookingNotificationCoordinator $notifications,
     ): JsonResponse {
         $session = $this->staffSession($request);
         $this->ensureBookingBelongsToSession($session, $classBooking);
@@ -126,10 +122,13 @@ class MobileBookingController extends Controller
         $reconcileCustomerClassPassForBooking->execute($classBooking);
 
         if ($status === ClassBookingStatus::Cancelled && $previousStatus !== ClassBookingStatus::Cancelled) {
-            $mailDispatcher->bookingCancelled($classBooking);
+            $notifications->bookingCancelled($classBooking);
         } elseif ($status === ClassBookingStatus::Booked && $previousStatus !== ClassBookingStatus::Booked) {
-            $mailDispatcher->bookingCreated($classBooking);
-            $queueTrainerAssignmentTelegramAlert->execute($classBooking);
+            $notifications->bookingCreated($classBooking);
+        } elseif ($status === ClassBookingStatus::Attended && $previousStatus !== ClassBookingStatus::Attended) {
+            $notifications->bookingUpdatedToActive($classBooking);
+        } elseif (in_array($previousStatus, [ClassBookingStatus::Booked, ClassBookingStatus::Attended], true) && ! in_array($status, [ClassBookingStatus::Booked, ClassBookingStatus::Attended], true)) {
+            $notifications->bookingNoLongerActive($classBooking, 'booking_status_'.$status->value);
         }
 
         return $this->bookingResponse($classBooking);
@@ -140,7 +139,7 @@ class MobileBookingController extends Controller
         ClassBooking $classBooking,
         ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
         ClassBookingCancellationWindow $cancellationWindow,
-        TransactionalMailDispatcher $mailDispatcher,
+        ClassBookingNotificationCoordinator $notifications,
     ): JsonResponse {
         $session = $request->attributes->get('mobileSession');
         abort_unless($session instanceof MobileSession, 403);
@@ -170,7 +169,7 @@ class MobileBookingController extends Controller
             'attended_at' => null,
         ]);
         $reconcileCustomerClassPassForBooking->execute($classBooking);
-        $mailDispatcher->bookingCancelled($classBooking);
+        $notifications->bookingCancelled($classBooking);
 
         return $this->bookingResponse($classBooking);
     }

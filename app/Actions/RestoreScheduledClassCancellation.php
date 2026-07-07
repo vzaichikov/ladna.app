@@ -11,6 +11,7 @@ use App\Models\ScheduledClass;
 use App\Models\ScheduledClassCancellation;
 use App\Models\ScheduledClassCancellationEffect;
 use App\Models\User;
+use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +21,7 @@ class RestoreScheduledClassCancellation
     public function __construct(
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
         private readonly TransactionalMailDispatcher $mailDispatcher,
+        private readonly ClassBookingNotificationCoordinator $notifications,
     ) {}
 
     public function execute(Account $account, ScheduledClass $scheduledClass, ?User $user): ScheduledClassCancellation
@@ -77,6 +79,7 @@ class RestoreScheduledClassCancellation
         });
 
         $this->mailDispatcher->scheduledClassRestored($cancellation);
+        $this->notifications->classRestored($cancellation);
 
         return $cancellation;
     }

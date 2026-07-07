@@ -8,7 +8,7 @@ use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\Customer;
 use App\Support\ClassBookingCancellationWindow;
-use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,7 +19,7 @@ class CustomerBookingCancellationController extends Controller
         ClassBooking $classBooking,
         ClassBookingCancellationWindow $cancellationWindow,
         ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
-        TransactionalMailDispatcher $mailDispatcher,
+        ClassBookingNotificationCoordinator $notifications,
     ): RedirectResponse {
         $account = Account::active()->where('slug', $accountSlug)->firstOrFail();
         $customer = Auth::guard('customer')->user();
@@ -42,7 +42,7 @@ class CustomerBookingCancellationController extends Controller
             'attended_at' => null,
         ]);
         $reconcileCustomerClassPassForBooking->execute($classBooking);
-        $mailDispatcher->bookingCancelled($classBooking);
+        $notifications->bookingCancelled($classBooking);
 
         return redirect()
             ->route('customer.dashboard', $account->slug)

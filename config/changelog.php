@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.77.0',
+                'date' => '2026-07-07',
+                'title' => 'Customer SMS notifications',
+                'items' => ['Added studio-configurable customer SMS notifications with platform-level provider controls, a customer notification queue, reminder scheduling before classes, quiet-hour protection, cancellation and restore handling, and a platform queue monitor for delivery statuses.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.76.0',
                 'date' => '2026-07-07',
                 'title' => 'Missing booking-payment report',
@@ -695,6 +702,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.77.0',
+                'date' => '2026-07-07',
+                'title' => 'SMS-сповіщення для клієнтів',
+                'items' => ['Додано клієнтські SMS-сповіщення, які студія може налаштовувати окремо: керування SMS-провайдером на рівні платформи, чергу клієнтських сповіщень, нагадування перед заняттями, захист тихих годин, скасування та повторну постановку в чергу після змін у записах і моніторинг статусів доставки для адміністратора платформи.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.76.0',
                 'date' => '2026-07-07',

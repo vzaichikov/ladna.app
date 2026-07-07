@@ -27,6 +27,7 @@ use App\Http\Controllers\CustomerBookingCancellationController;
 use App\Http\Controllers\CustomerBulkTransferController;
 use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerNotificationSettingsController;
 use App\Http\Controllers\CustomerPurchaseCorrectionController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
@@ -41,6 +42,7 @@ use App\Http\Controllers\PeopleCounterReportController;
 use App\Http\Controllers\PeopleCounterScreenshotController;
 use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
+use App\Http\Controllers\Platform\CustomerNotificationController as PlatformCustomerNotificationController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
 use App\Http\Controllers\Platform\OwnerTelegramWebhookController as PlatformOwnerTelegramWebhookController;
 use App\Http\Controllers\Platform\PaymentController as PlatformPaymentController;
@@ -195,6 +197,7 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::get('telegram-support', [PlatformTelegramSupportController::class, 'index'])->name('telegram-support.index');
         Route::post('telegram-support/authorizations/{telegramAuthorization}/reset', [PlatformTelegramSupportController::class, 'reset'])->name('telegram-support.authorizations.reset');
         Route::delete('telegram-support/authorizations/{telegramAuthorization}', [PlatformTelegramSupportController::class, 'revoke'])->name('telegram-support.authorizations.revoke');
+        Route::get('customer-notifications', [PlatformCustomerNotificationController::class, 'index'])->name('customer-notifications.index');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::get('scheduled-tasks', ScheduledTaskController::class)->name('scheduled-tasks.index');
@@ -256,6 +259,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.api-tokens.regenerate');
         Route::delete('accounts/{account}/api-tokens/{accountApiToken}', [AccountApiTokenController::class, 'destroy'])
             ->name('accounts.api-tokens.destroy');
+        Route::put('accounts/{account}/customer-notification-settings', [CustomerNotificationSettingsController::class, 'update'])
+            ->name('accounts.customer-notification-settings.update');
         Route::put('accounts/{account}/ai-telegram-settings', [AccountAiTelegramSettingsController::class, 'update'])
             ->name('accounts.ai-telegram-settings.update');
         Route::get('accounts/{account}/assistant', [AccountAssistantController::class, 'show'])

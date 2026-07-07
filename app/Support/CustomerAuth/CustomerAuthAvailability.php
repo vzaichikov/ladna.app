@@ -55,6 +55,13 @@ class CustomerAuthAvailability
             : $this->platformSmsSetting($settings->otp_provider);
     }
 
+    public function customerSmsSettingFor(Account $account, CustomerAuthSetting $settings): ?IntegrationSetting
+    {
+        return $settings->customer_sms_sender_scope === CustomerOtpSenderScope::Account
+            ? $this->accountSmsSetting($account, $settings->customer_sms_provider)
+            : $this->platformSmsSetting($settings->customer_sms_provider);
+    }
+
     public function platformSmsSetting(?string $provider = null): ?IntegrationSetting
     {
         return $this->configuredSmsSetting(IntegrationSetting::platform(), $provider);
@@ -66,7 +73,7 @@ class CustomerAuthAvailability
     }
 
     /**
-     * @return array{google: bool, turnstile: bool, platform_sms: bool, account_sms: bool, otp: bool, otp_enabled: bool}
+     * @return array{google: bool, turnstile: bool, platform_sms: bool, account_sms: bool, customer_platform_sms: bool, customer_account_sms: bool, otp: bool, otp_enabled: bool}
      */
     public function readinessFor(Account $account): array
     {
@@ -78,6 +85,8 @@ class CustomerAuthAvailability
             'turnstile' => $this->turnstileSetting() !== null,
             'platform_sms' => $this->platformSmsSetting($settings->otp_provider) !== null,
             'account_sms' => $this->accountSmsSetting($account, $settings->otp_provider) !== null,
+            'customer_platform_sms' => $this->platformSmsSetting($settings->customer_sms_provider) !== null,
+            'customer_account_sms' => $this->accountSmsSetting($account, $settings->customer_sms_provider) !== null,
             'otp' => $methods->otp,
             'otp_enabled' => $settings->allow_otp,
         ];

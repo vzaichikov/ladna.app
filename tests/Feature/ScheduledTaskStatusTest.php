@@ -38,6 +38,8 @@ class ScheduledTaskStatusTest extends TestCase
             ->assertSee('class-passes:normalize')
             ->assertSee('billing:reconcile')
             ->assertSee('telegram-alerts:send --limit=50')
+            ->assertSee('customer-notifications:send --limit=50')
+            ->assertSee('customer-notifications:fill --lookahead-hours=192 --limit=1000')
             ->assertSee('account-activity-logs:prune')
             ->assertSee('*/15 * * * *')
             ->assertSee(__('app.scheduled_task_status_succeeded'))
@@ -104,5 +106,27 @@ class ScheduledTaskStatusTest extends TestCase
         $this->assertSame('* * * * *', $definition['expression']);
         $this->assertSame('scheduled_task_frequency_every_minute', $definition['frequency_key']);
         $this->assertSame(5, $definition['overlap_minutes']);
+    }
+
+    public function test_customer_notification_sender_runs_every_minute(): void
+    {
+        $definition = collect(app(ScheduledTaskRegistry::class)->definitions())
+            ->firstWhere('key', 'customer_notifications_send');
+
+        $this->assertNotNull($definition);
+        $this->assertSame('* * * * *', $definition['expression']);
+        $this->assertSame('scheduled_task_frequency_every_minute', $definition['frequency_key']);
+        $this->assertSame(5, $definition['overlap_minutes']);
+    }
+
+    public function test_customer_notification_filler_runs_every_thirty_minutes(): void
+    {
+        $definition = collect(app(ScheduledTaskRegistry::class)->definitions())
+            ->firstWhere('key', 'customer_notifications_fill');
+
+        $this->assertNotNull($definition);
+        $this->assertSame('*/30 * * * *', $definition['expression']);
+        $this->assertSame('scheduled_task_frequency_every_thirty_minutes', $definition['frequency_key']);
+        $this->assertSame(10, $definition['overlap_minutes']);
     }
 }

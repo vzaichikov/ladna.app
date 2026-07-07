@@ -13,6 +13,11 @@ class TurboSmsGateway implements SmsGateway
 
     public function sendOtp(string $phone, string $message): SmsGatewayResult
     {
+        return $this->sendSms($phone, $message);
+    }
+
+    public function sendSms(string $phone, string $message): SmsGatewayResult
+    {
         $response = Http::withToken((string) ($this->credentials['api_token'] ?? ''))
             ->acceptJson()
             ->timeout(10)

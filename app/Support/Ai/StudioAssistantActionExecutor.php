@@ -10,7 +10,7 @@ use App\Models\AiPendingAction;
 use App\Models\ClassBooking;
 use App\Models\User;
 use App\Support\ClassBookingCancellationWindow;
-use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\ScheduleKindRegistry;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -24,7 +24,7 @@ class StudioAssistantActionExecutor
         private readonly CreateQuickBooking $createQuickBooking,
         private readonly ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
         private readonly ClassBookingCancellationWindow $cancellationWindow,
-        private readonly TransactionalMailDispatcher $mailDispatcher,
+        private readonly ClassBookingNotificationCoordinator $notifications,
         private readonly PhoneNumberNormalizer $phoneNumberNormalizer,
     ) {}
 
@@ -109,7 +109,7 @@ class StudioAssistantActionExecutor
         $this->reconcileCustomerClassPassForBooking->execute($booking);
 
         if ($previousStatus !== ClassBookingStatus::Cancelled) {
-            $this->mailDispatcher->bookingCancelled($booking);
+            $this->notifications->bookingCancelled($booking);
         }
 
         $action->update([

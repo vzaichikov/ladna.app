@@ -13,6 +13,7 @@ use App\Models\ScheduledClass;
 use App\Models\ScheduledClassCancellation;
 use App\Models\ScheduledClassCancellationEffect;
 use App\Models\User;
+use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,7 @@ class CancelScheduledClassForStudio
     public function __construct(
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
         private readonly TransactionalMailDispatcher $mailDispatcher,
+        private readonly ClassBookingNotificationCoordinator $notifications,
     ) {}
 
     /**
@@ -94,6 +96,7 @@ class CancelScheduledClassForStudio
         });
 
         $this->mailDispatcher->scheduledClassCancelled($cancellation);
+        $this->notifications->classCancelled($cancellation);
 
         return $cancellation;
     }

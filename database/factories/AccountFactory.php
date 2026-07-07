@@ -41,6 +41,7 @@ class AccountFactory extends Factory
             'allow_rtsp_cameras' => false,
             'enable_people_counter' => false,
             'enable_telegram_alerts' => true,
+            'enable_customer_notifications' => false,
         ];
     }
 }

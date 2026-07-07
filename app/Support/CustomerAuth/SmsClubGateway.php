@@ -13,6 +13,11 @@ class SmsClubGateway implements SmsGateway
 
     public function sendOtp(string $phone, string $message): SmsGatewayResult
     {
+        return $this->sendSms($phone, $message);
+    }
+
+    public function sendSms(string $phone, string $message): SmsGatewayResult
+    {
         $payload = [
             'phone' => [$phone],
             'message' => $message,

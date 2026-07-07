@@ -56,6 +56,14 @@
                             <span class="text-sm font-normal leading-6 text-slate-500">{{ __('app.studio_capability_telegram_alerts_hint') }}</span>
                         </span>
                     </label>
+                    <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
+                        <input type="hidden" name="enable_customer_notifications" value="0">
+                        <input name="enable_customer_notifications" type="checkbox" value="1" @checked(old('enable_customer_notifications', $account->enable_customer_notifications)) class="crm-checkbox mt-0.5">
+                        <span class="grid gap-1">
+                            <span>{{ __('app.enable_customer_notifications') }}</span>
+                            <span class="text-sm font-normal leading-6 text-slate-500">{{ __('app.studio_capability_customer_notifications_hint') }}</span>
+                        </span>
+                    </label>
                 </div>
             </section>
 
@@ -87,6 +95,31 @@
                             @endforeach
                         </select>
                         @error('otp_provider') <span class="crm-help">{{ $message }}</span> @enderror
+                    </label>
+
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.customer_notification_sender_scope') }}</span>
+                        <select name="customer_sms_sender_scope" class="crm-field">
+                            @foreach ($senderScopes as $scope)
+                                <option value="{{ $scope->value }}" @selected(old('customer_sms_sender_scope', $settings->customer_sms_sender_scope?->value ?? 'platform') === $scope->value)>
+                                    {{ __('app.otp_sender_scope_'.$scope->value) }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('customer_sms_sender_scope') <span class="crm-help">{{ $message }}</span> @enderror
+                    </label>
+
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.customer_notification_provider') }}</span>
+                        <select name="customer_sms_provider" class="crm-field">
+                            <option value="">{{ __('app.otp_provider_auto') }}</option>
+                            @foreach ($smsProviders as $provider)
+                                <option value="{{ $provider->value }}" @selected(old('customer_sms_provider', $settings->customer_sms_provider) === $provider->value)>
+                                    {{ config('integrations.providers.'.$provider->value.'.label') }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('customer_sms_provider') <span class="crm-help">{{ $message }}</span> @enderror
                     </label>
                 </div>
 

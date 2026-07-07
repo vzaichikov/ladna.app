@@ -285,6 +285,12 @@
             'active' => request()->routeIs('platform.telegram-support.*'),
         ],
         [
+            'label' => __('app.customer_notifications_queue_short'),
+            'icon' => 'bell',
+            'href' => route('platform.customer-notifications.index'),
+            'active' => request()->routeIs('platform.customer-notifications.*'),
+        ],
+        [
             'label' => __('app.scheduled_tasks'),
             'icon' => 'scheduled-tasks',
             'href' => route('platform.scheduled-tasks.index'),

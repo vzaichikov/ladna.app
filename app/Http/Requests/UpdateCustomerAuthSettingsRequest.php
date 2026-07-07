@@ -25,8 +25,18 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
             'allow_rtsp_cameras' => ['nullable', 'boolean'],
             'enable_people_counter' => ['nullable', 'boolean'],
             'enable_telegram_alerts' => ['nullable', 'boolean'],
+            'enable_customer_notifications' => ['nullable', 'boolean'],
             'otp_sender_scope' => ['required', Rule::enum(CustomerOtpSenderScope::class)],
             'otp_provider' => [
+                'nullable',
+                Rule::in([
+                    IntegrationProvider::Turbosms->value,
+                    IntegrationProvider::Smsclub->value,
+                    IntegrationProvider::Sendpulse->value,
+                ]),
+            ],
+            'customer_sms_sender_scope' => ['required', Rule::enum(CustomerOtpSenderScope::class)],
+            'customer_sms_provider' => [
                 'nullable',
                 Rule::in([
                     IntegrationProvider::Turbosms->value,
@@ -38,7 +48,7 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
     }
 
     /**
-     * @return array{allow_otp: bool, otp_sender_scope: string, otp_provider: ?string}
+     * @return array{allow_otp: bool, otp_sender_scope: string, otp_provider: ?string, customer_sms_sender_scope: string, customer_sms_provider: ?string}
      */
     public function payload(): array
     {
@@ -46,11 +56,13 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
             'allow_otp' => $this->boolean('allow_otp'),
             'otp_sender_scope' => (string) $this->validated('otp_sender_scope'),
             'otp_provider' => $this->validated('otp_provider'),
+            'customer_sms_sender_scope' => (string) $this->validated('customer_sms_sender_scope'),
+            'customer_sms_provider' => $this->validated('customer_sms_provider'),
         ];
     }
 
     /**
-     * @return array{allow_rtsp_cameras: bool, enable_people_counter: bool, enable_telegram_alerts: bool}
+     * @return array{allow_rtsp_cameras: bool, enable_people_counter: bool, enable_telegram_alerts: bool, enable_customer_notifications: bool}
      */
     public function accountFeaturePayload(): array
     {
@@ -58,6 +70,16 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
             'allow_rtsp_cameras' => $this->boolean('allow_rtsp_cameras'),
             'enable_people_counter' => $this->boolean('enable_people_counter'),
             'enable_telegram_alerts' => $this->boolean('enable_telegram_alerts'),
+            'enable_customer_notifications' => $this->boolean('enable_customer_notifications'),
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('customer_sms_sender_scope')) {
+            $this->merge([
+                'customer_sms_sender_scope' => CustomerOtpSenderScope::Platform->value,
+            ]);
+        }
     }
 }

@@ -101,7 +101,13 @@ class AccountController extends Controller
         $this->authorize('update', $account);
         $studioLandingUrl = route('public.studio', $account->slug);
         $customerLoginUrl = route('customer.studio.login', $account->slug);
-        $activeTab = in_array($request->query('tab'), ['formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view', 'qr', 'api', 'ai'], true) ? $request->query('tab') : 'business';
+        $allowedTabs = ['formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view', 'qr', 'api', 'ai'];
+
+        if ($account->customerNotificationsEnabled()) {
+            $allowedTabs[] = 'customer_notifications';
+        }
+
+        $activeTab = in_array($request->query('tab'), $allowedTabs, true) ? $request->query('tab') : 'business';
 
         return view('accounts.brand-edit', [
             'account' => $account,
@@ -118,6 +124,9 @@ class AccountController extends Controller
                 ? $account->apiTokens()->latest()->get()
                 : collect(),
             'apiTokenAbilities' => AccountApiTokenAbility::cases(),
+            'customerNotificationSetting' => $activeTab === 'customer_notifications'
+                ? $account->customerNotificationSetting()->first()
+                : null,
             'telegramBotProfilesList' => [TelegramBotProfile::Customer],
             'telegramBotModes' => [TelegramBotMode::Disabled, TelegramBotMode::Simple],
             'telegramBotInstallations' => $activeTab === 'ai'

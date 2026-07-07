@@ -10,10 +10,9 @@ use App\Models\ClassBooking;
 use App\Models\Customer;
 use App\Models\Location;
 use App\Models\ScheduledClass;
-use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
-use App\Support\Telegram\Alerts\QueueTrainerAssignmentTelegramAlert;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,8 +23,7 @@ class CreatePublicBooking
         private readonly ResolveQuickBookingCustomer $resolveQuickBookingCustomer,
         private readonly ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking,
         private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
-        private readonly TransactionalMailDispatcher $mailDispatcher,
-        private readonly QueueTrainerAssignmentTelegramAlert $queueTrainerAssignmentTelegramAlert,
+        private readonly ClassBookingNotificationCoordinator $notifications,
     ) {}
 
     /**
@@ -64,8 +62,7 @@ class CreatePublicBooking
         });
 
         if ($classBooking->wasRecentlyCreated || $classBooking->wasChanged('status')) {
-            $this->mailDispatcher->bookingCreated($classBooking);
-            $this->queueTrainerAssignmentTelegramAlert->execute($classBooking);
+            $this->notifications->bookingCreated($classBooking);
         }
 
         return $classBooking;
