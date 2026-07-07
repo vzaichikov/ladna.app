@@ -112,10 +112,12 @@ class PeopleCounterReportTest extends TestCase
         $originalPath = 'people-counter/testing/original.jpg';
         $maskedPath = 'people-counter/testing/masked.jpg';
         $olderOriginalPath = 'people-counter/testing/older-original.jpg';
+        $emptyOriginalPath = 'people-counter/testing/empty-original.jpg';
 
         Storage::disk('local')->put($originalPath, 'original');
         Storage::disk('local')->put($maskedPath, 'masked');
         Storage::disk('local')->put($olderOriginalPath, 'older-original');
+        Storage::disk('local')->put($emptyOriginalPath, 'empty-original');
 
         ScheduledClassPeopleCount::factory()->for($scheduledClass)->create([
             'account_id' => $account->id,
@@ -145,6 +147,15 @@ class PeopleCounterReportTest extends TestCase
             'captured_at' => Carbon::parse('2026-07-04 10:15:00'),
             'detected_count' => 6,
             'original_image_path' => $olderOriginalPath,
+            'masked_image_path' => null,
+        ]);
+        $emptySample = PeopleCounterSample::factory()->for($scheduledClass)->create([
+            'account_id' => $account->id,
+            'location_id' => $scheduledClass->location_id,
+            'room_id' => $scheduledClass->room_id,
+            'captured_at' => Carbon::parse('2026-07-04 10:45:00'),
+            'detected_count' => 0,
+            'original_image_path' => $emptyOriginalPath,
             'masked_image_path' => null,
         ]);
         ClassBooking::factory()
@@ -201,6 +212,7 @@ class PeopleCounterReportTest extends TestCase
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)
             ->assertDontSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'masked']), false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $olderSample, 'original']), false)
+            ->assertDontSee(route('dashboard.accounts.people-counter-samples.image', [$account, $emptySample, 'original']), false)
             ->assertDontSee('href="'.route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']).'"', false);
     }
 

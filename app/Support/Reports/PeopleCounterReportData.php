@@ -43,6 +43,7 @@ class PeopleCounterReportData
                         'average_confidence',
                     ])
                     ->whereNotNull('original_image_path')
+                    ->where('detected_count', '>', 0)
                     ->orderBy('captured_at'),
             ])
             ->withCount([

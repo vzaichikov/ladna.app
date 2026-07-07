@@ -66,7 +66,7 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertNull($sample->masked_image_path);
     }
 
-    public function test_capture_command_keeps_class_zero_count_without_screenshots(): void
+    public function test_capture_command_keeps_class_zero_count_with_current_dashboard_snapshot(): void
     {
         Carbon::setTestNow('2026-07-04 12:30:00');
         Storage::fake('local');
@@ -77,16 +77,33 @@ class PeopleCounterCommandsTest extends TestCase
             startsAt: Carbon::parse('2026-07-04 12:00:00'),
             endsAt: Carbon::parse('2026-07-04 13:00:00'),
         );
+        $oldZeroPath = 'people-counter/testing/old-empty-class.jpg';
+        Storage::disk('local')->put($oldZeroPath, 'old-empty');
+        $oldZeroSample = PeopleCounterSample::factory()->for($scheduledClass)->create([
+            'account_id' => $scheduledClass->account_id,
+            'location_id' => $scheduledClass->location_id,
+            'room_id' => $scheduledClass->room_id,
+            'captured_at' => Carbon::parse('2026-07-04 12:23:00'),
+            'status' => PeopleCounterSample::StatusSucceeded,
+            'detected_count' => 0,
+            'original_image_path' => $oldZeroPath,
+            'masked_image_path' => null,
+        ]);
 
         $this->artisan('people-counter:capture')
             ->assertExitCode(0);
 
-        $sample = PeopleCounterSample::query()->whereBelongsTo($scheduledClass)->firstOrFail();
+        $sample = PeopleCounterSample::query()
+            ->whereBelongsTo($scheduledClass)
+            ->latest('captured_at')
+            ->firstOrFail();
 
         $this->assertSame(PeopleCounterSample::StatusSucceeded, $sample->status);
         $this->assertSame(0, $sample->detected_count);
-        $this->assertNull($sample->original_image_path);
+        $this->assertTrue(Storage::disk('local')->exists($sample->original_image_path));
         $this->assertNull($sample->masked_image_path);
+        $this->assertFalse(Storage::disk('local')->exists($oldZeroPath));
+        $this->assertNull($oldZeroSample->refresh()->original_image_path);
     }
 
     public function test_capture_command_records_camera_failures_without_zero_counts(): void
@@ -234,7 +251,7 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertSame(2, $interval->peak_detected_count);
     }
 
-    public function test_capture_command_discards_empty_unknown_presence_without_database_rows_or_screenshots(): void
+    public function test_capture_command_records_empty_unknown_presence_only_as_latest_dashboard_snapshot(): void
     {
         Carbon::setTestNow('2026-07-04 12:30:00');
         Storage::fake('local');
@@ -242,13 +259,34 @@ class PeopleCounterCommandsTest extends TestCase
         $this->bindFrameCapture();
         $this->bindDetector(count: 0);
         $room = $this->peopleCounterRoom();
+        $oldZeroPath = 'people-counter/testing/old-empty-unknown.jpg';
+        Storage::disk('local')->put($oldZeroPath, 'old-empty');
+        $oldZeroSample = PeopleCounterSample::factory()->for($room)->create([
+            'account_id' => $room->account_id,
+            'scheduled_class_id' => null,
+            'unknown_presence_interval_id' => null,
+            'location_id' => $room->location_id,
+            'captured_at' => Carbon::parse('2026-07-04 12:23:00'),
+            'status' => PeopleCounterSample::StatusSucceeded,
+            'detected_count' => 0,
+            'original_image_path' => $oldZeroPath,
+            'masked_image_path' => null,
+        ]);
 
         $this->artisan('people-counter:capture', ['--debug' => true])
             ->expectsOutputToContain('[people-counter] capture.unknown.empty')
             ->assertExitCode(0);
 
-        $this->assertFalse(PeopleCounterSample::query()->whereBelongsTo($room)->exists());
         $this->assertFalse(UnknownPresenceInterval::query()->whereBelongsTo($room)->exists());
+        $this->assertModelMissing($oldZeroSample);
+        $this->assertFalse(Storage::disk('local')->exists($oldZeroPath));
+
+        $sample = PeopleCounterSample::query()->whereBelongsTo($room)->firstOrFail();
+
+        $this->assertNull($sample->scheduled_class_id);
+        $this->assertNull($sample->unknown_presence_interval_id);
+        $this->assertSame(0, $sample->detected_count);
+        $this->assertTrue(Storage::disk('local')->exists($sample->original_image_path));
     }
 
     public function test_capture_command_records_unknown_presence_when_studio_is_closed(): void
@@ -488,12 +526,25 @@ class PeopleCounterCommandsTest extends TestCase
         $oldOriginal = 'people-counter/old/original.jpg';
         $oldMasked = 'people-counter/old/masked.jpg';
         $oldUnknownOriginal = 'people-counter/old/unknown-original.jpg';
+        $oldDashboardOriginal = 'people-counter/old/dashboard-empty.jpg';
+        $freshDashboardOriginal = 'people-counter/fresh/dashboard-empty.jpg';
+        $oldOrphan = 'people-counter/old/orphan.jpg';
+        $freshOrphan = 'people-counter/fresh/orphan.jpg';
         $oldSnapshot = 'people-counter/old/snapshot.jpg';
+        $staleSnapshotWithoutDate = 'people-counter/old/stale-snapshot-without-date.jpg';
 
         Storage::disk('local')->put($oldOriginal, 'old-original');
         Storage::disk('local')->put($oldMasked, 'old-masked');
         Storage::disk('local')->put($oldUnknownOriginal, 'old-unknown-original');
+        Storage::disk('local')->put($oldDashboardOriginal, 'old-dashboard-empty');
+        Storage::disk('local')->put($freshDashboardOriginal, 'fresh-dashboard-empty');
+        Storage::disk('local')->put($oldOrphan, 'old-orphan');
+        Storage::disk('local')->put($freshOrphan, 'fresh-orphan');
         Storage::disk('local')->put($oldSnapshot, 'old-snapshot');
+        Storage::disk('local')->put($staleSnapshotWithoutDate, 'stale-snapshot-without-date');
+
+        touch(Storage::disk('local')->path($oldOrphan), Carbon::parse('2026-06-15 13:00:00')->getTimestamp());
+        touch(Storage::disk('local')->path($freshOrphan), Carbon::parse('2026-06-25 13:00:00')->getTimestamp());
 
         $sample = PeopleCounterSample::factory()->for($scheduledClass)->create([
             'account_id' => $scheduledClass->account_id,
@@ -525,11 +576,37 @@ class PeopleCounterCommandsTest extends TestCase
             'original_image_path' => $oldUnknownOriginal,
             'masked_image_path' => null,
         ]);
+        $dashboardSample = PeopleCounterSample::factory()->for($room)->create([
+            'account_id' => $scheduledClass->account_id,
+            'scheduled_class_id' => null,
+            'unknown_presence_interval_id' => null,
+            'location_id' => $scheduledClass->location_id,
+            'captured_at' => Carbon::parse('2026-06-15 12:30:00'),
+            'detected_count' => 0,
+            'original_image_path' => $oldDashboardOriginal,
+            'masked_image_path' => null,
+        ]);
+        $freshDashboardSample = PeopleCounterSample::factory()->for($room)->create([
+            'account_id' => $scheduledClass->account_id,
+            'scheduled_class_id' => null,
+            'unknown_presence_interval_id' => null,
+            'location_id' => $scheduledClass->location_id,
+            'captured_at' => Carbon::parse('2026-06-25 12:30:00'),
+            'detected_count' => 0,
+            'original_image_path' => $freshDashboardOriginal,
+            'masked_image_path' => null,
+        ]);
         $room->update([
             'people_counter_snapshot_path' => $oldSnapshot,
             'people_counter_snapshot_width' => 20,
             'people_counter_snapshot_height' => 20,
             'people_counter_snapshot_taken_at' => Carbon::parse('2026-06-15 09:55:00'),
+        ]);
+        $staleSnapshotRoom = Room::factory()->for($scheduledClass->account)->for($scheduledClass->location)->create([
+            'people_counter_snapshot_path' => $staleSnapshotWithoutDate,
+            'people_counter_snapshot_width' => 20,
+            'people_counter_snapshot_height' => 20,
+            'people_counter_snapshot_taken_at' => null,
         ]);
 
         $this->artisan('people-counter:prune', ['--debug' => true])
@@ -538,18 +615,27 @@ class PeopleCounterCommandsTest extends TestCase
             ->expectsOutputToContain('[people-counter] prune.summaries.deleted')
             ->expectsOutputToContain('[people-counter] prune.unknown_presence_intervals.deleted')
             ->expectsOutputToContain('[people-counter] prune.room_snapshot.deleted')
+            ->expectsOutputToContain('[people-counter] prune.orphan_images.deleted')
             ->expectsOutputToContain('[people-counter] prune.finished')
             ->assertExitCode(0);
 
         $this->assertDatabaseMissing('people_counter_samples', ['id' => $sample->id]);
         $this->assertDatabaseMissing('people_counter_samples', ['id' => $unknownSample->id]);
+        $this->assertDatabaseMissing('people_counter_samples', ['id' => $dashboardSample->id]);
+        $this->assertDatabaseHas('people_counter_samples', ['id' => $freshDashboardSample->id]);
         $this->assertDatabaseMissing('scheduled_class_people_counts', ['id' => $summary->id]);
         $this->assertDatabaseMissing('unknown_presence_intervals', ['id' => $unknownInterval->id]);
         $this->assertFalse(Storage::disk('local')->exists($oldOriginal));
         $this->assertFalse(Storage::disk('local')->exists($oldMasked));
         $this->assertFalse(Storage::disk('local')->exists($oldUnknownOriginal));
+        $this->assertFalse(Storage::disk('local')->exists($oldDashboardOriginal));
+        $this->assertTrue(Storage::disk('local')->exists($freshDashboardOriginal));
+        $this->assertFalse(Storage::disk('local')->exists($oldOrphan));
+        $this->assertTrue(Storage::disk('local')->exists($freshOrphan));
         $this->assertFalse(Storage::disk('local')->exists($oldSnapshot));
+        $this->assertFalse(Storage::disk('local')->exists($staleSnapshotWithoutDate));
         $this->assertNull($room->refresh()->people_counter_snapshot_path);
+        $this->assertNull($staleSnapshotRoom->refresh()->people_counter_snapshot_path);
     }
 
     private function fakeMediaMtxGateway(): void

@@ -425,7 +425,7 @@ class StudioDashboardData
             ->rtspEnabled()
             ->with([
                 'location:id,account_id,name,timezone',
-                'latestPositivePeopleCounterSample' => fn ($query) => $query->select([
+                'latestSuccessfulPeopleCounterSample' => fn ($query) => $query->select([
                     $samplesTable.'.id',
                     $samplesTable.'.account_id',
                     $samplesTable.'.room_id',
@@ -443,7 +443,7 @@ class StudioDashboardData
             ->get(['id', 'account_id', 'location_id', 'name', 'rtsp_enabled', 'rtsp_url'])
             ->map(function (Room $room) use ($account): array {
                 /** @var PeopleCounterSample|null $sample */
-                $sample = $room->latestPositivePeopleCounterSample;
+                $sample = $room->latestSuccessfulPeopleCounterSample;
                 $timezone = $room->location?->timezone ?: $this->timezone($account);
                 $capturedAt = $sample?->captured_at?->copy()->timezone($timezone);
                 $imageUrl = null;

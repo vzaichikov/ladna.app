@@ -206,10 +206,12 @@ class StudioDashboardTest extends TestCase
             'rtsp_url' => 'rtsp://camera.example.test/disabled',
         ]);
         $originalPath = 'people-counter/testing/dashboard-original.jpg';
+        $emptyPath = 'people-counter/testing/dashboard-empty.jpg';
 
         Storage::disk('local')->put($originalPath, 'image');
+        Storage::disk('local')->put($emptyPath, 'empty');
 
-        $sample = PeopleCounterSample::factory()
+        PeopleCounterSample::factory()
             ->for($account)
             ->for($location)
             ->for($room)
@@ -219,7 +221,7 @@ class StudioDashboardTest extends TestCase
                 'detected_count' => 7,
                 'original_image_path' => $originalPath,
             ]);
-        PeopleCounterSample::factory()
+        $sample = PeopleCounterSample::factory()
             ->for($account)
             ->for($location)
             ->for($room)
@@ -227,7 +229,8 @@ class StudioDashboardTest extends TestCase
                 'scheduled_class_id' => null,
                 'captured_at' => Carbon::parse('2026-07-05 08:05:00', 'UTC'),
                 'detected_count' => 0,
-                'original_image_path' => null,
+                'original_image_path' => $emptyPath,
+                'masked_image_path' => null,
             ]);
         PeopleCounterSample::factory()
             ->for($account)
@@ -245,9 +248,9 @@ class StudioDashboardTest extends TestCase
             ->assertSee(__('app.people_counter_live_title'))
             ->assertSee('Mirror Hall')
             ->assertSee('Center Studio')
-            ->assertSee(__('app.people_counter_live_last_updated_at', ['time' => '10:50']))
+            ->assertSee(__('app.people_counter_live_last_updated_at', ['time' => '11:05']))
             ->assertSee('Europe/Kyiv')
-            ->assertSee('data-people-counter-live-room="'.$room->id.':7:succeeded"', false)
+            ->assertSee('data-people-counter-live-room="'.$room->id.':0:succeeded"', false)
             ->assertSee('data-people-counter-screenshot-trigger', false)
             ->assertSee('data-people-counter-screenshot-modal', false)
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']), false)

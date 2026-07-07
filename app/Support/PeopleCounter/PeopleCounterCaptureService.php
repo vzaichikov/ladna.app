@@ -181,11 +181,6 @@ class PeopleCounterCaptureService
             $maskedFrame = $this->masker->mask($capturedFrame->path, $maskedPath, $room->people_counter_mask_polygons ?? []);
             $detection = $this->client->count(Storage::disk('local')->path($maskedFrame->path));
             $this->deleteFrame($maskedFrame);
-            $storedOriginalPath = $detection->count > 0 ? $capturedFrame->path : null;
-
-            if ($storedOriginalPath === null) {
-                $this->deleteFrame($capturedFrame);
-            }
 
             $sample = PeopleCounterSample::create([
                 'account_id' => $scheduledClass->account_id,
@@ -194,15 +189,17 @@ class PeopleCounterCaptureService
                 'room_id' => $scheduledClass->room_id,
                 'captured_at' => $capturedAt,
                 'status' => PeopleCounterSample::StatusSucceeded,
-                'original_image_path' => $storedOriginalPath,
+                'original_image_path' => $capturedFrame->path,
                 'masked_image_path' => null,
-                'image_width' => $storedOriginalPath === null ? null : $capturedFrame->width,
-                'image_height' => $storedOriginalPath === null ? null : $capturedFrame->height,
+                'image_width' => $capturedFrame->width,
+                'image_height' => $capturedFrame->height,
                 'detected_count' => $detection->count,
                 'average_confidence' => $detection->averageConfidence,
                 'detections' => $detection->detections,
                 'response_payload' => $detection->payload,
             ]);
+
+            $this->prunePreviousEmptySnapshots($room, $sample);
 
             $debug?->__invoke('capture.class.succeeded', [
                 'scheduled_class_id' => $scheduledClass->id,
@@ -251,15 +248,17 @@ class PeopleCounterCaptureService
             $this->deleteFrame($maskedFrame);
 
             if ($detection->count < 1) {
-                $this->deleteFrame($capturedFrame);
+                $sample = $this->recordEmptyDashboardSample($room, $capturedAt, $capturedFrame, $detection);
                 $debug?->__invoke('capture.unknown.empty', [
                     'account_id' => $room->account_id,
                     'location_id' => $room->location_id,
                     'room_id' => $room->id,
+                    'sample_id' => $sample->id,
                     'detected_count' => $detection->count,
+                    'stored_original_image' => $sample->original_image_path !== null,
                 ]);
 
-                return null;
+                return $sample;
             }
 
             $sample = $this->recordUnknownPresenceSample($room, $capturedAt, $capturedFrame, $detection);
@@ -385,7 +384,7 @@ class PeopleCounterCaptureService
                 'peak_detected_count' => max($interval->peak_detected_count, $detection->count),
             ]);
 
-            return PeopleCounterSample::create([
+            $sample = PeopleCounterSample::create([
                 'account_id' => $room->account_id,
                 'scheduled_class_id' => null,
                 'unknown_presence_interval_id' => $interval->id,
@@ -402,7 +401,76 @@ class PeopleCounterCaptureService
                 'detections' => $detection->detections,
                 'response_payload' => $detection->payload,
             ]);
+
+            $this->prunePreviousEmptySnapshots($room, $sample);
+
+            return $sample;
         });
+    }
+
+    private function recordEmptyDashboardSample(
+        Room $room,
+        Carbon $capturedAt,
+        PeopleCounterCaptureResult $capturedFrame,
+        PeopleCounterDetectionResult $detection,
+    ): PeopleCounterSample {
+        $sample = PeopleCounterSample::create([
+            'account_id' => $room->account_id,
+            'scheduled_class_id' => null,
+            'unknown_presence_interval_id' => null,
+            'location_id' => $room->location_id,
+            'room_id' => $room->id,
+            'captured_at' => $capturedAt,
+            'status' => PeopleCounterSample::StatusSucceeded,
+            'original_image_path' => $capturedFrame->path,
+            'masked_image_path' => null,
+            'image_width' => $capturedFrame->width,
+            'image_height' => $capturedFrame->height,
+            'detected_count' => $detection->count,
+            'average_confidence' => $detection->averageConfidence,
+            'detections' => $detection->detections,
+            'response_payload' => $detection->payload,
+        ]);
+
+        $this->prunePreviousEmptySnapshots($room, $sample);
+
+        return $sample;
+    }
+
+    private function prunePreviousEmptySnapshots(Room $room, PeopleCounterSample $currentSample): void
+    {
+        PeopleCounterSample::query()
+            ->where('account_id', $room->account_id)
+            ->where('room_id', $room->id)
+            ->whereKeyNot($currentSample->id)
+            ->where('status', PeopleCounterSample::StatusSucceeded)
+            ->where('detected_count', 0)
+            ->where(function ($query): void {
+                $query
+                    ->whereNotNull('original_image_path')
+                    ->orWhere(function ($query): void {
+                        $query
+                            ->whereNull('scheduled_class_id')
+                            ->whereNull('unknown_presence_interval_id');
+                    });
+            })
+            ->each(function (PeopleCounterSample $sample): void {
+                if (is_string($sample->original_image_path)) {
+                    Storage::disk('local')->delete($sample->original_image_path);
+                }
+
+                if ($sample->scheduled_class_id === null && $sample->unknown_presence_interval_id === null) {
+                    $sample->delete();
+
+                    return;
+                }
+
+                $sample->update([
+                    'original_image_path' => null,
+                    'image_width' => null,
+                    'image_height' => null,
+                ]);
+            });
     }
 
     private function deleteFrame(?PeopleCounterCaptureResult $frame): void

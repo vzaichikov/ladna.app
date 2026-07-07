@@ -9,9 +9,12 @@ use App\Models\UnknownPresenceInterval;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class PeopleCounterPruner
 {
+    private const ImageRoot = 'people-counter';
+
     /**
      * @param  callable(string, array<string, mixed>): void|null  $debug
      */
@@ -85,7 +88,11 @@ class PeopleCounterPruner
 
         Room::query()
             ->whereNotNull('people_counter_snapshot_path')
-            ->where('people_counter_snapshot_taken_at', '<', $cutoff)
+            ->where(function ($query) use ($cutoff): void {
+                $query
+                    ->where('people_counter_snapshot_taken_at', '<', $cutoff)
+                    ->orWhereNull('people_counter_snapshot_taken_at');
+            })
             ->orderBy('id')
             ->chunkById(200, function ($rooms) use ($debug, $disk): void {
                 foreach ($rooms as $room) {
@@ -105,8 +112,15 @@ class PeopleCounterPruner
                 }
             });
 
+        $deletedOrphanImages = $this->pruneOrphanedImages($disk, $cutoff);
+
+        $debug?->__invoke('prune.orphan_images.deleted', [
+            'count' => $deletedOrphanImages,
+        ]);
+
         $debug?->__invoke('prune.finished', [
             'deleted_records' => $deleted,
+            'deleted_orphan_images' => $deletedOrphanImages,
         ]);
 
         return $deleted;
@@ -122,5 +136,76 @@ class PeopleCounterPruner
         if (is_string($path) && $path !== '') {
             $disk->delete($path);
         }
+    }
+
+    private function pruneOrphanedImages(FilesystemAdapter $disk, Carbon $cutoff): int
+    {
+        if (! $disk->exists(self::ImageRoot)) {
+            return 0;
+        }
+
+        $deleted = 0;
+        $cutoffTimestamp = $cutoff->getTimestamp();
+
+        collect($disk->allFiles(self::ImageRoot))
+            ->filter(fn (string $path): bool => $this->isOlderThan($disk, $path, $cutoffTimestamp))
+            ->chunk(200)
+            ->each(function ($paths) use ($disk, &$deleted): void {
+                $pathList = $paths->values()->all();
+                $referencedPaths = $this->referencedImagePaths($pathList);
+
+                foreach ($pathList as $path) {
+                    if (isset($referencedPaths[$path])) {
+                        continue;
+                    }
+
+                    if ($disk->delete($path)) {
+                        $deleted++;
+                    }
+                }
+            });
+
+        return $deleted;
+    }
+
+    private function isOlderThan(FilesystemAdapter $disk, string $path, int $cutoffTimestamp): bool
+    {
+        try {
+            return $disk->lastModified($path) < $cutoffTimestamp;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $paths
+     * @return array<string, true>
+     */
+    private function referencedImagePaths(array $paths): array
+    {
+        $samplePaths = PeopleCounterSample::query()
+            ->where(function ($query) use ($paths): void {
+                $query
+                    ->whereIn('original_image_path', $paths)
+                    ->orWhereIn('masked_image_path', $paths);
+            })
+            ->get(['original_image_path', 'masked_image_path'])
+            ->flatMap(fn (PeopleCounterSample $sample): array => [
+                $sample->original_image_path,
+                $sample->masked_image_path,
+            ])
+            ->filter(fn (mixed $path): bool => is_string($path) && $path !== '')
+            ->all();
+
+        $roomPaths = Room::query()
+            ->whereIn('people_counter_snapshot_path', $paths)
+            ->pluck('people_counter_snapshot_path')
+            ->filter(fn (mixed $path): bool => is_string($path) && $path !== '')
+            ->all();
+
+        return collect([...$samplePaths, ...$roomPaths])
+            ->unique()
+            ->mapWithKeys(fn (string $path): array => [$path => true])
+            ->all();
     }
 }
