@@ -332,6 +332,94 @@ class ScheduleSeriesGenerationTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_schedule_generate_prunes_empty_unbacked_future_generated_classes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $inactiveClassType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'is_active' => false,
+        ]);
+        $inactiveSeries = ScheduleSeries::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($inactiveClassType)
+            ->create([
+                'weekday' => now('UTC')->isoWeekday(),
+                'start_time' => '14:00',
+                'start_date' => now('UTC')->toDateString(),
+            ]);
+        $emptyOrphan = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'schedule_series_id' => null,
+            'is_generated' => true,
+            'is_manually_modified' => false,
+            'starts_at' => Carbon::parse('2026-06-18 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-18 11:00:00', 'UTC'),
+        ]);
+        $inactiveSeriesClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($inactiveClassType)
+            ->for($inactiveSeries, 'scheduleSeries')
+            ->create([
+                'is_generated' => true,
+                'is_manually_modified' => false,
+                'starts_at' => Carbon::parse('2026-06-19 14:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-06-19 15:00:00', 'UTC'),
+            ]);
+        $bookedOrphan = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'schedule_series_id' => null,
+            'is_generated' => true,
+            'is_manually_modified' => false,
+            'starts_at' => Carbon::parse('2026-06-20 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-20 11:00:00', 'UTC'),
+        ]);
+        $manualOrphan = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'schedule_series_id' => null,
+            'is_generated' => true,
+            'is_manually_modified' => true,
+            'starts_at' => Carbon::parse('2026-06-21 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-21 11:00:00', 'UTC'),
+        ]);
+        $pastOrphan = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'schedule_series_id' => null,
+            'is_generated' => true,
+            'is_manually_modified' => false,
+            'starts_at' => Carbon::parse('2026-06-16 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-16 11:00:00', 'UTC'),
+        ]);
+        $manualClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'schedule_series_id' => null,
+            'is_generated' => false,
+            'is_manually_modified' => false,
+            'starts_at' => Carbon::parse('2026-06-22 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-22 11:00:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+        ClassBooking::factory()->for($account)->for($bookedOrphan, 'scheduledClass')->for($customer)->create([
+            'booked_by_user_id' => null,
+        ]);
+
+        $this->artisan('schedule:generate', ['--account' => $account->id])->assertSuccessful();
+
+        $this->assertNull($emptyOrphan->fresh());
+        $this->assertNull($inactiveSeriesClass->fresh());
+        $this->assertModelExists($bookedOrphan);
+        $this->assertModelExists($manualOrphan);
+        $this->assertModelExists($pastOrphan);
+        $this->assertModelExists($manualClass);
+
+        Carbon::setTestNow();
+    }
+
     private function seriesForAccount(Account $account): ScheduleSeries
     {
         $location = Location::factory()->for($account)->create(['timezone' => 'Europe/Kyiv']);

@@ -143,6 +143,10 @@ class PublicScheduleTest extends TestCase
             'name' => 'Compact Pole',
             'schedule_kind' => ScheduleKind::GroupClass->value,
         ]);
+        $unusedClassType = ClassType::factory()->for($account)->create([
+            'name' => 'Acro class*',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
         $classPassPlan = ClassPassPlan::factory()->for($account)->create([
             'schedule_kind' => ScheduleKind::GroupClass->value,
             'price_cents' => 40000,
@@ -210,6 +214,19 @@ class PublicScheduleTest extends TestCase
             ->assertSee('Nastya')
             ->assertSee('trainer-photos/nastya.png')
             ->assertSee('TOP Trainer');
+
+        $this->get('/test-compact-public-schedule-studio/main/schedule?date=2026-06-18&group_panel=class_type')
+            ->assertOk()
+            ->assertSee('id="group-filter-title"', false)
+            ->assertSee(__('app.choose_class_type'))
+            ->assertSee('Compact Pole')
+            ->assertDontSee('Acro class*')
+            ->assertDontSee('group_class_type='.$unusedClassType->id, false);
+
+        $this->get('/test-compact-public-schedule-studio/main/schedule?date=2026-06-18&group_class_type='.$unusedClassType->id)
+            ->assertOk()
+            ->assertSee('Compact Public Class')
+            ->assertDontSee('Acro class*');
 
         Carbon::setTestNow();
     }

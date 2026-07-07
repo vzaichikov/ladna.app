@@ -11,10 +11,11 @@ class GenerateAccountSchedule
     public function __construct(
         private readonly GenerateScheduleOccurrences $generateScheduleOccurrences,
         private readonly SyncTrainerSubstitutions $syncTrainerSubstitutions,
+        private readonly PruneStaleGeneratedScheduledClasses $pruneStaleGeneratedScheduledClasses,
     ) {}
 
     /**
-     * @return array{created: int, series: int}
+     * @return array{created: int, series: int, pruned: int}
      */
     public function execute(Account $account, ?int $seriesId = null): array
     {
@@ -38,6 +39,7 @@ class GenerateAccountSchedule
         return [
             'created' => $totalCreated,
             'series' => $totalSeries,
+            'pruned' => $this->pruneStaleGeneratedScheduledClasses->execute($account),
         ];
     }
 }

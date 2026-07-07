@@ -224,6 +224,9 @@ class PublicScheduleController extends Controller
         $groupClassTypes = $account->classTypes()
             ->active()
             ->where('schedule_kind', ScheduleKind::GroupClass->value)
+            ->whereIn('id', $location->scheduledClasses()
+                ->publicUpcoming()
+                ->select('class_type_id'))
             ->orderBy('name')
             ->get();
         $manualClassTypes = $selectedManualKind

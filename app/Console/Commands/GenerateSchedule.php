@@ -3,8 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Actions\GenerateAccountSchedule;
-use App\Actions\GenerateScheduleOccurrences;
-use App\Actions\SyncTrainerSubstitutions;
 use App\Enums\AccountStatus;
 use App\Enums\ScheduleSeriesStatus;
 use App\Models\Account;
@@ -12,7 +10,6 @@ use App\Models\ScheduleSeries;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
 
 #[Signature('schedule:generate {--series= : Generate one schedule series by id} {--account= : Generate active schedule series for one account id}')]
 #[Description('Generate rolling scheduled class occurrences from active weekly schedule series.')]
@@ -22,9 +19,7 @@ class GenerateSchedule extends Command
      * Execute the console command.
      */
     public function handle(
-        GenerateScheduleOccurrences $generateScheduleOccurrences,
         GenerateAccountSchedule $generateAccountSchedule,
-        SyncTrainerSubstitutions $syncTrainerSubstitutions,
     ): int {
         $seriesId = filled($this->option('series')) ? (int) $this->option('series') : null;
         $accountId = filled($this->option('account')) ? (int) $this->option('account') : null;
@@ -43,49 +38,56 @@ class GenerateSchedule extends Command
 
             $result = $generateAccountSchedule->execute($account, $seriesId);
 
-            $this->info("Generated {$result['created']} scheduled classes from {$result['series']} schedule series.");
+            $this->info($this->summaryLine($result));
 
             return self::SUCCESS;
         }
 
-        $query = ScheduleSeries::query()
-            ->with(['account', 'location', 'room', 'classType', 'trainer'])
-            ->where('status', ScheduleSeriesStatus::Active->value)
-            ->whereHas('account', fn ($query) => $query->where('status', AccountStatus::Active->value));
-
         if ($seriesId) {
-            $query->whereKey($seriesId);
+            $series = ScheduleSeries::query()
+                ->with('account')
+                ->whereKey($seriesId)
+                ->where('status', ScheduleSeriesStatus::Active->value)
+                ->whereHas('account', fn ($query) => $query->where('status', AccountStatus::Active->value))
+                ->first();
+
+            if (! $series) {
+                $this->info($this->summaryLine(['created' => 0, 'series' => 0, 'pruned' => 0]));
+
+                return self::SUCCESS;
+            }
+
+            $this->info($this->summaryLine($generateAccountSchedule->execute($series->account, $seriesId)));
+
+            return self::SUCCESS;
         }
 
         $totalCreated = 0;
         $totalSeries = 0;
-        $processedAccountIds = collect();
+        $totalPruned = 0;
 
-        $query->chunkById(100, function ($seriesBatch) use (&$totalCreated, &$totalSeries, $generateScheduleOccurrences, $processedAccountIds): void {
-            foreach ($seriesBatch as $series) {
-                $totalCreated += $generateScheduleOccurrences->execute($series);
-                $totalSeries++;
-                $processedAccountIds->push($series->account_id);
-            }
-        });
+        Account::query()
+            ->where('status', AccountStatus::Active->value)
+            ->chunkById(100, function ($accounts) use (&$totalCreated, &$totalSeries, &$totalPruned, $generateAccountSchedule): void {
+                foreach ($accounts as $account) {
+                    /** @var Account $account */
+                    $result = $generateAccountSchedule->execute($account);
+                    $totalCreated += $result['created'];
+                    $totalSeries += $result['series'];
+                    $totalPruned += $result['pruned'];
+                }
+            });
 
-        $this->syncProcessedAccounts($processedAccountIds, $syncTrainerSubstitutions);
-
-        $this->info("Generated {$totalCreated} scheduled classes from {$totalSeries} schedule series.");
+        $this->info($this->summaryLine(['created' => $totalCreated, 'series' => $totalSeries, 'pruned' => $totalPruned]));
 
         return self::SUCCESS;
     }
 
     /**
-     * @param  Collection<int, int>  $processedAccountIds
+     * @param  array{created: int, series: int, pruned: int}  $result
      */
-    private function syncProcessedAccounts(Collection $processedAccountIds, SyncTrainerSubstitutions $syncTrainerSubstitutions): void
+    private function summaryLine(array $result): string
     {
-        Account::query()
-            ->whereKey($processedAccountIds->unique()->values()->all())
-            ->get()
-            ->each(function (Account $account) use ($syncTrainerSubstitutions): void {
-                $syncTrainerSubstitutions->syncGeneratedWindow($account);
-            });
+        return "Generated {$result['created']} scheduled classes from {$result['series']} schedule series. Pruned {$result['pruned']} stale generated scheduled classes.";
     }
 }

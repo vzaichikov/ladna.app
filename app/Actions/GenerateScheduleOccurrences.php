@@ -38,7 +38,7 @@ class GenerateScheduleOccurrences
                 ->get()
                 ->keyBy(fn (ScheduledClass $scheduledClass): string => $scheduledClass->starts_at->toDateTimeString());
 
-            if ($series->status !== ScheduleSeriesStatus::Active || $series->start_date->copy()->timezone($timezone)->startOfDay()->greaterThan($until)) {
+            if (! $this->isGeneratableSeries($series, $timezone, $until)) {
                 $this->deleteStaleGeneratedClasses($futureGeneratedClasses, []);
 
                 $series->forceFill([
@@ -82,6 +82,19 @@ class GenerateScheduleOccurrences
         $daysUntilTarget = ($weekday - $date->isoWeekday() + 7) % 7;
 
         return $date->addDays($daysUntilTarget);
+    }
+
+    private function isGeneratableSeries(ScheduleSeries $series, string $timezone, CarbonImmutable $until): bool
+    {
+        if ($series->status !== ScheduleSeriesStatus::Active) {
+            return false;
+        }
+
+        if (! $series->classType || ! $series->classType->is_active || $series->classType->schedule_kind !== ScheduleKind::GroupClass) {
+            return false;
+        }
+
+        return ! $series->start_date->copy()->timezone($timezone)->startOfDay()->greaterThan($until);
     }
 
     /**
