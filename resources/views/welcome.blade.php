@@ -7,6 +7,7 @@
         $landing = __('app.landing');
         $demoPlan = $demoPlan ?? null;
         $standardPlan = $standardPlan ?? null;
+        $trustedStudios = collect($trustedStudios ?? []);
         $primaryLabel = auth()->check() ? __('app.dashboard') : $landing['hero_primary'];
         $currentLandingLocale = app()->getLocale() === 'en' ? 'en' : 'uk';
         $loginHref = $currentLandingLocale === 'en' ? route('login.en') : route('login');
@@ -220,6 +221,52 @@
                 </div>
             </div>
         </section>
+
+        @if ($trustedStudios->isNotEmpty())
+            <section id="trusted-studios" class="relative overflow-hidden bg-[#2B1731] px-5 py-18 text-white sm:px-8 lg:px-10">
+                <div class="absolute inset-0" aria-hidden="true">
+                    <div class="absolute left-[-10rem] top-[-12rem] h-96 w-96 rounded-full bg-[#A78AB9]/25 blur-3xl"></div>
+                    <div class="absolute bottom-[-11rem] right-[-10rem] h-[30rem] w-[30rem] rounded-full bg-[#E7DDC9]/18 blur-3xl"></div>
+                    <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/28 to-transparent"></div>
+                    <div class="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent"></div>
+                </div>
+
+                <div class="relative mx-auto max-w-7xl">
+                    <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                        <div class="max-w-3xl">
+                            <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[#C7B4D3]">{{ $landing['trusted_eyebrow'] }}</p>
+                            <h2 class="mt-3 text-3xl font-semibold leading-tight sm:text-5xl">
+                                {{ $landing['trusted_title'] }}
+                            </h2>
+                        </div>
+                        <p class="max-w-xl text-base leading-7 text-white/72">
+                            {{ $landing['trusted_copy'] }}
+                        </p>
+                    </div>
+
+                    <div class="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        @foreach ($trustedStudios as $studio)
+                            <a href="{{ route('public.studio', $studio->slug) }}" class="group flex min-h-44 flex-col justify-between rounded-lg border border-white/12 bg-white/[0.08] p-5 shadow-[0_20px_54px_rgba(0,0,0,0.16)] transition hover:-translate-y-0.5 hover:border-[#C7B4D3]/60 hover:bg-white/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7B4D3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2B1731]">
+                                <span class="flex items-center gap-4">
+                                    <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-white p-2 shadow-[0_12px_28px_rgba(0,0,0,0.12)]">
+                                        <img src="{{ $studio->logoUrl() }}" alt="{{ $studio->name }}" class="max-h-12 max-w-12 object-contain">
+                                    </span>
+                                    <span class="min-w-0">
+                                        <span class="block text-lg font-semibold leading-6 text-white">{{ $studio->name }}</span>
+                                        <span class="mt-1 block text-sm leading-5 text-[#DCCFF0]/82">{{ $studio->studio_slogan ?: __('app.studio_public_landing') }}</span>
+                                    </span>
+                                </span>
+
+                                <span class="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-[#E7DDC9] transition group-hover:text-white">
+                                    {{ $landing['trusted_link_label'] }}
+                                    <x-ui.icon name="external" class="h-4 w-4" />
+                                </span>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+        @endif
 
         <section class="border-b border-[#E7DDC9]/80 bg-[#FAF8F5] px-5 py-18 sm:px-8 lg:px-10">
             <div class="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">

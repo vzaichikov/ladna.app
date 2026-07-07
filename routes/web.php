@@ -32,6 +32,7 @@ use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HelpController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
@@ -83,48 +84,15 @@ use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Http\Middleware\RecordAccountActivity;
 use App\Http\Middleware\SetLocale;
 use App\Models\Account;
-use App\Support\SaasBilling\SaasBillingPlans;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Illuminate\View\View;
 
-$landingPlans = static function (): array {
-    try {
-        $plans = app(SaasBillingPlans::class);
-
-        return [
-            'demoPlan' => $plans->demoPlan(),
-            'standardPlan' => $plans->standardPlan(),
-        ];
-    } catch (Throwable) {
-        return [
-            'demoPlan' => null,
-            'standardPlan' => null,
-        ];
-    }
-};
-
-Route::get('/', function (Request $request) use ($landingPlans): View {
-    App::setLocale('uk');
-    Carbon::setLocale('uk');
-    $request->session()->put('locale', 'uk');
-
-    return view('welcome', $landingPlans());
-})->name('home');
-
-Route::get('/en', function (Request $request) use ($landingPlans): View {
-    App::setLocale('en');
-    Carbon::setLocale('en');
-    $request->session()->put('locale', 'en');
-
-    return view('welcome', $landingPlans());
-})->name('home.en');
+Route::get('/', [HomeController::class, 'ukrainian'])->name('home');
+Route::get('/en', [HomeController::class, 'english'])->name('home.en');
 
 Route::get('/changelog.en.html', [ChangelogController::class, 'english'])->name('changelog.en');
 Route::get('/changelog.ua.html', [ChangelogController::class, 'ukrainian'])->name('changelog.ua');
