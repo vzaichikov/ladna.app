@@ -172,10 +172,6 @@ class CustomerClassPass extends Model
             return false;
         }
 
-        if ($this->source === 'online_payment' && $this->purchased_at && $scheduledClass->starts_at->lessThan($this->purchased_at)) {
-            return false;
-        }
-
         if ($this->expires_at && $scheduledClass->starts_at->greaterThan($this->expires_at)) {
             return false;
         }

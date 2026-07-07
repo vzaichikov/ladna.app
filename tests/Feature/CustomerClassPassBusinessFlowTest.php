@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\IssueCustomerClassPass;
 use App\Actions\NormalizeCustomerClassPasses;
+use App\Actions\ReconcileCustomerClassPassForBooking;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduledClassStatus;
@@ -102,7 +103,7 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_online_pass_does_not_reconcile_bookings_before_purchase_time(): void
+    public function test_online_pass_reconciles_unreserved_bookings_before_and_after_purchase_time(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-07 10:00:00'));
         $context = $this->context();
@@ -120,15 +121,53 @@ class CustomerClassPassBusinessFlowTest extends TestCase
             purchasedAt: Carbon::parse('2026-07-07 10:00:00'),
         );
 
-        $this->assertFalse($pastBooking->classPassReservation()->exists());
-
+        $pastReservation = $pastBooking->classPassReservation()->firstOrFail();
         $futureReservation = $futureBooking->classPassReservation()->firstOrFail();
         $customerClassPass->refresh();
 
+        $this->assertSame($customerClassPass->id, $pastReservation->customer_class_pass_id);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $pastReservation->status);
+        $this->assertTrue($pastReservation->used_at->equalTo(Carbon::parse('2026-07-06 18:00:00')));
         $this->assertSame($customerClassPass->id, $futureReservation->customer_class_pass_id);
         $this->assertSame(CustomerClassPassReservationStatus::Reserved, $futureReservation->status);
         $this->assertSame(1, $customerClassPass->reserved_sessions_count);
-        $this->assertSame(0, $customerClassPass->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_new_online_pass_does_not_duplicate_existing_active_booking_reservation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-07 10:00:00'));
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 1);
+        $oldPass = app(IssueCustomerClassPass::class)->execute(
+            $context['account'],
+            $context['customer'],
+            $plan,
+            purchasedAt: Carbon::parse('2026-07-01 10:00:00'),
+        );
+        $scheduledClass = $this->scheduledClass($context, '2026-07-08 18:00:00');
+        $booking = $this->unlinkedBooking($context, $scheduledClass);
+
+        app(ReconcileCustomerClassPassForBooking::class)->execute($booking);
+
+        $oldReservation = $booking->classPassReservation()->firstOrFail();
+        $this->assertSame($oldPass->id, $oldReservation->customer_class_pass_id);
+
+        $newPass = app(IssueCustomerClassPass::class)->execute(
+            $context['account'],
+            $context['customer'],
+            $plan,
+            source: 'online_payment',
+            purchasedAt: Carbon::parse('2026-07-07 10:00:00'),
+        );
+
+        $this->assertSame(1, $booking->classPassReservation()->count());
+        $this->assertSame($oldPass->id, $booking->classPassReservation()->firstOrFail()->customer_class_pass_id);
+        $this->assertSame(1, $oldPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $newPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $newPass->fresh()->used_sessions_count);
 
         Carbon::setTestNow();
     }
