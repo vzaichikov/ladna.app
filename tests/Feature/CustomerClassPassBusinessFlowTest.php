@@ -102,6 +102,37 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_online_pass_does_not_reconcile_bookings_before_purchase_time(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-07 10:00:00'));
+        $context = $this->context();
+        $pastClass = $this->scheduledClass($context, '2026-07-06 18:00:00');
+        $futureClass = $this->scheduledClass($context, '2026-07-08 18:00:00');
+        $pastBooking = $this->unlinkedBooking($context, $pastClass, 'attended');
+        $futureBooking = $this->unlinkedBooking($context, $futureClass);
+        $plan = $this->plan($context, sessions: 2);
+
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute(
+            $context['account'],
+            $context['customer'],
+            $plan,
+            source: 'online_payment',
+            purchasedAt: Carbon::parse('2026-07-07 10:00:00'),
+        );
+
+        $this->assertFalse($pastBooking->classPassReservation()->exists());
+
+        $futureReservation = $futureBooking->classPassReservation()->firstOrFail();
+        $customerClassPass->refresh();
+
+        $this->assertSame($customerClassPass->id, $futureReservation->customer_class_pass_id);
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $futureReservation->status);
+        $this->assertSame(1, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->used_sessions_count);
+
+        Carbon::setTestNow();
+    }
+
     public function test_issuing_non_matching_pass_does_not_reconcile_unlinked_booking(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
