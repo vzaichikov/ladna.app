@@ -13,6 +13,7 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\User;
+use App\Support\Reports\UnpaidClassBookingPaymentsReport;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -24,6 +25,7 @@ class StudioDashboardData
 
     public function __construct(
         private readonly UnreservedClassPassBookingIssues $unreservedClassPassBookingIssues,
+        private readonly UnpaidClassBookingPaymentsReport $unpaidClassBookingPaymentsReport,
     ) {}
 
     /**
@@ -153,6 +155,13 @@ class StudioDashboardData
                 'label' => __('app.problem_unreserved_bookings'),
                 'url' => route('dashboard.accounts.trainers.index', $account),
                 'accent' => 'warning',
+            ],
+            [
+                'key' => 'unpaid_class_booking_payments',
+                'count' => $this->unpaidClassBookingPaymentsReport->countForAccount($account),
+                'label' => __('app.problem_unpaid_class_booking_payments'),
+                'url' => route('dashboard.accounts.reports.unpaid-class-payments', $account),
+                'accent' => 'danger',
             ],
             [
                 'key' => 'freezed_class_passes',

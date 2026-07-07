@@ -76,6 +76,7 @@ use App\Http\Controllers\TrainerReportController;
 use App\Http\Controllers\TrainerSubstitutionController;
 use App\Http\Controllers\TrainerTypeController;
 use App\Http\Controllers\UnknownPresenceReportController;
+use App\Http\Controllers\UnpaidClassPaymentReportController;
 use App\Http\Controllers\WebsiteLeadController;
 use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
@@ -236,6 +237,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.reports.index');
         Route::get('accounts/{account}/reports/trainers', TrainerReportController::class)
             ->name('accounts.reports.trainers');
+        Route::get('accounts/{account}/reports/unpaid-class-payments', UnpaidClassPaymentReportController::class)
+            ->name('accounts.reports.unpaid-class-payments');
         Route::get('accounts/{account}/reports/people-counter', PeopleCounterReportController::class)
             ->name('accounts.reports.people-counter');
         Route::get('accounts/{account}/reports/unknown-presence', UnknownPresenceReportController::class)

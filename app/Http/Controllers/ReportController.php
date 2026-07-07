@@ -17,6 +17,12 @@ class ReportController extends Controller
                 'icon' => 'trainers',
                 'href' => route('dashboard.accounts.reports.trainers', $account),
             ],
+            [
+                'title' => __('app.unpaid_class_booking_payments_report_title'),
+                'copy' => __('app.unpaid_class_booking_payments_report_card_copy'),
+                'icon' => 'payments',
+                'href' => route('dashboard.accounts.reports.unpaid-class-payments', $account),
+            ],
         ];
 
         if ($account->allowsRtspCameras() && $account->peopleCounterEnabled()) {

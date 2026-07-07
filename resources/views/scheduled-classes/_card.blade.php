@@ -337,6 +337,13 @@
                         : null;
                     $hasAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
                     $manualCashPayment = $booking->manualCashPayment;
+                    $hasUnpaidRequiredManualPayment = ! $manualCashPayment
+                        && ! $isCancelledClass
+                        && in_array($booking->status->value, ['booked', 'attended'], true)
+                        && (
+                            ($isRoomRental && ! $hasActivePassReservation)
+                            || $hasAnyTimeAddonPayment
+                        );
                 @endphp
                 <div class="rounded-lg border border-slate-200 p-3 text-sm">
                     <div class="flex items-start justify-between gap-3">
@@ -378,6 +385,11 @@
                             @if ($bookingCancellationLocked)
                                 <div class="mt-2 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
                                     {{ __('app.booking_cancellation_cutoff_marker') }}
+                                </div>
+                            @endif
+                            @if ($hasUnpaidRequiredManualPayment)
+                                <div class="mt-2 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">
+                                    {{ __('app.unpaid_class_booking_payment_alert') }}
                                 </div>
                             @endif
                         </div>

@@ -39,6 +39,13 @@ class ClassBookingPaymentController extends Controller
             return $this->bookingJsonResponse($account, $classBooking, __('app.class_booking_payment_recorded'));
         }
 
+        $returnUrl = $request->safeReturnUrl($account);
+
+        if ($returnUrl !== null) {
+            return redirect()->to($returnUrl)
+                ->with('status', __('app.class_booking_payment_recorded'));
+        }
+
         return redirect()->route('dashboard.accounts.scheduled-classes.index', $account)
             ->with('status', __('app.class_booking_payment_recorded'));
     }

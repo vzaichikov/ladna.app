@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.76.0',
+                'date' => '2026-07-07',
+                'title' => 'Missing booking-payment report',
+                'items' => ['Added an owner report for class bookings where a required studio cash payment has not been recorded yet, covering direct room-rental payments and any-time class-pass add-ons. The studio dashboard and schedule now flag these bookings, and the report includes quick payment controls for faster cashdesk cleanup.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.75.0',
                 'date' => '2026-07-07',
                 'title' => 'Any-time class-pass add-on',
@@ -688,6 +695,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.76.0',
+                'date' => '2026-07-07',
+                'title' => 'Звіт “Не внесена оплата”',
+                'items' => ['Додано звіт для власниці по записах, де потрібна касова оплата ще не внесена: прямі оплати оренди залу та доплати за будь-який час в абонементах. Панель студії й розклад тепер позначають такі записи, а у звіті є швидке внесення оплати для оперативного закриття каси.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.75.0',
                 'date' => '2026-07-07',

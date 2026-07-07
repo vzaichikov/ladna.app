@@ -150,7 +150,7 @@
             'label' => __('app.reports'),
             'icon' => 'reports',
             'href' => route('dashboard.accounts.reports.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.reports.index', 'dashboard.accounts.reports.trainers', 'dashboard.accounts.reports.people-counter', 'dashboard.accounts.reports.unknown-presence'),
+            'active' => request()->routeIs('dashboard.accounts.reports.*'),
         ]] : []),
         ...($canViewReports && $activeAccount->allowsRtspCameras() ? [[
             'label' => __('app.cameras'),

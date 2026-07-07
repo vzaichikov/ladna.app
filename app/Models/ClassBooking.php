@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
+use App\Enums\ScheduledClassStatus;
+use App\Enums\ScheduleKind;
 use Database\Factories\ClassBookingFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,6 +18,10 @@ class ClassBooking extends Model
 {
     /** @use HasFactory<ClassBookingFactory> */
     use HasFactory;
+
+    public const ManualPaymentDueAnyTimeAddon = 'any_time_addon';
+
+    public const ManualPaymentDueRoomRental = 'room_rental';
 
     protected $fillable = [
         'account_id',
@@ -125,6 +131,45 @@ class ClassBooking extends Model
         $reservation?->loadMissing('customerClassPass');
 
         return $reservation?->customerClassPass?->anyTimeAddonAmountCentsFor($this->scheduledClass);
+    }
+
+    public function manualCashPaymentDueKind(?ScheduledClass $scheduledClass = null): ?string
+    {
+        if ($scheduledClass) {
+            $this->setRelation('scheduledClass', $scheduledClass);
+        }
+
+        if ($this->isCorrectedRemoved() || ! in_array($this->status, [
+            ClassBookingStatus::Booked,
+            ClassBookingStatus::Attended,
+        ], true)) {
+            return null;
+        }
+
+        $this->loadMissing(['scheduledClass.classType', 'manualCashPayment', 'classPassReservation.customerClassPass']);
+
+        if ($this->manualCashPayment || ! $this->scheduledClass || $this->scheduledClass->status !== ScheduledClassStatus::Scheduled) {
+            return null;
+        }
+
+        $activeReservation = $this->activeClassPassReservation();
+
+        if ($this->scheduledClass->classType?->schedule_kind === ScheduleKind::RoomRental && ! $activeReservation) {
+            return self::ManualPaymentDueRoomRental;
+        }
+
+        if ($activeReservation && ($this->anyTimeAddonAmountCents() ?? 0) > 0) {
+            return self::ManualPaymentDueAnyTimeAddon;
+        }
+
+        return null;
+    }
+
+    public function manualCashPaymentDueAmountCents(?ScheduledClass $scheduledClass = null): ?int
+    {
+        return $this->manualCashPaymentDueKind($scheduledClass) === self::ManualPaymentDueAnyTimeAddon
+            ? $this->anyTimeAddonAmountCents()
+            : null;
     }
 
     public function corrections(): HasMany

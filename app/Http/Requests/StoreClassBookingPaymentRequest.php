@@ -37,6 +37,7 @@ class StoreClassBookingPaymentRequest extends FormRequest
     {
         return [
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
+            'return_to' => ['nullable', 'string', 'max:2048'],
         ];
     }
 
@@ -87,6 +88,26 @@ class StoreClassBookingPaymentRequest extends FormRequest
     public function amountCents(): int
     {
         return PaymentAmounts::decimalToCents($this->input('amount')) ?? 0;
+    }
+
+    public function safeReturnUrl(Account $account): ?string
+    {
+        $returnTo = (string) $this->input('return_to', '');
+
+        if ($returnTo === '') {
+            return null;
+        }
+
+        $returnPath = parse_url($returnTo, PHP_URL_PATH);
+        $allowedPath = parse_url(route('dashboard.accounts.reports.unpaid-class-payments', $account), PHP_URL_PATH);
+
+        if (! is_string($returnPath) || $returnPath !== $allowedPath) {
+            return null;
+        }
+
+        $query = parse_url($returnTo, PHP_URL_QUERY);
+
+        return is_string($query) && $query !== '' ? $returnPath.'?'.$query : $returnPath;
     }
 
     private function expectsJsonValidationResponse(): bool
