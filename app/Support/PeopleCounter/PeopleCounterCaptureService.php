@@ -3,6 +3,7 @@
 namespace App\Support\PeopleCounter;
 
 use App\Enums\ScheduledClassStatus;
+use App\Models\Account;
 use App\Models\PeopleCounterSample;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -84,15 +85,15 @@ class PeopleCounterCaptureService
      */
     private function captureUnknownPresenceSamples(Carbon $now, int $limit, ?callable $debug = null): int
     {
-        $openAccountIds = $this->studioHours->openAccountIds($now, requireRtspCameras: true);
-        $protectedAfter = $now->copy()->subMinutes(PeopleCounterSamplingWindow::UnknownPresenceGraceMinutes);
+        $peopleCounterAccountIds = $this->peopleCounterAccountIds(requireRtspCameras: true);
+        $protectedAfter = $now->copy()->subMinutes(PeopleCounterSamplingWindow::UnknownPresencePostClassGraceMinutes);
         $candidateCount = Room::query()
-            ->whereIn('account_id', $openAccountIds)
+            ->whereIn('account_id', $peopleCounterAccountIds)
             ->active()
             ->rtspEnabled()
             ->count();
         $rooms = Room::query()
-            ->whereIn('account_id', $openAccountIds)
+            ->whereIn('account_id', $peopleCounterAccountIds)
             ->active()
             ->rtspEnabled()
             ->whereDoesntHave('scheduledClasses', fn ($query) => $query
@@ -108,11 +109,13 @@ class PeopleCounterCaptureService
 
         $debug?->__invoke('capture.unknown.selection', [
             'now' => $now->toDateTimeString(),
-            'post_class_grace_minutes' => PeopleCounterSamplingWindow::UnknownPresenceGraceMinutes,
+            'post_class_grace_minutes' => PeopleCounterSamplingWindow::UnknownPresencePostClassGraceMinutes,
+            'merge_gap_minutes' => PeopleCounterSamplingWindow::UnknownPresenceMergeGapMinutes,
             'protected_after_or_at' => $protectedAfter->toDateTimeString(),
             'limit' => $limit,
             'candidate_rooms' => $candidateCount,
-            'open_people_counter_studios' => count($openAccountIds),
+            'people_counter_studios' => count($peopleCounterAccountIds),
+            'whole_day' => true,
             'eligible_rooms' => $rooms->count(),
         ]);
 
@@ -120,6 +123,23 @@ class PeopleCounterCaptureService
             ->map(fn (Room $room): ?PeopleCounterSample => $this->captureUnknownPresence($room, $now, $debug))
             ->filter()
             ->count();
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function peopleCounterAccountIds(bool $requireRtspCameras = false): array
+    {
+        return Account::query()
+            ->active()
+            ->where('enable_people_counter', true)
+            ->when(
+                $requireRtspCameras,
+                fn ($query) => $query->where('allow_rtsp_cameras', true),
+            )
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
     }
 
     /**
@@ -342,7 +362,7 @@ class PeopleCounterCaptureService
             $interval = UnknownPresenceInterval::query()
                 ->where('account_id', $room->account_id)
                 ->where('room_id', $room->id)
-                ->where('ended_at', '>=', $capturedAt->copy()->subMinutes(PeopleCounterSamplingWindow::UnknownPresenceGraceMinutes))
+                ->where('ended_at', '>=', $capturedAt->copy()->subMinutes(PeopleCounterSamplingWindow::UnknownPresenceMergeGapMinutes))
                 ->orderByDesc('ended_at')
                 ->lockForUpdate()
                 ->first();

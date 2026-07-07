@@ -10,5 +10,7 @@ final class PeopleCounterSamplingWindow
 
     public const int SummarizeDelayMinutes = 5;
 
-    public const int UnknownPresenceGraceMinutes = 15;
+    public const int UnknownPresencePostClassGraceMinutes = 15;
+
+    public const int UnknownPresenceMergeGapMinutes = 30;
 }

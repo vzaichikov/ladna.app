@@ -251,6 +251,29 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertFalse(UnknownPresenceInterval::query()->whereBelongsTo($room)->exists());
     }
 
+    public function test_capture_command_records_unknown_presence_when_studio_is_closed(): void
+    {
+        Carbon::setTestNow('2026-07-04 23:30:00');
+        Storage::fake('local');
+        $this->fakeMediaMtxGateway();
+        $this->bindFrameCapture();
+        $this->bindDetector(count: 2);
+        $room = $this->peopleCounterRoom();
+
+        $this->artisan('people-counter:capture', ['--debug' => true])
+            ->expectsOutputToContain('[people-counter] capture.unknown.selection')
+            ->expectsOutputToContain('[people-counter] capture.unknown.succeeded')
+            ->assertExitCode(0);
+
+        $interval = UnknownPresenceInterval::query()->whereBelongsTo($room)->firstOrFail();
+        $sample = PeopleCounterSample::query()->whereBelongsTo($interval, 'unknownPresenceInterval')->firstOrFail();
+
+        $this->assertSame(1, $interval->sample_count);
+        $this->assertSame(2, $interval->peak_detected_count);
+        $this->assertSame(2, $sample->detected_count);
+        $this->assertTrue(Storage::disk('local')->exists($sample->original_image_path));
+    }
+
     public function test_capture_command_skips_unknown_presence_during_class_and_post_class_grace(): void
     {
         Carbon::setTestNow('2026-07-04 11:10:00');
@@ -273,7 +296,7 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertFalse(UnknownPresenceInterval::query()->whereBelongsTo($room)->exists());
     }
 
-    public function test_unknown_presence_samples_extend_intervals_within_grace_and_split_after_gap(): void
+    public function test_unknown_presence_samples_extend_intervals_within_merge_gap_and_split_after_gap(): void
     {
         Storage::fake('local');
         $this->fakeMediaMtxGateway();
@@ -285,6 +308,7 @@ class PeopleCounterCommandsTest extends TestCase
         $service->captureUnknownPresence($room, Carbon::parse('2026-07-04 12:00:00'));
         $service->captureUnknownPresence($room, Carbon::parse('2026-07-04 12:10:00'));
         $service->captureUnknownPresence($room, Carbon::parse('2026-07-04 12:26:00'));
+        $service->captureUnknownPresence($room, Carbon::parse('2026-07-04 12:57:00'));
 
         $intervals = UnknownPresenceInterval::query()
             ->whereBelongsTo($room)
@@ -292,11 +316,11 @@ class PeopleCounterCommandsTest extends TestCase
             ->get();
 
         $this->assertCount(2, $intervals);
-        $this->assertSame(2, $intervals[0]->sample_count);
+        $this->assertSame(3, $intervals[0]->sample_count);
         $this->assertSame('2026-07-04 12:00:00', $intervals[0]->started_at->toDateTimeString());
-        $this->assertSame('2026-07-04 12:10:00', $intervals[0]->ended_at->toDateTimeString());
+        $this->assertSame('2026-07-04 12:26:00', $intervals[0]->ended_at->toDateTimeString());
         $this->assertSame(1, $intervals[1]->sample_count);
-        $this->assertSame('2026-07-04 12:26:00', $intervals[1]->started_at->toDateTimeString());
+        $this->assertSame('2026-07-04 12:57:00', $intervals[1]->started_at->toDateTimeString());
     }
 
     public function test_summarizer_uses_trimmed_75th_percentile_and_adds_trainer_for_group_classes(): void
