@@ -1287,6 +1287,39 @@ function closeQuickBookingModal(modal) {
     modal?.classList.remove('flex');
 }
 
+function closeAsyncSuccessModal(modal) {
+    if (!modal) {
+        return;
+    }
+
+    const shouldReload = modal.dataset.reload === 'true';
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    modal.dataset.reload = 'false';
+
+    if (shouldReload) {
+        window.location.reload();
+    }
+}
+
+function closeAsyncFormModal(form) {
+    const manualClassModal = form.closest('[data-manual-class-modal]');
+    const quickBookingModal = form.closest('[data-quick-booking-modal]');
+    const trainerSubstitutionModal = form.closest('[data-trainer-substitution-modal]');
+    const customerTransferModal = form.closest('[data-customer-transfer-modal]');
+
+    if (manualClassModal) {
+        closeManualClassModal(manualClassModal);
+    } else if (quickBookingModal) {
+        closeQuickBookingModal(quickBookingModal);
+    } else if (trainerSubstitutionModal) {
+        closeTrainerSubstitutionModal(trainerSubstitutionModal);
+    } else if (customerTransferModal) {
+        closeCustomerTransferModal(customerTransferModal);
+    }
+}
+
 function closeTrainerSubstitutionModal(modal) {
     modal?.classList.add('hidden');
     modal?.classList.remove('flex');
@@ -2343,6 +2376,30 @@ function replaceScheduledClassCard(cardHtml, fallbackCard) {
     createIcons({ icons });
 }
 
+function showAsyncSuccessModal(form, payload) {
+    const modal = document.querySelector('[data-async-success-modal]');
+    const title = modal?.querySelector('[data-async-success-title]');
+    const body = modal?.querySelector('[data-async-success-body]');
+    const closeButton = modal?.querySelector('[data-async-success-close]');
+
+    if (!modal || !body) {
+        return false;
+    }
+
+    if (title) {
+        title.textContent = payload.modal_title || payload.title || title.textContent;
+    }
+
+    body.textContent = payload.modal_message || payload.message || '';
+    modal.dataset.reload = payload.reload || form.dataset.asyncSuccess === 'modal-reload' ? 'true' : 'false';
+    closeAsyncFormModal(form);
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    closeButton?.focus();
+
+    return true;
+}
+
 function setPublicScheduleBusy(fragment, isBusy) {
     fragment.setAttribute('aria-busy', isBusy ? 'true' : 'false');
     fragment.classList.toggle('opacity-60', isBusy);
@@ -2452,6 +2509,10 @@ async function submitAsyncForm(form) {
             }
 
             setAsyncStatus(payload.message, 'success', form);
+
+            if ((payload.success_modal || form.dataset.asyncSuccess === 'modal' || form.dataset.asyncSuccess === 'modal-reload') && showAsyncSuccessModal(form, payload)) {
+                return;
+            }
 
             if (payload.reload || form.dataset.asyncSuccess === 'reload') {
                 window.setTimeout(() => window.location.reload(), 50);
@@ -3783,6 +3844,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const modal = document.getElementById('delete-confirmation-modal');
+    const asyncSuccessModal = document.querySelector('[data-async-success-modal]');
+    const asyncSuccessClose = asyncSuccessModal?.querySelector('[data-async-success-close]');
     const cancelButton = modal?.querySelector('[data-confirm-cancel]');
     const acceptButton = modal?.querySelector('[data-confirm-accept]');
     const confirmTitle = modal?.querySelector('[data-confirm-title]');
@@ -3820,6 +3883,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!modal || !cancelButton || !acceptButton) {
         return;
+    }
+
+    if (asyncSuccessModal && asyncSuccessClose) {
+        asyncSuccessClose.addEventListener('click', () => closeAsyncSuccessModal(asyncSuccessModal));
+        asyncSuccessModal.addEventListener('click', (event) => {
+            if (event.target === asyncSuccessModal) {
+                closeAsyncSuccessModal(asyncSuccessModal);
+            }
+        });
     }
 
     document.addEventListener('submit', (event) => {
@@ -3890,6 +3962,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (event.key === 'Escape' && pendingDeleteForm) {
             closeDeleteConfirmation(modal);
+        }
+
+        if (event.key === 'Escape' && asyncSuccessModal && !asyncSuccessModal.classList.contains('hidden')) {
+            closeAsyncSuccessModal(asyncSuccessModal);
         }
     });
 

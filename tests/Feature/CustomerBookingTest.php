@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Actions\CreateManualScheduledClass;
 use App\Enums\AccountRole;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\ScheduleKind;
 use App\Enums\TelegramAlertStatus;
 use App\Enums\TelegramAlertType;
 use App\Models\Account;
@@ -441,6 +443,100 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_manual_group_class_record_json_confirms_persisted_creation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['capacity' => 12]);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Stretching',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'default_duration_minutes' => 60,
+            'default_capacity' => 10,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Настя']);
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.scheduled-classes.manual.store', [$account, ScheduleKind::GroupClass->value]), [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'starts_at' => '2026-06-18T09:00',
+                'capacity' => 9,
+            ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('message', __('app.manual_class_created'))
+            ->assertJsonPath('success_modal', true)
+            ->assertJsonPath('modal_title', __('app.manual_class_created_title'))
+            ->assertJsonPath('reload', true);
+
+        $scheduledClass = ScheduledClass::whereBelongsTo($account)
+            ->where('title', 'Stretching')
+            ->firstOrFail();
+
+        $this->assertSame($scheduledClass->id, $response->json('scheduled_class_id'));
+        $this->assertSame($room->id, $scheduledClass->room_id);
+        $this->assertSame($classType->id, $scheduledClass->class_type_id);
+        $this->assertSame($trainer->id, $scheduledClass->trainer_id);
+        $this->assertSame(ScheduledClassStatus::Scheduled, $scheduledClass->status);
+        $this->assertSame('manual', $scheduledClass->metadata['source']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_manual_group_class_record_json_returns_form_error_when_creation_is_not_persisted(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['capacity' => 12]);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Stretching',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Настя']);
+
+        $this->app->instance(CreateManualScheduledClass::class, new class extends CreateManualScheduledClass
+        {
+            /**
+             * @param  array<string, mixed>  $validated
+             */
+            public function execute(Account $account, ScheduleKind $scheduleKind, array $validated): ScheduledClass
+            {
+                return new ScheduledClass;
+            }
+        });
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.scheduled-classes.manual.store', [$account, ScheduleKind::GroupClass->value]), [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'starts_at' => '2026-06-18T09:00',
+                'capacity' => 9,
+            ]);
+
+        $response
+            ->assertUnprocessable()
+            ->assertJsonPath('errors._form.0', __('app.manual_class_create_failed'));
+
+        $this->assertSame(0, ScheduledClass::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_private_lesson_booking_allows_only_one_active_customer(): void
     {
         $owner = User::factory()->create();
@@ -824,6 +920,69 @@ class CustomerBookingTest extends TestCase
             ->assertSee('Next Monday Class')
             ->assertDontSee('Sunday Class')
             ->assertDontSee('Other Account Class');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_weekly_scheduled_class_tabs_can_filter_by_weekday(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+
+        $this->scheduledClass($account, $location, $room, $classType, 'Today Class', '2026-06-17 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Tomorrow Class', '2026-06-18 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Sunday Class', '2026-06-21 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Next Monday Class', '2026-06-22 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Next Sunday Class', '2026-06-28 10:00:00');
+
+        $currentWeekResponse = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'this_week']));
+
+        $currentWeekResponse
+            ->assertOk()
+            ->assertSee('weekday=3', false)
+            ->assertSee('weekday=7', false)
+            ->assertDontSee('weekday=1', false);
+
+        $this->assertSame([3, 4, 5, 6, 7], collect($currentWeekResponse->viewData('weekDayOptions'))->pluck('weekday')->all());
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'this_week',
+                'weekday' => 4,
+            ]))
+            ->assertOk()
+            ->assertViewHas('activeWeekday', 4)
+            ->assertSee('Tomorrow Class')
+            ->assertDontSee('Today Class')
+            ->assertDontSee('Sunday Class')
+            ->assertDontSee('Next Monday Class');
+
+        $nextWeekResponse = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'next_week']));
+
+        $nextWeekResponse->assertOk();
+
+        $this->assertSame([1, 2, 3, 4, 5, 6, 7], collect($nextWeekResponse->viewData('weekDayOptions'))->pluck('weekday')->all());
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'next_week',
+                'weekday' => 1,
+            ]))
+            ->assertOk()
+            ->assertViewHas('activeWeekday', 1)
+            ->assertSee('Next Monday Class')
+            ->assertDontSee('Sunday Class')
+            ->assertDontSee('Next Sunday Class');
 
         Carbon::setTestNow();
     }

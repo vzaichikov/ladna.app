@@ -49,10 +49,26 @@
                     </div>
                 </div>
             @else
-                <form method="POST" action="{{ route('dashboard.accounts.scheduled-classes.manual.store', [$account, $scheduleKind->value]) }}" class="flex min-h-0 flex-1 flex-col" data-manual-class-form>
+                <form
+                    method="POST"
+                    action="{{ route('dashboard.accounts.scheduled-classes.manual.store', [$account, $scheduleKind->value]) }}"
+                    class="flex min-h-0 flex-1 flex-col"
+                    data-manual-class-form
+                    data-async-form
+                    data-async-success="modal-reload"
+                    novalidate
+                >
                     @csrf
 
                     <div class="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+                        <div
+                            data-async-form-status
+                            data-error-message="{{ __('app.async_request_failed') }}"
+                            data-validation-message="{{ __('app.async_validation_failed') }}"
+                            class="hidden rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 shadow-xs"
+                        ></div>
+                        <div data-async-error-for="_form"></div>
+
                         <div class="grid gap-4 sm:grid-cols-2">
                             @if ($singleLocation)
                                 <input type="hidden" name="location_id" value="{{ $singleLocation->id }}" data-quick-booking-location>

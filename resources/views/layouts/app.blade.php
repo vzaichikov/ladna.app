@@ -702,5 +702,33 @@
                 </div>
             </div>
         </div>
+
+        <div
+            data-async-success-modal
+            class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="async-success-title"
+        >
+            <div class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl">
+                <div class="flex items-start gap-4">
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                        <x-ui.icon name="check" class="h-5 w-5" />
+                    </div>
+                    <div>
+                        <h2 id="async-success-title" class="text-lg font-semibold text-slate-950" data-async-success-title>
+                            {{ __('app.success') }}
+                        </h2>
+                        <p class="mt-2 text-sm leading-6 text-slate-500" data-async-success-body></p>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <x-ui.button type="button" data-async-success-close>
+                        {{ __('app.ok') }}
+                    </x-ui.button>
+                </div>
+            </div>
+        </div>
     </body>
 </html>

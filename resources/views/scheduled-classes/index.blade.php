@@ -46,8 +46,31 @@
         @endforeach
     </nav>
 
+    @if ($weekDayOptions !== [])
+        <nav class="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.weekday') }}">
+            @foreach ($weekDayOptions as $weekDayOption)
+                <a
+                    href="{{ route('dashboard.accounts.scheduled-classes.index', array_merge(['account' => $account, 'tab' => $activeTab, 'weekday' => $weekDayOption['weekday']], $activeFilterQuery)) }}"
+                    @class([
+                        'inline-flex min-w-14 flex-col items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition',
+                        'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20' => $weekDayOption['active'],
+                        'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! $weekDayOption['active'],
+                    ])
+                    aria-label="{{ $weekDayOption['full_label'] }} {{ $weekDayOption['date_label'] }}"
+                    @if ($weekDayOption['active']) aria-current="date" @endif
+                >
+                    <span>{{ $weekDayOption['label'] }}</span>
+                    <span class="mt-0.5 text-[11px] leading-none opacity-75">{{ $weekDayOption['date_label'] }}</span>
+                </a>
+            @endforeach
+        </nav>
+    @endif
+
     <form method="GET" action="{{ route('dashboard.accounts.scheduled-classes.index', $account) }}" class="mt-4 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
         <input type="hidden" name="tab" value="{{ $activeTab }}">
+        @if ($activeWeekday)
+            <input type="hidden" name="weekday" value="{{ $activeWeekday }}">
+        @endif
 
         <div class="flex flex-col gap-4">
             <h2 class="text-sm font-semibold text-slate-950">{{ __('app.filters') }}</h2>
