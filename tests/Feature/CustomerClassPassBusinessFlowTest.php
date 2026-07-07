@@ -172,6 +172,62 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_new_pass_rebalances_customer_ledger_chronologically_after_old_pass_future_reservations(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-07 10:00:00'));
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 4);
+        $oldPass = app(IssueCustomerClassPass::class)->execute(
+            $context['account'],
+            $context['customer'],
+            $plan,
+            purchasedAt: Carbon::parse('2026-07-01 10:00:00'),
+        );
+        $usedClass1 = $this->scheduledClass($context, '2026-07-03 10:00:00');
+        $usedClass2 = $this->scheduledClass($context, '2026-07-04 10:00:00');
+        $missingPastClass = $this->scheduledClass($context, '2026-07-05 10:00:00');
+        $futureClass1 = $this->scheduledClass($context, '2026-07-08 10:00:00');
+        $futureClass2 = $this->scheduledClass($context, '2026-07-09 10:00:00');
+
+        foreach ([
+            $this->unlinkedBooking($context, $usedClass1, 'attended'),
+            $this->unlinkedBooking($context, $usedClass2, 'attended'),
+            $this->unlinkedBooking($context, $futureClass1),
+            $this->unlinkedBooking($context, $futureClass2),
+        ] as $booking) {
+            app(ReconcileCustomerClassPassForBooking::class)->execute($booking);
+        }
+
+        $missingPastBooking = $this->unlinkedBooking($context, $missingPastClass, 'attended');
+        app(ReconcileCustomerClassPassForBooking::class)->execute($missingPastBooking);
+
+        $this->assertFalse($missingPastBooking->classPassReservation()->exists());
+        $this->assertSame(2, $oldPass->fresh()->used_sessions_count);
+        $this->assertSame(2, $oldPass->fresh()->reserved_sessions_count);
+
+        $newPass = app(IssueCustomerClassPass::class)->execute(
+            $context['account'],
+            $context['customer'],
+            $plan,
+            source: 'online_payment',
+            purchasedAt: Carbon::parse('2026-07-07 10:00:00'),
+        );
+
+        $oldPass->refresh();
+        $newPass->refresh();
+
+        $this->assertSame($oldPass->id, $missingPastBooking->classPassReservation()->firstOrFail()->customer_class_pass_id);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $missingPastBooking->classPassReservation()->firstOrFail()->status);
+        $this->assertSame($oldPass->id, $futureClass1->classBookings()->firstOrFail()->classPassReservation()->firstOrFail()->customer_class_pass_id);
+        $this->assertSame($newPass->id, $futureClass2->classBookings()->firstOrFail()->classPassReservation()->firstOrFail()->customer_class_pass_id);
+        $this->assertSame(3, $oldPass->used_sessions_count);
+        $this->assertSame(1, $oldPass->reserved_sessions_count);
+        $this->assertSame(0, $newPass->used_sessions_count);
+        $this->assertSame(1, $newPass->reserved_sessions_count);
+
+        Carbon::setTestNow();
+    }
+
     public function test_issuing_non_matching_pass_does_not_reconcile_unlinked_booking(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
