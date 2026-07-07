@@ -91,7 +91,16 @@ class ClassPassPlan extends Model
         return $this->hasMany(CustomerPurchase::class);
     }
 
-    public function isAvailableFor(ScheduledClass $scheduledClass, bool $requireActivePlan = true): bool
+    public function isAvailableFor(ScheduledClass $scheduledClass, bool $requireActivePlan = true, bool $includeTimeWindow = true): bool
+    {
+        if (! $this->matchesScheduledClass($scheduledClass, $requireActivePlan)) {
+            return false;
+        }
+
+        return ! $includeTimeWindow || $this->isWithinTimeWindow($scheduledClass);
+    }
+
+    public function matchesScheduledClass(ScheduledClass $scheduledClass, bool $requireActivePlan = true): bool
     {
         if (($requireActivePlan && ! $this->is_active) || $scheduledClass->account_id !== $this->account_id) {
             return false;
@@ -119,19 +128,42 @@ class ClassPassPlan extends Model
             return false;
         }
 
-        $startsAt = $scheduledClass->starts_at
-            ->copy()
-            ->timezone($scheduledClass->displayTimezone())
-            ->format('H:i:s');
+        return true;
+    }
 
-        if ($this->available_from_time && $startsAt < $this->available_from_time) {
+    public function isWithinTimeWindow(ScheduledClass $scheduledClass): bool
+    {
+        $startsAt = $this->scheduledStartTime($scheduledClass);
+        $availableFromTime = $this->normalizedTime($this->available_from_time);
+        $availableUntilTime = $this->normalizedTime($this->available_until_time);
+
+        if ($availableFromTime && $startsAt < $availableFromTime) {
             return false;
         }
 
-        if ($this->available_until_time && $startsAt >= $this->available_until_time) {
+        if ($availableUntilTime && $startsAt >= $availableUntilTime) {
             return false;
         }
 
         return true;
+    }
+
+    private function scheduledStartTime(ScheduledClass $scheduledClass): string
+    {
+        return $scheduledClass->starts_at
+            ->copy()
+            ->timezone($scheduledClass->displayTimezone())
+            ->format('H:i:s');
+    }
+
+    private function normalizedTime(mixed $time): ?string
+    {
+        if (blank($time)) {
+            return null;
+        }
+
+        $time = (string) $time;
+
+        return strlen($time) === 5 ? $time.':00' : substr($time, 0, 8);
     }
 }

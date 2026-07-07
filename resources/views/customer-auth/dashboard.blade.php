@@ -120,6 +120,10 @@
                                     $bookingCancellationLocked = $cancellationWindow->isLockedForBooking($booking);
                                     $hasActivePassReservation = $booking->classPassReservation?->customerClassPass
                                         && in_array($booking->classPassReservation->status->value, ['reserved', 'used'], true);
+                                    $anyTimeAddonAmountCents = $hasActivePassReservation && $booking->scheduledClass
+                                        ? $booking->classPassReservation->customerClassPass->anyTimeAddonAmountCentsFor($booking->scheduledClass)
+                                        : null;
+                                    $hasAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
                                     $bookingNeedsClassPassAlert = ! $booking->skip_class_pass_reservation
                                         && ! $hasActivePassReservation
                                         && in_array($booking->status->value, ['booked', 'attended', 'no_show'], true)
@@ -144,6 +148,17 @@
                                         <div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
                                             <x-ui.icon name="triangle-alert" class="mt-0.5 h-4 w-4 shrink-0" />
                                             <span>{{ __('app.customer_booking_without_class_pass_alert') }}</span>
+                                        </div>
+                                    @elseif ($hasAnyTimeAddonPayment)
+                                        <div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                            <x-ui.icon name="triangle-alert" class="mt-0.5 h-4 w-4 shrink-0" />
+                                            <span>
+                                                @if ($booking->manualCashPayment)
+                                                    {{ __('app.customer_booking_any_time_addon_paid', ['amount' => \App\Support\MoneyFormatter::format($booking->manualCashPayment->amount_cents, $booking->manualCashPayment->currency)]) }}
+                                                @else
+                                                    {{ __('app.customer_booking_any_time_addon_due', ['amount' => \App\Support\MoneyFormatter::format($anyTimeAddonAmountCents, $booking->classPassReservation->customerClassPass->currency)]) }}
+                                                @endif
+                                            </span>
                                         </div>
                                     @endif
                                     @if ($canCancelBooking)

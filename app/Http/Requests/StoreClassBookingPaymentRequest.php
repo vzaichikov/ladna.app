@@ -2,13 +2,14 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Support\Payments\PaymentAmounts;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Contracts\Validation\Validator as ValidationContract;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Validator;
 
 class StoreClassBookingPaymentRequest extends FormRequest
@@ -53,27 +54,45 @@ class StoreClassBookingPaymentRequest extends FormRequest
                 }
 
                 $classBooking->loadMissing('scheduledClass.classType');
+                $anyTimeAddonAmountCents = $classBooking->anyTimeAddonAmountCents();
+                $isAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
 
-                if ($classBooking->scheduledClass?->classType?->schedule_kind !== ScheduleKind::RoomRental) {
+                if (! $isAnyTimeAddonPayment && $classBooking->scheduledClass?->classType?->schedule_kind !== ScheduleKind::RoomRental) {
                     $validator->errors()->add('amount', __('app.class_booking_payment_rental_only'));
                 }
 
-                $hasActivePassReservation = $classBooking->classPassReservation()
-                    ->whereIn('status', [
-                        CustomerClassPassReservationStatus::Reserved->value,
-                        CustomerClassPassReservationStatus::Used->value,
-                    ])
-                    ->exists();
-
-                if ($hasActivePassReservation) {
+                if ($classBooking->activeClassPassReservation() && ! $isAnyTimeAddonPayment) {
                     $validator->errors()->add('amount', __('app.class_booking_payment_class_pass_reserved'));
+                }
+
+                if ($isAnyTimeAddonPayment && $this->amountCents() !== $anyTimeAddonAmountCents) {
+                    $validator->errors()->add('amount', __('app.any_time_addon_payment_amount_mismatch'));
                 }
             },
         ];
     }
 
+    protected function failedValidation(ValidationContract $validator): void
+    {
+        if ($this->expectsJsonValidationResponse()) {
+            throw new HttpResponseException(response()->json([
+                'message' => $validator->errors()->first() ?: __('app.async_validation_failed'),
+                'errors' => $validator->errors(),
+            ], 422));
+        }
+
+        parent::failedValidation($validator);
+    }
+
     public function amountCents(): int
     {
         return PaymentAmounts::decimalToCents($this->input('amount')) ?? 0;
+    }
+
+    private function expectsJsonValidationResponse(): bool
+    {
+        return $this->expectsJson()
+            || $this->ajax()
+            || str_contains((string) $this->header('Accept'), 'json');
     }
 }

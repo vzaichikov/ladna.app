@@ -2,7 +2,6 @@
 
 namespace App\Actions;
 
-use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerPurchaseStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
@@ -28,28 +27,31 @@ class RecordManualClassBookingPayment
 
         return DB::transaction(function () use ($account, $classBooking, $amountCents): CustomerPurchase {
             $lockedBooking = ClassBooking::query()
-                ->with(['scheduledClass.location', 'scheduledClass.room', 'scheduledClass.classType', 'customer'])
+                ->with(['scheduledClass.location', 'scheduledClass.room', 'scheduledClass.classType', 'customer', 'classPassReservation.customerClassPass'])
                 ->whereBelongsTo($account)
                 ->whereKey($classBooking->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            $anyTimeAddonAmountCents = $lockedBooking->anyTimeAddonAmountCents();
+            $isAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
+            $activeReservation = $lockedBooking->activeClassPassReservation();
+            $reservedClassPass = $activeReservation?->customerClassPass;
 
-            if ($lockedBooking->scheduledClass?->classType?->schedule_kind !== ScheduleKind::RoomRental) {
+            if (! $isAnyTimeAddonPayment && $lockedBooking->scheduledClass?->classType?->schedule_kind !== ScheduleKind::RoomRental) {
                 throw ValidationException::withMessages([
                     'amount' => __('app.class_booking_payment_rental_only'),
                 ]);
             }
 
-            $hasActivePassReservation = $lockedBooking->classPassReservation()
-                ->whereIn('status', [
-                    CustomerClassPassReservationStatus::Reserved->value,
-                    CustomerClassPassReservationStatus::Used->value,
-                ])
-                ->exists();
-
-            if ($hasActivePassReservation) {
+            if ($activeReservation && ! $isAnyTimeAddonPayment) {
                 throw ValidationException::withMessages([
                     'amount' => __('app.class_booking_payment_class_pass_reserved'),
+                ]);
+            }
+
+            if ($isAnyTimeAddonPayment && $amountCents !== $anyTimeAddonAmountCents) {
+                throw ValidationException::withMessages([
+                    'amount' => __('app.any_time_addon_payment_amount_mismatch'),
                 ]);
             }
 
@@ -60,18 +62,18 @@ class RecordManualClassBookingPayment
                 'account_id' => $account->id,
                 'customer_id' => $lockedBooking->customer_id,
                 'location_id' => $scheduledClass?->location_id,
-                'class_pass_plan_id' => null,
-                'customer_class_pass_id' => null,
+                'class_pass_plan_id' => $isAnyTimeAddonPayment ? $reservedClassPass?->class_pass_plan_id : null,
+                'customer_class_pass_id' => $isAnyTimeAddonPayment ? $reservedClassPass?->id : null,
                 'class_booking_id' => $lockedBooking->id,
                 'provider' => CustomerPurchase::ProviderStudioCash,
                 'payment_source' => CustomerPurchase::SourceManualCashBooking,
                 'status' => CustomerPurchaseStatus::PaymentPaid->value,
-                'plan_name' => $this->paymentName($lockedBooking),
+                'plan_name' => $this->paymentName($lockedBooking, $isAnyTimeAddonPayment),
                 'plan_slug' => null,
-                'schedule_kind' => ScheduleKind::RoomRental->value,
+                'schedule_kind' => $scheduledClass?->classType?->schedule_kind?->value ?? ScheduleKind::RoomRental->value,
                 'amount_cents' => $amountCents,
                 'currency' => $account->default_currency,
-                'sessions_count' => 1,
+                'sessions_count' => $isAnyTimeAddonPayment ? 0 : 1,
                 'validity_days' => 1,
                 'total_validity_days' => 1,
                 'gateway_invoice_id' => null,
@@ -99,9 +101,18 @@ class RecordManualClassBookingPayment
         });
     }
 
-    private function paymentName(ClassBooking $classBooking): string
+    private function paymentName(ClassBooking $classBooking, bool $isAnyTimeAddonPayment): string
     {
         $scheduledClass = $classBooking->scheduledClass;
+
+        if ($isAnyTimeAddonPayment) {
+            return collect([
+                __('app.any_time_addon_payment'),
+                $scheduledClass?->title,
+            ])
+                ->filter()
+                ->join(' · ');
+        }
 
         return collect([
             $scheduledClass?->title,

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.75.0',
+                'date' => '2026-07-07',
+                'title' => 'Any-time class-pass add-on',
+                'items' => ['Class passes that allow any-time visits can now reserve classes outside their normal time window with the configured add-on payment. Studio schedules and the customer cabinet show the reserved class pass and required add-on instead of saying there is no active compatible pass, and the add-on can be recorded through the existing cash payment history.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.74.1',
                 'date' => '2026-07-06',
                 'title' => 'Web app installation help',
@@ -681,6 +688,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.75.0',
+                'date' => '2026-07-07',
+                'title' => 'Доплата за будь-який час в абонементах',
+                'items' => ['Абонементи з дозволом на відвідування в будь-який час тепер можуть резервувати заняття поза своїм звичайним часовим вікном із налаштованою доплатою. У розкладі студії та кабінеті клієнта показується зарезервований абонемент і потрібна доплата замість повідомлення, що активного сумісного абонемента немає, а доплату можна провести через наявну історію касових оплат.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.74.1',
                 'date' => '2026-07-06',

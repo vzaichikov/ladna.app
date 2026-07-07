@@ -20,6 +20,8 @@ use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\TrainerType;
 use App\Models\User;
+use App\Support\MoneyFormatter;
+use App\Support\UnreservedClassPassBookingIssues;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -62,6 +64,70 @@ class CustomerClassPassBusinessFlowTest extends TestCase
 
         $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
         $this->assertSame(1, CustomerClassPassReservation::where('customer_class_pass_id', $customerClassPass->id)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_any_time_addon_pass_reserves_outside_time_window_and_does_not_create_unreserved_issue(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 1);
+        $plan->forceFill([
+            'available_from_time' => null,
+            'available_until_time' => '12:00:00',
+            'allows_any_time' => true,
+            'any_time_addon_price_cents' => 4500,
+        ])->save();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 18:00:00');
+
+        $response = $this->actingAs($context['owner'])
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$context['account'], $scheduledClass]), [
+                'customer_id' => $context['customer']->id,
+            ])
+            ->assertCreated();
+
+        $booking = $scheduledClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail();
+        $reservation = $booking->classPassReservation()->firstOrFail();
+
+        $this->assertStringContainsString($customerClassPass->code, $response->json('card_html'));
+        $this->assertStringContainsString(MoneyFormatter::format(4500, 'UAH'), $response->json('card_html'));
+        $this->assertStringNotContainsString(__('app.no_matching_class_pass_alert'), $response->json('card_html'));
+        $this->assertSame($customerClassPass->id, $reservation->customer_class_pass_id);
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->status);
+        $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, app(UnreservedClassPassBookingIssues::class)->countForAccount($context['account']));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_time_limited_pass_without_any_time_addon_does_not_reserve_outside_time_window(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 1);
+        $plan->forceFill([
+            'available_from_time' => null,
+            'available_until_time' => '12:00:00',
+            'allows_any_time' => false,
+            'any_time_addon_price_cents' => null,
+        ])->save();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 18:00:00');
+
+        $response = $this->actingAs($context['owner'])
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$context['account'], $scheduledClass]), [
+                'customer_id' => $context['customer']->id,
+            ])
+            ->assertCreated();
+
+        $booking = $scheduledClass->classBookings()->whereBelongsTo($context['customer'])->firstOrFail();
+
+        $this->assertStringContainsString(__('app.no_matching_class_pass_alert'), $response->json('card_html'));
+        $this->assertFalse($booking->classPassReservation()->exists());
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(1, app(UnreservedClassPassBookingIssues::class)->countForAccount($context['account']));
 
         Carbon::setTestNow();
     }

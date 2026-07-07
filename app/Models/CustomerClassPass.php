@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
-#[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'code', 'source', 'issued_location_id', 'is_paid', 'issued_by_actor_user_id', 'issued_by_actor_trainer_id', 'issued_by_actor_name', 'issued_by_actor_email', 'issued_by_actor_role', 'status', 'plan_name', 'plan_slug', 'price_cents', 'paid_amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'reserved_sessions_count', 'used_sessions_count', 'purchased_at', 'opened_at', 'expires_at', 'usable_until_at', 'closed_at', 'frozen_at', 'is_active'])]
+#[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'code', 'source', 'issued_location_id', 'is_paid', 'issued_by_actor_user_id', 'issued_by_actor_trainer_id', 'issued_by_actor_name', 'issued_by_actor_email', 'issued_by_actor_role', 'status', 'plan_name', 'plan_slug', 'price_cents', 'paid_amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'reserved_sessions_count', 'used_sessions_count', 'purchased_at', 'opened_at', 'expires_at', 'usable_until_at', 'closed_at', 'frozen_at', 'is_active'])]
 class CustomerClassPass extends Model
 {
     /** @use HasFactory<CustomerClassPassFactory> */
@@ -25,6 +25,7 @@ class CustomerClassPass extends Model
         'currency' => 'UAH',
         'paid_amount_cents' => 0,
         'total_validity_days' => 180,
+        'allows_any_time' => false,
         'reserved_sessions_count' => 0,
         'used_sessions_count' => 0,
         'is_active' => true,
@@ -45,6 +46,8 @@ class CustomerClassPass extends Model
             'frozen_at' => 'datetime',
             'is_paid' => 'boolean',
             'paid_amount_cents' => 'integer',
+            'allows_any_time' => 'boolean',
+            'any_time_addon_price_cents' => 'integer',
             'is_active' => 'boolean',
         ];
     }
@@ -182,6 +185,62 @@ class CustomerClassPass extends Model
             return false;
         }
 
-        return $this->classPassPlan->isAvailableFor($scheduledClass, requireActivePlan: false);
+        if (! $this->classPassPlan->matchesScheduledClass($scheduledClass, requireActivePlan: false)) {
+            return false;
+        }
+
+        return $this->isWithinTimeWindow($scheduledClass) || $this->allowsAnyTimeAddonFor($scheduledClass);
+    }
+
+    public function anyTimeAddonAmountCentsFor(ScheduledClass $scheduledClass): ?int
+    {
+        if (! $this->allowsAnyTimeAddonFor($scheduledClass)) {
+            return null;
+        }
+
+        return max(0, (int) $this->any_time_addon_price_cents);
+    }
+
+    public function requiresAnyTimeAddonPaymentFor(ScheduledClass $scheduledClass): bool
+    {
+        return ($this->anyTimeAddonAmountCentsFor($scheduledClass) ?? 0) > 0;
+    }
+
+    public function isWithinTimeWindow(ScheduledClass $scheduledClass): bool
+    {
+        $startsAt = $scheduledClass->starts_at
+            ->copy()
+            ->timezone($scheduledClass->displayTimezone())
+            ->format('H:i:s');
+        $availableFromTime = $this->normalizedTime($this->available_from_time);
+        $availableUntilTime = $this->normalizedTime($this->available_until_time);
+
+        if ($availableFromTime && $startsAt < $availableFromTime) {
+            return false;
+        }
+
+        if ($availableUntilTime && $startsAt >= $availableUntilTime) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function allowsAnyTimeAddonFor(ScheduledClass $scheduledClass): bool
+    {
+        return $this->allows_any_time
+            && $this->any_time_addon_price_cents !== null
+            && ! $this->isWithinTimeWindow($scheduledClass);
+    }
+
+    private function normalizedTime(mixed $time): ?string
+    {
+        if (blank($time)) {
+            return null;
+        }
+
+        $time = (string) $time;
+
+        return strlen($time) === 5 ? $time.':00' : substr($time, 0, 8);
     }
 }

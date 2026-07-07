@@ -163,6 +163,141 @@ class PaymentHistoryTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_any_time_addon_booking_payment_is_recorded_against_booking_and_class_pass(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-23 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['name' => 'Studio Any Time Cash', 'default_currency' => 'UAH', 'timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['name' => 'Main desk', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Main Hall']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Pole group',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => 'Evening Pole',
+                'starts_at' => '2026-06-23 18:00:00',
+                'ends_at' => '2026-06-23 19:00:00',
+            ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Any Time Client']);
+        $plan = ClassPassPlan::factory()->for($account)->create([
+            'name' => 'Morning with add-on',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'sessions_count' => 4,
+            'available_from_time' => null,
+            'available_until_time' => '12:00:00',
+            'allows_any_time' => true,
+            'any_time_addon_price_cents' => 4500,
+        ]);
+        $plan->classTypes()->sync([$classType->id]);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+
+        $bookingResponse = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]), [
+                'customer_id' => $customer->id,
+            ])
+            ->assertCreated();
+
+        $this->assertStringContainsString(__('app.any_time_addon_due'), $bookingResponse->json('card_html'));
+        $this->assertStringContainsString(MoneyFormatter::format(4500, 'UAH'), $bookingResponse->json('card_html'));
+
+        $booking = ClassBooking::whereBelongsTo($account)->whereBelongsTo($customer)->firstOrFail();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.bookings.payment.store', [$account, $booking]), [
+                'amount' => '40.00',
+            ])
+            ->assertUnprocessable();
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.bookings.payment.store', [$account, $booking]), [
+                'amount' => '45.00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', __('app.class_booking_payment_recorded'))
+            ->assertJsonPath('scheduled_class_id', $scheduledClass->id);
+
+        $this->assertStringContainsString(__('app.any_time_addon_paid'), $response->json('card_html'));
+        $this->assertStringContainsString(MoneyFormatter::format(4500, 'UAH'), $response->json('card_html'));
+
+        $payment = CustomerPurchase::whereBelongsTo($account)->where('class_booking_id', $booking->id)->firstOrFail();
+
+        $this->assertSame(CustomerPurchase::ProviderStudioCash, $payment->provider);
+        $this->assertSame(CustomerPurchase::SourceManualCashBooking, $payment->payment_source);
+        $this->assertSame(CustomerPurchaseStatus::PaymentPaid, $payment->status);
+        $this->assertSame($customerClassPass->id, $payment->customer_class_pass_id);
+        $this->assertSame($plan->id, $payment->class_pass_plan_id);
+        $this->assertSame(4500, $payment->amount_cents);
+        $this->assertSame(ScheduleKind::GroupClass->value, $payment->schedule_kind);
+        $this->assertSame(0, $payment->sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->paid_amount_cents);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.any_time_addon_payment'))
+            ->assertSee('Evening Pole')
+            ->assertSee('Any Time Client')
+            ->assertSee($customerClassPass->code)
+            ->assertSee(MoneyFormatter::format(4500, 'UAH'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_regular_reserved_booking_still_blocks_manual_booking_payment(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-23 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['name' => 'Studio Reserved Cash', 'default_currency' => 'UAH', 'timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'starts_at' => '2026-06-23 10:00:00',
+                'ends_at' => '2026-06-23 11:00:00',
+            ]);
+        $customer = Customer::factory()->for($account)->create();
+        $plan = ClassPassPlan::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'sessions_count' => 1,
+        ]);
+        $plan->classTypes()->sync([$classType->id]);
+        app(IssueCustomerClassPass::class)->execute($account, $customer, $plan);
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]), [
+                'customer_id' => $customer->id,
+            ])
+            ->assertCreated();
+
+        $booking = ClassBooking::whereBelongsTo($account)->whereBelongsTo($customer)->firstOrFail();
+        $this->assertTrue($booking->classPassReservation()->exists());
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.bookings.payment.store', [$account, $booking]), [
+                'amount' => '45.00',
+            ])
+            ->assertUnprocessable();
+
+        $this->assertFalse(CustomerPurchase::whereBelongsTo($account)->where('class_booking_id', $booking->id)->exists());
+
+        Carbon::setTestNow();
+    }
+
     public function test_partial_cash_class_pass_payments_appear_as_separate_rows_and_sum_actual_cash(): void
     {
         $owner = User::factory()->create();

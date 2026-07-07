@@ -408,6 +408,7 @@ class CustomerAuthController extends Controller
                     'scheduledClass.location',
                     'scheduledClass.trainer',
                     'classPassReservation.customerClassPass',
+                    'manualCashPayment',
                 ]),
         ]);
 

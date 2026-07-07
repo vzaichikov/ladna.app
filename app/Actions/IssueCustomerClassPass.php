@@ -27,7 +27,7 @@ class IssueCustomerClassPass
     ) {}
 
     /**
-     * @param  array{plan_name?: string, plan_slug?: string|null, price_cents?: int, currency?: string, sessions_count?: int, validity_days?: int, total_validity_days?: int}  $snapshot
+     * @param  array{plan_name?: string, plan_slug?: string|null, price_cents?: int, currency?: string, sessions_count?: int, validity_days?: int, total_validity_days?: int, available_from_time?: string|null, available_until_time?: string|null, allows_any_time?: bool, any_time_addon_price_cents?: int|null}  $snapshot
      */
     public function execute(
         Account $account,
@@ -86,6 +86,10 @@ class IssueCustomerClassPass
                 'sessions_count' => $snapshot['sessions_count'] ?? $classPassPlan->sessions_count,
                 'validity_days' => $snapshot['validity_days'] ?? $classPassPlan->validity_days,
                 'total_validity_days' => $totalValidityDays,
+                'available_from_time' => $snapshot['available_from_time'] ?? $classPassPlan->available_from_time,
+                'available_until_time' => $snapshot['available_until_time'] ?? $classPassPlan->available_until_time,
+                'allows_any_time' => $snapshot['allows_any_time'] ?? $classPassPlan->allows_any_time,
+                'any_time_addon_price_cents' => $snapshot['any_time_addon_price_cents'] ?? $classPassPlan->any_time_addon_price_cents,
                 'purchased_at' => $purchasedAt,
                 'usable_until_at' => $purchasedAt->copy()->addDays($totalValidityDays),
                 'is_active' => true,

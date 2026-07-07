@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ClassBookingStatus;
+use App\Enums\CustomerClassPassReservationStatus;
 use Database\Factories\ClassBookingFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -91,6 +92,39 @@ class ClassBooking extends Model
     {
         return $this->hasOne(CustomerPurchase::class)
             ->where('payment_source', CustomerPurchase::SourceManualCashBooking);
+    }
+
+    public function activeClassPassReservation(): ?CustomerClassPassReservation
+    {
+        if ($this->relationLoaded('classPassReservation')) {
+            $reservation = $this->classPassReservation;
+
+            return $reservation && in_array($reservation->status, [
+                CustomerClassPassReservationStatus::Reserved,
+                CustomerClassPassReservationStatus::Used,
+            ], true) ? $reservation : null;
+        }
+
+        return $this->classPassReservation()
+            ->whereIn('status', [
+                CustomerClassPassReservationStatus::Reserved->value,
+                CustomerClassPassReservationStatus::Used->value,
+            ])
+            ->first();
+    }
+
+    public function anyTimeAddonAmountCents(): ?int
+    {
+        $this->loadMissing(['scheduledClass', 'classPassReservation.customerClassPass']);
+
+        if (! $this->scheduledClass) {
+            return null;
+        }
+
+        $reservation = $this->activeClassPassReservation();
+        $reservation?->loadMissing('customerClassPass');
+
+        return $reservation?->customerClassPass?->anyTimeAddonAmountCentsFor($this->scheduledClass);
     }
 
     public function corrections(): HasMany

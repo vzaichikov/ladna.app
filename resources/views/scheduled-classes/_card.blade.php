@@ -329,6 +329,14 @@
                         'cancelled', 'no_show' => 'crm-status-danger',
                         default => 'crm-status-scheduled',
                     };
+                    $reservedPass = $booking->classPassReservation?->customerClassPass;
+                    $hasActivePassReservation = $reservedPass
+                        && in_array($booking->classPassReservation->status->value, ['reserved', 'used'], true);
+                    $anyTimeAddonAmountCents = $hasActivePassReservation
+                        ? $reservedPass->anyTimeAddonAmountCentsFor($scheduledClass)
+                        : null;
+                    $hasAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
+                    $manualCashPayment = $booking->manualCashPayment;
                 @endphp
                 <div class="rounded-lg border border-slate-200 p-3 text-sm">
                     <div class="flex items-start justify-between gap-3">
@@ -347,14 +355,14 @@
                                 @endif
                             </div>
                             <div class="mt-1 text-slate-500">{{ $booking->customer->phone ?? $booking->customer->email ?? __('app.no_contact') }}</div>
-                            @if ($booking->classPassReservation?->customerClassPass && ($booking->classPassReservation->status->value !== 'released' || $isCancelledClass))
-                                @php
-                                    $reservedPass = $booking->classPassReservation->customerClassPass;
-                                @endphp
+                            @if ($reservedPass && ($booking->classPassReservation->status->value !== 'released' || $isCancelledClass))
                                 <div class="mt-2 inline-flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
                                     <span>{{ $reservedPass->code }}</span>
                                     <span>{{ $reservedPass->remainingSessionsCount() }} {{ __('app.remaining_sessions_short') }}</span>
                                     <span>{{ __('app.'.$booking->classPassReservation->status->value) }}</span>
+                                    @if ($hasAnyTimeAddonPayment)
+                                        <span>+ {{ \App\Support\MoneyFormatter::format($anyTimeAddonAmountCents, $reservedPass->currency) }} {{ __('app.any_time_addon_summary') }}</span>
+                                    @endif
                                 </div>
                             @elseif (! $isCancelledClass && in_array($booking->status->value, ['booked', 'attended', 'cancelled', 'no_show'], true))
                                 @if (! $booking->skip_class_pass_reservation)
@@ -376,38 +384,45 @@
                         <span class="{{ $bookingStatusClass }}">{{ __('app.'.$booking->status->value) }}</span>
                     </div>
                     @php
-                        $hasActivePassReservation = $booking->classPassReservation
-                            && in_array($booking->classPassReservation->status->value, ['reserved', 'used'], true);
                         $canRecordBookingPayment = ! $readonly
                             && ! $isCancelledClass
                             && ! $isClosedClass
-                            && $isRoomRental
-                            && ! $hasActivePassReservation
+                            && (
+                                ($isRoomRental && ! $hasActivePassReservation)
+                                || ($hasAnyTimeAddonPayment && ! $manualCashPayment)
+                            )
                             && in_array($booking->status->value, ['booked', 'attended'], true);
-                        $manualCashPayment = $booking->manualCashPayment;
+                        $bookingPaymentValue = $manualCashPayment
+                            ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $manualCashPayment->amount_cents)
+                            : ($hasAnyTimeAddonPayment ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $anyTimeAddonAmountCents) : '');
                     @endphp
-                    @if ($isRoomRental && $manualCashPayment)
+                    @if (($isRoomRental || $hasAnyTimeAddonPayment) && $manualCashPayment)
                         <div class="mt-3 inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
-                            {{ __('app.class_booking_payment') }}: {{ \App\Support\MoneyFormatter::format($manualCashPayment->amount_cents, $manualCashPayment->currency) }}
+                            {{ $hasAnyTimeAddonPayment ? __('app.any_time_addon_paid') : __('app.class_booking_payment') }}: {{ \App\Support\MoneyFormatter::format($manualCashPayment->amount_cents, $manualCashPayment->currency) }}
+                        </div>
+                    @elseif ($hasAnyTimeAddonPayment)
+                        <div class="mt-3 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
+                            {{ __('app.any_time_addon_due') }}: {{ \App\Support\MoneyFormatter::format($anyTimeAddonAmountCents, $reservedPass?->currency ?? $account->default_currency) }}
                         </div>
                     @endif
                     @if ($canRecordBookingPayment)
                         <form method="POST" action="{{ route('dashboard.accounts.bookings.payment.store', [$account, $booking]) }}" data-async-form class="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-sky-100 bg-sky-50 p-3">
                             @csrf
                             <label class="min-w-40 grow">
-                                <span class="crm-label">{{ __('app.class_booking_payment_amount') }}</span>
+                                <span class="crm-label">{{ $hasAnyTimeAddonPayment ? __('app.any_time_addon_price') : __('app.class_booking_payment_amount') }}</span>
                                 <input
                                     name="amount"
                                     type="number"
                                     min="0.01"
                                     step="0.01"
                                     inputmode="decimal"
-                                    value="{{ $manualCashPayment ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $manualCashPayment->amount_cents) : '' }}"
+                                    value="{{ $bookingPaymentValue }}"
                                     class="crm-field"
                                     placeholder="0.00"
+                                    @readonly($hasAnyTimeAddonPayment)
                                 >
                             </label>
-                            <x-ui.button type="submit" variant="secondary" size="sm">{{ $manualCashPayment ? __('app.update_payment') : __('app.record_payment') }}</x-ui.button>
+                            <x-ui.button type="submit" variant="secondary" size="sm">{{ $hasAnyTimeAddonPayment ? __('app.record_any_time_addon_payment') : ($manualCashPayment ? __('app.update_payment') : __('app.record_payment')) }}</x-ui.button>
                         </form>
                     @endif
                     @unless ($isCancelledClass || $readonly || $isClosedClass)

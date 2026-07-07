@@ -13,6 +13,7 @@ use App\Models\CustomerClassPassReservation;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Support\MoneyFormatter;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -225,6 +226,70 @@ class CustomerDashboardTest extends TestCase
             ->assertSee('На це заняття немає активного абонемента.', false)
             ->assertSee('Covered Exot', false)
             ->assertSee('PASS-001', false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_default_classes_tab_shows_any_time_addon_instead_of_missing_pass_alert(): void
+    {
+        app()->setLocale('uk');
+        Carbon::setTestNow(Carbon::parse('2026-07-06 08:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'slug' => 'customer-dashboard-any-time-addon',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Катерина',
+            'phone' => '+380501112237',
+        ]);
+        $customerClassPass = $this->classPass($account, $customer, [
+            'code' => 'MORN-001',
+            'plan_name' => 'Morning Pole',
+            'sessions_count' => 4,
+            'used_sessions_count' => 0,
+            'reserved_sessions_count' => 1,
+            'available_from_time' => null,
+            'available_until_time' => '12:00:00',
+            'allows_any_time' => true,
+            'any_time_addon_price_cents' => 4500,
+        ]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => 'Evening Exot',
+                'starts_at' => Carbon::parse('2026-07-07 18:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-07 19:00:00', 'UTC'),
+            ]);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass, 'scheduledClass')
+            ->for($customer)
+            ->create();
+        CustomerClassPassReservation::factory()->create([
+            'account_id' => $account->id,
+            'customer_class_pass_id' => $customerClassPass->id,
+            'class_booking_id' => $booking->id,
+            'scheduled_class_id' => $scheduledClass->id,
+            'status' => 'reserved',
+            'reserved_at' => Carbon::parse('2026-07-06 08:10:00', 'UTC'),
+        ]);
+
+        $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee('Evening Exot', false)
+            ->assertSee('MORN-001', false)
+            ->assertSee(__('app.customer_booking_any_time_addon_due', ['amount' => MoneyFormatter::format(4500, 'UAH')]), false)
+            ->assertDontSee('На це заняття немає активного абонемента.', false);
 
         Carbon::setTestNow();
     }
