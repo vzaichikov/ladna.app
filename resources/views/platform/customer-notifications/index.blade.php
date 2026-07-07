@@ -4,9 +4,11 @@
 
 @section('content')
     @php
-        $formatDate = fn ($date): string => $date
-            ? $date->timezone(config('app.timezone'))->format('d.m.Y H:i')
-            : __('app.not_set');
+        $notificationTimezone = fn ($notification): string => \App\Support\DateTimePresenter::safeTimezone(
+            $notification->scheduledClass?->location?->timezone ?: $notification->account?->timezone,
+        );
+        $formatDate = fn ($notification, $date): string => \App\Support\DateTimePresenter::formatInTimezone($date, $notificationTimezone($notification), 'd.m.Y H:i')
+            ?? __('app.not_set');
         $statusClass = fn ($status): string => match ($status?->value ?? $status) {
             \App\Enums\CustomerNotificationStatus::Sent->value => 'crm-status-active',
             \App\Enums\CustomerNotificationStatus::Failed->value => 'crm-status-danger',
@@ -118,7 +120,7 @@
                                     <div class="mt-1 text-sm text-slate-500">{{ __('app.customer_notification_channel_'.$notification->channel->value) }}</div>
                                     @if ($scheduledClass)
                                         <div class="mt-2 text-xs text-slate-500">
-                                            {{ $scheduledClass->title }} · {{ $formatDate($scheduledClass->starts_at) }}
+                                            {{ $scheduledClass->title }} · {{ $formatDate($notification, $scheduledClass->starts_at) }}
                                         </div>
                                     @endif
                                 </td>
@@ -133,14 +135,15 @@
                                     <div class="mt-2 text-xs text-slate-500">{{ __('app.attempts') }}: {{ $notification->attempts }}</div>
                                 </td>
                                 <td class="px-5 py-4 text-slate-700">
-                                    <div>{{ __('app.scheduled_at') }}: {{ $formatDate($notification->scheduled_send_at) }}</div>
-                                    <div class="mt-1 text-xs text-slate-500">{{ __('app.next_attempt_at') }}: {{ $formatDate($notification->next_attempt_at) }}</div>
-                                    <div class="mt-1 text-xs text-slate-500">{{ __('app.created_at') }}: {{ $formatDate($notification->created_at) }}</div>
+                                    <div>{{ __('app.scheduled_at') }}: {{ $formatDate($notification, $notification->scheduled_send_at) }}</div>
+                                    <div class="mt-1 text-xs text-slate-500">{{ __('app.next_attempt_at') }}: {{ $formatDate($notification, $notification->next_attempt_at) }}</div>
+                                    <div class="mt-1 text-xs text-slate-500">{{ __('app.created_at') }}: {{ $formatDate($notification, $notification->created_at) }}</div>
+                                    <div class="mt-1 text-xs text-slate-500">{{ $notificationTimezone($notification) }}</div>
                                 </td>
                                 <td class="px-5 py-4 text-slate-700">
                                     <div>{{ __('app.provider') }}: {{ $notification->provider ?: __('app.not_set') }}</div>
                                     <div class="mt-1 text-xs text-slate-500">{{ __('app.provider_scope') }}: {{ $notification->provider_scope ?: __('app.not_set') }}</div>
-                                    <div class="mt-1 text-xs text-slate-500">{{ __('app.sent_at') }}: {{ $formatDate($notification->sent_at) }}</div>
+                                    <div class="mt-1 text-xs text-slate-500">{{ __('app.sent_at') }}: {{ $formatDate($notification, $notification->sent_at) }}</div>
                                     @if ($notification->provider_message_id)
                                         <div class="mt-1 font-mono text-xs text-slate-500">{{ $notification->provider_message_id }}</div>
                                     @endif
