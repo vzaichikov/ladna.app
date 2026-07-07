@@ -7,6 +7,7 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
 use App\Enums\ScheduleKind;
+use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AccountMembership;
 use App\Models\ActivityDirection;
@@ -200,6 +201,83 @@ class MobileApiTest extends TestCase
                 'customer_id' => $customer->id,
             ])
             ->assertNotFound();
+    }
+
+    public function test_staff_mobile_schedule_without_booking_permissions_hides_booking_details(): void
+    {
+        [$account, , , $scheduledClass] = $this->groupClassContext([
+            'slug' => 'mobile-staff-hidden-bookings',
+        ]);
+        $staff = User::factory()->create();
+        AccountMembership::factory()
+            ->for($account)
+            ->for($staff, 'user')
+            ->create([
+                'role' => AccountRole::Receptionist->value,
+                'permissions' => [StudioPermission::ManageSchedule->value],
+            ]);
+        $customer = Customer::factory()->for($account)->create([
+            'email' => 'hidden-booking@example.test',
+            'phone' => '+380501234567',
+        ]);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass, 'scheduledClass')
+            ->for($customer)
+            ->create([
+                'status' => ClassBookingStatus::Booked->value,
+                'notes' => 'Sensitive booking note',
+            ]);
+        $staffToken = $this->staffToken($account, $staff, AccountRole::Receptionist->value);
+
+        $this->withToken($staffToken)
+            ->getJson('/api/v1/mobile/schedule')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $scheduledClass->id)
+            ->assertJsonPath('data.0.booked_count', 1)
+            ->assertJsonMissingPath('data.0.bookings');
+
+        $this->withToken($staffToken)
+            ->getJson("/api/v1/mobile/classes/{$scheduledClass->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $scheduledClass->id)
+            ->assertJsonPath('data.booked_count', 1)
+            ->assertJsonMissingPath('data.bookings');
+    }
+
+    public function test_staff_mobile_schedule_with_booking_permissions_includes_booking_details(): void
+    {
+        [$account, , , $scheduledClass] = $this->groupClassContext([
+            'slug' => 'mobile-staff-visible-bookings',
+        ]);
+        $staff = User::factory()->create();
+        AccountMembership::factory()
+            ->for($account)
+            ->for($staff, 'user')
+            ->create([
+                'role' => AccountRole::Receptionist->value,
+                'permissions' => [StudioPermission::ManageBookings->value],
+            ]);
+        $customer = Customer::factory()->for($account)->create([
+            'email' => 'visible-booking@example.test',
+            'phone' => '+380509876543',
+        ]);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass, 'scheduledClass')
+            ->for($customer)
+            ->create([
+                'status' => ClassBookingStatus::Booked->value,
+                'notes' => 'Visible booking note',
+            ]);
+        $staffToken = $this->staffToken($account, $staff, AccountRole::Receptionist->value);
+
+        $this->withToken($staffToken)
+            ->getJson("/api/v1/mobile/classes/{$scheduledClass->id}")
+            ->assertOk()
+            ->assertJsonPath('data.bookings.0.customer.email', 'visible-booking@example.test')
+            ->assertJsonPath('data.bookings.0.customer.phone', '+380509876543')
+            ->assertJsonPath('data.bookings.0.notes', 'Visible booking note');
     }
 
     public function test_staff_mobile_booking_cannot_overfill_group_class_capacity(): void

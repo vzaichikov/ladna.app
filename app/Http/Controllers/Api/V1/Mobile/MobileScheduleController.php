@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Mobile;
 use App\Enums\AccountRole;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
+use App\Enums\StudioPermission;
 use App\Http\Controllers\Controller;
 use App\Models\MobileSession;
 use App\Models\ScheduledClass;
@@ -54,7 +55,7 @@ class MobileScheduleController extends Controller
                 ->map(fn (ScheduledClass $scheduledClass): array => $payload->forClass(
                     $scheduledClass,
                     $customer,
-                    includeBookings: $session->guard === MobileSession::GuardStaff,
+                    includeBookings: $this->canViewStaffBookingDetails($session),
                 ))
                 ->values(),
         ]);
@@ -80,7 +81,7 @@ class MobileScheduleController extends Controller
             'data' => $payload->forClass(
                 $scheduledClass,
                 $session->guard === MobileSession::GuardCustomer ? $session->customer : null,
-                includeBookings: $session->guard === MobileSession::GuardStaff,
+                includeBookings: $this->canViewStaffBookingDetails($session),
             ),
         ]);
     }
@@ -110,5 +111,15 @@ class MobileScheduleController extends Controller
 
             abort_unless($trainerId && $scheduledClass->trainer_id === $trainerId, 404);
         }
+    }
+
+    private function canViewStaffBookingDetails(MobileSession $session): bool
+    {
+        if ($session->guard !== MobileSession::GuardStaff || ! $session->user) {
+            return false;
+        }
+
+        return $session->account->userCan($session->user, StudioPermission::ManageBookings)
+            || $session->account->userCan($session->user, StudioPermission::ManageClients);
     }
 }

@@ -73,6 +73,7 @@ class TelegramUpdateProcessor
 
         $installation = $telegramUpdate->installation;
         $chatId = (string) data_get($callbackQuery, 'message.chat.id');
+        $telegramUserId = (string) data_get($callbackQuery, 'from.id');
         $data = (string) data_get($callbackQuery, 'data', '');
 
         $this->telegramClient->answerCallbackQuery($installation, (string) data_get($callbackQuery, 'id'));
@@ -92,7 +93,7 @@ class TelegramUpdateProcessor
             return true;
         }
 
-        $authorization = $this->authorizationForCallback($installation->id, $chatId);
+        $authorization = $this->authorizationForCallback($installation->id, $chatId, $telegramUserId);
 
         if (! $authorization) {
             $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_authorization_failed'));
@@ -575,12 +576,13 @@ class TelegramUpdateProcessor
         return is_string($first) && $first !== '' ? $first : $exception->getMessage();
     }
 
-    private function authorizationForCallback(int $installationId, string $chatId): ?TelegramChatAuthorization
+    private function authorizationForCallback(int $installationId, string $chatId, string $telegramUserId): ?TelegramChatAuthorization
     {
         return TelegramChatAuthorization::query()
             ->with(['account', 'user', 'trainer'])
             ->where('telegram_bot_installation_id', $installationId)
             ->where('telegram_chat_id', $chatId)
+            ->where('telegram_user_id', $telegramUserId)
             ->where('status', TelegramChatAuthorizationStatus::Authorized->value)
             ->first();
     }
