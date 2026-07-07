@@ -22,6 +22,7 @@ use App\Support\SystemAppearance;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -41,7 +42,35 @@ class PlatformAdminTest extends TestCase
             ->get(route('platform.accounts.index'))
             ->assertOk()
             ->assertSee('Studio A')
-            ->assertSee('Studio B');
+            ->assertSee('Studio B')
+            ->assertSee(route('dashboard.accounts.show', Account::where('name', 'Studio A')->firstOrFail()), false);
+    }
+
+    public function test_platform_accounts_list_is_paginated(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        foreach (range(1, 26) as $number) {
+            Account::factory()->create([
+                'name' => sprintf('000 Platform Pagination %02d', $number),
+                'slug' => sprintf('platform-pagination-%02d', $number),
+            ]);
+        }
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.accounts.index'))
+            ->assertOk()
+            ->assertViewHas('accounts', fn ($accounts): bool => $accounts instanceof LengthAwarePaginator
+                && $accounts->perPage() === 25
+                && $accounts->hasPages())
+            ->assertSee('000 Platform Pagination 01')
+            ->assertSee('000 Platform Pagination 25')
+            ->assertSee('page=2', false);
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.accounts.index', ['page' => 2]))
+            ->assertOk()
+            ->assertSee('000 Platform Pagination 26');
     }
 
     public function test_normal_owner_cannot_access_platform(): void

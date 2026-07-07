@@ -40,8 +40,11 @@ class ServiceRoomController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug((int) $validated['location_id'], ($validated['slug'] ?? null) ?: $validated['name']);
         $validated['is_active'] = $request->boolean('is_active', true);
-        $validated['rtsp_enabled'] = $request->boolean('rtsp_enabled');
-        $validated['rtsp_url'] = blank($validated['rtsp_url'] ?? null) ? null : $validated['rtsp_url'];
+
+        if ($request->user()?->isPlatformAdmin()) {
+            $validated['rtsp_enabled'] = $request->boolean('rtsp_enabled');
+            $validated['rtsp_url'] = blank($validated['rtsp_url'] ?? null) ? null : $validated['rtsp_url'];
+        }
 
         $account->serviceRooms()->create($validated);
 
@@ -74,8 +77,11 @@ class ServiceRoomController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug((int) $validated['location_id'], ($validated['slug'] ?? null) ?: $validated['name'], $serviceRoom);
         $validated['is_active'] = $request->boolean('is_active');
-        $validated['rtsp_enabled'] = $request->boolean('rtsp_enabled');
-        $validated['rtsp_url'] = blank($validated['rtsp_url'] ?? null) ? null : $validated['rtsp_url'];
+
+        if ($request->user()?->isPlatformAdmin()) {
+            $validated['rtsp_enabled'] = $request->boolean('rtsp_enabled');
+            $validated['rtsp_url'] = blank($validated['rtsp_url'] ?? null) ? null : $validated['rtsp_url'];
+        }
 
         $serviceRoom->update($validated);
 

@@ -39,7 +39,7 @@ class RoomController extends Controller
         $validated['slug'] = $this->uniqueSlug((int) $validated['location_id'], ($validated['slug'] ?? null) ?: $validated['name']);
         $validated['is_active'] = $request->boolean('is_active', true);
 
-        if ($account->allowsRtspCameras()) {
+        if ($request->user()?->isPlatformAdmin() && $account->allowsRtspCameras()) {
             $validated['rtsp_enabled'] = $request->boolean('rtsp_enabled');
             $validated['rtsp_url'] = blank($validated['rtsp_url'] ?? null) ? null : $validated['rtsp_url'];
             $validated['people_counter_capture_delay_seconds'] = $validated['people_counter_capture_delay_seconds'] ?? null;
@@ -76,7 +76,7 @@ class RoomController extends Controller
         $validated['slug'] = $this->uniqueSlug((int) $validated['location_id'], ($validated['slug'] ?? null) ?: $validated['name'], $room);
         $validated['is_active'] = $request->boolean('is_active');
 
-        if ($account->allowsRtspCameras()) {
+        if ($request->user()?->isPlatformAdmin() && $account->allowsRtspCameras()) {
             $validated['rtsp_enabled'] = $request->boolean('rtsp_enabled');
             $validated['rtsp_url'] = blank($validated['rtsp_url'] ?? null) ? null : $validated['rtsp_url'];
             $validated['people_counter_capture_delay_seconds'] = $validated['people_counter_capture_delay_seconds'] ?? null;

@@ -13,6 +13,7 @@ class TestRoomCameraRequest extends FormRequest
         $account = $this->route('account');
 
         return $account?->allowsRtspCameras()
+            && ($this->user()?->isPlatformAdmin() ?? false)
             && ($this->user()?->can('manageStudioSettings', $account) ?? false);
     }
 

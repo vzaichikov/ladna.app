@@ -280,15 +280,21 @@ class CustomerAuthFlowTest extends TestCase
         $this->actingAs($platformAdmin)
             ->get(route('platform.accounts.customer-auth.edit', $account))
             ->assertOk()
-            ->assertSee(__('app.customer_otp_tariff_settings'), false)
-            ->assertSee(__('app.cloudflare_turnstile'), false)
+            ->assertSee(__('app.studio_capabilities_settings'), false)
+            ->assertSee(__('app.studio_capabilities_features_title'), false)
+            ->assertSee(__('app.studio_capability_customer_otp_hint'), false)
+            ->assertSee(__('app.studio_capability_rtsp_camera_hint'), false)
+            ->assertSee(__('app.studio_capability_people_counter_hint'), false)
+            ->assertSee(__('app.studio_capability_telegram_alerts_hint'), false)
+            ->assertSee(__('app.studio_capabilities_sms_title'), false)
+            ->assertDontSee(__('app.cloudflare_turnstile'), false)
             ->assertDontSee('name="allow_google"', false)
             ->assertDontSee('name="allow_email_password"', false);
 
         $this->actingAs($platformAdmin)
             ->get(route('platform.accounts.index'))
             ->assertOk()
-            ->assertSee(__('app.customer_otp_tariff_short'), false);
+            ->assertSee(__('app.studio_capabilities_short'), false);
 
         $this->actingAs($owner)
             ->get(route('platform.accounts.customer-auth.edit', $account))

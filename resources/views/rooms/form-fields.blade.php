@@ -68,68 +68,83 @@
 
 @if ($account->allowsRtspCameras())
     @php
+        $canManageCameraSettings = auth()->user()?->isPlatformAdmin() ?? false;
         $cameraTest = session('rtsp_camera_test');
         $captureDelayDefault = (int) config('services.people_counter.capture_delay_seconds', 3);
     @endphp
 
     <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
         <legend class="crm-label px-1">{{ __('app.rtsp_camera') }}</legend>
-        <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.rtsp_camera_help') }}</p>
 
-        <div class="mt-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-            <label class="block">
-                <span class="crm-label">{{ __('app.rtsp_address') }}</span>
-                <input name="rtsp_url" type="text" inputmode="url" value="{{ old('rtsp_url', $room->rtsp_url) }}" placeholder="rtsp://user:password@camera-host:554/stream" class="crm-field bg-white">
-                @error('rtsp_url') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
+        @if ($canManageCameraSettings)
+            <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.rtsp_camera_help') }}</p>
 
-            <x-ui.button
-                type="submit"
-                variant="secondary"
-                formaction="{{ route('dashboard.accounts.rooms.test-camera', $account) }}"
-                formmethod="POST"
-            >
-                <x-ui.icon name="video" class="h-4 w-4" />
-                {{ __('app.test') }}
-            </x-ui.button>
-        </div>
+            <div class="mt-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                <label class="block">
+                    <span class="crm-label">{{ __('app.rtsp_address') }}</span>
+                    <input name="rtsp_url" type="text" inputmode="url" value="{{ old('rtsp_url', $room->rtsp_url) }}" placeholder="rtsp://user:password@camera-host:554/stream" class="crm-field bg-white">
+                    @error('rtsp_url') <span class="crm-help">{{ $message }}</span> @enderror
+                </label>
 
-        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <label class="flex items-center gap-3 text-sm font-medium text-slate-700">
-                <input type="hidden" name="rtsp_enabled" value="0">
-                <input name="rtsp_enabled" type="checkbox" value="1" @checked(old('rtsp_enabled', $room->rtsp_enabled)) class="crm-checkbox">
-                {{ __('app.enable_camera') }}
-            </label>
-
-            @if (is_array($cameraTest))
-                <span class="{{ $cameraTest['ok'] ?? false ? 'text-emerald-700' : 'text-rose-700' }} text-sm font-semibold">
-                    {{ $cameraTest['message'] ?? '' }}
-                </span>
-            @endif
-
-            @if ($account->peopleCounterEnabled() && $room->exists && $room->hasEnabledRtspCamera())
-                <x-ui.button :href="route('dashboard.accounts.rooms.people-counter-mask.edit', [$account, $room])" variant="secondary" size="sm">
-                    <x-ui.icon name="scan" class="h-4 w-4" />
-                    {{ __('app.configure_people_counter_mask') }}
+                <x-ui.button
+                    type="submit"
+                    variant="secondary"
+                    formaction="{{ route('dashboard.accounts.rooms.test-camera', $account) }}"
+                    formmethod="POST"
+                >
+                    <x-ui.icon name="video" class="h-4 w-4" />
+                    {{ __('app.test') }}
                 </x-ui.button>
-            @endif
-        </div>
+            </div>
 
-        <label class="mt-4 block max-w-xs">
-            <span class="crm-label">{{ __('app.people_counter_capture_delay_seconds') }}</span>
-            <input
-                name="people_counter_capture_delay_seconds"
-                type="number"
-                min="0"
-                max="30"
-                step="1"
-                inputmode="numeric"
-                value="{{ old('people_counter_capture_delay_seconds', $room->people_counter_capture_delay_seconds) }}"
-                placeholder="{{ $captureDelayDefault }}"
-                class="crm-field bg-white"
-            >
-            <span class="crm-help">{{ __('app.people_counter_capture_delay_help', ['seconds' => $captureDelayDefault]) }}</span>
-            @error('people_counter_capture_delay_seconds') <span class="crm-help">{{ $message }}</span> @enderror
-        </label>
+            <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <label class="flex items-center gap-3 text-sm font-medium text-slate-700">
+                    <input type="hidden" name="rtsp_enabled" value="0">
+                    <input name="rtsp_enabled" type="checkbox" value="1" @checked(old('rtsp_enabled', $room->rtsp_enabled)) class="crm-checkbox">
+                    {{ __('app.enable_camera') }}
+                </label>
+
+                @if (is_array($cameraTest))
+                    <span class="{{ $cameraTest['ok'] ?? false ? 'text-emerald-700' : 'text-rose-700' }} text-sm font-semibold">
+                        {{ $cameraTest['message'] ?? '' }}
+                    </span>
+                @endif
+
+                @if ($account->peopleCounterEnabled() && $room->exists && $room->hasEnabledRtspCamera())
+                    <x-ui.button :href="route('dashboard.accounts.rooms.people-counter-mask.edit', [$account, $room])" variant="secondary" size="sm">
+                        <x-ui.icon name="scan" class="h-4 w-4" />
+                        {{ __('app.configure_people_counter_mask') }}
+                    </x-ui.button>
+                @endif
+            </div>
+
+            <label class="mt-4 block max-w-xs">
+                <span class="crm-label">{{ __('app.people_counter_capture_delay_seconds') }}</span>
+                <input
+                    name="people_counter_capture_delay_seconds"
+                    type="number"
+                    min="0"
+                    max="30"
+                    step="1"
+                    inputmode="numeric"
+                    value="{{ old('people_counter_capture_delay_seconds', $room->people_counter_capture_delay_seconds) }}"
+                    placeholder="{{ $captureDelayDefault }}"
+                    class="crm-field bg-white"
+                >
+                <span class="crm-help">{{ __('app.people_counter_capture_delay_help', ['seconds' => $captureDelayDefault]) }}</span>
+                @error('people_counter_capture_delay_seconds') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+        @else
+            @if (filled($room->rtsp_url))
+                <label class="mt-4 block">
+                    <span class="crm-label">{{ __('app.rtsp_address') }}</span>
+                    <input type="text" value="{{ $room->rtsp_url }}" class="crm-field bg-white text-slate-500" readonly disabled>
+                </label>
+            @endif
+
+            <p class="mt-1 text-sm leading-6 text-slate-500">
+                {{ filled($room->rtsp_url) ? __('app.rtsp_camera_change_support_notice') : __('app.rtsp_camera_add_support_notice') }}
+            </p>
+        @endif
     </fieldset>
 @endif

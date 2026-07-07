@@ -26,11 +26,11 @@ class PlatformAccountController extends Controller
         $accounts = Account::with(['subscription.plan', 'customerAuthSetting'])
             ->withCount(['locations', 'users'])
             ->orderBy('name')
-            ->get();
+            ->paginate(25);
 
         return view('platform.accounts.index', [
             'accounts' => $accounts,
-            'customerAuthReadiness' => $accounts->mapWithKeys(fn (Account $account): array => [
+            'customerAuthReadiness' => $accounts->getCollection()->mapWithKeys(fn (Account $account): array => [
                 $account->getKey() => $customerAuthAvailability->readinessFor($account),
             ]),
         ]);

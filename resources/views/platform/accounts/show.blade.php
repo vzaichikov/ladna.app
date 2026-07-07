@@ -26,9 +26,19 @@
                     {{ __('app.edit') }}
                 </x-ui.button>
                 <x-ui.button :href="route('platform.accounts.customer-auth.edit', $account)" variant="secondary">
-                    <x-ui.icon name="key-round" class="h-4 w-4" />
-                    {{ __('app.customer_otp_tariff_settings') }}
+                    <x-ui.icon name="sliders-horizontal" class="h-4 w-4" />
+                    {{ __('app.studio_capabilities_settings') }}
                 </x-ui.button>
+                <x-ui.button :href="route('dashboard.accounts.rooms.index', $account)" variant="secondary">
+                    <x-ui.icon name="rooms" class="h-4 w-4" />
+                    {{ __('app.rooms') }}
+                </x-ui.button>
+                @if ($account->allowsRtspCameras())
+                    <x-ui.button :href="route('dashboard.accounts.service-rooms.index', $account)" variant="secondary">
+                        <x-ui.icon name="video" class="h-4 w-4" />
+                        {{ __('app.service_rooms') }}
+                    </x-ui.button>
+                @endif
                 <form method="POST" action="{{ route('platform.accounts.destroy', $account) }}" data-confirm-delete>
                     @csrf
                     @method('DELETE')

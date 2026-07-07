@@ -9,6 +9,7 @@ use App\Models\Room;
 use App\Models\ServiceRoom;
 use App\Models\User;
 use App\Support\MediaMtxCameraGateway;
+use App\Support\RtspCameraService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -102,8 +103,9 @@ class CameraMonitoringTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_room_rtsp_fields_are_available_only_when_account_allows_rtsp(): void
+    public function test_room_rtsp_fields_are_platform_admin_only(): void
     {
+        $platformAdmin = User::factory()->platformAdmin()->create();
         $owner = User::factory()->create();
         $account = Account::factory()->create(['allow_rtsp_cameras' => false]);
         $account->addOwner($owner);
@@ -123,9 +125,6 @@ class CameraMonitoringTest extends TestCase
                 'slug' => 'big-hall',
                 'capacity' => 12,
                 'is_active' => '1',
-                'rtsp_url' => 'rtsp://camera.example.test/live',
-                'rtsp_enabled' => '1',
-                'people_counter_capture_delay_seconds' => '9',
             ])
             ->assertRedirect(route('dashboard.accounts.rooms.index', $account));
 
@@ -139,12 +138,22 @@ class CameraMonitoringTest extends TestCase
         $cameraUrl = 'rtsp://user:secret@camera.example.test:554/live';
 
         $this->actingAs($owner)
+            ->get(route('dashboard.accounts.rooms.create', $account))
+            ->assertOk()
+            ->assertDontSee('name="rtsp_url"', false)
+            ->assertDontSee('name="rtsp_enabled"', false)
+            ->assertDontSee('name="people_counter_capture_delay_seconds"', false)
+            ->assertDontSee(route('dashboard.accounts.rooms.test-camera', $account), false)
+            ->assertSee(__('app.rtsp_camera_add_support_notice'), false);
+
+        $this->actingAs($owner)
             ->get(route('dashboard.accounts.rooms.edit', [$account, $room]))
             ->assertOk()
-            ->assertSee('name="rtsp_url"', false)
-            ->assertSee('name="rtsp_enabled"', false)
-            ->assertSee('name="people_counter_capture_delay_seconds"', false)
-            ->assertSee(route('dashboard.accounts.rooms.test-camera', $account), false);
+            ->assertDontSee('name="rtsp_url"', false)
+            ->assertDontSee('name="rtsp_enabled"', false)
+            ->assertDontSee('name="people_counter_capture_delay_seconds"', false)
+            ->assertDontSee(route('dashboard.accounts.rooms.test-camera', $account), false)
+            ->assertSee(__('app.rtsp_camera_add_support_notice'), false);
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.rooms.update', [$account, $room]), [
@@ -157,48 +166,108 @@ class CameraMonitoringTest extends TestCase
                 'rtsp_enabled' => '1',
                 'people_counter_capture_delay_seconds' => '4',
             ])
-            ->assertRedirect(route('dashboard.accounts.rooms.index', $account));
+            ->assertSessionHasErrors(['rtsp_url', 'rtsp_enabled', 'people_counter_capture_delay_seconds']);
 
         $room->refresh();
 
-        $this->assertSame($cameraUrl, $room->rtsp_url);
-        $this->assertTrue($room->rtsp_enabled);
-        $this->assertSame(4, $room->people_counter_capture_delay_seconds);
+        $this->assertNull($room->rtsp_url);
+        $this->assertFalse($room->rtsp_enabled);
+        $this->assertNull($room->people_counter_capture_delay_seconds);
 
-        $this->actingAs($owner)
-            ->put(route('dashboard.accounts.rooms.update', [$account, $room]), [
+        $this->actingAs($platformAdmin)
+            ->get(route('dashboard.accounts.rooms.create', $account))
+            ->assertOk()
+            ->assertSee('name="rtsp_url"', false)
+            ->assertSee('name="rtsp_enabled"', false)
+            ->assertSee('name="people_counter_capture_delay_seconds"', false)
+            ->assertSee(route('dashboard.accounts.rooms.test-camera', $account), false);
+
+        $this->actingAs($platformAdmin)
+            ->post(route('dashboard.accounts.rooms.store', $account), [
                 'location_id' => $location->id,
-                'name' => 'Big Hall',
-                'slug' => 'big-hall',
-                'capacity' => 12,
+                'name' => 'Platform Camera Hall',
+                'slug' => 'platform-camera-hall',
+                'capacity' => 8,
                 'is_active' => '1',
                 'rtsp_url' => $cameraUrl,
+                'rtsp_enabled' => '1',
+                'people_counter_capture_delay_seconds' => '4',
+            ])
+            ->assertRedirect(route('dashboard.accounts.rooms.index', $account));
+
+        $cameraRoom = Room::whereBelongsTo($account)->where('slug', 'platform-camera-hall')->firstOrFail();
+
+        $this->assertSame($cameraUrl, $cameraRoom->rtsp_url);
+        $this->assertTrue($cameraRoom->rtsp_enabled);
+        $this->assertSame(4, $cameraRoom->people_counter_capture_delay_seconds);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.rooms.edit', [$account, $cameraRoom]))
+            ->assertOk()
+            ->assertDontSee('name="rtsp_url"', false)
+            ->assertDontSee('name="rtsp_enabled"', false)
+            ->assertDontSee('name="people_counter_capture_delay_seconds"', false)
+            ->assertDontSee(route('dashboard.accounts.rooms.test-camera', $account), false)
+            ->assertSee($cameraUrl)
+            ->assertSee(__('app.rtsp_camera_change_support_notice'), false);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.rooms.update', [$account, $cameraRoom]), [
+                'location_id' => $location->id,
+                'name' => 'Platform Camera Hall updated',
+                'slug' => 'platform-camera-hall-updated',
+                'capacity' => 10,
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.rooms.index', $account));
+
+        $cameraRoom->refresh();
+
+        $this->assertSame('Platform Camera Hall updated', $cameraRoom->name);
+        $this->assertSame($cameraUrl, $cameraRoom->rtsp_url);
+        $this->assertTrue($cameraRoom->rtsp_enabled);
+        $this->assertSame(4, $cameraRoom->people_counter_capture_delay_seconds);
+
+        $updatedCameraUrl = 'rtsp://camera.example.test/updated';
+
+        $this->actingAs($platformAdmin)
+            ->put(route('dashboard.accounts.rooms.update', [$account, $cameraRoom]), [
+                'location_id' => $location->id,
+                'name' => 'Platform Camera Hall updated',
+                'slug' => 'platform-camera-hall-updated',
+                'capacity' => 10,
+                'is_active' => '1',
+                'rtsp_url' => $updatedCameraUrl,
                 'rtsp_enabled' => '1',
                 'people_counter_capture_delay_seconds' => '',
             ])
             ->assertRedirect(route('dashboard.accounts.rooms.index', $account));
 
-        $this->assertNull($room->refresh()->people_counter_capture_delay_seconds);
+        $cameraRoom->refresh();
 
-        $this->actingAs($owner)
-            ->put(route('dashboard.accounts.rooms.update', [$account, $room]), [
+        $this->assertSame($updatedCameraUrl, $cameraRoom->rtsp_url);
+        $this->assertTrue($cameraRoom->rtsp_enabled);
+        $this->assertNull($cameraRoom->people_counter_capture_delay_seconds);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('dashboard.accounts.rooms.update', [$account, $cameraRoom]), [
                 'location_id' => $location->id,
-                'name' => 'Big Hall',
-                'slug' => 'big-hall',
-                'capacity' => 12,
+                'name' => 'Platform Camera Hall updated',
+                'slug' => 'platform-camera-hall-updated',
+                'capacity' => 10,
                 'is_active' => '1',
-                'rtsp_url' => $cameraUrl,
+                'rtsp_url' => $updatedCameraUrl,
                 'rtsp_enabled' => '1',
                 'people_counter_capture_delay_seconds' => '31',
             ])
             ->assertSessionHasErrors('people_counter_capture_delay_seconds');
 
-        $this->actingAs($owner)
-            ->put(route('dashboard.accounts.rooms.update', [$account, $room]), [
+        $this->actingAs($platformAdmin)
+            ->put(route('dashboard.accounts.rooms.update', [$account, $cameraRoom]), [
                 'location_id' => $location->id,
-                'name' => 'Big Hall',
-                'slug' => 'big-hall',
-                'capacity' => 12,
+                'name' => 'Platform Camera Hall updated',
+                'slug' => 'platform-camera-hall-updated',
+                'capacity' => 10,
                 'is_active' => '1',
                 'rtsp_url' => '',
                 'rtsp_enabled' => '1',
@@ -207,9 +276,59 @@ class CameraMonitoringTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.rooms.test-camera', $account), [
+                'rtsp_url' => $cameraUrl,
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($platformAdmin)
+            ->post(route('dashboard.accounts.rooms.test-camera', $account), [
                 'rtsp_url' => 'https://camera.example.test/live',
             ])
             ->assertSessionHasErrors('rtsp_url');
+
+        $fakeCameraService = new class extends RtspCameraService
+        {
+            public ?string $url = null;
+
+            /**
+             * @return array{ok: bool, message: string}
+             */
+            public function test(string $url, int $timeoutSeconds = self::TEST_TIMEOUT_SECONDS): array
+            {
+                $this->url = $url;
+
+                return [
+                    'ok' => true,
+                    'message' => 'ok',
+                ];
+            }
+        };
+
+        $this->app->instance(RtspCameraService::class, $fakeCameraService);
+
+        $this->actingAs($platformAdmin)
+            ->post(route('dashboard.accounts.rooms.test-camera', $account), [
+                'rtsp_url' => $updatedCameraUrl,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('rtsp_camera_test', [
+                'ok' => true,
+                'message' => 'ok',
+            ]);
+
+        $this->assertSame($updatedCameraUrl, $fakeCameraService->url);
+    }
+
+    public function test_platform_account_page_links_to_room_management(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $account = Account::factory()->create(['allow_rtsp_cameras' => true]);
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.accounts.show', $account))
+            ->assertOk()
+            ->assertSee(route('dashboard.accounts.rooms.index', $account), false)
+            ->assertSee(route('dashboard.accounts.service-rooms.index', $account), false);
     }
 
     public function test_camera_page_is_standalone_and_gated_by_rtsp_allowance(): void

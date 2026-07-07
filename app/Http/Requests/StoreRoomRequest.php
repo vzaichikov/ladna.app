@@ -36,13 +36,22 @@ class StoreRoomRequest extends FormRequest
             'is_active' => ['nullable', 'boolean'],
         ];
 
-        if ($account?->allowsRtspCameras()) {
+        if ($this->canManageCameraSettings() && $account?->allowsRtspCameras()) {
             $rules['rtsp_url'] = [Rule::requiredIf($this->boolean('rtsp_enabled')), 'nullable', 'string', 'max:2048', new RtspUrl];
             $rules['rtsp_enabled'] = ['nullable', 'boolean'];
             $rules['people_counter_capture_delay_seconds'] = ['nullable', 'integer', 'min:0', 'max:30'];
+        } else {
+            $rules['rtsp_url'] = ['prohibited'];
+            $rules['rtsp_enabled'] = ['prohibited'];
+            $rules['people_counter_capture_delay_seconds'] = ['prohibited'];
         }
 
         return $rules;
+    }
+
+    private function canManageCameraSettings(): bool
+    {
+        return $this->user()?->isPlatformAdmin() ?? false;
     }
 
     protected function prepareForValidation(): void

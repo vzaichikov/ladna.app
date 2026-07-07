@@ -28,7 +28,7 @@
                 $otpReady = (bool) ($readiness['otp'] ?? false);
                 $otpEnabled = (bool) ($readiness['otp_enabled'] ?? false);
             @endphp
-            <div class="crm-row transition hover:bg-violet-crm-50/50 lg:grid-cols-[1.3fr_1fr_1fr_auto_auto] lg:items-center">
+            <div class="crm-row transition hover:bg-violet-crm-50/50 lg:grid-cols-[1fr_220px_160px_160px_auto_auto] lg:items-center">
                 <div>
                     <a href="{{ route('platform.accounts.show', $account) }}" class="font-semibold text-slate-950 transition hover:text-brand-700">{{ $account->name }}</a>
                     <div class="mt-1 text-sm text-slate-500">{{ $account->slug }}</div>
@@ -41,10 +41,17 @@
                         {{ $otpReady ? __('app.otp_ready') : ($otpEnabled ? __('app.otp_needs_setup') : __('app.otp_off')) }}
                     </span>
                 </div>
-                <x-ui.action-button :href="route('platform.accounts.customer-auth.edit', $account)" icon="key-round" :label="__('app.customer_otp_tariff_short')" />
+                <x-ui.action-button :href="route('dashboard.accounts.show', $account)" icon="arrow-right" :label="__('app.dashboard')" />
+                <x-ui.action-button :href="route('platform.accounts.customer-auth.edit', $account)" icon="sliders-horizontal" :label="__('app.studio_capabilities_short')" />
             </div>
         @empty
             <x-ui.empty-state :title="__('app.no_accounts')" icon="accounts" class="m-5" />
         @endforelse
     </x-ui.panel>
+
+    @if ($accounts->hasPages())
+        <div class="mt-6">
+            {{ $accounts->links() }}
+        </div>
+    @endif
 @endsection

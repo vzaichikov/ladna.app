@@ -15,6 +15,7 @@ class ServiceRoomTest extends TestCase
 
     public function test_owner_can_manage_service_rooms_when_rtsp_is_enabled(): void
     {
+        $platformAdmin = User::factory()->platformAdmin()->create();
         $owner = User::factory()->create();
         $account = Account::factory()->create(['allow_rtsp_cameras' => false]);
         $account->addOwner($owner);
@@ -45,7 +46,10 @@ class ServiceRoomTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.service-rooms.create', $account))
             ->assertOk()
-            ->assertSee(route('dashboard.accounts.service-rooms.test-camera', $account), false);
+            ->assertDontSee('name="rtsp_url"', false)
+            ->assertDontSee('name="rtsp_enabled"', false)
+            ->assertDontSee(route('dashboard.accounts.service-rooms.test-camera', $account), false)
+            ->assertSee(__('app.rtsp_camera_add_support_notice'), false);
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.service-rooms.store', $account), [
@@ -58,10 +62,47 @@ class ServiceRoomTest extends TestCase
                 'rtsp_url' => 'https://camera.example.test/reception',
                 'rtsp_enabled' => '1',
             ])
+            ->assertSessionHasErrors('rtsp_enabled');
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.service-rooms.store', $account), [
+                'location_id' => $location->id,
+                'name' => 'Reception',
+                'slug' => 'reception',
+                'description' => 'Front desk camera',
+                'color' => '#38BDF8',
+                'is_active' => '1',
+                'rtsp_url' => 'rtsp://camera.example.test/reception',
+            ])
             ->assertSessionHasErrors('rtsp_url');
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.service-rooms.store', $account), [
+                'location_id' => $location->id,
+                'name' => 'Reception',
+                'slug' => 'reception',
+                'description' => 'Front desk camera',
+                'color' => '#38BDF8',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.service-rooms.index', $account));
+
+        $serviceRoom = ServiceRoom::whereBelongsTo($account)->where('slug', 'reception')->firstOrFail();
+
+        $this->assertNull($serviceRoom->rtsp_url);
+        $this->assertFalse($serviceRoom->rtsp_enabled);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.service-rooms.edit', [$account, $serviceRoom]))
+            ->assertOk()
+            ->assertSee('Reception')
+            ->assertDontSee('name="rtsp_url"', false)
+            ->assertDontSee('name="rtsp_enabled"', false)
+            ->assertDontSee(route('dashboard.accounts.service-rooms.test-camera', $account), false)
+            ->assertSee(__('app.rtsp_camera_add_support_notice'), false);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('dashboard.accounts.service-rooms.update', [$account, $serviceRoom]), [
                 'location_id' => $location->id,
                 'name' => 'Reception',
                 'slug' => 'reception',
@@ -73,15 +114,26 @@ class ServiceRoomTest extends TestCase
             ])
             ->assertRedirect(route('dashboard.accounts.service-rooms.index', $account));
 
-        $serviceRoom = ServiceRoom::whereBelongsTo($account)->where('slug', 'reception')->firstOrFail();
+        $serviceRoom->refresh();
 
         $this->assertSame('rtsp://camera.example.test/reception', $serviceRoom->rtsp_url);
         $this->assertTrue($serviceRoom->rtsp_enabled);
 
+        $this->actingAs($platformAdmin)
+            ->get(route('dashboard.accounts.service-rooms.create', $account))
+            ->assertOk()
+            ->assertSee('name="rtsp_url"', false)
+            ->assertSee('name="rtsp_enabled"', false)
+            ->assertSee(route('dashboard.accounts.service-rooms.test-camera', $account), false);
+
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.service-rooms.edit', [$account, $serviceRoom]))
             ->assertOk()
-            ->assertSee('Reception');
+            ->assertDontSee('name="rtsp_url"', false)
+            ->assertDontSee('name="rtsp_enabled"', false)
+            ->assertDontSee(route('dashboard.accounts.service-rooms.test-camera', $account), false)
+            ->assertSee('rtsp://camera.example.test/reception')
+            ->assertSee(__('app.rtsp_camera_change_support_notice'), false);
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.service-rooms.update', [$account, $serviceRoom]), [
@@ -94,14 +146,43 @@ class ServiceRoomTest extends TestCase
                 'rtsp_url' => '',
                 'rtsp_enabled' => '0',
             ])
+            ->assertSessionHasErrors('rtsp_enabled');
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.service-rooms.update', [$account, $serviceRoom]), [
+                'location_id' => $location->id,
+                'name' => 'Reception desk',
+                'slug' => 'reception-desk',
+                'description' => '',
+                'color' => '',
+                'is_active' => '1',
+            ])
             ->assertRedirect(route('dashboard.accounts.service-rooms.index', $account));
 
         $serviceRoom->refresh();
 
         $this->assertSame('Reception desk', $serviceRoom->name);
         $this->assertSame('reception-desk', $serviceRoom->slug);
-        $this->assertNull($serviceRoom->rtsp_url);
-        $this->assertFalse($serviceRoom->rtsp_enabled);
+        $this->assertSame('rtsp://camera.example.test/reception', $serviceRoom->rtsp_url);
+        $this->assertTrue($serviceRoom->rtsp_enabled);
+
+        $this->actingAs($platformAdmin)
+            ->post(route('dashboard.accounts.service-rooms.store', $account), [
+                'location_id' => $location->id,
+                'name' => 'Corridor',
+                'slug' => 'corridor',
+                'description' => 'Corridor camera',
+                'color' => '#A78BFA',
+                'is_active' => '1',
+                'rtsp_url' => 'rtsp://camera.example.test/corridor',
+                'rtsp_enabled' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.service-rooms.index', $account));
+
+        $platformServiceRoom = ServiceRoom::whereBelongsTo($account)->where('slug', 'corridor')->firstOrFail();
+
+        $this->assertSame('rtsp://camera.example.test/corridor', $platformServiceRoom->rtsp_url);
+        $this->assertTrue($platformServiceRoom->rtsp_enabled);
 
         $this->actingAs($owner)
             ->delete(route('dashboard.accounts.service-rooms.destroy', [$account, $serviceRoom]))
