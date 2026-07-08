@@ -109,6 +109,9 @@ class CreateQuickBooking
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['starts_at'], $timezone);
         $isAnytimeRental = $this->shouldSkipClassPassReservation($scheduleKind, $validated);
+        $ignoreTrainerTimeframes = $scheduleKind === ScheduleKind::PrivateLesson
+            && $account->trainerPrivateTimeframesEnabled()
+            && (bool) ($validated['ignore_trainer_timeframes'] ?? false);
         $endsAt = $isAnytimeRental
             ? CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['ends_at'], $timezone)
             : $startsAt->addMinutes((int) ($classType->default_duration_minutes ?: 60));
@@ -128,6 +131,7 @@ class CreateQuickBooking
                 'trainer_id' => $trainer?->id,
                 'customer_id' => $customerId,
                 'allow_past' => $this->allowsPastManualBooking($scheduleKind),
+                'ignore_trainer_timeframes' => $ignoreTrainerTimeframes,
             ]);
 
         if (! $isAvailable) {
@@ -156,6 +160,7 @@ class CreateQuickBooking
                 'schedule_kind' => $scheduleKind->value,
                 'rental_mode' => $isAnytimeRental ? 'anytime' : null,
                 'skip_class_pass_reservation' => $isAnytimeRental,
+                'trainer_timeframe_override' => $ignoreTrainerTimeframes ?: null,
             ],
             'is_public' => (bool) ScheduleKindRegistry::get($scheduleKind)['default_is_public'],
             'status' => ScheduledClassStatus::Scheduled->value,

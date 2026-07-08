@@ -16,10 +16,11 @@
         $selectedTrainer = $compact['trainers']->firstWhere('id', $compact['selectedTrainerId']);
         $selectedRoom = $compact['rooms']->firstWhere('id', $compact['selectedRoomId']);
         $selectedManualClassType = $compact['manualClassTypes']->firstWhere('id', $compact['selectedManualClassTypeId']);
-        $selectedManualTrainer = $compact['trainers']->firstWhere('id', $compact['selectedManualTrainerId']);
+        $selectedManualTrainer = ($compact['manualTrainers'] ?? $compact['trainers'])->firstWhere('id', $compact['selectedManualTrainerId']);
         $selectedManualRoom = $compact['rooms']->firstWhere('id', $compact['selectedManualRoomId']);
         $selectedGroupPanel = $compact['groupPanel'];
         $selectedManualPanel = $compact['manualPanel'];
+        $usesTrainerPrivateTimeframes = (bool) ($compact['usesTrainerPrivateTimeframes'] ?? false);
         $routeName = $isEmbed ? 'public.schedule.embed' : 'public.schedule';
         $routeParams = ['accountSlug' => $account->slug, 'locationSlug' => $location->slug];
         $compactUrl = static fn (array $query): string => route($routeName, [...$routeParams, ...array_filter($query, fn ($value) => $value !== null && $value !== '')]);
@@ -177,16 +178,18 @@
                                                     </a>
                                                 @endif
 
-                                                <a href="{{ $compactUrl([...$manualQuery, 'manual_panel' => 'room']) }}" data-public-schedule-link class="flex min-h-16 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
-                                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
-                                                        <x-ui.icon name="rooms" class="h-5 w-5" />
-                                                    </span>
-                                                    <span class="min-w-0 flex-1">
-                                                        <span class="block text-sm font-semibold text-slate-950">{{ __('app.choose_room') }}</span>
-                                                        <span class="mt-0.5 block truncate text-sm text-slate-500">{{ $selectedManualRoom?->name ?? __('app.choose_room') }}</span>
-                                                    </span>
-                                                    <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-400" />
-                                                </a>
+                                                @unless ($usesTrainerPrivateTimeframes && blank($compact['selectedManualStartsAt']))
+                                                    <a href="{{ $compactUrl([...$manualQuery, 'manual_panel' => 'room']) }}" data-public-schedule-link class="flex min-h-16 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                            <x-ui.icon name="rooms" class="h-5 w-5" />
+                                                        </span>
+                                                        <span class="min-w-0 flex-1">
+                                                            <span class="block text-sm font-semibold text-slate-950">{{ __('app.choose_room') }}</span>
+                                                            <span class="mt-0.5 block truncate text-sm text-slate-500">{{ $selectedManualRoom?->name ?? __('app.choose_room') }}</span>
+                                                        </span>
+                                                        <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-400" />
+                                                    </a>
+                                                @endunless
                                             </div>
 
                                             <div class="mt-4">
@@ -202,25 +205,31 @@
                                                     <div class="space-y-2">
                                                         @forelse (($compact['manualAvailability']['slots'] ?? []) as $slot)
                                                             @php
-                                                                $bookingParams = array_filter([
-                                                                    'accountSlug' => $account->slug,
-                                                                    'locationSlug' => $location->slug,
-                                                                    'schedule_kind' => $selectedManualKind->value,
-                                                                    'date' => $compact['selectedDate']->toDateString(),
-                                                                    'starts_at' => $slot['starts_at'],
-                                                                    'class_type_id' => $selectedManualClassType?->id,
-                                                                    'trainer_id' => $selectedManualTrainer?->id,
-                                                                    'room_id' => $selectedManualRoom?->id,
-                                                                ], fn ($value) => $value !== null && $value !== '');
-                                                                $bookingUrl = route('public.booking.show', $bookingParams);
+                                                                if ($usesTrainerPrivateTimeframes) {
+                                                                    $bookingUrl = $compactUrl([...$manualQuery, 'manual_panel' => 'room', 'starts_at' => $slot['starts_at'], 'room' => null]);
+                                                                    $slotCta = __('app.choose_room');
+                                                                } else {
+                                                                    $bookingParams = array_filter([
+                                                                        'accountSlug' => $account->slug,
+                                                                        'locationSlug' => $location->slug,
+                                                                        'schedule_kind' => $selectedManualKind->value,
+                                                                        'date' => $compact['selectedDate']->toDateString(),
+                                                                        'starts_at' => $slot['starts_at'],
+                                                                        'class_type_id' => $selectedManualClassType?->id,
+                                                                        'trainer_id' => $selectedManualTrainer?->id,
+                                                                        'room_id' => $selectedManualRoom?->id,
+                                                                    ], fn ($value) => $value !== null && $value !== '');
+                                                                    $bookingUrl = route('public.booking.show', $bookingParams);
+                                                                    $slotCta = $manualBookLabel;
+                                                                }
                                                             @endphp
-                                                            <a href="{{ $bookingUrl }}" class="flex min-h-14 items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                            <a href="{{ $bookingUrl }}" @if ($usesTrainerPrivateTimeframes) data-public-schedule-link @endif class="flex min-h-14 items-center justify-between gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
                                                                 <span>
                                                                     <span class="block text-base font-semibold text-slate-950">{{ $slot['time'] }}</span>
                                                                     <span class="mt-0.5 block text-xs font-semibold text-slate-500">{{ $slot['ends_time'] }} · {{ __('app.available_slots') }}</span>
                                                                 </span>
                                                                 <span class="inline-flex min-h-10 items-center justify-center rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white shadow-sm shadow-brand-600/20">
-                                                                    {{ $manualBookLabel }}
+                                                                    {{ $slotCta }}
                                                                 </span>
                                                             </a>
                                                         @empty
@@ -287,16 +296,26 @@
                                                 @endforeach
                                             </div>
                                         @elseif ($selectedManualPanel === 'room')
+                                            @if ($usesTrainerPrivateTimeframes && blank($compact['selectedManualStartsAt']))
+                                                <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                                                    {{ __('app.public_booking_choose_time_first') }}
+                                                </div>
+                                            @else
                                             <div class="space-y-2">
-                                                @foreach ($compact['manualRoomOptions'] as $option)
-                                                    <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
+                                                @forelse ($compact['manualRoomOptions'] as $option)
+                                                    <a href="{{ $option['url'] }}" @unless ($option['booking'] ?? false) data-public-schedule-link @endunless class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
                                                         <span>{{ $option['name'] }}</span>
                                                         @if ($option['active'])
                                                             <x-ui.icon name="check" class="h-4 w-4" />
                                                         @endif
                                                     </a>
-                                                @endforeach
+                                                @empty
+                                                    <div class="rounded-lg border border-stone-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
+                                                        {{ __('app.no_available_manual_slots') }}
+                                                    </div>
+                                                @endforelse
                                             </div>
+                                            @endif
                                         @endif
                                     </div>
                                 </div>

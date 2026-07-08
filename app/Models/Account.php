@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks'])]
+#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'trainer_private_timeframe_weeks'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -43,6 +43,7 @@ class Account extends Model
         'enable_people_counter' => false,
         'enable_telegram_alerts' => true,
         'enable_customer_notifications' => false,
+        'trainer_private_timeframes_enabled' => false,
     ];
 
     /**
@@ -62,6 +63,8 @@ class Account extends Model
             'enable_telegram_alerts' => 'boolean',
             'enable_customer_notifications' => 'boolean',
             'schedule_generation_weeks' => 'integer',
+            'trainer_private_timeframes_enabled' => 'boolean',
+            'trainer_private_timeframe_weeks' => 'integer',
         ];
     }
 
@@ -319,6 +322,11 @@ class Account extends Model
         return (bool) $this->enable_customer_notifications;
     }
 
+    public function trainerPrivateTimeframesEnabled(): bool
+    {
+        return (bool) $this->trainer_private_timeframes_enabled;
+    }
+
     public static function defaultScheduleGenerationWeeks(): int
     {
         return self::integerInRange(
@@ -334,6 +342,16 @@ class Account extends Model
         return self::integerInRange(
             $this->schedule_generation_weeks,
             self::defaultScheduleGenerationWeeks(),
+            self::MIN_SCHEDULE_GENERATION_WEEKS,
+            self::MAX_SCHEDULE_GENERATION_WEEKS,
+        );
+    }
+
+    public function trainerPrivateTimeframeWeeks(): int
+    {
+        return self::integerInRange(
+            $this->trainer_private_timeframe_weeks,
+            $this->scheduleGenerationWeeks(),
             self::MIN_SCHEDULE_GENERATION_WEEKS,
             self::MAX_SCHEDULE_GENERATION_WEEKS,
         );
@@ -551,6 +569,11 @@ class Account extends Model
     public function trainers(): HasMany
     {
         return $this->hasMany(Trainer::class);
+    }
+
+    public function trainerPrivateTimeframes(): HasMany
+    {
+        return $this->hasMany(TrainerPrivateTimeframe::class);
     }
 
     public function trainerSubstitutions(): HasMany

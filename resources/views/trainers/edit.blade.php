@@ -6,6 +6,15 @@
     <h1 class="crm-page-title">{{ __('app.edit') }} {{ $trainer->name }}</h1>
     <p class="crm-page-copy">{{ $account->name }}</p>
 
+    @if ($account->trainerPrivateTimeframesEnabled())
+        <div class="mt-4">
+            <x-ui.button :href="route('dashboard.accounts.trainers.private-timeframes.edit', [$account, $trainer])" variant="secondary">
+                <x-ui.icon name="schedule" class="h-4 w-4" />
+                {{ __('app.trainer_private_timeframes') }}
+            </x-ui.button>
+        </div>
+    @endif
+
     <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <form method="POST" action="{{ route('dashboard.accounts.trainers.update', [$account, $trainer]) }}" enctype="multipart/form-data" class="space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">
             @csrf

@@ -14,6 +14,7 @@ use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
+use App\Models\TrainerPrivateTimeframe;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
@@ -246,6 +247,76 @@ class PublicBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_public_private_lesson_rejects_slot_without_trainer_timeframe_when_enabled(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $room] = $this->manualBookingSetup('public-private-timeframe-required-studio');
+        $account->update(['trainer_private_timeframes_enabled' => true]);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create();
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-18',
+                'starts_at' => '2026-06-18T15:00',
+                'class_type_id' => $classType->id,
+                'room_id' => $room->id,
+                'trainer_id' => $trainer->id,
+            ])
+            ->assertSessionHasErrors('starts_at');
+
+        $this->assertSame(0, ScheduledClass::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_public_private_lesson_uses_consecutive_trainer_timeframes_and_selected_free_room(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $room] = $this->manualBookingSetup('public-private-timeframe-valid-studio');
+        $account->update(['trainer_private_timeframes_enabled' => true]);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+            'default_capacity' => 1,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create();
+        $this->createPublicTrainerTimeframes($account, $trainer, $location, ['15:00', '15:30']);
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-18',
+                'starts_at' => '2026-06-18T15:00',
+                'class_type_id' => $classType->id,
+                'room_id' => $room->id,
+                'trainer_id' => $trainer->id,
+            ])
+            ->assertRedirect(route('customer.dashboard', $account->slug))
+            ->assertSessionHas('status', __('app.booking_created'));
+
+        $scheduledClass = ScheduledClass::whereBelongsTo($account)->where('title', 'Private 60')->firstOrFail();
+
+        $this->assertSame($room->id, $scheduledClass->room_id);
+        $this->assertSame($trainer->id, $scheduledClass->trainer_id);
+        $this->assertSame('public_booking', $scheduledClass->metadata['source']);
+        $this->assertSame(1, ClassBooking::whereBelongsTo($scheduledClass)->whereBelongsTo($customer)->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_room_rental_public_booking_allows_one_active_customer_per_slot(): void
     {
         Mail::fake();
@@ -330,5 +401,23 @@ class PublicBookingTest extends TestCase
         $room = Room::factory()->for($account)->for($location)->create(['capacity' => 1]);
 
         return [$account, $location, $room];
+    }
+
+    /**
+     * @param  array<int, string>  $times
+     */
+    private function createPublicTrainerTimeframes(Account $account, Trainer $trainer, Location $location, array $times): void
+    {
+        foreach ($times as $time) {
+            $startsAt = Carbon::parse('2026-06-18 '.$time.':00', 'UTC');
+
+            TrainerPrivateTimeframe::factory()->create([
+                'account_id' => $account->id,
+                'trainer_id' => $trainer->id,
+                'location_id' => $location->id,
+                'starts_at' => $startsAt,
+                'ends_at' => $startsAt->copy()->addMinutes(30),
+            ]);
+        }
     }
 }

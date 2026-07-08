@@ -14,6 +14,7 @@ use App\Models\Room;
 use App\Models\Trainer;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrainerPrivateLessonAvailability;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -107,8 +108,12 @@ class QuickBookingController extends Controller
         return response()->json(['data' => $classes]);
     }
 
-    public function manualAvailability(Request $request, Account $account, ManualQuickBookingAvailability $availability): JsonResponse
-    {
+    public function manualAvailability(
+        Request $request,
+        Account $account,
+        ManualQuickBookingAvailability $availability,
+        TrainerPrivateLessonAvailability $trainerPrivateLessonAvailability,
+    ): JsonResponse {
         $this->authorize('manageBookings', $account);
 
         $manualKinds = collect(ScheduleKindRegistry::manualKinds())
@@ -118,21 +123,31 @@ class QuickBookingController extends Controller
             'schedule_kind' => ['required', Rule::in($manualKinds)],
             'date' => ['required', 'date_format:Y-m-d'],
             'location_id' => ['required', Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account->id)],
-            'room_id' => ['required', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account->id)],
+            'room_id' => ['nullable', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account->id)],
             'class_type_id' => ['required', Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account->id)],
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account->id)],
+            'ignore_trainer_timeframes' => ['nullable', 'boolean'],
         ]);
         $scheduleKind = ScheduleKind::from($validated['schedule_kind']);
+        $ignoreTrainerTimeframes = filter_var($validated['ignore_trainer_timeframes'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $usesTrainerTimeframes = $trainerPrivateLessonAvailability->featureApplies($account, $scheduleKind, $ignoreTrainerTimeframes);
 
         abort_unless($account->hasScheduleKindEnabled($scheduleKind), 404);
+
+        if (! $usesTrainerTimeframes && blank($validated['room_id'] ?? null)) {
+            throw ValidationException::withMessages([
+                'room_id' => __('app.room_required'),
+            ]);
+        }
 
         $result = $availability->for($account, $scheduleKind, [
             'date' => $validated['date'],
             'location_id' => (int) $validated['location_id'],
-            'room_id' => (int) $validated['room_id'],
+            'room_id' => filled($validated['room_id'] ?? null) ? (int) $validated['room_id'] : null,
             'class_type_id' => (int) $validated['class_type_id'],
             'trainer_id' => filled($validated['trainer_id'] ?? null) ? (int) $validated['trainer_id'] : null,
             'allow_past' => in_array($scheduleKind, [ScheduleKind::PrivateLesson, ScheduleKind::RoomRental], true),
+            'ignore_trainer_timeframes' => $ignoreTrainerTimeframes,
         ]);
 
         return response()->json([

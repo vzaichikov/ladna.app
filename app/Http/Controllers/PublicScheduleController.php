@@ -15,6 +15,7 @@ use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrainerPrivateLessonAvailability;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -221,6 +222,8 @@ class PublicScheduleController extends Controller
             ->values()
             ->all();
         $selectedManualKind = $this->selectedCompactManualKind($request, $manualKinds);
+        $usesTrainerPrivateTimeframes = $selectedManualKind === ScheduleKind::PrivateLesson
+            && $account->trainerPrivateTimeframesEnabled();
         $groupClassTypes = $account->classTypes()
             ->active()
             ->where('schedule_kind', ScheduleKind::GroupClass->value)
@@ -238,6 +241,9 @@ class PublicScheduleController extends Controller
             : collect();
         $rooms = $location->rooms()->active()->orderBy('name')->get();
         $trainers = $account->trainers()->active()->with('trainerType')->orderBy('name')->get();
+        $manualTrainers = $usesTrainerPrivateTimeframes
+            ? app(TrainerPrivateLessonAvailability::class)->trainersForLocation($account, $location)
+            : $trainers;
         $selectedGroupClassTypeId = $this->selectedModelId($request->query('group_class_type', $selectedManualKind ? null : $request->query('class_type')), $groupClassTypes);
         $selectedGroupRoomId = $this->selectedModelId($request->query('group_room', $selectedManualKind ? null : $request->query('room')), $rooms);
         $selectedGroupTrainerId = $this->selectedModelId($request->query('group_trainer', $selectedManualKind ? null : $request->query('trainer')), $trainers);
@@ -248,11 +254,12 @@ class PublicScheduleController extends Controller
         $selectedManualRoomId = $this->selectedModelId($request->query('room'), $rooms);
         $selectedManualTrainerId = $this->selectedModelId(
             $request->query('trainer'),
-            $trainers,
+            $manualTrainers,
             false,
         );
+        $selectedManualStartsAt = $this->selectedManualStartsAt($request, $selectedDate, $timezone);
         $groupQuery = $this->compactGroupQuery($selectedManualKind, $selectedDate, $selectedGroupClassTypeId, $selectedGroupTrainerId, $selectedGroupRoomId);
-        $manualQuery = $this->compactManualQuery($selectedManualKind, $selectedDate, $selectedManualClassTypeId, $selectedManualTrainerId, $selectedManualRoomId);
+        $manualQuery = $this->compactManualQuery($selectedManualKind, $selectedDate, $selectedManualClassTypeId, $selectedManualTrainerId, $selectedManualRoomId, $selectedManualStartsAt);
         $groupPanel = $this->selectedCompactPanel($request->query('group_panel'), ['class_type', 'trainer', 'room']);
         $manualPanel = $selectedManualKind
             ? $this->selectedCompactPanel($request->query('manual_panel'), ['service', 'date', 'trainer', 'room'])
@@ -278,18 +285,24 @@ class PublicScheduleController extends Controller
         $manualRequiredFilters = [];
 
         if ($selectedManualKind) {
-            $manualRequiredFilters = $this->manualRequiredFilters($selectedManualKind, $selectedManualClassTypeId, $selectedManualTrainerId, $selectedManualRoomId);
+            $manualRequiredFilters = $this->manualRequiredFilters($selectedManualKind, $selectedManualClassTypeId, $selectedManualTrainerId, $selectedManualRoomId, $usesTrainerPrivateTimeframes);
 
             if ($manualRequiredFilters === []) {
                 $manualAvailability = app(ManualQuickBookingAvailability::class)->for($account, $selectedManualKind, [
                     'date' => $selectedDate->toDateString(),
                     'location_id' => $location->id,
-                    'room_id' => (int) $selectedManualRoomId,
+                    'room_id' => $selectedManualRoomId ? (int) $selectedManualRoomId : null,
                     'class_type_id' => (int) $selectedManualClassTypeId,
                     'trainer_id' => $selectedManualTrainerId,
                 ]);
             }
         }
+
+        $manualRoomOptions = $selectedManualKind
+            ? ($usesTrainerPrivateTimeframes
+                ? $this->compactManualTimeframeRoomOptions($account, $location, $selectedManualKind, $selectedDate, $selectedManualClassTypeId, $selectedManualTrainerId, $selectedManualStartsAt, $selectedManualRoomId, $manualAvailability)
+                : $this->compactFilterOptions($account, $location, $isEmbed, $manualQuery, 'room', $rooms, $selectedManualRoomId))
+            : [];
 
         return [
             'selectedKind' => $selectedManualKind ?? ScheduleKind::GroupClass,
@@ -302,6 +315,8 @@ class PublicScheduleController extends Controller
             'selectedManualClassTypeId' => $selectedManualClassTypeId,
             'selectedManualTrainerId' => $selectedManualTrainerId,
             'selectedManualRoomId' => $selectedManualRoomId,
+            'selectedManualStartsAt' => $selectedManualStartsAt,
+            'usesTrainerPrivateTimeframes' => $usesTrainerPrivateTimeframes,
             'selectedQuery' => $groupQuery,
             'manualQuery' => $manualQuery,
             'groupPanel' => $groupPanel,
@@ -315,11 +330,12 @@ class PublicScheduleController extends Controller
             'trainerOptions' => $this->compactFilterOptions($account, $location, $isEmbed, $groupQuery, 'group_trainer', $trainers, $selectedGroupTrainerId),
             'roomOptions' => $this->compactFilterOptions($account, $location, $isEmbed, $groupQuery, 'group_room', $rooms, $selectedGroupRoomId),
             'manualClassTypeOptions' => $selectedManualKind ? $this->compactFilterOptions($account, $location, $isEmbed, $manualQuery, 'class_type', $manualClassTypes, $selectedManualClassTypeId) : [],
-            'manualTrainerOptions' => $selectedManualKind === ScheduleKind::PrivateLesson ? $this->compactFilterOptions($account, $location, $isEmbed, $manualQuery, 'trainer', $trainers, $selectedManualTrainerId) : [],
-            'manualRoomOptions' => $selectedManualKind ? $this->compactFilterOptions($account, $location, $isEmbed, $manualQuery, 'room', $rooms, $selectedManualRoomId) : [],
+            'manualTrainerOptions' => $selectedManualKind === ScheduleKind::PrivateLesson ? $this->compactFilterOptions($account, $location, $isEmbed, $manualQuery, 'trainer', $manualTrainers, $selectedManualTrainerId) : [],
+            'manualRoomOptions' => $manualRoomOptions,
             'classTypes' => $groupClassTypes,
             'manualClassTypes' => $manualClassTypes,
             'trainers' => $trainers,
+            'manualTrainers' => $manualTrainers,
             'rooms' => $rooms,
             'classes' => $groupClasses,
             'manualAvailability' => $manualAvailability,
@@ -424,6 +440,23 @@ class PublicScheduleController extends Controller
         return $defaultToFirst ? $models->first()?->id : null;
     }
 
+    private function selectedManualStartsAt(Request $request, Carbon $selectedDate, string $timezone): ?string
+    {
+        $startsAt = (string) $request->query('starts_at', '');
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $startsAt) !== 1) {
+            return null;
+        }
+
+        try {
+            $date = Carbon::createFromFormat('Y-m-d\TH:i', $startsAt, $timezone);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $date->isSameDay($selectedDate) ? $startsAt : null;
+    }
+
     /**
      * @return Collection<int, ScheduledClass>
      */
@@ -490,6 +523,7 @@ class PublicScheduleController extends Controller
         ?int $selectedClassTypeId,
         ?int $selectedTrainerId,
         ?int $selectedRoomId,
+        ?string $selectedStartsAt,
     ): array {
         return array_filter([
             'kind' => $selectedManualKind?->value,
@@ -497,6 +531,7 @@ class PublicScheduleController extends Controller
             'class_type' => $selectedClassTypeId,
             'trainer' => $selectedManualKind === ScheduleKind::PrivateLesson ? $selectedTrainerId : null,
             'room' => $selectedRoomId,
+            'starts_at' => $selectedStartsAt,
         ], fn (mixed $value): bool => $value !== null && $value !== '');
     }
 
@@ -682,8 +717,13 @@ class PublicScheduleController extends Controller
     /**
      * @return array<int, string>
      */
-    private function manualRequiredFilters(ScheduleKind $scheduleKind, ?int $selectedClassTypeId, ?int $selectedTrainerId, ?int $selectedRoomId): array
-    {
+    private function manualRequiredFilters(
+        ScheduleKind $scheduleKind,
+        ?int $selectedClassTypeId,
+        ?int $selectedTrainerId,
+        ?int $selectedRoomId,
+        bool $usesTrainerPrivateTimeframes,
+    ): array {
         $missing = [];
 
         if (! $selectedClassTypeId) {
@@ -694,11 +734,57 @@ class PublicScheduleController extends Controller
             $missing[] = __('app.trainer');
         }
 
-        if (! $selectedRoomId) {
+        if (! $usesTrainerPrivateTimeframes && ! $selectedRoomId) {
             $missing[] = __('app.room');
         }
 
         return $missing;
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string, url: string, active: bool, booking: bool}>
+     */
+    private function compactManualTimeframeRoomOptions(
+        Account $account,
+        Location $location,
+        ScheduleKind $selectedManualKind,
+        Carbon $selectedDate,
+        ?int $selectedClassTypeId,
+        ?int $selectedTrainerId,
+        ?string $selectedStartsAt,
+        ?int $selectedRoomId,
+        ?array $manualAvailability,
+    ): array {
+        if (! $selectedStartsAt || ! $selectedClassTypeId || ! $selectedTrainerId) {
+            return [];
+        }
+
+        $slot = collect($manualAvailability['slots'] ?? [])
+            ->first(fn (array $slot): bool => $slot['starts_at'] === $selectedStartsAt);
+
+        if (! $slot) {
+            return [];
+        }
+
+        return collect($slot['rooms'] ?? [])
+            ->map(fn (array $room): array => [
+                'id' => (int) $room['id'],
+                'name' => (string) $room['name'],
+                'url' => route('public.booking.show', [
+                    'accountSlug' => $account->slug,
+                    'locationSlug' => $location->slug,
+                    'schedule_kind' => $selectedManualKind->value,
+                    'date' => $selectedDate->toDateString(),
+                    'starts_at' => $selectedStartsAt,
+                    'class_type_id' => $selectedClassTypeId,
+                    'trainer_id' => $selectedTrainerId,
+                    'room_id' => (int) $room['id'],
+                ]),
+                'active' => $selectedRoomId === (int) $room['id'],
+                'booking' => true,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

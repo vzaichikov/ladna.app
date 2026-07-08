@@ -122,6 +122,12 @@
             'href' => route('dashboard.accounts.scheduled-classes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.scheduled-classes.*'),
         ]] : []),
+        ...($trainerProfile && $activeAccount->trainerPrivateTimeframesEnabled() ? [[
+            'label' => __('app.trainer_private_timeframes'),
+            'icon' => 'schedule',
+            'href' => route('dashboard.accounts.trainer-private-timeframes.mine', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.trainer-private-timeframes.*'),
+        ]] : []),
         ...($canManageClients ? [[
             'label' => __('app.customers'),
             'icon' => 'accounts',

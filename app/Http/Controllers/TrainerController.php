@@ -60,6 +60,7 @@ class TrainerController extends Controller
         }
 
         $trainer = $account->trainers()->create($this->trainerAttributes($validated));
+        $this->syncLocations($account, $trainer, $validated);
         $this->syncLogin($account, $trainer, $validated);
 
         return redirect()->route('dashboard.accounts.trainers.index', $account)
@@ -76,7 +77,7 @@ class TrainerController extends Controller
         $this->ensureBelongsToAccount($account, $trainer);
         $this->authorize('manageTrainers', $account);
         $account->ensureDefaultTrainerType();
-        $trainer->loadMissing(['user', 'trainerType']);
+        $trainer->loadMissing(['user', 'trainerType', 'locations']);
         $timezone = $account->timezone ?: config('app.timezone');
 
         return view('trainers.edit', [
@@ -118,6 +119,7 @@ class TrainerController extends Controller
         }
 
         $trainer->update($this->trainerAttributes($validated));
+        $this->syncLocations($account, $trainer, $validated);
         $this->syncLogin($account, $trainer, $validated);
 
         return redirect()->route('dashboard.accounts.trainers.index', $account)
@@ -216,6 +218,26 @@ class TrainerController extends Controller
     }
 
     /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncLocations(Account $account, Trainer $trainer, array $validated): void
+    {
+        $locationIds = collect($validated['location_ids'] ?? [])
+            ->map(fn (mixed $locationId): int => (int) $locationId)
+            ->filter(fn (int $locationId): bool => $locationId > 0)
+            ->unique()
+            ->values();
+
+        $syncPayload = $locationIds
+            ->mapWithKeys(fn (int $locationId): array => [
+                $locationId => ['account_id' => $account->id],
+            ])
+            ->all();
+
+        $trainer->locations()->sync($syncPayload);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function staffFormData(Account $account, ?Trainer $trainer = null): array
@@ -233,6 +255,8 @@ class TrainerController extends Controller
             'studioPermissions' => StudioPermission::cases(),
             'selectedPermissions' => $selectedPermissions,
             'trainerTypes' => $account->trainerTypes()->ordered()->get(),
+            'activeLocations' => $account->locations()->active()->orderBy('name')->get(),
+            'selectedLocationIds' => $trainer?->locations()->pluck('locations.id')->all() ?? [],
         ];
     }
 }

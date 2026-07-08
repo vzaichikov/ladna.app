@@ -55,6 +55,9 @@
                             {{ __('app.trainer_unreserved_bookings', ['count' => $issueCount]) }}
                         </button>
                     @endif
+                    @if ($account->trainerPrivateTimeframesEnabled())
+                        <x-ui.action-button :href="route('dashboard.accounts.trainers.private-timeframes.edit', [$account, $trainer])" icon="schedule" :label="__('app.trainer_private_timeframes')" />
+                    @endif
                     <x-ui.action-button :href="route('dashboard.accounts.trainers.edit', [$account, $trainer])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.trainers.destroy', [$account, $trainer]) }}" data-confirm-delete>
                         @csrf

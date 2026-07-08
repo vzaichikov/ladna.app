@@ -74,6 +74,7 @@ use App\Http\Controllers\ServiceRoomController;
 use App\Http\Controllers\StudioCashEntryController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\TrainerPrivateTimeframeController;
 use App\Http\Controllers\TrainerReportController;
 use App\Http\Controllers\TrainerSubstitutionController;
 use App\Http\Controllers\TrainerTypeController;
@@ -383,6 +384,12 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.trainers.substitutions.update');
         Route::delete('accounts/{account}/trainers/{trainer}/substitutions/{trainerSubstitution}', [TrainerSubstitutionController::class, 'destroy'])
             ->name('accounts.trainers.substitutions.destroy');
+        Route::get('accounts/{account}/trainer-private-timeframes', [TrainerPrivateTimeframeController::class, 'mine'])
+            ->name('accounts.trainer-private-timeframes.mine');
+        Route::get('accounts/{account}/trainers/{trainer}/private-timeframes', [TrainerPrivateTimeframeController::class, 'edit'])
+            ->name('accounts.trainers.private-timeframes.edit');
+        Route::post('accounts/{account}/trainers/{trainer}/private-timeframes/toggle', [TrainerPrivateTimeframeController::class, 'toggle'])
+            ->name('accounts.trainers.private-timeframes.toggle');
         Route::resource('accounts.trainers', TrainerController::class)
             ->except(['show'])
             ->scoped();

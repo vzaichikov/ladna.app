@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.78.0',
+                'date' => '2026-07-08',
+                'title' => 'Trainer private lesson timeframes',
+                'items' => ['Added studio-controlled trainer timeframes for private lessons. Trainers can mark 30-minute availability by location, owners can limit trainer locations, public booking now shows private lesson times only when the trainer has enough availability and a room is free, and admin quick booking can explicitly override trainer timeframes after coordinating by phone. Owner help now explains the workflow and color legend.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.77.0',
                 'date' => '2026-07-07',
                 'title' => 'Customer SMS notifications',
@@ -702,6 +709,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.78.0',
+                'date' => '2026-07-08',
+                'title' => 'Індивідуальні таймфрейми тренерів',
+                'items' => ['Додано керовані студією таймфрейми тренерів для індивідуальних занять. Тренери можуть позначати 30-хвилинну доступність по локаціях, власниця може обмежити локації тренера, публічний запис показує час лише коли таймфрейми покривають тривалість заняття і є вільний зал, а адміністратор може явно не враховувати таймфрейми після домовленості телефоном. Довідка для власниці тепер пояснює цей процес і кольори клітинок.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.77.0',
                 'date' => '2026-07-07',

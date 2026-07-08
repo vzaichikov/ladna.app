@@ -13,8 +13,12 @@ class ManualQuickBookingAvailability
 {
     private const SLOT_STEP_MINUTES = 30;
 
+    public function __construct(
+        private readonly TrainerPrivateLessonAvailability $trainerPrivateLessonAvailability,
+    ) {}
+
     /**
-     * @param  array{date: string, location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool}  $input
+     * @param  array{date: string, location_id: int, room_id?: int|null, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool, ignore_trainer_timeframes?: bool}  $input
      * @return array{
      *     date: string,
      *     timezone: string,
@@ -24,6 +28,10 @@ class ManualQuickBookingAvailability
      */
     public function for(Account $account, ScheduleKind $scheduleKind, array $input): array
     {
+        if ($this->trainerPrivateLessonAvailability->featureApplies($account, $scheduleKind, (bool) ($input['ignore_trainer_timeframes'] ?? false))) {
+            return $this->trainerPrivateLessonAvailability->for($account, $input);
+        }
+
         $location = $account->locations()->whereKey($input['location_id'])->firstOrFail();
         $room = $account->rooms()
             ->whereKey($input['room_id'])
@@ -97,10 +105,14 @@ class ManualQuickBookingAvailability
     }
 
     /**
-     * @param  array{location_id: int, room_id: int, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool}  $input
+     * @param  array{location_id: int, room_id?: int|null, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool, ignore_trainer_timeframes?: bool}  $input
      */
     public function hasStart(Account $account, ScheduleKind $scheduleKind, string $startsAt, array $input): bool
     {
+        if ($this->trainerPrivateLessonAvailability->featureApplies($account, $scheduleKind, (bool) ($input['ignore_trainer_timeframes'] ?? false))) {
+            return $this->trainerPrivateLessonAvailability->hasStart($account, $startsAt, $input);
+        }
+
         $date = substr($startsAt, 0, 10);
 
         if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {

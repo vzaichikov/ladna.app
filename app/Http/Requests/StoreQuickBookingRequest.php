@@ -56,6 +56,7 @@ class StoreQuickBookingRequest extends FormRequest
             'ends_at' => [Rule::requiredIf($scheduleKind === ScheduleKind::RoomRental && $this->input('rental_mode') === 'anytime'), 'nullable', 'date_format:Y-m-d\TH:i'],
             'rental_mode' => ['nullable', Rule::in(['preset', 'anytime'])],
             'payment_amount' => ['nullable', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
+            'ignore_trainer_timeframes' => ['nullable', 'boolean'],
         ];
     }
 
@@ -162,6 +163,7 @@ class StoreQuickBookingRequest extends FormRequest
             'rental_mode' => $this->input('rental_mode') ?: 'preset',
             'ends_at' => blank($this->input('ends_at')) ? null : $this->input('ends_at'),
             'payment_amount' => blank($this->input('payment_amount')) ? null : $this->input('payment_amount'),
+            'ignore_trainer_timeframes' => filter_var($this->input('ignore_trainer_timeframes', false), FILTER_VALIDATE_BOOLEAN),
         ]);
     }
 

@@ -21,6 +21,31 @@
     </select>
     @error('trainer_type_id') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
+@if ($activeLocations->isNotEmpty())
+    @php
+        $locationSelection = old('location_ids', $selectedLocationIds ?? []);
+    @endphp
+    <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+        <legend class="crm-label px-1">{{ __('app.trainer_locations') }}</legend>
+        <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.trainer_locations_help') }}</p>
+        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            @foreach ($activeLocations as $location)
+                <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                    <input
+                        name="location_ids[]"
+                        type="checkbox"
+                        value="{{ $location->id }}"
+                        @checked(in_array($location->id, array_map('intval', $locationSelection), true))
+                        class="crm-checkbox"
+                    >
+                    {{ $location->name }}
+                </label>
+            @endforeach
+        </div>
+        @error('location_ids') <span class="crm-help">{{ $message }}</span> @enderror
+        @error('location_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
+    </fieldset>
+@endif
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.email') }}</span>

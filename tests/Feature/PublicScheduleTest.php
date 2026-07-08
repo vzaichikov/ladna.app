@@ -18,6 +18,7 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\ServiceRoom;
 use App\Models\Trainer;
+use App\Models\TrainerPrivateTimeframe;
 use App\Models\TrainerType;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
@@ -272,6 +273,60 @@ class PublicScheduleTest extends TestCase
             ->assertSee(__('app.back_to_booking_options'))
             ->assertSee('June')
             ->assertSee('18');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_public_schedule_compact_private_timeframes_show_rooms_after_time_selection(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-compact-private-timeframes-studio',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+            'trainer_private_timeframes_enabled' => true,
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Private Room']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Nastya']);
+
+        $this->get('/test-compact-private-timeframes-studio/main/schedule?kind=private_lesson&date=2026-06-18&class_type='.$classType->id.'&trainer='.$trainer->id)
+            ->assertOk()
+            ->assertSee(__('app.no_available_manual_slots'))
+            ->assertDontSee('schedule/book?schedule_kind=private_lesson', false);
+
+        foreach (['15:00', '15:30'] as $time) {
+            $startsAt = Carbon::parse('2026-06-18 '.$time.':00', 'UTC');
+            TrainerPrivateTimeframe::factory()->create([
+                'account_id' => $account->id,
+                'trainer_id' => $trainer->id,
+                'location_id' => $location->id,
+                'starts_at' => $startsAt,
+                'ends_at' => $startsAt->copy()->addMinutes(30),
+            ]);
+        }
+
+        $this->get('/test-compact-private-timeframes-studio/main/schedule?kind=private_lesson&date=2026-06-18&class_type='.$classType->id.'&trainer='.$trainer->id)
+            ->assertOk()
+            ->assertSee('15:00')
+            ->assertSee(__('app.choose_room'))
+            ->assertSee('manual_panel=room', false)
+            ->assertSee('starts_at=2026-06-18T15%3A00', false)
+            ->assertDontSee('room_id='.$room->id, false);
+
+        $this->get('/test-compact-private-timeframes-studio/main/schedule?kind=private_lesson&manual_panel=room&date=2026-06-18&class_type='.$classType->id.'&trainer='.$trainer->id.'&starts_at=2026-06-18T15%3A00')
+            ->assertOk()
+            ->assertSee('Private Room')
+            ->assertSee('schedule/book?schedule_kind=private_lesson', false)
+            ->assertSee('starts_at=2026-06-18T15%3A00', false)
+            ->assertSee('room_id='.$room->id, false);
 
         Carbon::setTestNow();
     }

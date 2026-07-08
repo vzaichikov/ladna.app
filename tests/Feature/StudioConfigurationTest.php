@@ -309,6 +309,7 @@ class StudioConfigurationTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.class_passes_and_classes'))
             ->assertSee(__('app.schedule_generation_policy'))
+            ->assertSee(__('app.trainer_private_timeframes_policy'))
             ->assertSee(__('app.public_booking_policy'))
             ->assertSee(__('app.allow_guest_public_booking'));
 
@@ -330,6 +331,8 @@ class StudioConfigurationTest extends TestCase
                     'extend_days_count' => '1',
                 ],
                 'schedule_generation_weeks' => '6',
+                'trainer_private_timeframes_enabled' => '1',
+                'trainer_private_timeframe_weeks' => '',
                 'allow_guest_public_booking' => '1',
             ])
             ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']));
@@ -338,6 +341,9 @@ class StudioConfigurationTest extends TestCase
 
         $this->assertTrue($account->allowsGuestPublicBooking());
         $this->assertSame(6, $account->scheduleGenerationWeeks());
+        $this->assertTrue($account->trainerPrivateTimeframesEnabled());
+        $this->assertNull($account->trainer_private_timeframe_weeks);
+        $this->assertSame(6, $account->trainerPrivateTimeframeWeeks());
         $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
     }
 

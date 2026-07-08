@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['account_id', 'name', 'slug', 'address', 'google_maps_embed_url', 'phone', 'email', 'timezone', 'is_active'])]
@@ -43,6 +44,13 @@ class Location extends Model
     public function rooms(): HasMany
     {
         return $this->hasMany(Room::class);
+    }
+
+    public function trainers(): BelongsToMany
+    {
+        return $this->belongsToMany(Trainer::class, 'trainer_location')
+            ->withPivot('account_id')
+            ->withTimestamps();
     }
 
     public function serviceRooms(): HasMany

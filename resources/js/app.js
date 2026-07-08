@@ -1476,6 +1476,108 @@ function resetManualBookingTime(form) {
     updateManualBookingStartsAt(form);
 }
 
+function privateTrainerTimeframeMode(form) {
+    const scheduleKind = form?.querySelector('input[name="schedule_kind"]')?.value;
+    const ignoreCheckbox = form?.querySelector('[data-ignore-trainer-timeframes]');
+
+    return scheduleKind === 'private_lesson'
+        && form?.dataset.privateTimeframesEnabled === '1'
+        && !ignoreCheckbox?.checked;
+}
+
+function cachedRoomOptions(roomSelect) {
+    if (!roomSelect) {
+        return [];
+    }
+
+    if (!roomSelect.dataset.originalOptions) {
+        roomSelect.dataset.originalOptions = JSON.stringify(Array.from(roomSelect.options).map((option) => ({
+            value: option.value,
+            text: option.textContent,
+            locationId: option.dataset.locationId || '',
+        })));
+    }
+
+    try {
+        const options = JSON.parse(roomSelect.dataset.originalOptions || '[]');
+
+        return Array.isArray(options) ? options : [];
+    } catch {
+        return [];
+    }
+}
+
+function restoreManualRoomOptions(form) {
+    const roomSelect = form?.querySelector('[data-quick-booking-room]');
+
+    if (!roomSelect) {
+        return;
+    }
+
+    const options = cachedRoomOptions(roomSelect);
+
+    roomSelect.innerHTML = '';
+    options.forEach((option) => {
+        const element = document.createElement('option');
+
+        element.value = option.value;
+        element.textContent = option.text;
+
+        if (option.locationId) {
+            element.dataset.locationId = option.locationId;
+        }
+
+        roomSelect.append(element);
+    });
+
+    roomSelect.disabled = false;
+    updateQuickBookingRooms(form);
+}
+
+function resetPrivateTimeframeRoomOptions(form) {
+    const roomSelect = form?.querySelector('[data-quick-booking-room]');
+
+    if (!roomSelect) {
+        return;
+    }
+
+    cachedRoomOptions(roomSelect);
+    roomSelect.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+
+    placeholder.value = '';
+    placeholder.textContent = roomSelect.dataset.chooseTimeLabel || '';
+    roomSelect.append(placeholder);
+    roomSelect.value = '';
+    roomSelect.disabled = true;
+}
+
+function applyManualSlotRooms(form, rooms = []) {
+    const roomSelect = form?.querySelector('[data-quick-booking-room]');
+
+    if (!roomSelect || !privateTrainerTimeframeMode(form)) {
+        return;
+    }
+
+    cachedRoomOptions(roomSelect);
+    roomSelect.innerHTML = '';
+
+    rooms.forEach((room) => {
+        const option = document.createElement('option');
+
+        option.value = String(room.id);
+        option.textContent = room.name;
+        roomSelect.append(option);
+    });
+
+    roomSelect.disabled = rooms.length === 0;
+
+    if (rooms.length > 0) {
+        roomSelect.value = String(rooms[0].id);
+    }
+}
+
 function isAnytimeRental(form) {
     return form?.querySelector('[data-rental-mode-choice]:checked')?.value === 'anytime';
 }
@@ -1546,6 +1648,7 @@ function renderManualBookingResults(container, slots, form, closed = false) {
                 timeInput.value = slot.time;
             }
 
+            applyManualSlotRooms(form, slot.rooms ?? []);
             updateManualBookingStartsAt(form);
         });
 
@@ -1578,6 +1681,7 @@ function loadManualBookingAvailability(form) {
     const trainerInput = form.querySelector('[data-manual-booking-trainer]');
     const trainerId = trainerInput?.value || '';
     const anytimeRental = isAnytimeRental(form);
+    const timeframeMode = privateTrainerTimeframeMode(form);
 
     if (anytimeRental) {
         syncRentalModeFields(form);
@@ -1586,7 +1690,11 @@ function loadManualBookingAvailability(form) {
 
     resetManualBookingTime(form);
 
-    if (!dateInput.value || !scheduleKind || !locationId || !roomId || !classTypeId || (trainerInput?.required && !trainerId)) {
+    if (timeframeMode) {
+        resetPrivateTimeframeRoomOptions(form);
+    }
+
+    if (!dateInput.value || !scheduleKind || !locationId || (!timeframeMode && !roomId) || !classTypeId || (trainerInput?.required && !trainerId)) {
         setManualBookingResultsMessage(results, results.dataset.empty || 'No available times.');
         return;
     }
@@ -1597,11 +1705,18 @@ function loadManualBookingAvailability(form) {
     url.searchParams.set('schedule_kind', scheduleKind);
     url.searchParams.set('date', dateInput.value);
     url.searchParams.set('location_id', locationId);
-    url.searchParams.set('room_id', roomId);
     url.searchParams.set('class_type_id', classTypeId);
+
+    if (roomId) {
+        url.searchParams.set('room_id', roomId);
+    }
 
     if (trainerId) {
         url.searchParams.set('trainer_id', trainerId);
+    }
+
+    if (!timeframeMode && scheduleKind === 'private_lesson') {
+        url.searchParams.set('ignore_trainer_timeframes', '1');
     }
 
     fetch(url, {
@@ -1645,6 +1760,76 @@ function updateQuickBookingRooms(form) {
             roomSelect.value = firstAllowedOption.value;
         }
     }
+}
+
+function initTrainerPrivateTimeframes() {
+    document.querySelectorAll('[data-trainer-private-timeframes]').forEach((container) => {
+        if (container.dataset.trainerPrivateTimeframesReady === 'true') {
+            return;
+        }
+
+        const toggleUrl = container.dataset.toggleUrl;
+        const locationId = container.dataset.locationId;
+        const csrfToken = container.dataset.csrfToken || '';
+
+        if (!toggleUrl || !locationId || !csrfToken) {
+            return;
+        }
+
+        container.dataset.trainerPrivateTimeframesReady = 'true';
+        container.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-timeframe-cell]');
+
+            if (!button || button.disabled) {
+                return;
+            }
+
+            const nextSelected = button.dataset.selected !== '1';
+
+            button.disabled = true;
+            button.classList.add('opacity-70');
+
+            try {
+                const response = await fetch(toggleUrl, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        location_id: locationId,
+                        starts_at: button.dataset.startsAt,
+                        selected: nextSelected,
+                    }),
+                });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(payload.message || 'Request failed');
+                }
+
+                button.dataset.selected = payload.selected ? '1' : '0';
+                button.classList.toggle('border-emerald-300', payload.selected);
+                button.classList.toggle('bg-emerald-50', payload.selected);
+                button.classList.toggle('text-emerald-800', payload.selected);
+                button.classList.toggle('shadow-sm', payload.selected);
+                button.classList.toggle('border-stone-200', !payload.selected);
+                button.classList.toggle('bg-white', !payload.selected);
+                button.classList.toggle('text-slate-700', !payload.selected);
+            } catch {
+                button.classList.add('border-rose-300', 'bg-rose-50', 'text-rose-800');
+                window.setTimeout(() => {
+                    button.classList.remove('border-rose-300', 'bg-rose-50', 'text-rose-800');
+                }, 1400);
+            } finally {
+                button.disabled = false;
+                button.classList.remove('opacity-70');
+            }
+        });
+    });
 }
 
 function updateTrainerSubstitutionRooms(form) {
@@ -2134,6 +2319,25 @@ function initQuickBookingModals() {
 
         input.dataset.manualAvailabilityReady = 'true';
         input.addEventListener('change', () => loadManualBookingAvailability(input.closest('form')));
+    });
+
+    document.querySelectorAll('[data-ignore-trainer-timeframes]').forEach((input) => {
+        if (input.dataset.ignoreTrainerTimeframesReady === 'true') {
+            return;
+        }
+
+        input.dataset.ignoreTrainerTimeframesReady = 'true';
+        input.addEventListener('change', () => {
+            const form = input.closest('form');
+
+            if (input.checked) {
+                restoreManualRoomOptions(form);
+            } else {
+                resetPrivateTimeframeRoomOptions(form);
+            }
+
+            loadManualBookingAvailability(form);
+        });
     });
 
     document.querySelectorAll('[data-rental-mode-choice]').forEach((input) => {
@@ -3720,6 +3924,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initManualClassModals();
     initTrainerSubstitutionModals();
     initTrainerIssueModals();
+    initTrainerPrivateTimeframes();
     initQuickBookingModals();
     initCustomerTransferModals();
     initCopyButtons();

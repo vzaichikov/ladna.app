@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\StudioPermission;
+use App\Models\Location;
 use App\Models\TrainerType;
 use App\Models\User;
 use App\Support\PhoneNumberNormalizer;
@@ -56,6 +57,8 @@ class UpdateTrainerRequest extends FormRequest
             'user_password' => ['nullable', Password::defaults()],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => [Rule::in(array_map(fn (StudioPermission $permission): string => $permission->value, StudioPermission::cases()))],
+            'location_ids' => ['nullable', 'array'],
+            'location_ids.*' => [Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id)],
         ];
     }
 
@@ -67,6 +70,11 @@ class UpdateTrainerRequest extends FormRequest
             'phone' => app(PhoneNumberNormalizer::class)->normalize($this->input('phone'), $countryCode),
             'email' => blank($this->input('email')) ? null : mb_strtolower(trim((string) $this->input('email'))),
             'user_email' => blank($this->input('user_email')) ? null : mb_strtolower(trim((string) $this->input('user_email'))),
+            'location_ids' => collect($this->input('location_ids', []))
+                ->filter(fn (mixed $locationId): bool => filled($locationId))
+                ->map(fn (mixed $locationId): int => (int) $locationId)
+                ->values()
+                ->all(),
         ]);
     }
 }

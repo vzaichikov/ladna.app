@@ -18,6 +18,7 @@ use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
+use App\Models\TrainerPrivateTimeframe;
 use App\Models\User;
 use App\Models\WebsiteLead;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -1220,5 +1221,211 @@ class QuickBookingTest extends TestCase
         $this->assertSame(1, ClassBooking::whereBelongsTo($account)->count());
 
         Carbon::setTestNow();
+    }
+
+    public function test_private_timeframe_availability_allows_slot_when_one_room_is_free(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        [$owner, $account, $location, $bigRoom, $smallRoom, $classType, $trainer] = $this->privateTimeframeSetup();
+        $otherTrainer = Trainer::factory()->for($account)->create();
+        $groupType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($bigRoom)
+            ->for($groupType)
+            ->for($otherTrainer)
+            ->create([
+                'starts_at' => '2026-06-22 12:00:00',
+                'ends_at' => '2026-06-22 13:00:00',
+            ]);
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.trainers.private-timeframes.toggle', [$account, $trainer]), [
+                'location_id' => $location->id,
+                'starts_at' => '2026-06-22T12:00',
+                'selected' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('selected', true);
+
+        $this->createTrainerTimeframes($account, $trainer, $location, ['12:30']);
+
+        $response = $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.time', '12:00');
+
+        $this->assertSame([['id' => $smallRoom->id, 'name' => $smallRoom->name]], $response->json('data.0.rooms'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_private_timeframe_availability_requires_a_room_free_for_exact_lesson_range(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        [$owner, $account, $location, $bigRoom, $smallRoom, $classType, $trainer] = $this->privateTimeframeSetup();
+        $otherTrainer = Trainer::factory()->for($account)->create();
+        $groupType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
+        $this->createTrainerTimeframes($account, $trainer, $location, ['12:00', '12:30', '13:00', '13:30']);
+
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($bigRoom)
+            ->for($groupType)
+            ->for($otherTrainer)
+            ->create([
+                'starts_at' => '2026-06-22 12:00:00',
+                'ends_at' => '2026-06-22 13:00:00',
+            ]);
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($smallRoom)
+            ->for($groupType)
+            ->for($otherTrainer)
+            ->create([
+                'starts_at' => '2026-06-22 12:30:00',
+                'ends_at' => '2026-06-22 14:00:00',
+            ]);
+
+        $response = $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+            ]))
+            ->assertOk();
+
+        $this->assertSame(['13:00'], array_column($response->json('data'), 'time'));
+        $this->assertSame([['id' => $bigRoom->id, 'name' => $bigRoom->name]], $response->json('data.0.rooms'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_quick_booking_private_timeframes_restrict_by_default_and_override_records_metadata(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        [$owner, $account, $location, $bigRoom, , $classType, $trainer] = $this->privateTimeframeSetup();
+        $customer = Customer::factory()->for($account)->create();
+
+        $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+            ]))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'location_id' => $location->id,
+                'room_id' => $bigRoom->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'starts_at' => '2026-06-22T12:00',
+                'customer_id' => $customer->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.starts_at.0', __('app.manual_slot_unavailable'));
+
+        $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'room_id' => $bigRoom->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'ignore_trainer_timeframes' => true,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.time', '12:00');
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'location_id' => $location->id,
+                'room_id' => $bigRoom->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'starts_at' => '2026-06-22T12:00',
+                'customer_id' => $customer->id,
+                'ignore_trainer_timeframes' => true,
+            ])
+            ->assertCreated();
+
+        $scheduledClass = ScheduledClass::whereBelongsTo($account)->where('title', $classType->name)->firstOrFail();
+
+        $this->assertTrue($scheduledClass->metadata['trainer_timeframe_override']);
+
+        Carbon::setTestNow();
+    }
+
+    /**
+     * @return array{0: User, 1: Account, 2: Location, 3: Room, 4: Room, 5: ClassType, 6: Trainer}
+     */
+    private function privateTimeframeSetup(): array
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'trainer_private_timeframes_enabled' => true,
+            'opening_hours' => [
+                1 => ['enabled' => true, 'opens_at' => '12:00', 'closes_at' => '14:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $bigRoom = Room::factory()->for($account)->for($location)->create(['name' => 'Big Hall']);
+        $smallRoom = Room::factory()->for($account)->for($location)->create(['name' => 'Small Hall']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+            'default_capacity' => 1,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+
+        return [$owner, $account, $location, $bigRoom, $smallRoom, $classType, $trainer];
+    }
+
+    /**
+     * @param  array<int, string>  $times
+     */
+    private function createTrainerTimeframes(Account $account, Trainer $trainer, Location $location, array $times): void
+    {
+        foreach ($times as $time) {
+            $startsAt = Carbon::parse('2026-06-22 '.$time.':00', 'UTC');
+
+            TrainerPrivateTimeframe::factory()->create([
+                'account_id' => $account->id,
+                'trainer_id' => $trainer->id,
+                'location_id' => $location->id,
+                'starts_at' => $startsAt,
+                'ends_at' => $startsAt->copy()->addMinutes(30),
+            ]);
+        }
     }
 }

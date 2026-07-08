@@ -14,6 +14,7 @@
 <input type="hidden" name="timezone" value="{{ $account->timezone }}">
 <input type="hidden" name="class_pass_cancellation_rules_present" value="1">
 <input type="hidden" name="allow_guest_public_booking" value="0">
+<input type="hidden" name="trainer_private_timeframes_enabled" value="0">
 
 <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
     <legend class="crm-label px-1">{{ __('app.class_pass_rules_on_delete') }}</legend>
@@ -105,6 +106,41 @@
                 class="crm-field"
             >
             @error('schedule_generation_weeks') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+    </div>
+</fieldset>
+
+<fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+    <legend class="crm-label px-1">{{ __('app.trainer_private_timeframes_policy') }}</legend>
+    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.trainer_private_timeframes_policy_help') }}</p>
+
+    <div class="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end">
+        <label class="flex min-w-0 items-start gap-3 text-sm font-medium text-slate-700">
+            <input
+                name="trainer_private_timeframes_enabled"
+                type="checkbox"
+                value="1"
+                @checked(old('trainer_private_timeframes_enabled', $account->trainer_private_timeframes_enabled))
+                class="crm-checkbox mt-0.5"
+            >
+            <span class="min-w-0">
+                <span class="block text-slate-950">{{ __('app.trainer_private_timeframes_enabled') }}</span>
+                <span class="mt-0.5 block text-xs leading-5 text-slate-500">{{ __('app.trainer_private_timeframes_enabled_help') }}</span>
+            </span>
+        </label>
+        <label class="block">
+            <span class="crm-label">{{ __('app.trainer_private_timeframe_weeks') }}</span>
+            <input
+                name="trainer_private_timeframe_weeks"
+                type="number"
+                min="{{ \App\Models\Account::MIN_SCHEDULE_GENERATION_WEEKS }}"
+                max="{{ \App\Models\Account::MAX_SCHEDULE_GENERATION_WEEKS }}"
+                placeholder="{{ $account->scheduleGenerationWeeks() }}"
+                value="{{ old('trainer_private_timeframe_weeks', $account->trainer_private_timeframe_weeks) }}"
+                class="crm-field"
+            >
+            <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.trainer_private_timeframe_weeks_help', ['weeks' => $account->scheduleGenerationWeeks()]) }}</span>
+            @error('trainer_private_timeframe_weeks') <span class="crm-help">{{ $message }}</span> @enderror
         </label>
     </div>
 </fieldset>

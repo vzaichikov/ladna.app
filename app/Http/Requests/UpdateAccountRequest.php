@@ -72,6 +72,8 @@ class UpdateAccountRequest extends FormRequest
             'public_schedule_view' => ['nullable', Rule::in(PublicScheduleView::values())],
             'allow_guest_public_booking' => ['nullable', 'boolean'],
             'schedule_generation_weeks' => ['nullable', 'integer', 'min:'.Account::MIN_SCHEDULE_GENERATION_WEEKS, 'max:'.Account::MAX_SCHEDULE_GENERATION_WEEKS],
+            'trainer_private_timeframes_enabled' => ['nullable', 'boolean'],
+            'trainer_private_timeframe_weeks' => ['nullable', 'integer', 'min:'.Account::MIN_SCHEDULE_GENERATION_WEEKS, 'max:'.Account::MAX_SCHEDULE_GENERATION_WEEKS],
         ];
     }
 
@@ -134,6 +136,8 @@ class UpdateAccountRequest extends FormRequest
         $this->merge([
             'country_code' => $this->input('country_code') ?: ($account?->country_code ?? 'UA'),
             'allow_guest_public_booking' => filter_var($this->input('allow_guest_public_booking', $account?->allow_guest_public_booking ?? false), FILTER_VALIDATE_BOOLEAN),
+            'trainer_private_timeframes_enabled' => filter_var($this->input('trainer_private_timeframes_enabled', $account?->trainer_private_timeframes_enabled ?? false), FILTER_VALIDATE_BOOLEAN),
+            'trainer_private_timeframe_weeks' => blank($this->input('trainer_private_timeframe_weeks')) ? null : $this->input('trainer_private_timeframe_weeks'),
             ...$this->normalizedOptionalPublicFields(),
         ]);
 

@@ -9,6 +9,7 @@ return [
         'building' => 'building-2',
         'calendar' => 'calendar',
         'chevron-down' => 'chevron-down',
+        'chevron-left' => 'chevron-left',
         'chevron-right' => 'chevron-right',
         'class-pass-plans' => 'ticket',
         'class-types' => 'circle-dot',

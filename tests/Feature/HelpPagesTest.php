@@ -142,6 +142,21 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('customer_class_pass', false);
     }
 
+    public function test_trainers_help_explains_private_lesson_timeframes(): void
+    {
+        $this->get(route('help.show', 'trainers', false))
+            ->assertStatus(200)
+            ->assertSee('Як працюють індивідуальні таймфрейми', false)
+            ->assertSee('тренер сам позначив, коли він готовий вести індивідуальне заняття', false)
+            ->assertSee('Таймфрейм не бронює зал', false)
+            ->assertSee('Якщо локації в картці тренера не вибрані', false)
+            ->assertSee('білий час можна позначити, жовтий показує заняття тренера, сірий недоступний', false)
+            ->assertSee('адміністратор може вручну не враховувати таймфрейми', false)
+            ->assertSee('assets/help/screenshots/trainer-private-timeframes.png', false)
+            ->assertDontSee('endpoint', false)
+            ->assertDontSee('database', false);
+    }
+
     public function test_customers_help_explains_customer_import_and_export(): void
     {
         $this->get(route('help.show', 'customers-bookings', false))

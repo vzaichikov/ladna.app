@@ -50,7 +50,15 @@
                     </div>
                 </div>
             @else
-                <form method="POST" action="{{ route('dashboard.accounts.quick-bookings.store', $account) }}" class="flex min-h-0 flex-1 flex-col" data-async-form data-async-success="reload" novalidate>
+                <form
+                    method="POST"
+                    action="{{ route('dashboard.accounts.quick-bookings.store', $account) }}"
+                    class="flex min-h-0 flex-1 flex-col"
+                    data-async-form
+                    data-async-success="reload"
+                    data-private-timeframes-enabled="{{ $quickBookingKind === \App\Enums\ScheduleKind::PrivateLesson && $account->trainerPrivateTimeframesEnabled() ? '1' : '0' }}"
+                    novalidate
+                >
                     @csrf
                     <input type="hidden" name="schedule_kind" value="{{ $quickBookingKind->value }}">
                     <input type="hidden" name="website_lead_id" value="{{ $quickBookingPrefill['website_lead_id'] ?? '' }}" data-quick-booking-lead-id>
@@ -125,7 +133,7 @@
 
                                     <label class="block">
                                         <span class="crm-label">{{ __('app.room') }}</span>
-                                        <select name="room_id" required class="crm-field" data-quick-booking-room>
+                                        <select name="room_id" required class="crm-field" data-quick-booking-room data-choose-time-label="{{ __('app.choose_time_first') }}">
                                             @foreach ($quickBookingRooms as $room)
                                                 <option value="{{ $room->id }}" data-location-id="{{ $room->location_id }}">{{ $room->location?->name }} · {{ $room->name }}</option>
                                             @endforeach
@@ -154,6 +162,17 @@
                                         </label>
                                     @endif
                                 </div>
+
+                                @if ($quickBookingKind === \App\Enums\ScheduleKind::PrivateLesson && $account->trainerPrivateTimeframesEnabled())
+                                    <label class="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-950">
+                                        <input type="hidden" name="ignore_trainer_timeframes" value="0">
+                                        <input name="ignore_trainer_timeframes" type="checkbox" value="1" class="crm-checkbox mt-0.5" data-ignore-trainer-timeframes>
+                                        <span>
+                                            <span class="block font-semibold">{{ __('app.ignore_trainer_timeframes') }}</span>
+                                            <span class="mt-0.5 block text-xs leading-5 text-amber-800">{{ __('app.ignore_trainer_timeframes_help') }}</span>
+                                        </span>
+                                    </label>
+                                @endif
 
                                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                                     <label class="block">
