@@ -130,13 +130,13 @@ Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, Pr
         Route::get('/{accountSlug}/service-worker', [PwaController::class, 'studioServiceWorker'])
             ->where('accountSlug', '[A-Za-z0-9-]+')
             ->name('pwa.studio.service-worker');
-        Route::get('/{accountSlug}/pwa/icon-{size}.png', [PwaController::class, 'studioIcon'])
+        Route::get('/{accountSlug}/pwa/icon-{size}', [PwaController::class, 'studioIcon'])
             ->where('accountSlug', '[A-Za-z0-9-]+')
             ->where('size', '180|192|512')
             ->name('pwa.studio.icon');
         Route::get('/{accountSlug}/pwa/{asset}', [PwaController::class, 'studioAsset'])
             ->where('accountSlug', '[A-Za-z0-9-]+')
-            ->where('asset', 'maskable-icon-(192|512)\.png|screenshot-(wide|narrow)\.png')
+            ->where('asset', 'maskable-icon-(192|512)|screenshot-(wide|narrow)')
             ->name('pwa.studio.asset');
     });
 

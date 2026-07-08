@@ -103,6 +103,8 @@ class StudioPwaIconGenerator
 
     public function assetPath(Account $account, string $filename): string
     {
+        $filename = str_ends_with($filename, '.png') ? $filename : $filename.'.png';
+
         if (! in_array($filename, $this->assetFilenames(), true)) {
             throw new InvalidArgumentException('Unsupported PWA asset.');
         }
@@ -132,25 +134,25 @@ class StudioPwaIconGenerator
 
         return [
             [
-                'src' => $url('/'.$account->slug.'/pwa/icon-192.png?v='.$version),
+                'src' => $url('/'.$account->slug.'/pwa/icon-192?v='.$version),
                 'sizes' => '192x192',
                 'type' => 'image/png',
                 'purpose' => 'any',
             ],
             [
-                'src' => $url('/'.$account->slug.'/pwa/icon-512.png?v='.$version),
+                'src' => $url('/'.$account->slug.'/pwa/icon-512?v='.$version),
                 'sizes' => '512x512',
                 'type' => 'image/png',
                 'purpose' => 'any',
             ],
             [
-                'src' => $url('/'.$account->slug.'/pwa/maskable-icon-192.png?v='.$version),
+                'src' => $url('/'.$account->slug.'/pwa/maskable-icon-192?v='.$version),
                 'sizes' => '192x192',
                 'type' => 'image/png',
                 'purpose' => 'maskable',
             ],
             [
-                'src' => $url('/'.$account->slug.'/pwa/maskable-icon-512.png?v='.$version),
+                'src' => $url('/'.$account->slug.'/pwa/maskable-icon-512?v='.$version),
                 'sizes' => '512x512',
                 'type' => 'image/png',
                 'purpose' => 'maskable',
@@ -165,7 +167,7 @@ class StudioPwaIconGenerator
     public function shortcutIcon(Account $account, callable $url): array
     {
         return [
-            'src' => $url('/'.$account->slug.'/pwa/icon-192.png?v='.$this->version($account)),
+            'src' => $url('/'.$account->slug.'/pwa/icon-192?v='.$this->version($account)),
             'sizes' => '192x192',
         ];
     }
@@ -180,7 +182,7 @@ class StudioPwaIconGenerator
 
         return array_map(
             fn (array $screenshot): array => [
-                'src' => $url('/'.$account->slug.'/pwa/'.$screenshot['filename'].'?v='.$version),
+                'src' => $url('/'.$account->slug.'/pwa/'.str_replace('.png', '', $screenshot['filename']).'?v='.$version),
                 'sizes' => $screenshot['width'].'x'.$screenshot['height'],
                 'type' => 'image/png',
                 'form_factor' => $screenshot['form_factor'],

@@ -119,6 +119,7 @@ class PwaTest extends TestCase
             $this->assertSame('image/png', $icon['type']);
             $this->assertStringStartsWith('https://studio.example.test/'.$account->slug.'/pwa/', $icon['src']);
             $this->assertStringContainsString('v=', $icon['src']);
+            $this->assertStringNotContainsString('.png?', $icon['src']);
             $this->assertFileExists($assets->assetPath($account, basename($path)));
 
             $this->get($path)->assertOk()->assertHeader('Content-Type', 'image/png');
@@ -130,6 +131,7 @@ class PwaTest extends TestCase
 
             $this->assertSame('image/png', $screenshot['type']);
             $this->assertStringStartsWith('https://studio.example.test/'.$account->slug.'/pwa/screenshot-', $screenshot['src']);
+            $this->assertStringNotContainsString('.png?', $screenshot['src']);
             $this->assertStringContainsString('v=', $screenshot['src']);
             $this->assertFileExists($path);
             $this->get($urlPath)->assertOk()->assertHeader('Content-Type', 'image/png');
