@@ -213,6 +213,17 @@ class PwaController extends Controller
         return $response;
     }
 
+    public function studioAsset(string $accountSlug, string $asset, StudioPwaIconGenerator $icons): BinaryFileResponse
+    {
+        $account = $this->activeAccount($accountSlug);
+        $response = response()->file($icons->assetPath($account, $asset));
+
+        $response->headers->set('Content-Type', 'image/png');
+        $response->headers->set('Cache-Control', 'public, max-age=604800, immutable');
+
+        return $response;
+    }
+
     private function activeAccount(string $accountSlug): Account
     {
         return Account::active()

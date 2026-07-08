@@ -134,6 +134,10 @@ Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, Pr
             ->where('accountSlug', '[A-Za-z0-9-]+')
             ->where('size', '180|192|512')
             ->name('pwa.studio.icon');
+        Route::get('/{accountSlug}/pwa/{asset}', [PwaController::class, 'studioAsset'])
+            ->where('accountSlug', '[A-Za-z0-9-]+')
+            ->where('asset', 'maskable-icon-(192|512)\.png|screenshot-(wide|narrow)\.png')
+            ->name('pwa.studio.asset');
     });
 
 $appCompatibilityRedirect = static function (Request $request, string $path): RedirectResponse {

@@ -101,6 +101,27 @@ class StudioPwaIconGenerator
         return is_file($path) ? $path : $this->fallbackPath($size);
     }
 
+    public function assetPath(Account $account, string $filename): string
+    {
+        if (! in_array($filename, $this->assetFilenames(), true)) {
+            throw new InvalidArgumentException('Unsupported PWA asset.');
+        }
+
+        $this->ensure($account);
+
+        $path = $this->directory($account).'/'.$filename;
+
+        if (is_file($path)) {
+            return $path;
+        }
+
+        if (preg_match('/^icon-(180|192|512)\.png$/', $filename, $matches) === 1) {
+            return $this->fallbackPath((int) $matches[1]);
+        }
+
+        return $this->fallbackPath(512);
+    }
+
     /**
      * @param  callable(string): string  $url
      * @return list<array{src: string, sizes: string, type: string, purpose: string}>
@@ -176,6 +197,7 @@ class StudioPwaIconGenerator
         }
 
         File::deleteDirectory(public_path($slug.'/pwa'));
+        @rmdir(public_path($slug));
     }
 
     private function compliantLogoPath(Account $account): ?string
@@ -696,18 +718,28 @@ class StudioPwaIconGenerator
 
     private function directory(Account $account): string
     {
-        $slug = (string) $account->slug;
-
-        if (preg_match('/^[A-Za-z0-9-]+$/', $slug) !== 1) {
-            throw new InvalidArgumentException('Invalid account slug for PWA assets.');
-        }
-
-        return public_path($slug.'/pwa');
+        return storage_path('app/pwa-assets/accounts/'.$account->getKey());
     }
 
     private function ensureDirectory(string $directory): bool
     {
         return is_dir($directory) || @mkdir($directory, 0755, true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function assetFilenames(): array
+    {
+        return [
+            'icon-180.png',
+            'icon-192.png',
+            'icon-512.png',
+            'maskable-icon-192.png',
+            'maskable-icon-512.png',
+            'screenshot-wide.png',
+            'screenshot-narrow.png',
+        ];
     }
 
     private function shouldRefresh(Account $account, string $targetPath, ?string $sourcePath = null): bool

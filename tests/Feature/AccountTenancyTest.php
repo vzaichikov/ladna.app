@@ -75,11 +75,12 @@ class AccountTenancyTest extends TestCase
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
-        $assetDirectory = public_path($account->slug.'/pwa');
+        $assetDirectory = storage_path('app/pwa-assets/accounts/'.$account->getKey());
 
         $this->beforeApplicationDestroyed(function () use ($account): void {
             File::deleteDirectory(public_path($account->slug.'/pwa'));
             @rmdir(public_path($account->slug));
+            File::deleteDirectory(storage_path('app/pwa-assets/accounts/'.$account->getKey()));
         });
 
         $this->actingAs($owner)

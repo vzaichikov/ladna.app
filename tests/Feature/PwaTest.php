@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Location;
 use App\Models\User;
 use App\Support\ApplicationVersion;
+use App\Support\Pwa\StudioPwaIconGenerator;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -108,21 +109,30 @@ class PwaTest extends TestCase
         $this->assertCount(2, $manifest['screenshots']);
         $this->assertContains('wide', array_column($manifest['screenshots'], 'form_factor'));
         $this->assertContains('narrow', array_column($manifest['screenshots'], 'form_factor'));
+        $this->assertDirectoryDoesNotExist(public_path($account->slug));
+
+        $assets = app(StudioPwaIconGenerator::class);
 
         foreach ($manifest['icons'] as $icon) {
+            $path = (string) parse_url($icon['src'], PHP_URL_PATH);
+
             $this->assertSame('image/png', $icon['type']);
             $this->assertStringStartsWith('https://studio.example.test/'.$account->slug.'/pwa/', $icon['src']);
             $this->assertStringContainsString('v=', $icon['src']);
-            $this->assertFileExists(public_path(ltrim((string) parse_url($icon['src'], PHP_URL_PATH), '/')));
+            $this->assertFileExists($assets->assetPath($account, basename($path)));
+
+            $this->get($path)->assertOk()->assertHeader('Content-Type', 'image/png');
         }
 
         foreach ($manifest['screenshots'] as $screenshot) {
-            $path = public_path(ltrim((string) parse_url($screenshot['src'], PHP_URL_PATH), '/'));
+            $urlPath = (string) parse_url($screenshot['src'], PHP_URL_PATH);
+            $path = $assets->assetPath($account, basename($urlPath));
 
             $this->assertSame('image/png', $screenshot['type']);
             $this->assertStringStartsWith('https://studio.example.test/'.$account->slug.'/pwa/screenshot-', $screenshot['src']);
             $this->assertStringContainsString('v=', $screenshot['src']);
             $this->assertFileExists($path);
+            $this->get($urlPath)->assertOk()->assertHeader('Content-Type', 'image/png');
 
             $dimensions = getimagesize($path);
 
@@ -280,6 +290,7 @@ class PwaTest extends TestCase
         $this->beforeApplicationDestroyed(function () use ($account): void {
             File::deleteDirectory(public_path($account->slug.'/pwa'));
             @rmdir(public_path($account->slug));
+            File::deleteDirectory(storage_path('app/pwa-assets/accounts/'.$account->getKey()));
         });
 
         return [$account, $location];
