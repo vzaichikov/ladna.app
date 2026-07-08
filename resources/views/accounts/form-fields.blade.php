@@ -29,7 +29,7 @@
     </div>
     <label class="block">
         <span class="crm-label">{{ __('app.studio_logo') }}</span>
-        <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" class="crm-field">
+        <input name="logo" type="file" accept="image/png" class="crm-field">
         <span class="mt-1 block text-xs font-medium text-slate-500">{{ __('app.logo_help') }}</span>
         @error('logo') <span class="crm-help">{{ $message }}</span> @enderror
     </label>

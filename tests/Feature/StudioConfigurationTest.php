@@ -402,6 +402,8 @@ class StudioConfigurationTest extends TestCase
             ->get(route('dashboard.accounts.general-settings.edit', $account))
             ->assertOk()
             ->assertSee(__('app.studio_slogan'))
+            ->assertSee(__('app.logo_help'))
+            ->assertSee('accept="image/png"', false)
             ->assertSee(__('app.public_support_links'))
             ->assertSee(__('app.support_phone_url'))
             ->assertSee(__('app.support_secondary_phone_url'));
