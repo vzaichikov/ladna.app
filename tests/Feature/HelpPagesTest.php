@@ -157,6 +157,21 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('database', false);
     }
 
+    public function test_trainers_help_explains_private_lesson_activity_directions(): void
+    {
+        $this->get(route('help.show', 'trainers', false))
+            ->assertStatus(200)
+            ->assertSee('Як обмежити тренера по напрямах', false)
+            ->assertSee('не вибрано жодного напряму', false)
+            ->assertSee('може вести всі активні напрями студії', false)
+            ->assertSee('спочатку просять вибрати Напрям', false)
+            ->assertSee('показує тільки сумісні послуги й тренерів', false)
+            ->assertSee('Формат індивідуального заняття без власного напряму', false)
+            ->assertSee('це обходить тільки таймфрейми, а не сумісність тренера з напрямом', false)
+            ->assertDontSee('trainer_activity_direction', false)
+            ->assertDontSee('endpoint', false);
+    }
+
     public function test_customers_help_explains_customer_import_and_export(): void
     {
         $this->get(route('help.show', 'customers-bookings', false))
