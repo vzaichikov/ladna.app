@@ -296,10 +296,10 @@ class CustomerDashboardTest extends TestCase
 
     public function test_customer_dashboard_shows_public_links_for_active_studio_locations(): void
     {
-        app()->setLocale('en');
+        app()->setLocale('uk');
 
         $account = Account::factory()->create([
-            'default_language' => 'en',
+            'default_language' => 'uk',
             'slug' => 'customer-dashboard-public-links',
             'timezone' => 'UTC',
         ]);
@@ -318,11 +318,14 @@ class CustomerDashboardTest extends TestCase
         ]);
 
         $this->actingAs($customer, 'customer')
-            ->withSession(['locale' => 'en'])
+            ->withSession(['locale' => 'uk'])
             ->get(route('customer.dashboard', $account->slug))
             ->assertOk()
-            ->assertSee(__('app.public_links'))
-            ->assertSee($activeLocation->name)
+            ->assertSee(__('app.customer_dashboard_buy_class_pass'))
+            ->assertSee(__('app.customer_dashboard_book_class'))
+            ->assertDontSee(__('app.public_links'))
+            ->assertDontSee(__('app.public_links_copy'))
+            ->assertDontSee($activeLocation->name)
             ->assertSee(route('public.price', [$account->slug, $activeLocation->slug]), false)
             ->assertSee(route('public.schedule', [$account->slug, $activeLocation->slug]), false)
             ->assertDontSee($inactiveLocation->name)

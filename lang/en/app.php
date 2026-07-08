@@ -1575,6 +1575,8 @@ return [
     'public_links_empty' => 'Add an active location to get public schedule and price links.',
     'public_url' => 'Public URL',
     'public_price' => 'Public price',
+    'customer_dashboard_buy_class_pass' => 'Buy class pass',
+    'customer_dashboard_book_class' => 'Book a class',
     'public_price_title' => 'Class passes & prices',
     'public_schedule_embed' => 'Schedule embed',
     'public_price_embed' => 'Price embed',

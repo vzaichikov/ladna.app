@@ -1575,6 +1575,8 @@ return [
     'public_links_empty' => 'Додайте активну локацію, щоб отримати публічні посилання для розкладу та прайсу.',
     'public_url' => 'Публічне посилання',
     'public_price' => 'Публічний прайс',
+    'customer_dashboard_buy_class_pass' => 'Купити абонемент',
+    'customer_dashboard_book_class' => 'Записатись на заняття',
     'public_price_title' => 'Абонементи й ціни',
     'public_schedule_embed' => 'Embed розклад',
     'public_price_embed' => 'Embed прайс',
