@@ -57,6 +57,7 @@ class ExampleTest extends TestCase
             ->assertSee('Вхід для тренерів та власників студії')
             ->assertSee('Вхід для клієнтів')
             ->assertSee('href="'.route('customer.login').'"', false)
+            ->assertSee('name="remember" type="checkbox" value="1" checked', false)
             ->assertSee('href="'.route('login.en').'"', false)
             ->assertSessionHas('locale', 'uk');
 
@@ -67,6 +68,7 @@ class ExampleTest extends TestCase
             ->assertSee('Login for trainers and studio owners')
             ->assertSee('Customer login')
             ->assertSee('href="'.route('customer.login').'"', false)
+            ->assertSee('name="remember" type="checkbox" value="1" checked', false)
             ->assertSee('href="'.route('login').'"', false)
             ->assertSessionHas('locale', 'en');
     }

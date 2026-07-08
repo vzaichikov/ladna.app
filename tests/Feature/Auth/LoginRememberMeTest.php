@@ -12,6 +12,23 @@ class LoginRememberMeTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_internal_login_remembers_users_by_default(): void
+    {
+        $user = User::factory()->create([
+            'password' => 'correct-password',
+        ]);
+
+        $response = $this->post(route('login', absolute: false), [
+            'email' => $user->email,
+            'password' => 'correct-password',
+        ]);
+
+        $response->assertRedirect(route('dashboard.index', absolute: false));
+        $this->assertAuthenticatedAs($user, 'web');
+
+        $this->assertLongLivedRememberCookie($response->headers->getCookies());
+    }
+
     public function test_internal_login_remember_me_cookie_lasts_at_least_ninety_days(): void
     {
         $user = User::factory()->create([
@@ -27,7 +44,15 @@ class LoginRememberMeTest extends TestCase
         $response->assertRedirect(route('dashboard.index', absolute: false));
         $this->assertAuthenticatedAs($user, 'web');
 
-        $rememberCookie = collect($response->headers->getCookies())
+        $this->assertLongLivedRememberCookie($response->headers->getCookies());
+    }
+
+    /**
+     * @param  array<int, Cookie>  $cookies
+     */
+    private function assertLongLivedRememberCookie(array $cookies): void
+    {
+        $rememberCookie = collect($cookies)
             ->first(fn (Cookie $cookie): bool => $cookie->getName() === Auth::guard('web')->getRecallerName());
 
         $this->assertInstanceOf(Cookie::class, $rememberCookie);

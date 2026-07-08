@@ -79,7 +79,7 @@
                             </label>
 
                             <label class="inline-flex items-center gap-2 text-xs font-semibold text-[#4D3152]/78">
-                                <input name="remember" type="checkbox" value="1" @checked(old('remember')) class="h-4 w-4 rounded border-[#A78AB9]/45 text-[#3B223F] focus:ring-[#A78AB9]">
+                                <input name="remember" type="checkbox" value="1" @checked(old('remember', '1')) class="h-4 w-4 rounded border-[#A78AB9]/45 text-[#3B223F] focus:ring-[#A78AB9]">
                                 {{ __('app.remember_me') }}
                             </label>
 
