@@ -383,6 +383,101 @@ function initCustomerAutocomplete(root = document) {
     });
 }
 
+function initStudioLoginPickers(root = document) {
+    root.querySelectorAll('[data-studio-login-picker]').forEach((container) => {
+        if (container.dataset.studioLoginPickerReady === 'true') {
+            return;
+        }
+
+        const input = container.querySelector('[data-studio-login-picker-input]');
+        const results = container.querySelector('[data-studio-login-picker-results]');
+        const emptyResult = container.querySelector('[data-studio-login-picker-empty]');
+        const page = container.closest('main') ?? document;
+        const cards = Array.from(page.querySelectorAll('[data-studio-login-picker-card]'));
+        const gridEmpty = page.querySelector('[data-studio-login-picker-grid-empty]');
+        const options = Array.from(container.querySelectorAll('[data-studio-login-picker-option]'));
+
+        if (!input || !results) {
+            return;
+        }
+
+        container.dataset.studioLoginPickerReady = 'true';
+
+        const normalized = (value) => value.trim().toLocaleLowerCase();
+        const matchesTerm = (element, term) => term === '' || (element.dataset.studioSearchText || '').includes(term);
+        const visibleOptions = () => options.filter((option) => !option.classList.contains('hidden'));
+
+        const setResultsVisible = (isVisible) => {
+            results.classList.toggle('hidden', !isVisible);
+            input.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
+        };
+
+        const render = (showResults = false) => {
+            const term = normalized(input.value);
+            let optionCount = 0;
+            let cardCount = 0;
+
+            options.forEach((option) => {
+                const isVisible = matchesTerm(option, term);
+
+                option.classList.toggle('hidden', !isVisible);
+
+                if (isVisible) {
+                    optionCount += 1;
+                }
+            });
+
+            cards.forEach((card) => {
+                const isVisible = matchesTerm(card, term);
+
+                card.classList.toggle('hidden', !isVisible);
+
+                if (isVisible) {
+                    cardCount += 1;
+                }
+            });
+
+            emptyResult?.classList.toggle('hidden', optionCount > 0);
+            gridEmpty?.classList.toggle('hidden', cardCount > 0);
+            setResultsVisible(showResults && (optionCount > 0 || Boolean(emptyResult)));
+        };
+
+        input.addEventListener('focus', () => render(true));
+        input.addEventListener('input', () => render(true));
+        input.addEventListener('keydown', (event) => {
+            const firstOption = visibleOptions()[0];
+
+            if (event.key === 'ArrowDown' && firstOption) {
+                event.preventDefault();
+                firstOption.focus();
+                return;
+            }
+
+            if (event.key === 'Enter' && firstOption) {
+                event.preventDefault();
+                window.location.href = firstOption.href;
+            }
+        });
+
+        options.forEach((option) => {
+            option.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    setResultsVisible(false);
+                    input.focus();
+                }
+            });
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!container.contains(event.target)) {
+                setResultsVisible(false);
+            }
+        });
+
+        render(false);
+    });
+}
+
 function initClassPassPreviews(root = document) {
     root.querySelectorAll('[data-class-pass-preview-url]').forEach((form) => {
         if (form.dataset.classPassPreviewReady === 'true') {
@@ -4077,6 +4172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initColorPickers();
     initStudioRulesEditors();
     initCustomerAutocomplete();
+    initStudioLoginPickers();
     initClassPassPreviews();
     initCustomerAuthTabs();
     initPlatformSettingsTabs();

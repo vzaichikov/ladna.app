@@ -122,6 +122,10 @@
                             <a href="#flow" class="inline-flex h-12 items-center justify-center rounded-lg border border-[#A78AB9]/30 bg-white/70 px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
                                 {{ $landing['hero_secondary'] }}
                             </a>
+                            <a href="{{ route('customer.login') }}" class="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-[#A78AB9]/30 bg-white/70 px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                                <x-ui.icon name="log-in" class="h-4 w-4" />
+                                {{ __('app.customer_login_cta') }}
+                            </a>
                         </div>
 
                         <div class="mt-8 max-w-xl border-l-2 border-[#A78AB9]/40 pl-4 text-sm leading-6 text-[#4D3152]/70">

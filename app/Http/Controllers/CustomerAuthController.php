@@ -18,8 +18,10 @@ use App\Support\CustomerAuth\GoogleOAuthClient;
 use App\Support\CustomerAuth\GoogleUserData;
 use App\Support\CustomerAuth\TurnstileVerifier;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\SaasBilling\AccountSubscriptionAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -29,7 +31,7 @@ use RuntimeException;
 
 class CustomerAuthController extends Controller
 {
-    public function create(CustomerStudioAccess $studioAccess): RedirectResponse
+    public function create(CustomerStudioAccess $studioAccess, AccountSubscriptionAccess $subscriptionAccess): View|RedirectResponse
     {
         $customer = $this->currentCustomer();
 
@@ -37,7 +39,9 @@ class CustomerAuthController extends Controller
             return redirect()->to($destination);
         }
 
-        return redirect()->route('home');
+        return view('customer-auth.studio-picker', [
+            'studios' => $this->customerLoginStudios($subscriptionAccess),
+        ]);
     }
 
     public function studios(CustomerStudioAccess $studioAccess): View|RedirectResponse
@@ -628,6 +632,20 @@ class CustomerAuthController extends Controller
         }
 
         return $account;
+    }
+
+    /**
+     * @return Collection<int, Account>
+     */
+    private function customerLoginStudios(AccountSubscriptionAccess $subscriptionAccess): Collection
+    {
+        return Account::active()
+            ->with('subscription.plan')
+            ->whereHas('locations', fn ($query) => $query->active())
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'logo_path', 'status', 'studio_slogan'])
+            ->filter(fn (Account $account): bool => $subscriptionAccess->canUsePublicFeatures($account))
+            ->values();
     }
 
     private function otpPhoneSessionKey(Account $account): string

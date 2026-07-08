@@ -20,6 +20,8 @@ class ExampleTest extends TestCase
         $response->assertSee($version);
         $response->assertSee('changelog.', false);
         $response->assertSee('href="'.route('demo.signup.create', [], false).'"', false);
+        $response->assertSee('href="'.route('customer.login').'"', false);
+        $response->assertSee(__('app.customer_login_cta'));
         $this->assertSame(1, substr_count($response->getContent(), 'href="'.route('login').'"'));
     }
 
@@ -52,6 +54,9 @@ class ExampleTest extends TestCase
             ->get(route('login', absolute: false))
             ->assertStatus(200)
             ->assertSee('Увійдіть, щоб керувати розкладом')
+            ->assertSee('Вхід для тренерів та власників студії')
+            ->assertSee('Вхід для клієнтів')
+            ->assertSee('href="'.route('customer.login').'"', false)
             ->assertSee('href="'.route('login.en').'"', false)
             ->assertSessionHas('locale', 'uk');
 
@@ -59,6 +64,9 @@ class ExampleTest extends TestCase
             ->get(route('login.en', absolute: false))
             ->assertStatus(200)
             ->assertSee('Log in to manage schedules')
+            ->assertSee('Login for trainers and studio owners')
+            ->assertSee('Customer login')
+            ->assertSee('href="'.route('customer.login').'"', false)
             ->assertSee('href="'.route('login').'"', false)
             ->assertSessionHas('locale', 'en');
     }

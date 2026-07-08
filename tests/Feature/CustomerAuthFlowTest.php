@@ -5,11 +5,15 @@ namespace Tests\Feature;
 use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
+use App\Enums\SubscriptionPlanType;
+use App\Enums\SubscriptionStatus;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerAuthSetting;
 use App\Models\CustomerRememberToken;
 use App\Models\IntegrationSetting;
+use App\Models\Location;
+use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerOtpService;
 use App\Support\CustomerAuth\CustomerRememberTokenService;
@@ -23,6 +27,47 @@ use Tests\TestCase;
 class CustomerAuthFlowTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_customer_login_page_lets_guest_choose_available_studio(): void
+    {
+        $availableStudio = Account::factory()->create([
+            'name' => 'Client Entry Studio',
+            'slug' => 'client-entry-studio',
+            'logo_path' => 'brand/charmpole-icon.svg',
+            'studio_slogan' => 'Move with your group.',
+        ]);
+        Location::factory()->for($availableStudio)->create(['is_active' => true]);
+
+        $expiredStudio = Account::factory()->create([
+            'name' => 'Expired Client Studio',
+            'slug' => 'expired-client-studio',
+        ]);
+        Location::factory()->for($expiredStudio)->create(['is_active' => true]);
+
+        $plan = SubscriptionPlan::factory()->create(['plan_type' => SubscriptionPlanType::Standard]);
+        $expiredStudio->subscription()->create([
+            'subscription_plan_id' => $plan->id,
+            'status' => SubscriptionStatus::Active,
+            'started_at' => now()->subMonths(2),
+            'ends_at' => now()->subDay(),
+        ]);
+
+        $this->get(route('customer.login'))
+            ->assertOk()
+            ->assertViewIs('customer-auth.studio-picker')
+            ->assertSee(__('app.customer_studio_login_title'))
+            ->assertSee(__('app.customer_studio_search_placeholder'))
+            ->assertSee(__('app.staff_owner_login_cta'))
+            ->assertSee('data-studio-login-picker', false)
+            ->assertSee('data-studio-login-picker-option', false)
+            ->assertSee('data-studio-login-picker-card', false)
+            ->assertSee('Client Entry Studio')
+            ->assertSee('Move with your group.')
+            ->assertSee('brand/charmpole-icon.svg', false)
+            ->assertSee(route('customer.studio.login', $availableStudio->slug), false)
+            ->assertDontSee('Expired Client Studio')
+            ->assertDontSee(route('customer.studio.login', $expiredStudio->slug), false);
+    }
 
     public function test_global_google_enabled_shows_google_without_studio_auth_settings(): void
     {
