@@ -184,7 +184,8 @@ class PwaTest extends TestCase
             ->assertDontSee('apple-touch-icon.png', false)
             ->assertDontSee('data-app-update', false)
             ->assertDontSee('app-version.json', false)
-            ->assertDontSee('service-worker', false);
+            ->assertDontSee('service-worker', false)
+            ->assertDontSee('data-pwa-install-banner', false);
 
         $this->get('/en')
             ->assertStatus(200)
@@ -201,7 +202,9 @@ class PwaTest extends TestCase
             ->assertSee('data-app-update', false)
             ->assertSee(route('pwa.version'), false)
             ->assertSee(route('pwa.service-worker'), false)
-            ->assertSee('data-pwa-install', false);
+            ->assertSee('data-pwa-install-banner', false)
+            ->assertSee('data-pwa-install', false)
+            ->assertSee('data-pwa-install-dismiss', false);
     }
 
     public function test_studio_public_and_customer_pages_include_studio_pwa_metadata(): void
@@ -213,12 +216,16 @@ class PwaTest extends TestCase
             ->assertSee(route('pwa.studio.manifest', $account->slug), false)
             ->assertSee(route('pwa.studio.service-worker', $account->slug), false)
             ->assertSee(route('pwa.studio.icon', [$account->slug, 180]), false)
+            ->assertSee('data-pwa-install-banner', false)
+            ->assertSee('data-pwa-install-dismiss', false)
             ->assertDontSee(route('pwa.manifest'), false);
 
         $this->get(route('customer.studio.login', $account->slug, false))
             ->assertOk()
             ->assertSee(route('pwa.studio.manifest', $account->slug), false)
             ->assertSee(route('pwa.studio.service-worker', $account->slug), false)
+            ->assertSee('data-pwa-install-banner', false)
+            ->assertSee('data-pwa-install-dismiss', false)
             ->assertDontSee(route('pwa.manifest'), false);
     }
 
@@ -232,6 +239,7 @@ class PwaTest extends TestCase
 
         $this->assertStringNotContainsString('manifest.webmanifest', $html);
         $this->assertStringNotContainsString('data-app-update', $html);
+        $this->assertStringNotContainsString('data-pwa-install-banner', $html);
         $this->assertStringNotContainsString('data-pwa-install', $html);
     }
 

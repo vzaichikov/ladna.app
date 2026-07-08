@@ -490,6 +490,8 @@
             </aside>
 
             <div class="min-h-screen flex-1 lg:pl-72">
+                <x-ui.pwa-install-button />
+
                 <header class="sticky top-0 z-20 border-b border-stone-200/80 bg-white/90 backdrop-blur">
                     <div class="flex min-h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
                         <div class="flex items-center gap-3">
@@ -577,7 +579,6 @@
         </div>
 
         <x-ui.update-reload-toast :revision="$applicationRevision" desktop-offset />
-        <x-ui.pwa-install-button desktop-offset />
 
         @stack('modals')
 

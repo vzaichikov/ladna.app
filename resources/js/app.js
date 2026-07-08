@@ -3790,7 +3790,9 @@ function initAppUpdatePrompt() {
 }
 
 function initPwaInstallPrompt() {
+    const banners = Array.from(document.querySelectorAll('[data-pwa-install-banner]'));
     const buttons = Array.from(document.querySelectorAll('[data-pwa-install]'));
+    const dismissButtons = Array.from(document.querySelectorAll('[data-pwa-install-dismiss]'));
 
     if (buttons.length === 0) {
         return;
@@ -3803,14 +3805,28 @@ function initPwaInstallPrompt() {
     }
 
     let deferredPrompt = null;
+    let dismissed = false;
 
-    const showButtons = () => {
+    const showPrompt = () => {
+        if (dismissed) {
+            return;
+        }
+
+        banners.forEach((banner) => {
+            banner.hidden = false;
+        });
+
         buttons.forEach((button) => {
             button.hidden = false;
+            button.disabled = false;
         });
     };
 
-    const hideButtons = () => {
+    const hidePrompt = () => {
+        banners.forEach((banner) => {
+            banner.hidden = true;
+        });
+
         buttons.forEach((button) => {
             button.hidden = true;
             button.disabled = false;
@@ -3820,20 +3836,23 @@ function initPwaInstallPrompt() {
     window.addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
         deferredPrompt = event;
-        showButtons();
+        showPrompt();
     });
 
     buttons.forEach((button) => {
         button.addEventListener('click', async () => {
             if (!deferredPrompt) {
-                hideButtons();
+                hidePrompt();
 
                 return;
             }
 
             const promptEvent = deferredPrompt;
             deferredPrompt = null;
-            button.disabled = true;
+
+            buttons.forEach((installButton) => {
+                installButton.disabled = true;
+            });
 
             try {
                 await promptEvent.prompt();
@@ -3841,12 +3860,23 @@ function initPwaInstallPrompt() {
             } catch (error) {
                 deferredPrompt = null;
             } finally {
-                hideButtons();
+                hidePrompt();
             }
         });
     });
 
-    window.addEventListener('appinstalled', hideButtons);
+    dismissButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            dismissed = true;
+            deferredPrompt = null;
+            hidePrompt();
+        });
+    });
+
+    window.addEventListener('appinstalled', () => {
+        dismissed = true;
+        hidePrompt();
+    });
 }
 
 function initPeopleCounterScreenshotViewer() {

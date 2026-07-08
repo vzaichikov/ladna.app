@@ -58,6 +58,10 @@
         data-phone-mask-success="{{ __('app.phone_mask_success') }}"
         style="--app-font-family: '{{ $systemAppearance['css_family'] }}';"
     >
+        @if ($pwaServiceWorkerUrl)
+            <x-ui.pwa-install-button />
+        @endif
+
         @yield('content')
 
         @unless ($isEmbedLayout)
@@ -70,7 +74,6 @@
 
         @if ($pwaServiceWorkerUrl)
             <x-ui.update-reload-toast :revision="$applicationRevision" :version-url="$pwaVersionUrl" :service-worker-url="$pwaServiceWorkerUrl" />
-            <x-ui.pwa-install-button />
         @endif
     </body>
 </html>
