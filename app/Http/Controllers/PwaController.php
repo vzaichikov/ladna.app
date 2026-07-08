@@ -119,13 +119,13 @@ class PwaController extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
-    public function studioManifest(Request $request, string $accountSlug): JsonResponse
+    public function studioManifest(Request $request, string $accountSlug, StudioPwaIconGenerator $icons): JsonResponse
     {
         $account = $this->activeAccount($accountSlug);
         $url = fn (string $path): string => $this->absoluteUrl($request, $path);
         $themeColor = $this->themeColor($account);
-        $iconVersion = $account->updated_at?->timestamp ?? $account->getKey();
-        $iconUrl = fn (int $size): string => $url('/'.$account->slug.'/pwa/icon-'.$size.'.png?v='.$iconVersion);
+
+        $icons->ensure($account);
 
         return response()
             ->json([
@@ -143,41 +143,17 @@ class PwaController extends Controller
                 'background_color' => '#FAF8F5',
                 'theme_color' => $themeColor,
                 'categories' => ['health', 'sports', 'lifestyle'],
-                'icons' => [
-                    [
-                        'src' => $iconUrl(192),
-                        'sizes' => '192x192',
-                        'type' => 'image/png',
-                        'purpose' => 'any',
-                    ],
-                    [
-                        'src' => $iconUrl(512),
-                        'sizes' => '512x512',
-                        'type' => 'image/png',
-                        'purpose' => 'any',
-                    ],
-                    [
-                        'src' => $iconUrl(192),
-                        'sizes' => '192x192',
-                        'type' => 'image/png',
-                        'purpose' => 'maskable',
-                    ],
-                    [
-                        'src' => $iconUrl(512),
-                        'sizes' => '512x512',
-                        'type' => 'image/png',
-                        'purpose' => 'maskable',
-                    ],
-                ],
+                'icons' => $icons->iconEntries($account, $url),
                 'shortcuts' => [
                     [
                         'name' => 'Customer portal',
                         'short_name' => 'Portal',
                         'description' => 'Open the customer portal.',
                         'url' => $url('/'.$account->slug.'/customer/login'),
-                        'icons' => [['src' => $iconUrl(192), 'sizes' => '192x192']],
+                        'icons' => [$icons->shortcutIcon($account, $url)],
                     ],
                 ],
+                'screenshots' => $icons->screenshotEntries($account, $url),
             ])
             ->header('Content-Type', 'application/manifest+json')
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');

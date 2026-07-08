@@ -11,6 +11,7 @@ use App\Models\Account;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\Pwa\StudioPwaIconGenerator;
 use App\Support\ReservedPublicSlugs;
 use App\Support\SaasBilling\DeleteAccountWithOwnedUsers;
 use App\Support\SlugGenerator;
@@ -47,7 +48,7 @@ class PlatformAccountController extends Controller
         ])));
     }
 
-    public function store(StorePlatformAccountRequest $request): RedirectResponse
+    public function store(StorePlatformAccountRequest $request, StudioPwaIconGenerator $pwaAssets): RedirectResponse
     {
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name']);
@@ -79,6 +80,8 @@ class PlatformAccountController extends Controller
             return $account;
         });
 
+        $pwaAssets->ensure($account);
+
         return redirect()->route('platform.accounts.show', $account)
             ->with('status', __('app.account_created'));
     }
@@ -105,14 +108,21 @@ class PlatformAccountController extends Controller
         return view('platform.accounts.edit', $this->formData($account));
     }
 
-    public function update(UpdatePlatformAccountRequest $request, Account $account): RedirectResponse
+    public function update(UpdatePlatformAccountRequest $request, Account $account, StudioPwaIconGenerator $pwaAssets): RedirectResponse
     {
+        $previousSlug = $account->slug;
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
         $account->update(collect($validated)->except(['logo', 'subscription_plan_id', 'subscription_status', 'subscription_ends_at'])->all());
         $this->storeLogo($request, $account);
         $this->syncSubscription($account, $validated);
+
+        if ($previousSlug !== $account->slug) {
+            $pwaAssets->deleteForSlug($previousSlug);
+        }
+
+        $pwaAssets->ensure($account);
 
         return redirect()->route('platform.accounts.show', $account)
             ->with('status', __('app.account_updated'));

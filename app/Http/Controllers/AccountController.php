@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
 use App\Models\Location;
 use App\Support\PublicScheduleViewRegistry;
+use App\Support\Pwa\StudioPwaIconGenerator;
 use App\Support\ReservedPublicSlugs;
 use App\Support\SlugGenerator;
 use App\Support\StudioDashboardData;
@@ -56,7 +57,7 @@ class AccountController extends Controller
         ]);
     }
 
-    public function store(StoreAccountRequest $request): RedirectResponse
+    public function store(StoreAccountRequest $request, StudioPwaIconGenerator $pwaAssets): RedirectResponse
     {
         $this->authorize('create', Account::class);
 
@@ -71,6 +72,8 @@ class AccountController extends Controller
 
             return $account;
         });
+
+        $pwaAssets->ensure($account);
 
         return redirect()->route('dashboard.accounts.show', $account)
             ->with('status', __('app.account_created'));
@@ -145,13 +148,20 @@ class AccountController extends Controller
         ]);
     }
 
-    public function update(UpdateAccountRequest $request, Account $account): RedirectResponse
+    public function update(UpdateAccountRequest $request, Account $account, StudioPwaIconGenerator $pwaAssets): RedirectResponse
     {
+        $previousSlug = $account->slug;
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
         $account->update(collect($validated)->except(['brand_tab', 'logo', 'enabled_schedule_kinds_present', 'schedule_kind_colors_present', 'opening_hours_present', 'class_pass_cancellation_rules_present'])->all());
         $this->storeLogo($request, $account);
+
+        if ($previousSlug !== $account->slug) {
+            $pwaAssets->deleteForSlug($previousSlug);
+        }
+
+        $pwaAssets->ensure($account);
 
         $routeParameters = match ($request->input('brand_tab')) {
             'formats' => [$account, 'tab' => 'formats'],

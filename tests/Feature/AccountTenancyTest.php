@@ -11,6 +11,7 @@ use App\Models\TrainerType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -74,6 +75,12 @@ class AccountTenancyTest extends TestCase
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
+        $assetDirectory = public_path($account->slug.'/pwa');
+
+        $this->beforeApplicationDestroyed(function () use ($account): void {
+            File::deleteDirectory(public_path($account->slug.'/pwa'));
+            @rmdir(public_path($account->slug));
+        });
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.update', $account), [
@@ -91,6 +98,10 @@ class AccountTenancyTest extends TestCase
 
         $this->assertNotNull($account->logo_path);
         Storage::disk('public')->assertExists($account->logo_path);
+        $this->assertFileExists($assetDirectory.'/icon-192.png');
+        $this->assertFileExists($assetDirectory.'/icon-512.png');
+        $this->assertFileExists($assetDirectory.'/screenshot-wide.png');
+        $this->assertFileExists($assetDirectory.'/screenshot-narrow.png');
     }
 
     public function test_studio_logo_upload_requires_png_at_least_512_pixels(): void

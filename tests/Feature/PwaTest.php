@@ -7,6 +7,7 @@ use App\Models\Location;
 use App\Models\User;
 use App\Support\ApplicationVersion;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class PwaTest extends TestCase
@@ -104,11 +105,31 @@ class PwaTest extends TestCase
         $this->assertSame($account->brand_color, $manifest['theme_color']);
         $this->assertSame($account->default_language, $manifest['lang']);
         $this->assertCount(4, $manifest['icons']);
+        $this->assertCount(2, $manifest['screenshots']);
+        $this->assertContains('wide', array_column($manifest['screenshots'], 'form_factor'));
+        $this->assertContains('narrow', array_column($manifest['screenshots'], 'form_factor'));
 
         foreach ($manifest['icons'] as $icon) {
             $this->assertSame('image/png', $icon['type']);
-            $this->assertStringStartsWith('https://studio.example.test/'.$account->slug.'/pwa/icon-', $icon['src']);
+            $this->assertStringStartsWith('https://studio.example.test/'.$account->slug.'/pwa/', $icon['src']);
             $this->assertStringContainsString('v=', $icon['src']);
+            $this->assertFileExists(public_path(ltrim((string) parse_url($icon['src'], PHP_URL_PATH), '/')));
+        }
+
+        foreach ($manifest['screenshots'] as $screenshot) {
+            $path = public_path(ltrim((string) parse_url($screenshot['src'], PHP_URL_PATH), '/'));
+
+            $this->assertSame('image/png', $screenshot['type']);
+            $this->assertStringStartsWith('https://studio.example.test/'.$account->slug.'/pwa/screenshot-', $screenshot['src']);
+            $this->assertStringContainsString('v=', $screenshot['src']);
+            $this->assertFileExists($path);
+
+            $dimensions = getimagesize($path);
+
+            $this->assertIsArray($dimensions);
+
+            [$width, $height] = $dimensions;
+            $this->assertSame($screenshot['sizes'], $width.'x'.$height);
         }
     }
 
@@ -255,6 +276,11 @@ class PwaTest extends TestCase
         $location = Location::factory()->for($account)->create([
             'slug' => 'main',
         ]);
+
+        $this->beforeApplicationDestroyed(function () use ($account): void {
+            File::deleteDirectory(public_path($account->slug.'/pwa'));
+            @rmdir(public_path($account->slug));
+        });
 
         return [$account, $location];
     }
