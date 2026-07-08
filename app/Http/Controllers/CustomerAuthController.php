@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\LinkGoogleCustomerByVerifiedPhone;
+use App\Actions\MergeCustomerIdentityByVerifiedPhone;
 use App\Http\Requests\CustomerEmailLoginRequest;
 use App\Http\Requests\CustomerGooglePhoneOtpSendRequest;
 use App\Http\Requests\CustomerOtpSendRequest;
 use App\Http\Requests\CustomerOtpVerifyRequest;
+use App\Http\Requests\CustomerProfilePhoneOtpSendRequest;
 use App\Http\Requests\UpdateCustomerProfileRequest;
 use App\Models\Account;
 use App\Models\Customer;
@@ -404,7 +405,7 @@ class CustomerAuthController extends Controller
         CustomerOtpVerifyRequest $request,
         string $accountSlug,
         CustomerOtpService $otp,
-        LinkGoogleCustomerByVerifiedPhone $linkCustomer,
+        MergeCustomerIdentityByVerifiedPhone $mergeCustomer,
     ): RedirectResponse {
         $account = $this->account($accountSlug);
         $pendingGoogleCustomer = $this->pendingGoogleCustomer($account);
@@ -429,11 +430,15 @@ class CustomerAuthController extends Controller
             ]);
         }
 
-        $customer = $linkCustomer->execute(
+        $sourceCustomer = isset($pendingGoogleCustomer['customer_id'])
+            ? $account->customers()->find($pendingGoogleCustomer['customer_id'])
+            : null;
+
+        $customer = $mergeCustomer->execute(
             $account,
-            $pendingGoogleCustomer,
             $result->challenge->phone,
-            $pendingGoogleCustomer['customer_id'] ?? null,
+            $sourceCustomer,
+            $pendingGoogleCustomer,
         );
 
         session()->forget([
@@ -489,6 +494,7 @@ class CustomerAuthController extends Controller
         return view('customer-auth.profile', [
             'account' => $account,
             'customer' => $customer,
+            'profilePhoneMerge' => $this->profilePhoneMergeState($account),
         ]);
     }
 
@@ -497,6 +503,30 @@ class CustomerAuthController extends Controller
         $account = $this->account($accountSlug);
         $customer = $this->customerForAccount($account);
         $validated = $request->validated();
+        $duplicatePhoneCustomer = $account->customers()
+            ->where('phone', $validated['phone'])
+            ->whereKeyNot($customer)
+            ->first();
+
+        if ($duplicatePhoneCustomer) {
+            $sourceUpdates = [
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+            ];
+
+            if (filled($validated['password'] ?? null)) {
+                $sourceUpdates['password'] = $validated['password'];
+            }
+
+            $customer->update($sourceUpdates);
+            session()->put($this->profilePhoneSessionKey($account), $validated['phone']);
+            session()->forget($this->profilePhoneChallengeSessionKey($account));
+
+            return redirect()
+                ->route('customer.profile.complete', $account->slug)
+                ->withInput($request->safe()->except(['password', 'password_confirmation']))
+                ->with('phone_merge_required', true);
+        }
 
         if ($customer->phone !== $validated['phone']) {
             $validated['phone_verified_at'] = null;
@@ -509,6 +539,10 @@ class CustomerAuthController extends Controller
         unset($validated['password_confirmation']);
 
         $customer->update($validated);
+        session()->forget([
+            $this->profilePhoneSessionKey($account),
+            $this->profilePhoneChallengeSessionKey($account),
+        ]);
 
         if ($customer->profileIsComplete()) {
             return redirect()
@@ -519,6 +553,109 @@ class CustomerAuthController extends Controller
         return redirect()
             ->route('customer.profile.complete', $account->slug)
             ->with('status', __('app.customer_profile_updated'));
+    }
+
+    public function sendProfilePhoneOtp(
+        CustomerProfilePhoneOtpSendRequest $request,
+        string $accountSlug,
+        CustomerOtpService $otp,
+    ): RedirectResponse {
+        $account = $this->account($accountSlug);
+        $phone = $this->profilePhone($account);
+
+        if (! $phone) {
+            return redirect()->route('customer.profile.complete', $account->slug);
+        }
+
+        $result = $otp->send($account, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
+
+        if (! $result->ok) {
+            return redirect()
+                ->route('customer.profile.complete', $account->slug)
+                ->withErrors(['phone' => $result->message ?? __('app.customer_otp_send_failed')])
+                ->with('otp_resend_seconds', $result->secondsUntilResend);
+        }
+
+        session()->put($this->profilePhoneChallengeSessionKey($account), true);
+
+        return redirect()
+            ->route('customer.profile.complete', $account->slug)
+            ->with('status', __('app.customer_otp_sent'))
+            ->with('otp_resend_seconds', $result->secondsUntilResend);
+    }
+
+    public function resendProfilePhoneOtp(
+        Request $request,
+        string $accountSlug,
+        CustomerOtpService $otp,
+    ): RedirectResponse {
+        $account = $this->account($accountSlug);
+        $phone = $this->profilePhone($account);
+
+        if (! $phone) {
+            return redirect()->route('customer.profile.complete', $account->slug);
+        }
+
+        $result = $otp->send($account, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
+
+        if (! $result->ok) {
+            return redirect()
+                ->route('customer.profile.complete', $account->slug)
+                ->withErrors(['code' => $result->message ?? __('app.customer_otp_send_failed')])
+                ->with('otp_resend_seconds', $result->secondsUntilResend);
+        }
+
+        session()->put($this->profilePhoneChallengeSessionKey($account), true);
+
+        return redirect()
+            ->route('customer.profile.complete', $account->slug)
+            ->with('status', __('app.customer_otp_sent'))
+            ->with('otp_resend_seconds', $result->secondsUntilResend);
+    }
+
+    public function changeProfilePhone(string $accountSlug): RedirectResponse
+    {
+        $account = $this->account($accountSlug);
+        session()->forget([
+            $this->profilePhoneSessionKey($account),
+            $this->profilePhoneChallengeSessionKey($account),
+        ]);
+
+        return redirect()->route('customer.profile.complete', $account->slug);
+    }
+
+    public function verifyProfilePhoneOtp(
+        CustomerOtpVerifyRequest $request,
+        string $accountSlug,
+        CustomerOtpService $otp,
+        MergeCustomerIdentityByVerifiedPhone $mergeCustomer,
+    ): RedirectResponse {
+        $account = $this->account($accountSlug);
+        $customer = $this->customerForAccount($account);
+        $phone = $this->profilePhone($account);
+
+        if (! $phone || $phone !== $request->validated('phone')) {
+            throw ValidationException::withMessages([
+                'code' => __('app.customer_otp_invalid'),
+            ]);
+        }
+
+        $result = $otp->verify($account, $request->validated('phone'), $request->validated('code'));
+
+        if (! $result->ok || ! $result->challenge) {
+            throw ValidationException::withMessages([
+                'code' => $result->message ?? __('app.customer_otp_invalid'),
+            ]);
+        }
+
+        $mergedCustomer = $mergeCustomer->execute($account, $result->challenge->phone, $customer);
+
+        session()->forget([
+            $this->profilePhoneSessionKey($account),
+            $this->profilePhoneChallengeSessionKey($account),
+        ]);
+
+        return $this->loginCustomer($mergedCustomer, $account, __('app.customer_profile_phone_verified'));
     }
 
     public function logout(Request $request, CustomerRememberTokenService $rememberTokens, string $accountSlug): RedirectResponse
@@ -593,7 +730,7 @@ class CustomerAuthController extends Controller
         return $pending;
     }
 
-    private function loginCustomer(Customer $customer, Account $account): RedirectResponse
+    private function loginCustomer(Customer $customer, Account $account, ?string $status = null): RedirectResponse
     {
         abort_unless($customer->account_id === $account->id, 404);
 
@@ -601,10 +738,14 @@ class CustomerAuthController extends Controller
         app(CustomerRememberTokenService::class)->issue($customer);
 
         if ($customer->profileIsComplete()) {
-            return redirect()->intended(route('customer.dashboard', $account->slug));
+            $redirect = redirect()->intended(route('customer.dashboard', $account->slug));
+
+            return $status ? $redirect->with('status', $status) : $redirect;
         }
 
-        return redirect()->route('customer.profile.complete', $account->slug);
+        $redirect = redirect()->route('customer.profile.complete', $account->slug);
+
+        return $status ? $redirect->with('status', $status) : $redirect;
     }
 
     private function currentCustomer(): ?Customer
@@ -661,5 +802,39 @@ class CustomerAuthController extends Controller
     private function googlePhoneSessionKey(Account $account): string
     {
         return 'customer_google_phone_'.$account->id;
+    }
+
+    /**
+     * @return array{phone: string, challenge_active: bool}|null
+     */
+    private function profilePhoneMergeState(Account $account): ?array
+    {
+        $phone = $this->profilePhone($account);
+
+        if (! $phone) {
+            return null;
+        }
+
+        return [
+            'phone' => $phone,
+            'challenge_active' => (bool) session($this->profilePhoneChallengeSessionKey($account)),
+        ];
+    }
+
+    private function profilePhone(Account $account): ?string
+    {
+        $phone = session($this->profilePhoneSessionKey($account));
+
+        return is_string($phone) && $phone !== '' ? $phone : null;
+    }
+
+    private function profilePhoneSessionKey(Account $account): string
+    {
+        return 'customer_profile_phone_'.$account->id;
+    }
+
+    private function profilePhoneChallengeSessionKey(Account $account): string
+    {
+        return 'customer_profile_phone_challenge_'.$account->id;
     }
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
+use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
 use App\Enums\ScheduleKind;
@@ -14,6 +15,7 @@ use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
 use App\Models\ClassType;
 use App\Models\Customer;
+use App\Models\CustomerAuthSetting;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
 use App\Models\MobileDeviceToken;
@@ -25,6 +27,8 @@ use App\Models\User;
 use App\Support\Mobile\MobileSessionIssuer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -100,6 +104,167 @@ class MobileApiTest extends TestCase
             ->assertJsonPath('data.actor.customer.email', 'customer-mobile@example.test');
 
         $this->assertStringStartsWith('ladna_mobile_', (string) $response->json('data.token'));
+    }
+
+    public function test_mobile_customer_profile_duplicate_phone_returns_otp_required_response(): void
+    {
+        [$account] = $this->groupClassContext([
+            'slug' => 'mobile-profile-phone-otp-required',
+            'country_code' => 'UA',
+        ]);
+        $source = Customer::factory()->for($account)->create([
+            'name' => null,
+            'email' => 'mobile-source@example.test',
+            'phone' => null,
+            'password' => Hash::make('old-secret'),
+        ]);
+        Customer::factory()->for($account)->create([
+            'phone' => '+380501112288',
+            'email' => null,
+        ]);
+        $token = $this->customerToken($account, $source);
+
+        $this->withToken($token)
+            ->putJson('/api/v1/mobile/customer/profile', [
+                'name' => 'Mobile Source',
+                'phone' => '0501112288',
+                'email' => 'mobile-source@example.test',
+                'password' => 'new-secret',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'phone_verification_required')
+            ->assertJsonPath('data.phone', '+380501112288')
+            ->assertJsonValidationErrors('phone');
+
+        $this->assertDatabaseHas('customers', [
+            'id' => $source->id,
+            'phone' => null,
+        ]);
+    }
+
+    public function test_mobile_profile_phone_otp_verify_merges_customer_and_keeps_token_usable(): void
+    {
+        [$account] = $this->groupClassContext([
+            'slug' => 'mobile-profile-phone-merge',
+            'country_code' => 'UA',
+        ]);
+        $source = Customer::factory()->for($account)->create([
+            'name' => null,
+            'email' => 'mobile-google-source@example.test',
+            'phone' => null,
+            'password' => Hash::make('source-password'),
+            'google_id' => 'mobile-google-source',
+            'email_verified_at' => now(),
+        ]);
+        $target = Customer::factory()->for($account)->create([
+            'name' => 'Mobile Phone Target',
+            'email' => null,
+            'phone' => '+380501112299',
+            'password' => null,
+            'google_id' => null,
+            'phone_verified_at' => null,
+        ]);
+        $session = app(MobileSessionIssuer::class)->issueForCustomer($account, $source, 'Android phone', 'android');
+        $token = (string) $session->getAttribute('plain_token');
+        $deviceToken = MobileDeviceToken::factory()
+            ->for($account)
+            ->for($session, 'mobileSession')
+            ->for($source)
+            ->create([
+                'user_id' => null,
+                'customer_id' => $source->id,
+            ]);
+
+        $this->enableMobileOtp($account);
+        Http::fake([
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'mobile-profile-otp']]]),
+        ]);
+
+        $this->withToken($token)
+            ->putJson('/api/v1/mobile/customer/profile', [
+                'name' => 'Mobile Source',
+                'phone' => '+380501112299',
+                'email' => 'mobile-google-source@example.test',
+                'password' => 'new-secret',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'phone_verification_required');
+
+        $this->withToken($token)
+            ->postJson('/api/v1/mobile/customer/profile/phone/send', [
+                'phone' => '0501112299',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.phone', '+380501112299');
+
+        $this->withToken($token)
+            ->postJson('/api/v1/mobile/customer/profile/phone/verify', [
+                'phone' => '+380501112299',
+                'code' => '123456',
+                'name' => 'Mobile Source',
+                'email' => 'mobile-google-source@example.test',
+                'password' => 'new-secret',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', __('app.customer_profile_phone_verified'))
+            ->assertJsonPath('data.token', $token)
+            ->assertJsonPath('data.actor.customer.id', $target->id)
+            ->assertJsonPath('data.actor.customer.phone_verified', true);
+
+        $target->refresh();
+
+        $this->assertSame('mobile-google-source@example.test', $target->email);
+        $this->assertSame('mobile-google-source', $target->google_id);
+        $this->assertTrue(Hash::check('new-secret', $target->password));
+        $this->assertNotNull($target->phone_verified_at);
+        $this->assertDatabaseMissing('customers', ['id' => $source->id]);
+        $this->assertSame($target->id, $session->fresh()->customer_id);
+        $this->assertSame($target->id, $deviceToken->fresh()->customer_id);
+
+        $this->withToken($token)
+            ->getJson('/api/v1/mobile/me')
+            ->assertOk()
+            ->assertJsonPath('data.actor.customer.id', $target->id)
+            ->assertJsonPath('data.actor.customer.email', 'mobile-google-source@example.test');
+    }
+
+    public function test_mobile_customer_phone_otp_login_still_uses_existing_phone_customer(): void
+    {
+        [$account] = $this->groupClassContext([
+            'slug' => 'mobile-existing-phone-otp',
+            'country_code' => 'UA',
+        ]);
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Existing OTP Customer',
+            'phone' => '+380501112300',
+            'phone_verified_at' => null,
+        ]);
+
+        $this->enableMobileOtp($account, withTurnstile: true);
+        Http::fake([
+            'challenges.cloudflare.com/*' => Http::response(['success' => true]),
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'mobile-login-otp']]]),
+        ]);
+
+        $this->postJson('/api/v1/mobile/auth/customer/otp/send', [
+            'account_slug' => $account->slug,
+            'phone' => '0501112300',
+            'turnstile_token' => 'turnstile-token',
+        ])->assertOk()
+            ->assertJsonPath('data.phone', '+380501112300');
+
+        $this->postJson('/api/v1/mobile/auth/customer/otp/verify', [
+            'account_slug' => $account->slug,
+            'phone' => '+380501112300',
+            'code' => '123456',
+            'device_name' => 'Android phone',
+            'platform' => 'android',
+        ])->assertOk()
+            ->assertJsonPath('data.actor.customer.id', $customer->id)
+            ->assertJsonPath('data.actor.customer.phone', '+380501112300');
+
+        $this->assertSame(1, $account->customers()->count());
+        $this->assertNotNull($customer->fresh()->phone_verified_at);
     }
 
     public function test_mobile_google_redirect_rejects_untrusted_return_url(): void
@@ -404,6 +569,28 @@ class MobileApiTest extends TestCase
         $session = app(MobileSessionIssuer::class)->issueForCustomer($account, $customer, 'Test device', 'android');
 
         return (string) $session->getAttribute('plain_token');
+    }
+
+    private function enableMobileOtp(Account $account, bool $withTurnstile = false): void
+    {
+        CustomerAuthSetting::create([
+            'account_id' => $account->id,
+            'allow_otp' => true,
+            'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
+            'otp_provider' => 'turbosms',
+        ]);
+
+        $this->platformIntegration('turbosms', IntegrationCategory::Messaging->value, [
+            'api_token' => 'turbo-token',
+            'sms_sender' => 'Ladna',
+        ]);
+
+        if ($withTurnstile) {
+            $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
+                'site_key' => 'turnstile-site',
+                'secret_key' => 'turnstile-secret',
+            ]);
+        }
     }
 
     /**

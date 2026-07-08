@@ -3341,6 +3341,18 @@ function initActiveScrollTargets() {
     });
 }
 
+function initProfilePhoneMergeScroll() {
+    const mergePanel = document.querySelector('[data-profile-phone-merge]');
+
+    if (!mergePanel) {
+        return;
+    }
+
+    window.setTimeout(() => {
+        mergePanel.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }, 80);
+}
+
 function normalizeAssistantText(content) {
     return String(content || '')
         .replace(/\r\n?/g, '\n')
@@ -4190,6 +4202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCustomerTransferModals();
     initCopyButtons();
     initActiveScrollTargets();
+    initProfilePhoneMergeScroll();
     initAssistantChat();
     initAppUpdatePrompt();
     initPwaInstallPrompt();

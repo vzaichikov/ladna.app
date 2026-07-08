@@ -15,6 +15,7 @@ use App\Models\IntegrationSetting;
 use App\Models\Location;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Models\WebsiteLead;
 use App\Support\CustomerAuth\CustomerOtpService;
 use App\Support\CustomerAuth\CustomerRememberTokenService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -300,6 +301,188 @@ class CustomerAuthFlowTest extends TestCase
             ]);
 
         $this->assertTrue(Hash::check('old-password', $customer->fresh()->password));
+    }
+
+    public function test_customer_profile_duplicate_phone_requires_inline_otp_and_merges_identity(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'country_code' => 'UA',
+            'slug' => 'profile-phone-merge-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $source = Customer::factory()->for($account)->create([
+            'name' => null,
+            'email' => 'temporary-profile@example.test',
+            'phone' => null,
+            'password' => Hash::make('old-secret'),
+            'google_id' => null,
+        ]);
+        $target = Customer::factory()->for($account)->create([
+            'name' => 'Existing Phone Client',
+            'email' => null,
+            'phone' => '+380501112244',
+            'password' => null,
+            'phone_verified_at' => null,
+        ]);
+
+        $this->enableGooglePhoneOtp($account);
+        Http::fake([
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'profile-otp']]]),
+        ]);
+
+        $this->actingAs($source, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->put(route('customer.profile.update', $account->slug), [
+                'name' => 'Temporary Profile',
+                'phone' => '0501112244',
+                'email' => 'temporary-profile@example.test',
+                'password' => 'new-secret',
+                'password_confirmation' => 'new-secret',
+            ])
+            ->assertRedirect(route('customer.profile.complete', $account->slug))
+            ->assertSessionDoesntHaveErrors();
+
+        $this->get(route('customer.profile.complete', $account->slug))
+            ->assertOk()
+            ->assertSee('У нас вже є клієнт з таким номером телефону. Для того, щоб увійти з цим номером - підтвердіть його будь-ласка.', false)
+            ->assertSee('+380501112244', false)
+            ->assertSee(route('customer.profile.phone.send', $account->slug), false)
+            ->assertSeeInOrder([
+                'name="phone"',
+                'data-profile-phone-merge',
+                'name="email"',
+            ], false);
+
+        $this->post(route('customer.profile.phone.send', $account->slug))
+            ->assertRedirect(route('customer.profile.complete', $account->slug));
+
+        $this->get(route('customer.profile.complete', $account->slug))
+            ->assertOk()
+            ->assertSee('name="code"', false)
+            ->assertSee('readonly', false);
+
+        $this->post(route('customer.profile.phone.verify', $account->slug), [
+            'phone' => '+380501112244',
+            'code' => '123456',
+        ])->assertRedirect(route('customer.dashboard', $account->slug))
+            ->assertSessionHas('status', 'Телефон підтверджено, дякую');
+
+        $target->refresh();
+
+        $this->assertAuthenticatedAs($target, 'customer');
+        $this->assertSame('Existing Phone Client', $target->name);
+        $this->assertSame('temporary-profile@example.test', $target->email);
+        $this->assertTrue(Hash::check('new-secret', $target->password));
+        $this->assertNotNull($target->phone_verified_at);
+        $this->assertDatabaseMissing('customers', ['id' => $source->id]);
+        $this->assertSame(1, $account->customers()->count());
+    }
+
+    public function test_customer_profile_wrong_otp_keeps_temporary_customer_unmerged(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'country_code' => 'UA',
+            'slug' => 'profile-phone-wrong-otp-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $source = Customer::factory()->for($account)->create([
+            'name' => null,
+            'email' => 'wrong-otp-source@example.test',
+            'phone' => null,
+            'password' => Hash::make('old-secret'),
+        ]);
+        $target = Customer::factory()->for($account)->create([
+            'email' => null,
+            'phone' => '+380501112255',
+            'phone_verified_at' => null,
+        ]);
+
+        $this->enableGooglePhoneOtp($account);
+        Http::fake([
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'profile-otp']]]),
+        ]);
+
+        $this->actingAs($source, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->put(route('customer.profile.update', $account->slug), [
+                'name' => 'Wrong OTP Source',
+                'phone' => '+380501112255',
+                'email' => 'wrong-otp-source@example.test',
+                'password' => 'new-secret',
+                'password_confirmation' => 'new-secret',
+            ])
+            ->assertRedirect(route('customer.profile.complete', $account->slug));
+
+        $this->post(route('customer.profile.phone.send', $account->slug))
+            ->assertRedirect(route('customer.profile.complete', $account->slug));
+
+        $this->from(route('customer.profile.complete', $account->slug))
+            ->post(route('customer.profile.phone.verify', $account->slug), [
+                'phone' => '+380501112255',
+                'code' => '000000',
+            ])
+            ->assertRedirect(route('customer.profile.complete', $account->slug))
+            ->assertSessionHasErrors('code');
+
+        $this->assertAuthenticatedAs($source, 'customer');
+        $this->assertDatabaseHas('customers', ['id' => $source->id]);
+        $this->assertNull($target->fresh()->email);
+        $this->assertNull($target->fresh()->phone_verified_at);
+    }
+
+    public function test_customer_profile_duplicate_phone_preserves_source_with_business_history(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'country_code' => 'UA',
+            'slug' => 'profile-phone-history-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $source = Customer::factory()->for($account)->create([
+            'name' => null,
+            'email' => 'history-source@example.test',
+            'phone' => null,
+            'password' => Hash::make('old-secret'),
+        ]);
+        $target = Customer::factory()->for($account)->create([
+            'email' => null,
+            'phone' => '+380501112266',
+        ]);
+        WebsiteLead::factory()->for($account)->for($source)->create([
+            'phone' => '+380501112200',
+        ]);
+
+        $this->enableGooglePhoneOtp($account);
+        Http::fake([
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'profile-otp']]]),
+        ]);
+
+        $this->actingAs($source, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->put(route('customer.profile.update', $account->slug), [
+                'name' => 'History Source',
+                'phone' => '+380501112266',
+                'email' => 'history-source@example.test',
+                'password' => 'new-secret',
+                'password_confirmation' => 'new-secret',
+            ])
+            ->assertRedirect(route('customer.profile.complete', $account->slug));
+
+        $this->post(route('customer.profile.phone.send', $account->slug))
+            ->assertRedirect(route('customer.profile.complete', $account->slug));
+
+        $this->from(route('customer.profile.complete', $account->slug))
+            ->post(route('customer.profile.phone.verify', $account->slug), [
+                'phone' => '+380501112266',
+                'code' => '123456',
+            ])
+            ->assertRedirect(route('customer.profile.complete', $account->slug))
+            ->assertSessionHasErrors([
+                'phone' => __('app.customer_identity_merge_source_has_history'),
+            ]);
+
+        $this->assertAuthenticatedAs($source, 'customer');
+        $this->assertDatabaseHas('customers', ['id' => $source->id]);
+        $this->assertNull($target->fresh()->email);
     }
 
     public function test_home_redirects_logged_in_customer_to_customer_dashboard(): void
@@ -758,6 +941,76 @@ class CustomerAuthFlowTest extends TestCase
         $this->assertNotNull($customer->phone_verified_at);
         $this->assertSame(1, $account->customers()->count());
         $this->assertAuthenticatedAs($customer, 'customer');
+    }
+
+    public function test_google_login_merges_email_only_source_into_existing_phone_customer(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'country_code' => 'UA',
+            'slug' => 'google-phone-email-source-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $source = Customer::factory()->for($account)->create([
+            'name' => null,
+            'email' => 'google-source@example.test',
+            'phone' => null,
+            'password' => Hash::make('source-password'),
+            'google_id' => null,
+            'email_verified_at' => null,
+        ]);
+        $target = Customer::factory()->for($account)->create([
+            'name' => 'Phone Target',
+            'email' => null,
+            'phone' => '+380501112277',
+            'password' => null,
+            'google_id' => null,
+            'phone_verified_at' => null,
+        ]);
+
+        $this->enableGooglePhoneOtp($account);
+
+        $redirect = $this->get(route('customer.google.redirect', $account->slug))
+            ->assertRedirect()
+            ->headers->get('Location');
+
+        parse_str(parse_url((string) $redirect, PHP_URL_QUERY) ?: '', $query);
+
+        Http::fake([
+            'oauth2.googleapis.com/token' => Http::response(['access_token' => 'google-access-token']),
+            'openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'sub' => 'google-subject-email-source',
+                'email' => 'google-source@example.test',
+                'email_verified' => true,
+                'name' => 'Google Source Name',
+            ]),
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'otp-email-source']]]),
+        ]);
+
+        $this->get(route('customer.google.callback', [
+            'state' => $query['state'],
+            'code' => 'auth-code',
+        ]))->assertRedirect(route('customer.google.phone', $account->slug));
+
+        $this->post(route('customer.google.phone.send', $account->slug), [
+            'phone' => '0501112277',
+        ])->assertRedirect(route('customer.google.phone', $account->slug));
+
+        $this->post(route('customer.google.phone.verify', $account->slug), [
+            'phone' => '+380501112277',
+            'code' => '123456',
+        ])->assertRedirect(route('customer.dashboard', $account->slug));
+
+        $target->refresh();
+
+        $this->assertAuthenticatedAs($target, 'customer');
+        $this->assertSame('Phone Target', $target->name);
+        $this->assertSame('google-source@example.test', $target->email);
+        $this->assertSame('google-subject-email-source', $target->google_id);
+        $this->assertTrue(Hash::check('source-password', $target->password));
+        $this->assertNotNull($target->email_verified_at);
+        $this->assertNotNull($target->phone_verified_at);
+        $this->assertDatabaseMissing('customers', ['id' => $source->id]);
+        $this->assertSame(1, $account->customers()->count());
     }
 
     public function test_google_login_creates_customer_after_verified_phone_when_no_phone_match_exists(): void

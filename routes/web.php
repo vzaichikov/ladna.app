@@ -220,6 +220,10 @@ Route::prefix('{accountSlug}/customer')
         Route::middleware(EnsureCustomerIsAuthenticated::class)->group(function (): void {
             Route::get('profile/complete', [CustomerAuthController::class, 'editProfile'])->name('profile.complete');
             Route::put('profile', [CustomerAuthController::class, 'updateProfile'])->name('profile.update');
+            Route::post('profile/phone/send', [CustomerAuthController::class, 'sendProfilePhoneOtp'])->middleware('throttle:customer-otp')->name('profile.phone.send');
+            Route::post('profile/phone/resend', [CustomerAuthController::class, 'resendProfilePhoneOtp'])->middleware('throttle:customer-otp')->name('profile.phone.resend');
+            Route::post('profile/phone/change', [CustomerAuthController::class, 'changeProfilePhone'])->name('profile.phone.change');
+            Route::post('profile/phone/verify', [CustomerAuthController::class, 'verifyProfilePhoneOtp'])->middleware('throttle:customer-login')->name('profile.phone.verify');
             Route::post('logout', [CustomerAuthController::class, 'logout'])->name('logout');
 
             Route::middleware(EnsureCustomerProfileIsComplete::class)->group(function (): void {

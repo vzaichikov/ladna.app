@@ -56,6 +56,9 @@ class LadnaOpenApiSpec
                 '/api/v1/mobile/customer/bookings' => $this->mobileCustomerBookingsPath(),
                 '/api/v1/mobile/customer/passes' => $this->mobileCustomerPassesPath(),
                 '/api/v1/mobile/customer/profile' => $this->mobileCustomerProfilePath(),
+                '/api/v1/mobile/customer/profile/phone/send' => $this->mobileCustomerProfilePhoneOtpSendPath('Sends an OTP challenge to confirm a duplicate profile phone before merging customer identities.'),
+                '/api/v1/mobile/customer/profile/phone/resend' => $this->mobileCustomerProfilePhoneOtpSendPath('Resends an OTP challenge for the pending duplicate profile phone confirmation.'),
+                '/api/v1/mobile/customer/profile/phone/verify' => $this->mobileCustomerProfilePhoneOtpVerifyPath(),
                 '/api/v1/mobile/staff/customers' => $this->mobileStaffCustomersPath(),
                 '/api/v1/website-leads' => $this->websiteLeadPath(),
                 '/mcp/ladna-studio' => $this->mcpStudioPath(),
@@ -608,11 +611,55 @@ class LadnaOpenApiSpec
         return [
             'put' => [
                 'tags' => ['Mobile customer'],
-                'summary' => 'Updates the current customer profile for the session account.',
+                'summary' => 'Updates the current customer profile for the session account. If the phone belongs to another customer in this studio, returns a validation response with code phone_verification_required.',
                 'security' => $this->mobileSecurity(),
                 'requestBody' => $this->jsonRequestBody('#/components/schemas/MobileCustomerProfileUpdateRequest'),
                 'responses' => [
                     '200' => $this->jsonDataResponse('Updated customer profile.', ['$ref' => '#/components/schemas/MobileCustomer']),
+                    '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '403' => ['$ref' => '#/components/responses/Forbidden'],
+                    '422' => ['$ref' => '#/components/responses/ValidationError'],
+                    '429' => ['$ref' => '#/components/responses/TooManyRequests'],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mobileCustomerProfilePhoneOtpSendPath(string $summary): array
+    {
+        return [
+            'post' => [
+                'tags' => ['Mobile customer'],
+                'summary' => $summary,
+                'security' => $this->mobileSecurity(),
+                'requestBody' => $this->jsonRequestBody('#/components/schemas/MobileCustomerProfilePhoneOtpSendRequest'),
+                'responses' => [
+                    '200' => $this->jsonDataResponse('OTP challenge send result.', ['$ref' => '#/components/schemas/MobileCustomerOtpSendResponse']),
+                    '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '403' => ['$ref' => '#/components/responses/Forbidden'],
+                    '422' => ['$ref' => '#/components/responses/ValidationError'],
+                    '429' => ['$ref' => '#/components/responses/TooManyRequests'],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mobileCustomerProfilePhoneOtpVerifyPath(): array
+    {
+        return [
+            'post' => [
+                'tags' => ['Mobile customer'],
+                'summary' => 'Verifies a duplicate profile phone OTP, merges the temporary email or Google identity into the existing phone customer, and returns the refreshed customer session.',
+                'security' => $this->mobileSecurity(),
+                'requestBody' => $this->jsonRequestBody('#/components/schemas/MobileCustomerProfilePhoneOtpVerifyRequest'),
+                'responses' => [
+                    '200' => $this->jsonDataResponse('Merged customer session.', ['$ref' => '#/components/schemas/MobileCustomerSessionResponse']),
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '403' => ['$ref' => '#/components/responses/Forbidden'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
@@ -958,6 +1005,7 @@ class LadnaOpenApiSpec
                             'type' => 'object',
                             'properties' => [
                                 'message' => ['type' => 'string'],
+                                'code' => ['type' => ['string', 'null'], 'example' => 'phone_verification_required'],
                                 'errors' => ['type' => 'object'],
                             ],
                         ],
@@ -1166,6 +1214,24 @@ class LadnaOpenApiSpec
                 'properties' => [
                     'name' => ['type' => 'string'],
                     'phone' => ['type' => 'string'],
+                    'email' => ['type' => ['string', 'null'], 'format' => 'email'],
+                    'password' => ['type' => ['string', 'null'], 'minLength' => 6],
+                ],
+            ],
+            'MobileCustomerProfilePhoneOtpSendRequest' => [
+                'type' => 'object',
+                'required' => ['phone'],
+                'properties' => [
+                    'phone' => ['type' => 'string', 'example' => '+380671112233'],
+                ],
+            ],
+            'MobileCustomerProfilePhoneOtpVerifyRequest' => [
+                'type' => 'object',
+                'required' => ['phone', 'code', 'name'],
+                'properties' => [
+                    'phone' => ['type' => 'string', 'example' => '+380671112233'],
+                    'code' => ['type' => 'string', 'example' => '123456'],
+                    'name' => ['type' => 'string'],
                     'email' => ['type' => ['string', 'null'], 'format' => 'email'],
                     'password' => ['type' => ['string', 'null'], 'minLength' => 6],
                 ],

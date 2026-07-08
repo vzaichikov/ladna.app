@@ -57,6 +57,9 @@ Route::prefix('v1/mobile')->name('api.v1.mobile.')->group(function (): void {
         Route::get('customer/bookings', [MobileCustomerController::class, 'bookings'])->name('customer.bookings');
         Route::get('customer/passes', [MobileCustomerController::class, 'passes'])->name('customer.passes');
         Route::put('customer/profile', [MobileCustomerController::class, 'updateProfile'])->name('customer.profile.update');
+        Route::post('customer/profile/phone/send', [MobileCustomerController::class, 'sendProfilePhoneOtp'])->name('customer.profile.phone.send');
+        Route::post('customer/profile/phone/resend', [MobileCustomerController::class, 'resendProfilePhoneOtp'])->name('customer.profile.phone.resend');
+        Route::post('customer/profile/phone/verify', [MobileCustomerController::class, 'verifyProfilePhoneOtp'])->name('customer.profile.phone.verify');
         Route::get('staff/customers', [MobileCustomerController::class, 'search'])->name('staff.customers.index');
     });
 });

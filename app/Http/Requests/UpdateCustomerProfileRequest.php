@@ -31,9 +31,6 @@ class UpdateCustomerProfileRequest extends FormRequest
                 'required',
                 'string',
                 'max:255',
-                Rule::unique((new Customer)->getTable(), 'phone')
-                    ->where('account_id', $accountId)
-                    ->ignore($customer),
             ],
             'email' => [
                 'nullable',

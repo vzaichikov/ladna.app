@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.81.0',
+                'date' => '2026-07-08',
+                'title' => 'Phone-confirmed customer identity merge',
+                'items' => ['Customer email and Google login profiles that enter an existing studio phone number now get an inline OTP confirmation instead of a duplicate-phone error. After the phone is confirmed, Ladna merges the login identity into the existing phone customer, removes only temporary identity-only rows, preserves customer history, and documents the same mobile API flow for the native app.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.80.0',
                 'date' => '2026-07-08',
                 'title' => 'Studio-scoped web apps',
@@ -723,6 +730,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.81.0',
+                'date' => '2026-07-08',
+                'title' => 'Обʼєднання клієнта після підтвердження телефону',
+                'items' => ['Клієнти, які входять через email або Google і вводять вже наявний у студії номер телефону, тепер бачать inline підтвердження OTP замість помилки дублювання. Після підтвердження Ladna переносить email, пароль або Google-ідентичність у наявного клієнта з цим телефоном, видаляє лише тимчасові identity-only записи, зберігає історію клієнта та документує такий самий mobile API flow для native app.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.80.0',
                 'date' => '2026-07-08',
