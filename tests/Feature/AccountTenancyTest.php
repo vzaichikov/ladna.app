@@ -27,7 +27,7 @@ class AccountTenancyTest extends TestCase
             ->get(route('dashboard.accounts.create'))
             ->assertForbidden();
 
-        $this->actingAs($user)->post('/dashboard/accounts', [
+        $this->actingAs($user)->post(route('dashboard.accounts.store', absolute: false), [
             'name' => 'Studio Test',
             'default_language' => 'uk',
             'default_currency' => 'UAH',
@@ -83,7 +83,7 @@ class AccountTenancyTest extends TestCase
                 'default_currency' => 'UAH',
                 'brand_color' => '#3B223F',
                 'timezone' => 'Europe/Kyiv',
-                'logo' => UploadedFile::fake()->image('studio-logo.png', 256, 256),
+                'logo' => UploadedFile::fake()->image('studio-logo.png', 512, 512),
             ])
             ->assertRedirect(route('dashboard.accounts.general-settings.edit', $account));
 
@@ -91,6 +91,60 @@ class AccountTenancyTest extends TestCase
 
         $this->assertNotNull($account->logo_path);
         Storage::disk('public')->assertExists($account->logo_path);
+    }
+
+    public function test_studio_logo_upload_requires_png_at_least_512_pixels(): void
+    {
+        Storage::fake('public');
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $payload = [
+            'name' => $account->name,
+            'slug' => $account->slug,
+            'default_language' => 'uk',
+            'default_currency' => 'UAH',
+            'brand_color' => '#3B223F',
+            'timezone' => 'Europe/Kyiv',
+        ];
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                ...$payload,
+                'logo' => UploadedFile::fake()->image('studio-logo.jpg', 512, 512),
+            ])
+            ->assertSessionHasErrors('logo');
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                ...$payload,
+                'logo' => UploadedFile::fake()->image('studio-logo.png', 511, 512),
+            ])
+            ->assertSessionHasErrors('logo');
+
+        $this->assertNull($account->fresh()->logo_path);
+    }
+
+    public function test_studio_owner_cannot_update_account_to_reserved_public_slug(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['slug' => 'reserved-owner-studio']);
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'name' => $account->name,
+                'slug' => 'app',
+                'default_language' => 'uk',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+            ])
+            ->assertSessionHasErrors('slug');
+
+        $this->assertSame('reserved-owner-studio', $account->fresh()->slug);
     }
 
     public function test_studio_owner_can_update_own_account_profile_from_account_edit(): void

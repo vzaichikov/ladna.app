@@ -19,6 +19,8 @@ class ExampleTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee($version);
         $response->assertSee('changelog.', false);
+        $response->assertSee('href="'.route('demo.signup.create', [], false).'"', false);
+        $this->assertSame(1, substr_count($response->getContent(), 'href="'.route('login').'"'));
     }
 
     public function test_landing_language_urls_control_the_visible_locale(): void
@@ -47,14 +49,14 @@ class ExampleTest extends TestCase
     public function test_login_language_urls_control_the_visible_locale(): void
     {
         $this->withSession(['locale' => 'en'])
-            ->get('/login')
+            ->get(route('login', absolute: false))
             ->assertStatus(200)
             ->assertSee('Увійдіть, щоб керувати розкладом')
             ->assertSee('href="'.route('login.en').'"', false)
             ->assertSessionHas('locale', 'uk');
 
         $this->withSession(['locale' => 'uk'])
-            ->get('/en/login')
+            ->get(route('login.en', absolute: false))
             ->assertStatus(200)
             ->assertSee('Log in to manage schedules')
             ->assertSee('href="'.route('login').'"', false)

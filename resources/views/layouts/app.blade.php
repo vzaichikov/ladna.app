@@ -577,6 +577,7 @@
         </div>
 
         <x-ui.update-reload-toast :revision="$applicationRevision" desktop-offset />
+        <x-ui.pwa-install-button desktop-offset />
 
         @stack('modals')
 

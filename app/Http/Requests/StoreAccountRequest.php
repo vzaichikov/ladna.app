@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\NotReservedPublicSlug;
 use App\Rules\PublicSupportLink;
 use App\Rules\PublicSupportPhone;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -28,13 +29,13 @@ class StoreAccountRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:255', new NotReservedPublicSlug],
             'default_language' => ['required', Rule::in(['uk', 'en'])],
             'country_code' => ['required', Rule::in(array_keys(config('ladna.countries')))],
             'default_currency' => ['required', Rule::in(['UAH', 'USD', 'EUR'])],
             'brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'studio_slogan' => ['nullable', 'string', 'max:255'],
-            'logo' => ['nullable', File::image()->types(['png', 'jpg', 'jpeg', 'webp'])->max('2mb')],
+            'logo' => ['nullable', File::image()->types(['png'])->max('2mb')->dimensions(Rule::dimensions()->minWidth(512)->minHeight(512))],
             'timezone' => ['nullable', 'timezone'],
             'legal_entity_name' => ['nullable', 'string', 'max:255'],
             'tax_id' => ['nullable', 'string', 'max:255'],

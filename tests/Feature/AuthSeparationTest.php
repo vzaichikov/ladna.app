@@ -31,7 +31,7 @@ class AuthSeparationTest extends TestCase
         $customer = Customer::factory()->create();
 
         $this->actingAs($customer, 'customer')
-            ->get('/dashboard')
-            ->assertRedirect('/login');
+            ->get(route('dashboard.index', absolute: false))
+            ->assertRedirect(route('login', absolute: false));
     }
 }

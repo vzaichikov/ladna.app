@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
 use App\Models\Location;
 use App\Support\PublicScheduleViewRegistry;
+use App\Support\ReservedPublicSlugs;
 use App\Support\SlugGenerator;
 use App\Support\StudioDashboardData;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -179,7 +180,7 @@ class AccountController extends Controller
     {
         return SlugGenerator::unique($source, 'account', fn (string $candidate): bool => Account::where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists());
+            ->exists(), ReservedPublicSlugs::all());
     }
 
     private function storeLogo(StoreAccountRequest|UpdateAccountRequest $request, Account $account): void

@@ -693,6 +693,85 @@ class PlatformAdminTest extends TestCase
         $this->assertSame($plan->id, $account->subscription?->subscription_plan_id);
     }
 
+    public function test_platform_account_create_and_update_reject_reserved_public_slugs(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $account = Account::factory()->create(['slug' => 'platform-reserved-studio']);
+
+        $this->actingAs($platformAdmin)
+            ->post(route('platform.accounts.store'), [
+                'name' => 'Reserved Platform Studio',
+                'slug' => 'app',
+                'status' => 'active',
+                'default_language' => 'uk',
+                'default_currency' => 'UAH',
+                'timezone' => 'Europe/Kyiv',
+                'subscription_plan_id' => null,
+                'subscription_status' => 'active',
+                'owner_name' => 'Owner',
+                'owner_email' => 'reserved-platform-owner@example.com',
+                'owner_password' => 'password',
+            ])
+            ->assertSessionHasErrors('slug');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.accounts.update', $account), [
+                'name' => $account->name,
+                'slug' => 'help',
+                'status' => 'active',
+                'default_language' => 'uk',
+                'default_currency' => 'UAH',
+                'timezone' => 'Europe/Kyiv',
+                'subscription_plan_id' => null,
+                'subscription_status' => 'active',
+            ])
+            ->assertSessionHasErrors('slug');
+
+        $this->assertFalse(Account::where('slug', 'app')->exists());
+        $this->assertSame('platform-reserved-studio', $account->fresh()->slug);
+    }
+
+    public function test_platform_account_logo_upload_requires_png_at_least_512_pixels(): void
+    {
+        Storage::fake('public');
+
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $account = Account::factory()->create();
+
+        $this->actingAs($platformAdmin)
+            ->post(route('platform.accounts.store'), [
+                'name' => 'Logo Validation Studio',
+                'slug' => 'logo-validation-studio',
+                'status' => 'active',
+                'default_language' => 'uk',
+                'default_currency' => 'UAH',
+                'timezone' => 'Europe/Kyiv',
+                'subscription_plan_id' => null,
+                'subscription_status' => 'active',
+                'owner_name' => 'Owner',
+                'owner_email' => 'logo-validation-owner@example.com',
+                'owner_password' => 'password',
+                'logo' => UploadedFile::fake()->image('studio-logo.jpg', 512, 512),
+            ])
+            ->assertSessionHasErrors('logo');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.accounts.update', $account), [
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'status' => 'active',
+                'default_language' => 'uk',
+                'default_currency' => 'UAH',
+                'timezone' => 'Europe/Kyiv',
+                'subscription_plan_id' => null,
+                'subscription_status' => 'active',
+                'logo' => UploadedFile::fake()->image('studio-logo.png', 512, 511),
+            ])
+            ->assertSessionHasErrors('logo');
+
+        $this->assertNull($account->fresh()->logo_path);
+    }
+
     public function test_platform_admin_deletes_studio_and_only_dedicated_owner_user(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();

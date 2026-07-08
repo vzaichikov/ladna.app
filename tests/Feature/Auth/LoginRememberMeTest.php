@@ -18,13 +18,13 @@ class LoginRememberMeTest extends TestCase
             'password' => 'correct-password',
         ]);
 
-        $response = $this->post('/login', [
+        $response = $this->post(route('login', absolute: false), [
             'email' => $user->email,
             'password' => 'correct-password',
             'remember' => '1',
         ]);
 
-        $response->assertRedirect('/dashboard');
+        $response->assertRedirect(route('dashboard.index', absolute: false));
         $this->assertAuthenticatedAs($user, 'web');
 
         $rememberCookie = collect($response->headers->getCookies())

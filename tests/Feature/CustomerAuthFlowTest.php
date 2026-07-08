@@ -285,7 +285,7 @@ class CustomerAuthFlowTest extends TestCase
         ]);
 
         $this->actingAs($customer, 'customer')
-            ->get('/login')
+            ->get(route('login', absolute: false))
             ->assertRedirect(route('customer.dashboard', $account->slug));
     }
 

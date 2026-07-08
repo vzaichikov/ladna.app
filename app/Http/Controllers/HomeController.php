@@ -33,6 +33,19 @@ class HomeController extends Controller
         return $this->show($request, 'en');
     }
 
+    public function app(Request $request): RedirectResponse
+    {
+        if ($redirect = $this->redirectForAuthenticatedUser($request)) {
+            return $redirect;
+        }
+
+        if ($redirect = $this->redirectForAuthenticatedCustomer($request)) {
+            return $redirect;
+        }
+
+        return redirect()->route('login');
+    }
+
     private function show(Request $request, string $locale): View|RedirectResponse
     {
         App::setLocale($locale);

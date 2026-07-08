@@ -14,6 +14,8 @@ use App\Models\AccountSubscription;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Support\ReservedPublicSlugs;
+use App\Support\SlugGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -131,12 +133,15 @@ class CreateDemoSignup
 
     private function uniqueSlug(string $source): string
     {
-        $base = Str::slug($source);
-        $slugBase = $base !== '' ? $base : 'studio';
+        $slugBase = SlugGenerator::base($source, 'studio');
         $candidate = $slugBase;
         $suffix = 1;
 
-        while (AccountSignupRequest::where('account_slug', $candidate)->exists() || Account::where('slug', $candidate)->exists()) {
+        while (
+            ReservedPublicSlugs::isReserved($candidate)
+            || AccountSignupRequest::where('account_slug', $candidate)->exists()
+            || Account::where('slug', $candidate)->exists()
+        ) {
             $candidate = $slugBase.'-'.$suffix;
             $suffix++;
         }

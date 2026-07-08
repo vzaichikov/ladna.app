@@ -10,6 +10,7 @@ use App\Support\SaasBilling\CreateDemoSignup;
 use App\Support\SaasBilling\MonopaySaasBilling;
 use App\Support\SaasBilling\SaasBillingPlans;
 use App\Support\SaasBilling\StartAccountSubscriptionPaymentCheckout;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,10 +19,16 @@ use Throwable;
 
 class PublicDemoSignupController extends Controller
 {
-    public function create(SaasBillingPlans $plans): View
+    public function create(SaasBillingPlans $plans): View|RedirectResponse
     {
+        try {
+            $demoPlan = $plans->demoPlan();
+        } catch (ModelNotFoundException) {
+            return redirect()->to(route('home', [], false).'#pricing');
+        }
+
         return view('demo-signup.create', [
-            'demoPlan' => $plans->demoPlan(),
+            'demoPlan' => $demoPlan,
             'standardPlan' => $plans->standardPlan(),
         ]);
     }

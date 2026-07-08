@@ -286,6 +286,7 @@ return [
     'app_update_available_title' => 'Ladna was updated',
     'app_update_available_body' => 'Reload the page to use the newest interface and avoid stale screens.',
     'reload_page' => 'Reload page',
+    'install_app' => 'Install app',
     'subscription_plan_created' => 'Subscription plan created.',
     'subscription_plan_updated' => 'Subscription plan updated.',
     'subscription_plan_deleted' => 'Subscription plan deleted.',

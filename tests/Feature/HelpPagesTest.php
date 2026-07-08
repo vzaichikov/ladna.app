@@ -8,7 +8,7 @@ class HelpPagesTest extends TestCase
 {
     public function test_help_index_is_public_and_links_to_all_owner_pages(): void
     {
-        $response = $this->get('/help');
+        $response = $this->get(route('help.index', absolute: false));
 
         $response->assertStatus(200);
         $response->assertSee('Допомога для власниці студії', false);
@@ -36,7 +36,7 @@ class HelpPagesTest extends TestCase
 
     public function test_unknown_help_page_returns_404(): void
     {
-        $this->get('/help/not-a-page')->assertNotFound();
+        $this->get('/app/help/not-a-page')->assertNotFound();
     }
 
     public function test_passes_prices_help_explains_both_validity_terms(): void

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.80.0',
+                'date' => '2026-07-08',
+                'title' => 'Studio-scoped web apps',
+                'items' => ['Moved the central Ladna web app to the `/app` scope, added separate installable studio web apps under each studio slug, retired the old root service worker, and tightened studio logo uploads so new PWA icons must come from PNG images at least 512x512 pixels. Reserved system slugs now stay unavailable for studios and demo signup.', 'Cleaned up the landing hero so login stays only in the header, and made the create-studio CTA avoid a dead demo page when public demo signup is not currently available.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.79.0',
                 'date' => '2026-07-08',
                 'title' => 'Trainer activity directions',
@@ -716,6 +723,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.80.0',
+                'date' => '2026-07-08',
+                'title' => 'Веб-застосунки окремо для студій',
+                'items' => ['Центральний веб-застосунок Ladna перенесено в scope `/app`, для кожної студії додано окремий встановлюваний веб-застосунок у її slug, старий root service worker тепер сам себе прибирає, а нові логотипи для PWA-іконок мають бути PNG щонайменше 512x512 пікселів. Системні slug-и більше не можна зайняти студією або демо-реєстрацією.', 'У hero-блоці лендингу залишено тільки основні дії без дубля входу, а CTA створення студії більше не веде на мертву демо-сторінку, коли публічна демо-реєстрація тимчасово недоступна.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.79.0',
                 'date' => '2026-07-08',

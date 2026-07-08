@@ -108,20 +108,57 @@ Route::get('/api-docs', [ApiDocumentationController::class, 'show'])->name('api-
 Route::get('/api-docs/openapi.json', [ApiDocumentationController::class, 'openApi'])->name('api-docs.openapi');
 Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class, SetLocale::class])
     ->group(function (): void {
-        Route::get('/app-version.json', [PwaController::class, 'version'])->name('pwa.version');
-        Route::get('/manifest.webmanifest', [PwaController::class, 'manifest'])->name('pwa.manifest');
-        Route::get('/offline.html', [PwaController::class, 'offline'])->name('pwa.offline');
-        Route::get('/service-worker', [PwaController::class, 'serviceWorker'])->name('pwa.service-worker');
+        Route::get('/app/app-version.json', [PwaController::class, 'version'])->name('pwa.version');
+        Route::get('/app/manifest.webmanifest', [PwaController::class, 'manifest'])->name('pwa.manifest');
+        Route::get('/app/offline.html', [PwaController::class, 'offline'])->name('pwa.offline');
+        Route::get('/app/service-worker', [PwaController::class, 'serviceWorker'])->name('pwa.service-worker');
+
+        Route::get('/app-version.json', [PwaController::class, 'version'])->name('pwa.legacy-version');
+        Route::get('/manifest.webmanifest', [PwaController::class, 'manifest'])->name('pwa.legacy-manifest');
+        Route::get('/offline.html', [PwaController::class, 'offline'])->name('pwa.legacy-offline');
+        Route::get('/service-worker', [PwaController::class, 'retiringServiceWorker'])->name('pwa.retiring-service-worker');
+
+        Route::get('/{accountSlug}/app-version.json', [PwaController::class, 'version'])
+            ->where('accountSlug', '[A-Za-z0-9-]+')
+            ->name('pwa.studio.version');
+        Route::get('/{accountSlug}/manifest.webmanifest', [PwaController::class, 'studioManifest'])
+            ->where('accountSlug', '[A-Za-z0-9-]+')
+            ->name('pwa.studio.manifest');
+        Route::get('/{accountSlug}/offline.html', [PwaController::class, 'studioOffline'])
+            ->where('accountSlug', '[A-Za-z0-9-]+')
+            ->name('pwa.studio.offline');
+        Route::get('/{accountSlug}/service-worker', [PwaController::class, 'studioServiceWorker'])
+            ->where('accountSlug', '[A-Za-z0-9-]+')
+            ->name('pwa.studio.service-worker');
+        Route::get('/{accountSlug}/pwa/icon-{size}.png', [PwaController::class, 'studioIcon'])
+            ->where('accountSlug', '[A-Za-z0-9-]+')
+            ->where('size', '180|192|512')
+            ->name('pwa.studio.icon');
     });
-Route::get('/help', [HelpController::class, 'index'])->name('help.index');
-Route::get('/help/{slug}', [HelpController::class, 'show'])
+
+$appCompatibilityRedirect = static function (Request $request, string $path): RedirectResponse {
+    $query = $request->getQueryString();
+    $target = '/app'.($path !== '' ? '/'.ltrim($path, '/') : '');
+
+    return redirect()->to($target.($query ? '?'.$query : ''), 308);
+};
+
+Route::get('/app', [HomeController::class, 'app'])->name('app.index');
+
+Route::get('/app/help', [HelpController::class, 'index'])->name('help.index');
+Route::get('/app/help/{slug}', [HelpController::class, 'show'])
     ->where('slug', '[A-Za-z0-9-]+')
     ->name('help.show');
 
+Route::middleware('guest:web')
+    ->prefix('app')
+    ->group(function (): void {
+        Route::get('login', [LoginController::class, 'create'])->name('login');
+        Route::get('en/login', [LoginController::class, 'createEnglish'])->name('login.en');
+        Route::post('login', [LoginController::class, 'store'])->middleware('throttle:login');
+    });
+
 Route::middleware('guest:web')->group(function (): void {
-    Route::get('/login', [LoginController::class, 'create'])->name('login');
-    Route::get('/en/login', [LoginController::class, 'createEnglish'])->name('login.en');
-    Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
     Route::any('/register', function (): void {
         abort(404);
     });
@@ -131,7 +168,18 @@ Route::middleware('guest:web')->group(function (): void {
 
 Route::get('/demo/{accountSignupRequest}/return', [PublicDemoSignupController::class, 'returned'])->name('demo.return');
 
-Route::post('/logout', [LoginController::class, 'destroy'])
+Route::any('/login', fn (Request $request): RedirectResponse => $appCompatibilityRedirect($request, 'login'));
+Route::any('/en/login', fn (Request $request): RedirectResponse => $appCompatibilityRedirect($request, 'en/login'));
+Route::any('/dashboard/{legacyPath?}', fn (Request $request, ?string $legacyPath = null): RedirectResponse => $appCompatibilityRedirect($request, 'dashboard'.($legacyPath ? '/'.$legacyPath : '')))
+    ->where('legacyPath', '.*');
+Route::any('/platform/{legacyPath?}', fn (Request $request, ?string $legacyPath = null): RedirectResponse => $appCompatibilityRedirect($request, 'platform'.($legacyPath ? '/'.$legacyPath : '')))
+    ->where('legacyPath', '.*');
+Route::get('/help/{legacyPath?}', fn (Request $request, ?string $legacyPath = null): RedirectResponse => $appCompatibilityRedirect($request, 'help'.($legacyPath ? '/'.$legacyPath : '')))
+    ->where('legacyPath', '.*');
+Route::post('/logout', fn (Request $request): RedirectResponse => $appCompatibilityRedirect($request, 'logout'))
+    ->middleware('auth:web');
+
+Route::post('/app/logout', [LoginController::class, 'destroy'])
     ->middleware('auth:web')
     ->name('logout');
 
@@ -187,7 +235,7 @@ Route::get('/{accountSlug}/client', fn (string $accountSlug): RedirectResponse =
     ->name('customer.studio.dashboard');
 
 Route::middleware(['auth:web', 'can:accessPlatform'])
-    ->prefix('platform')
+    ->prefix('app/platform')
     ->name('platform.')
     ->group(function (): void {
         Route::get('/', PlatformController::class)->name('index');
@@ -216,7 +264,7 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
     });
 
 Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
-    ->prefix('dashboard')
+    ->prefix('app/dashboard')
     ->name('dashboard.')
     ->group(function (): void {
         Route::get('/', DashboardController::class)->name('index');

@@ -59,13 +59,17 @@ class SlugGenerator
         return $source !== '' ? $source : $fallback;
     }
 
-    public static function unique(?string $source, string $fallback, Closure $isTaken): string
+    /**
+     * @param  list<string>  $reserved
+     */
+    public static function unique(?string $source, string $fallback, Closure $isTaken, array $reserved = []): string
     {
         $base = self::base($source, $fallback);
         $candidate = $base;
+        $reservedLookup = array_flip($reserved);
         $suffix = 2;
 
-        while ($isTaken($candidate)) {
+        while (isset($reservedLookup[$candidate]) || $isTaken($candidate)) {
             $candidate = $base.'-'.$suffix;
             $suffix++;
         }

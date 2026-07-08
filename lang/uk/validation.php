@@ -7,6 +7,7 @@ return [
     'email' => 'Поле :attribute має бути коректною email-адресою.',
     'string' => 'Поле :attribute має бути текстом.',
     'unique' => 'Таке значення поля :attribute вже використовується.',
+    'reserved_public_slug' => 'Ця публічна адреса зарезервована для системних сторінок Ladna.',
     'digits' => 'Поле :attribute має містити :digits цифр.',
     'max' => [
         'string' => 'Поле :attribute не може містити більше ніж :max символів.',

@@ -286,6 +286,7 @@ return [
     'app_update_available_title' => 'Ladna оновилась',
     'app_update_available_body' => 'Оновіть сторінку, щоб перейти на найсвіжіший інтерфейс без застарілих екранів.',
     'reload_page' => 'Оновити сторінку',
+    'install_app' => 'Встановити застосунок',
     'subscription_plan_created' => 'Тариф створено.',
     'subscription_plan_updated' => 'Тариф оновлено.',
     'subscription_plan_deleted' => 'Тариф видалено.',

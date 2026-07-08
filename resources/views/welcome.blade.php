@@ -15,7 +15,7 @@
         $headerAuthLabel = auth()->check() ? __('app.dashboard') : __('app.login');
         $primaryHref = auth()->check()
             ? route('dashboard.index')
-            : route('demo.signup.create');
+            : route('demo.signup.create', [], false);
         $formatMoney = fn (?int $cents, ?string $currency, int $fallbackCents): string => \App\Support\MoneyFormatter::format($cents, $currency, $fallbackCents);
         $demoPrice = $formatMoney($demoPlan?->price_cents, $demoPlan?->currency, 100);
         $standardPrice = $formatMoney($standardPlan?->price_cents, $standardPlan?->currency, 99900);
@@ -122,11 +122,6 @@
                             <a href="#flow" class="inline-flex h-12 items-center justify-center rounded-lg border border-[#A78AB9]/30 bg-white/70 px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
                                 {{ $landing['hero_secondary'] }}
                             </a>
-                            @unless (auth()->check())
-                                <a href="{{ $loginHref }}" class="inline-flex h-12 items-center justify-center rounded-lg px-6 text-sm font-semibold text-[#3B223F] transition hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
-                                    {{ __('app.login') }}
-                                </a>
-                            @endunless
                         </div>
 
                         <div class="mt-8 max-w-xl border-l-2 border-[#A78AB9]/40 pl-4 text-sm leading-6 text-[#4D3152]/70">
@@ -268,7 +263,7 @@
             </section>
         @endif
 
-        <section class="border-b border-[#E7DDC9]/80 bg-[#FAF8F5] px-5 py-18 sm:px-8 lg:px-10">
+        <section id="pricing" class="border-b border-[#E7DDC9]/80 bg-[#FAF8F5] px-5 py-18 sm:px-8 lg:px-10">
             <div class="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
                 <div>
                     <h2 class="text-3xl font-semibold leading-tight text-[#2B1731] sm:text-5xl">

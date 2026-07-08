@@ -3789,6 +3789,66 @@ function initAppUpdatePrompt() {
         .catch(() => {});
 }
 
+function initPwaInstallPrompt() {
+    const buttons = Array.from(document.querySelectorAll('[data-pwa-install]'));
+
+    if (buttons.length === 0) {
+        return;
+    }
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    if (isStandalone) {
+        return;
+    }
+
+    let deferredPrompt = null;
+
+    const showButtons = () => {
+        buttons.forEach((button) => {
+            button.hidden = false;
+        });
+    };
+
+    const hideButtons = () => {
+        buttons.forEach((button) => {
+            button.hidden = true;
+            button.disabled = false;
+        });
+    };
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredPrompt = event;
+        showButtons();
+    });
+
+    buttons.forEach((button) => {
+        button.addEventListener('click', async () => {
+            if (!deferredPrompt) {
+                hideButtons();
+
+                return;
+            }
+
+            const promptEvent = deferredPrompt;
+            deferredPrompt = null;
+            button.disabled = true;
+
+            try {
+                await promptEvent.prompt();
+                await promptEvent.userChoice;
+            } catch (error) {
+                deferredPrompt = null;
+            } finally {
+                hideButtons();
+            }
+        });
+    });
+
+    window.addEventListener('appinstalled', hideButtons);
+}
+
 function initPeopleCounterScreenshotViewer() {
     const modal = document.querySelector('[data-people-counter-screenshot-modal]');
 
@@ -4006,6 +4066,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initActiveScrollTargets();
     initAssistantChat();
     initAppUpdatePrompt();
+    initPwaInstallPrompt();
     initPeopleCounterScreenshotViewer();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {

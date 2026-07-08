@@ -1,5 +1,33 @@
 @php
     $systemAppearance = $systemAppearance ?? \App\Support\SystemAppearance::current();
+    $isEmbedLayout = $isEmbed ?? false;
+    $candidateAccount = $account ?? null;
+    $publicPwaAccount = ! $isEmbedLayout && $candidateAccount instanceof \App\Models\Account && $candidateAccount->exists
+        ? $candidateAccount
+        : null;
+    $isCentralAppScope = request()->is('app') || request()->is('app/*');
+    $pwaManifestUrl = null;
+    $pwaAppleTouchIconUrl = null;
+    $pwaThemeColor = '#3B223F';
+    $pwaTitle = __('app.app_name');
+    $pwaVersionUrl = null;
+    $pwaServiceWorkerUrl = null;
+
+    if ($publicPwaAccount) {
+        $pwaManifestUrl = route('pwa.studio.manifest', $publicPwaAccount->slug);
+        $pwaAppleTouchIconUrl = route('pwa.studio.icon', [$publicPwaAccount->slug, 180]);
+        $pwaThemeColor = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $publicPwaAccount->brand_color) === 1
+            ? $publicPwaAccount->brand_color
+            : '#3B223F';
+        $pwaTitle = $publicPwaAccount->name;
+        $pwaVersionUrl = route('pwa.studio.version', $publicPwaAccount->slug);
+        $pwaServiceWorkerUrl = route('pwa.studio.service-worker', $publicPwaAccount->slug);
+    } elseif (! $isEmbedLayout && $isCentralAppScope) {
+        $pwaManifestUrl = route('pwa.manifest');
+        $pwaAppleTouchIconUrl = asset('pwa/apple-touch-icon.png');
+        $pwaVersionUrl = route('pwa.version');
+        $pwaServiceWorkerUrl = route('pwa.service-worker');
+    }
 @endphp
 
 <!DOCTYPE html>
@@ -9,13 +37,13 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>@yield('title', __('app.app_name'))</title>
         <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
-        @unless ($isEmbed ?? false)
-            <link rel="manifest" href="{{ route('pwa.manifest') }}">
-            <link rel="apple-touch-icon" href="{{ asset('pwa/apple-touch-icon.png') }}">
-            <meta name="theme-color" content="#3B223F">
+        @if ($pwaManifestUrl)
+            <link rel="manifest" href="{{ $pwaManifestUrl }}">
+            <link rel="apple-touch-icon" href="{{ $pwaAppleTouchIconUrl }}">
+            <meta name="theme-color" content="{{ $pwaThemeColor }}">
             <meta name="apple-mobile-web-app-capable" content="yes">
-            <meta name="apple-mobile-web-app-title" content="{{ __('app.app_name') }}">
-        @endunless
+            <meta name="apple-mobile-web-app-title" content="{{ $pwaTitle }}">
+        @endif
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link rel="stylesheet" href="{{ $systemAppearance['google_fonts_url'] }}">
@@ -32,7 +60,7 @@
     >
         @yield('content')
 
-        @unless ($isEmbed ?? false)
+        @unless ($isEmbedLayout)
             @hasSection('publicFooter')
                 @yield('publicFooter')
             @elseif (! ($hideAppFooter ?? false))
@@ -40,8 +68,9 @@
             @endif
         @endunless
 
-        @unless ($isEmbed ?? false)
-            <x-ui.update-reload-toast :revision="$applicationRevision" />
-        @endunless
+        @if ($pwaServiceWorkerUrl)
+            <x-ui.update-reload-toast :revision="$applicationRevision" :version-url="$pwaVersionUrl" :service-worker-url="$pwaServiceWorkerUrl" />
+            <x-ui.pwa-install-button />
+        @endif
     </body>
 </html>

@@ -11,6 +11,7 @@ use App\Models\Account;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\ReservedPublicSlugs;
 use App\Support\SaasBilling\DeleteAccountWithOwnedUsers;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
@@ -169,7 +170,7 @@ class PlatformAccountController extends Controller
     {
         return SlugGenerator::unique($source, 'account', fn (string $candidate): bool => Account::where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
-            ->exists());
+            ->exists(), ReservedPublicSlugs::all());
     }
 
     private function storeLogo(StorePlatformAccountRequest|UpdatePlatformAccountRequest $request, Account $account): void

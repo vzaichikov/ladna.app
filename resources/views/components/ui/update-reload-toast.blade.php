@@ -1,13 +1,15 @@
 @props([
     'revision',
     'desktopOffset' => false,
+    'versionUrl' => null,
+    'serviceWorkerUrl' => null,
 ])
 
 <div
     data-app-update
     data-current-revision="{{ $revision }}"
-    data-version-url="{{ route('pwa.version') }}"
-    data-service-worker-url="{{ route('pwa.service-worker') }}"
+    data-version-url="{{ $versionUrl ?? route('pwa.version') }}"
+    data-service-worker-url="{{ $serviceWorkerUrl ?? route('pwa.service-worker') }}"
     class="fixed bottom-4 left-4 z-50 hidden w-[calc(100vw-2rem)] max-w-sm {{ $desktopOffset ? 'lg:left-80' : '' }}"
     role="status"
     aria-live="polite"
