@@ -320,7 +320,7 @@ return [
     'public_support_phone_invalid' => 'Enter a valid phone number.',
     'logo' => 'Logo',
     'studio_logo' => 'Studio logo',
-    'logo_help' => 'png min 512x512px',
+    'logo_help' => 'Format - square PNG with a minimum size of 512x512 px',
     'avatar' => 'Avatar',
     'avatar_help' => 'PNG, JPG, or WebP up to 2 MB.',
     'address' => 'Address',

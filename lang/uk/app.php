@@ -320,7 +320,7 @@ return [
     'public_support_phone_invalid' => 'Введіть коректний номер телефону.',
     'logo' => 'Логотип',
     'studio_logo' => 'Логотип студії',
-    'logo_help' => 'png min 512x512px',
+    'logo_help' => 'Формат - квадратний PNG розміром мінімум 512x512 px',
     'avatar' => 'Аватар',
     'avatar_help' => 'PNG, JPG або WebP до 2 МБ.',
     'address' => 'Адреса',
