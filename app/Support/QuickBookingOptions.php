@@ -12,6 +12,7 @@ class QuickBookingOptions
      *     locations: Collection<int, mixed>,
      *     rooms: Collection<int, mixed>,
      *     trainers: Collection<int, mixed>,
+     *     activityDirections: Collection<int, mixed>,
      *     options: Collection<int, array{kind: mixed, definition: array<string, mixed>, classTypes: Collection<int, mixed>}>
      * }
      */
@@ -29,6 +30,11 @@ class QuickBookingOptions
             ->get(['id', 'location_id', 'name']);
         $trainers = $account->trainers()
             ->active()
+            ->with('activityDirections:id')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        $activityDirections = $account->activityDirections()
+            ->active()
             ->orderBy('name')
             ->get(['id', 'name']);
         $options = collect(ScheduleKindRegistry::all())
@@ -40,7 +46,7 @@ class QuickBookingOptions
                     ->active()
                     ->where('schedule_kind', $definition['kind']->value)
                     ->orderBy('name')
-                    ->get(['id', 'name', 'default_duration_minutes', 'default_capacity']),
+                    ->get(['id', 'activity_direction_id', 'name', 'default_duration_minutes', 'default_capacity']),
             ])
             ->values();
 
@@ -48,6 +54,7 @@ class QuickBookingOptions
             'locations' => $locations,
             'rooms' => $rooms,
             'trainers' => $trainers,
+            'activityDirections' => $activityDirections,
             'options' => $options,
         ];
     }

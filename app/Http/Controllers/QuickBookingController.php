@@ -8,12 +8,14 @@ use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Http\Requests\StoreQuickBookingRequest;
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassType;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\Trainer;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrainerActivityDirectionEligibility;
 use App\Support\TrainerPrivateLessonAvailability;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -113,6 +115,7 @@ class QuickBookingController extends Controller
         Account $account,
         ManualQuickBookingAvailability $availability,
         TrainerPrivateLessonAvailability $trainerPrivateLessonAvailability,
+        TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
     ): JsonResponse {
         $this->authorize('manageBookings', $account);
 
@@ -126,6 +129,12 @@ class QuickBookingController extends Controller
             'room_id' => ['nullable', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account->id)],
             'class_type_id' => ['required', Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account->id)],
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account->id)],
+            'activity_direction_id' => [
+                'nullable',
+                Rule::exists((new ActivityDirection)->getTable(), 'id')
+                    ->where('account_id', $account->id)
+                    ->where('is_active', true),
+            ],
             'ignore_trainer_timeframes' => ['nullable', 'boolean'],
         ]);
         $scheduleKind = ScheduleKind::from($validated['schedule_kind']);
@@ -133,6 +142,16 @@ class QuickBookingController extends Controller
         $usesTrainerTimeframes = $trainerPrivateLessonAvailability->featureApplies($account, $scheduleKind, $ignoreTrainerTimeframes);
 
         abort_unless($account->hasScheduleKindEnabled($scheduleKind), 404);
+
+        if (
+            $scheduleKind === ScheduleKind::PrivateLesson
+            && $trainerActivityDirectionEligibility->accountHasActiveDirections($account)
+            && blank($validated['activity_direction_id'] ?? null)
+        ) {
+            throw ValidationException::withMessages([
+                'activity_direction_id' => __('app.private_lesson_activity_direction_required'),
+            ]);
+        }
 
         if (! $usesTrainerTimeframes && blank($validated['room_id'] ?? null)) {
             throw ValidationException::withMessages([
@@ -146,6 +165,7 @@ class QuickBookingController extends Controller
             'room_id' => filled($validated['room_id'] ?? null) ? (int) $validated['room_id'] : null,
             'class_type_id' => (int) $validated['class_type_id'],
             'trainer_id' => filled($validated['trainer_id'] ?? null) ? (int) $validated['trainer_id'] : null,
+            'activity_direction_id' => filled($validated['activity_direction_id'] ?? null) ? (int) $validated['activity_direction_id'] : null,
             'allow_past' => in_array($scheduleKind, [ScheduleKind::PrivateLesson, ScheduleKind::RoomRental], true),
             'ignore_trainer_timeframes' => $ignoreTrainerTimeframes,
         ]);

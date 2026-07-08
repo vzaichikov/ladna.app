@@ -59,6 +59,13 @@ class Trainer extends Model
             ->withTimestamps();
     }
 
+    public function activityDirections(): BelongsToMany
+    {
+        return $this->belongsToMany(ActivityDirection::class, 'trainer_activity_direction')
+            ->withPivot('account_id')
+            ->withTimestamps();
+    }
+
     public function privateTimeframes(): HasMany
     {
         return $this->hasMany(TrainerPrivateTimeframe::class);

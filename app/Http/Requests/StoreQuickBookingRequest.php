@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\ScheduleKind;
+use App\Models\ActivityDirection;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\Location;
@@ -12,6 +13,7 @@ use App\Models\Trainer;
 use App\Models\WebsiteLead;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrainerActivityDirectionEligibility;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -51,6 +53,12 @@ class StoreQuickBookingRequest extends FormRequest
             'location_id' => [Rule::requiredIf((bool) $isManual), 'nullable', Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id)],
             'room_id' => [Rule::requiredIf((bool) $isManual), 'nullable', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account?->id)],
             'class_type_id' => [Rule::requiredIf((bool) $isManual), 'nullable', Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account?->id)],
+            'activity_direction_id' => [
+                'nullable',
+                Rule::exists((new ActivityDirection)->getTable(), 'id')
+                    ->where('account_id', $account?->id)
+                    ->where('is_active', true),
+            ],
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account?->id)],
             'starts_at' => [Rule::requiredIf((bool) $isManual), 'nullable', 'date_format:Y-m-d\TH:i'],
             'ends_at' => [Rule::requiredIf($scheduleKind === ScheduleKind::RoomRental && $this->input('rental_mode') === 'anytime'), 'nullable', 'date_format:Y-m-d\TH:i'],
@@ -137,6 +145,29 @@ class StoreQuickBookingRequest extends FormRequest
                     $validator->errors()->add('trainer_id', __('app.private_lesson_trainer_required'));
                 }
 
+                if ($scheduleKind === ScheduleKind::PrivateLesson) {
+                    $trainerActivityDirectionEligibility = app(TrainerActivityDirectionEligibility::class);
+                    $activityDirectionId = $trainerActivityDirectionEligibility->activeDirectionId($account, $this->input('activity_direction_id'));
+
+                    if ($trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $activityDirectionId) {
+                        $validator->errors()->add('activity_direction_id', __('app.private_lesson_activity_direction_required'));
+                    }
+
+                    if ($classTypeId > 0 && filled($this->input('trainer_id'))) {
+                        $classType = $account->classTypes()
+                            ->whereKey($classTypeId)
+                            ->where('schedule_kind', $scheduleKind->value)
+                            ->first();
+                        $trainer = $account->trainers()
+                            ->whereKey((int) $this->input('trainer_id'))
+                            ->first();
+
+                        if ($classType && $trainer && ! $trainerActivityDirectionEligibility->trainerCanHandle($account, $trainer, $classType, $activityDirectionId)) {
+                            $validator->errors()->add('trainer_id', __('app.trainer_activity_direction_mismatch'));
+                        }
+                    }
+                }
+
                 if ($this->input('rental_mode') === 'anytime' && $scheduleKind !== ScheduleKind::RoomRental) {
                     $validator->errors()->add('rental_mode', __('app.rental_mode_anytime_only'));
                 }
@@ -159,6 +190,7 @@ class StoreQuickBookingRequest extends FormRequest
             'customer_phone' => app(PhoneNumberNormalizer::class)->normalize($this->input('customer_phone'), $countryCode),
             'customer_id' => blank($this->input('customer_id')) ? null : $this->input('customer_id'),
             'trainer_id' => blank($this->input('trainer_id')) ? null : $this->input('trainer_id'),
+            'activity_direction_id' => blank($this->input('activity_direction_id')) ? null : $this->input('activity_direction_id'),
             'website_lead_id' => blank($this->input('website_lead_id')) ? null : $this->input('website_lead_id'),
             'rental_mode' => $this->input('rental_mode') ?: 'preset',
             'ends_at' => blank($this->input('ends_at')) ? null : $this->input('ends_at'),

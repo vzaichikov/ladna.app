@@ -19,6 +19,10 @@ class TrainerPrivateLessonAvailability
 {
     public const SLOT_STEP_MINUTES = 30;
 
+    public function __construct(
+        private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
+    ) {}
+
     /**
      * @return array{
      *     date: string,
@@ -38,9 +42,14 @@ class TrainerPrivateLessonAvailability
         $customerId = $this->customerIdFor($account, $input['customer_id'] ?? null);
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $allowPast = (bool) ($input['allow_past'] ?? false);
+        $activityDirectionId = $this->trainerActivityDirectionEligibility->activeDirectionId($account, $input['activity_direction_id'] ?? null);
 
         if (! $this->trainerCanUseLocation($trainer, $location)) {
             return $this->closedResult((string) $input['date'], $timezone);
+        }
+
+        if (! $this->trainerActivityDirectionEligibility->trainerCanHandle($account, $trainer, $classType, $activityDirectionId)) {
+            return $this->emptyResult((string) $input['date'], $timezone);
         }
 
         $localDate = CarbonImmutable::createFromFormat('Y-m-d H:i:s', $input['date'].' 00:00:00', $timezone);
@@ -112,7 +121,7 @@ class TrainerPrivateLessonAvailability
     }
 
     /**
-     * @param  array{location_id: int, class_type_id: int, trainer_id: int, room_id?: int|null, customer_id?: int|null, allow_past?: bool}  $input
+     * @param  array{location_id: int, class_type_id: int, trainer_id: int, room_id?: int|null, customer_id?: int|null, allow_past?: bool, activity_direction_id?: int|null}  $input
      */
     public function hasStart(Account $account, string $startsAt, array $input): bool
     {
@@ -183,11 +192,11 @@ class TrainerPrivateLessonAvailability
     /**
      * @return Collection<int, Trainer>
      */
-    public function trainersForLocation(Account $account, Location $location): Collection
+    public function trainersForLocation(Account $account, Location $location, ?int $activityDirectionId = null): Collection
     {
-        return $account->trainers()
+        $query = $account->trainers()
             ->active()
-            ->with('trainerType')
+            ->with(['trainerType', 'activityDirections'])
             ->where(function ($query) use ($account, $location): void {
                 $query
                     ->whereDoesntHave('locations', fn ($query) => $query->where('trainer_location.account_id', $account->id))
@@ -195,7 +204,10 @@ class TrainerPrivateLessonAvailability
                         ->where('trainer_location.account_id', $account->id)
                         ->whereKey($location->id));
             })
-            ->orderBy('name')
+            ->orderBy('name');
+
+        return $this->trainerActivityDirectionEligibility
+            ->scopeTrainerQueryForDirection($query, $account, $activityDirectionId)
             ->get();
     }
 
@@ -494,6 +506,19 @@ class TrainerPrivateLessonAvailability
             'date' => $date,
             'timezone' => $timezone,
             'closed' => true,
+            'slots' => [],
+        ];
+    }
+
+    /**
+     * @return array{date: string, timezone: string, closed: bool, slots: array<int, mixed>}
+     */
+    private function emptyResult(string $date, string $timezone): array
+    {
+        return [
+            'date' => $date,
+            'timezone' => $timezone,
+            'closed' => false,
             'slots' => [],
         ];
     }

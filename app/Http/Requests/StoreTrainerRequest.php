@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\StudioPermission;
+use App\Models\ActivityDirection;
 use App\Models\Location;
 use App\Models\TrainerType;
 use App\Models\User;
@@ -62,6 +63,11 @@ class StoreTrainerRequest extends FormRequest
             'permissions.*' => [Rule::in(array_map(fn (StudioPermission $permission): string => $permission->value, StudioPermission::cases()))],
             'location_ids' => ['nullable', 'array'],
             'location_ids.*' => [Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id)],
+            'activity_direction_ids' => ['nullable', 'array'],
+            'activity_direction_ids.*' => [
+                'integer',
+                Rule::exists((new ActivityDirection)->getTable(), 'id')->where('account_id', $account?->id),
+            ],
         ];
     }
 
@@ -76,6 +82,11 @@ class StoreTrainerRequest extends FormRequest
             'location_ids' => collect($this->input('location_ids', []))
                 ->filter(fn (mixed $locationId): bool => filled($locationId))
                 ->map(fn (mixed $locationId): int => (int) $locationId)
+                ->values()
+                ->all(),
+            'activity_direction_ids' => collect($this->input('activity_direction_ids', []))
+                ->filter(fn (mixed $activityDirectionId): bool => filled($activityDirectionId))
+                ->map(fn (mixed $activityDirectionId): int => (int) $activityDirectionId)
                 ->values()
                 ->all(),
         ]);

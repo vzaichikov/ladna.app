@@ -331,6 +331,54 @@ class PublicScheduleTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_public_schedule_compact_private_lesson_filters_services_and_trainers_by_activity_direction(): void
+    {
+        $account = Account::factory()->create([
+            'slug' => 'test-compact-private-directions-studio',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        Room::factory()->for($account)->for($location)->create();
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        ClassType::factory()->for($account)->create([
+            'activity_direction_id' => null,
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+        ]);
+        ClassType::factory()->for($account)->create([
+            'activity_direction_id' => $exoticDirection->id,
+            'name' => 'Exotic Private',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+        ]);
+        $poleTrainer = Trainer::factory()->for($account)->create(['name' => 'Pole Trainer']);
+        $exoticTrainer = Trainer::factory()->for($account)->create(['name' => 'Exotic Trainer']);
+        $poleTrainer->activityDirections()->sync([$poleDirection->id => ['account_id' => $account->id]]);
+        $exoticTrainer->activityDirections()->sync([$exoticDirection->id => ['account_id' => $account->id]]);
+
+        $this->get('/test-compact-private-directions-studio/main/schedule?kind=private_lesson')
+            ->assertOk()
+            ->assertSee(__('app.choose_activity_direction'))
+            ->assertSee(__('app.public_booking_choose_filters', ['filters' => __('app.direction')]));
+
+        $this->get('/test-compact-private-directions-studio/main/schedule?kind=private_lesson&manual_panel=activity_direction')
+            ->assertOk()
+            ->assertSee('Pole')
+            ->assertSee('Exotic');
+
+        $this->get('/test-compact-private-directions-studio/main/schedule?kind=private_lesson&activity_direction='.$poleDirection->id.'&manual_panel=service')
+            ->assertOk()
+            ->assertSee('Private 60')
+            ->assertDontSee('Exotic Private');
+
+        $this->get('/test-compact-private-directions-studio/main/schedule?kind=private_lesson&activity_direction='.$poleDirection->id.'&manual_panel=trainer')
+            ->assertOk()
+            ->assertSee('Pole Trainer')
+            ->assertDontSee('Exotic Trainer');
+    }
+
     public function test_public_schedule_xhr_returns_only_schedule_fragment(): void
     {
         $account = Account::factory()->create(['slug' => 'test-fragment-studio', 'timezone' => 'UTC']);

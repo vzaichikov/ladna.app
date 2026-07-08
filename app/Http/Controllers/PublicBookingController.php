@@ -13,6 +13,7 @@ use App\Models\Location;
 use App\Models\ScheduledClass;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrainerActivityDirectionEligibility;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -220,6 +221,8 @@ class PublicBookingController extends Controller
         $trainer = filled($request->query('trainer_id'))
             ? $account->trainers()->active()->whereKey((int) $request->query('trainer_id'))->first()
             : null;
+        $trainerActivityDirectionEligibility = app(TrainerActivityDirectionEligibility::class);
+        $activityDirectionId = $trainerActivityDirectionEligibility->activeDirectionId($account, $request->query('activity_direction_id'));
 
         if (! $classType || ! $room) {
             throw ValidationException::withMessages([
@@ -233,6 +236,26 @@ class PublicBookingController extends Controller
             ]);
         }
 
+        if (
+            $scheduleKind === ScheduleKind::PrivateLesson
+            && $trainerActivityDirectionEligibility->accountHasActiveDirections($account)
+            && ! $activityDirectionId
+        ) {
+            throw ValidationException::withMessages([
+                'activity_direction_id' => __('app.private_lesson_activity_direction_required'),
+            ]);
+        }
+
+        if (
+            $scheduleKind === ScheduleKind::PrivateLesson
+            && $trainer
+            && ! $trainerActivityDirectionEligibility->trainerCanHandle($account, $trainer, $classType, $activityDirectionId)
+        ) {
+            throw ValidationException::withMessages([
+                'trainer_id' => __('app.trainer_activity_direction_mismatch'),
+            ]);
+        }
+
         $startsAtValue = (string) $request->query('starts_at');
 
         if (! app(ManualQuickBookingAvailability::class)->hasStart($account, $scheduleKind, $startsAtValue, [
@@ -240,6 +263,7 @@ class PublicBookingController extends Controller
             'room_id' => $room->id,
             'class_type_id' => $classType->id,
             'trainer_id' => $trainer?->id,
+            'activity_direction_id' => $activityDirectionId,
         ])) {
             throw ValidationException::withMessages([
                 'starts_at' => __('app.manual_slot_unavailable'),
@@ -264,6 +288,7 @@ class PublicBookingController extends Controller
                 'date' => $startsAt->toDateString(),
                 'starts_at' => $startsAt->format('Y-m-d\TH:i'),
                 'class_type_id' => $classType->id,
+                'activity_direction_id' => $activityDirectionId,
                 'room_id' => $room->id,
                 'trainer_id' => $trainer?->id,
             ],
@@ -272,6 +297,7 @@ class PublicBookingController extends Controller
                 'locationSlug' => $location->slug,
                 'kind' => $scheduleKind->value,
                 'date' => $startsAt->toDateString(),
+                'activity_direction' => $activityDirectionId,
                 'class_type' => $classType->id,
                 'room' => $room->id,
                 'trainer' => $trainer?->id,
@@ -313,7 +339,7 @@ class PublicBookingController extends Controller
     private function confirmationUrl(Account $account, Location $location, array $validated): string
     {
         $query = collect($validated)
-            ->only(['schedule_kind', 'scheduled_class_id', 'date', 'starts_at', 'class_type_id', 'room_id', 'trainer_id'])
+            ->only(['schedule_kind', 'scheduled_class_id', 'date', 'starts_at', 'class_type_id', 'activity_direction_id', 'room_id', 'trainer_id'])
             ->filter(fn (mixed $value): bool => $value !== null && $value !== '')
             ->all();
 

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
@@ -313,6 +314,41 @@ class PublicBookingTest extends TestCase
         $this->assertSame($trainer->id, $scheduledClass->trainer_id);
         $this->assertSame('public_booking', $scheduledClass->metadata['source']);
         $this->assertSame(1, ClassBooking::whereBelongsTo($scheduledClass)->whereBelongsTo($customer)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_public_private_lesson_rejects_trainer_outside_selected_activity_direction(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $room] = $this->manualBookingSetup('public-private-direction-mismatch-studio');
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $classType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => null,
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+        $trainer->activityDirections()->sync([$exoticDirection->id => ['account_id' => $account->id]]);
+        $customer = Customer::factory()->for($account)->create();
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-18',
+                'starts_at' => '2026-06-18T15:00',
+                'class_type_id' => $classType->id,
+                'activity_direction_id' => $poleDirection->id,
+                'room_id' => $room->id,
+                'trainer_id' => $trainer->id,
+            ])
+            ->assertSessionHasErrors('trainer_id');
+
+        $this->assertSame(0, ScheduledClass::whereBelongsTo($account)->count());
 
         Carbon::setTestNow();
     }

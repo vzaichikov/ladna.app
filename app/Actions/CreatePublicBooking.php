@@ -13,6 +13,7 @@ use App\Models\ScheduledClass;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrainerActivityDirectionEligibility;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,7 @@ class CreatePublicBooking
         private readonly ReserveCustomerClassPassForBooking $reserveCustomerClassPassForBooking,
         private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
         private readonly ClassBookingNotificationCoordinator $notifications,
+        private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
     ) {}
 
     /**
@@ -123,6 +125,7 @@ class CreatePublicBooking
         $trainer = filled($validated['trainer_id'] ?? null)
             ? $account->trainers()->active()->whereKey((int) $validated['trainer_id'])->firstOrFail()
             : null;
+        $activityDirectionId = $this->trainerActivityDirectionEligibility->activeDirectionId($account, $validated['activity_direction_id'] ?? null);
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['starts_at'], $timezone);
         $durationMinutes = (int) ($classType->default_duration_minutes ?: 60);
@@ -134,11 +137,26 @@ class CreatePublicBooking
             ]);
         }
 
+        if ($scheduleKind === ScheduleKind::PrivateLesson) {
+            if ($this->trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $activityDirectionId) {
+                throw ValidationException::withMessages([
+                    'activity_direction_id' => __('app.private_lesson_activity_direction_required'),
+                ]);
+            }
+
+            if ($trainer && ! $this->trainerActivityDirectionEligibility->trainerCanHandle($account, $trainer, $classType, $activityDirectionId)) {
+                throw ValidationException::withMessages([
+                    'trainer_id' => __('app.trainer_activity_direction_mismatch'),
+                ]);
+            }
+        }
+
         if (! $this->manualQuickBookingAvailability->hasStart($account, $scheduleKind, (string) $validated['starts_at'], [
             'location_id' => $location->id,
             'room_id' => $room->id,
             'class_type_id' => $classType->id,
             'trainer_id' => $trainer?->id,
+            'activity_direction_id' => $activityDirectionId,
         ])) {
             throw ValidationException::withMessages([
                 'starts_at' => __('app.manual_slot_unavailable'),

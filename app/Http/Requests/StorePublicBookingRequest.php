@@ -6,6 +6,7 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\Location;
@@ -15,6 +16,7 @@ use App\Models\Trainer;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrainerActivityDirectionEligibility;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -49,6 +51,12 @@ class StorePublicBookingRequest extends FormRequest
             'date' => [Rule::requiredIf((bool) $isManual), 'nullable', 'date_format:Y-m-d'],
             'starts_at' => [Rule::requiredIf((bool) $isManual), 'nullable', 'date_format:Y-m-d\TH:i'],
             'class_type_id' => [Rule::requiredIf((bool) $isManual), 'nullable', Rule::exists((new ClassType)->getTable(), 'id')->where('account_id', $account?->id)],
+            'activity_direction_id' => [
+                'nullable',
+                Rule::exists((new ActivityDirection)->getTable(), 'id')
+                    ->where('account_id', $account?->id)
+                    ->where('is_active', true),
+            ],
             'room_id' => [Rule::requiredIf((bool) $isManual), 'nullable', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account?->id)],
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account?->id)],
             'customer_name' => [Rule::requiredIf($requiresGuestDetails), 'nullable', 'string', 'max:255'],
@@ -111,6 +119,7 @@ class StorePublicBookingRequest extends FormRequest
             'trainer_id' => blank($this->input('trainer_id')) ? null : $this->input('trainer_id'),
             'scheduled_class_id' => blank($this->input('scheduled_class_id')) ? null : $this->input('scheduled_class_id'),
             'class_type_id' => blank($this->input('class_type_id')) ? null : $this->input('class_type_id'),
+            'activity_direction_id' => blank($this->input('activity_direction_id')) ? null : $this->input('activity_direction_id'),
             'room_id' => blank($this->input('room_id')) ? null : $this->input('room_id'),
         ]);
     }
@@ -185,19 +194,24 @@ class StorePublicBookingRequest extends FormRequest
         $roomId = (int) $this->input('room_id');
         $trainerId = filled($this->input('trainer_id')) ? (int) $this->input('trainer_id') : null;
         $startsAt = (string) $this->input('starts_at');
+        $trainerActivityDirectionEligibility = app(TrainerActivityDirectionEligibility::class);
+        $activityDirectionId = $trainerActivityDirectionEligibility->activeDirectionId($account, $this->input('activity_direction_id'));
+        $trainer = $trainerId
+            ? $account->trainers()->active()->whereKey($trainerId)->first()
+            : null;
 
-        $classTypeExists = $account->classTypes()
+        $classType = $account->classTypes()
             ->active()
             ->whereKey($classTypeId)
             ->where('schedule_kind', $scheduleKind->value)
-            ->exists();
+            ->first();
         $roomExists = $account->rooms()
             ->active()
             ->whereKey($roomId)
             ->where('location_id', $location->id)
             ->exists();
 
-        if (! $classTypeExists) {
+        if (! $classType) {
             $validator->errors()->add('class_type_id', __('app.manual_class_format_invalid'));
         }
 
@@ -206,10 +220,16 @@ class StorePublicBookingRequest extends FormRequest
         }
 
         if ($scheduleKind === ScheduleKind::PrivateLesson) {
+            if ($trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $activityDirectionId) {
+                $validator->errors()->add('activity_direction_id', __('app.private_lesson_activity_direction_required'));
+            }
+
             if (! $trainerId) {
                 $validator->errors()->add('trainer_id', __('app.private_lesson_trainer_required'));
-            } elseif (! $account->trainers()->active()->whereKey($trainerId)->exists()) {
+            } elseif (! $trainer) {
                 $validator->errors()->add('trainer_id', __('app.private_lesson_trainer_required'));
+            } elseif ($classType && ! $trainerActivityDirectionEligibility->trainerCanHandle($account, $trainer, $classType, $activityDirectionId)) {
+                $validator->errors()->add('trainer_id', __('app.trainer_activity_direction_mismatch'));
             }
         }
 
@@ -222,6 +242,7 @@ class StorePublicBookingRequest extends FormRequest
             'room_id' => $roomId,
             'class_type_id' => $classTypeId,
             'trainer_id' => $trainerId,
+            'activity_direction_id' => $activityDirectionId,
         ])) {
             $validator->errors()->add('starts_at', __('app.manual_slot_unavailable'));
         }

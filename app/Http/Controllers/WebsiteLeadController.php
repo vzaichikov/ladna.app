@@ -44,6 +44,7 @@ class WebsiteLeadController extends Controller
             'quickBookingLocations' => $quickBookingData['locations'],
             'quickBookingRooms' => $quickBookingData['rooms'],
             'quickBookingTrainers' => $quickBookingData['trainers'],
+            'quickBookingActivityDirections' => $quickBookingData['activityDirections'],
             'customerSearchUrl' => route('dashboard.accounts.customers.search', $account),
             'groupAvailabilityUrl' => route('dashboard.accounts.quick-bookings.group-availability', $account),
             'manualAvailabilityUrl' => route('dashboard.accounts.quick-bookings.manual-availability', $account),

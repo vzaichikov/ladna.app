@@ -1578,6 +1578,69 @@ function applyManualSlotRooms(form, rooms = []) {
     }
 }
 
+function optionMatchesActivityDirection(option, activityDirectionId, multiple = false) {
+    if (!activityDirectionId) {
+        return true;
+    }
+
+    if (multiple) {
+        const activityDirectionIds = (option.dataset.activityDirectionIds || '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean);
+
+        return activityDirectionIds.length === 0 || activityDirectionIds.includes(activityDirectionId);
+    }
+
+    return !option.dataset.activityDirectionId || option.dataset.activityDirectionId === activityDirectionId;
+}
+
+function selectFirstEnabledOption(select) {
+    if (!select || !select.value || !select.selectedOptions[0]?.disabled) {
+        return;
+    }
+
+    const firstEnabledOption = Array.from(select.options).find((option) => !option.disabled);
+
+    select.value = firstEnabledOption?.value || '';
+}
+
+function updateManualBookingDirectionFilters(form) {
+    const activityDirectionSelect = form?.querySelector('[data-manual-booking-activity-direction]');
+
+    if (!activityDirectionSelect) {
+        return;
+    }
+
+    const activityDirectionId = activityDirectionSelect.value;
+    const classTypeSelect = form.querySelector('[data-manual-booking-class-type]');
+    const trainerSelect = form.querySelector('[data-manual-booking-trainer]');
+
+    Array.from(classTypeSelect?.options || []).forEach((option) => {
+        const isAllowed = optionMatchesActivityDirection(option, activityDirectionId);
+
+        option.disabled = !isAllowed;
+        option.hidden = !isAllowed;
+    });
+
+    selectFirstEnabledOption(classTypeSelect);
+
+    Array.from(trainerSelect?.options || []).forEach((option) => {
+        if (!option.value) {
+            return;
+        }
+
+        const isAllowed = optionMatchesActivityDirection(option, activityDirectionId, true);
+
+        option.disabled = !isAllowed;
+        option.hidden = !isAllowed;
+    });
+
+    if (trainerSelect?.selectedOptions[0]?.disabled) {
+        trainerSelect.value = '';
+    }
+}
+
 function isAnytimeRental(form) {
     return form?.querySelector('[data-rental-mode-choice]:checked')?.value === 'anytime';
 }
@@ -1678,6 +1741,8 @@ function loadManualBookingAvailability(form) {
     const locationId = form.querySelector('[data-quick-booking-location]')?.value;
     const roomId = form.querySelector('[data-quick-booking-room]')?.value;
     const classTypeId = form.querySelector('[data-manual-booking-class-type]')?.value;
+    const activityDirectionInput = form.querySelector('[data-manual-booking-activity-direction]');
+    const activityDirectionId = activityDirectionInput?.value || '';
     const trainerInput = form.querySelector('[data-manual-booking-trainer]');
     const trainerId = trainerInput?.value || '';
     const anytimeRental = isAnytimeRental(form);
@@ -1694,7 +1759,7 @@ function loadManualBookingAvailability(form) {
         resetPrivateTimeframeRoomOptions(form);
     }
 
-    if (!dateInput.value || !scheduleKind || !locationId || (!timeframeMode && !roomId) || !classTypeId || (trainerInput?.required && !trainerId)) {
+    if (!dateInput.value || !scheduleKind || !locationId || (!timeframeMode && !roomId) || !classTypeId || (activityDirectionInput?.required && !activityDirectionId) || (trainerInput?.required && !trainerId)) {
         setManualBookingResultsMessage(results, results.dataset.empty || 'No available times.');
         return;
     }
@@ -1713,6 +1778,10 @@ function loadManualBookingAvailability(form) {
 
     if (trainerId) {
         url.searchParams.set('trainer_id', trainerId);
+    }
+
+    if (activityDirectionId) {
+        url.searchParams.set('activity_direction_id', activityDirectionId);
     }
 
     if (!timeframeMode && scheduleKind === 'private_lesson') {
@@ -2312,13 +2381,19 @@ function initQuickBookingModals() {
         updateQuickBookingRooms(input.closest('form'));
     });
 
-    document.querySelectorAll('[data-quick-booking-room], [data-manual-booking-date], [data-manual-booking-class-type], [data-manual-booking-trainer]').forEach((input) => {
+    document.querySelectorAll('[data-quick-booking-room], [data-manual-booking-date], [data-manual-booking-activity-direction], [data-manual-booking-class-type], [data-manual-booking-trainer]').forEach((input) => {
         if (input.dataset.manualAvailabilityReady === 'true') {
             return;
         }
 
         input.dataset.manualAvailabilityReady = 'true';
-        input.addEventListener('change', () => loadManualBookingAvailability(input.closest('form')));
+        input.addEventListener('change', () => {
+            const form = input.closest('form');
+
+            updateManualBookingDirectionFilters(form);
+            loadManualBookingAvailability(form);
+        });
+        updateManualBookingDirectionFilters(input.closest('form'));
     });
 
     document.querySelectorAll('[data-ignore-trainer-timeframes]').forEach((input) => {

@@ -77,4 +77,11 @@ class ActivityDirection extends Model
         return $this->belongsToMany(ClassPassSegment::class, 'activity_direction_class_pass_segment')
             ->withTimestamps();
     }
+
+    public function trainers(): BelongsToMany
+    {
+        return $this->belongsToMany(Trainer::class, 'trainer_activity_direction')
+            ->withPivot('account_id')
+            ->withTimestamps();
+    }
 }

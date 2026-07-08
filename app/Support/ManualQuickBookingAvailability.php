@@ -15,10 +15,11 @@ class ManualQuickBookingAvailability
 
     public function __construct(
         private readonly TrainerPrivateLessonAvailability $trainerPrivateLessonAvailability,
+        private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
     ) {}
 
     /**
-     * @param  array{date: string, location_id: int, room_id?: int|null, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool, ignore_trainer_timeframes?: bool}  $input
+     * @param  array{date: string, location_id: int, room_id?: int|null, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool, ignore_trainer_timeframes?: bool, activity_direction_id?: int|null}  $input
      * @return array{
      *     date: string,
      *     timezone: string,
@@ -42,10 +43,20 @@ class ManualQuickBookingAvailability
             ->where('schedule_kind', $scheduleKind->value)
             ->firstOrFail();
         $trainerId = filled($input['trainer_id'] ?? null) ? (int) $input['trainer_id'] : null;
+        $trainer = $trainerId ? $account->trainers()->whereKey($trainerId)->firstOrFail() : null;
+        $activityDirectionId = $this->trainerActivityDirectionEligibility->activeDirectionId($account, $input['activity_direction_id'] ?? null);
         $customerId = $this->customerIdFor($account, $input['customer_id'] ?? null);
 
-        if ($trainerId) {
-            $account->trainers()->whereKey($trainerId)->firstOrFail();
+        if (
+            $scheduleKind === ScheduleKind::PrivateLesson
+            && (! $trainer || ! $this->trainerActivityDirectionEligibility->trainerCanHandle($account, $trainer, $classType, $activityDirectionId))
+        ) {
+            return [
+                'date' => $input['date'],
+                'timezone' => $location->timezone ?? $account->timezone ?? config('app.timezone'),
+                'closed' => false,
+                'slots' => [],
+            ];
         }
 
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
@@ -105,7 +116,7 @@ class ManualQuickBookingAvailability
     }
 
     /**
-     * @param  array{location_id: int, room_id?: int|null, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool, ignore_trainer_timeframes?: bool}  $input
+     * @param  array{location_id: int, room_id?: int|null, class_type_id: int, trainer_id?: int|null, customer_id?: int|null, allow_past?: bool, ignore_trainer_timeframes?: bool, activity_direction_id?: int|null}  $input
      */
     public function hasStart(Account $account, ScheduleKind $scheduleKind, string $startsAt, array $input): bool
     {

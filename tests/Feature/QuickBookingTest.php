@@ -1383,6 +1383,109 @@ class QuickBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_quick_booking_private_lesson_availability_filters_trainers_by_activity_direction(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'opening_hours' => [
+                1 => ['enabled' => true, 'opens_at' => '12:00', 'closes_at' => '14:00'],
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $classType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => null,
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $poleTrainer = Trainer::factory()->for($account)->create(['name' => 'Pole Trainer']);
+        $exoticTrainer = Trainer::factory()->for($account)->create(['name' => 'Exotic Trainer']);
+        $anyDirectionTrainer = Trainer::factory()->for($account)->create(['name' => 'Any Trainer']);
+        $poleTrainer->activityDirections()->sync([$poleDirection->id => ['account_id' => $account->id]]);
+        $exoticTrainer->activityDirections()->sync([$exoticDirection->id => ['account_id' => $account->id]]);
+
+        $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $poleTrainer->id,
+                'activity_direction_id' => $poleDirection->id,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.time', '12:00');
+
+        $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $exoticTrainer->id,
+                'activity_direction_id' => $poleDirection->id,
+            ]))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $anyDirectionTrainer->id,
+                'activity_direction_id' => $poleDirection->id,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.time', '12:00');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_quick_booking_trainer_timeframe_override_does_not_bypass_activity_direction(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        [$owner, $account, $location, $bigRoom, , $classType, $trainer] = $this->privateTimeframeSetup();
+        $customer = Customer::factory()->for($account)->create();
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $classType->forceFill(['activity_direction_id' => null])->save();
+        $trainer->activityDirections()->sync([$exoticDirection->id => ['account_id' => $account->id]]);
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'location_id' => $location->id,
+                'room_id' => $bigRoom->id,
+                'class_type_id' => $classType->id,
+                'activity_direction_id' => $poleDirection->id,
+                'trainer_id' => $trainer->id,
+                'starts_at' => '2026-06-22T12:00',
+                'customer_id' => $customer->id,
+                'ignore_trainer_timeframes' => true,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.trainer_id.0', __('app.trainer_activity_direction_mismatch'));
+
+        $this->assertSame(0, ScheduledClass::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
     /**
      * @return array{0: User, 1: Account, 2: Location, 3: Room, 4: Room, 5: ClassType, 6: Trainer}
      */

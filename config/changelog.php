@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.79.0',
+                'date' => '2026-07-08',
+                'title' => 'Trainer activity directions',
+                'items' => ['Studio owners can now link trainers to the activity directions they teach. Private lesson booking starts with direction selection when directions are configured, filters compatible services and trainers in public and admin booking, keeps directionless private formats available for any direction, and still prevents admin timeframe overrides from bypassing trainer-direction compatibility.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.78.0',
                 'date' => '2026-07-08',
                 'title' => 'Trainer private lesson timeframes',
@@ -709,6 +716,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.79.0',
+                'date' => '2026-07-08',
+                'title' => 'Напрями занять для тренерів',
+                'items' => ['Власниця студії тепер може привʼязувати тренерів до напрямів занять, які вони ведуть. Запис на індивідуальне заняття починається з вибору напряму, якщо напрями налаштовані, фільтрує сумісні послуги й тренерів у публічному та адміністраторському записі, залишає індивідуальні формати без напряму доступними для будь-якого напряму і не дозволяє override таймфреймів обходити сумісність тренера з напрямом.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.78.0',
                 'date' => '2026-07-08',

@@ -98,6 +98,7 @@ class ScheduledClassController extends Controller
             'quickBookingLocations' => $quickBookingData['locations'],
             'quickBookingRooms' => $quickBookingData['rooms'],
             'quickBookingTrainers' => $quickBookingData['trainers'],
+            'quickBookingActivityDirections' => $quickBookingData['activityDirections'],
             'selectedLocationIds' => $selectedLocationIds,
             'selectedRoomIds' => $selectedRoomIds,
             'selectedTrainerIds' => $selectedTrainerIds,

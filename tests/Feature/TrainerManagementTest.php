@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AccountRole;
 use App\Enums\StudioPermission;
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\Location;
 use App\Models\TrainerType;
 use App\Models\User;
@@ -117,6 +118,88 @@ class TrainerManagementTest extends TestCase
             ->assertRedirect(route('dashboard.accounts.trainers.index', $account));
 
         $this->assertSame([], $trainer->fresh()->locations()->pluck('locations.id')->all());
+    }
+
+    public function test_owner_can_sync_trainer_activity_directions_on_create_and_update(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $trainerType = TrainerType::factory()->for($account)->default()->create();
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.trainers.store', $account), [
+                'name' => 'Олена',
+                'trainer_type_id' => $trainerType->id,
+                'email' => 'direction-trainer@example.com',
+                'phone' => '+380501112244',
+                'bio' => 'Trainer profile.',
+                'is_active' => '1',
+                'create_login' => '0',
+                'activity_direction_ids' => [$poleDirection->id],
+            ])
+            ->assertRedirect(route('dashboard.accounts.trainers.index', $account));
+
+        $trainer = $account->trainers()->where('email', 'direction-trainer@example.com')->firstOrFail();
+
+        $this->assertSame([$poleDirection->id], $trainer->activityDirections()->pluck('activity_directions.id')->all());
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.trainers.update', [$account, $trainer]), [
+                'name' => 'Олена',
+                'trainer_type_id' => $trainerType->id,
+                'email' => 'direction-trainer@example.com',
+                'phone' => '+380501112244',
+                'bio' => 'Trainer profile.',
+                'is_active' => '1',
+                'create_login' => '0',
+                'activity_direction_ids' => [$exoticDirection->id],
+            ])
+            ->assertRedirect(route('dashboard.accounts.trainers.index', $account));
+
+        $this->assertSame([$exoticDirection->id], $trainer->fresh()->activityDirections()->pluck('activity_directions.id')->all());
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.trainers.update', [$account, $trainer]), [
+                'name' => 'Олена',
+                'trainer_type_id' => $trainerType->id,
+                'email' => 'direction-trainer@example.com',
+                'phone' => '+380501112244',
+                'bio' => 'Trainer profile.',
+                'is_active' => '1',
+                'create_login' => '0',
+                'activity_direction_ids' => [],
+            ])
+            ->assertRedirect(route('dashboard.accounts.trainers.index', $account));
+
+        $this->assertSame([], $trainer->fresh()->activityDirections()->pluck('activity_directions.id')->all());
+    }
+
+    public function test_trainer_activity_direction_rejects_foreign_account_direction(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $otherAccount = Account::factory()->create();
+        $account->addOwner($owner);
+        $trainerType = TrainerType::factory()->for($account)->default()->create();
+        $foreignDirection = ActivityDirection::factory()->for($otherAccount)->create();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.trainers.store', $account), [
+                'name' => 'Марина',
+                'trainer_type_id' => $trainerType->id,
+                'email' => 'foreign-direction@example.com',
+                'phone' => '+380501112255',
+                'bio' => 'Trainer profile.',
+                'is_active' => '1',
+                'create_login' => '0',
+                'activity_direction_ids' => [$foreignDirection->id],
+            ])
+            ->assertSessionHasErrors('activity_direction_ids.0');
+
+        $this->assertFalse($account->trainers()->where('email', 'foreign-direction@example.com')->exists());
     }
 
     public function test_linked_trainer_can_open_self_timeframes_only_when_feature_is_enabled(): void

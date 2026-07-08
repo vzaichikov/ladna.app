@@ -61,6 +61,7 @@ class TrainerController extends Controller
 
         $trainer = $account->trainers()->create($this->trainerAttributes($validated));
         $this->syncLocations($account, $trainer, $validated);
+        $this->syncActivityDirections($account, $trainer, $validated);
         $this->syncLogin($account, $trainer, $validated);
 
         return redirect()->route('dashboard.accounts.trainers.index', $account)
@@ -77,7 +78,7 @@ class TrainerController extends Controller
         $this->ensureBelongsToAccount($account, $trainer);
         $this->authorize('manageTrainers', $account);
         $account->ensureDefaultTrainerType();
-        $trainer->loadMissing(['user', 'trainerType', 'locations']);
+        $trainer->loadMissing(['user', 'trainerType', 'locations', 'activityDirections']);
         $timezone = $account->timezone ?: config('app.timezone');
 
         return view('trainers.edit', [
@@ -120,6 +121,7 @@ class TrainerController extends Controller
 
         $trainer->update($this->trainerAttributes($validated));
         $this->syncLocations($account, $trainer, $validated);
+        $this->syncActivityDirections($account, $trainer, $validated);
         $this->syncLogin($account, $trainer, $validated);
 
         return redirect()->route('dashboard.accounts.trainers.index', $account)
@@ -238,6 +240,26 @@ class TrainerController extends Controller
     }
 
     /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncActivityDirections(Account $account, Trainer $trainer, array $validated): void
+    {
+        $activityDirectionIds = collect($validated['activity_direction_ids'] ?? [])
+            ->map(fn (mixed $activityDirectionId): int => (int) $activityDirectionId)
+            ->filter(fn (int $activityDirectionId): bool => $activityDirectionId > 0)
+            ->unique()
+            ->values();
+
+        $syncPayload = $activityDirectionIds
+            ->mapWithKeys(fn (int $activityDirectionId): array => [
+                $activityDirectionId => ['account_id' => $account->id],
+            ])
+            ->all();
+
+        $trainer->activityDirections()->sync($syncPayload);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function staffFormData(Account $account, ?Trainer $trainer = null): array
@@ -257,6 +279,8 @@ class TrainerController extends Controller
             'trainerTypes' => $account->trainerTypes()->ordered()->get(),
             'activeLocations' => $account->locations()->active()->orderBy('name')->get(),
             'selectedLocationIds' => $trainer?->locations()->pluck('locations.id')->all() ?? [],
+            'activeActivityDirections' => $account->activityDirections()->active()->orderBy('name')->get(),
+            'selectedActivityDirectionIds' => $trainer?->activityDirections()->pluck('activity_directions.id')->all() ?? [],
         ];
     }
 }

@@ -15,6 +15,7 @@ use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrainerActivityDirectionEligibility;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,7 @@ class CreateQuickBooking
         private readonly ActorSnapshot $actorSnapshot,
         private readonly RecordManualClassBookingPayment $recordManualClassBookingPayment,
         private readonly ClassBookingNotificationCoordinator $notifications,
+        private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
     ) {}
 
     /**
@@ -106,6 +108,7 @@ class CreateQuickBooking
         $trainer = filled($validated['trainer_id'] ?? null)
             ? $account->trainers()->whereKey((int) $validated['trainer_id'])->firstOrFail()
             : null;
+        $activityDirectionId = $this->trainerActivityDirectionEligibility->activeDirectionId($account, $validated['activity_direction_id'] ?? null);
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['starts_at'], $timezone);
         $isAnytimeRental = $this->shouldSkipClassPassReservation($scheduleKind, $validated);
@@ -115,6 +118,21 @@ class CreateQuickBooking
         $endsAt = $isAnytimeRental
             ? CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['ends_at'], $timezone)
             : $startsAt->addMinutes((int) ($classType->default_duration_minutes ?: 60));
+
+        if ($scheduleKind === ScheduleKind::PrivateLesson) {
+            if ($this->trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $activityDirectionId) {
+                throw ValidationException::withMessages([
+                    'activity_direction_id' => __('app.private_lesson_activity_direction_required'),
+                ]);
+            }
+
+            if (! $trainer || ! $this->trainerActivityDirectionEligibility->trainerCanHandle($account, $trainer, $classType, $activityDirectionId)) {
+                throw ValidationException::withMessages([
+                    'trainer_id' => __('app.trainer_activity_direction_mismatch'),
+                ]);
+            }
+        }
+
         $isAvailable = $isAnytimeRental
             ? $this->manualQuickBookingAvailability->hasRange($account, $scheduleKind, (string) $validated['starts_at'], (string) $validated['ends_at'], [
                 'location_id' => $location->id,
@@ -129,6 +147,7 @@ class CreateQuickBooking
                 'room_id' => $room->id,
                 'class_type_id' => $classType->id,
                 'trainer_id' => $trainer?->id,
+                'activity_direction_id' => $activityDirectionId,
                 'customer_id' => $customerId,
                 'allow_past' => $this->allowsPastManualBooking($scheduleKind),
                 'ignore_trainer_timeframes' => $ignoreTrainerTimeframes,

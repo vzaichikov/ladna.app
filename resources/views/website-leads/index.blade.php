@@ -89,6 +89,7 @@
         'quickBookingLocations' => $quickBookingLocations,
         'quickBookingRooms' => $quickBookingRooms,
         'quickBookingTrainers' => $quickBookingTrainers,
+        'quickBookingActivityDirections' => $quickBookingActivityDirections,
         'groupAvailabilityUrl' => $groupAvailabilityUrl,
         'manualAvailabilityUrl' => $manualAvailabilityUrl,
         'customerSearchUrl' => $customerSearchUrl,

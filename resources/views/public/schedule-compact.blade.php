@@ -16,6 +16,7 @@
         $selectedTrainer = $compact['trainers']->firstWhere('id', $compact['selectedTrainerId']);
         $selectedRoom = $compact['rooms']->firstWhere('id', $compact['selectedRoomId']);
         $selectedManualClassType = $compact['manualClassTypes']->firstWhere('id', $compact['selectedManualClassTypeId']);
+        $selectedManualActivityDirection = ($compact['manualActivityDirections'] ?? collect())->firstWhere('id', $compact['selectedManualActivityDirectionId'] ?? null);
         $selectedManualTrainer = ($compact['manualTrainers'] ?? $compact['trainers'])->firstWhere('id', $compact['selectedManualTrainerId']);
         $selectedManualRoom = $compact['rooms']->firstWhere('id', $compact['selectedManualRoomId']);
         $selectedGroupPanel = $compact['groupPanel'];
@@ -120,6 +121,8 @@
                                                 <h2 id="manual-booking-title" class="truncate text-lg font-semibold text-slate-950">
                                                     @if ($selectedManualPanel === 'service')
                                                         {{ __('app.choose_class_type') }}
+                                                    @elseif ($selectedManualPanel === 'activity_direction')
+                                                        {{ __('app.choose_activity_direction') }}
                                                     @elseif ($selectedManualPanel === 'date')
                                                         {{ __('app.choose_date_and_time') }}
                                                     @elseif ($selectedManualPanel === 'trainer')
@@ -143,6 +146,19 @@
                                     <div class="p-4">
                                         @if (! $selectedManualPanel)
                                             <div class="space-y-2">
+                                                @if ($selectedManualKind === \App\Enums\ScheduleKind::PrivateLesson && ($compact['manualActivityDirectionOptions'] ?? []) !== [])
+                                                    <a href="{{ $compactUrl([...$manualQuery, 'manual_panel' => 'activity_direction']) }}" data-public-schedule-link class="flex min-h-16 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                            <x-ui.icon name="directions" class="h-5 w-5" />
+                                                        </span>
+                                                        <span class="min-w-0 flex-1">
+                                                            <span class="block text-sm font-semibold text-slate-950">{{ __('app.choose_activity_direction') }}</span>
+                                                            <span class="mt-0.5 block truncate text-sm text-slate-500">{{ __('app.direction') }}: {{ $selectedManualActivityDirection?->name ?? __('app.choose_activity_direction') }}</span>
+                                                        </span>
+                                                        <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-400" />
+                                                    </a>
+                                                @endif
+
                                                 <a href="{{ $compactUrl([...$manualQuery, 'manual_panel' => 'service']) }}" data-public-schedule-link class="flex min-h-16 items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
                                                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
                                                         <x-ui.icon name="class-pass-plans" class="h-5 w-5" />
@@ -216,6 +232,7 @@
                                                                         'date' => $compact['selectedDate']->toDateString(),
                                                                         'starts_at' => $slot['starts_at'],
                                                                         'class_type_id' => $selectedManualClassType?->id,
+                                                                        'activity_direction_id' => $compact['selectedManualActivityDirectionId'] ?? null,
                                                                         'trainer_id' => $selectedManualTrainer?->id,
                                                                         'room_id' => $selectedManualRoom?->id,
                                                                     ], fn ($value) => $value !== null && $value !== '');
@@ -243,6 +260,17 @@
                                         @elseif ($selectedManualPanel === 'service')
                                             <div class="space-y-2">
                                                 @foreach ($compact['manualClassTypeOptions'] as $option)
+                                                    <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
+                                                        <span>{{ $option['name'] }}</span>
+                                                        @if ($option['active'])
+                                                            <x-ui.icon name="check" class="h-4 w-4" />
+                                                        @endif
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        @elseif ($selectedManualPanel === 'activity_direction')
+                                            <div class="space-y-2">
+                                                @foreach ($compact['manualActivityDirectionOptions'] as $option)
                                                     <a href="{{ $option['url'] }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $option['active'] ? 'bg-brand-600 text-white' : 'bg-slate-50 text-slate-800 hover:bg-brand-50' }}">
                                                         <span>{{ $option['name'] }}</span>
                                                         @if ($option['active'])

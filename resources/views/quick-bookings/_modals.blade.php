@@ -3,6 +3,7 @@
     $defaultTimezone = $account->timezone ?? config('app.timezone');
     $defaultDate = now($defaultTimezone)->toDateString();
     $singleLocation = $quickBookingLocations->count() === 1 ? $quickBookingLocations->first() : null;
+    $quickBookingActivityDirections = $quickBookingActivityDirections ?? collect();
 @endphp
 
 @foreach ($quickBookingOptions as $quickBookingOption)
@@ -141,12 +142,23 @@
                                     </label>
                                 </div>
 
-                                <div class="mt-4 grid gap-4 sm:grid-cols-2" @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental) data-rental-preset-fields @endif>
+                                <div class="mt-4 grid gap-4 {{ $quickBookingKind === \App\Enums\ScheduleKind::PrivateLesson && $quickBookingActivityDirections->isNotEmpty() ? 'sm:grid-cols-3' : 'sm:grid-cols-2' }}" @if ($quickBookingKind === \App\Enums\ScheduleKind::RoomRental) data-rental-preset-fields @endif>
+                                    @if ($quickBookingKind === \App\Enums\ScheduleKind::PrivateLesson && $quickBookingActivityDirections->isNotEmpty())
+                                        <label class="block">
+                                            <span class="crm-label">{{ __('app.choose_activity_direction') }}</span>
+                                            <select name="activity_direction_id" required class="crm-field" data-manual-booking-activity-direction>
+                                                <option value="">{{ __('app.choose_activity_direction') }}</option>
+                                                @foreach ($quickBookingActivityDirections as $activityDirection)
+                                                    <option value="{{ $activityDirection->id }}">{{ $activityDirection->name }}</option>
+                                                @endforeach
+                                            </select>
+                                        </label>
+                                    @endif
                                     <label class="block">
                                         <span class="crm-label">{{ $quickBookingKind === \App\Enums\ScheduleKind::RoomRental ? __('app.rental_type') : __('app.class_type') }}</span>
                                         <select name="class_type_id" required class="crm-field" data-manual-booking-class-type>
                                             @foreach ($quickBookingOption['classTypes'] as $classType)
-                                                <option value="{{ $classType->id }}">{{ $classType->name }}</option>
+                                                <option value="{{ $classType->id }}" data-activity-direction-id="{{ $classType->activity_direction_id }}">{{ $classType->name }}</option>
                                             @endforeach
                                         </select>
                                     </label>
@@ -156,7 +168,7 @@
                                             <select name="trainer_id" required class="crm-field" data-manual-booking-trainer>
                                                 <option value="">{{ __('app.trainer_not_assigned') }}</option>
                                                 @foreach ($quickBookingTrainers as $trainer)
-                                                    <option value="{{ $trainer->id }}">{{ $trainer->name }}</option>
+                                                    <option value="{{ $trainer->id }}" data-activity-direction-ids="{{ $trainer->activityDirections->pluck('id')->implode(',') }}">{{ $trainer->name }}</option>
                                                 @endforeach
                                             </select>
                                         </label>
