@@ -117,7 +117,7 @@ Route::get('/help/{slug}', [HelpController::class, 'show'])
     ->where('slug', '[A-Za-z0-9-]+')
     ->name('help.show');
 
-Route::middleware('guest')->group(function (): void {
+Route::middleware('guest:web')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::get('/en/login', [LoginController::class, 'createEnglish'])->name('login.en');
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
@@ -137,6 +137,10 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::post('/locale', LocaleController::class)->name('locale.update');
 Route::get('/customer/login', [CustomerAuthController::class, 'create'])->name('customer.login');
 Route::get('/customer/auth/google/callback', [CustomerAuthController::class, 'googleCallback'])->name('customer.google.callback');
+Route::get('/customer/studios', [CustomerAuthController::class, 'studios'])->name('customer.studios.index');
+Route::post('/customer/studios/{customerId}/switch', [CustomerAuthController::class, 'switchStudio'])
+    ->whereNumber('customerId')
+    ->name('customer.studios.switch');
 
 Route::prefix('{accountSlug}/customer')
     ->name('customer.')

@@ -13,6 +13,7 @@ use App\Models\Customer;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\CustomerAuth\CustomerOtpService;
 use App\Support\CustomerAuth\CustomerRememberTokenService;
+use App\Support\CustomerAuth\CustomerStudioAccess;
 use App\Support\CustomerAuth\GoogleOAuthClient;
 use App\Support\CustomerAuth\GoogleUserData;
 use App\Support\CustomerAuth\TurnstileVerifier;
@@ -28,17 +29,69 @@ use RuntimeException;
 
 class CustomerAuthController extends Controller
 {
-    public function create(): RedirectResponse
+    public function create(CustomerStudioAccess $studioAccess): RedirectResponse
     {
+        $customer = $this->currentCustomer();
+
+        if ($customer && $destination = $studioAccess->destinationFor($customer)) {
+            return redirect()->to($destination);
+        }
+
         return redirect()->route('home');
     }
 
-    public function studioLogin(string $accountSlug, CustomerAuthAvailability $availability): View|RedirectResponse
+    public function studios(CustomerStudioAccess $studioAccess): View|RedirectResponse
+    {
+        $customer = $this->currentCustomer();
+
+        if (! $customer) {
+            return redirect()->route('home');
+        }
+
+        $studioCustomers = $studioAccess->matchingCustomersFor($customer);
+
+        if ($studioCustomers->count() === 1) {
+            return redirect()->to($studioAccess->destinationForCustomer($studioCustomers->first()));
+        }
+
+        return view('customer-auth.studios', [
+            'customer' => $customer,
+            'studioCustomers' => $studioCustomers,
+            'studioAccess' => $studioAccess,
+        ]);
+    }
+
+    public function switchStudio(int $customerId, CustomerStudioAccess $studioAccess): RedirectResponse
+    {
+        $customer = $this->currentCustomer();
+
+        if (! $customer) {
+            return redirect()->route('home');
+        }
+
+        $targetCustomer = Customer::query()
+            ->with('account')
+            ->findOrFail($customerId);
+
+        abort_unless($studioAccess->canSwitch($customer, $targetCustomer), 404);
+
+        Auth::guard('customer')->login($targetCustomer);
+        app(CustomerRememberTokenService::class)->issue($targetCustomer);
+
+        return redirect()->to($studioAccess->destinationForCustomer($targetCustomer));
+    }
+
+    public function studioLogin(string $accountSlug, CustomerAuthAvailability $availability, CustomerStudioAccess $studioAccess): View|RedirectResponse
     {
         $account = $this->account($accountSlug);
+        $customer = $this->currentCustomer();
 
-        if ($this->currentCustomerBelongsTo($account)) {
+        if ($customer instanceof Customer && $customer->account_id === $account->id) {
             return redirect()->route('customer.dashboard', $account->slug);
+        }
+
+        if ($customer instanceof Customer && $matchingCustomer = $studioAccess->matchingCustomerForAccount($customer, (int) $account->id)) {
+            return $this->loginCustomer($matchingCustomer, $account);
         }
 
         return $this->loginView($account, $availability);
@@ -391,6 +444,10 @@ class CustomerAuthController extends Controller
     {
         $account = $this->account($accountSlug);
         $customer = $this->customerForAccount($account);
+        $publicLocations = $account->locations()
+            ->active()
+            ->orderBy('name')
+            ->get(['id', 'account_id', 'name', 'slug']);
         $purchaseHistory = $customer->purchases()
             ->with(['customerClassPass', 'classPassPlan', 'location'])
             ->newestFirst()
@@ -415,6 +472,7 @@ class CustomerAuthController extends Controller
         return view('customer-auth.dashboard', [
             'account' => $account,
             'customer' => $customer,
+            'publicLocations' => $publicLocations,
             'purchaseHistory' => $purchaseHistory,
         ]);
     }
@@ -545,11 +603,11 @@ class CustomerAuthController extends Controller
         return redirect()->route('customer.profile.complete', $account->slug);
     }
 
-    private function currentCustomerBelongsTo(Account $account): bool
+    private function currentCustomer(): ?Customer
     {
         $customer = Auth::guard('customer')->user();
 
-        return $customer instanceof Customer && $customer->account_id === $account->id;
+        return $customer instanceof Customer ? $customer : null;
     }
 
     private function customerForAccount(Account $account): Customer

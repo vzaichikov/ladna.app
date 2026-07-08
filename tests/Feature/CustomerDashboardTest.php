@@ -294,6 +294,42 @@ class CustomerDashboardTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_customer_dashboard_shows_public_links_for_active_studio_locations(): void
+    {
+        app()->setLocale('en');
+
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'slug' => 'customer-dashboard-public-links',
+            'timezone' => 'UTC',
+        ]);
+        $activeLocation = Location::factory()->for($account)->create([
+            'name' => 'Public Main',
+            'slug' => 'public-main',
+        ]);
+        $inactiveLocation = Location::factory()->for($account)->create([
+            'name' => 'Closed Main',
+            'slug' => 'closed-main',
+            'is_active' => false,
+        ]);
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Alice',
+            'phone' => '+380501112238',
+        ]);
+
+        $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'en'])
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee(__('app.public_links'))
+            ->assertSee($activeLocation->name)
+            ->assertSee(route('public.price', [$account->slug, $activeLocation->slug]), false)
+            ->assertSee(route('public.schedule', [$account->slug, $activeLocation->slug]), false)
+            ->assertDontSee($inactiveLocation->name)
+            ->assertDontSee(route('public.price', [$account->slug, $inactiveLocation->slug]), false)
+            ->assertDontSee(route('public.schedule', [$account->slug, $inactiveLocation->slug]), false);
+    }
+
     /**
      * @param  array<string, mixed>  $attributes
      */

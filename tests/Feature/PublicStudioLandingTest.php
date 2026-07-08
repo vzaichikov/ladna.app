@@ -48,8 +48,14 @@ class PublicStudioLandingTest extends TestCase
             ->assertDontSee('Choose a location, check class passes and prices, or open the schedule to book.')
             ->assertSee($activeLocation->name)
             ->assertSee($activeLocation->address)
+            ->assertSee(route('customer.studio.login', $account->slug), false)
             ->assertSee(route('public.price', [$account->slug, $activeLocation->slug]), false)
             ->assertSee(route('public.schedule', [$account->slug, $activeLocation->slug]), false)
+            ->assertSeeInOrder([
+                route('customer.studio.login', $account->slug),
+                route('public.price', [$account->slug, $activeLocation->slug]),
+                route('public.schedule', [$account->slug, $activeLocation->slug]),
+            ], false)
             ->assertSee(__('app.public_contact_title', ['studio' => $account->name]))
             ->assertSee('https://instagram.example/landing-studio', false)
             ->assertSee('tg://resolve?domain=landingstudio', false)

@@ -73,6 +73,34 @@
                 </div>
             @endif
 
+            @if ($publicLocations->isNotEmpty())
+                <section class="mt-6 rounded-xl border border-stone-200 bg-white p-5 shadow-crm">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.public_links') }}</h2>
+                            <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.public_links_copy') }}</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid gap-3 md:grid-cols-2">
+                        @foreach ($publicLocations as $publicLocation)
+                            <article class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+                                <div class="font-semibold text-slate-950">{{ $publicLocation->name }}</div>
+                                <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+                                    <x-ui.button :href="route('public.price', [$account->slug, $publicLocation->slug])" variant="secondary" size="sm" class="w-full sm:w-auto">
+                                        <x-ui.icon name="class-pass-plans" class="h-4 w-4" />
+                                        {{ __('app.public_price') }}
+                                    </x-ui.button>
+                                    <x-ui.button :href="route('public.schedule', [$account->slug, $publicLocation->slug])" variant="secondary" size="sm" class="w-full sm:w-auto">
+                                        <x-ui.icon name="schedule" class="h-4 w-4" />
+                                        {{ __('app.public_schedule') }}
+                                    </x-ui.button>
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
+
             <section class="mt-6 grid gap-3 md:grid-cols-3">
                 <x-ui.metric :label="__('app.bookings')" :value="$bookings->count()" icon="schedule" accent="brand" :mobile-inline="true" />
                 <x-ui.metric :label="__('app.customer_remaining_sessions')" :value="$activePasses->sum(fn ($pass) => max(0, $pass->remainingSessionsCount()))" icon="check-circle" accent="emerald" :mobile-inline="true" />

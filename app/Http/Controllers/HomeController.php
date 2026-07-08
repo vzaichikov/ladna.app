@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Account;
+use App\Models\Customer;
 use App\Models\User;
+use App\Support\CustomerAuth\CustomerStudioAccess;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
 use App\Support\SaasBilling\SaasBillingPlans;
 use Illuminate\Http\RedirectResponse;
@@ -16,7 +18,10 @@ use Throwable;
 
 class HomeController extends Controller
 {
-    public function __construct(private readonly AccountSubscriptionAccess $subscriptionAccess) {}
+    public function __construct(
+        private readonly AccountSubscriptionAccess $subscriptionAccess,
+        private readonly CustomerStudioAccess $customerStudioAccess,
+    ) {}
 
     public function ukrainian(Request $request): View|RedirectResponse
     {
@@ -35,6 +40,10 @@ class HomeController extends Controller
         $request->session()->put('locale', $locale);
 
         if ($redirect = $this->redirectForAuthenticatedUser($request)) {
+            return $redirect;
+        }
+
+        if ($redirect = $this->redirectForAuthenticatedCustomer($request)) {
             return $redirect;
         }
 
@@ -63,6 +72,23 @@ class HomeController extends Controller
 
         if ($accounts->isNotEmpty()) {
             return redirect()->route('dashboard.index');
+        }
+
+        return null;
+    }
+
+    private function redirectForAuthenticatedCustomer(Request $request): ?RedirectResponse
+    {
+        $customer = $request->user('customer');
+
+        if (! $customer instanceof Customer) {
+            return null;
+        }
+
+        $destination = $this->customerStudioAccess->destinationFor($customer);
+
+        if ($destination) {
+            return redirect()->to($destination);
         }
 
         return null;

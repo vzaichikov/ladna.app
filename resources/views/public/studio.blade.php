@@ -88,7 +88,11 @@
                                     @endif
                                 </div>
                                 <div class="flex flex-col gap-3 sm:flex-row lg:justify-end">
-                                    <x-ui.button :href="route('public.price', [$account->slug, $location->slug])" variant="brand" class="w-full sm:w-auto">
+                                    <x-ui.button :href="route('customer.studio.login', $account->slug)" variant="brand" class="w-full sm:w-auto">
+                                        <x-ui.icon name="log-in" class="h-4 w-4" />
+                                        {{ __('app.customer_login') }}
+                                    </x-ui.button>
+                                    <x-ui.button :href="route('public.price', [$account->slug, $location->slug])" variant="secondary" class="w-full sm:w-auto">
                                         <x-ui.icon name="class-pass-plans" class="h-4 w-4" />
                                         {{ __('app.studio_landing_price_cta') }}
                                     </x-ui.button>

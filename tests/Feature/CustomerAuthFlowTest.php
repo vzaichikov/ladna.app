@@ -257,6 +257,110 @@ class CustomerAuthFlowTest extends TestCase
         $this->assertTrue(Hash::check('old-password', $customer->fresh()->password));
     }
 
+    public function test_home_redirects_logged_in_customer_to_customer_dashboard(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'slug' => 'customer-home-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Single Studio Customer',
+            'phone' => '+380501112240',
+        ]);
+
+        $this->actingAs($customer, 'customer')
+            ->get('/')
+            ->assertRedirect(route('customer.dashboard', $account->slug));
+    }
+
+    public function test_pwa_login_start_redirects_logged_in_customer_to_customer_dashboard(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'slug' => 'customer-pwa-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'PWA Customer',
+            'phone' => '+380501112241',
+        ]);
+
+        $this->actingAs($customer, 'customer')
+            ->get('/login')
+            ->assertRedirect(route('customer.dashboard', $account->slug));
+    }
+
+    public function test_verified_customer_with_multiple_studios_chooses_and_switches_studio(): void
+    {
+        $firstAccount = Account::factory()->create([
+            'name' => 'First Studio',
+            'default_language' => 'en',
+            'slug' => 'first-customer-studio-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $secondAccount = Account::factory()->create([
+            'name' => 'Second Studio',
+            'default_language' => 'en',
+            'slug' => 'second-customer-studio-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $phone = '+380501112242';
+        $currentCustomer = Customer::factory()->for($firstAccount)->create([
+            'name' => 'Multi Studio Customer',
+            'phone' => $phone,
+            'phone_verified_at' => now(),
+        ]);
+        $secondStudioCustomer = Customer::factory()->for($secondAccount)->create([
+            'name' => 'Multi Studio Customer',
+            'phone' => $phone,
+        ]);
+
+        $this->actingAs($currentCustomer, 'customer')
+            ->get('/')
+            ->assertRedirect(route('customer.studios.index'));
+
+        $this->get(route('customer.studios.index'))
+            ->assertOk()
+            ->assertSee('First Studio', false)
+            ->assertSee('Second Studio', false)
+            ->assertSee(route('customer.studios.switch', $secondStudioCustomer), false);
+
+        $this->post(route('customer.studios.switch', $secondStudioCustomer))
+            ->assertRedirect(route('customer.dashboard', $secondAccount->slug));
+
+        $this->assertAuthenticatedAs($secondStudioCustomer, 'customer');
+    }
+
+    public function test_unverified_customer_contact_does_not_allow_switching_to_matching_studio_record(): void
+    {
+        $firstAccount = Account::factory()->create([
+            'default_language' => 'en',
+            'slug' => 'unverified-first-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $secondAccount = Account::factory()->create([
+            'default_language' => 'en',
+            'slug' => 'unverified-second-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        $currentCustomer = Customer::factory()->for($firstAccount)->create([
+            'name' => 'Unverified Contact',
+            'phone' => '+380501112243',
+            'email' => 'unverified.customer@example.com',
+            'phone_verified_at' => null,
+            'email_verified_at' => null,
+        ]);
+        $secondStudioCustomer = Customer::factory()->for($secondAccount)->create([
+            'name' => 'Unverified Contact',
+            'phone' => '+380501112243',
+            'email' => 'unverified.customer@example.com',
+        ]);
+
+        $this->actingAs($currentCustomer, 'customer')
+            ->get('/')
+            ->assertRedirect(route('customer.dashboard', $firstAccount->slug));
+
+        $this->post(route('customer.studios.switch', $secondStudioCustomer))
+            ->assertNotFound();
+
+        $this->assertAuthenticatedAs($currentCustomer, 'customer');
+    }
+
     public function test_platform_admin_can_update_customer_auth_settings_and_owner_cannot(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
