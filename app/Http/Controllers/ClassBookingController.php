@@ -107,12 +107,10 @@ class ClassBookingController extends Controller
 
     public function destroy(Request $request, Account $account, ClassBooking $classBooking, NormalizeCustomerClassPasses $normalizeCustomerClassPasses, ClassBookingCancellationWindow $cancellationWindow, ClassBookingNotificationCoordinator $notifications): RedirectResponse|JsonResponse
     {
-        $this->authorize('manageBookings', $account);
         $this->ensureBookingBelongsToAccount($account, $classBooking);
+        $bookingCancellationLocked = $cancellationWindow->isLockedForBooking($classBooking);
 
-        if ($cancellationWindow->isLockedForBooking($classBooking)) {
-            return $this->bookingBlockedResponse($request, __('app.booking_cancellation_cutoff_locked'), 'booking');
-        }
+        $this->authorize($bookingCancellationLocked ? 'correctClosedClasses' : 'manageBookings', $account);
 
         $scheduledClass = $classBooking->scheduledClass;
         $classBooking->loadMissing('classPassReservation.customerClassPass');

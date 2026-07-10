@@ -6,6 +6,7 @@ use App\Actions\IssueCustomerClassPass;
 use App\Actions\NormalizeCustomerClassPasses;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
+use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
@@ -404,6 +405,8 @@ class ScheduledClassCancellationTest extends TestCase
         $reservation = $booking->classPassReservation()->firstOrFail();
         $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->fresh()->status);
         $this->assertSame(1, $customerClassPass->fresh()->used_sessions_count);
+        $this->assertSame(CustomerClassPassStatus::UsedUp, $customerClassPass->fresh()->status);
+        $this->assertFalse($customerClassPass->fresh()->is_active);
 
         Carbon::setTestNow(Carbon::parse('2026-06-21 12:30:00', 'UTC'));
 
@@ -431,6 +434,9 @@ class ScheduledClassCancellationTest extends TestCase
         $this->assertSame(0, $customerClassPass->used_sessions_count);
         $this->assertSame(0, $customerClassPass->reserved_sessions_count);
         $this->assertSame(1, $customerClassPass->remainingSessionsCount());
+        $this->assertSame(CustomerClassPassStatus::Active, $customerClassPass->status);
+        $this->assertTrue($customerClassPass->is_active);
+        $this->assertNull($customerClassPass->closed_at);
         $this->assertSame(CustomerPurchase::ProviderStudioCash, $cashPayment->provider);
         $this->assertSame(CustomerPurchase::SourceManualCashClassPass, $cashPayment->payment_source);
         $this->assertSame($customerClassPass->price_cents, $cashPayment->amount_cents);

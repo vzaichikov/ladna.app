@@ -453,6 +453,40 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_reconciliation_reopens_used_up_pass_when_used_booking_is_restored_to_booked(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        $context = $this->context();
+        $plan = $this->plan($context, sessions: 1);
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute($context['account'], $context['customer'], $plan);
+        $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $booking = $this->unlinkedBooking($context, $scheduledClass, 'attended');
+
+        app(ReconcileCustomerClassPassForBooking::class)->execute($booking);
+
+        $this->assertSame(CustomerClassPassStatus::UsedUp, $customerClassPass->fresh()->status);
+        $this->assertFalse($customerClassPass->fresh()->is_active);
+
+        $booking->forceFill([
+            'status' => 'booked',
+            'attended_at' => null,
+        ])->save();
+        $booking->refresh();
+        app(ReconcileCustomerClassPassForBooking::class)->execute($booking);
+
+        $reservation = $booking->classPassReservation()->firstOrFail();
+        $customerClassPass->refresh();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->status);
+        $this->assertSame(1, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->used_sessions_count);
+        $this->assertSame(CustomerClassPassStatus::Active, $customerClassPass->status);
+        $this->assertTrue($customerClassPass->is_active);
+        $this->assertNull($customerClassPass->closed_at);
+
+        Carbon::setTestNow();
+    }
+
     public function test_normalizer_waits_until_studio_cancellation_window_closes_before_consuming_reserved_session(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-25 11:59:00'));

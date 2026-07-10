@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.82.0',
+                'date' => '2026-07-10',
+                'title' => 'Protected booking corrections and pass recovery',
+                'items' => ['Studio owners and explicitly trusted staff can now remove a booking during a closed cancellation window. Returned sessions reactivate still-valid used-up class passes automatically, and owner help explains when to delete a booking versus keeping a cancellation or no-show status.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.81.0',
                 'date' => '2026-07-08',
                 'title' => 'Phone-confirmed customer identity merge',
@@ -730,6 +737,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.82.0',
+                'date' => '2026-07-10',
+                'title' => 'Захищені виправлення записів і повернення абонемента',
+                'items' => ['Власниця студії та явно уповноважені працівники тепер можуть прибрати запис після закриття строку скасування. Повернене заняття автоматично робить ще чинний використаний абонемент активним, а довідка для власниці пояснює, коли запис треба видалити, а коли залишити зі статусом Скасовано або Не прийшов/прийшла.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.81.0',
                 'date' => '2026-07-08',

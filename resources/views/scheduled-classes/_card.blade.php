@@ -324,6 +324,10 @@
             @foreach ($scheduledClass->classBookings as $booking)
                 @php
                     $bookingCancellationLocked = $cancellationWindow->isLockedForClass($scheduledClass);
+                    $canRemoveBooking = (bool) (request()->user()?->can(
+                        $bookingCancellationLocked ? 'correctClosedClasses' : 'manageBookings',
+                        $account,
+                    ) ?? false);
                     $bookingStatusClass = match ($booking->status->value) {
                         'attended' => 'crm-status-active',
                         'cancelled', 'no_show' => 'crm-status-danger',
@@ -452,15 +456,13 @@
                                 <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.save') }}</x-ui.button>
                             </form>
                         @endcan
-                        @can('manageBookings', $account)
-                            @unless ($bookingCancellationLocked)
+                        @if ($canRemoveBooking)
                             <form method="POST" action="{{ route('dashboard.accounts.bookings.destroy', [$account, $booking]) }}" data-async-form data-confirm-delete>
                                 @csrf
                                 @method('DELETE')
                                 <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                             </form>
-                            @endunless
-                        @endcan
+                        @endif
                     </div>
                     @endunless
                 </div>

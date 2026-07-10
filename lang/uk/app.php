@@ -649,7 +649,7 @@ return [
     'permission_interact_with_telegram_bot_description' => 'Використання підключеного асистента власника та Telegram-процесів.',
     'permission_issue_customer_class_passes_description' => 'Видача куплених абонементів клієнтам і запуск підбору записів.',
     'permission_manage_customer_class_passes_description' => 'Редагування абонементів, оплат, заморозок, строків дії та історії коригувань.',
-    'permission_correct_closed_classes_description' => 'Додавання або видалення клієнтів із уже завершених занять і зміна використаних занять абонемента.',
+    'permission_correct_closed_classes_description' => 'Додавання або видалення клієнтів із уже завершених занять, видалення записів у закритому вікні скасування та зміна використаних занять абонемента.',
     'permission_manage_studio_cashflow_description' => 'Редагування ручних готівкових оплат і фіксація внесення або вилучення грошей.',
     'permission_view_activity_log_description' => 'Перегляд дій в акаунті та аудиту.',
     'permission_mark_attendance_description' => 'Відмітка записів як відвіданих, пропущених, скасованих або активних.',

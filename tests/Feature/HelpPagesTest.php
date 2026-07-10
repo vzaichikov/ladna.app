@@ -260,11 +260,30 @@ class HelpPagesTest extends TestCase
             ->assertStatus(200)
             ->assertSee('кольоровий рівень чутливості', false)
             ->assertSee('Коригувати закриті заняття', false)
+            ->assertSee('дозволяє прибрати майбутній запис після закриття строку скасування', false)
             ->assertSee('Керувати касою студії', false)
             ->assertSee('всі інші ролі отримують чутливі дії тільки явно', false)
             ->assertSee('assets/help/screenshots/trainer-permissions.png', false)
             ->assertDontSee('correct_closed_classes', false)
             ->assertDontSee('manage_studio_cashflow', false);
+    }
+
+    public function test_help_explains_locked_booking_removal_and_returned_pass_reactivation(): void
+    {
+        $this->get(route('help.show', 'schedule', false))
+            ->assertStatus(200)
+            ->assertSee('Як прибрати запис після закриття строку скасування', false)
+            ->assertSee('Заняття -&gt; картка заняття -&gt; запис клієнта -&gt; Видалити', false)
+            ->assertSee('Коригувати закриті заняття', false)
+            ->assertSee('автоматично стає активним', false)
+            ->assertDontSee('correct_closed_classes', false)
+            ->assertDontSee('used_up', false);
+
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertStatus(200)
+            ->assertSee('автоматично робить його активним з доступним заняттям', false)
+            ->assertSee('Скасований, прострочений або заморожений абонемент самостійно не відкривається', false)
+            ->assertDontSee('used_up', false);
     }
 
     public function test_start_help_explains_dashboard_rules_and_assistant(): void

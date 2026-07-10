@@ -7,6 +7,7 @@ use App\Actions\RecordManualClassBookingPayment;
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
+use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
 use App\Models\Account;
@@ -66,11 +67,13 @@ class ClosedClassCorrectionTest extends TestCase
     public function test_remove_wrong_group_class_customer_can_return_consumed_session(): void
     {
         Carbon::setTestNow('2026-07-04 10:00:00');
-        [$owner, $account, $scheduledClass, $customer, $customerClassPass, $booking] = $this->closedBookingContext();
+        [$owner, $account, $scheduledClass, $customer, $customerClassPass, $booking] = $this->closedBookingContext(sessions: 1);
         $reservation = $booking->classPassReservation()->firstOrFail();
 
         $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->status);
         $this->assertSame(1, $customerClassPass->fresh()->used_sessions_count);
+        $this->assertSame(CustomerClassPassStatus::UsedUp, $customerClassPass->fresh()->status);
+        $this->assertFalse($customerClassPass->fresh()->is_active);
 
         $this->actingAs($owner)
             ->postJson(route('dashboard.accounts.bookings.corrections.remove', [$account, $booking]), [
@@ -90,6 +93,10 @@ class ClosedClassCorrectionTest extends TestCase
         $this->assertNull($reservation->used_at);
         $this->assertSame(0, $customerClassPass->used_sessions_count);
         $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(1, $customerClassPass->remainingSessionsCount());
+        $this->assertSame(CustomerClassPassStatus::Active, $customerClassPass->status);
+        $this->assertTrue($customerClassPass->is_active);
+        $this->assertNull($customerClassPass->closed_at);
         $this->assertSame(0, $scheduledClass->visibleClassBookings()->count());
 
         $correction = ClassBookingCorrection::firstOrFail();
@@ -218,10 +225,10 @@ class ClosedClassCorrectionTest extends TestCase
     /**
      * @return array{0: User, 1: Account, 2: ScheduledClass, 3: Customer, 4: CustomerClassPass, 5: ClassBooking}
      */
-    private function closedBookingContext(ScheduleKind $scheduleKind = ScheduleKind::GroupClass): array
+    private function closedBookingContext(ScheduleKind $scheduleKind = ScheduleKind::GroupClass, int $sessions = 4): array
     {
         [$owner, $account, $scheduledClass] = $this->closedClassContext($scheduleKind);
-        [$customer, $customerClassPass] = $this->customerWithPass($account, $scheduledClass);
+        [$customer, $customerClassPass] = $this->customerWithPass($account, $scheduledClass, $sessions);
         $booking = ClassBooking::factory()
             ->for($account)
             ->for($scheduledClass)
@@ -267,13 +274,13 @@ class ClosedClassCorrectionTest extends TestCase
     /**
      * @return array{0: Customer, 1: CustomerClassPass}
      */
-    private function customerWithPass(Account $account, ScheduledClass $scheduledClass): array
+    private function customerWithPass(Account $account, ScheduledClass $scheduledClass, int $sessions = 4): array
     {
         $scheduledClass->loadMissing('classType');
         $customer = Customer::factory()->for($account)->create();
         $plan = ClassPassPlan::factory()->for($account)->create([
             'schedule_kind' => $scheduledClass->classType->schedule_kind->value,
-            'sessions_count' => 4,
+            'sessions_count' => $sessions,
             'price_cents' => 100000,
         ]);
         $plan->classTypes()->attach($scheduledClass->class_type_id);

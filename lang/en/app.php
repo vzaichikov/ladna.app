@@ -649,7 +649,7 @@ return [
     'permission_interact_with_telegram_bot_description' => 'Use the connected owner assistant and Telegram bot workflows.',
     'permission_issue_customer_class_passes_description' => 'Issue purchased passes to customers and trigger pass reservation matching.',
     'permission_manage_customer_class_passes_description' => 'Edit customer passes, payments, freezes, validity, and adjustment history.',
-    'permission_correct_closed_classes_description' => 'Add or remove customers from already-ended classes and change consumed pass sessions.',
+    'permission_correct_closed_classes_description' => 'Add or remove customers from already-ended classes, remove bookings during a closed cancellation window, and change consumed pass sessions.',
     'permission_manage_studio_cashflow_description' => 'Edit manual cash payment rows and record cash-in or cash-out entries.',
     'permission_view_activity_log_description' => 'View account activity and audit events.',
     'permission_mark_attendance_description' => 'Mark bookings as attended, no-show, cancelled, or booked.',

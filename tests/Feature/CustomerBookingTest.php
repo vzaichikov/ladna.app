@@ -6,9 +6,11 @@ use App\Actions\CreateManualScheduledClass;
 use App\Enums\AccountRole;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
+use App\Enums\StudioPermission;
 use App\Enums\TelegramAlertStatus;
 use App\Enums\TelegramAlertType;
 use App\Models\Account;
+use App\Models\AccountMembership;
 use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
 use App\Models\ClassType;
@@ -657,7 +659,7 @@ class CustomerBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_owner_cannot_delete_booking_inside_cancellation_cutoff(): void
+    public function test_owner_can_delete_booking_inside_cancellation_cutoff(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 09:30:00', 'UTC'));
 
@@ -676,18 +678,70 @@ class CustomerBookingTest extends TestCase
         $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
 
         $this->actingAs($owner)
-            ->deleteJson(route('dashboard.accounts.bookings.destroy', [$account, $booking]))
-            ->assertUnprocessable()
-            ->assertJsonPath('errors.booking.0', __('app.booking_cancellation_cutoff_locked'));
-
-        $this->assertModelExists($booking);
-
-        $this->actingAs($owner)
             ->get(route('dashboard.accounts.scheduled-classes.index', $account))
             ->assertOk()
             ->assertSee(__('app.booking_cancellation_cutoff_marker'))
-            ->assertDontSee('data-confirm-delete', false)
-            ->assertDontSee('value="DELETE"', false);
+            ->assertSee('data-confirm-delete', false);
+
+        $this->actingAs($owner)
+            ->deleteJson(route('dashboard.accounts.bookings.destroy', [$account, $booking]))
+            ->assertOk();
+
+        $this->assertModelMissing($booking);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_only_trainer_with_closed_class_correction_permission_can_delete_inside_cancellation_cutoff(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:30:00', 'UTC'));
+
+        $trainer = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $membership = AccountMembership::factory()
+            ->for($account)
+            ->for($trainer, 'user')
+            ->create([
+                'role' => AccountRole::Trainer->value,
+                'permissions' => null,
+            ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create(['cancellation_cutoff_minutes' => 60]);
+        $scheduledClass = ScheduledClass::factory()->for($account)->for($location)->for($room)->for($classType)->create([
+            'title' => 'Trusted Correction Class',
+            'starts_at' => Carbon::parse('2026-06-17 10:00:00', 'UTC'),
+            'ends_at' => Carbon::parse('2026-06-17 11:00:00', 'UTC'),
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Protected Client']);
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+
+        $this->actingAs($trainer)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.booking_cancellation_cutoff_marker'))
+            ->assertDontSee('data-confirm-delete', false);
+
+        $this->actingAs($trainer)
+            ->deleteJson(route('dashboard.accounts.bookings.destroy', [$account, $booking]))
+            ->assertForbidden();
+
+        $this->assertModelExists($booking);
+
+        $membership->update([
+            'permissions' => [StudioPermission::CorrectClosedClasses->value],
+        ]);
+
+        $this->actingAs($trainer)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee('data-confirm-delete', false);
+
+        $this->actingAs($trainer)
+            ->deleteJson(route('dashboard.accounts.bookings.destroy', [$account, $booking]))
+            ->assertOk();
+
+        $this->assertModelMissing($booking);
 
         Carbon::setTestNow();
     }
