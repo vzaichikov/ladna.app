@@ -23,11 +23,48 @@ use App\Models\User;
 use App\Models\WebsiteLead;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class QuickBookingTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_private_lesson_modal_shows_locked_location_and_room_selectors_and_hides_manual_time_field(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'trainer_private_timeframes_enabled' => true,
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['name' => 'Only Location']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Only Hall']);
+        ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+        ]);
+        Trainer::factory()->for($account)->create();
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk();
+
+        $privateLessonModal = Str::between(
+            (string) $response->getContent(),
+            'data-quick-booking-modal="private_lesson"',
+            'data-quick-booking-modal="room_rental"',
+        );
+
+        $this->assertNotSame('', $privateLessonModal);
+        $this->assertMatchesRegularExpression('/<select(?=[^>]*data-quick-booking-location)(?=[^>]*data-async-field="location_id")(?=[^>]*disabled)[^>]*>/', $privateLessonModal);
+        $this->assertMatchesRegularExpression('/<input(?=[^>]*type="hidden")(?=[^>]*name="location_id")(?=[^>]*value="'.$location->id.'")(?=[^>]*data-quick-booking-location-value)[^>]*>/', $privateLessonModal);
+        $this->assertMatchesRegularExpression('/<select(?=[^>]*data-quick-booking-room)(?=[^>]*data-async-field="room_id")(?=[^>]*disabled)[^>]*>/', $privateLessonModal);
+        $this->assertMatchesRegularExpression('/<input(?=[^>]*type="hidden")(?=[^>]*name="room_id")(?=[^>]*value="'.$room->id.'")(?=[^>]*data-quick-booking-room-value)[^>]*>/', $privateLessonModal);
+        $this->assertStringContainsString('Only Location', $privateLessonModal);
+        $this->assertStringContainsString('Only Hall', $privateLessonModal);
+        $this->assertStringNotContainsString('Only Location · Only Hall', $privateLessonModal);
+        $this->assertMatchesRegularExpression('/<input(?=[^>]*type="hidden")(?=[^>]*data-manual-booking-time)(?=[^>]*data-async-field="starts_at")[^>]*>/', $privateLessonModal);
+        $this->assertDoesNotMatchRegularExpression('/<input(?=[^>]*type="time")(?=[^>]*data-manual-booking-time)[^>]*>/', $privateLessonModal);
+    }
 
     public function test_owner_can_quick_book_private_lesson_with_new_customer_and_class_type_defaults(): void
     {
@@ -1313,6 +1350,37 @@ class QuickBookingTest extends TestCase
 
         $this->assertSame(['13:00'], array_column($response->json('data'), 'time'));
         $this->assertSame([['id' => $bigRoom->id, 'name' => $bigRoom->name]], $response->json('data.0.rooms'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_strict_private_timeframe_booking_uses_selected_non_first_room(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        [$owner, $account, $location, , $smallRoom, $classType, $trainer] = $this->privateTimeframeSetup();
+        $customer = Customer::factory()->for($account)->create();
+        $this->createTrainerTimeframes($account, $trainer, $location, ['12:00', '12:30']);
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.quick-bookings.store', $account), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'location_id' => $location->id,
+                'room_id' => $smallRoom->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+                'starts_at' => '2026-06-22T12:00',
+                'customer_id' => $customer->id,
+            ])
+            ->assertCreated();
+
+        $scheduledClass = ScheduledClass::whereBelongsTo($account)
+            ->where('title', $classType->name)
+            ->firstOrFail();
+
+        $this->assertSame($smallRoom->id, $scheduledClass->room_id);
+        $this->assertSame('2026-06-22 12:00:00', $scheduledClass->starts_at->format('Y-m-d H:i:s'));
+        $this->assertFalse((bool) ($scheduledClass->metadata['trainer_timeframe_override'] ?? false));
 
         Carbon::setTestNow();
     }

@@ -2,7 +2,10 @@
     $quickBookingPrefill = $quickBookingPrefill ?? [];
     $defaultTimezone = $account->timezone ?? config('app.timezone');
     $defaultDate = now($defaultTimezone)->toDateString();
-    $singleLocation = $quickBookingLocations->count() === 1 ? $quickBookingLocations->first() : null;
+    $defaultQuickBookingLocation = $quickBookingLocations->first();
+    $defaultQuickBookingRooms = $defaultQuickBookingLocation
+        ? $quickBookingRooms->where('location_id', $defaultQuickBookingLocation->id)->values()
+        : collect();
     $quickBookingActivityDirections = $quickBookingActivityDirections ?? collect();
 @endphp
 
@@ -11,6 +14,7 @@
         $quickBookingKind = $quickBookingOption['kind'];
         $quickBookingDefinition = $quickBookingOption['definition'];
         $isGroupQuickBooking = $quickBookingKind === \App\Enums\ScheduleKind::GroupClass;
+        $isPrivateQuickBooking = $quickBookingKind === \App\Enums\ScheduleKind::PrivateLesson;
         $modalId = 'quick-booking-title-'.$quickBookingKind->value;
     @endphp
 
@@ -119,26 +123,52 @@
                                 @endif
 
                                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                                    @if ($singleLocation)
-                                        <input type="hidden" name="location_id" value="{{ $singleLocation->id }}" data-quick-booking-location>
-                                    @else
-                                        <label class="block">
-                                            <span class="crm-label">{{ __('app.location') }}</span>
-                                            <select name="location_id" required class="crm-field" data-quick-booking-location>
-                                                @foreach ($quickBookingLocations as $location)
-                                                    <option value="{{ $location->id }}">{{ $location->name }}</option>
-                                                @endforeach
-                                            </select>
-                                        </label>
-                                    @endif
+                                    <label class="block">
+                                        <span class="crm-label">{{ __('app.location') }}</span>
+                                        <select
+                                            required
+                                            class="crm-field disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 disabled:shadow-none"
+                                            data-quick-booking-location
+                                            data-async-field="location_id"
+                                            @disabled($quickBookingLocations->count() <= 1)
+                                        >
+                                            @foreach ($quickBookingLocations as $location)
+                                                <option value="{{ $location->id }}">{{ $location->name }}</option>
+                                            @endforeach
+                                        </select>
+                                        <input
+                                            type="hidden"
+                                            name="location_id"
+                                            value="{{ $defaultQuickBookingLocation?->id }}"
+                                            data-quick-booking-location-value
+                                        >
+                                    </label>
 
                                     <label class="block">
                                         <span class="crm-label">{{ __('app.room') }}</span>
-                                        <select name="room_id" required class="crm-field" data-quick-booking-room data-choose-time-label="{{ __('app.choose_time_first') }}">
+                                        <select
+                                            required
+                                            class="crm-field disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 disabled:shadow-none"
+                                            data-quick-booking-room
+                                            data-async-field="room_id"
+                                            data-choose-time-label="{{ __('app.choose_time_first') }}"
+                                            data-no-rooms-label="{{ __('app.no_rooms') }}"
+                                            @disabled($defaultQuickBookingRooms->count() <= 1)
+                                        >
                                             @foreach ($quickBookingRooms as $room)
-                                                <option value="{{ $room->id }}" data-location-id="{{ $room->location_id }}">{{ $room->location?->name }} · {{ $room->name }}</option>
+                                                <option
+                                                    value="{{ $room->id }}"
+                                                    data-location-id="{{ $room->location_id }}"
+                                                    @selected($room->id === $defaultQuickBookingRooms->first()?->id)
+                                                >{{ $room->name }}</option>
                                             @endforeach
                                         </select>
+                                        <input
+                                            type="hidden"
+                                            name="room_id"
+                                            value="{{ $defaultQuickBookingRooms->first()?->id }}"
+                                            data-quick-booking-room-value
+                                        >
                                     </label>
                                 </div>
 
@@ -186,7 +216,7 @@
                                     </label>
                                 @endif
 
-                                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                                <div class="mt-4 grid gap-4 {{ $isPrivateQuickBooking ? '' : 'sm:grid-cols-2' }}">
                                     <label class="block">
                                         <span class="crm-label">{{ __('app.date') }}</span>
                                         <input
@@ -213,10 +243,7 @@
                                             </label>
                                         </div>
                                     @else
-                                        <label class="block">
-                                            <span class="crm-label">{{ __('app.start_time') }}</span>
-                                            <input type="time" required class="crm-field" data-manual-booking-time data-async-field="starts_at">
-                                        </label>
+                                        <input type="hidden" data-manual-booking-time data-async-field="starts_at">
                                     @endif
                                 </div>
 

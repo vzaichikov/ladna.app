@@ -1458,7 +1458,8 @@ function fillQuickBookingForm(modal, button) {
         setPhoneMaskValue(phoneInput, button?.dataset.quickBookingPrefillPhone ?? '');
     }
 
-    updateQuickBookingRooms(form);
+    syncQuickBookingLocationState(form);
+    updateQuickBookingModalRooms(form);
     loadManualBookingAvailability(form);
 }
 
@@ -1602,6 +1603,91 @@ function cachedRoomOptions(roomSelect) {
     }
 }
 
+function syncQuickBookingSelectState(select, valueInput, disabled) {
+    if (!select) {
+        return;
+    }
+
+    select.disabled = disabled;
+
+    if (valueInput) {
+        valueInput.value = select.value;
+    }
+}
+
+function syncQuickBookingLocationState(form) {
+    const locationSelect = form?.querySelector('[data-quick-booking-location]');
+    const locationValueInput = form?.querySelector('[data-quick-booking-location-value]');
+
+    if (!locationSelect || !locationValueInput) {
+        return;
+    }
+
+    syncQuickBookingSelectState(locationSelect, locationValueInput, locationSelect.options.length <= 1);
+}
+
+function replaceQuickBookingRoomOptions(form, options, preferredRoomId = '', emptyLabel = '') {
+    const roomSelect = form?.querySelector('[data-quick-booking-room]');
+    const roomValueInput = form?.querySelector('[data-quick-booking-room-value]');
+
+    if (!roomSelect || !roomValueInput) {
+        return;
+    }
+
+    roomSelect.innerHTML = '';
+
+    options.forEach((option) => {
+        const element = document.createElement('option');
+
+        element.value = String(option.value);
+        element.textContent = option.text;
+
+        if (option.locationId) {
+            element.dataset.locationId = String(option.locationId);
+        }
+
+        roomSelect.append(element);
+    });
+
+    if (options.length === 0) {
+        const placeholder = document.createElement('option');
+
+        placeholder.value = '';
+        placeholder.textContent = emptyLabel;
+        roomSelect.append(placeholder);
+    }
+
+    const selectedRoom = options.find((option) => String(option.value) === String(preferredRoomId)) ?? options[0];
+
+    roomSelect.value = selectedRoom ? String(selectedRoom.value) : '';
+    syncQuickBookingSelectState(roomSelect, roomValueInput, options.length <= 1);
+}
+
+function roomsForQuickBookingLocation(form) {
+    const locationId = form?.querySelector('[data-quick-booking-location]')?.value || '';
+    const roomSelect = form?.querySelector('[data-quick-booking-room]');
+
+    return cachedRoomOptions(roomSelect)
+        .filter((option) => !option.locationId || option.locationId === locationId);
+}
+
+function updateQuickBookingModalRooms(form, preferredRoomId = '') {
+    const roomSelect = form?.querySelector('[data-quick-booking-room]');
+
+    if (!roomSelect || !form?.querySelector('[data-quick-booking-room-value]')) {
+        return;
+    }
+
+    const locationRooms = roomsForQuickBookingLocation(form);
+
+    replaceQuickBookingRoomOptions(
+        form,
+        locationRooms,
+        preferredRoomId || roomSelect.value,
+        roomSelect.dataset.noRoomsLabel || '',
+    );
+}
+
 function restoreManualRoomOptions(form) {
     const roomSelect = form?.querySelector('[data-quick-booking-room]');
 
@@ -1609,24 +1695,7 @@ function restoreManualRoomOptions(form) {
         return;
     }
 
-    const options = cachedRoomOptions(roomSelect);
-
-    roomSelect.innerHTML = '';
-    options.forEach((option) => {
-        const element = document.createElement('option');
-
-        element.value = option.value;
-        element.textContent = option.text;
-
-        if (option.locationId) {
-            element.dataset.locationId = option.locationId;
-        }
-
-        roomSelect.append(element);
-    });
-
-    roomSelect.disabled = false;
-    updateQuickBookingRooms(form);
+    updateQuickBookingModalRooms(form, roomSelect.value);
 }
 
 function resetPrivateTimeframeRoomOptions(form) {
@@ -1636,16 +1705,21 @@ function resetPrivateTimeframeRoomOptions(form) {
         return;
     }
 
-    cachedRoomOptions(roomSelect);
-    roomSelect.innerHTML = '';
+    const locationRooms = roomsForQuickBookingLocation(form);
 
-    const placeholder = document.createElement('option');
+    if (locationRooms.length === 1) {
+        replaceQuickBookingRoomOptions(form, locationRooms, locationRooms[0].value);
+        return;
+    }
 
-    placeholder.value = '';
-    placeholder.textContent = roomSelect.dataset.chooseTimeLabel || '';
-    roomSelect.append(placeholder);
-    roomSelect.value = '';
-    roomSelect.disabled = true;
+    replaceQuickBookingRoomOptions(
+        form,
+        [],
+        '',
+        locationRooms.length === 0
+            ? (roomSelect.dataset.noRoomsLabel || '')
+            : (roomSelect.dataset.chooseTimeLabel || ''),
+    );
 }
 
 function applyManualSlotRooms(form, rooms = []) {
@@ -1656,21 +1730,17 @@ function applyManualSlotRooms(form, rooms = []) {
     }
 
     cachedRoomOptions(roomSelect);
-    roomSelect.innerHTML = '';
 
-    rooms.forEach((room) => {
-        const option = document.createElement('option');
-
-        option.value = String(room.id);
-        option.textContent = room.name;
-        roomSelect.append(option);
-    });
-
-    roomSelect.disabled = rooms.length === 0;
-
-    if (rooms.length > 0) {
-        roomSelect.value = String(rooms[0].id);
-    }
+    replaceQuickBookingRoomOptions(
+        form,
+        rooms.map((room) => ({
+            value: room.id,
+            text: room.name,
+            locationId: '',
+        })),
+        roomSelect.value,
+        roomSelect.dataset.noRoomsLabel || '',
+    );
 }
 
 function optionMatchesActivityDirection(option, activityDirectionId, multiple = false) {
@@ -1867,7 +1937,7 @@ function loadManualBookingAvailability(form) {
     url.searchParams.set('location_id', locationId);
     url.searchParams.set('class_type_id', classTypeId);
 
-    if (roomId) {
+    if (roomId && !timeframeMode) {
         url.searchParams.set('room_id', roomId);
     }
 
@@ -2470,10 +2540,24 @@ function initQuickBookingModals() {
         input.addEventListener('change', () => {
             const form = input.closest('form');
 
-            updateQuickBookingRooms(form);
+            if (form?.closest('[data-quick-booking-modal]')) {
+                syncQuickBookingLocationState(form);
+                updateQuickBookingModalRooms(form);
+            } else {
+                updateQuickBookingRooms(form);
+            }
+
             loadManualBookingAvailability(form);
         });
-        updateQuickBookingRooms(input.closest('form'));
+
+        const form = input.closest('form');
+
+        if (form?.closest('[data-quick-booking-modal]')) {
+            syncQuickBookingLocationState(form);
+            updateQuickBookingModalRooms(form);
+        } else {
+            updateQuickBookingRooms(form);
+        }
     });
 
     document.querySelectorAll('[data-quick-booking-room], [data-manual-booking-date], [data-manual-booking-activity-direction], [data-manual-booking-class-type], [data-manual-booking-trainer]').forEach((input) => {
@@ -2486,6 +2570,20 @@ function initQuickBookingModals() {
             const form = input.closest('form');
 
             updateManualBookingDirectionFilters(form);
+
+            if (input.matches('[data-quick-booking-room]') && privateTrainerTimeframeMode(form)) {
+                const roomValueInput = form?.querySelector('[data-quick-booking-room-value]');
+
+                syncQuickBookingSelectState(input, roomValueInput, input.disabled);
+                return;
+            }
+
+            if (input.matches('[data-quick-booking-room]')) {
+                const roomValueInput = form?.querySelector('[data-quick-booking-room-value]');
+
+                syncQuickBookingSelectState(input, roomValueInput, input.disabled);
+            }
+
             loadManualBookingAvailability(form);
         });
         updateManualBookingDirectionFilters(input.closest('form'));
@@ -2653,7 +2751,17 @@ function fallbackAsyncMessage(type = 'error', form = null) {
 
 function setFormDisabled(form, disabled) {
     form.querySelectorAll('button, input, select, textarea').forEach((field) => {
-        field.disabled = disabled;
+        if (disabled) {
+            if (field.dataset.asyncWasDisabled === undefined) {
+                field.dataset.asyncWasDisabled = field.disabled ? 'true' : 'false';
+            }
+
+            field.disabled = true;
+            return;
+        }
+
+        field.disabled = field.dataset.asyncWasDisabled === 'true';
+        delete field.dataset.asyncWasDisabled;
     });
     form.setAttribute('aria-busy', disabled ? 'true' : 'false');
 }
