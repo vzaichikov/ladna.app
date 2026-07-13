@@ -56,8 +56,16 @@ class FiscalizationTest extends TestCase
         $this->assertNotNull($receipt);
         $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt->status);
         $this->assertSame('FN-CUSTOMER-1', $receipt->fiscal_number);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/cashier/signin'
+            && $request->data() === [
+                'login' => 'cashier-login',
+                'password' => 'cashier-password',
+            ]
+            && ! $request->hasHeader('X-Client-Name')
+            && ! $request->hasHeader('X-Client-Version'));
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/shifts'
             && $request->hasHeader('X-License-Key', 'license-key'));
+        Http::assertNotSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/cashier/signinPinCode');
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell');
     }
 
@@ -220,9 +228,8 @@ class FiscalizationTest extends TestCase
     {
         return [
             'license_key' => 'license-key',
-            'cashier_pin_code' => '1234',
-            'client_name' => 'Ladna',
-            'client_version' => 'test',
+            'cashier_login' => 'cashier-login',
+            'cashier_password' => 'cashier-password',
         ];
     }
 
@@ -232,7 +239,7 @@ class FiscalizationTest extends TestCase
         $receiptId = '22222222-2222-2222-2222-222222222222';
 
         Http::fake([
-            'https://api.checkbox.ua/api/v1/cashier/signinPinCode' => Http::response(['access_token' => 'checkbox-token']),
+            'https://api.checkbox.ua/api/v1/cashier/signin' => Http::response(['access_token' => 'checkbox-token']),
             'https://api.checkbox.ua/api/v1/cashier/shift' => Http::response(['message' => 'No opened shift'], 422),
             'https://api.checkbox.ua/api/v1/shifts' => Http::response([
                 'id' => $shiftId,
@@ -259,7 +266,7 @@ class FiscalizationTest extends TestCase
         $shiftId = '11111111-1111-1111-1111-111111111111';
 
         Http::fake([
-            'https://api.checkbox.ua/api/v1/cashier/signinPinCode' => Http::response(['access_token' => 'checkbox-token']),
+            'https://api.checkbox.ua/api/v1/cashier/signin' => Http::response(['access_token' => 'checkbox-token']),
             'https://api.checkbox.ua/api/v1/cashier/shift' => Http::response([
                 'id' => $shiftId,
                 'status' => 'OPENED',

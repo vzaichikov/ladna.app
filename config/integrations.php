@@ -60,11 +60,8 @@ return [
             'category' => 'fiscalization',
             'fields' => [
                 'license_key' => ['label_key' => 'app.integration_field_license_key', 'type' => 'password', 'sensitive' => true, 'required_when_enabled' => true, 'max' => 2048],
-                'cashier_pin_code' => ['label_key' => 'app.integration_field_cashier_pin_code', 'type' => 'password', 'sensitive' => true, 'required_when_enabled' => true, 'max' => 255],
-                'client_name' => ['label_key' => 'app.integration_field_client_name', 'type' => 'text', 'required_when_enabled' => true, 'max' => 255],
-                'client_version' => ['label_key' => 'app.integration_field_client_version', 'type' => 'text', 'required_when_enabled' => true, 'max' => 255],
-                'cashier_login' => ['label_key' => 'app.integration_field_cashier_login', 'type' => 'text', 'max' => 255],
-                'cashier_password' => ['label_key' => 'app.integration_field_cashier_password', 'type' => 'password', 'sensitive' => true, 'max' => 2048],
+                'cashier_login' => ['label_key' => 'app.integration_field_cashier_login', 'type' => 'text', 'required_when_enabled' => true, 'max' => 255],
+                'cashier_password' => ['label_key' => 'app.integration_field_cashier_password', 'type' => 'password', 'sensitive' => true, 'required_when_enabled' => true, 'max' => 2048],
             ],
         ],
         'turbosms' => [

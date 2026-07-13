@@ -39,7 +39,7 @@ class CheckboxFiscalizationClient
             return FiscalizationResult::failed(null, null, $shiftError);
         }
 
-        $response = $this->authorizedRequest($setting, $token)
+        $response = $this->authorizedRequest($token)
             ->post(self::BaseUrl.'/api/v1/receipts/sell', $payload);
 
         $result = $this->resultFromResponse($response);
@@ -48,7 +48,7 @@ class CheckboxFiscalizationClient
             return $result;
         }
 
-        return $this->pollReceipt($setting, $token, $result->providerReceiptId, $result);
+        return $this->pollReceipt($token, $result->providerReceiptId, $result);
     }
 
     public function status(IntegrationSetting $setting, string $providerReceiptId): FiscalizationResult
@@ -59,7 +59,7 @@ class CheckboxFiscalizationClient
             return FiscalizationResult::failed($providerReceiptId, null, 'Checkbox sign in failed.');
         }
 
-        $response = $this->authorizedRequest($setting, $token)
+        $response = $this->authorizedRequest($token)
             ->get(self::BaseUrl.'/api/v1/receipts/'.$providerReceiptId);
 
         return $this->resultFromResponse($response);
@@ -68,14 +68,10 @@ class CheckboxFiscalizationClient
     private function token(IntegrationSetting $setting): ?string
     {
         $credentials = $setting->readableCredentials();
-        $response = filled($credentials['cashier_login'] ?? null) && filled($credentials['cashier_password'] ?? null)
-            ? $this->baseRequest($setting)->post(self::BaseUrl.'/api/v1/cashier/signin', [
-                'login' => (string) $credentials['cashier_login'],
-                'password' => (string) $credentials['cashier_password'],
-            ])
-            : $this->licensedRequest($setting)->post(self::BaseUrl.'/api/v1/cashier/signinPinCode', [
-                'pin_code' => (string) ($credentials['cashier_pin_code'] ?? ''),
-            ]);
+        $response = $this->baseRequest()->post(self::BaseUrl.'/api/v1/cashier/signin', [
+            'login' => (string) ($credentials['cashier_login'] ?? ''),
+            'password' => (string) ($credentials['cashier_password'] ?? ''),
+        ]);
 
         if (! $response->successful()) {
             return null;
@@ -86,35 +82,23 @@ class CheckboxFiscalizationClient
         return is_string($token) && $token !== '' ? $token : null;
     }
 
-    private function baseRequest(IntegrationSetting $setting): PendingRequest
+    private function baseRequest(): PendingRequest
     {
-        $credentials = $setting->readableCredentials();
-
-        $headers = [
-            'X-Client-Name' => (string) ($credentials['client_name'] ?? 'Ladna'),
-            'X-Client-Version' => (string) ($credentials['client_version'] ?? config('app.version', '1.0')),
-        ];
-
-        if (filled($credentials['device_id'] ?? null)) {
-            $headers['X-Device-ID'] = (string) $credentials['device_id'];
-        }
-
-        return Http::withHeaders($headers)
-            ->acceptJson()
+        return Http::acceptJson()
             ->asJson()
             ->timeout(10)
             ->connectTimeout(3)
             ->retry([100, 300], throw: false);
     }
 
-    private function authorizedRequest(IntegrationSetting $setting, string $token): PendingRequest
+    private function authorizedRequest(string $token): PendingRequest
     {
-        return $this->baseRequest($setting)->withToken($token);
+        return $this->baseRequest()->withToken($token);
     }
 
     private function licensedRequest(IntegrationSetting $setting, ?string $token = null): PendingRequest
     {
-        $request = $this->baseRequest($setting)->withHeaders([
+        $request = $this->baseRequest()->withHeaders([
             'X-License-Key' => (string) ($setting->readableCredentials()['license_key'] ?? ''),
         ]);
 
@@ -123,7 +107,7 @@ class CheckboxFiscalizationClient
 
     private function ensureShiftIsOpen(IntegrationSetting $setting, string $token): ?string
     {
-        $currentShiftResponse = $this->authorizedRequest($setting, $token)
+        $currentShiftResponse = $this->authorizedRequest($token)
             ->get(self::BaseUrl.'/api/v1/cashier/shift');
 
         if ($currentShiftResponse->successful()) {
@@ -138,7 +122,7 @@ class CheckboxFiscalizationClient
                 $shiftId = $this->firstString($currentShift, ['id', 'shift_id']);
 
                 return $shiftId
-                    ? $this->waitForOpenedShift($setting, $token, $shiftId)
+                    ? $this->waitForOpenedShift($token, $shiftId)
                     : 'Checkbox shift is opening, but response did not include a shift ID.';
             }
 
@@ -166,10 +150,10 @@ class CheckboxFiscalizationClient
             return null;
         }
 
-        return $this->waitForOpenedShift($setting, $token, $returnedShiftId);
+        return $this->waitForOpenedShift($token, $returnedShiftId);
     }
 
-    private function waitForOpenedShift(IntegrationSetting $setting, string $token, string $shiftId): ?string
+    private function waitForOpenedShift(string $token, string $shiftId): ?string
     {
         $lastStatus = null;
 
@@ -178,7 +162,7 @@ class CheckboxFiscalizationClient
                 usleep($delayMicroseconds);
             }
 
-            $response = $this->authorizedRequest($setting, $token)
+            $response = $this->authorizedRequest($token)
                 ->get(self::BaseUrl.'/api/v1/shifts/'.$shiftId);
             $payload = $this->jsonPayload($response);
 
@@ -201,7 +185,6 @@ class CheckboxFiscalizationClient
     }
 
     private function pollReceipt(
-        IntegrationSetting $setting,
         string $token,
         string $providerReceiptId,
         FiscalizationResult $initialResult,
@@ -214,7 +197,7 @@ class CheckboxFiscalizationClient
             }
 
             $lastResult = $this->resultFromResponse(
-                $this->authorizedRequest($setting, $token)
+                $this->authorizedRequest($token)
                     ->get(self::BaseUrl.'/api/v1/receipts/'.$providerReceiptId),
             );
 

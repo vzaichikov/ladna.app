@@ -468,9 +468,8 @@ class PaymentHistoryTest extends TestCase
     {
         return [
             'license_key' => 'license-key',
-            'cashier_pin_code' => '1234',
-            'client_name' => 'Ladna',
-            'client_version' => 'test',
+            'cashier_login' => 'cashier-login',
+            'cashier_password' => 'cashier-password',
         ];
     }
 }

@@ -51,6 +51,97 @@ class IntegrationSettingsTest extends TestCase
         $this->assertArrayNotHasKey('webhook_public_key', $setting->credentials);
     }
 
+    public function test_checkbox_uses_only_license_login_and_password(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.integrations.index', ['tab' => 'fiscalization']))
+            ->assertOk()
+            ->assertSee('name="credentials[license_key]"', false)
+            ->assertSee('name="credentials[cashier_login]"', false)
+            ->assertSee('name="credentials[cashier_password]"', false)
+            ->assertDontSee('name="credentials[cashier_pin_code]"', false)
+            ->assertDontSee('name="credentials[client_name]"', false)
+            ->assertDontSee('name="credentials[client_version]"', false);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.integrations.update', 'checkbox'), [
+                'is_enabled' => '1',
+                'credentials' => [
+                    'license_key' => 'checkbox-license',
+                    'cashier_login' => 'cashier-login',
+                    'cashier_password' => 'cashier-password',
+                    'cashier_pin_code' => '1234',
+                    'client_name' => 'Custom client',
+                    'client_version' => '9.9.9',
+                ],
+            ])
+            ->assertRedirect(route('platform.integrations.index', ['tab' => 'fiscalization']));
+
+        $setting = IntegrationSetting::platform()->where('provider', 'checkbox')->firstOrFail();
+
+        $this->assertTrue($setting->is_enabled);
+        $this->assertSame([
+            'license_key' => 'checkbox-license',
+            'cashier_login' => 'cashier-login',
+            'cashier_password' => 'cashier-password',
+        ], $setting->credentials);
+    }
+
+    public function test_checkbox_requires_all_three_credentials_when_enabled(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.integrations.update', 'checkbox'), [
+                'is_enabled' => '1',
+                'credentials' => [],
+            ])
+            ->assertSessionHasErrors([
+                'credentials.license_key',
+                'credentials.cashier_login',
+                'credentials.cashier_password',
+            ]);
+
+        $this->assertFalse(IntegrationSetting::platform()->where('provider', 'checkbox')->exists());
+    }
+
+    public function test_checkbox_preserves_license_and_removes_legacy_credentials_when_updated(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $setting = IntegrationSetting::factory()->create([
+            'provider' => 'checkbox',
+            'category' => 'fiscalization',
+            'is_enabled' => true,
+            'credentials' => [
+                'license_key' => 'existing-license',
+                'cashier_pin_code' => '1234',
+                'client_name' => 'Legacy client',
+                'client_version' => '1.0',
+            ],
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.integrations.update', 'checkbox'), [
+                'is_enabled' => '1',
+                'credentials' => [
+                    'license_key' => '',
+                    'cashier_login' => 'cashier-login',
+                    'cashier_password' => 'cashier-password',
+                ],
+            ])
+            ->assertRedirect(route('platform.integrations.index', ['tab' => 'fiscalization']));
+
+        $setting->refresh();
+
+        $this->assertSame([
+            'license_key' => 'existing-license',
+            'cashier_login' => 'cashier-login',
+            'cashier_password' => 'cashier-password',
+        ], $setting->credentials);
+    }
+
     public function test_platform_admin_can_configure_email_delivery_engine(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
