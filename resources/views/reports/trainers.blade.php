@@ -71,8 +71,9 @@
         </div>
     </form>
 
-    <section class="mt-6 grid gap-4 sm:grid-cols-2">
+    <section class="mt-6 grid gap-4 sm:grid-cols-3">
         <x-ui.metric :label="__('app.trainer_report_total_classes')" :value="$totals['classes_count']" icon="calendar" accent="brand" />
+        <x-ui.metric :label="__('app.private_lessons')" :value="$totals['private_lessons_count']" icon="user" accent="violet" />
         <x-ui.metric :label="__('app.trainer_report_people_count')" :value="$totals['people_count']" icon="accounts" accent="emerald" />
     </section>
 
@@ -80,6 +81,7 @@
         <div class="hidden gap-3 border-b border-stone-100 px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:flex">
             <div class="flex-1">{{ __('app.trainer') }}</div>
             <div class="flex-1">{{ __('app.trainer_report_total_classes') }}</div>
+            <div class="flex-1">{{ __('app.private_lessons') }}</div>
             <div class="flex-1">{{ __('app.trainer_report_people_count') }}</div>
         </div>
 
@@ -88,12 +90,13 @@
                 $trainer = $row['trainer'];
             @endphp
             <article
-                class="crm-row lg:grid-cols-3 lg:items-center"
+                class="crm-row lg:grid-cols-4 lg:items-center"
                 data-trainer-report-row
                 data-trainer-id="{{ $trainer->id }}"
                 data-classes-count="{{ $row['classes_count'] }}"
+                data-private-lessons-count="{{ $row['private_lessons_count'] }}"
                 data-people-count="{{ $row['people_count'] }}"
-                data-report-metrics="{{ $trainer->id }}:{{ $row['classes_count'] }}:{{ $row['people_count'] }}"
+                data-report-metrics="{{ $trainer->id }}:{{ $row['classes_count'] }}:{{ $row['private_lessons_count'] }}:{{ $row['people_count'] }}"
             >
                 <div class="flex min-w-0 items-center gap-4">
                     @if ($trainer->photoUrl())
@@ -116,6 +119,10 @@
                 <div>
                     <div class="text-2xl font-semibold text-slate-950">{{ $row['classes_count'] }}</div>
                     <div class="mt-1 text-xs font-medium text-slate-500">{{ __('app.trainer_report_total_classes') }}</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-semibold text-slate-950">{{ $row['private_lessons_count'] }}</div>
+                    <div class="mt-1 text-xs font-medium text-slate-500">{{ __('app.private_lessons') }}</div>
                 </div>
                 <div>
                     <div class="text-2xl font-semibold text-slate-950">{{ $row['people_count'] }}</div>

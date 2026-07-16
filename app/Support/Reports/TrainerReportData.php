@@ -3,18 +3,21 @@
 namespace App\Support\Reports;
 
 use App\Enums\ScheduledClassStatus;
+use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassBooking;
+use App\Models\ClassType;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 
 class TrainerReportData
 {
     /**
      * @param  array{date_from: string, date_to: string, location_id: int|null, booking_statuses: array<int, string>}  $filters
-     * @return Collection<int, array{trainer: Trainer, classes_count: int, people_count: int}>
+     * @return Collection<int, array{trainer: Trainer, classes_count: int, private_lessons_count: int, people_count: int}>
      */
     public function forAccount(Account $account, array $filters): Collection
     {
@@ -27,21 +30,27 @@ class TrainerReportData
             ->with('trainerType')
             ->orderBy('name')
             ->get()
-            ->map(fn (Trainer $trainer): array => [
-                'trainer' => $trainer,
-                'classes_count' => (int) ($classCounts->get($trainer->id) ?? 0),
-                'people_count' => (int) ($peopleCounts->get($trainer->id) ?? 0),
-            ]);
+            ->map(function (Trainer $trainer) use ($classCounts, $peopleCounts): array {
+                $counts = $classCounts->get($trainer->id);
+
+                return [
+                    'trainer' => $trainer,
+                    'classes_count' => (int) ($counts?->classes_count ?? 0),
+                    'private_lessons_count' => (int) ($counts?->private_lessons_count ?? 0),
+                    'people_count' => (int) ($peopleCounts->get($trainer->id) ?? 0),
+                ];
+            });
     }
 
     /**
-     * @param  Collection<int, array{trainer: Trainer, classes_count: int, people_count: int}>  $rows
-     * @return array{classes_count: int, people_count: int}
+     * @param  Collection<int, array{trainer: Trainer, classes_count: int, private_lessons_count: int, people_count: int}>  $rows
+     * @return array{classes_count: int, private_lessons_count: int, people_count: int}
      */
     public function totals(Collection $rows): array
     {
         return [
             'classes_count' => (int) $rows->sum('classes_count'),
+            'private_lessons_count' => (int) $rows->sum('private_lessons_count'),
             'people_count' => (int) $rows->sum('people_count'),
         ];
     }
@@ -64,18 +73,31 @@ class TrainerReportData
     }
 
     /**
-     * @return Collection<int, int>
+     * @return Collection<int, ScheduledClass>
      */
     private function classCounts(Account $account, CarbonImmutable $startsAt, CarbonImmutable $endsAt, ?int $locationId): Collection
     {
+        $classesTable = (new ScheduledClass)->getTable();
+        $classTypesTable = (new ClassType)->getTable();
+
         return $account->scheduledClasses()
-            ->select('trainer_id')
+            ->select($classesTable.'.trainer_id')
             ->selectRaw('count(*) as classes_count')
-            ->where('status', '!=', ScheduledClassStatus::Cancelled->value)
-            ->whereBetween('starts_at', [$startsAt, $endsAt])
-            ->when($locationId !== null, fn ($query) => $query->where('location_id', $locationId))
-            ->groupBy('trainer_id')
-            ->pluck('classes_count', 'trainer_id');
+            ->selectRaw(
+                "sum(case when {$classTypesTable}.schedule_kind = ? then 1 else 0 end) as private_lessons_count",
+                [ScheduleKind::PrivateLesson->value],
+            )
+            ->leftJoin($classTypesTable, function (JoinClause $join) use ($classesTable, $classTypesTable): void {
+                $join
+                    ->on($classTypesTable.'.id', '=', $classesTable.'.class_type_id')
+                    ->on($classTypesTable.'.account_id', '=', $classesTable.'.account_id');
+            })
+            ->where($classesTable.'.status', '!=', ScheduledClassStatus::Cancelled->value)
+            ->whereBetween($classesTable.'.starts_at', [$startsAt, $endsAt])
+            ->when($locationId !== null, fn ($query) => $query->where($classesTable.'.location_id', $locationId))
+            ->groupBy($classesTable.'.trainer_id')
+            ->get()
+            ->keyBy('trainer_id');
     }
 
     /**

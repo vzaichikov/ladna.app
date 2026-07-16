@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AccountMembership;
@@ -104,8 +105,26 @@ class TrainerReportTest extends TestCase
         $this->booking($account, $aliceClass, ClassBookingStatus::NoShow, 'No Show Client');
         $this->booking($account, $aliceClass, ClassBookingStatus::Cancelled, 'Cancelled Client');
 
+        $privateLesson = $this->scheduledClass(
+            $account,
+            $alice,
+            $center,
+            '2026-06-10 12:00:00',
+            scheduleKind: ScheduleKind::PrivateLesson,
+        );
+        $this->booking($account, $privateLesson, ClassBookingStatus::Booked, 'Private Lesson Client');
+
         $cancelledClass = $this->scheduledClass($account, $alice, $center, '2026-06-11 10:00:00', ScheduledClassStatus::Cancelled);
         $this->booking($account, $cancelledClass, ClassBookingStatus::Booked, 'Cancelled Class Client');
+        $cancelledPrivateLesson = $this->scheduledClass(
+            $account,
+            $alice,
+            $center,
+            '2026-06-11 12:00:00',
+            ScheduledClassStatus::Cancelled,
+            ScheduleKind::PrivateLesson,
+        );
+        $this->booking($account, $cancelledPrivateLesson, ClassBookingStatus::Booked, 'Cancelled Private Lesson Client');
         $this->scheduledClass($account, $alice, $suburb, '2026-06-12 10:00:00');
         $this->scheduledClass($account, $bob, $center, '2026-06-13 10:00:00');
 
@@ -127,9 +146,9 @@ class TrainerReportTest extends TestCase
             ->assertSee('Inactive Bob')
             ->assertSee('Zero Trainer')
             ->assertDontSee('Other Studio Trainer')
-            ->assertSee('data-report-metrics="'.$alice->id.':1:2"', false)
-            ->assertSee('data-report-metrics="'.$bob->id.':1:0"', false)
-            ->assertSee('data-report-metrics="'.$zero->id.':0:0"', false);
+            ->assertSee('data-report-metrics="'.$alice->id.':2:1:3"', false)
+            ->assertSee('data-report-metrics="'.$bob->id.':1:0:0"', false)
+            ->assertSee('data-report-metrics="'.$zero->id.':0:0:0"', false);
     }
 
     public function test_trainer_report_can_filter_people_by_booking_status(): void
@@ -152,7 +171,7 @@ class TrainerReportTest extends TestCase
                 'booking_statuses' => [ClassBookingStatus::NoShow->value],
             ]))
             ->assertOk()
-            ->assertSee('data-report-metrics="'.$trainer->id.':1:1"', false);
+            ->assertSee('data-report-metrics="'.$trainer->id.':1:0:1"', false);
     }
 
     public function test_default_period_uses_account_timezone(): void
@@ -173,7 +192,7 @@ class TrainerReportTest extends TestCase
             ->get(route('dashboard.accounts.reports.trainers', $account))
             ->assertOk()
             ->assertSee('value="2026-07-01"', false)
-            ->assertSee('data-report-metrics="'.$trainer->id.':1:1"', false);
+            ->assertSee('data-report-metrics="'.$trainer->id.':1:0:1"', false);
     }
 
     private function scheduledClass(
@@ -182,6 +201,7 @@ class TrainerReportTest extends TestCase
         Location $location,
         string $startsAt,
         ScheduledClassStatus $status = ScheduledClassStatus::Scheduled,
+        ScheduleKind $scheduleKind = ScheduleKind::GroupClass,
     ): ScheduledClass {
         $start = Carbon::parse($startsAt, 'UTC');
         $room = Room::factory()->for($account)->for($location)->create();
@@ -189,7 +209,7 @@ class TrainerReportTest extends TestCase
         $classType = ClassType::factory()
             ->for($account)
             ->for($activityDirection, 'activityDirection')
-            ->create();
+            ->create(['schedule_kind' => $scheduleKind->value]);
 
         return ScheduledClass::factory()
             ->for($account)

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.83.0',
+                'date' => '2026-07-16',
+                'title' => 'Private lesson totals in trainer reports',
+                'items' => ['Trainer reports now show private lesson counts separately for the selected period while keeping the existing total for all assigned classes. Cancelled classes remain excluded from class, private lesson, and people totals.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.82.0',
                 'date' => '2026-07-10',
                 'title' => 'Protected booking corrections and pass recovery',
@@ -737,6 +744,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.83.0',
+                'date' => '2026-07-16',
+                'title' => 'Кількість індивідуальних занять у звітах по тренерах',
+                'items' => ['У звітах по тренерах тепер окремо показується кількість індивідуальних занять за вибраний період, а загальна кількість і далі охоплює всі призначені заняття. Скасовані заняття не враховуються в кількості занять, індивідуальних занять і людей.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.82.0',
                 'date' => '2026-07-10',
