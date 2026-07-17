@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.85.0',
+                'date' => '2026-07-17',
+                'title' => 'Trainer corrections for class records',
+                'items' => ['Studio owners and staff with schedule access can now assign or correct the trainer on manually created group and private classes, including future records, and on classes that have already ended. Future and running automatically generated classes remain protected, while every correction keeps a permanent history with the previous trainer, new trainer, time, and responsible staff member.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.84.0',
                 'date' => '2026-07-17',
                 'title' => 'Trainer work reports and operational expense control',
@@ -751,6 +758,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.85.0',
+                'date' => '2026-07-17',
+                'title' => 'Виправлення тренера у записах занять',
+                'items' => ['Власниця студії та працівники з доступом до розкладу тепер можуть призначити або виправити тренера у створених вручну групових та індивідуальних заняттях, зокрема майбутніх, а також у вже завершених заняттях. Майбутні й поточні автоматично згенеровані заняття залишаються захищеними, а кожне виправлення назавжди зберігає попереднього й нового тренера, час і відповідального працівника.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.84.0',
                 'date' => '2026-07-17',

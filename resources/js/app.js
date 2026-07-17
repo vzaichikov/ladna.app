@@ -2945,7 +2945,52 @@ function replaceScheduledClassCard(cardHtml, fallbackCard) {
     initCustomerAutocomplete(replacement);
     initClassPassPreviews(replacement);
     initPhoneMasks(replacement);
+    initScheduledClassTrainerModals(replacement);
     createIcons({ icons });
+}
+
+function closeScheduledClassTrainerModal(modal) {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+function initScheduledClassTrainerModals(root = document) {
+    root.querySelectorAll('[data-scheduled-class-trainer-modal]').forEach((modal) => {
+        if (modal.dataset.scheduledClassTrainerModalReady === 'true') {
+            return;
+        }
+
+        modal.dataset.scheduledClassTrainerModalReady = 'true';
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeScheduledClassTrainerModal(modal);
+            }
+        });
+
+        modal.querySelectorAll('[data-scheduled-class-trainer-close]').forEach((button) => {
+            button.addEventListener('click', () => closeScheduledClassTrainerModal(modal));
+        });
+    });
+
+    root.querySelectorAll('[data-scheduled-class-trainer-open]').forEach((button) => {
+        if (button.dataset.scheduledClassTrainerOpenReady === 'true') {
+            return;
+        }
+
+        button.dataset.scheduledClassTrainerOpenReady = 'true';
+        button.addEventListener('click', () => {
+            const modal = root.querySelector(`[data-scheduled-class-trainer-modal="${button.dataset.scheduledClassTrainerOpen}"]`)
+                ?? document.querySelector(`[data-scheduled-class-trainer-modal="${button.dataset.scheduledClassTrainerOpen}"]`);
+
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.querySelector('[data-scheduled-class-trainer-select]')?.focus();
+        });
+    });
 }
 
 function showAsyncSuccessModal(form, payload) {
@@ -4394,6 +4439,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPeopleCounterMaskEditors();
     initManualClassModals();
     initTrainerSubstitutionModals();
+    initScheduledClassTrainerModals();
     initTrainerIssueModals();
     initTrainerPrivateLessonsModal();
     initTrainerPrivateTimeframes();
@@ -4622,6 +4668,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (event.key === 'Escape') {
             closeTrainerSubstitutionModal(document.querySelector('[data-trainer-substitution-modal]:not(.hidden)'));
+        }
+
+        if (event.key === 'Escape') {
+            closeScheduledClassTrainerModal(document.querySelector('[data-scheduled-class-trainer-modal]:not(.hidden)'));
         }
 
         if (event.key === 'Escape') {

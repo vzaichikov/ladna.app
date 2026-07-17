@@ -34,6 +34,12 @@
     $addedDaysPassesCount = $cancellationEffects->where('added_validity_days', '>', 0)->count();
     $addedDaysCount = (int) ($cancellationEffects->max('added_validity_days') ?? 0);
     $readonly = $readonly ?? false;
+    $trainerOptions = $trainerOptions ?? collect();
+    $trainerChanges = $scheduledClass->relationLoaded('trainerChanges') ? $scheduledClass->trainerChanges : collect();
+    $canEditScheduledClassTrainer = (auth()->user()?->can('manageSchedule', $account) ?? false)
+        && $scheduledClass->canManuallyCorrectTrainer()
+        && $trainerOptions->isNotEmpty();
+    $trainerOptionAllowsInactive = $scheduledClass->ends_at->lessThanOrEqualTo(now());
     $canManageClassCancellation = auth()->user()?->can('manageSchedule', $account) && auth()->user()?->can('manageBookings', $account);
     $canCancelClass = $canManageClassCancellation && ! $isCancelledClass && $scheduledClass->isStudioCancellationOpen();
     $canRestoreClass = $canManageClassCancellation && $isCancelledClass && ! $isClosedCorrectionCancellation;
@@ -112,7 +118,18 @@
         </div>
         <div>
             <dt class="text-slate-500">{{ __('app.trainer') }}</dt>
-            <dd class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned') }}</dd>
+            <dd class="mt-1 flex items-center gap-2 font-semibold text-slate-950">
+                <span>{{ $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned') }}</span>
+                @if ($canEditScheduledClassTrainer)
+                    <x-ui.action-button
+                        type="button"
+                        variant="ghost"
+                        icon="pencil"
+                        :label="__('app.edit_scheduled_class_trainer')"
+                        data-scheduled-class-trainer-open="{{ $scheduledClass->id }}"
+                    />
+                @endif
+            </dd>
         </div>
     </dl>
 
@@ -467,6 +484,91 @@
                     @endunless
                 </div>
             @endforeach
+        </div>
+    @endif
+    @if ($canEditScheduledClassTrainer)
+        <div
+            class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/50 p-4"
+            data-scheduled-class-trainer-modal="{{ $scheduledClass->id }}"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scheduled-class-trainer-title-{{ $scheduledClass->id }}"
+        >
+            <div class="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 id="scheduled-class-trainer-title-{{ $scheduledClass->id }}" class="text-xl font-semibold text-slate-950">
+                            {{ __('app.edit_scheduled_class_trainer') }}
+                        </h2>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('app.edit_scheduled_class_trainer_copy') }}</p>
+                    </div>
+                    <x-ui.action-button
+                        type="button"
+                        variant="ghost"
+                        icon="x"
+                        :label="__('app.close')"
+                        data-scheduled-class-trainer-close
+                    />
+                </div>
+
+                <form
+                    method="POST"
+                    action="{{ route('dashboard.accounts.scheduled-classes.trainer.update', [$account, $scheduledClass]) }}"
+                    data-async-form
+                    class="mt-5 space-y-4"
+                >
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="readonly" value="{{ $readonly ? 1 : 0 }}">
+                    <div
+                        class="hidden"
+                        data-async-form-status
+                        data-validation-message="{{ __('app.async_validation_failed') }}"
+                        data-error-message="{{ __('app.async_request_failed') }}"
+                    ></div>
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.trainer') }}</span>
+                        <select name="trainer_id" class="crm-field" required data-scheduled-class-trainer-select>
+                            <option value="" disabled @selected($scheduledClass->trainer_id === null)>{{ __('app.choose_trainer') }}</option>
+                            @foreach ($trainerOptions as $trainerOption)
+                                @continue(! $trainerOptionAllowsInactive && ! $trainerOption->is_active)
+                                <option value="{{ $trainerOption->id }}" @selected($scheduledClass->trainer_id === $trainerOption->id)>
+                                    {{ $trainerOption->name }}@if (! $trainerOption->is_active) · {{ __('app.inactive') }}@endif
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <div class="flex flex-wrap justify-end gap-2">
+                        <x-ui.button type="button" variant="secondary" data-scheduled-class-trainer-close>{{ __('app.cancel') }}</x-ui.button>
+                        <x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
+                    </div>
+                </form>
+
+                <section class="mt-6 border-t border-stone-200 pt-5">
+                    <h3 class="text-sm font-semibold text-slate-950">{{ __('app.trainer_change_history') }}</h3>
+                    @if ($trainerChanges->isEmpty())
+                        <p class="mt-3 text-sm text-slate-500">{{ __('app.no_trainer_change_history') }}</p>
+                    @else
+                        <ol class="mt-3 space-y-3">
+                            @foreach ($trainerChanges as $trainerChange)
+                                <li class="rounded-xl border border-stone-200 bg-slate-50 p-3 text-sm">
+                                    <div class="font-semibold text-slate-950">
+                                        {{ $trainerChange->previous_trainer_name ?? __('app.trainer_not_assigned') }}
+                                        <span aria-hidden="true">→</span>
+                                        {{ $trainerChange->new_trainer_name ?? __('app.trainer_not_assigned') }}
+                                    </div>
+                                    <div class="mt-1 text-xs leading-5 text-slate-500">
+                                        <time datetime="{{ $trainerChange->created_at->toIso8601String() }}">
+                                            {{ \App\Support\DateTimePresenter::format($trainerChange->created_at, $account, 'd.m.Y H:i') }}
+                                        </time>
+                                        · {{ __('app.changed_by') }} {{ $trainerChange->actor_name ?? $trainerChange->actor_email ?? __('app.system') }}
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ol>
+                    @endif
+                </section>
+            </div>
         </div>
     @endif
 </article>

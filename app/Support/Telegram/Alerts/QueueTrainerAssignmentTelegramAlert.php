@@ -17,7 +17,7 @@ class QueueTrainerAssignmentTelegramAlert
         private readonly TelegramAlertProducer $alerts,
     ) {}
 
-    public function execute(ClassBooking $booking): ?TelegramAlert
+    public function execute(ClassBooking $booking, ?string $dedupeSuffix = null): ?TelegramAlert
     {
         $booking->loadMissing([
             'account',
@@ -49,13 +49,13 @@ class QueueTrainerAssignmentTelegramAlert
             TelegramAlertType::TrainerAssignment,
             $account,
             TelegramAlertRecipientKind::Trainer,
-            $this->payload($scheduledClass, $booking),
+            $this->payloadFor($scheduledClass, $booking),
             [
                 'trainer_id' => $scheduledClass->trainer_id,
                 'scheduled_class_id' => $scheduledClass->id,
                 'class_booking_id' => $booking->id,
             ],
-            $this->dedupeKey($scheduledClass, $scheduleKind),
+            $this->dedupeKeyFor($scheduledClass, $dedupeSuffix),
         );
     }
 
@@ -73,23 +73,30 @@ class QueueTrainerAssignmentTelegramAlert
             ->exists();
     }
 
-    private function dedupeKey(ScheduledClass $scheduledClass, ScheduleKind $scheduleKind): ?string
+    public function dedupeKeyFor(ScheduledClass $scheduledClass, ?string $suffix = null): ?string
     {
+        $scheduleKind = $scheduledClass->classType?->schedule_kind;
+
         if ($scheduleKind !== ScheduleKind::GroupClass) {
             return null;
         }
 
-        return Str::of('trainer_assignment')
+        $key = Str::of('trainer_assignment')
             ->append(':group:', (string) $scheduledClass->account_id)
             ->append(':class:', (string) $scheduledClass->id)
-            ->append(':trainer:', (string) ($scheduledClass->trainer_id ?? 'none'))
-            ->toString();
+            ->append(':trainer:', (string) ($scheduledClass->trainer_id ?? 'none'));
+
+        if (filled($suffix)) {
+            $key = $key->append(':', $suffix);
+        }
+
+        return $key->toString();
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function payload(ScheduledClass $scheduledClass, ClassBooking $booking): array
+    public function payloadFor(ScheduledClass $scheduledClass, ClassBooking $booking): array
     {
         return [
             'studio_name' => $scheduledClass->account?->name,

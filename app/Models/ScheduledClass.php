@@ -6,6 +6,7 @@ use App\Enums\AccountStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
+use Carbon\CarbonInterface;
 use Database\Factories\ScheduledClassFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,6 +25,8 @@ class ScheduledClass extends Model
     use HasFactory;
 
     public const STUDIO_CANCELLATION_GRACE_MINUTES = 60;
+
+    public const MANUAL_TRAINER_OVERRIDE_METADATA_KEY = 'manual_trainer_override';
 
     protected $attributes = [
         'is_generated' => false,
@@ -91,6 +94,11 @@ class ScheduledClass extends Model
     public function classBookingCorrections(): HasMany
     {
         return $this->hasMany(ClassBookingCorrection::class);
+    }
+
+    public function trainerChanges(): HasMany
+    {
+        return $this->hasMany(ScheduledClassTrainerChange::class)->latest('id');
     }
 
     public function peopleCounterSamples(): HasMany
@@ -291,5 +299,14 @@ class ScheduledClass extends Model
     public function isStudioCancellationOpen(): bool
     {
         return now()->lessThanOrEqualTo($this->studioCancellationClosesAt());
+    }
+
+    public function canManuallyCorrectTrainer(?CarbonInterface $at = null): bool
+    {
+        if (! in_array($this->classType?->schedule_kind, [ScheduleKind::GroupClass, ScheduleKind::PrivateLesson], true)) {
+            return false;
+        }
+
+        return ! $this->is_generated || $this->ends_at->lessThanOrEqualTo($at ?? now());
     }
 }

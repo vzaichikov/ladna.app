@@ -35,6 +35,10 @@ class ScheduledClassHistoryController extends Controller
             ->active()
             ->orderBy('name')
             ->get(['id', 'name']);
+        $trainerOptions = $account->trainers()
+            ->orderByDesc('is_active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_active']);
         $filterClassTypes = $account->classTypes()
             ->active()
             ->with('activityDirection:id,name')
@@ -57,6 +61,7 @@ class ScheduledClassHistoryController extends Controller
                 'room',
                 'classType.activityDirection',
                 'trainer',
+                'trainerChanges',
                 'scheduleSeries',
                 'activeCancellation.effects',
                 'classBookings' => fn ($query) => $query
@@ -92,6 +97,7 @@ class ScheduledClassHistoryController extends Controller
             'filterLocations' => $filterLocations,
             'filterRooms' => $filterRooms,
             'filterTrainers' => $filterTrainers,
+            'trainerOptions' => $trainerOptions,
             'filterClassTypes' => $filterClassTypes,
             'filterScheduleKinds' => $filterScheduleKinds,
             'selectedDateFrom' => $selectedDateFrom->toDateString(),

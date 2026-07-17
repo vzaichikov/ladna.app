@@ -73,6 +73,10 @@ class SyncTrainerSubstitutions
      */
     private function syncClass(ScheduledClass $scheduledClass, Collection $substitutions, string $timezone): void
     {
+        if (data_get($scheduledClass->metadata, ScheduledClass::MANUAL_TRAINER_OVERRIDE_METADATA_KEY)) {
+            return;
+        }
+
         $matchingSubstitution = $this->matchingSubstitution($scheduledClass, $substitutions, $timezone);
         $existingMetadata = $this->substitutionMetadata($scheduledClass);
         $metadata = $scheduledClass->metadata ?? [];

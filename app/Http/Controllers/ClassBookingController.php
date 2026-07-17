@@ -165,6 +165,7 @@ class ClassBookingController extends Controller
             'room',
             'classType.activityDirection',
             'trainer',
+            'trainerChanges',
             'scheduleSeries',
             'activeCancellation.effects',
             'classBookings' => fn ($query) => $query
@@ -180,6 +181,10 @@ class ClassBookingController extends Controller
                 'scheduledClass' => $scheduledClass,
                 'customerSearchUrl' => route('dashboard.accounts.customers.search', $account),
                 'bookingStatuses' => ClassBookingStatus::cases(),
+                'trainerOptions' => $account->trainers()
+                    ->orderByDesc('is_active')
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'is_active']),
             ])->render(),
         ], $status);
     }

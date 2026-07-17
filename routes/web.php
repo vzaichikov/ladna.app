@@ -71,6 +71,7 @@ use App\Http\Controllers\SalaryModelController;
 use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
 use App\Http\Controllers\ScheduledClassHistoryController;
+use App\Http\Controllers\ScheduledClassTrainerController;
 use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\ServiceRoomController;
 use App\Http\Controllers\StudioCashEntryController;
@@ -522,6 +523,8 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.quick-bookings.manual-availability');
         Route::post('accounts/{account}/scheduled-classes/manual/{scheduleKind}', [ManualScheduledClassController::class, 'store'])
             ->name('accounts.scheduled-classes.manual.store');
+        Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/trainer', [ScheduledClassTrainerController::class, 'update'])
+            ->name('accounts.scheduled-classes.trainer.update');
         Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/cancel', [ScheduledClassCancellationController::class, 'cancel'])
             ->name('accounts.scheduled-classes.cancel');
         Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/cancel-closed', [ScheduledClassCancellationController::class, 'cancelClosed'])

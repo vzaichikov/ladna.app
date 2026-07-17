@@ -526,6 +526,11 @@ class Account extends Model
         return $this->hasMany(AccountActivityLog::class);
     }
 
+    public function telegramAlerts(): HasMany
+    {
+        return $this->hasMany(TelegramAlert::class);
+    }
+
     public function customerPurchases(): HasMany
     {
         return $this->hasMany(CustomerPurchase::class);
@@ -637,6 +642,11 @@ class Account extends Model
     public function classBookingCorrections(): HasMany
     {
         return $this->hasMany(ClassBookingCorrection::class);
+    }
+
+    public function scheduledClassTrainerChanges(): HasMany
+    {
+        return $this->hasMany(ScheduledClassTrainerChange::class);
     }
 
     public function scheduleSeries(): HasMany

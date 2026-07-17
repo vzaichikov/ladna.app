@@ -171,6 +171,7 @@
                 'classes' => $classes,
                 'customerSearchUrl' => $customerSearchUrl,
                 'bookingStatuses' => $bookingStatuses,
+                'trainerOptions' => $trainerOptions,
                 'readonly' => false,
             ])
         @endforeach

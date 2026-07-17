@@ -45,6 +45,10 @@ class ScheduledClassController extends Controller
             ->active()
             ->orderBy('name')
             ->get(['id', 'user_id', 'name']);
+        $trainerOptions = $account->trainers()
+            ->orderByDesc('is_active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_active']);
         $quickBookingData = $quickBookingOptions->forAccount($account);
         $manualClassOptions = $quickBookingData['options']
             ->filter(fn (array $option): bool => in_array($option['kind'], ScheduleKindRegistry::oneOffRecordKinds(), true))
@@ -66,6 +70,7 @@ class ScheduledClassController extends Controller
                 'room',
                 'classType.activityDirection',
                 'trainer',
+                'trainerChanges',
                 'scheduleSeries',
                 'activeCancellation.effects',
                 'classBookings' => fn ($query) => $query
@@ -93,6 +98,7 @@ class ScheduledClassController extends Controller
             'filterLocations' => $filterLocations,
             'filterRooms' => $filterRooms,
             'filterTrainers' => $filterTrainers,
+            'trainerOptions' => $trainerOptions,
             'quickBookingOptions' => $quickBookingData['options'],
             'manualClassOptions' => $manualClassOptions,
             'quickBookingLocations' => $quickBookingData['locations'],
