@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\ClassPassPlan;
 use App\Models\ClassPassSegment;
 use App\Models\ClassType;
+use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\TrainerType;
@@ -69,6 +70,33 @@ class PublicPriceTest extends TestCase
             ->assertJsonMissing(['key' => 'full_day'])
             ->assertJsonMissing(['key' => 'big-hall'])
             ->assertJsonMissing(['title' => 'Top trainer']);
+    }
+
+    public function test_logged_in_customer_can_return_to_customer_portal_from_public_price(): void
+    {
+        [$account, $location] = $this->priceContext();
+        $customer = Customer::factory()->for($account)->create(['name' => 'Olena Client']);
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('public.price', [$account->slug, $location->slug]))
+            ->assertOk()
+            ->assertSee(__('app.public_schedule_logged_in_as', ['name' => $customer->name]))
+            ->assertSee(__('app.customer_portal'))
+            ->assertSee('href="'.route('customer.dashboard', $account->slug).'"', false);
+    }
+
+    public function test_public_price_does_not_expose_customer_session_from_another_studio(): void
+    {
+        [$account, $location] = $this->priceContext();
+        $otherAccount = Account::factory()->create();
+        $customer = Customer::factory()->for($otherAccount)->create(['name' => 'Other Studio Client']);
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('public.price', [$account->slug, $location->slug]))
+            ->assertOk()
+            ->assertDontSee($customer->name)
+            ->assertDontSee('href="'.route('customer.dashboard', $account->slug).'"', false)
+            ->assertSee('href="'.route('customer.studio.login', $account->slug).'"', false);
     }
 
     public function test_public_price_groups_segmented_plans_inside_schedule_kind(): void

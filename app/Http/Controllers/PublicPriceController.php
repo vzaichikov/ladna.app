@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Actions\BuildPublicPriceList;
 use App\Models\Account;
+use App\Models\Customer;
 use App\Models\Location;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class PublicPriceController extends Controller
@@ -30,6 +32,7 @@ class PublicPriceController extends Controller
             'account' => $account,
             'location' => $location,
             'priceGroups' => $buildPublicPriceList->execute($account, $location),
+            'customer' => $this->currentCustomerFor($account),
             'isEmbed' => $isEmbed,
         ]);
     }
@@ -56,5 +59,12 @@ class PublicPriceController extends Controller
             App::setLocale($account->default_language);
             Carbon::setLocale($account->default_language);
         }
+    }
+
+    private function currentCustomerFor(Account $account): ?Customer
+    {
+        $customer = Auth::guard('customer')->user();
+
+        return $customer instanceof Customer && $customer->account_id === $account->id ? $customer : null;
     }
 }
