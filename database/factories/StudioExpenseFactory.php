@@ -3,14 +3,14 @@
 namespace Database\Factories;
 
 use App\Models\Account;
-use App\Models\Location;
-use App\Models\StudioCashEntry;
+use App\Models\ExpenseCategory;
+use App\Models\StudioExpense;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<StudioCashEntry>
+ * @extends Factory<StudioExpense>
  */
-class StudioCashEntryFactory extends Factory
+class StudioExpenseFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -23,11 +23,11 @@ class StudioCashEntryFactory extends Factory
 
         return [
             'account_id' => $account,
-            'location_id' => Location::factory()->for($account),
-            'direction' => StudioCashEntry::DirectionIn,
-            'purpose' => StudioCashEntry::PurposeDeposit,
-            'amount_cents' => fake()->numberBetween(1000, 100000),
+            'expense_category_id' => ExpenseCategory::factory()->for($account),
+            'location_id' => null,
+            'amount_cents' => fake()->numberBetween(100, 100000),
             'currency' => 'UAH',
+            'payment_method' => StudioExpense::PaymentMethodBankCard,
             'occurred_at' => now(),
             'actor_name' => fake()->name(),
             'actor_email' => fake()->safeEmail(),

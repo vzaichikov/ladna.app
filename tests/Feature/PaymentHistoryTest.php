@@ -18,11 +18,14 @@ use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
+use App\Models\ExpenseCategory;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\StudioCashEntry;
+use App\Models\StudioExpense;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\MoneyFormatter;
@@ -49,7 +52,11 @@ class PaymentHistoryTest extends TestCase
             ->create();
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.payments.index', $account))
+            ->get(route('dashboard.accounts.payments.index', [
+                'account' => $account,
+                'date_from' => '2026-06-01',
+                'date_to' => '2026-06-30',
+            ]))
             ->assertOk()
             ->assertSee('Group 8 classes')
             ->assertSee('Payment Client')
@@ -64,6 +71,7 @@ class PaymentHistoryTest extends TestCase
         $account = Account::factory()->create(['name' => 'Studio B']);
         $account->addOwner($owner);
         $purchase = $this->customerPurchase($account);
+        $purchase->update(['paid_at' => Carbon::parse('2026-06-20 02:30:00', 'UTC')]);
         FiscalReceipt::factory()
             ->forAccountScope($account)
             ->for($purchase, 'payment')
@@ -71,7 +79,11 @@ class PaymentHistoryTest extends TestCase
             ->create();
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.payments.index', $account))
+            ->get(route('dashboard.accounts.payments.index', [
+                'account' => $account,
+                'date_from' => '2026-06-01',
+                'date_to' => '2026-06-30',
+            ]))
             ->assertOk()
             ->assertSee('Group 8 classes')
             ->assertDontSee('FN-HIDDEN-1');
@@ -347,6 +359,290 @@ class PaymentHistoryTest extends TestCase
             ->assertSee('Center plan')
             ->assertSee('Center cash desk')
             ->assertDontSee('Suburb plan');
+    }
+
+    public function test_studio_payment_history_defaults_to_account_month_and_filters_by_effective_payment_date(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-17 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['name' => 'Studio Periods', 'timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $this->customerPurchase($account, $location, [
+            'plan_name' => 'Current paid purchase',
+            'paid_at' => '2026-07-01 00:00:00',
+            'started_at' => '2026-06-30 23:00:00',
+        ]);
+        $this->customerPurchase($account, $location, [
+            'plan_name' => 'Current started purchase',
+            'status' => CustomerPurchaseStatus::PaymentPending->value,
+            'paid_at' => null,
+            'started_at' => '2026-07-05 09:00:00',
+        ]);
+        $this->customerPurchase($account, $location, [
+            'plan_name' => 'Previous purchase',
+            'paid_at' => '2026-06-30 23:59:59',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', $account))
+            ->assertOk()
+            ->assertSee('value="2026-07-01"', false)
+            ->assertSee('value="2026-07-17"', false)
+            ->assertSee('Current paid purchase')
+            ->assertSee('Current started purchase')
+            ->assertDontSee('Previous purchase');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', [
+                'account' => $account,
+                'date_from' => '2026-06-01',
+                'date_to' => '2026-06-30',
+            ]))
+            ->assertOk()
+            ->assertSee('Previous purchase')
+            ->assertDontSee('Current paid purchase')
+            ->assertDontSee('Current started purchase');
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.payments.index', $account))
+            ->followingRedirects()
+            ->get(route('dashboard.accounts.payments.index', [
+                'account' => $account,
+                'date_from' => '2026-07-18',
+                'date_to' => '2026-07-17',
+            ]))
+            ->assertOk()
+            ->assertSee('class="crm-help"', false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_payment_period_totals_expenses_and_cash_balance_use_their_documented_scopes(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-17 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'name' => 'Studio Period Totals',
+            'timezone' => 'UTC',
+            'default_currency' => 'UAH',
+        ]);
+        $account->addOwner($owner);
+        $this->enableAccountFiscalization($account);
+        $location = Location::factory()->for($account)->create();
+        $paidPurchase = $this->customerPurchase($account, $location, [
+            'plan_name' => 'Period paid purchase',
+            'amount_cents' => 10000,
+            'paid_at' => '2026-07-10 10:00:00',
+        ]);
+        $pendingPurchase = $this->customerPurchase($account, $location, [
+            'plan_name' => 'Period pending purchase',
+            'status' => CustomerPurchaseStatus::PaymentPending->value,
+            'amount_cents' => 20000,
+            'paid_at' => null,
+            'started_at' => '2026-07-11 10:00:00',
+        ]);
+        $failedPurchase = $this->customerPurchase($account, $location, [
+            'plan_name' => 'Period failed purchase',
+            'status' => CustomerPurchaseStatus::PaymentFailed->value,
+            'amount_cents' => 30000,
+            'paid_at' => null,
+            'started_at' => '2026-07-12 10:00:00',
+        ]);
+        $previousPurchase = $this->customerPurchase($account, $location, [
+            'plan_name' => 'Previous paid purchase',
+            'amount_cents' => 40000,
+            'paid_at' => '2026-06-30 23:59:59',
+        ]);
+        FiscalReceipt::factory()->forAccountScope($account)->for($paidPurchase, 'payment')->failed()->create();
+        FiscalReceipt::factory()->forAccountScope($account)->for($previousPurchase, 'payment')->failed()->create();
+
+        $category = ExpenseCategory::factory()->for($account)->create(['name' => 'Supplies']);
+        StudioExpense::factory()
+            ->for($account)
+            ->for($category, 'category')
+            ->create([
+                'location_id' => $location->id,
+                'amount_cents' => 2500,
+                'occurred_at' => '2026-07-10 12:00:00',
+                'payment_method' => StudioExpense::PaymentMethodBankCard,
+            ]);
+        StudioExpense::factory()
+            ->for($account)
+            ->for($category, 'category')
+            ->create([
+                'location_id' => $location->id,
+                'amount_cents' => 9000,
+                'occurred_at' => '2026-07-11 12:00:00',
+                'voided_at' => '2026-07-12 12:00:00',
+                'void_reason' => 'Duplicate',
+                'payment_method' => StudioExpense::PaymentMethodBankTransfer,
+            ]);
+        StudioExpense::factory()
+            ->for($account)
+            ->for($category, 'category')
+            ->create([
+                'location_id' => $location->id,
+                'amount_cents' => 8000,
+                'occurred_at' => '2026-06-30 23:59:59',
+            ]);
+        StudioCashEntry::factory()->for($account)->for($location)->create([
+            'direction' => StudioCashEntry::DirectionIn,
+            'purpose' => StudioCashEntry::PurposeDeposit,
+            'amount_cents' => 1000,
+            'occurred_at' => '2026-06-30 10:00:00',
+        ]);
+        StudioCashEntry::factory()->for($account)->for($location)->create([
+            'direction' => StudioCashEntry::DirectionOut,
+            'purpose' => StudioCashEntry::PurposeOwnerWithdrawal,
+            'amount_cents' => 300,
+            'occurred_at' => '2026-07-13 10:00:00',
+        ]);
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', [
+                'account' => $account,
+                'date_from' => '2026-07-01',
+                'date_to' => '2026-07-17',
+                'location_id' => $location->id,
+            ]))
+            ->assertOk();
+
+        $this->assertSame(3, $response->viewData('stats')['total']);
+        $this->assertSame(['UAH' => 10000], $response->viewData('stats')['paid_amounts_by_currency']);
+        $this->assertSame(1, $response->viewData('stats')['pending']);
+        $this->assertSame(1, $response->viewData('stats')['failed']);
+        $this->assertSame(1, $response->viewData('stats')['fiscal_failed']);
+        $this->assertSame(['UAH' => 700], $response->viewData('stats')['cash_balance_by_currency']);
+        $this->assertSame([
+            'income_by_currency' => ['UAH' => 10000],
+            'expense_by_currency' => ['UAH' => 2500],
+            'net_by_currency' => ['UAH' => 7500],
+            'owner_withdrawal_by_currency' => ['UAH' => 300],
+        ], $response->viewData('periodOverview'));
+        $this->assertSame('Period failed purchase', $response->viewData('payments')->first()->plan_name);
+        $this->assertCount(2, $response->viewData('expenses'));
+        $this->assertSame(2500, $response->viewData('expenseCategoryBreakdown')->sole()['amount_cents']);
+
+        $filteredResponse = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', [
+                'account' => $account,
+                'date_from' => '2026-07-01',
+                'date_to' => '2026-07-17',
+                'status' => CustomerPurchaseStatus::PaymentPaid->value,
+                'expense_payment_method' => StudioExpense::PaymentMethodBankTransfer,
+                'expense_status' => StudioExpense::StatusVoided,
+            ]))
+            ->assertOk();
+
+        $this->assertSame(1, $filteredResponse->viewData('stats')['total']);
+        $this->assertSame(0, $filteredResponse->viewData('stats')['pending']);
+        $this->assertSame(1, $filteredResponse->viewData('stats')['fiscal_failed']);
+        $this->assertSame($paidPurchase->id, $filteredResponse->viewData('payments')->sole()->id);
+        $this->assertSame(9000, $filteredResponse->viewData('expenses')->sole()->amount_cents);
+        $this->assertTrue($filteredResponse->viewData('expenseCategoryBreakdown')->isEmpty());
+        $this->assertModelExists($pendingPurchase);
+        $this->assertModelExists($failedPurchase);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_payment_and_cashflow_totals_keep_currencies_separate(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-17 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'default_currency' => 'UAH',
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $this->customerPurchase($account, $location, [
+            'plan_name' => 'UAH payment',
+            'amount_cents' => 10000,
+            'currency' => 'UAH',
+            'paid_at' => '2026-07-10 10:00:00',
+        ]);
+        $this->customerPurchase($account, $location, [
+            'plan_name' => 'USD cash payment',
+            'amount_cents' => 5000,
+            'currency' => 'USD',
+            'provider' => CustomerPurchase::ProviderStudioCash,
+            'payment_source' => CustomerPurchase::SourceManualCashClassPass,
+            'paid_at' => '2026-07-11 10:00:00',
+        ]);
+        $category = ExpenseCategory::factory()->for($account)->create();
+        StudioExpense::factory()
+            ->for($account)
+            ->for($category, 'category')
+            ->create([
+                'location_id' => $location->id,
+                'amount_cents' => 2500,
+                'currency' => 'UAH',
+                'occurred_at' => '2026-07-12 10:00:00',
+            ]);
+        StudioCashEntry::factory()->for($account)->for($location)->create([
+            'direction' => StudioCashEntry::DirectionIn,
+            'purpose' => StudioCashEntry::PurposeDeposit,
+            'amount_cents' => 1000,
+            'currency' => 'UAH',
+            'occurred_at' => '2026-07-13 10:00:00',
+        ]);
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', $account))
+            ->assertOk();
+
+        $this->assertSame([
+            'UAH' => 10000,
+            'USD' => 5000,
+        ], $response->viewData('stats')['paid_amounts_by_currency']);
+        $this->assertSame([
+            'UAH' => 1000,
+            'USD' => 5000,
+        ], $response->viewData('stats')['cash_balance_by_currency']);
+        $this->assertSame([
+            'UAH' => 7500,
+            'USD' => 5000,
+        ], $response->viewData('periodOverview')['net_by_currency']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_payment_period_boundaries_use_the_account_timezone(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-17 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'name' => 'New York Period Studio',
+            'timezone' => 'America/New_York',
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $this->customerPurchase($account, $location, [
+            'plan_name' => 'Before local July',
+            'paid_at' => '2026-07-01 03:59:59',
+        ]);
+        $this->customerPurchase($account, $location, [
+            'plan_name' => 'At local July boundary',
+            'paid_at' => '2026-07-01 04:00:00',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.payments.index', [
+                'account' => $account,
+                'date_from' => '2026-07-01',
+                'date_to' => '2026-07-01',
+            ]))
+            ->assertOk()
+            ->assertSee('At local July boundary')
+            ->assertDontSee('Before local July');
+
+        Carbon::setTestNow();
     }
 
     public function test_platform_admin_can_view_saas_payment_history_with_fiscal_data_when_enabled(): void

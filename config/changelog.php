@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.84.0',
+                'date' => '2026-07-17',
+                'title' => 'Trainer work reports and operational expense control',
+                'items' => ['Trainer reports now focus on completed, non-cancelled work, separate group and private attendance, show dated private-lesson details, and provide a shortcut to prefiltered class history. Private bookings now preserve the actual people count, while financial details remain protected by cashflow permission.', 'Payments now support account-local date periods with matching totals, while operational expenses can be categorized, filtered, analyzed, and voided with an audit trail. Cash expenses affect the selected cashdesk, non-cash expenses stay separate, and owner withdrawals remain distinct from business expenses.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.83.0',
                 'date' => '2026-07-16',
                 'title' => 'Private lesson totals in trainer reports',
@@ -744,6 +751,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.84.0',
+                'date' => '2026-07-17',
+                'title' => 'Звіти про роботу тренерів і контроль операційних витрат',
+                'items' => ['Звіт по тренерах тепер показує завершені нескасовані заняття, окремо рахує людей на групових та індивідуальних заняттях, відкриває датовані деталі індивідуальних занять і відфільтровану історію. В індивідуальному записі зберігається фактична кількість людей, а фінансові деталі захищені правом керування касою.', 'У Платежах зʼявився локальний для студії вибір періоду зі спільними підсумками, а операційні витрати можна розподіляти за категоріями, фільтрувати, аналізувати й анулювати зі збереженням історії. Готівкові витрати змінюють вибрану касу, безготівкові ведуться окремо, а вилучення власником не змішуються з витратами студії.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.83.0',
                 'date' => '2026-07-16',

@@ -64,6 +64,7 @@ class QuickBookingTest extends TestCase
         $this->assertStringNotContainsString('Only Location · Only Hall', $privateLessonModal);
         $this->assertMatchesRegularExpression('/<input(?=[^>]*type="hidden")(?=[^>]*data-manual-booking-time)(?=[^>]*data-async-field="starts_at")[^>]*>/', $privateLessonModal);
         $this->assertDoesNotMatchRegularExpression('/<input(?=[^>]*type="time")(?=[^>]*data-manual-booking-time)[^>]*>/', $privateLessonModal);
+        $this->assertMatchesRegularExpression('/<input(?=[^>]*name="people_count")(?=[^>]*value="1")(?=[^>]*required)[^>]*>/', $privateLessonModal);
     }
 
     public function test_owner_can_quick_book_private_lesson_with_new_customer_and_class_type_defaults(): void
@@ -92,6 +93,7 @@ class QuickBookingTest extends TestCase
                 'room_id' => $room->id,
                 'class_type_id' => $classType->id,
                 'trainer_id' => $trainer->id,
+                'people_count' => 3,
                 'starts_at' => '2026-06-17T15:00',
                 'customer_phone' => '+380671112233',
                 'customer_name' => 'Олена Коваль',
@@ -108,7 +110,7 @@ class QuickBookingTest extends TestCase
         $this->assertSame('uk', $customer->default_language);
         $this->assertSame($classType->id, $scheduledClass->class_type_id);
         $this->assertSame($trainer->id, $scheduledClass->trainer_id);
-        $this->assertSame(2, $scheduledClass->capacity);
+        $this->assertSame(3, $scheduledClass->capacity);
         $this->assertSame(15, $scheduledClass->booking_cutoff_minutes);
         $this->assertSame(1440, $scheduledClass->cancellation_cutoff_minutes);
         $this->assertSame('quick_booking', $scheduledClass->metadata['source']);

@@ -173,7 +173,9 @@ class CreatePublicBooking
             'description' => $classType->description,
             'starts_at' => $startsAt->timezone(config('app.timezone')),
             'ends_at' => $endsAt->timezone(config('app.timezone')),
-            'capacity' => $classType->default_capacity ?? $room->capacity,
+            'capacity' => $scheduleKind === ScheduleKind::PrivateLesson
+                ? (int) $validated['people_count']
+                : ($classType->default_capacity ?? $room->capacity),
             'booking_cutoff_minutes' => $classType->booking_cutoff_minutes,
             'cancellation_cutoff_minutes' => $classType->cancellation_cutoff_minutes,
             'is_generated' => false,

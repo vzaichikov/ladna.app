@@ -74,6 +74,15 @@
                     </fieldset>
                 @endif
 
+                @if ($selection['scheduleKind'] === \App\Enums\ScheduleKind::PrivateLesson)
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.people_count') }}</span>
+                        <input name="people_count" type="number" min="1" max="999" value="{{ old('people_count', $selection['peopleCount'] ?? 1) }}" class="crm-field" required>
+                        <span class="crm-help">{{ __('app.private_lesson_people_count_help') }}</span>
+                        @error('people_count') <span class="crm-help">{{ $message }}</span> @enderror
+                    </label>
+                @endif
+
                 <label class="block">
                     <span class="crm-label">{{ __('app.notes') }}</span>
                     <textarea name="notes" rows="3" class="crm-field">{{ old('notes') }}</textarea>

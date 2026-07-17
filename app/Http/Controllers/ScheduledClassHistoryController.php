@@ -42,9 +42,11 @@ class ScheduledClassHistoryController extends Controller
             ->orderBy('name')
             ->get(['id', 'activity_direction_id', 'name', 'schedule_kind']);
         $filterScheduleKinds = array_keys(ScheduleKindRegistry::all());
-        $selectedLocationIds = $this->selectedIds($request, 'locations', $filterLocations->pluck('id')->all());
+        $allowedLocationIds = $account->locations()->pluck('id')->all();
+        $allowedTrainerIds = $account->trainers()->pluck('id')->all();
+        $selectedLocationIds = $this->selectedIds($request, 'locations', $allowedLocationIds);
         $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
-        $selectedTrainerIds = $this->selectedIds($request, 'trainers', $filterTrainers->pluck('id')->all());
+        $selectedTrainerIds = $this->selectedIds($request, 'trainers', $allowedTrainerIds);
         $selectedClassTypeIds = $this->selectedIds($request, 'class_types', $filterClassTypes->pluck('id')->all());
         $selectedScheduleKinds = $this->selectedScheduleKinds($request, $filterScheduleKinds);
         $withoutAttendance = $request->boolean('without_attendance');

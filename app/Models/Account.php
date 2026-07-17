@@ -541,6 +541,16 @@ class Account extends Model
         return $this->hasMany(StudioCashEntry::class);
     }
 
+    public function expenseCategories(): HasMany
+    {
+        return $this->hasMany(ExpenseCategory::class);
+    }
+
+    public function studioExpenses(): HasMany
+    {
+        return $this->hasMany(StudioExpense::class);
+    }
+
     public function subscriptionPayments(): HasMany
     {
         return $this->hasMany(AccountSubscriptionPayment::class);

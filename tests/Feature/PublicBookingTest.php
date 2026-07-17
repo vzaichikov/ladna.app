@@ -226,6 +226,7 @@ class PublicBookingTest extends TestCase
             'class_type_id' => $classType->id,
             'room_id' => $room->id,
             'trainer_id' => $trainer->id,
+            'people_count' => 2,
         ];
 
         $this->actingAs($firstCustomer, 'customer')
@@ -236,6 +237,7 @@ class PublicBookingTest extends TestCase
 
         $this->assertSame('public_booking', $scheduledClass->metadata['source']);
         $this->assertSame(ScheduleKind::PrivateLesson, $scheduledClass->classType->schedule_kind);
+        $this->assertSame(2, $scheduledClass->capacity);
         $this->assertSame(1, ClassBooking::whereBelongsTo($scheduledClass)->count());
 
         $this->actingAs($secondCustomer, 'customer')

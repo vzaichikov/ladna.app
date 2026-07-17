@@ -47,7 +47,7 @@ class StudioCashflowCorrectionTest extends TestCase
         $this->actingAs($trainer->fresh())
             ->get(route('dashboard.accounts.payments.index', $account))
             ->assertOk()
-            ->assertSee(__('app.cashdesk_balance'));
+            ->assertSee(__('app.cashdesk_current_balance'));
     }
 
     public function test_manual_cash_payment_edit_stores_history_and_updates_purchase(): void

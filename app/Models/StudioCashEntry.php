@@ -16,10 +16,20 @@ class StudioCashEntry extends Model
 
     public const DirectionOut = 'cash_out';
 
+    public const PurposeDeposit = 'deposit';
+
+    public const PurposeOwnerWithdrawal = 'owner_withdrawal';
+
+    public const PurposeOperationalExpense = 'operational_expense';
+
+    public const PurposeExpenseReversal = 'expense_reversal';
+
     protected $fillable = [
         'account_id',
         'location_id',
+        'studio_expense_id',
         'direction',
+        'purpose',
         'amount_cents',
         'currency',
         'occurred_at',
@@ -33,7 +43,21 @@ class StudioCashEntry extends Model
 
     protected $attributes = [
         'currency' => 'UAH',
+        'purpose' => self::PurposeDeposit,
     ];
+
+    /**
+     * @return array<int, string>
+     */
+    public static function purposes(): array
+    {
+        return [
+            self::PurposeDeposit,
+            self::PurposeOwnerWithdrawal,
+            self::PurposeOperationalExpense,
+            self::PurposeExpenseReversal,
+        ];
+    }
 
     /**
      * @return array<string, string>
@@ -53,5 +77,10 @@ class StudioCashEntry extends Model
     public function location(): BelongsTo
     {
         return $this->belongsTo(Location::class);
+    }
+
+    public function expense(): BelongsTo
+    {
+        return $this->belongsTo(StudioExpense::class, 'studio_expense_id');
     }
 }

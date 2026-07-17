@@ -32,6 +32,7 @@ use App\Http\Controllers\CustomerPurchaseCorrectionController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LegalPageController;
@@ -66,14 +67,17 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoomCameraTestController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\RoomPeopleCounterMaskController;
+use App\Http\Controllers\SalaryModelController;
 use App\Http\Controllers\ScheduledClassCancellationController;
 use App\Http\Controllers\ScheduledClassController;
 use App\Http\Controllers\ScheduledClassHistoryController;
 use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\ServiceRoomController;
 use App\Http\Controllers\StudioCashEntryController;
+use App\Http\Controllers\StudioExpenseController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\TrainerPrivateLessonReportController;
 use App\Http\Controllers\TrainerPrivateTimeframeController;
 use App\Http\Controllers\TrainerReportController;
 use App\Http\Controllers\TrainerSubstitutionController;
@@ -295,12 +299,30 @@ Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, Recor
             ->name('accounts.payments.index');
         Route::post('accounts/{account}/cash-entries', [StudioCashEntryController::class, 'store'])
             ->name('accounts.cash-entries.store');
+        Route::post('accounts/{account}/expense-categories', [ExpenseCategoryController::class, 'store'])
+            ->name('accounts.expense-categories.store');
+        Route::patch('accounts/{account}/expense-categories/{expenseCategory}', [ExpenseCategoryController::class, 'update'])
+            ->scopeBindings()
+            ->name('accounts.expense-categories.update');
+        Route::patch('accounts/{account}/expense-categories/{expenseCategory}/status', [ExpenseCategoryController::class, 'updateStatus'])
+            ->scopeBindings()
+            ->name('accounts.expense-categories.status');
+        Route::post('accounts/{account}/expenses', [StudioExpenseController::class, 'store'])
+            ->name('accounts.expenses.store');
+        Route::patch('accounts/{account}/expenses/{studioExpense}/void', [StudioExpenseController::class, 'void'])
+            ->scopeBindings()
+            ->name('accounts.expenses.void');
         Route::post('accounts/{account}/payments/{customerPurchase}/corrections', [CustomerPurchaseCorrectionController::class, 'store'])
             ->name('accounts.payments.corrections.store');
         Route::get('accounts/{account}/reports', [ReportController::class, 'index'])
             ->name('accounts.reports.index');
         Route::get('accounts/{account}/reports/trainers', TrainerReportController::class)
             ->name('accounts.reports.trainers');
+        Route::get('accounts/{account}/reports/trainers/{trainer}/private-lessons', TrainerPrivateLessonReportController::class)
+            ->scopeBindings()
+            ->name('accounts.reports.trainers.private-lessons');
+        Route::get('accounts/{account}/salary-models', SalaryModelController::class)
+            ->name('accounts.salary-models.index');
         Route::get('accounts/{account}/reports/unpaid-class-payments', UnpaidClassPaymentReportController::class)
             ->name('accounts.reports.unpaid-class-payments');
         Route::get('accounts/{account}/reports/people-counter', PeopleCounterReportController::class)

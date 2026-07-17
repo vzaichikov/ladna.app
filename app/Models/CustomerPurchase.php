@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Support\Carbon;
 
 #[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'class_booking_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
 #[Hidden(['gateway_checkout_payload', 'last_callback_payload'])]
@@ -55,6 +56,40 @@ class CustomerPurchase extends Model
     public function scopeNewestFirst(Builder $query): Builder
     {
         return $query->orderByDesc('created_at')->orderByDesc('id');
+    }
+
+    public function scopeWithinEffectiveDateRange(Builder $query, mixed $startsAt, mixed $endsAt): Builder
+    {
+        return $query->where(function (Builder $query) use ($startsAt, $endsAt): void {
+            $query
+                ->where(function (Builder $query) use ($startsAt, $endsAt): void {
+                    $query->whereNotNull('paid_at')->whereBetween('paid_at', [$startsAt, $endsAt]);
+                })
+                ->orWhere(function (Builder $query) use ($startsAt, $endsAt): void {
+                    $query
+                        ->whereNull('paid_at')
+                        ->whereNotNull('started_at')
+                        ->whereBetween('started_at', [$startsAt, $endsAt]);
+                })
+                ->orWhere(function (Builder $query) use ($startsAt, $endsAt): void {
+                    $query
+                        ->whereNull('paid_at')
+                        ->whereNull('started_at')
+                        ->whereBetween('created_at', [$startsAt, $endsAt]);
+                });
+        });
+    }
+
+    public function scopeEffectiveNewestFirst(Builder $query): Builder
+    {
+        return $query
+            ->orderByRaw('COALESCE(paid_at, started_at, created_at) DESC')
+            ->orderByDesc('id');
+    }
+
+    public function effectiveOccurredAt(): ?Carbon
+    {
+        return $this->paid_at ?? $this->started_at ?? $this->created_at;
     }
 
     public function account(): BelongsTo

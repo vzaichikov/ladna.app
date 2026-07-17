@@ -252,9 +252,9 @@ class HelpPagesTest extends TestCase
             ->assertStatus(200)
             ->assertSee('Як виправляти готівкові оплати і вести касу', false)
             ->assertSee('Внесення готівки', false)
-            ->assertSee('Вилучення готівки', false)
+            ->assertSee('Вилучення власником', false)
             ->assertSee('Онлайн-оплати, платежі через платіжний сервіс і фіскалізовані платежі не редагуються вручну', false)
-            ->assertSee('assets/help/screenshots/studio-cashflow.png', false);
+            ->assertSee('assets/help/screenshots/payments-period.png', false);
 
         $this->get(route('help.show', 'trainers', false))
             ->assertStatus(200)
@@ -313,6 +313,21 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('tenant', false);
     }
 
+    public function test_payments_help_explains_periods_operational_expenses_and_cash_audit(): void
+    {
+        $this->get(route('help.show', 'integrations-payments', false))
+            ->assertStatus(200)
+            ->assertSee('від першого дня поточного місяця до сьогодні', false)
+            ->assertSee('Поточний Баланс каси за локаціями не обмежується вибраними датами', false)
+            ->assertSee('Як записувати операційні витрати студії', false)
+            ->assertSee('Для Готівки з каси локація обовʼязкова', false)
+            ->assertSee('Банківська картка, Банківський переказ та Інше не змінюють касу', false)
+            ->assertSee('Вилучення власником не є витратою студії', false)
+            ->assertSee('повернення в ту саму касу', false)
+            ->assertSee('assets/help/screenshots/payments-period.png', false)
+            ->assertSee('assets/help/screenshots/operational-expenses.png', false);
+    }
+
     public function test_public_pages_help_explains_studio_landing_maps_and_support_links(): void
     {
         $this->get(route('help.show', 'public-pages', false))
@@ -368,6 +383,20 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('endpoint', false)
             ->assertDontSee('payload', false)
             ->assertDontSee('database', false);
+    }
+
+    public function test_trainer_report_help_explains_completed_work_private_details_and_financial_access(): void
+    {
+        $this->get(route('help.show', 'reports-cameras', false))
+            ->assertStatus(200)
+            ->assertSee('Майбутні й скасовані заняття до звіту по тренерах не потрапляють', false)
+            ->assertSee('людей на групових заняттях і людей на індивідуальних заняттях', false)
+            ->assertSee('Натисніть на кількість індивідуальних занять тренера', false)
+            ->assertSee('Керувати касою студії також бачить суму одного заняття', false)
+            ->assertSee('Суму не вказано', false)
+            ->assertSee('Кнопка з іконкою фільтра', false)
+            ->assertSee('Моделі оплати тренерів поки має статус Не налаштовано', false)
+            ->assertSee('assets/help/screenshots/trainer-report.png', false);
     }
 
     public function test_real_workflows_help_uses_submenu_and_question_pages(): void

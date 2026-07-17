@@ -205,6 +205,16 @@
                                     @endif
                                 </div>
 
+                                @if ($quickBookingKind === \App\Enums\ScheduleKind::PrivateLesson)
+                                    <label class="mt-4 block">
+                                        <span class="crm-label">{{ __('app.people_count') }}</span>
+                                        <input name="people_count" type="number" min="1" max="999" value="{{ old('people_count', 1) }}" required class="crm-field">
+                                        <span class="crm-help">{{ __('app.private_lesson_people_count_help') }}</span>
+                                        <div data-async-error-for="people_count"></div>
+                                        @error('people_count') <span class="crm-help">{{ $message }}</span> @enderror
+                                    </label>
+                                @endif
+
                                 @if ($quickBookingKind === \App\Enums\ScheduleKind::PrivateLesson && $account->trainerPrivateTimeframesEnabled())
                                     <label class="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-950">
                                         <input type="hidden" name="ignore_trainer_timeframes" value="0">

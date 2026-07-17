@@ -6,6 +6,7 @@ import 'summernote/dist/summernote-lite.css';
 let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
 let publicScheduleAbortController = null;
+let trainerPrivateLessonsAbortController = null;
 
 const confirmationButtonVariants = {
     danger: 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
@@ -1423,6 +1424,95 @@ function closeTrainerSubstitutionModal(modal) {
 function closeTrainerIssuesModal(modal) {
     modal?.classList.add('hidden');
     modal?.classList.remove('flex');
+}
+
+function closeTrainerPrivateLessonsModal(modal) {
+    trainerPrivateLessonsAbortController?.abort();
+    trainerPrivateLessonsAbortController = null;
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+}
+
+async function loadTrainerPrivateLessons(modal, url) {
+    const content = modal?.querySelector('[data-trainer-private-lessons-content]');
+
+    if (!modal || !content || !url) {
+        return;
+    }
+
+    trainerPrivateLessonsAbortController?.abort();
+    trainerPrivateLessonsAbortController = new AbortController();
+    content.innerHTML = `<p class="text-sm text-slate-500">${modal.dataset.loading || ''}</p>`;
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                Accept: 'text/html',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            signal: trainerPrivateLessonsAbortController.signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        content.innerHTML = await response.text();
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            return;
+        }
+
+        content.innerHTML = `<p class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">${modal.dataset.error || ''}</p>`;
+    }
+}
+
+function initTrainerPrivateLessonsModal() {
+    const modal = document.querySelector('[data-trainer-private-lessons-modal]');
+
+    if (!modal || modal.dataset.trainerPrivateLessonsReady === 'true') {
+        return;
+    }
+
+    modal.dataset.trainerPrivateLessonsReady = 'true';
+    const title = modal.querySelector('[data-trainer-private-lessons-title]');
+
+    document.querySelectorAll('[data-trainer-private-lessons-open]').forEach((button) => {
+        button.addEventListener('click', () => {
+            if (title) {
+                title.textContent = `${button.dataset.trainerName} · ${modal.dataset.title}`;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.querySelector('[data-trainer-private-lessons-close]')?.focus();
+            loadTrainerPrivateLessons(modal, button.dataset.url);
+        });
+    });
+
+    modal.querySelectorAll('[data-trainer-private-lessons-close]').forEach((button) => {
+        button.addEventListener('click', () => closeTrainerPrivateLessonsModal(modal));
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeTrainerPrivateLessonsModal(modal);
+            return;
+        }
+
+        const paginationLink = event.target.closest('[data-trainer-private-lessons-pagination] a');
+
+        if (paginationLink) {
+            event.preventDefault();
+            loadTrainerPrivateLessons(modal, paginationLink.href);
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeTrainerPrivateLessonsModal(modal);
+        }
+    });
 }
 
 function fillQuickBookingForm(modal, button) {
@@ -4305,6 +4395,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initManualClassModals();
     initTrainerSubstitutionModals();
     initTrainerIssueModals();
+    initTrainerPrivateLessonsModal();
     initTrainerPrivateTimeframes();
     initQuickBookingModals();
     initCustomerTransferModals();

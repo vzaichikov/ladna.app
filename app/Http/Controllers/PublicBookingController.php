@@ -283,6 +283,9 @@ class PublicBookingController extends Controller
             'durationLabel' => $durationMinutes.' '.__('app.minutes'),
             'trainerLabel' => $trainer?->name,
             'roomLabel' => $room->name,
+            'peopleCount' => $scheduleKind === ScheduleKind::PrivateLesson
+                ? max(1, (int) $request->query('people_count', 1))
+                : null,
             'hiddenFields' => [
                 'schedule_kind' => $scheduleKind->value,
                 'date' => $startsAt->toDateString(),
@@ -339,7 +342,7 @@ class PublicBookingController extends Controller
     private function confirmationUrl(Account $account, Location $location, array $validated): string
     {
         $query = collect($validated)
-            ->only(['schedule_kind', 'scheduled_class_id', 'date', 'starts_at', 'class_type_id', 'activity_direction_id', 'room_id', 'trainer_id'])
+            ->only(['schedule_kind', 'scheduled_class_id', 'date', 'starts_at', 'class_type_id', 'activity_direction_id', 'room_id', 'trainer_id', 'people_count'])
             ->filter(fn (mixed $value): bool => $value !== null && $value !== '')
             ->all();
 

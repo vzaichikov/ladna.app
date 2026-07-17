@@ -19,6 +19,7 @@ return [
         'directions' => 'waypoints',
         'edit' => 'square-pen',
         'external' => 'external-link',
+        'filter' => 'list-filter',
         'generated-classes' => 'clipboard-list',
         'globe' => 'globe',
         'integrations' => 'settings',

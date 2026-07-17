@@ -60,6 +60,7 @@ class StoreQuickBookingRequest extends FormRequest
                     ->where('is_active', true),
             ],
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account?->id)],
+            'people_count' => [Rule::requiredIf($scheduleKind === ScheduleKind::PrivateLesson), 'nullable', 'integer', 'min:1', 'max:999'],
             'starts_at' => [Rule::requiredIf((bool) $isManual), 'nullable', 'date_format:Y-m-d\TH:i'],
             'ends_at' => [Rule::requiredIf($scheduleKind === ScheduleKind::RoomRental && $this->input('rental_mode') === 'anytime'), 'nullable', 'date_format:Y-m-d\TH:i'],
             'rental_mode' => ['nullable', Rule::in(['preset', 'anytime'])],
@@ -94,6 +95,7 @@ class StoreQuickBookingRequest extends FormRequest
             'starts_at' => __('app.start_time'),
             'ends_at' => __('app.end_time'),
             'payment_amount' => __('app.class_booking_payment_amount'),
+            'people_count' => __('app.people_count'),
         ];
     }
 
@@ -185,6 +187,7 @@ class StoreQuickBookingRequest extends FormRequest
     {
         $account = $this->route('account');
         $countryCode = $account?->country_code ?? 'UA';
+        $scheduleKind = ScheduleKind::tryFrom((string) $this->input('schedule_kind'));
 
         $this->merge([
             'customer_phone' => app(PhoneNumberNormalizer::class)->normalize($this->input('customer_phone'), $countryCode),
@@ -196,6 +199,9 @@ class StoreQuickBookingRequest extends FormRequest
             'ends_at' => blank($this->input('ends_at')) ? null : $this->input('ends_at'),
             'payment_amount' => blank($this->input('payment_amount')) ? null : $this->input('payment_amount'),
             'ignore_trainer_timeframes' => filter_var($this->input('ignore_trainer_timeframes', false), FILTER_VALIDATE_BOOLEAN),
+            'people_count' => $scheduleKind === ScheduleKind::PrivateLesson
+                ? (filled($this->input('people_count')) ? $this->input('people_count') : 1)
+                : null,
         ]);
     }
 

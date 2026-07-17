@@ -59,6 +59,7 @@ class StorePublicBookingRequest extends FormRequest
             ],
             'room_id' => [Rule::requiredIf((bool) $isManual), 'nullable', Rule::exists((new Room)->getTable(), 'id')->where('account_id', $account?->id)],
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')->where('account_id', $account?->id)],
+            'people_count' => [Rule::requiredIf($scheduleKind === ScheduleKind::PrivateLesson), 'nullable', 'integer', 'min:1', 'max:999'],
             'customer_name' => [Rule::requiredIf($requiresGuestDetails), 'nullable', 'string', 'max:255'],
             'customer_phone' => [Rule::requiredIf($requiresGuestDetails), 'nullable', 'string', 'max:64'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -113,6 +114,7 @@ class StorePublicBookingRequest extends FormRequest
     {
         $account = $this->publicAccount();
         $countryCode = $account?->country_code ?? 'UA';
+        $scheduleKind = ScheduleKind::tryFrom((string) $this->input('schedule_kind'));
 
         $this->merge([
             'customer_phone' => app(PhoneNumberNormalizer::class)->normalize($this->input('customer_phone'), $countryCode),
@@ -121,6 +123,9 @@ class StorePublicBookingRequest extends FormRequest
             'class_type_id' => blank($this->input('class_type_id')) ? null : $this->input('class_type_id'),
             'activity_direction_id' => blank($this->input('activity_direction_id')) ? null : $this->input('activity_direction_id'),
             'room_id' => blank($this->input('room_id')) ? null : $this->input('room_id'),
+            'people_count' => $scheduleKind === ScheduleKind::PrivateLesson
+                ? (filled($this->input('people_count')) ? $this->input('people_count') : 1)
+                : null,
         ]);
     }
 

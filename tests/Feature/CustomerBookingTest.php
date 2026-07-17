@@ -1050,7 +1050,7 @@ class CustomerBookingTest extends TestCase
         $otherAccount = Account::factory()->create(['timezone' => 'UTC']);
         $account->addOwner($owner);
         $firstLocation = Location::factory()->for($account)->create(['name' => 'First Studio', 'timezone' => 'UTC']);
-        $secondLocation = Location::factory()->for($account)->create(['name' => 'Second Studio', 'timezone' => 'UTC']);
+        $secondLocation = Location::factory()->for($account)->create(['name' => 'Second Studio', 'timezone' => 'UTC', 'is_active' => false]);
         $firstRoom = Room::factory()->for($account)->for($firstLocation)->create(['name' => 'Blue Room']);
         $secondRoom = Room::factory()->for($account)->for($secondLocation)->create(['name' => 'Pink Room']);
         $classType = ClassType::factory()->for($account)->create();
@@ -1208,7 +1208,7 @@ class CustomerBookingTest extends TestCase
         $privateClassType = ClassType::factory()->for($account)->create(['name' => 'Private Pole', 'schedule_kind' => 'private_lesson']);
         $rentalClassType = ClassType::factory()->for($account)->create(['name' => 'Rental Hall', 'schedule_kind' => 'room_rental']);
         $firstTrainer = Trainer::factory()->for($account)->create(['name' => 'First History Trainer']);
-        $secondTrainer = Trainer::factory()->for($account)->create(['name' => 'Second History Trainer']);
+        $secondTrainer = Trainer::factory()->for($account)->create(['name' => 'Second History Trainer', 'is_active' => false]);
         $otherLocation = Location::factory()->for($otherAccount)->create(['timezone' => 'UTC']);
         $otherRoom = Room::factory()->for($otherAccount)->for($otherLocation)->create();
         $otherClassType = ClassType::factory()->for($otherAccount)->create();

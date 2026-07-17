@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
+use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
@@ -11,8 +12,11 @@ use App\Models\Account;
 use App\Models\AccountMembership;
 use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
+use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
+use App\Models\CustomerClassPass;
+use App\Models\CustomerClassPassReservation;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -113,6 +117,14 @@ class TrainerReportTest extends TestCase
             scheduleKind: ScheduleKind::PrivateLesson,
         );
         $this->booking($account, $privateLesson, ClassBookingStatus::Booked, 'Private Lesson Client');
+        $roomRental = $this->scheduledClass(
+            $account,
+            $alice,
+            $center,
+            '2026-06-10 14:00:00',
+            scheduleKind: ScheduleKind::RoomRental,
+        );
+        $this->booking($account, $roomRental, ClassBookingStatus::Booked, 'Rental Client');
 
         $cancelledClass = $this->scheduledClass($account, $alice, $center, '2026-06-11 10:00:00', ScheduledClassStatus::Cancelled);
         $this->booking($account, $cancelledClass, ClassBookingStatus::Booked, 'Cancelled Class Client');
@@ -127,6 +139,9 @@ class TrainerReportTest extends TestCase
         $this->booking($account, $cancelledPrivateLesson, ClassBookingStatus::Booked, 'Cancelled Private Lesson Client');
         $this->scheduledClass($account, $alice, $suburb, '2026-06-12 10:00:00');
         $this->scheduledClass($account, $bob, $center, '2026-06-13 10:00:00');
+        $correctedClass = $this->scheduledClass($account, $alice, $center, '2026-06-14 10:00:00');
+        $this->booking($account, $correctedClass, ClassBookingStatus::Booked, 'Corrected Client')
+            ->update(['corrected_removed_at' => now()]);
 
         $otherLocation = Location::factory()->for($otherAccount)->create();
         $otherClass = $this->scheduledClass($otherAccount, $otherTrainer, $otherLocation, '2026-06-10 10:00:00');
@@ -146,9 +161,215 @@ class TrainerReportTest extends TestCase
             ->assertSee('Inactive Bob')
             ->assertSee('Zero Trainer')
             ->assertDontSee('Other Studio Trainer')
-            ->assertSee('data-report-metrics="'.$alice->id.':2:1:3"', false)
-            ->assertSee('data-report-metrics="'.$bob->id.':1:0:0"', false)
-            ->assertSee('data-report-metrics="'.$zero->id.':0:0:0"', false);
+            ->assertSee(__('app.trainer_report_group_people_count'))
+            ->assertSee(__('app.trainer_report_private_people_count'))
+            ->assertSee('data-report-metrics="'.$alice->id.':3:1:2:1"', false)
+            ->assertSee('data-report-metrics="'.$bob->id.':0:0:0:0"', false)
+            ->assertSee('data-report-metrics="'.$zero->id.':0:0:0:0"', false)
+            ->assertSee('data-private-lesson-count-actions', false)
+            ->assertSee('data-filtered-history-link', false)
+            ->assertSee('data-lucide="list-filter"', false);
+    }
+
+    public function test_trainer_report_excludes_classes_that_have_not_ended(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-10 10:30:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $trainer = Trainer::factory()->for($account)->create();
+        $ongoingClass = $this->scheduledClass($account, $trainer, $location, '2026-06-10 10:00:00');
+        $futureClass = $this->scheduledClass($account, $trainer, $location, '2026-06-11 10:00:00');
+        $this->booking($account, $ongoingClass, ClassBookingStatus::Booked, 'Ongoing Client');
+        $this->booking($account, $futureClass, ClassBookingStatus::Booked, 'Future Client');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.trainers', [
+                'account' => $account,
+                'date_from' => '2026-06-01',
+                'date_to' => '2026-06-30',
+            ]))
+            ->assertOk()
+            ->assertSee('data-report-metrics="'.$trainer->id.':0:0:0:0"', false);
+    }
+
+    public function test_private_lesson_details_keep_pass_amounts_without_aggregate_salary_basis(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-01 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC', 'default_currency' => 'UAH']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['name' => 'Main studio']);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Salary Trainer']);
+        $firstLesson = $this->scheduledClass($account, $trainer, $location, '2026-06-10 10:00:00', scheduleKind: ScheduleKind::PrivateLesson);
+        $firstLesson->update(['capacity' => 2]);
+        $firstBooking = $this->booking($account, $firstLesson, ClassBookingStatus::Attended, 'Salary Client');
+        $secondLesson = $this->scheduledClass($account, $trainer, $location, '2026-06-11 10:00:00', scheduleKind: ScheduleKind::PrivateLesson);
+        $secondLesson->update(['capacity' => 3]);
+        $secondBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($secondLesson, 'scheduledClass')
+            ->for($firstBooking->customer)
+            ->create(['status' => ClassBookingStatus::Attended->value]);
+        $missingLesson = $this->scheduledClass($account, $trainer, $location, '2026-06-12 10:00:00', scheduleKind: ScheduleKind::PrivateLesson);
+        $missingLesson->update(['capacity' => 1]);
+        $this->booking($account, $missingLesson, ClassBookingStatus::Attended, 'Missing Pass Client');
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'price_cents' => 1001,
+            'sessions_count' => 3,
+        ]);
+        $customerClassPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($firstBooking->customer)
+            ->for($classPassPlan)
+            ->create([
+                'plan_name' => 'Private salary pass',
+                'price_cents' => 1001,
+                'sessions_count' => 3,
+                'currency' => 'UAH',
+            ]);
+        $this->reservation($account, $customerClassPass, $firstBooking, $firstLesson);
+        $this->reservation($account, $customerClassPass, $secondBooking, $secondLesson);
+        $usdLesson = $this->scheduledClass($account, $trainer, $location, '2026-06-13 10:00:00', scheduleKind: ScheduleKind::PrivateLesson);
+        $usdBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($usdLesson, 'scheduledClass')
+            ->for($firstBooking->customer)
+            ->create(['status' => ClassBookingStatus::Attended->value]);
+        $usdPlan = ClassPassPlan::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'price_cents' => 5000,
+            'sessions_count' => 1,
+            'currency' => 'USD',
+        ]);
+        $usdClassPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($firstBooking->customer)
+            ->for($usdPlan, 'classPassPlan')
+            ->create([
+                'plan_name' => 'USD private pass',
+                'price_cents' => 5000,
+                'sessions_count' => 1,
+                'currency' => 'USD',
+            ]);
+        $this->reservation($account, $usdClassPass, $usdBooking, $usdLesson);
+
+        $reportResponse = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.trainers', [
+                'account' => $account,
+                'date_from' => '2026-06-01',
+                'date_to' => '2026-06-30',
+            ]));
+
+        $reportResponse
+            ->assertOk()
+            ->assertSee('data-report-metrics="'.$trainer->id.':4:4:0:7"', false)
+            ->assertSee('data-group-people-count="0"', false)
+            ->assertSee('data-private-people-count="7"', false)
+            ->assertDontSee('data-private-lessons-amounts', false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.trainers.private-lessons', [
+                'account' => $account,
+                'trainer' => $trainer,
+                'date_from' => '2026-06-01',
+                'date_to' => '2026-06-30',
+            ]))
+            ->assertOk()
+            ->assertSee('Salary Client')
+            ->assertSee('Private salary pass')
+            ->assertSee('3.34 ₴')
+            ->assertSee(__('app.amount_not_specified'));
+    }
+
+    public function test_private_lesson_amounts_and_salary_models_are_cashflow_protected(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $staff = User::factory()->create();
+        AccountMembership::factory()
+            ->for($account)
+            ->for($staff, 'user')
+            ->create([
+                'role' => AccountRole::Receptionist->value,
+                'permissions' => [StudioPermission::ManageBookings->value],
+            ]);
+        $location = Location::factory()->for($account)->create();
+        $trainer = Trainer::factory()->for($account)->create();
+        $lesson = $this->scheduledClass($account, $trainer, $location, '2026-06-10 10:00:00', scheduleKind: ScheduleKind::PrivateLesson);
+        $this->booking($account, $lesson, ClassBookingStatus::Attended, 'Redacted Client');
+        $filters = [
+            'date_from' => '2026-06-01',
+            'date_to' => '2026-06-30',
+        ];
+
+        $this->actingAs($staff)
+            ->get(route('dashboard.accounts.reports.trainers', ['account' => $account, ...$filters]))
+            ->assertOk()
+            ->assertDontSee('data-private-lessons-amounts', false)
+            ->assertDontSee(route('dashboard.accounts.salary-models.index', $account), false);
+
+        $this->actingAs($staff)
+            ->get(route('dashboard.accounts.reports.trainers.private-lessons', ['account' => $account, 'trainer' => $trainer, ...$filters]))
+            ->assertOk()
+            ->assertDontSee(__('app.amount_not_specified'));
+
+        $this->actingAs($staff)
+            ->get(route('dashboard.accounts.salary-models.index', $account))
+            ->assertForbidden();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.trainers', ['account' => $account, ...$filters]))
+            ->assertOk()
+            ->assertDontSee('data-private-lessons-amounts', false)
+            ->assertSee(route('dashboard.accounts.salary-models.index', $account), false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.salary-models.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.salary_models_not_configured'));
+    }
+
+    public function test_private_lesson_details_are_paginated_twenty_per_page(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-01 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $trainer = Trainer::factory()->for($account)->create();
+
+        foreach (range(1, 21) as $index) {
+            $lesson = $this->scheduledClass($account, $trainer, $location, sprintf('2026-06-%02d 10:00:00', $index), scheduleKind: ScheduleKind::PrivateLesson);
+            $this->booking($account, $lesson, ClassBookingStatus::Attended, 'Page Client '.$index);
+        }
+
+        $routeParameters = [
+            'account' => $account,
+            'trainer' => $trainer,
+            'date_from' => '2026-06-01',
+            'date_to' => '2026-06-30',
+        ];
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.trainers.private-lessons', $routeParameters))
+            ->assertOk()
+            ->assertSee('Page Client 1')
+            ->assertSee('Page Client 20')
+            ->assertDontSee('Page Client 21')
+            ->assertSee('page=2', false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.trainers.private-lessons', [...$routeParameters, 'page' => 2]))
+            ->assertOk()
+            ->assertSee('Page Client 21')
+            ->assertDontSee('Page Client 20');
     }
 
     public function test_trainer_report_can_filter_people_by_booking_status(): void
@@ -171,7 +392,7 @@ class TrainerReportTest extends TestCase
                 'booking_statuses' => [ClassBookingStatus::NoShow->value],
             ]))
             ->assertOk()
-            ->assertSee('data-report-metrics="'.$trainer->id.':1:0:1"', false);
+            ->assertSee('data-report-metrics="'.$trainer->id.':1:0:1:0"', false);
     }
 
     public function test_default_period_uses_account_timezone(): void
@@ -192,7 +413,7 @@ class TrainerReportTest extends TestCase
             ->get(route('dashboard.accounts.reports.trainers', $account))
             ->assertOk()
             ->assertSee('value="2026-07-01"', false)
-            ->assertSee('data-report-metrics="'.$trainer->id.':1:0:1"', false);
+            ->assertSee('data-report-metrics="'.$trainer->id.':1:0:1:0"', false);
     }
 
     private function scheduledClass(
@@ -220,6 +441,7 @@ class TrainerReportTest extends TestCase
             ->create([
                 'starts_at' => $start,
                 'ends_at' => $start->copy()->addHour(),
+                'capacity' => $scheduleKind === ScheduleKind::PrivateLesson ? 1 : 10,
                 'status' => $status->value,
             ]);
     }
@@ -233,5 +455,22 @@ class TrainerReportTest extends TestCase
             ->for($scheduledClass, 'scheduledClass')
             ->for($customer)
             ->create(['status' => $status->value]);
+    }
+
+    private function reservation(
+        Account $account,
+        CustomerClassPass $customerClassPass,
+        ClassBooking $classBooking,
+        ScheduledClass $scheduledClass,
+    ): CustomerClassPassReservation {
+        return CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($customerClassPass)
+            ->for($classBooking)
+            ->for($scheduledClass)
+            ->create([
+                'status' => CustomerClassPassReservationStatus::Used->value,
+                'used_at' => $scheduledClass->ends_at,
+            ]);
     }
 }
