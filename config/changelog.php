@@ -20,13 +20,6 @@ return [
     'releases' => [
         'en' => [
             [
-                'version' => '0.87.0',
-                'date' => '2026-07-17',
-                'title' => 'AI and camera showcase in the read-only demo',
-                'items' => ['The synthetic Ladna Demo Studio now includes the owner AI assistant for read-only questions, help, and studio analytics while keeping every confirmable business action locked. The demo also shows two fictional RTSP camera feeds, dashboard camera snapshots, and a populated People Counter report without contacting MediaMTX or running camera capture and summarization jobs for the demo.'],
-                'meta' => 'Release commit.',
-            ],
-            [
                 'version' => '0.86.0',
                 'date' => '2026-07-17',
                 'title' => 'Synthetic read-only demo studio',
@@ -772,13 +765,6 @@ return [
             ],
         ],
         'uk' => [
-            [
-                'version' => '0.87.0',
-                'date' => '2026-07-17',
-                'title' => 'AI та камери у демо лише для перегляду',
-                'items' => ['Синтетична Ladna Demo Studio тепер містить AI-асистента власниці для запитань, довідки й аналітики студії, але всі бізнес-дії з підтвердженням залишаються заблокованими. У демо також зʼявилися два вигадані RTSP-потоки, демо-знімки камер на панелі та наповнений звіт People Counter без звернень до MediaMTX і без запуску збору чи підсумовування даних камер для демо.'],
-                'meta' => 'Релізний коміт.',
-            ],
             [
                 'version' => '0.86.0',
                 'date' => '2026-07-17',
