@@ -10,6 +10,8 @@ use App\Models\McpToolInvocation;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Support\Carbon;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class McpAccountContext
 {
@@ -43,6 +45,10 @@ class McpAccountContext
             throw new AuthorizationException(__('app.api_token_forbidden'));
         }
 
+        if ($ability->mutatesAccountData() && $this->account()->isReadOnlyDemo()) {
+            throw new HttpException(Response::HTTP_LOCKED, __('app.demo_readonly_message'));
+        }
+
         return $token;
     }
 
@@ -59,6 +65,10 @@ class McpAccountContext
         ?string $errorMessage,
         Carbon $startedAt,
     ): void {
+        if ($this->account()->isReadOnlyDemo()) {
+            return;
+        }
+
         McpToolInvocation::create([
             'account_id' => $this->account()->id,
             'account_api_token_id' => $this->token()->id,

@@ -5,11 +5,19 @@
 @section('content')
     @php
         $currentLoginLocale = app()->getLocale() === 'en' ? 'en' : 'uk';
+        $demoLogin = $demoLogin ?? false;
+        $prefillEmail = $prefillEmail ?? null;
+        $prefillPassword = $prefillPassword ?? null;
         $homeHref = $currentLoginLocale === 'en' ? route('home.en') : route('home');
-        $loginLocales = [
-            'uk' => ['label' => 'UA', 'href' => route('login')],
-            'en' => ['label' => 'EN', 'href' => route('login.en')],
-        ];
+        $loginLocales = $demoLogin
+            ? [
+                'uk' => ['label' => 'UA', 'href' => route('demo.login', ['locale' => 'uk'])],
+                'en' => ['label' => 'EN', 'href' => route('demo.login', ['locale' => 'en'])],
+            ]
+            : [
+                'uk' => ['label' => 'UA', 'href' => route('login')],
+                'en' => ['label' => 'EN', 'href' => route('login.en')],
+            ];
     @endphp
 
     <main class="relative min-h-screen overflow-hidden bg-[#FAF8F5] text-[#2B2B2F]">
@@ -57,6 +65,10 @@
                     <form method="POST" action="{{ route('login') }}" class="mt-8 max-w-md rounded-lg border border-[#E7DDC9]/80 bg-white/82 p-5 shadow-[0_22px_54px_rgba(59,34,63,0.09)] backdrop-blur sm:p-6">
                         @csrf
 
+                        @if ($demoLogin)
+                            <input name="remember" type="hidden" value="0">
+                        @endif
+
                         <div class="mb-6">
                             <h2 class="text-lg font-semibold leading-7 text-[#2B1731]">{{ __('app.staff_owner_login_heading') }}</h2>
                         </div>
@@ -64,7 +76,7 @@
                         <div class="space-y-5">
                             <label class="block">
                                 <span class="block text-xs font-semibold uppercase text-[#4D3152]/72">{{ __('app.email') }}</span>
-                                <input name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="email" placeholder="{{ __('app.auth_email_placeholder') }}" class="mt-2 h-12 w-full rounded-lg border border-[#E7DDC9] bg-[#FAF8F5]/70 px-4 text-sm font-semibold text-[#2B2B2F] shadow-xs outline-none transition placeholder:font-medium placeholder:text-[#4D3152]/38 focus:border-[#A78AB9] focus:bg-white focus:ring-3 focus:ring-[#DCCFF0]/65">
+                                <input name="email" type="email" value="{{ old('email', $prefillEmail) }}" required autofocus autocomplete="email" placeholder="{{ __('app.auth_email_placeholder') }}" class="mt-2 h-12 w-full rounded-lg border border-[#E7DDC9] bg-[#FAF8F5]/70 px-4 text-sm font-semibold text-[#2B2B2F] shadow-xs outline-none transition placeholder:font-medium placeholder:text-[#4D3152]/38 focus:border-[#A78AB9] focus:bg-white focus:ring-3 focus:ring-[#DCCFF0]/65">
                                 @error('email')
                                     <span class="mt-2 block text-xs font-semibold text-rose-600">{{ $message }}</span>
                                 @enderror
@@ -72,16 +84,18 @@
 
                             <label class="block">
                                 <span class="block text-xs font-semibold uppercase text-[#4D3152]/72">{{ __('app.password') }}</span>
-                                <input name="password" type="password" required autocomplete="current-password" class="mt-2 h-12 w-full rounded-lg border border-[#E7DDC9] bg-[#FAF8F5]/70 px-4 text-sm font-semibold text-[#2B2B2F] shadow-xs outline-none transition focus:border-[#A78AB9] focus:bg-white focus:ring-3 focus:ring-[#DCCFF0]/65">
+                                <input name="password" type="password" value="{{ $prefillPassword }}" required autocomplete="current-password" class="mt-2 h-12 w-full rounded-lg border border-[#E7DDC9] bg-[#FAF8F5]/70 px-4 text-sm font-semibold text-[#2B2B2F] shadow-xs outline-none transition focus:border-[#A78AB9] focus:bg-white focus:ring-3 focus:ring-[#DCCFF0]/65">
                                 @error('password')
                                     <span class="mt-2 block text-xs font-semibold text-rose-600">{{ $message }}</span>
                                 @enderror
                             </label>
 
-                            <label class="inline-flex items-center gap-2 text-xs font-semibold text-[#4D3152]/78">
-                                <input name="remember" type="checkbox" value="1" @checked(old('remember', '1')) class="h-4 w-4 rounded border-[#A78AB9]/45 text-[#3B223F] focus:ring-[#A78AB9]">
-                                {{ __('app.remember_me') }}
-                            </label>
+                            @unless ($demoLogin)
+                                <label class="inline-flex items-center gap-2 text-xs font-semibold text-[#4D3152]/78">
+                                    <input name="remember" type="checkbox" value="1" @checked(old('remember', '1')) class="h-4 w-4 rounded border-[#A78AB9]/45 text-[#3B223F] focus:ring-[#A78AB9]">
+                                    {{ __('app.remember_me') }}
+                                </label>
+                            @endunless
 
                             <button type="submit" class="inline-flex h-12 w-full items-center justify-center rounded-lg bg-[#3B223F] px-4 text-sm font-semibold text-white shadow-[0_16px_32px_rgba(59,34,63,0.22)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
                                 {{ __('app.login') }}

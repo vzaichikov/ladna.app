@@ -45,6 +45,7 @@ class CustomerNotificationFiller
             ->where('status', ScheduledClassStatus::Scheduled->value)
             ->whereBetween('starts_at', [$now, $lookahead])
             ->whereHas('account', fn (Builder $query): Builder => $query
+                ->operational()
                 ->where('enable_customer_notifications', true)
                 ->whereHas('customerNotificationSetting', fn (Builder $query): Builder => $query
                     ->where('is_enabled', true)
@@ -98,6 +99,7 @@ class CustomerNotificationFiller
                 CustomerNotificationStatus::Processing->value,
                 CustomerNotificationStatus::Failed->value,
             ])
+            ->whereHas('account', fn (Builder $query): Builder => $query->operational())
             ->where('scheduled_send_at', '<=', $lookahead)
             ->orderBy('scheduled_send_at')
             ->orderBy('id')

@@ -25,6 +25,7 @@ class ReconcileSaasBilling extends Command
     {
         $expired = 0;
         AccountSubscription::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->whereIn('status', [
                 SubscriptionStatus::Trialing->value,
                 SubscriptionStatus::Active->value,
@@ -50,6 +51,7 @@ class ReconcileSaasBilling extends Command
 
         if ($setting) {
             AccountSubscription::query()
+                ->whereHas('account', fn ($query) => $query->operational())
                 ->where('payment_provider', IntegrationProvider::Monopay->value)
                 ->where('auto_renew_enabled', true)
                 ->whereNotNull('provider_subscription_id')

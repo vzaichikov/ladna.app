@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\AccountMode;
 use App\Models\Account;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -24,6 +25,7 @@ class AccountFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 9999),
             'status' => 'active',
+            'mode' => AccountMode::Live->value,
             'default_language' => fake()->randomElement(['uk', 'en']),
             'country_code' => 'UA',
             'default_currency' => fake()->randomElement(['UAH', 'USD', 'EUR']),
@@ -43,5 +45,12 @@ class AccountFactory extends Factory
             'enable_telegram_alerts' => true,
             'enable_customer_notifications' => false,
         ];
+    }
+
+    public function demoReadonly(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'mode' => AccountMode::DemoReadonly->value,
+        ]);
     }
 }

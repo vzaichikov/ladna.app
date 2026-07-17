@@ -94,13 +94,13 @@ class LadnaOpenApiSpec
                 'title' => __('app.api_docs_example_public_schedule'),
                 'method' => 'GET',
                 'path' => '/api/v1/public/{accountSlug}/{locationSlug}/schedule',
-                'samples' => $this->codeSamples('GET', '/api/v1/public/charmpole/main-studio/schedule'),
+                'samples' => $this->codeSamples('GET', '/api/v1/public/ladna-demo/demo-location/schedule'),
             ],
             'public_price' => [
                 'title' => __('app.api_docs_example_public_price'),
                 'method' => 'GET',
                 'path' => '/api/v1/public/{accountSlug}/{locationSlug}/price',
-                'samples' => $this->codeSamples('GET', '/api/v1/public/charmpole/main-studio/price'),
+                'samples' => $this->codeSamples('GET', '/api/v1/public/ladna-demo/demo-location/price'),
             ],
             'website_lead' => [
                 'title' => __('app.api_docs_example_website_lead'),
@@ -170,7 +170,7 @@ class LadnaOpenApiSpec
                     '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
                     '404' => ['$ref' => '#/components/responses/NotFound'],
                 ],
-                'x-codeSamples' => $this->codeSamples('GET', '/api/v1/public/charmpole/main-studio/schedule'),
+                'x-codeSamples' => $this->codeSamples('GET', '/api/v1/public/ladna-demo/demo-location/schedule'),
             ],
         ];
     }
@@ -205,7 +205,7 @@ class LadnaOpenApiSpec
                     '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
                     '404' => ['$ref' => '#/components/responses/NotFound'],
                 ],
-                'x-codeSamples' => $this->codeSamples('GET', '/api/v1/public/charmpole/main-studio/price'),
+                'x-codeSamples' => $this->codeSamples('GET', '/api/v1/public/ladna-demo/demo-location/price'),
             ],
         ];
     }
@@ -262,6 +262,7 @@ class LadnaOpenApiSpec
                 'responses' => [
                     '200' => $this->jsonDataResponse('Authenticated customer session.', ['$ref' => '#/components/schemas/MobileCustomerSessionResponse']),
                     '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -282,6 +283,7 @@ class LadnaOpenApiSpec
                 'responses' => [
                     '200' => $this->jsonDataResponse('OTP challenge send result.', ['$ref' => '#/components/schemas/MobileCustomerOtpSendResponse']),
                     '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -301,6 +303,7 @@ class LadnaOpenApiSpec
                 'requestBody' => $this->jsonRequestBody('#/components/schemas/MobileCustomerOtpVerifyRequest'),
                 'responses' => [
                     '200' => $this->jsonDataResponse('Authenticated customer session.', ['$ref' => '#/components/schemas/MobileCustomerSessionResponse']),
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -366,6 +369,7 @@ class LadnaOpenApiSpec
                 'responses' => [
                     '200' => $this->jsonDataResponse('Authenticated customer session.', ['$ref' => '#/components/schemas/MobileCustomerSessionResponse']),
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -425,6 +429,7 @@ class LadnaOpenApiSpec
                 'responses' => [
                     '200' => $this->jsonDataResponse('Registered device token metadata.', ['$ref' => '#/components/schemas/MobileDeviceTokenResponse']),
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -494,6 +499,7 @@ class LadnaOpenApiSpec
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '403' => ['$ref' => '#/components/responses/Forbidden'],
                     '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -518,6 +524,7 @@ class LadnaOpenApiSpec
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '403' => ['$ref' => '#/components/responses/Forbidden'],
                     '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -542,6 +549,7 @@ class LadnaOpenApiSpec
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '403' => ['$ref' => '#/components/responses/Forbidden'],
                     '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -556,6 +564,7 @@ class LadnaOpenApiSpec
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '403' => ['$ref' => '#/components/responses/Forbidden'],
                     '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -618,6 +627,7 @@ class LadnaOpenApiSpec
                     '200' => $this->jsonDataResponse('Updated customer profile.', ['$ref' => '#/components/schemas/MobileCustomer']),
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '403' => ['$ref' => '#/components/responses/Forbidden'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -640,6 +650,7 @@ class LadnaOpenApiSpec
                     '200' => $this->jsonDataResponse('OTP challenge send result.', ['$ref' => '#/components/schemas/MobileCustomerOtpSendResponse']),
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '403' => ['$ref' => '#/components/responses/Forbidden'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -662,6 +673,7 @@ class LadnaOpenApiSpec
                     '200' => $this->jsonDataResponse('Merged customer session.', ['$ref' => '#/components/schemas/MobileCustomerSessionResponse']),
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '403' => ['$ref' => '#/components/responses/Forbidden'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -742,6 +754,7 @@ class LadnaOpenApiSpec
                     ],
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
                     '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '422' => ['$ref' => '#/components/responses/ValidationError'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
@@ -763,7 +776,7 @@ class LadnaOpenApiSpec
             'post' => [
                 'tags' => ['MCP'],
                 'summary' => 'Calls Ladna studio MCP tools through JSON-RPC in the bearer token account scope.',
-                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, such as mcp:read, mcp:customers:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Tool calls never accept account_id or tenant_id arguments for scoping.',
+                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, such as mcp:read, mcp:customers:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Tool calls never accept account_id or tenant_id arguments for scoping. Read tools remain available for a read-only demo; mutation abilities return HTTP 423.',
                 'security' => [
                     ['AccountBearerToken' => []],
                 ],
@@ -803,6 +816,7 @@ class LadnaOpenApiSpec
                         ],
                     ],
                     '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
                     '429' => ['$ref' => '#/components/responses/TooManyRequests'],
                 ],
                 'x-codeSamples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-class-bookings-for-day', [
@@ -823,14 +837,14 @@ class LadnaOpenApiSpec
                 'in' => 'path',
                 'required' => true,
                 'schema' => ['type' => 'string'],
-                'example' => 'charmpole',
+                'example' => 'ladna-demo',
             ],
             [
                 'name' => 'locationSlug',
                 'in' => 'path',
                 'required' => true,
                 'schema' => ['type' => 'string'],
-                'example' => 'main-studio',
+                'example' => 'demo-location',
             ],
         ];
     }
@@ -845,7 +859,7 @@ class LadnaOpenApiSpec
             'in' => 'path',
             'required' => true,
             'schema' => ['type' => 'string'],
-            'example' => 'charmpole',
+            'example' => 'ladna-demo',
         ];
     }
 
@@ -997,6 +1011,24 @@ class LadnaOpenApiSpec
                     ],
                 ],
             ],
+            'DemoReadOnly' => [
+                'description' => 'The selected studio is a synthetic read-only demo and does not accept mutations.',
+                'content' => [
+                    'application/json' => [
+                        'schema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'message' => ['type' => 'string'],
+                                'code' => [
+                                    'type' => 'string',
+                                    'enum' => ['demo_readonly'],
+                                    'example' => 'demo_readonly',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
             'ValidationError' => [
                 'description' => 'Request validation failed.',
                 'content' => [
@@ -1108,7 +1140,7 @@ class LadnaOpenApiSpec
                 'type' => 'object',
                 'required' => ['account_slug', 'email', 'password'],
                 'properties' => [
-                    'account_slug' => ['type' => 'string', 'example' => 'charmpole'],
+                    'account_slug' => ['type' => 'string', 'example' => 'ladna-demo'],
                     'email' => ['type' => 'string', 'format' => 'email'],
                     'password' => ['type' => 'string', 'minLength' => 6],
                     'device_name' => ['type' => ['string', 'null']],
@@ -1119,7 +1151,7 @@ class LadnaOpenApiSpec
                 'type' => 'object',
                 'required' => ['account_slug', 'phone'],
                 'properties' => [
-                    'account_slug' => ['type' => 'string', 'example' => 'charmpole'],
+                    'account_slug' => ['type' => 'string', 'example' => 'ladna-demo'],
                     'phone' => ['type' => 'string', 'example' => '+380671112233'],
                     'turnstile_token' => ['type' => ['string', 'null']],
                 ],
@@ -1135,7 +1167,7 @@ class LadnaOpenApiSpec
                 'type' => 'object',
                 'required' => ['account_slug', 'phone', 'code'],
                 'properties' => [
-                    'account_slug' => ['type' => 'string', 'example' => 'charmpole'],
+                    'account_slug' => ['type' => 'string', 'example' => 'ladna-demo'],
                     'phone' => ['type' => 'string', 'example' => '+380671112233'],
                     'code' => ['type' => 'string'],
                     'device_name' => ['type' => ['string', 'null']],

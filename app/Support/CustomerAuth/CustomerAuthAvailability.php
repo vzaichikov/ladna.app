@@ -27,6 +27,15 @@ class CustomerAuthAvailability
 
     public function methodsFor(Account $account): CustomerAuthMethodAvailability
     {
+        if ($account->isReadOnlyDemo()) {
+            return new CustomerAuthMethodAvailability(
+                emailPassword: false,
+                otp: false,
+                google: false,
+                turnstileSiteKey: null,
+            );
+        }
+
         $settings = $this->settingsFor($account);
         $turnstile = $this->turnstileSetting();
 

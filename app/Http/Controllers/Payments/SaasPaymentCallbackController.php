@@ -11,6 +11,7 @@ use App\Support\SaasBilling\ResolveAccountSubscriptionPayment;
 use App\Support\SaasBilling\SaasPaymentCallbackLogger;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
 
 class SaasPaymentCallbackController extends Controller
@@ -29,8 +30,6 @@ class SaasPaymentCallbackController extends Controller
 
         $orderId = $billing->orderIdFromCallback($request);
 
-        $logger->log(null, $provider, $orderId, $request, 'received');
-
         $setting = $billing->platformSetting();
 
         if (! $setting) {
@@ -43,6 +42,8 @@ class SaasPaymentCallbackController extends Controller
             $callback = $billing->handleCallback($request, $setting);
             $payment = $resolvePayment->execute(IntegrationProvider::Monopay->value, $callback);
 
+            $logger->log($payment, $provider, $orderId, $request, 'received');
+
             if (! $payment) {
                 $logger->log(null, $provider, $orderId, $request, 'unknown-payment');
 
@@ -50,6 +51,8 @@ class SaasPaymentCallbackController extends Controller
             }
 
             $payment = $completePayment->execute($payment, $callback);
+        } catch (HttpException $exception) {
+            return response($exception->getMessage(), $exception->getStatusCode());
         } catch (InvalidPaymentCallbackException $exception) {
             $logger->log(null, $provider, $orderId, $request, 'invalid', [
                 'message' => $exception->getMessage(),

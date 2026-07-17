@@ -90,6 +90,7 @@ use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
 use App\Http\Middleware\EnsurePublicSubscriptionIsActive;
 use App\Http\Middleware\PreventExpiredSubscriptionMutations;
+use App\Http\Middleware\PreventReadOnlyDemoMutations;
 use App\Http\Middleware\RecordAccountActivity;
 use App\Http\Middleware\SetLocale;
 use App\Models\Account;
@@ -171,8 +172,7 @@ Route::middleware('guest:web')->group(function (): void {
     Route::any('/register', function (): void {
         abort(404);
     });
-    Route::get('/demo', [PublicDemoSignupController::class, 'create'])->name('demo.signup.create');
-    Route::post('/demo', [PublicDemoSignupController::class, 'store'])->middleware('throttle:demo-signup')->name('demo.signup.store');
+    Route::get('/demo', [LoginController::class, 'demo'])->name('demo.login');
 });
 
 Route::get('/demo/{accountSignupRequest}/return', [PublicDemoSignupController::class, 'returned'])->name('demo.return');
@@ -202,7 +202,7 @@ Route::post('/customer/studios/{customerId}/switch', [CustomerAuthController::cl
 
 Route::prefix('{accountSlug}/customer')
     ->name('customer.')
-    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class])
     ->group(function (): void {
         Route::get('login', [CustomerAuthController::class, 'studioLogin'])->name('studio.login');
         Route::get('admin-login/{token}', [AdminCustomerLoginController::class, 'consume'])
@@ -247,7 +247,7 @@ Route::get('/{accountSlug}/client', fn (string $accountSlug): RedirectResponse =
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('customer.studio.dashboard');
 
-Route::middleware(['auth:web', 'can:accessPlatform'])
+Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutations::class])
     ->prefix('app/platform')
     ->name('platform.')
     ->group(function (): void {
@@ -276,7 +276,7 @@ Route::middleware(['auth:web', 'can:accessPlatform'])
         Route::resource('subscription-plans', SubscriptionPlanController::class)->except(['show']);
     });
 
-Route::middleware(['auth:web', PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
+Route::middleware(['auth:web', PreventReadOnlyDemoMutations::class, PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
     ->prefix('app/dashboard')
     ->name('dashboard.')
     ->group(function (): void {
@@ -563,7 +563,7 @@ Route::get('/{accountSlug}/{locationSlug}/schedule/book', [PublicBookingControll
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.booking.show');
 Route::post('/{accountSlug}/{locationSlug}/schedule/book', [PublicBookingController::class, 'store'])
-    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:public-booking'])
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:public-booking'])
     ->name('public.booking.store');
 Route::get('/{accountSlug}/{locationSlug}/price', [PublicPriceController::class, 'show'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
@@ -575,5 +575,5 @@ Route::get('/{accountSlug}/{locationSlug}/price/{classPassPlanSlug}/buy', [Publi
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.class-pass-plans.buy');
 Route::post('/{accountSlug}/{locationSlug}/price/{classPassPlanSlug}/buy', [PublicClassPassPurchaseController::class, 'store'])
-    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class])
     ->name('public.class-pass-plans.purchase');

@@ -43,6 +43,10 @@ class TelegramUpdateProcessor
             return;
         }
 
+        if (($telegramUpdate->account ?? $telegramUpdate->installation?->account)?->isReadOnlyDemo()) {
+            return;
+        }
+
         $telegramUpdate->update(['status' => TelegramUpdateStatus::Processing->value]);
 
         try {
@@ -200,7 +204,7 @@ class TelegramUpdateProcessor
             }
 
             $messageText = ($result['status'] ?? null) === 'not_found'
-                ? __('app.telegram_unknown_phone_signup', ['url' => route('demo.signup.create')])
+                ? __('app.telegram_unknown_phone_signup', ['url' => route('demo.login')])
                 : __('app.telegram_authorization_failed');
             $this->sendAndStore($telegramUpdate, $chatId, $messageText);
 

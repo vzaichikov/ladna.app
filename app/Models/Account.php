@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AccountMode;
 use App\Enums\AccountRole;
 use App\Enums\AccountStatus;
 use App\Enums\PublicScheduleView;
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'trainer_private_timeframe_weeks'])]
+#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'trainer_private_timeframe_weeks'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -34,6 +35,7 @@ class Account extends Model
 
     protected $attributes = [
         'status' => 'active',
+        'mode' => 'live',
         'default_language' => 'uk',
         'country_code' => 'UA',
         'default_currency' => 'UAH',
@@ -53,6 +55,7 @@ class Account extends Model
     {
         return [
             'status' => AccountStatus::class,
+            'mode' => AccountMode::class,
             'enabled_schedule_kinds' => 'array',
             'schedule_kind_colors' => 'array',
             'opening_hours' => 'array',
@@ -71,6 +74,36 @@ class Account extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', AccountStatus::Active->value);
+    }
+
+    public function scopeOperational(Builder $query): Builder
+    {
+        return $query->where('mode', AccountMode::Live->value);
+    }
+
+    public function scopePubliclyDiscoverable(Builder $query): Builder
+    {
+        return $query->operational()->active();
+    }
+
+    public function scopeEligibleForScheduleGeneration(Builder $query): Builder
+    {
+        return $query
+            ->active()
+            ->whereIn('mode', [
+                AccountMode::Live->value,
+                AccountMode::DemoReadonly->value,
+            ]);
+    }
+
+    public function scopeIncludedInMetrics(Builder $query): Builder
+    {
+        return $query->operational();
+    }
+
+    public function isReadOnlyDemo(): bool
+    {
+        return $this->mode === AccountMode::DemoReadonly;
     }
 
     public function logoUrl(): string

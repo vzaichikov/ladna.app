@@ -15,4 +15,13 @@ enum AccountApiTokenAbility: string
     {
         return 'app.account_api_token_ability_'.$this->value;
     }
+
+    public function mutatesAccountData(): bool
+    {
+        return in_array($this, [
+            self::WebsiteLeadsCreate,
+            self::McpBookingsCreate,
+            self::McpBookingsCancel,
+        ], true);
+    }
 }

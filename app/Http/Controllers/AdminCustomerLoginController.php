@@ -38,6 +38,9 @@ class AdminCustomerLoginController extends Controller
         CustomerRememberTokenService $rememberTokens,
     ): RedirectResponse {
         $account = Account::active()->where('slug', $accountSlug)->firstOrFail();
+
+        abort_if($account->isReadOnlyDemo(), 404);
+
         $customer = $tokens->consume($account, $token);
 
         abort_unless($customer instanceof Customer, 404);

@@ -44,6 +44,7 @@ class CustomerNotificationSender
         ];
 
         $notificationIds = CustomerNotification::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('status', CustomerNotificationStatus::Pending->value)
             ->whereNotNull('scheduled_send_at')
             ->where('scheduled_send_at', '<=', now())
@@ -74,6 +75,7 @@ class CustomerNotificationSender
     {
         return DB::transaction(function () use ($notificationId): ?CustomerNotification {
             $notification = CustomerNotification::query()
+                ->whereHas('account', fn ($query) => $query->operational())
                 ->whereKey($notificationId)
                 ->lockForUpdate()
                 ->first();
@@ -129,6 +131,10 @@ class CustomerNotificationSender
 
         if (! $booking || ! $scheduledClass || ! $account || ! $customer) {
             return $this->cancel($notification, 'customer_notification_context_missing');
+        }
+
+        if ($account->isReadOnlyDemo()) {
+            return $this->cancel($notification, 'read_only_demo');
         }
 
         if (! $this->producer->bookingIsActiveForClassReminder($booking, $scheduledClass)) {

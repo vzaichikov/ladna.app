@@ -30,8 +30,8 @@ class FiscalizePayments extends Command
             return self::FAILURE;
         }
 
-        if ($accountId !== null && ! Account::whereKey($accountId)->exists()) {
-            $this->components->error("Account {$accountId} was not found.");
+        if ($accountId !== null && ! Account::query()->operational()->whereKey($accountId)->exists()) {
+            $this->components->error("Operational account {$accountId} was not found.");
 
             return self::FAILURE;
         }
@@ -46,6 +46,11 @@ class FiscalizePayments extends Command
         AccountSubscriptionPayment::query()
             ->where('status', AccountSubscriptionPaymentStatus::PaymentPaid->value)
             ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
+            ->when($accountId === null, fn ($query) => $query->where(function ($query): void {
+                $query
+                    ->whereNull('account_id')
+                    ->orWhereHas('account', fn ($query) => $query->operational());
+            }))
             ->with(['account', 'plan', 'fiscalReceipt'])
             ->lazyById()
             ->each(function (AccountSubscriptionPayment $payment) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {
@@ -63,6 +68,7 @@ class FiscalizePayments extends Command
         CustomerPurchase::query()
             ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
             ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
+            ->when($accountId === null, fn ($query) => $query->whereHas('account', fn ($query) => $query->operational()))
             ->with(['account', 'customer', 'classPassPlan', 'fiscalReceipt'])
             ->lazyById()
             ->each(function (CustomerPurchase $purchase) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {

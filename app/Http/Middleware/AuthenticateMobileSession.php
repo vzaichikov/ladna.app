@@ -39,7 +39,9 @@ class AuthenticateMobileSession
             return response()->json(['message' => __('app.api_token_invalid')], Response::HTTP_UNAUTHORIZED);
         }
 
-        $session->forceFill(['last_used_at' => now()])->save();
+        if (! $session->account->isReadOnlyDemo()) {
+            $session->forceFill(['last_used_at' => now()])->save();
+        }
         $request->attributes->set('mobileSession', $session);
         $request->attributes->set('account', $session->account);
         $request->attributes->set('mobileGuard', $session->guard);

@@ -6,15 +6,14 @@ use App\Models\Account;
 use App\Models\Customer;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerStudioAccess;
+use App\Support\DemoStudioFixture;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
-use App\Support\SaasBilling\SaasBillingPlans;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
 use Illuminate\View\View;
-use Throwable;
 
 class HomeController extends Controller
 {
@@ -108,34 +107,19 @@ class HomeController extends Controller
     }
 
     /**
-     * @return array{demoPlan: mixed, standardPlan: mixed, trustedStudios: Collection<int, Account>}
+     * @return array{demoAvailable: bool, trustedStudios: Collection<int, Account>}
      */
     private function landingData(): array
     {
+        $demoAccount = Account::query()
+            ->active()
+            ->where('slug', DemoStudioFixture::AccountSlug)
+            ->first();
+
         return [
-            ...$this->landingPlans(),
+            'demoAvailable' => $demoAccount?->isReadOnlyDemo() ?? false,
             'trustedStudios' => $this->trustedStudios(),
         ];
-    }
-
-    /**
-     * @return array{demoPlan: mixed, standardPlan: mixed}
-     */
-    private function landingPlans(): array
-    {
-        try {
-            $plans = app(SaasBillingPlans::class);
-
-            return [
-                'demoPlan' => $plans->demoPlan(),
-                'standardPlan' => $plans->standardPlan(),
-            ];
-        } catch (Throwable) {
-            return [
-                'demoPlan' => null,
-                'standardPlan' => null,
-            ];
-        }
     }
 
     /**
@@ -143,7 +127,7 @@ class HomeController extends Controller
      */
     private function trustedStudios(): Collection
     {
-        return Account::active()
+        return Account::publiclyDiscoverable()
             ->with('subscription.plan')
             ->whereHas('locations', fn ($query) => $query->active())
             ->orderBy('name')

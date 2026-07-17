@@ -2,6 +2,7 @@
 
 namespace App\Support\PeopleCounter;
 
+use App\Models\Account;
 use App\Models\PeopleCounterSample;
 use App\Models\Room;
 use App\Models\ScheduledClassPeopleCount;
@@ -25,15 +26,19 @@ class PeopleCounterPruner
         $deleted = 0;
         $disk = Storage::disk('local');
         $oldSamplesCount = PeopleCounterSample::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('captured_at', '<', $cutoff)
             ->count();
         $oldSummariesCount = ScheduledClassPeopleCount::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('summarized_at', '<', $cutoff)
             ->count();
         $oldUnknownIntervalsCount = UnknownPresenceInterval::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('ended_at', '<', $cutoff)
             ->count();
         $staleSnapshotsCount = Room::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->whereNotNull('people_counter_snapshot_path')
             ->where('people_counter_snapshot_taken_at', '<', $cutoff)
             ->count();
@@ -49,6 +54,7 @@ class PeopleCounterPruner
         ]);
 
         PeopleCounterSample::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('captured_at', '<', $cutoff)
             ->orderBy('id')
             ->chunkById(200, function ($samples) use ($debug, $disk, &$deleted): void {
@@ -69,6 +75,7 @@ class PeopleCounterPruner
             });
 
         $deletedSummaries = ScheduledClassPeopleCount::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('summarized_at', '<', $cutoff)
             ->delete();
         $deleted += $deletedSummaries;
@@ -78,6 +85,7 @@ class PeopleCounterPruner
         ]);
 
         $deletedUnknownIntervals = UnknownPresenceInterval::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('ended_at', '<', $cutoff)
             ->delete();
         $deleted += $deletedUnknownIntervals;
@@ -87,6 +95,7 @@ class PeopleCounterPruner
         ]);
 
         Room::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->whereNotNull('people_counter_snapshot_path')
             ->where(function ($query) use ($cutoff): void {
                 $query
@@ -146,8 +155,10 @@ class PeopleCounterPruner
 
         $deleted = 0;
         $cutoffTimestamp = $cutoff->getTimestamp();
+        $demoAccountPrefixes = $this->demoAccountPrefixes();
 
         collect($disk->allFiles(self::ImageRoot))
+            ->reject(fn (string $path): bool => $this->matchesAnyPrefix($path, $demoAccountPrefixes))
             ->filter(fn (string $path): bool => $this->isOlderThan($disk, $path, $cutoffTimestamp))
             ->chunk(200)
             ->each(function ($paths) use ($disk, &$deleted): void {
@@ -166,6 +177,33 @@ class PeopleCounterPruner
             });
 
         return $deleted;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function demoAccountPrefixes(): array
+    {
+        return Account::query()
+            ->get(['id', 'mode'])
+            ->filter(fn (Account $account): bool => $account->isReadOnlyDemo())
+            ->map(fn (Account $account): string => self::ImageRoot.'/a'.$account->id.'/')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, string>  $prefixes
+     */
+    private function matchesAnyPrefix(string $path, array $prefixes): bool
+    {
+        foreach ($prefixes as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isOlderThan(FilesystemAdapter $disk, string $path, int $cutoffTimestamp): bool

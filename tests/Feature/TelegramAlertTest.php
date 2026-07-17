@@ -41,9 +41,9 @@ class TelegramAlertTest extends TestCase
         $this->assertSame($trainer->id, $alert->trainer_id);
         $this->assertSame($scheduledClass->id, $alert->scheduled_class_id);
         $this->assertNull($alert->telegram_chat_id);
-        $this->assertStringContainsString('Iryna, you have a new booking in Charmpole', (string) $alert->text);
+        $this->assertStringContainsString('Iryna, you have a new booking in Test Studio', (string) $alert->text);
         $this->assertStringContainsString('Private Pole', (string) $alert->text);
-        $this->assertStringContainsString('Charmpole', (string) $alert->text);
+        $this->assertStringContainsString('Test Studio', (string) $alert->text);
         $this->assertStringContainsString('Customer: Anna', (string) $alert->text);
     }
 
@@ -262,7 +262,7 @@ class TelegramAlertTest extends TestCase
     private function bookingFixture(ScheduleKind $scheduleKind): array
     {
         $account = Account::factory()->create([
-            'name' => 'Charmpole',
+            'name' => 'Test Studio',
             'default_language' => 'en',
             'timezone' => 'Europe/Kyiv',
         ]);

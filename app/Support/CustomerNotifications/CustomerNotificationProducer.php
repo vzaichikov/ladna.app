@@ -220,7 +220,8 @@ class CustomerNotificationProducer
     {
         $setting = $this->notificationSettingFor($account);
 
-        return $account->customerNotificationsEnabled()
+        return ! $account->isReadOnlyDemo()
+            && $account->customerNotificationsEnabled()
             && $setting->is_enabled
             && $setting->class_reminder_enabled;
     }

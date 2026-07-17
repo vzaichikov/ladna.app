@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
+  <title id="title">Ladna Demo Studio</title>
+  <desc id="desc">Fictional plum and lavender studio mark</desc>
+  <defs>
+    <linearGradient id="bg" x1="24" y1="20" x2="140" y2="144" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DCCFF0"/>
+      <stop offset="1" stop-color="#A78AB9"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="160" rx="38" fill="#FAF8F5"/>
+  <circle cx="80" cy="80" r="58" fill="url(#bg)"/>
+  <path d="M52 49v61c0 8 6 14 14 14h42" fill="none" stroke="#3B223F" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M77 63c11-12 29-12 40 0M77 88c11-12 29-12 40 0" fill="none" stroke="#FAF8F5" stroke-width="9" stroke-linecap="round"/>
+</svg>

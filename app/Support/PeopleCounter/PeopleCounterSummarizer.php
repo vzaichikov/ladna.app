@@ -24,6 +24,7 @@ class PeopleCounterSummarizer
         $endedBefore = $now->copy()->subMinutes(PeopleCounterSamplingWindow::SummarizeDelayMinutes);
         $openAccountIds = $this->studioHours->openAccountIds($now);
         $candidateCount = ScheduledClass::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('status', ScheduledClassStatus::Scheduled->value)
             ->where('ends_at', '<=', $endedBefore)
             ->whereDoesntHave('peopleCount')

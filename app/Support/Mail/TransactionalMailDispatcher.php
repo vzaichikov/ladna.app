@@ -381,6 +381,10 @@ class TransactionalMailDispatcher
 
     private function sendToAddress(?string $email, ?string $name, Account $account, TransactionalMail $mail, ?string $locale = null): void
     {
+        if ($account->isReadOnlyDemo()) {
+            return;
+        }
+
         $email = trim((string) $email);
 
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {

@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class MobileAuthController extends Controller
 {
@@ -213,6 +214,11 @@ class MobileAuthController extends Controller
 
         try {
             $loginCode = $bridge->consumeLoginCode((string) $validated['code']);
+        } catch (HttpException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => 'demo_readonly',
+            ], $exception->getStatusCode());
         } catch (RuntimeException) {
             return response()->json(['message' => __('app.api_token_invalid')], 401);
         }

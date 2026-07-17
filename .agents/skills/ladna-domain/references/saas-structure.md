@@ -56,12 +56,10 @@
 - When a booking needs a pass, use the suitable active purchased pass with the earliest `purchased_at`, then lowest id. Suitability is checked against the scheduled class account, class type, optional room, optional trainer type, remaining unreserved sessions, expiry after opening, and total validity from purchase.
 - Public price output is built from active `ClassPassPlan` records for one account/location and is exposed as both HTML (`/{accountSlug}/{locationSlug}/price`) and JSON API (`/api/v1/public/{accountSlug}/{locationSlug}/price`), grouped by `ClassPassPlan.schedule_kind`.
 
-## Demo Defaults
+## Bootstrap And Demo Safety
 
-- Platform user credentials are configured by local-only `LADNA_DEMO_*` env values.
-- Studio owner credentials are configured by local-only `LADNA_DEMO_*` env values.
-- Dev and QA login users must come from the local `.env` `LADNA_DEMO_*` values. Do not invent or create replacement demo login users when those env-backed users are missing; restore them with `php artisan db:seed --no-interaction` only on local/dev environments. Running seeders is strictly forbidden on any production environment.
-- Demo account/location: `Charmpole`.
-- Demo rooms: `Великий зал` and `Малий зал`.
-- Demo data should model the real Charmpole studio, not generic placeholder fitness data. Charmpole demo class-pass plans include group classes, private lessons, room rental, and one trial pass.
-- `App\Support\CharmpoleDemoCatalog` is the code source of truth for sanitized Charmpole demo account, location, directions, rooms, trainer type defaults, trainers, class types, pass segments, pass plans, and weekly schedule rows. Do not add studio customers, bookings, purchased passes, or usable demo credentials to this tracked catalog.
+- Treat Charmpole as existing studio data. Never regenerate, replace, truncate, or use it as a seeder target.
+- The public `DatabaseSeeder` may create only one platform owner on an empty non-production database. It must require an explicit bootstrap opt-in and must never create accounts, studio owners, subscriptions, or demo business data.
+- Configure bootstrap credentials with local-only `LADNA_PLATFORM_OWNER_*` values. Legacy `LADNA_DEMO_PLATFORM_*` values are temporary compatibility fallbacks, not the preferred keys for new environments.
+- Provision the read-only demo studio only through its guarded provision command and synthetic fixture. Keep trainer names, branding, contact details, and financial data anonymous and fictional.
+- Never run the public seeder to restore QA or demo studio data. Stop and inspect the exact environment and target account before any provision or repair operation.

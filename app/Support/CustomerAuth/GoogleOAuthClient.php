@@ -16,6 +16,8 @@ class GoogleOAuthClient
 
     public function redirect(Account $account): RedirectResponse
     {
+        abort_if($account->isReadOnlyDemo(), 404);
+
         $setting = $this->availability->googleSetting();
 
         if (! $setting) {
@@ -56,6 +58,11 @@ class GoogleOAuthClient
         }
 
         $account = Account::active()->where('slug', $statePayload['account_slug'] ?? null)->firstOrFail();
+
+        if ($account->isReadOnlyDemo()) {
+            throw new RuntimeException('Customer Google OAuth is unavailable for the read-only demo.');
+        }
+
         $setting = $this->availability->googleSetting();
 
         if (! $setting) {

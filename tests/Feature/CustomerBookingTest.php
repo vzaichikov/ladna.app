@@ -244,7 +244,7 @@ class CustomerBookingTest extends TestCase
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create([
-            'name' => 'Charmpole',
+            'name' => 'Test Studio',
             'default_language' => 'en',
         ]);
         $account->addOwner($owner);
@@ -286,8 +286,8 @@ class CustomerBookingTest extends TestCase
         $this->assertSame(TelegramAlertType::TrainerAssignment, $alert->type);
         $this->assertSame(TelegramAlertStatus::Pending, $alert->status);
         $this->assertSame($trainer->id, $alert->trainer_id);
-        $this->assertStringContainsString('Iryna, you have a new booking in Charmpole', (string) $alert->text);
-        $this->assertStringContainsString('Charmpole', (string) $alert->text);
+        $this->assertStringContainsString('Iryna, you have a new booking in Test Studio', (string) $alert->text);
+        $this->assertStringContainsString('Test Studio', (string) $alert->text);
         $this->assertStringContainsString('Podil Studio', (string) $alert->text);
         $this->assertStringContainsString('Blue Hall', (string) $alert->text);
         $this->assertStringContainsString('Group Choreo', (string) $alert->text);

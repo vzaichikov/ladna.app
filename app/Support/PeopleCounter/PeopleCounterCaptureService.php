@@ -46,6 +46,7 @@ class PeopleCounterCaptureService
         $earliestEndAt = $now->copy()->addMinutes(PeopleCounterSamplingWindow::EndBufferMinutes);
         $openAccountIds = $this->studioHours->openAccountIds($now, requireRtspCameras: true);
         $candidateCount = ScheduledClass::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('status', ScheduledClassStatus::Scheduled->value)
             ->where('starts_at', '<=', $latestStartAt)
             ->where('ends_at', '>=', $earliestEndAt)
@@ -131,6 +132,7 @@ class PeopleCounterCaptureService
     private function peopleCounterAccountIds(bool $requireRtspCameras = false): array
     {
         return Account::query()
+            ->operational()
             ->active()
             ->where('enable_people_counter', true)
             ->when(

@@ -14,6 +14,7 @@ class PeopleCounterStudioHours
     public function openAccountIds(Carbon $moment, bool $requireRtspCameras = false): array
     {
         return Account::query()
+            ->operational()
             ->active()
             ->where('enable_people_counter', true)
             ->when(

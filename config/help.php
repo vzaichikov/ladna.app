@@ -66,32 +66,32 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/my-brand.png',
-                    'alt' => 'Екран Загальних налаштувань у демо-студії Charmpole',
+                    'alt' => 'Екран Загальних налаштувань у демо-студії Ladna Demo Studio',
                     'caption' => 'Екран Загальних налаштувань: назва студії, логотип, колір, слоган, посилання для звʼязку, мова, валюта, формати занять, години роботи, правила студії та QR-посилання.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/class-pass-rules.png',
-                    'alt' => 'Вкладка правил абонементів Charmpole',
+                    'alt' => 'Вкладка правил абонементів Ladna Demo Studio',
                     'caption' => 'Правила абонементів: що Ladna робить з активними абонементами, коли студія скасовує конкретне заняття.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/studio-dashboard.png',
-                    'alt' => 'Головний екран студії Charmpole',
+                    'alt' => 'Головний екран студії Ladna Demo Studio',
                     'caption' => 'Головний екран студії: сьогоднішні заняття, активні абонементи, клієнти, заявки, завантаження та проблемні моменти.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/locations.png',
-                    'alt' => 'Екран локацій Charmpole',
+                    'alt' => 'Екран локацій Ladna Demo Studio',
                     'caption' => 'Локації: адреси студії, які потім використовуються в розкладі, прайсі та публічних сторінках.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/rooms.png',
-                    'alt' => 'Екран залів Charmpole',
+                    'alt' => 'Екран залів Ladna Demo Studio',
                     'caption' => 'Зали: конкретні кімнати всередині локації, де проходять заняття.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/group-classes.png',
-                    'alt' => 'Екран форматів групових занять Charmpole',
+                    'alt' => 'Екран форматів групових занять Ladna Demo Studio',
                     'caption' => 'Формати занять: напрями, тривалість, місткість і правила запису для майбутнього розкладу.',
                 ],
             ],
@@ -242,27 +242,27 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/weekly-schedule.png',
-                    'alt' => 'Екран тижневого розкладу Charmpole',
+                    'alt' => 'Екран тижневого розкладу Ladna Demo Studio',
                     'caption' => 'Тижневий розклад: регулярні групові заняття, з яких Ladna створює календар.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/classes-calendar.png',
-                    'alt' => 'Екран календаря занять Charmpole',
+                    'alt' => 'Екран календаря занять Ladna Demo Studio',
                     'caption' => 'Заняття: реальний календар на дні, де видно записи клієнтів, тренера, зал і статуси.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/manual-class-modal.png',
-                    'alt' => 'Модальне вікно разового заняття Charmpole',
+                    'alt' => 'Модальне вікно разового заняття Ladna Demo Studio',
                     'caption' => 'Разове заняття: форма для заняття поза тижневим розкладом, наприклад заміни на інший час.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/class-cancellation-confirm.png',
-                    'alt' => 'Підтвердження скасування заняття Charmpole',
+                    'alt' => 'Підтвердження скасування заняття Ladna Demo Studio',
                     'caption' => 'Скасування заняття: підтвердження дії, після якої заняття зникає з публічного розкладу.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/closed-class-corrections.png',
-                    'alt' => 'Виправлення записів у завершеному занятті Charmpole',
+                    'alt' => 'Виправлення записів у завершеному занятті Ladna Demo Studio',
                     'caption' => 'Виправлення завершеного заняття: окремий режим для додавання правильного клієнта або прибирання помилкового запису з причиною.',
                 ],
             ],
@@ -423,22 +423,22 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/customers.png',
-                    'alt' => 'Екран клієнтів Charmpole',
+                    'alt' => 'Екран клієнтів Ladna Demo Studio',
                     'caption' => 'Клієнти: база людей студії з контактами, записами та активними абонементами.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/customer-import.png',
-                    'alt' => 'Модальне вікно імпорту клієнтів Charmpole',
+                    'alt' => 'Модальне вікно імпорту клієнтів Ladna Demo Studio',
                     'caption' => 'Імпорт клієнтів: завантаження таблиці, приклад файлу, прогрес і результати по кожному рядку.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/studio-dashboard.png',
-                    'alt' => 'Головний екран студії Charmpole',
+                    'alt' => 'Головний екран студії Ladna Demo Studio',
                     'caption' => 'Головний екран студії: сьогоднішні заняття, активні абонементи, клієнти, заявки та завантаження.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/rent-anytime-modal.png',
-                    'alt' => 'Швидкий запис оренди залу на довільний час у Charmpole',
+                    'alt' => 'Швидкий запис оренди залу на довільний час у Ladna Demo Studio',
                     'caption' => 'Оренда залу: спочатку оберіть режим - абонемент і готові слоти або пряма оренда на довільний час.',
                 ],
             ],
@@ -606,22 +606,22 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/classes-calendar.png',
-                    'alt' => 'Екран календаря занять Charmpole зі списком записів',
+                    'alt' => 'Екран календаря занять Ladna Demo Studio зі списком записів',
                     'caption' => 'Заняття: у картці заняття команда додає клієнтів і змінює статус запису.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/closed-class-corrections.png',
-                    'alt' => 'Виправлення записів у завершеному занятті Charmpole',
+                    'alt' => 'Виправлення записів у завершеному занятті Ladna Demo Studio',
                     'caption' => 'Історія занять: виправлення завершеного заняття, якщо клієнта треба додати або змінити вже після тренування.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/customers.png',
-                    'alt' => 'Екран клієнтів Charmpole',
+                    'alt' => 'Екран клієнтів Ladna Demo Studio',
                     'caption' => 'Клієнти: спочатку створіть людину в базі студії, якщо її ще немає.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/studio-problems.png',
-                    'alt' => 'Блок проблемних моментів на головному екрані студії Charmpole',
+                    'alt' => 'Блок проблемних моментів на головному екрані студії Ladna Demo Studio',
                     'caption' => 'Проблемні моменти: записи без резерву в абонементі показують, де треба перевірити оплату або видати правильний абонемент.',
                 ],
             ],
@@ -656,12 +656,12 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/classes-calendar.png',
-                    'alt' => 'Картка заняття Charmpole зі статусами записів',
+                    'alt' => 'Картка заняття Ladna Demo Studio зі статусами записів',
                     'caption' => 'У картці заняття змініть статус конкретного запису на Не прийшов/прийшла.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/active-passes.png',
-                    'alt' => 'Екран активних абонементів Charmpole',
+                    'alt' => 'Екран активних абонементів Ladna Demo Studio',
                     'caption' => 'Активні абонементи показують використані, зарезервовані та залишкові заняття клієнта.',
                 ],
             ],
@@ -699,7 +699,7 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/classes-calendar.png',
-                    'alt' => 'Картка заняття Charmpole із записом клієнта без абонемента',
+                    'alt' => 'Картка заняття Ladna Demo Studio із записом клієнта без абонемента',
                     'caption' => 'У занятті все одно виставте реальний статус запису, навіть якщо абонемента немає.',
                 ],
                 [
@@ -709,7 +709,7 @@ return [
                 ],
                 [
                     'path' => 'assets/help/screenshots/customer-pass-normalization.png',
-                    'alt' => 'Нормалізація записів клієнта Charmpole',
+                    'alt' => 'Нормалізація записів клієнта Ladna Demo Studio',
                     'caption' => 'Якщо абонемент видали пізніше, нормалізація привʼяже відповідні минулі та майбутні записи.',
                 ],
             ],
@@ -747,12 +747,12 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/classes-calendar.png',
-                    'alt' => 'Картка заняття Charmpole для додавання запису',
+                    'alt' => 'Картка заняття Ladna Demo Studio для додавання запису',
                     'caption' => 'Поки заняття відкрите, додайте клієнта просто в картку заняття.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/closed-class-corrections.png',
-                    'alt' => 'Виправлення завершеного заняття Charmpole',
+                    'alt' => 'Виправлення завершеного заняття Ladna Demo Studio',
                     'caption' => 'Після завершення заняття використовуйте виправлення в Історії занять і вказуйте причину.',
                 ],
             ],
@@ -790,12 +790,12 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/customers.png',
-                    'alt' => 'Екран клієнтів Charmpole',
+                    'alt' => 'Екран клієнтів Ladna Demo Studio',
                     'caption' => 'Клієнти: створіть людину один раз, щоб потім використовувати її в записах, абонементах і платежах.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/classes-calendar.png',
-                    'alt' => 'Екран занять Charmpole для додавання запису',
+                    'alt' => 'Екран занять Ladna Demo Studio для додавання запису',
                     'caption' => 'Після створення клієнта знайдіть його в картці заняття і додайте запис.',
                 ],
             ],
@@ -832,27 +832,27 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/passes-prices.png',
-                    'alt' => 'Екран абонементів і цін Charmpole',
+                    'alt' => 'Екран абонементів і цін Ladna Demo Studio',
                     'caption' => 'Абонементи і ціни: правила продажу для групових занять, індивідуальних занять і оренди, з фільтрами сегментів всередині формату.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/active-passes.png',
-                    'alt' => 'Екран активних абонементів Charmpole',
+                    'alt' => 'Екран активних абонементів Ladna Demo Studio',
                     'caption' => 'Активні абонементи: куплені або видані клієнтам абонементи, залишки, резерви та строки дії.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/class-pass-freeze.png',
-                    'alt' => 'Картка абонемента із заморозкою Charmpole',
+                    'alt' => 'Картка абонемента із заморозкою Ladna Demo Studio',
                     'caption' => 'Картка абонемента: заморозка, розморозка, ручна зміна занять і днів дії з історією змін.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/studio-problems.png',
-                    'alt' => 'Блок проблемних моментів на головному екрані студії Charmpole',
+                    'alt' => 'Блок проблемних моментів на головному екрані студії Ladna Demo Studio',
                     'caption' => 'Проблемні моменти: неоплачені активні абонементи, записи без резерву в абонементі та заморожені абонементи.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/customer-pass-normalization.png',
-                    'alt' => 'Модальне вікно нормалізації абонементів у картці клієнта Charmpole',
+                    'alt' => 'Модальне вікно нормалізації абонементів у картці клієнта Ladna Demo Studio',
                     'caption' => 'Нормалізація записів: попередній перегляд показує, скільки занять буде списано або зарезервовано за вже виданими абонементами клієнта.',
                 ],
             ],
@@ -1105,22 +1105,22 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/trainers.png',
-                    'alt' => 'Екран тренерів Charmpole',
+                    'alt' => 'Екран тренерів Ladna Demo Studio',
                     'caption' => 'Тренери: фото, рівень, контакти, активність і доступ до входу в Ladna.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/trainer-unreserved-bookings.png',
-                    'alt' => 'Список тренерів із записами без резерву в абонементі Charmpole',
+                    'alt' => 'Список тренерів із записами без резерву в абонементі Ladna Demo Studio',
                     'caption' => 'Тренери: бейджі показують, скільки записів тренера потребують перевірки абонемента.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/trainer-permissions.png',
-                    'alt' => 'Права доступу тренера в Charmpole',
+                    'alt' => 'Права доступу тренера в Ladna Demo Studio',
                     'caption' => 'Права команди: біля кожного дозволу є коротке пояснення та рівень чутливості для процесів студії.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/trainer-private-timeframes.png',
-                    'alt' => 'Індивідуальні таймфрейми тренера в Charmpole',
+                    'alt' => 'Індивідуальні таймфрейми тренера в Ladna Demo Studio',
                     'caption' => 'Індивідуальні таймфрейми: тренер або адміністратор позначає 30-хвилинні проміжки, коли тренер може провести індивідуальне заняття.',
                 ],
             ],
@@ -1285,22 +1285,22 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/public-studio-page.png',
-                    'alt' => 'Публічна сторінка студії Charmpole',
+                    'alt' => 'Публічна сторінка студії Ladna Demo Studio',
                     'caption' => 'Публічна сторінка студії: бренд студії, активні локації, кнопки прайсу й розкладу та карта локації.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/public-links-qr.png',
-                    'alt' => 'QR-коди та публічні посилання Charmpole',
+                    'alt' => 'QR-коди та публічні посилання Ladna Demo Studio',
                     'caption' => 'QR-коди та посилання: швидкий перехід до сторінки студії, входу клієнта, публічного розкладу та прайсу.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/public-schedule.png',
-                    'alt' => 'Публічний розклад Charmpole',
+                    'alt' => 'Публічний розклад Ladna Demo Studio',
                     'caption' => 'Публічний розклад: сторінка для клієнтів з груповими заняттями активної локації.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/public-price.png',
-                    'alt' => 'Публічний прайс Charmpole',
+                    'alt' => 'Публічний прайс Ladna Demo Studio',
                     'caption' => 'Публічний прайс: активні ціни студії, які клієнт може переглянути або купити онлайн, якщо оплати налаштовані.',
                 ],
             ],
@@ -1395,7 +1395,7 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/studio-dashboard.png',
-                    'alt' => 'Головний екран студії Charmpole у Ladna',
+                    'alt' => 'Головний екран студії Ladna Demo Studio у Ladna',
                     'caption' => 'Відкрийте Ladna у браузері на телефоні, увійдіть у студію і додайте цю сторінку на головний екран або в лаунчер.',
                 ],
             ],
@@ -1491,12 +1491,12 @@ return [
                 ],
                 [
                     'path' => 'assets/help/screenshots/rooms.png',
-                    'alt' => 'Екран залів Charmpole для налаштування кімнат студії',
+                    'alt' => 'Екран залів Ladna Demo Studio для налаштування кімнат студії',
                     'caption' => 'Зали: тут зберігаються кімнати для розкладу, а для увімкненої підтримки камер можна додати RTSP-адресу залу.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/studio-dashboard.png',
-                    'alt' => 'Головний екран студії Charmpole з робочими підсумками',
+                    'alt' => 'Головний екран студії Ladna Demo Studio з робочими підсумками',
                     'caption' => 'Головний екран: власниця бачить робочі підсумки студії, а за увімкненого People Counter - останній підрахунок із камер залів.',
                 ],
             ],
@@ -1572,12 +1572,12 @@ return [
             'screenshots' => [
                 [
                     'path' => 'assets/help/screenshots/integrations.png',
-                    'alt' => 'Екран інтеграцій Charmpole',
+                    'alt' => 'Екран інтеграцій Ladna Demo Studio',
                     'caption' => 'Інтеграції: підключення оплат, повідомлень, входу клієнтів та інших сервісів студії.',
                 ],
                 [
                     'path' => 'assets/help/screenshots/website-leads.png',
-                    'alt' => 'Екран заявок з сайту Charmpole',
+                    'alt' => 'Екран заявок з сайту Ladna Demo Studio',
                     'caption' => 'Заявки з сайту: люди, які залишили контакт, з можливістю швидко створити запис.',
                 ],
                 [

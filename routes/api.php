@@ -15,6 +15,7 @@ use App\Http\Controllers\Payments\SaasPaymentCallbackController;
 use App\Http\Middleware\AuthenticateAccountApiToken;
 use App\Http\Middleware\AuthenticateMobileSession;
 use App\Http\Middleware\EnsurePublicSubscriptionIsActive;
+use App\Http\Middleware\PreventReadOnlyDemoMutations;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/public/{accountSlug}/{locationSlug}')
@@ -26,7 +27,7 @@ Route::prefix('v1/public/{accountSlug}/{locationSlug}')
     });
 
 Route::post('v1/website-leads', WebsiteLeadController::class)
-    ->middleware([AuthenticateAccountApiToken::class.':website_leads:create', EnsurePublicSubscriptionIsActive::class, 'throttle:website-leads'])
+    ->middleware([AuthenticateAccountApiToken::class.':website_leads:create', PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:website-leads'])
     ->name('api.v1.website-leads.store');
 
 Route::prefix('v1/mobile')->name('api.v1.mobile.')->group(function (): void {
@@ -36,15 +37,15 @@ Route::prefix('v1/mobile')->name('api.v1.mobile.')->group(function (): void {
 
     Route::prefix('auth')->name('auth.')->middleware('throttle:mobile-auth')->group(function (): void {
         Route::post('staff/login', [MobileAuthController::class, 'staffLogin'])->name('staff.login');
-        Route::post('customer/email-login', [MobileAuthController::class, 'customerEmailLogin'])->name('customer.email-login');
-        Route::post('customer/otp/send', [MobileAuthController::class, 'customerOtpSend'])->name('customer.otp.send');
-        Route::post('customer/otp/verify', [MobileAuthController::class, 'customerOtpVerify'])->name('customer.otp.verify');
+        Route::post('customer/email-login', [MobileAuthController::class, 'customerEmailLogin'])->middleware(PreventReadOnlyDemoMutations::class)->name('customer.email-login');
+        Route::post('customer/otp/send', [MobileAuthController::class, 'customerOtpSend'])->middleware(PreventReadOnlyDemoMutations::class)->name('customer.otp.send');
+        Route::post('customer/otp/verify', [MobileAuthController::class, 'customerOtpVerify'])->middleware(PreventReadOnlyDemoMutations::class)->name('customer.otp.verify');
         Route::get('customer/google/{accountSlug}/redirect', [MobileAuthController::class, 'customerGoogleRedirect'])->name('customer.google.redirect');
         Route::get('customer/google/callback', [MobileAuthController::class, 'customerGoogleCallback'])->name('customer.google.callback');
         Route::post('customer/google/exchange', [MobileAuthController::class, 'customerGoogleExchange'])->name('customer.google.exchange');
     });
 
-    Route::middleware([AuthenticateMobileSession::class, 'throttle:mobile-api'])->group(function (): void {
+    Route::middleware([AuthenticateMobileSession::class, PreventReadOnlyDemoMutations::class, 'throttle:mobile-api'])->group(function (): void {
         Route::get('me', [MobileAuthController::class, 'me'])->name('me');
         Route::post('logout', [MobileAuthController::class, 'logout'])->name('logout');
         Route::post('device-tokens', [MobileDeviceTokenController::class, 'store'])->name('device-tokens.store');

@@ -16,15 +16,22 @@
                 </span>
                 <div>
                     <div class="crm-page-kicker">{{ __('app.platform') }}</div>
-                    <h1 class="crm-page-title">{{ $account->name }}</h1>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h1 class="crm-page-title">{{ $account->name }}</h1>
+                        @if ($account->isReadOnlyDemo())
+                            <span class="crm-status-scheduled">{{ __('app.demo_account_badge') }}</span>
+                        @endif
+                    </div>
                     <p class="crm-page-copy">{{ $account->slug }} · {{ __('app.'.$account->status->value) }}</p>
                 </div>
             </div>
             <div class="flex flex-wrap gap-2">
-                <x-ui.button :href="route('platform.accounts.edit', $account)">
-                    <x-ui.icon name="edit" class="h-4 w-4" />
-                    {{ __('app.edit') }}
-                </x-ui.button>
+                @unless ($account->isReadOnlyDemo())
+                    <x-ui.button :href="route('platform.accounts.edit', $account)">
+                        <x-ui.icon name="edit" class="h-4 w-4" />
+                        {{ __('app.edit') }}
+                    </x-ui.button>
+                @endunless
                 <x-ui.button :href="route('platform.accounts.customer-auth.edit', $account)" variant="secondary">
                     <x-ui.icon name="sliders-horizontal" class="h-4 w-4" />
                     {{ __('app.studio_capabilities_settings') }}
@@ -39,14 +46,16 @@
                         {{ __('app.service_rooms') }}
                     </x-ui.button>
                 @endif
-                <form method="POST" action="{{ route('platform.accounts.destroy', $account) }}" data-confirm-delete>
-                    @csrf
-                    @method('DELETE')
-                    <x-ui.button type="submit" variant="danger">
-                        <x-ui.icon name="trash" class="h-4 w-4" />
-                        {{ __('app.delete') }}
-                    </x-ui.button>
-                </form>
+                @unless ($account->isReadOnlyDemo())
+                    <form method="POST" action="{{ route('platform.accounts.destroy', $account) }}" data-confirm-delete>
+                        @csrf
+                        @method('DELETE')
+                        <x-ui.button type="submit" variant="danger">
+                            <x-ui.icon name="trash" class="h-4 w-4" />
+                            {{ __('app.delete') }}
+                        </x-ui.button>
+                    </form>
+                @endunless
             </div>
         </div>
     </x-ui.panel>

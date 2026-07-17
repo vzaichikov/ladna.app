@@ -17,9 +17,13 @@ use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
+use App\Support\SaasBilling\CreateDemoSignup;
+use App\Support\SaasBilling\MonopaySaasBilling;
+use App\Support\SaasBilling\StartAccountSubscriptionPaymentCheckout;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request as HttpClientRequest;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
@@ -43,88 +47,40 @@ class SaasBillingTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_demo_signup_form_uses_phone_mask_for_owner_phone(): void
+    public function test_demo_route_shows_prefilled_read_only_owner_login(): void
     {
-        $this->upsertPlan('demo-month', [
-            'name' => 'Demo test',
-            'price_cents' => 100,
-            'currency' => 'UAH',
-            'plan_type' => SubscriptionPlanType::Demo,
-            'access_days' => 30,
-            'public_signup_enabled' => true,
-            'requires_recurring_payment' => false,
-            'sort_order' => 0,
-        ]);
-        $this->upsertPlan('standard-monthly', [
-            'name' => 'Standard test',
-            'price_cents' => 99900,
-            'currency' => 'UAH',
-            'plan_type' => SubscriptionPlanType::Standard,
-            'access_days' => 30,
-            'public_signup_enabled' => false,
-            'requires_recurring_payment' => true,
-            'sort_order' => 10,
+        Account::factory()->demoReadonly()->create([
+            'slug' => 'ladna-demo',
         ]);
 
-        $this->get(route('demo.signup.create'))
+        $this->get(route('demo.login'))
             ->assertOk()
-            ->assertSee('1 ₴')
-            ->assertSee('999 ₴')
-            ->assertDontSee('1.00 UAH')
-            ->assertDontSee('name="account_slug"', false)
-            ->assertSee(__('app.demo_signup_copy'))
-            ->assertDontSee('Кабінет створюється')
-            ->assertDontSee('Після створення студії')
-            ->assertDontSee('After creating the studio')
-            ->assertSee('name="owner_phone"', false)
-            ->assertSee('type="tel"', false)
-            ->assertSee('autocomplete="tel"', false)
-            ->assertSee('data-phone-mask', false)
-            ->assertSee('data-country-code="UA"', false)
-            ->assertSee(__('app.create_my_studio'));
+            ->assertSee('value="'.config('demo-studio.owner.email').'"', false)
+            ->assertSee('value="'.config('demo-studio.owner.password').'"', false)
+            ->assertSee('name="remember" type="hidden" value="0"', false)
+            ->assertDontSee('name="remember" type="checkbox"', false)
+            ->assertSee(__('app.demo_readonly_title'));
     }
 
-    public function test_demo_signup_redirects_to_pricing_when_demo_plan_is_missing(): void
+    public function test_paid_demo_signup_post_route_is_retired(): void
     {
-        SubscriptionPlan::query()
-            ->where('plan_type', SubscriptionPlanType::Demo->value)
-            ->delete();
-
-        $this->get(route('demo.signup.create'))
-            ->assertRedirect(route('home', [], false).'#pricing');
+        $this->post('/demo')->assertStatus(405);
     }
 
-    public function test_landing_formats_subscription_prices_with_hryvnia_symbol(): void
+    public function test_landing_links_to_read_only_demo_without_tariff_prices(): void
     {
-        $this->upsertPlan('demo-month', [
-            'name' => 'Demo test',
-            'price_cents' => 100,
-            'currency' => 'UAH',
-            'plan_type' => SubscriptionPlanType::Demo,
-            'access_days' => 30,
-            'public_signup_enabled' => true,
-            'requires_recurring_payment' => false,
-            'sort_order' => 0,
-        ]);
-        $this->upsertPlan('standard-monthly', [
-            'name' => 'Standard test',
-            'price_cents' => 99900,
-            'currency' => 'UAH',
-            'plan_type' => SubscriptionPlanType::Standard,
-            'access_days' => 30,
-            'public_signup_enabled' => false,
-            'requires_recurring_payment' => true,
-            'sort_order' => 10,
+        Account::factory()->demoReadonly()->create([
+            'slug' => 'ladna-demo',
         ]);
 
         $this->get(route('home'))
             ->assertOk()
-            ->assertSee('1 ₴')
-            ->assertSee('999 ₴')
+            ->assertDontSee('1 ₴')
+            ->assertDontSee('999 ₴')
             ->assertSee('data-landing-header-auth', false)
             ->assertSee('href="'.route('login').'"', false)
-            ->assertSee('href="'.route('demo.signup.create', [], false).'"', false)
-            ->assertDontSee('1.00 UAH');
+            ->assertSee('href="'.route('demo.login', [], false).'"', false)
+            ->assertDontSee('id="pricing"', false);
     }
 
     public function test_demo_signup_creates_account_owner_and_embedded_one_uah_payment(): void
@@ -144,6 +100,16 @@ class SaasBillingTest extends TestCase
             'requires_recurring_payment' => false,
             'sort_order' => 0,
         ]);
+        $this->upsertPlan('standard-monthly', [
+            'name' => 'Standard test',
+            'price_cents' => 99900,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Standard,
+            'access_days' => 30,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => true,
+            'sort_order' => 10,
+        ]);
 
         Http::fake([
             'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
@@ -153,14 +119,14 @@ class SaasBillingTest extends TestCase
             ]),
         ]);
 
-        $this->post(route('demo.signup.store'), [
+        $this->createLegacyDemoSignup([
             'studio_name' => 'Studio One',
             'owner_name' => 'Oksana Studio',
             'owner_email' => 'owner-demo@example.com',
             'owner_phone' => '+380501111111',
             'owner_password' => 'secret123',
             'owner_password_confirmation' => 'secret123',
-        ])->assertRedirect();
+        ], $demoPlan);
 
         $signup = AccountSignupRequest::firstOrFail();
         $payment = AccountSubscriptionPayment::firstOrFail();
@@ -215,14 +181,14 @@ class SaasBillingTest extends TestCase
             ]),
         ]);
 
-        $this->post(route('demo.signup.store'), [
+        $this->createLegacyDemoSignup([
             'studio_name' => 'Studio One',
             'owner_name' => 'Oksana Studio',
             'owner_email' => 'owner-demo-conflict@example.com',
             'owner_phone' => '+380501111111',
             'owner_password' => 'secret123',
             'owner_password_confirmation' => 'secret123',
-        ])->assertRedirect();
+        ], $demoPlan);
 
         $signup = AccountSignupRequest::where('owner_email', 'owner-demo-conflict@example.com')->firstOrFail();
         $account = Account::where('slug', 'studio-one-1')->firstOrFail();
@@ -254,14 +220,14 @@ class SaasBillingTest extends TestCase
             ]),
         ]);
 
-        $this->post(route('demo.signup.store'), [
+        $this->createLegacyDemoSignup([
             'studio_name' => 'App',
             'owner_name' => 'Oksana Studio',
             'owner_email' => 'owner-demo-reserved@example.com',
             'owner_phone' => '+380501111112',
             'owner_password' => 'secret123',
             'owner_password_confirmation' => 'secret123',
-        ])->assertRedirect();
+        ], $demoPlan);
 
         $signup = AccountSignupRequest::where('owner_email', 'owner-demo-reserved@example.com')->firstOrFail();
         $account = Account::where('slug', 'app-1')->firstOrFail();
@@ -377,7 +343,7 @@ class SaasBillingTest extends TestCase
         $this->platformMonopayIntegration([
             'api_token' => 'mono-token',
         ]);
-        $this->upsertPlan('demo-month', [
+        $demoPlan = $this->upsertPlan('demo-month', [
             'name' => 'Demo test',
             'price_cents' => 100,
             'currency' => 'UAH',
@@ -418,14 +384,14 @@ class SaasBillingTest extends TestCase
             return Http::response(['message' => 'Unexpected request'], 500);
         });
 
-        $this->post(route('demo.signup.store'), [
+        $this->createLegacyDemoSignup([
             'studio_name' => 'Retry Studio',
             'owner_name' => 'Retry Owner',
             'owner_email' => 'retry-owner@example.com',
             'owner_phone' => '+380501234500',
             'owner_password' => 'retry-secret',
             'owner_password_confirmation' => 'retry-secret',
-        ])->assertRedirect();
+        ], $demoPlan);
 
         $signup = AccountSignupRequest::firstOrFail();
         $account = Account::where('slug', 'retry-studio')->firstOrFail();
@@ -679,14 +645,14 @@ class SaasBillingTest extends TestCase
             return Http::response(['message' => 'Unexpected request'], 500);
         });
 
-        $this->post(route('demo.signup.store'), [
+        $this->createLegacyDemoSignup([
             'studio_name' => 'Flow Studio',
             'owner_name' => 'Flow Owner',
             'owner_email' => 'flow-owner@example.com',
             'owner_phone' => '+380501234567',
             'owner_password' => 'flow-secret',
             'owner_password_confirmation' => 'flow-secret',
-        ])->assertRedirect();
+        ], $demoPlan);
 
         Http::assertSent(fn (HttpClientRequest $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
             && $request['amount'] === 100
@@ -979,6 +945,28 @@ class SaasBillingTest extends TestCase
             'is_enabled' => true,
             'credentials' => $credentials,
         ]);
+    }
+
+    /**
+     * Creates an old paid-demo account directly so callback and retry compatibility remains tested
+     * after the public signup endpoint has been retired.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createLegacyDemoSignup(array $attributes, SubscriptionPlan $plan): void
+    {
+        [$signup, $payment, , $owner] = app(CreateDemoSignup::class)->execute($attributes, $plan);
+        $setting = app(MonopaySaasBilling::class)->platformSetting();
+
+        $this->assertNotNull($setting);
+
+        app(StartAccountSubscriptionPaymentCheckout::class)->execute(
+            $payment,
+            $setting,
+            route('demo.return', $signup),
+        );
+
+        Auth::login($owner);
     }
 
     /**

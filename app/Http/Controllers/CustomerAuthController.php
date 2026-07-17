@@ -780,7 +780,7 @@ class CustomerAuthController extends Controller
      */
     private function customerLoginStudios(AccountSubscriptionAccess $subscriptionAccess): Collection
     {
-        return Account::active()
+        return Account::publiclyDiscoverable()
             ->with('subscription.plan')
             ->whereHas('locations', fn ($query) => $query->active())
             ->orderBy('name')

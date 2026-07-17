@@ -11,8 +11,8 @@ class PlatformController extends Controller
     public function __invoke(): View
     {
         return view('platform.index', [
-            'accountsCount' => Account::count(),
-            'activeAccountsCount' => Account::active()->count(),
+            'accountsCount' => Account::includedInMetrics()->count(),
+            'activeAccountsCount' => Account::includedInMetrics()->active()->count(),
             'recentAccounts' => Account::with('subscription.plan')
                 ->latest()
                 ->limit(8)

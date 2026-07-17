@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Actions\GenerateAccountSchedule;
-use App\Enums\AccountStatus;
 use App\Enums\ScheduleSeriesStatus;
 use App\Models\Account;
 use App\Models\ScheduleSeries;
@@ -26,8 +25,8 @@ class GenerateSchedule extends Command
 
         if ($accountId) {
             $account = Account::query()
+                ->eligibleForScheduleGeneration()
                 ->whereKey($accountId)
-                ->where('status', AccountStatus::Active->value)
                 ->first();
 
             if (! $account) {
@@ -48,7 +47,7 @@ class GenerateSchedule extends Command
                 ->with('account')
                 ->whereKey($seriesId)
                 ->where('status', ScheduleSeriesStatus::Active->value)
-                ->whereHas('account', fn ($query) => $query->where('status', AccountStatus::Active->value))
+                ->whereHas('account', fn ($query) => $query->eligibleForScheduleGeneration())
                 ->first();
 
             if (! $series) {
@@ -67,7 +66,7 @@ class GenerateSchedule extends Command
         $totalPruned = 0;
 
         Account::query()
-            ->where('status', AccountStatus::Active->value)
+            ->eligibleForScheduleGeneration()
             ->chunkById(100, function ($accounts) use (&$totalCreated, &$totalSeries, &$totalPruned, $generateAccountSchedule): void {
                 foreach ($accounts as $account) {
                     /** @var Account $account */

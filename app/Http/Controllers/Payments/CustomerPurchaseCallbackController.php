@@ -38,6 +38,10 @@ class CustomerPurchaseCallbackController extends Controller
                 ->first()
             : null;
 
+        if ($purchase?->account?->isReadOnlyDemo()) {
+            return response(__('app.demo_readonly_message'), Response::HTTP_LOCKED);
+        }
+
         $logger->log($purchase, $provider, $orderId, $request, 'received');
 
         if (! $purchase) {

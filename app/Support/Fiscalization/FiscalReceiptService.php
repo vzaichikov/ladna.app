@@ -23,6 +23,12 @@ class FiscalReceiptService
 
     public function skipReasonFor(CustomerPurchase|AccountSubscriptionPayment $payment): ?string
     {
+        $payment->loadMissing('account');
+
+        if ($payment->account?->isReadOnlyDemo()) {
+            return 'read-only demo payments are not fiscalized';
+        }
+
         if (! $this->paymentIsPaid($payment)) {
             return 'payment is not paid';
         }

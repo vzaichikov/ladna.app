@@ -14,6 +14,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class MobileGoogleOAuthBridge
 {
@@ -21,6 +23,8 @@ class MobileGoogleOAuthBridge
 
     public function redirect(Account $account, ?string $returnUrl = null): RedirectResponse
     {
+        abort_if($account->isReadOnlyDemo(), 404);
+
         $setting = $this->availability->googleSetting();
 
         if (! $setting) {
@@ -83,6 +87,10 @@ class MobileGoogleOAuthBridge
             throw new RuntimeException('Invalid mobile login code.');
         }
 
+        if ($loginCode->account?->isReadOnlyDemo()) {
+            throw new HttpException(Response::HTTP_LOCKED, __('app.demo_readonly_message'));
+        }
+
         $loginCode->forceFill(['consumed_at' => now()])->save();
 
         return $loginCode;
@@ -102,6 +110,10 @@ class MobileGoogleOAuthBridge
 
         if (! $mobileState || ! $mobileState->account) {
             throw new RuntimeException('Invalid OAuth state.');
+        }
+
+        if ($mobileState->account->isReadOnlyDemo()) {
+            throw new HttpException(Response::HTTP_LOCKED, __('app.demo_readonly_message'));
         }
 
         $mobileState->forceFill(['consumed_at' => now()])->save();

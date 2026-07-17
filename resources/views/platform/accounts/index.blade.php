@@ -30,7 +30,12 @@
             @endphp
             <div class="crm-row transition hover:bg-violet-crm-50/50 lg:grid-cols-[1fr_220px_160px_160px_auto_auto] lg:items-center">
                 <div>
-                    <a href="{{ route('platform.accounts.show', $account) }}" class="font-semibold text-slate-950 transition hover:text-brand-700">{{ $account->name }}</a>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <a href="{{ route('platform.accounts.show', $account) }}" class="font-semibold text-slate-950 transition hover:text-brand-700">{{ $account->name }}</a>
+                        @if ($account->isReadOnlyDemo())
+                            <span class="crm-status-scheduled">{{ __('app.demo_account_badge') }}</span>
+                        @endif
+                    </div>
                     <div class="mt-1 text-sm text-slate-500">{{ $account->slug }}</div>
                 </div>
                 <div class="text-sm text-slate-500">{{ $account->locations_count }} {{ __('app.locations') }}</div>

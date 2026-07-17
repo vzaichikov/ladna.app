@@ -6,6 +6,13 @@
     $sidebarAccount = $showAccountNav ? $activeAccount : null;
     $authUser = auth()->user();
     $isPlatformAdmin = $authUser?->isPlatformAdmin() ?? false;
+    $isReadOnlyDemo = $activeAccount?->isReadOnlyDemo() ?? false;
+
+    if (! $activeAccount && $authUser && ! $isPlatformAdmin) {
+        $userAccounts = $authUser->accounts()->limit(2)->get();
+        $isReadOnlyDemo = $userAccounts->count() === 1 && $userAccounts->first()?->isReadOnlyDemo();
+    }
+
     $accountMembership = $showAccountNav && $authUser ? $activeAccount->membershipFor($authUser) : null;
     $trainerProfile = $accountMembership?->role === \App\Enums\AccountRole::Trainer
         ? $activeAccount->trainers()->with('trainerType')->whereBelongsTo($authUser, 'user')->first()
@@ -56,12 +63,12 @@
     $canManageStudioCashflow = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioCashflow);
     $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
-    $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
+    $showAssistantWidget = ! $isReadOnlyDemo && $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
     $canViewPayments = $showAccountNav && $authUser && ($activeAccount->isOwnedBy($authUser) || $canManageStudioCashflow);
-    $canViewTariffPayments = $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
+    $canViewTariffPayments = ! $isReadOnlyDemo && $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
     $subscriptionAccess = $showAccountNav ? app(\App\Support\SaasBilling\AccountSubscriptionAccess::class) : null;
-    $subscriptionWarning = $showAccountNav && $subscriptionAccess?->shouldShowWarning($activeAccount);
+    $subscriptionWarning = ! $isReadOnlyDemo && $showAccountNav && $subscriptionAccess?->shouldShowWarning($activeAccount);
     $subscriptionCanEdit = ! $showAccountNav || $subscriptionAccess?->canEditStudio($activeAccount);
     $subscriptionWarningMessage = match (true) {
         $showAccountNav && $subscriptionAccess?->requiresInitialDemoPayment($activeAccount) => __('app.demo_payment_required_readonly'),
@@ -524,6 +531,10 @@
                         </div>
                     </div>
                 </header>
+
+                @if ($isReadOnlyDemo || $errors->has('demo'))
+                    <x-ui.demo-readonly-banner />
+                @endif
 
                 @if ($subscriptionWarning)
                     <div class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 sm:px-6 lg:px-8">

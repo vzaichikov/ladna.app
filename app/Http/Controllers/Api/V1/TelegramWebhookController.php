@@ -27,6 +27,10 @@ class TelegramWebhookController extends Controller
             return response()->noContent(Response::HTTP_NOT_FOUND);
         }
 
+        if ($installation->account?->isReadOnlyDemo()) {
+            return response()->noContent(Response::HTTP_NOT_FOUND);
+        }
+
         if ($installation->webhook_secret_token_hash) {
             $secret = (string) $request->header('X-Telegram-Bot-Api-Secret-Token');
 

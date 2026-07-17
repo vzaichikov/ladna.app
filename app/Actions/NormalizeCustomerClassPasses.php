@@ -18,6 +18,7 @@ class NormalizeCustomerClassPasses
         $normalized = 0;
 
         CustomerClassPass::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->with('reservations')
             ->orderBy('id')
             ->chunkById(100, function ($customerClassPasses) use (&$normalized): void {

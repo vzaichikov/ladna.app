@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.86.0',
+                'date' => '2026-07-17',
+                'title' => 'Synthetic read-only demo studio',
+                'items' => ['Added a realistic synthetic Ladna Demo Studio with prefilled public login, anonymous contacts and financial examples, an eight-week recurring schedule, and read-only protection across the owner workspace, platform controls, public and mobile APIs, tokens, and MCP. The landing page now opens this demo and no longer shows tariff blocks, while the demo stays excluded from operational discovery, notifications, billing, fiscalization, and live platform metrics.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.85.0',
                 'date' => '2026-07-17',
                 'title' => 'Trainer corrections for class records',
@@ -758,6 +765,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.86.0',
+                'date' => '2026-07-17',
+                'title' => 'Синтетична демо-студія лише для перегляду',
+                'items' => ['Додано реалістичну синтетичну Ladna Demo Studio з публічним входом із заповненими даними, анонімними контактами й фінансовими прикладами, восьмитижневим повторюваним розкладом та захистом від змін у кабінеті студії, платформних діях, публічному й мобільному API, токенах і MCP. Лендинг тепер відкриває це демо й більше не показує тарифні блоки, а сама демо-студія не потрапляє до робочих списків, сповіщень, білінгу, фіскалізації та платформних бізнес-метрик.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.85.0',
                 'date' => '2026-07-17',

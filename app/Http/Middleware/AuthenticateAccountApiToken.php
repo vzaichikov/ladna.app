@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\AccountApiTokenAbility;
 use App\Models\AccountApiToken;
 use App\Support\AccountApiTokenIssuer;
 use Closure;
@@ -38,7 +39,20 @@ class AuthenticateAccountApiToken
             }
         }
 
-        $accountApiToken->forceFill(['last_used_at' => now()])->save();
+        $requestsMutation = collect($abilities)
+            ->map(fn (string $ability): ?AccountApiTokenAbility => AccountApiTokenAbility::tryFrom($ability))
+            ->contains(fn (?AccountApiTokenAbility $ability): bool => $ability?->mutatesAccountData() ?? false);
+
+        if ($requestsMutation && $accountApiToken->account->isReadOnlyDemo()) {
+            return response()->json([
+                'message' => __('app.demo_readonly_message'),
+                'code' => 'demo_readonly',
+            ], Response::HTTP_LOCKED);
+        }
+
+        if (! $accountApiToken->account->isReadOnlyDemo()) {
+            $accountApiToken->forceFill(['last_used_at' => now()])->save();
+        }
         $request->attributes->set('accountApiToken', $accountApiToken);
         $request->attributes->set('account', $accountApiToken->account);
 

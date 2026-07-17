@@ -36,7 +36,7 @@ class TelegramTypingPulseCommand extends Command
         $installation = TelegramBotInstallation::query()->find((int) ($payload['installation_id'] ?? 0));
         $chatId = (string) ($payload['chat_id'] ?? '');
 
-        if (! $installation || $chatId === '') {
+        if (! $installation || $installation->account?->isReadOnlyDemo() || $chatId === '') {
             $this->deletePulse($path);
 
             return self::SUCCESS;

@@ -19,7 +19,7 @@ class ExampleTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee($version);
         $response->assertSee('changelog.', false);
-        $response->assertSee('href="'.route('demo.signup.create', [], false).'"', false);
+        $response->assertDontSee('id="pricing"', false);
         $response->assertSee('href="'.route('customer.login').'"', false);
         $response->assertSee(__('app.customer_login_cta'));
         $this->assertSame(1, substr_count($response->getContent(), 'href="'.route('login').'"'));

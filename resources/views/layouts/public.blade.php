@@ -5,6 +5,7 @@
     $publicPwaAccount = ! $isEmbedLayout && $candidateAccount instanceof \App\Models\Account && $candidateAccount->exists
         ? $candidateAccount
         : null;
+    $isReadOnlyDemo = $publicPwaAccount?->isReadOnlyDemo() ?? false;
     $isCentralAppScope = request()->is('app') || request()->is('app/*');
     $pwaManifestUrl = null;
     $pwaAppleTouchIconUrl = null;
@@ -60,6 +61,10 @@
     >
         @if ($pwaServiceWorkerUrl)
             <x-ui.pwa-install-button />
+        @endif
+
+        @if ($isReadOnlyDemo || (isset($errors) && $errors->has('demo')))
+            <x-ui.demo-readonly-banner />
         @endif
 
         @yield('content')

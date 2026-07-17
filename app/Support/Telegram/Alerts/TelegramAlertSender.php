@@ -38,6 +38,7 @@ class TelegramAlertSender
         ];
 
         $alertIds = TelegramAlert::query()
+            ->whereHas('account', fn ($query) => $query->operational())
             ->where('status', TelegramAlertStatus::Pending->value)
             ->where(fn ($query) => $query
                 ->whereNull('next_attempt_at')
@@ -66,6 +67,7 @@ class TelegramAlertSender
     {
         return DB::transaction(function () use ($alertId): ?TelegramAlert {
             $alert = TelegramAlert::query()
+                ->whereHas('account', fn ($query) => $query->operational())
                 ->whereKey($alertId)
                 ->lockForUpdate()
                 ->first();
@@ -93,6 +95,10 @@ class TelegramAlertSender
 
         if (! $alert->account) {
             return $this->retryOrFail($alert, 'alert_account_missing', true);
+        }
+
+        if ($alert->account->isReadOnlyDemo()) {
+            return $this->retryOrFail($alert, 'read_only_demo', true);
         }
 
         if (! $alert->account->telegramAlertsEnabled()) {

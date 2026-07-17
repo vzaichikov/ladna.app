@@ -8,6 +8,8 @@ use App\Models\AccountSubscription;
 use App\Models\AccountSubscriptionPayment;
 use App\Support\Payments\PaymentCallbackResult;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ResolveAccountSubscriptionPayment
 {
@@ -16,6 +18,8 @@ class ResolveAccountSubscriptionPayment
         $payment = $this->findDirectPayment($provider, $callback);
 
         if ($payment) {
+            $this->ensureAccountIsWritable($payment);
+
             return $payment;
         }
 
@@ -26,6 +30,7 @@ class ResolveAccountSubscriptionPayment
         }
 
         $pendingPayment = AccountSubscriptionPayment::query()
+            ->with('account')
             ->where('provider', $provider)
             ->where('gateway_subscription_id', $subscriptionId)
             ->whereIn('status', [
@@ -36,6 +41,8 @@ class ResolveAccountSubscriptionPayment
             ->first();
 
         if ($pendingPayment) {
+            $this->ensureAccountIsWritable($pendingPayment);
+
             return $pendingPayment;
         }
 
@@ -47,6 +54,10 @@ class ResolveAccountSubscriptionPayment
 
         if (! $subscription || ! $subscription->account || ! $subscription->plan) {
             return null;
+        }
+
+        if ($subscription->account->isReadOnlyDemo()) {
+            throw new HttpException(Response::HTTP_LOCKED, __('app.demo_readonly_message'));
         }
 
         $periodStart = $subscription->ends_at?->isFuture()
@@ -87,6 +98,7 @@ class ResolveAccountSubscriptionPayment
         }
 
         return AccountSubscriptionPayment::query()
+            ->with('account')
             ->where('provider', $provider)
             ->where(function ($query) use ($references): void {
                 $query
@@ -96,6 +108,13 @@ class ResolveAccountSubscriptionPayment
             })
             ->latest('id')
             ->first();
+    }
+
+    private function ensureAccountIsWritable(AccountSubscriptionPayment $payment): void
+    {
+        if ($payment->account?->isReadOnlyDemo()) {
+            throw new HttpException(Response::HTTP_LOCKED, __('app.demo_readonly_message'));
+        }
     }
 
     private function subscriptionId(PaymentCallbackResult $callback): ?string

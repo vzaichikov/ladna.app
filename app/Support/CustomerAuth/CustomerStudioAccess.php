@@ -24,7 +24,7 @@ class CustomerStudioAccess
                     $query->orWhere($condition['column'], $condition['value']);
                 }
             })
-            ->whereHas('account', fn (Builder $query): Builder => $query->active())
+            ->whereHas('account', fn (Builder $query): Builder => $query->publiclyDiscoverable())
             ->get()
             ->sortBy(fn (Customer $studioCustomer): string => $studioCustomer->account?->name ?? '')
             ->values();

@@ -74,6 +74,7 @@ class TelegramContactAuthorizer
         $candidate = TelegramAuthorizationSelectionCandidate::query()
             ->with(['selection', 'account', 'user', 'trainer'])
             ->whereKey((int) $matches[1])
+            ->whereHas('account', fn ($query) => $query->operational())
             ->whereHas('selection', function ($query) use ($installation, $callbackQuery): void {
                 $query->where('telegram_bot_installation_id', $installation->id)
                     ->where('telegram_chat_id', (string) data_get($callbackQuery, 'message.chat.id'))
@@ -118,6 +119,7 @@ class TelegramContactAuthorizer
     {
         $memberships = AccountMembership::query()
             ->whereHas('user', fn ($query) => $query->where('phone', $phone))
+            ->whereHas('account', fn ($query) => $query->operational())
             ->with(['account', 'user'])
             ->get()
             ->filter(fn (AccountMembership $membership): bool => $membership->allows(StudioPermission::InteractWithTelegramBot))
@@ -146,12 +148,14 @@ class TelegramContactAuthorizer
             ->where('phone', $phone)
             ->where('is_active', true)
             ->whereNotNull('user_id')
+            ->whereHas('account', fn ($query) => $query->operational())
             ->with(['account', 'user'])
             ->get()
             ->map(function (Trainer $trainer): ?array {
                 $membership = AccountMembership::query()
                     ->where('account_id', $trainer->account_id)
                     ->where('user_id', $trainer->user_id)
+                    ->whereHas('account', fn ($query) => $query->operational())
                     ->with('account')
                     ->first();
 

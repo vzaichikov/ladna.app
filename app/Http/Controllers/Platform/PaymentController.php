@@ -20,6 +20,11 @@ class PaymentController extends Controller
         $provider = $this->providerFilter($request->query('provider'));
         $fiscalizationEnabled = $fiscalization->enabledForPlatform();
         $baseQuery = AccountSubscriptionPayment::query()
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('account_id')
+                    ->orWhereHas('account', fn (Builder $query): Builder => $query->operational());
+            })
             ->when($status, fn (Builder $query): Builder => $query->where('status', $status))
             ->when($provider, fn (Builder $query): Builder => $query->where('provider', $provider));
 
@@ -60,6 +65,11 @@ class PaymentController extends Controller
     private function providerOptions(): array
     {
         return AccountSubscriptionPayment::query()
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('account_id')
+                    ->orWhereHas('account', fn (Builder $query): Builder => $query->operational());
+            })
             ->select('provider')
             ->distinct()
             ->orderBy('provider')
@@ -96,6 +106,11 @@ class PaymentController extends Controller
             'fiscal_failed' => $fiscalizationEnabled
                 ? FiscalReceipt::query()
                     ->where('scope_type', 'platform')
+                    ->where(function (Builder $query): void {
+                        $query
+                            ->whereNull('account_id')
+                            ->orWhereHas('account', fn (Builder $query): Builder => $query->operational());
+                    })
                     ->where('status', FiscalReceiptStatus::Failed->value)
                     ->count()
                 : 0,

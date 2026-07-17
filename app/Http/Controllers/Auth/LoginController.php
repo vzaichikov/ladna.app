@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
+use App\Models\Account;
 use App\Models\Customer;
 use App\Support\CustomerAuth\CustomerStudioAccess;
+use App\Support\DemoStudioFixture;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -26,7 +28,33 @@ class LoginController extends Controller
         return $this->createForLocale($request, $customerStudioAccess, 'en');
     }
 
-    private function createForLocale(Request $request, CustomerStudioAccess $customerStudioAccess, string $locale): View|RedirectResponse
+    public function demo(Request $request, CustomerStudioAccess $customerStudioAccess): View|RedirectResponse
+    {
+        $account = Account::query()
+            ->active()
+            ->where('slug', DemoStudioFixture::AccountSlug)
+            ->firstOrFail();
+
+        abort_unless($account->isReadOnlyDemo(), 404);
+
+        $requestedLocale = $request->query('locale');
+        $sessionLocale = $request->session()->get('locale', 'uk');
+        $locale = in_array($requestedLocale, ['uk', 'en'], true)
+            ? $requestedLocale
+            : (in_array($sessionLocale, ['uk', 'en'], true) ? $sessionLocale : 'uk');
+
+        return $this->createForLocale($request, $customerStudioAccess, $locale, [
+            'account' => $account,
+            'demoLogin' => true,
+            'prefillEmail' => config('demo-studio.owner.email'),
+            'prefillPassword' => config('demo-studio.owner.password'),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $viewData
+     */
+    private function createForLocale(Request $request, CustomerStudioAccess $customerStudioAccess, string $locale, array $viewData = []): View|RedirectResponse
     {
         App::setLocale($locale);
         Carbon::setLocale($locale);
@@ -38,7 +66,7 @@ class LoginController extends Controller
             return redirect()->to($destination);
         }
 
-        return view('auth.login');
+        return view('auth.login', $viewData);
     }
 
     public function store(LoginRequest $request): RedirectResponse

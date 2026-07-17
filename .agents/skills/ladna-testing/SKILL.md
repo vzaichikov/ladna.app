@@ -5,16 +5,14 @@ description: Use when running Ladna manual QA, browser or Playwright checks, scr
 
 # Ladna Testing
 
-## Demo Credentials And Data
+## QA Identities And Data
 
-- Use the canonical demo users and demo studio from the local `.env` file for manual QA:
-  - `LADNA_DEMO_PLATFORM_*` for the product owner / platform admin.
-  - `LADNA_DEMO_OWNER_*` for the demo studio owner.
-- Do not create replacement product-owner or studio-owner login users for manual QA when these `.env` demo users are available.
-- Never delete the demo product owner, demo studio owner, or demo studio as part of QA cleanup.
-- If demo users or the demo studio are missing or stale, restore them with `php artisan db:seed --no-interaction` instead of recreating them manually.
-- If a task truly needs an additional QA studio, create it without deleting or replacing the `.env` demo users; continue using the canonical demo accounts for login whenever possible.
-- Prefer creating temporary business data inside the demo studio for the target flow, not new CRM login users.
+- Use the configured `LADNA_PLATFORM_OWNER_*` identity for platform-level QA. Older local environments may still provide the temporary `LADNA_DEMO_PLATFORM_*` compatibility keys.
+- Use `demo@ladna.app` with password `demo` only for read-only demo-studio navigation and presentation checks. Do not use that account for mutation-flow QA.
+- Never run `db:seed` to create or restore QA studios. The public seeder is an explicit, empty-database platform bootstrap and contains no studio data.
+- Never delete, replace, or regenerate Charmpole during QA cleanup. Treat it as protected existing studio data.
+- Provision or repair the synthetic read-only demo only through its guarded command after verifying the exact environment and target account. Do not recreate it manually.
+- For mutation-flow QA, use an authorized writable local studio and keep temporary records scoped to that studio.
 
 ## Browser QA
 

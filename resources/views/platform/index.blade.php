@@ -37,7 +37,12 @@
             @endphp
             <a href="{{ route('platform.accounts.show', $account) }}" class="flex items-center justify-between gap-4 border-b border-stone-100 px-5 py-4 last:border-b-0">
                 <div>
-                    <div class="font-semibold">{{ $account->name }}</div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="font-semibold">{{ $account->name }}</div>
+                        @if ($account->isReadOnlyDemo())
+                            <span class="crm-status-scheduled">{{ __('app.demo_account_badge') }}</span>
+                        @endif
+                    </div>
                     <div class="mt-1 text-sm text-slate-500">{{ $account->subscription?->plan?->name ?? __('app.subscription_plan') }}</div>
                 </div>
                 <span class="{{ $statusClass }}">{{ __('app.'.$account->status->value) }}</span>
