@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 class PeopleCounterCaptureService
@@ -59,7 +60,7 @@ class PeopleCounterCaptureService
             ->whereHas('room', fn ($query) => $query
                 ->active()
                 ->rtspEnabled())
-            ->with(['account:id,status,allow_rtsp_cameras,enable_people_counter,timezone,opening_hours', 'location:id,account_id,name,timezone', 'room'])
+            ->with(['account:id,status,mode,allow_rtsp_cameras,enable_people_counter,timezone,opening_hours', 'location:id,account_id,name,timezone', 'room'])
             ->orderBy('starts_at')
             ->limit($limit)
             ->get();
@@ -101,7 +102,7 @@ class PeopleCounterCaptureService
                 ->where('status', ScheduledClassStatus::Scheduled->value)
                 ->where('starts_at', '<=', $now)
                 ->where('ends_at', '>=', $protectedAfter))
-            ->with(['account:id,status,allow_rtsp_cameras,enable_people_counter,timezone,opening_hours', 'location:id,account_id,name,timezone'])
+            ->with(['account:id,status,mode,allow_rtsp_cameras,enable_people_counter,timezone,opening_hours', 'location:id,account_id,name,timezone'])
             ->orderBy('account_id')
             ->orderBy('location_id')
             ->orderBy('name')
@@ -151,6 +152,7 @@ class PeopleCounterCaptureService
     {
         $capturedAt ??= now();
         $scheduledClass->loadMissing(['account', 'location', 'room']);
+        $this->assertOperationalAccount($scheduledClass->account);
         $room = $scheduledClass->room;
         $displayTimezone = $scheduledClass->displayTimezone();
         $originalPath = $this->imagePath($scheduledClass->account_id, $scheduledClass->room_id, $capturedAt, 'original', $displayTimezone);
@@ -227,6 +229,7 @@ class PeopleCounterCaptureService
     {
         $capturedAt ??= now();
         $room->loadMissing(['account', 'location']);
+        $this->assertOperationalAccount($room->account);
         $displayTimezone = $this->roomTimezone($room);
         $originalPath = $this->imagePath($room->account_id, $room->id, $capturedAt, 'unknown-original', $displayTimezone);
         $maskedPath = $this->imagePath($room->account_id, $room->id, $capturedAt, 'unknown-masked', $displayTimezone);
@@ -295,6 +298,7 @@ class PeopleCounterCaptureService
     {
         $capturedAt ??= now();
         $room->loadMissing(['account', 'location']);
+        $this->assertOperationalAccount($room->account);
         $displayTimezone = $this->roomTimezone($room);
         $this->gateway->ensurePath($room);
         $path = $this->imagePath($room->account_id, $room->id, $capturedAt, 'calibration', $displayTimezone);
@@ -496,5 +500,12 @@ class PeopleCounterCaptureService
         return $room->location?->timezone
             ?? $room->account?->timezone
             ?? config('app.timezone');
+    }
+
+    private function assertOperationalAccount(?Account $account): void
+    {
+        if (! $account || $account->isReadOnlyDemo()) {
+            throw new RuntimeException('People counter capture is unavailable for synthetic demo accounts.');
+        }
     }
 }

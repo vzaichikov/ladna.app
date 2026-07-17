@@ -27,6 +27,8 @@ use App\Models\User;
 use App\Support\AccountActivityLogSettings;
 use App\Support\CustomerAuth\CustomerStudioAccess;
 use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\PeopleCounter\PeopleCounterCaptureService;
+use App\Support\PeopleCounter\PeopleCounterSummarizer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -169,6 +171,53 @@ class DemoAccountAutomationTest extends TestCase
 
         $this->assertModelExists($sample);
         $this->assertTrue(Storage::disk('local')->exists($path));
+    }
+
+    public function test_direct_people_counter_capture_rejects_demo_without_side_effects(): void
+    {
+        Http::fake();
+        Storage::fake('local');
+        $series = $this->scheduleSeriesForDemo();
+        $scheduledClass = ScheduledClass::factory()
+            ->for($series->account)
+            ->for($series->location)
+            ->for($series->room)
+            ->for($series->classType)
+            ->create();
+
+        try {
+            app(PeopleCounterCaptureService::class)->captureClass($scheduledClass);
+            $this->fail('Direct demo people-counter capture was not rejected.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('unavailable for synthetic demo accounts', $exception->getMessage());
+        }
+
+        $this->assertFalse(PeopleCounterSample::query()->whereBelongsTo($series->account)->exists());
+        $this->assertSame([], Storage::disk('local')->allFiles());
+        Http::assertNothingSent();
+    }
+
+    public function test_direct_people_counter_summarization_rejects_demo_without_side_effects(): void
+    {
+        $series = $this->scheduleSeriesForDemo();
+        $scheduledClass = ScheduledClass::factory()
+            ->for($series->account)
+            ->for($series->location)
+            ->for($series->room)
+            ->for($series->classType)
+            ->create([
+                'starts_at' => now()->subHours(2),
+                'ends_at' => now()->subHour(),
+            ]);
+
+        try {
+            app(PeopleCounterSummarizer::class)->summarizeClass($scheduledClass);
+            $this->fail('Direct demo people-counter summarization was not rejected.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('unavailable for synthetic demo accounts', $exception->getMessage());
+        }
+
+        $this->assertFalse($scheduledClass->peopleCount()->exists());
     }
 
     public function test_fiscalization_command_rejects_an_explicit_demo_account(): void

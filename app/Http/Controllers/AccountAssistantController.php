@@ -11,6 +11,7 @@ use App\Models\AiPendingAction;
 use App\Models\PlatformAiSetting;
 use App\Models\Trainer;
 use App\Support\Ai\StudioAiInference;
+use App\Support\Ai\StudioAiResult;
 use App\Support\Ai\StudioAssistantActionExecutor;
 use App\Support\Ai\StudioAssistantActionPlanner;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -50,50 +51,47 @@ class AccountAssistantController extends Controller
             'occurred_at' => now(),
         ]);
 
-        $allowNewBookingDialog = $inference->shouldStartBookingDialog($account, $text);
-        $plan = $planner->plan($account, $request->user(), $this->trainerFor($account, $request), $conversation, $text, $allowNewBookingDialog);
-
-        if ($plan->pendingAction) {
-            $assistantText = $plan->message ?? __('app.assistant_pending_action_created');
-            $conversation->messages()->create([
-                'account_id' => $account->id,
-                'role' => AiConversationMessageRole::Assistant->value,
-                'content' => $assistantText,
-                'metadata' => [
-                    'pending_action_id' => $plan->pendingAction->id,
-                    'used_ai' => false,
-                    ...$plan->metadata,
-                ],
-                'occurred_at' => now(),
-            ]);
-        } elseif ($plan->handled) {
-            $conversation->messages()->create([
-                'account_id' => $account->id,
-                'role' => AiConversationMessageRole::Assistant->value,
-                'content' => $plan->message ?? '',
-                'metadata' => [
-                    'used_ai' => false,
-                    ...$plan->metadata,
-                ],
-                'occurred_at' => now(),
-            ]);
+        if ($account->isReadOnlyDemo()) {
+            $this->storeInferenceResponse(
+                $account,
+                $conversation,
+                $inference->respond($account, $text, conversation: $conversation),
+            );
         } else {
-            $result = $inference->respond($account, $text, conversation: $conversation);
-            $assistantText = $result->text !== '' ? $result->text : __('app.assistant_ai_unavailable');
-            $conversation->messages()->create([
-                'account_id' => $account->id,
-                'role' => $result->rejected ? AiConversationMessageRole::RejectedIntent->value : AiConversationMessageRole::Assistant->value,
-                'content' => $assistantText,
-                'metadata' => [
-                    'used_ai' => $result->usedAi,
-                    'provider' => $result->provider,
-                    'model' => $result->model,
-                    'fallback_reason' => $result->fallbackReason,
-                    'follow_up_actions' => $result->followUpActions,
-                    'help_sources' => $result->helpSources,
-                ],
-                'occurred_at' => now(),
-            ]);
+            $allowNewBookingDialog = $inference->shouldStartBookingDialog($account, $text);
+            $plan = $planner->plan($account, $request->user(), $this->trainerFor($account, $request), $conversation, $text, $allowNewBookingDialog);
+
+            if ($plan->pendingAction) {
+                $assistantText = $plan->message ?? __('app.assistant_pending_action_created');
+                $conversation->messages()->create([
+                    'account_id' => $account->id,
+                    'role' => AiConversationMessageRole::Assistant->value,
+                    'content' => $assistantText,
+                    'metadata' => [
+                        'pending_action_id' => $plan->pendingAction->id,
+                        'used_ai' => false,
+                        ...$plan->metadata,
+                    ],
+                    'occurred_at' => now(),
+                ]);
+            } elseif ($plan->handled) {
+                $conversation->messages()->create([
+                    'account_id' => $account->id,
+                    'role' => AiConversationMessageRole::Assistant->value,
+                    'content' => $plan->message ?? '',
+                    'metadata' => [
+                        'used_ai' => false,
+                        ...$plan->metadata,
+                    ],
+                    'occurred_at' => now(),
+                ]);
+            } else {
+                $this->storeInferenceResponse(
+                    $account,
+                    $conversation,
+                    $inference->respond($account, $text, conversation: $conversation),
+                );
+            }
         }
 
         $conversation->update(['last_message_at' => now()]);
@@ -138,6 +136,7 @@ class AccountAssistantController extends Controller
     public function confirm(Request $request, Account $account, AiPendingAction $action, StudioAssistantActionExecutor $executor): JsonResponse
     {
         $this->authorizeAssistant($request, $account);
+        abort_if($account->isReadOnlyDemo(), 423, __('app.demo_readonly_message'));
         $this->ensureActionBelongsToAccount($account, $action);
 
         try {
@@ -175,6 +174,7 @@ class AccountAssistantController extends Controller
     public function cancel(Request $request, Account $account, AiPendingAction $action): JsonResponse
     {
         $this->authorizeAssistant($request, $account);
+        abort_if($account->isReadOnlyDemo(), 423, __('app.demo_readonly_message'));
         $this->ensureActionBelongsToAccount($account, $action);
 
         if (! $action->isPending()) {
@@ -205,6 +205,26 @@ class AccountAssistantController extends Controller
             'message' => __('app.assistant_action_cancelled'),
             'messages' => $this->messagePayload($conversation->refresh()),
             'pending_actions' => $this->pendingActionPayload($conversation),
+        ]);
+    }
+
+    private function storeInferenceResponse(Account $account, AiConversation $conversation, StudioAiResult $result): void
+    {
+        $assistantText = $result->text !== '' ? $result->text : __('app.assistant_ai_unavailable');
+
+        $conversation->messages()->create([
+            'account_id' => $account->id,
+            'role' => $result->rejected ? AiConversationMessageRole::RejectedIntent->value : AiConversationMessageRole::Assistant->value,
+            'content' => $assistantText,
+            'metadata' => [
+                'used_ai' => $result->usedAi,
+                'provider' => $result->provider,
+                'model' => $result->model,
+                'fallback_reason' => $result->fallbackReason,
+                'follow_up_actions' => $result->followUpActions,
+                'help_sources' => $result->helpSources,
+            ],
+            'occurred_at' => now(),
         ]);
     }
 

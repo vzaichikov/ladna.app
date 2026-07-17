@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\PeopleCounterSample;
+use App\Support\PeopleCounter\PeopleCounterImageLocator;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PeopleCounterScreenshotController extends Controller
@@ -13,7 +13,7 @@ class PeopleCounterScreenshotController extends Controller
     /**
      * Handle the incoming request.
      */
-    public function __invoke(Request $request, Account $account, PeopleCounterSample $peopleCounterSample, string $variant): BinaryFileResponse
+    public function __invoke(Request $request, Account $account, PeopleCounterSample $peopleCounterSample, string $variant, PeopleCounterImageLocator $imageLocator): BinaryFileResponse
     {
         $this->authorize('viewReports', $account);
         abort_unless($peopleCounterSample->account_id === $account->id, 404);
@@ -23,8 +23,10 @@ class PeopleCounterScreenshotController extends Controller
             ? $peopleCounterSample->original_image_path
             : $peopleCounterSample->masked_image_path;
 
-        abort_unless(is_string($path) && Storage::disk('local')->exists($path), 404);
+        $absolutePath = $imageLocator->absolutePath($account, $path);
 
-        return response()->file(Storage::disk('local')->path($path), ['Content-Type' => 'image/jpeg']);
+        abort_unless($absolutePath !== null, 404);
+
+        return response()->file($absolutePath, ['Content-Type' => 'image/jpeg']);
     }
 }

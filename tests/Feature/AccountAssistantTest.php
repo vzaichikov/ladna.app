@@ -83,6 +83,50 @@ class AccountAssistantTest extends TestCase
         });
     }
 
+    public function test_readonly_demo_uses_ai_for_readonly_answers_without_preparing_actions(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push(['message' => ['role' => 'assistant', 'content' => '{"in_scope":true,"reason":"demo studio question"}']])
+                ->push(['message' => ['role' => 'assistant', 'content' => '{"answer":"У демо є 6 людей у Лавандовій залі.","follow_up_actions":["Покажи навантаження залів"]}']]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->demoReadonly()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee('data-assistant-chat', false);
+
+        $response = $this->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+            'message' => 'Запиши Анну на заняття і покажи завантаження залів.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', 'У демо є 6 людей у Лавандовій залі.')
+            ->assertJsonPath('messages.1.metadata.follow_up_actions.0', 'Покажи навантаження залів')
+            ->assertJsonPath('pending_actions', []);
+
+        $this->assertSame(0, AiPendingAction::query()->whereBelongsTo($account)->count());
+        Http::assertSentCount(2);
+
+        $conversation = AiConversation::query()->whereBelongsTo($account)->sole();
+        $action = AiPendingAction::factory()
+            ->for($account)
+            ->for($conversation, 'conversation')
+            ->for($owner, 'user')
+            ->create();
+
+        $this->postJson(route('dashboard.accounts.assistant.actions.confirm', [$account, $action]))
+            ->assertStatus(423)
+            ->assertJsonPath('code', 'demo_readonly');
+
+        $this->assertSame(AiPendingAction::StatusPending, $action->fresh()->status);
+        $this->assertNotNull($response->json('messages.1.metadata.provider'));
+    }
+
     public function test_dashboard_message_endpoint_stores_ai_follow_up_actions(): void
     {
         Http::fake([

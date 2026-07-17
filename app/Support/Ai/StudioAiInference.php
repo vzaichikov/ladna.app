@@ -204,6 +204,9 @@ class StudioAiInference
             'For questions about who you are or what you can do, use assistant_capabilities when provided. Name useful abilities in owner language, distinguish read/help/analytics from confirm-required changes, and do not invent unsupported abilities.',
             'Do not mention internal source keys unless the owner asks for sources. You may naturally name visible Ladna screens and buttons from help_context.',
             'Never execute booking changes directly. Mutating actions require a server-side pending action and explicit user confirmation.',
+            $account->isReadOnlyDemo()
+                ? 'This is a synthetic read-only demo studio. Never offer, prepare, or claim to execute mutations. Limit answers and follow-up actions to reading, explaining, help, and analytics; explain that changes are disabled when asked to alter data.'
+                : null,
             'Greet only when the user greets you or asks who you are. For direct operational questions, answer directly.',
             'Return only a JSON object with "answer" string and "follow_up_actions" array of up to 3 short owner messages. Add follow_up_actions only when they are natural safe next steps for this studio conversation; otherwise return an empty array.',
             'When an answer contains a schedule, customers, bookings, class passes, report rows, or any list of multiple items, format it for chat readability: use a short intro line, then Markdown-style bullets or numbered list items on separate lines. Do not compress lists into one sentence separated by hyphens.',

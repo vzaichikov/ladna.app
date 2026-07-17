@@ -13,11 +13,11 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\User;
+use App\Support\PeopleCounter\PeopleCounterImageLocator;
 use App\Support\Reports\UnpaidClassBookingPaymentsReport;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 
 class StudioDashboardData
 {
@@ -26,6 +26,7 @@ class StudioDashboardData
     public function __construct(
         private readonly UnreservedClassPassBookingIssues $unreservedClassPassBookingIssues,
         private readonly UnpaidClassBookingPaymentsReport $unpaidClassBookingPaymentsReport,
+        private readonly PeopleCounterImageLocator $peopleCounterImageLocator,
     ) {}
 
     /**
@@ -448,7 +449,7 @@ class StudioDashboardData
                 $capturedAt = $sample?->captured_at?->copy()->timezone($timezone);
                 $imageUrl = null;
 
-                if ($sample && is_string($sample->original_image_path) && Storage::disk('local')->exists($sample->original_image_path)) {
+                if ($sample && $this->peopleCounterImageLocator->exists($account, $sample->original_image_path)) {
                     $imageUrl = route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']);
                 }
 

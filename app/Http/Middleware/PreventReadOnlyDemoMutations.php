@@ -18,7 +18,7 @@ class PreventReadOnlyDemoMutations
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->isMethodSafe() || $this->isSessionLifecycleRoute($request)) {
+        if ($request->isMethodSafe() || $this->isSessionLifecycleRoute($request) || $this->isAssistantConversationRoute($request)) {
             return $next($request);
         }
 
@@ -46,6 +46,14 @@ class PreventReadOnlyDemoMutations
             'logout',
             'customer.logout',
             'api.v1.mobile.logout',
+        ], true);
+    }
+
+    private function isAssistantConversationRoute(Request $request): bool
+    {
+        return in_array($request->route()?->getName(), [
+            'dashboard.accounts.assistant.messages.store',
+            'dashboard.accounts.assistant.destroy',
         ], true);
     }
 }

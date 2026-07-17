@@ -1807,6 +1807,7 @@ return [
     'rtsp_camera_test_success' => 'Підключення до :host::port встановлено за :seconds с.',
     'rtsp_camera_test_failed' => 'Камера :host::port не відповіла за :seconds с: :error',
     'rtsp_camera_stream_unavailable' => 'Потік камери недоступний.',
+    'demo_camera_feed' => 'Синтетичний демо-кадр',
     'configure_people_counter_mask' => 'Налаштувати маску підрахунку',
     'people_counter_mask_title' => 'Маска People Counter',
     'people_counter_mask_saved' => 'Маску People Counter збережено.',

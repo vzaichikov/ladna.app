@@ -470,6 +470,34 @@ class CameraMonitoringTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_camera_gateway_never_registers_a_readonly_demo_rtsp_path(): void
+    {
+        config([
+            'services.mediamtx.api_url' => 'http://mediamtx.test',
+            'services.mediamtx.public_url' => 'https://cam.example.test',
+        ]);
+        Http::fake();
+
+        $account = Account::factory()->demoReadonly()->create(['allow_rtsp_cameras' => true]);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()
+            ->for($account)
+            ->for($location)
+            ->create([
+                'rtsp_url' => 'rtsp://demo-camera.example.test/live',
+                'rtsp_enabled' => true,
+            ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Synthetic demo cameras cannot be sent');
+
+        try {
+            app(MediaMtxCameraGateway::class)->ensurePath($room);
+        } finally {
+            Http::assertNothingSent();
+        }
+    }
+
     public function test_camera_gateway_uses_distinct_service_room_paths(): void
     {
         $account = Account::factory()->create(['allow_rtsp_cameras' => true]);

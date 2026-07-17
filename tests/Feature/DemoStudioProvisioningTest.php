@@ -8,7 +8,9 @@ use App\Models\AccountSubscription;
 use App\Models\ClassBooking;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
+use App\Models\PeopleCounterSample;
 use App\Models\ScheduledClass;
+use App\Models\ScheduledClassPeopleCount;
 use App\Models\ScheduleSeries;
 use App\Models\User;
 use App\Support\DemoStudioFixture;
@@ -17,6 +19,8 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class DemoStudioProvisioningTest extends TestCase
@@ -75,6 +79,17 @@ class DemoStudioProvisioningTest extends TestCase
         $this->assertGreaterThan(12, ScheduledClass::query()->whereBelongsTo($account)->count());
         $this->assertGreaterThan(10, ClassBooking::query()->whereBelongsTo($account)->count());
         $this->assertSame(4, CustomerPurchase::query()->whereBelongsTo($account)->count());
+        $this->assertTrue($account->allowsRtspCameras());
+        $this->assertTrue($account->peopleCounterEnabled());
+        $this->assertSame(2, $account->rooms()->where('rtsp_enabled', true)->count());
+        $this->assertSame(
+            DemoStudioFixture::PeopleCounterSampleCount,
+            PeopleCounterSample::query()->whereBelongsTo($account)->count(),
+        );
+        $this->assertSame(6, ScheduledClassPeopleCount::query()->whereBelongsTo($account)->count());
+        $this->assertTrue($account->rooms()->get()->every(
+            fn ($room): bool => str_contains((string) $room->rtsp_url, '.example.test/'),
+        ));
         $this->assertFalse($account->subscription()->exists());
         $this->assertFalse($account->apiTokens()->exists());
         $this->assertFalse($account->fiscalReceipts()->exists());
@@ -86,6 +101,51 @@ class DemoStudioProvisioningTest extends TestCase
         $this->assertSame(0, Customer::query()->whereBelongsTo($account)->whereNot('email', 'like', '%.example.test')->count());
         $this->assertSame(0, $account->trainers()->whereNot('email', 'like', '%.example.test')->count());
         $this->assertSame(0, $account->trainers()->whereNotNull('photo_path')->count());
+    }
+
+    public function test_demo_camera_dashboard_and_report_use_only_synthetic_images(): void
+    {
+        Http::fake();
+        Storage::fake('local');
+        $this->artisan('demo-studio:provision', ['--execute' => true])->assertSuccessful();
+
+        $account = Account::query()->where('slug', DemoStudioFixture::AccountSlug)->sole();
+        $owner = User::query()->where('email', config('demo-studio.owner.email'))->sole();
+        $sample = PeopleCounterSample::query()
+            ->whereBelongsTo($account)
+            ->whereNotNull('scheduled_class_id')
+            ->firstOrFail();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee(__('app.people_counter_live_title'))
+            ->assertSee('Лавандова зала')
+            ->assertSee('Сливова студія')
+            ->assertSee('data-people-counter-screenshot-trigger', false);
+
+        $this->get(route('dashboard.accounts.cameras.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.demo_camera_feed'))
+            ->assertSee('data-demo-camera-feed', false)
+            ->assertDontSee(__('app.rtsp_camera_gateway_unavailable'));
+
+        $this->get(route('dashboard.accounts.reports.people-counter', $account))
+            ->assertOk()
+            ->assertSee('data-people-counter-row', false)
+            ->assertSee('data-people-counter-screenshot-trigger', false);
+
+        $this->get(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']))
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
+
+        Storage::disk('local')->put('people-counter/live-account/private.jpg', 'not demo data');
+        $sample->update(['original_image_path' => 'people-counter/live-account/private.jpg']);
+
+        $this->get(route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']))
+            ->assertNotFound();
+
+        Http::assertNothingSent();
     }
 
     public function test_refresh_replaces_only_the_validated_demo_account(): void

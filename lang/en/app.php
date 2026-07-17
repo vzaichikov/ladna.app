@@ -1807,6 +1807,7 @@ return [
     'rtsp_camera_test_success' => 'Camera endpoint reached at :host::port in :seconds s.',
     'rtsp_camera_test_failed' => 'Camera endpoint :host::port did not respond in :seconds s: :error',
     'rtsp_camera_stream_unavailable' => 'Camera stream is unavailable.',
+    'demo_camera_feed' => 'Synthetic demo feed',
     'configure_people_counter_mask' => 'Configure counter mask',
     'people_counter_mask_title' => 'People counter mask',
     'people_counter_mask_saved' => 'People counter mask saved.',

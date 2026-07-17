@@ -11,6 +11,8 @@ class DemoStudioFixture
 {
     public const AccountSlug = 'ladna-demo';
 
+    public const PeopleCounterSampleCount = 14;
+
     /** @return array<string, mixed> */
     public static function account(): array
     {
@@ -48,8 +50,8 @@ class DemoStudioFixture
             ],
             'public_schedule_view' => 'classic',
             'allow_guest_public_booking' => false,
-            'allow_rtsp_cameras' => false,
-            'enable_people_counter' => false,
+            'allow_rtsp_cameras' => true,
+            'enable_people_counter' => true,
             'enable_telegram_alerts' => false,
             'enable_customer_notifications' => false,
             'schedule_generation_weeks' => 8,
@@ -82,6 +84,9 @@ class DemoStudioFixture
                 'capacity' => 14,
                 'color' => '#A78AB9',
                 'is_active' => true,
+                'rtsp_url' => 'rtsp://lavender-hall.ladna-demo.example.test/live',
+                'rtsp_enabled' => true,
+                'people_counter_capture_delay_seconds' => 0,
             ],
             'plum-studio' => [
                 'name' => 'Сливова студія',
@@ -89,8 +94,29 @@ class DemoStudioFixture
                 'capacity' => 6,
                 'color' => '#6F4B7A',
                 'is_active' => true,
+                'rtsp_url' => 'rtsp://plum-studio.ladna-demo.example.test/live',
+                'rtsp_enabled' => true,
+                'people_counter_capture_delay_seconds' => 0,
             ],
         ];
+    }
+
+    public static function cameraImagePath(string $roomSlug): string
+    {
+        return match ($roomSlug) {
+            'lavender-hall' => 'demo-camera://lavender-hall',
+            'plum-studio' => 'demo-camera://plum-studio',
+            default => throw new \InvalidArgumentException("Unknown demo camera room [{$roomSlug}]."),
+        };
+    }
+
+    public static function cameraAssetPath(string $imagePath): ?string
+    {
+        return match ($imagePath) {
+            'demo-camera://lavender-hall' => 'assets/demo/cameras/lavender-hall.jpg',
+            'demo-camera://plum-studio' => 'assets/demo/cameras/plum-studio.jpg',
+            default => null,
+        };
     }
 
     /** @return array<string, array<string, mixed>> */

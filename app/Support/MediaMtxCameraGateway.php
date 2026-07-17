@@ -18,6 +18,12 @@ class MediaMtxCameraGateway
 
     public function ensurePath(Room|ServiceRoom $camera): void
     {
+        $camera->loadMissing('account');
+
+        if ($camera->account?->isReadOnlyDemo()) {
+            throw new RuntimeException('Synthetic demo cameras cannot be sent to the MediaMTX gateway.');
+        }
+
         if (! $this->configured()) {
             throw new RuntimeException('MediaMTX camera gateway is not configured.');
         }

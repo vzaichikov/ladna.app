@@ -27,14 +27,25 @@
                             <p class="mt-1 text-sm text-slate-500">{{ $camera->location?->name }}</p>
                         </div>
                         <div class="flex flex-col items-end gap-2">
-                            <span class="crm-status-active">{{ __('app.live') }}</span>
+                            @if ($stream['mockImageUrl'])
+                                <span class="crm-status-scheduled">{{ __('app.demo_camera_feed') }}</span>
+                            @else
+                                <span class="crm-status-active">{{ __('app.live') }}</span>
+                            @endif
                             <span class="crm-status-muted">{{ $stream['type'] === 'service_room' ? __('app.service_room') : __('app.room') }}</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="aspect-video bg-slate-950">
-                    @if ($gatewayConfigured && $stream['available'])
+                    @if ($stream['mockImageUrl'])
+                        <img
+                            src="{{ $stream['mockImageUrl'] }}"
+                            alt="{{ $camera->name }}"
+                            class="h-full w-full object-cover"
+                            data-demo-camera-feed
+                        >
+                    @elseif ($gatewayConfigured && $stream['available'])
                         <iframe
                             src="{{ $stream['playerUrl'] }}"
                             title="{{ $camera->name }}"

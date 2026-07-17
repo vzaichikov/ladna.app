@@ -10,6 +10,7 @@ use App\Models\ScheduledClass;
 use App\Models\ScheduledClassPeopleCount;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use RuntimeException;
 
 class PeopleCounterSummarizer
 {
@@ -34,7 +35,7 @@ class PeopleCounterSummarizer
             ->where('ends_at', '<=', $endedBefore)
             ->whereDoesntHave('peopleCount')
             ->whereIn('account_id', $openAccountIds)
-            ->with(['account:id,status,enable_people_counter,timezone,opening_hours', 'classType:id,account_id,schedule_kind', 'room'])
+            ->with(['account:id,status,mode,enable_people_counter,timezone,opening_hours', 'classType:id,account_id,schedule_kind', 'room'])
             ->orderBy('ends_at')
             ->limit($limit)
             ->get();
@@ -59,7 +60,12 @@ class PeopleCounterSummarizer
      */
     public function summarizeClass(ScheduledClass $scheduledClass, ?callable $debug = null): ScheduledClassPeopleCount
     {
-        $scheduledClass->loadMissing(['classType', 'room']);
+        $scheduledClass->loadMissing(['account', 'classType', 'room']);
+
+        if (! $scheduledClass->account || $scheduledClass->account->isReadOnlyDemo()) {
+            throw new RuntimeException('People counter summarization is unavailable for synthetic demo accounts.');
+        }
+
         $trimStart = $scheduledClass->starts_at->copy()->addMinutes(PeopleCounterSamplingWindow::StartBufferMinutes);
         $trimEnd = $scheduledClass->ends_at->copy()->subMinutes(PeopleCounterSamplingWindow::EndBufferMinutes);
         $samples = $trimStart->lessThanOrEqualTo($trimEnd)

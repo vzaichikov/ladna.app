@@ -63,7 +63,7 @@
     $canManageStudioCashflow = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioCashflow);
     $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
-    $showAssistantWidget = ! $isReadOnlyDemo && $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
+    $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
     $canViewPayments = $showAccountNav && $authUser && ($activeAccount->isOwnedBy($authUser) || $canManageStudioCashflow);
     $canViewTariffPayments = ! $isReadOnlyDemo && $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);

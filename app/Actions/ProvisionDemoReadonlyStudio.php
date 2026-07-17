@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Enums\AccountRole;
+use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\CustomerPurchaseStatus;
@@ -21,8 +22,10 @@ use App\Models\CustomerPurchaseCorrection;
 use App\Models\ExpenseCategory;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
+use App\Models\PeopleCounterSample;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\ScheduledClassPeopleCount;
 use App\Models\StudioCashEntry;
 use App\Models\StudioExpense;
 use App\Models\Trainer;
@@ -30,6 +33,7 @@ use App\Models\TrainerType;
 use App\Models\User;
 use App\Models\WebsiteLead;
 use App\Support\DemoStudioFixture;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -39,7 +43,7 @@ class ProvisionDemoReadonlyStudio
         private readonly GenerateAccountSchedule $generateAccountSchedule,
     ) {}
 
-    /** @return array{operation: string, account_slug: string, owner_email: string, customers: int, trainers: int, schedule_series: int} */
+    /** @return array{operation: string, account_slug: string, owner_email: string, customers: int, trainers: int, schedule_series: int, people_counter_samples: int} */
     public function preview(bool $refresh): array
     {
         $state = $this->validatedState($refresh);
@@ -51,6 +55,7 @@ class ProvisionDemoReadonlyStudio
             'customers' => count(DemoStudioFixture::customerNames()),
             'trainers' => count(DemoStudioFixture::trainers()),
             'schedule_series' => count(DemoStudioFixture::scheduleRows()),
+            'people_counter_samples' => DemoStudioFixture::PeopleCounterSampleCount,
         ];
     }
 
@@ -199,6 +204,7 @@ class ProvisionDemoReadonlyStudio
 
         $this->schedule($account, $location, $rooms, $classTypes, $trainers);
         $this->bookingsAndPasses($account, $owner, $location, $rooms, $classTypes, $trainers, $plans, $customers);
+        $this->peopleCounter($account, $owner, $location, $rooms, $customers);
         $this->leads($account);
         $this->cashflow($account, $owner, $location, $plans, $customers);
     }
@@ -536,6 +542,149 @@ class ProvisionDemoReadonlyStudio
             'booked_by_actor_role' => AccountRole::Owner->value,
             'status' => $status,
             'skip_class_pass_reservation' => true,
+        ]);
+    }
+
+    /**
+     * @param  array<string, Room>  $rooms
+     * @param  array<int, Customer>  $customers
+     */
+    private function peopleCounter(Account $account, User $owner, Location $location, array $rooms, array $customers): void
+    {
+        $classes = $account->scheduledClasses()
+            ->with('classType')
+            ->where('starts_at', '<', now())
+            ->latest('starts_at')
+            ->take(6)
+            ->get();
+
+        foreach ($classes as $index => $scheduledClass) {
+            $usedCustomerIds = $scheduledClass->classBookings()->pluck('customer_id');
+            $additionalCustomers = collect($customers)
+                ->reject(fn (Customer $customer): bool => $usedCustomerIds->contains($customer->id))
+                ->skip($index * 2)
+                ->take(4 + ($index % 3));
+
+            foreach ($additionalCustomers->values() as $bookingIndex => $customer) {
+                $status = $bookingIndex % 4 === 3
+                    ? ClassBookingStatus::NoShow
+                    : ClassBookingStatus::Attended;
+                $booking = $this->booking($account, $owner, $scheduledClass, $customer, $status->value);
+
+                if ($status === ClassBookingStatus::Attended) {
+                    $booking->update(['attended_at' => $scheduledClass->ends_at]);
+                }
+            }
+
+            $assignedCount = $scheduledClass->classBookings()
+                ->notCorrectedRemoved()
+                ->whereIn('status', [
+                    ClassBookingStatus::Booked->value,
+                    ClassBookingStatus::Attended->value,
+                    ClassBookingStatus::NoShow->value,
+                ])
+                ->count();
+            $attendedCount = $scheduledClass->classBookings()
+                ->notCorrectedRemoved()
+                ->where('status', ClassBookingStatus::Attended->value)
+                ->count();
+            $trainerAdjustment = $scheduledClass->peopleCounterTrainerAdjustment();
+            $visibleDetectedCount = $assignedCount + ($index % 3 === 0 ? 2 : 0);
+            $detectedCount = $visibleDetectedCount + $trainerAdjustment;
+            $sampleCounts = [max(0, $detectedCount - 1), $detectedCount];
+            $sampleTimes = [
+                $scheduledClass->starts_at->copy()->addMinutes(20),
+                $scheduledClass->starts_at->copy()->addMinutes(40),
+            ];
+
+            foreach ($sampleCounts as $sampleIndex => $sampleCount) {
+                $this->createPeopleCounterSample(
+                    $account,
+                    $location,
+                    $rooms['lavender-hall'],
+                    $sampleCount,
+                    $sampleTimes[$sampleIndex],
+                    $scheduledClass,
+                );
+            }
+
+            $expectedPeopleCount = $attendedCount + $trainerAdjustment;
+            $delta = $detectedCount - $expectedPeopleCount;
+
+            $scheduledClass->peopleCount()->create([
+                'account_id' => $account->id,
+                'location_id' => $location->id,
+                'room_id' => $scheduledClass->room_id,
+                'trainer_id' => $scheduledClass->trainer_id,
+                'status' => $delta === 0
+                    ? ScheduledClassPeopleCount::StatusMatched
+                    : ScheduledClassPeopleCount::StatusMismatch,
+                'attended_count' => $attendedCount,
+                'detected_count' => $detectedCount,
+                'delta' => $delta,
+                'successful_samples_count' => count($sampleCounts),
+                'failed_samples_count' => 0,
+                'first_sampled_at' => $sampleTimes[0],
+                'last_sampled_at' => $sampleTimes[1],
+                'summarized_at' => $scheduledClass->ends_at->copy()->addMinutes(15),
+            ]);
+        }
+
+        foreach ([
+            'lavender-hall' => ['count' => 6, 'minutes_ago' => 7],
+            'plum-studio' => ['count' => 3, 'minutes_ago' => 11],
+        ] as $roomSlug => $snapshot) {
+            $this->createPeopleCounterSample(
+                $account,
+                $location,
+                $rooms[$roomSlug],
+                $snapshot['count'],
+                now()->subMinutes($snapshot['minutes_ago']),
+            );
+        }
+    }
+
+    private function createPeopleCounterSample(
+        Account $account,
+        Location $location,
+        Room $room,
+        int $detectedCount,
+        CarbonInterface $capturedAt,
+        ?ScheduledClass $scheduledClass = null,
+    ): PeopleCounterSample {
+        $detections = $detectedCount === 0
+            ? []
+            : collect(range(1, $detectedCount))->map(fn (int $index): array => [
+                'label' => 'person',
+                'confidence' => round(0.91 + (($index % 5) * 0.01), 2),
+                'box' => [
+                    'x' => 90 + (($index * 137) % 950),
+                    'y' => 80 + (($index * 83) % 480),
+                    'width' => 72,
+                    'height' => 168,
+                ],
+            ])->all();
+
+        return PeopleCounterSample::query()->create([
+            'account_id' => $account->id,
+            'scheduled_class_id' => $scheduledClass?->id,
+            'location_id' => $location->id,
+            'room_id' => $room->id,
+            'captured_at' => $capturedAt,
+            'status' => PeopleCounterSample::StatusSucceeded,
+            'failure_reason' => null,
+            'original_image_path' => DemoStudioFixture::cameraImagePath($room->slug),
+            'masked_image_path' => null,
+            'image_width' => 1280,
+            'image_height' => 720,
+            'detected_count' => $detectedCount,
+            'average_confidence' => '0.9300',
+            'detections' => $detections,
+            'response_payload' => [
+                'source' => 'synthetic_demo_fixture',
+                'count' => $detectedCount,
+                'detections' => $detections,
+            ],
         ]);
     }
 
