@@ -101,7 +101,7 @@
                 <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     @foreach ($fontOptions as $fontKey => $font)
                         <label
-                            class="cursor-pointer rounded-xl border p-4 transition {{ old('font_family', $currentFontKey) === $fontKey ? 'border-brand-600 bg-brand-50 ring-1 ring-brand-600' : 'border-stone-200 bg-white hover:border-brand-100 hover:bg-brand-50' }}"
+                            class="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 transition hover:border-brand-100 hover:bg-brand-50 has-checked:border-brand-600 has-checked:bg-brand-50 has-checked:ring-1 has-checked:ring-brand-600 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500 has-[:focus-visible]:ring-offset-2"
                             style="font-family: '{{ $font['css_family'] }}', ui-sans-serif, system-ui, sans-serif;"
                         >
                             <input type="radio" name="font_family" value="{{ $fontKey }}" class="sr-only" @checked(old('font_family', $currentFontKey) === $fontKey)>

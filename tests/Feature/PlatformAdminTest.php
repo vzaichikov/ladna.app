@@ -135,6 +135,7 @@ class PlatformAdminTest extends TestCase
             ->assertSee('role="tablist"', false)
             ->assertSee('role="tab"', false)
             ->assertSee('data-platform-settings-panel="appearance"', false)
+            ->assertSee('has-checked:border-brand-600', false)
             ->assertSee('form="platform-settings-form"', false)
             ->assertSee(__('app.save'));
 
