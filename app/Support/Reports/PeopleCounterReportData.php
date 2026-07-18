@@ -3,8 +3,8 @@
 namespace App\Support\Reports;
 
 use App\Enums\ClassBookingStatus;
-use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
+use App\Models\ScheduledClass;
 use App\Support\DateTimePresenter;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -18,11 +18,7 @@ class PeopleCounterReportData
     {
         $filters = $this->normalizeFilters($filters);
         $dateRange = $filters['date'] === null ? null : $this->databaseDateRange($account, $filters['date']);
-        $assignedBookingStatuses = [
-            ClassBookingStatus::Booked->value,
-            ClassBookingStatus::Attended->value,
-            ClassBookingStatus::NoShow->value,
-        ];
+        $assignedBookingStatuses = ScheduledClass::peopleCounterAssignedBookingStatuses();
 
         return $account->scheduledClasses()
             ->with([
@@ -54,7 +50,7 @@ class PeopleCounterReportData
                     ->notCorrectedRemoved()
                     ->where('status', ClassBookingStatus::Attended->value),
             ])
-            ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->peopleCounterTrackable()
             ->where('starts_at', '<=', $this->databaseNow($account))
             ->when($dateRange !== null, fn ($query) => $query->whereBetween('starts_at', $dateRange))
             ->when($filters['location_id'] !== null, fn ($query) => $query->where('location_id', $filters['location_id']))

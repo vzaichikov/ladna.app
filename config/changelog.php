@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.86.1',
+                'date' => '2026-07-18',
+                'title' => 'Cleaner people counter reports',
+                'items' => ['People counter reports and scheduled camera processing now skip cancelled classes and empty generated schedule slots without customer bookings, so camera detections are matched only against real classes.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.86.0',
                 'date' => '2026-07-17',
                 'title' => 'Synthetic read-only demo studio',
@@ -765,6 +772,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.86.1',
+                'date' => '2026-07-18',
+                'title' => 'Чистіші звіти лічильника людей',
+                'items' => ['Звіти лічильника людей і планова обробка камер тепер пропускають скасовані заняття та порожні автоматично згенеровані слоти без записів клієнтів, тому виявлення з камер зіставляються лише з реальними заняттями.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.86.0',
                 'date' => '2026-07-17',

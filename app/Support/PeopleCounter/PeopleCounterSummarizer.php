@@ -3,7 +3,6 @@
 namespace App\Support\PeopleCounter;
 
 use App\Enums\ClassBookingStatus;
-use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\PeopleCounterSample;
 use App\Models\ScheduledClass;
@@ -26,12 +25,12 @@ class PeopleCounterSummarizer
         $openAccountIds = $this->studioHours->openAccountIds($now);
         $candidateCount = ScheduledClass::query()
             ->whereHas('account', fn ($query) => $query->operational())
-            ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->peopleCounterTrackable()
             ->where('ends_at', '<=', $endedBefore)
             ->whereDoesntHave('peopleCount')
             ->count();
         $classes = ScheduledClass::query()
-            ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->peopleCounterTrackable()
             ->where('ends_at', '<=', $endedBefore)
             ->whereDoesntHave('peopleCount')
             ->whereIn('account_id', $openAccountIds)

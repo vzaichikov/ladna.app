@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AccountStatus;
+use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
@@ -156,6 +157,33 @@ class ScheduledClass extends Model
                     ->orWhereHas('scheduleSeries', fn (Builder $query) => $query->where('status', ScheduleSeriesStatus::Active->value));
             })
             ->orderBy('starts_at');
+    }
+
+    public function scopePeopleCounterTrackable(Builder $query): Builder
+    {
+        return $query
+            ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->whereDoesntHave('cancellations', fn (Builder $query) => $query->whereNull('restored_at'))
+            ->where(function (Builder $query): void {
+                $query
+                    ->where('is_generated', false)
+                    ->orWhere('is_manually_modified', true)
+                    ->orWhereHas('classBookings', fn (Builder $query) => $query
+                        ->notCorrectedRemoved()
+                        ->whereIn('status', self::peopleCounterAssignedBookingStatuses()));
+            });
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function peopleCounterAssignedBookingStatuses(): array
+    {
+        return [
+            ClassBookingStatus::Booked->value,
+            ClassBookingStatus::Attended->value,
+            ClassBookingStatus::NoShow->value,
+        ];
     }
 
     public function displayTimezone(): string

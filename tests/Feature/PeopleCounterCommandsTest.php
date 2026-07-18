@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\ClassBookingStatus;
+use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ActivityDirection;
@@ -12,6 +13,7 @@ use App\Models\Location;
 use App\Models\PeopleCounterSample;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\ScheduledClassCancellation;
 use App\Models\ScheduledClassPeopleCount;
 use App\Models\Trainer;
 use App\Models\UnknownPresenceInterval;
@@ -64,6 +66,38 @@ class PeopleCounterCommandsTest extends TestCase
         $this->assertSame($scheduledClass->account_id, $sample->account_id);
         $this->assertTrue(Storage::disk('local')->exists($sample->original_image_path));
         $this->assertNull($sample->masked_image_path);
+    }
+
+    public function test_capture_command_treats_empty_generated_slots_as_unknown_presence(): void
+    {
+        Carbon::setTestNow('2026-07-16 13:30:00');
+        Storage::fake('local');
+        $this->fakeMediaMtxGateway();
+        $this->bindFrameCapture();
+        $this->bindDetector(count: 2);
+        $room = $this->peopleCounterRoom();
+        $emptyGeneratedSlot = $this->scheduledClassForRoom(
+            room: $room,
+            startsAt: Carbon::parse('2026-07-16 13:00:00'),
+            endsAt: Carbon::parse('2026-07-16 14:00:00'),
+        );
+        $emptyGeneratedSlot->forceFill([
+            'is_generated' => true,
+            'is_manually_modified' => false,
+        ])->save();
+
+        $this->artisan('people-counter:capture', ['--debug' => true])
+            ->expectsOutputToContain('"eligible_classes":0')
+            ->expectsOutputToContain('[people-counter] capture.unknown.succeeded')
+            ->assertExitCode(0);
+
+        $this->assertFalse(PeopleCounterSample::query()->whereBelongsTo($emptyGeneratedSlot)->exists());
+
+        $interval = UnknownPresenceInterval::query()->whereBelongsTo($room)->firstOrFail();
+        $sample = PeopleCounterSample::query()->whereBelongsTo($interval, 'unknownPresenceInterval')->firstOrFail();
+
+        $this->assertNull($sample->scheduled_class_id);
+        $this->assertSame(2, $sample->detected_count);
     }
 
     public function test_capture_command_keeps_class_zero_count_with_current_dashboard_snapshot(): void
@@ -327,7 +361,7 @@ class PeopleCounterCommandsTest extends TestCase
         );
 
         $this->artisan('people-counter:capture', ['--debug' => true])
-            ->expectsOutputToContain('"eligible_rooms":0')
+            ->expectsOutputToContain('[people-counter] capture.unknown.selection')
             ->assertExitCode(0);
 
         $this->assertFalse(PeopleCounterSample::query()->whereBelongsTo($room)->exists());
@@ -512,6 +546,75 @@ class PeopleCounterCommandsTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertFalse(ScheduledClassPeopleCount::query()->whereBelongsTo($scheduledClass)->exists());
+    }
+
+    public function test_summarize_command_skips_cancelled_classes_and_empty_generated_slots(): void
+    {
+        Carbon::setTestNow('2026-07-16 12:10:00');
+        $realClass = $this->scheduledClass(
+            startsAt: Carbon::parse('2026-07-16 10:00:00'),
+            endsAt: Carbon::parse('2026-07-16 11:00:00'),
+        );
+        $emptyGeneratedSlot = $this->scheduledClass(
+            startsAt: Carbon::parse('2026-07-16 10:00:00'),
+            endsAt: Carbon::parse('2026-07-16 11:00:00'),
+        );
+        $cancelledStatusClass = $this->scheduledClass(
+            startsAt: Carbon::parse('2026-07-16 10:00:00'),
+            endsAt: Carbon::parse('2026-07-16 11:00:00'),
+        );
+        $activeCancellationClass = $this->scheduledClass(
+            startsAt: Carbon::parse('2026-07-16 10:00:00'),
+            endsAt: Carbon::parse('2026-07-16 11:00:00'),
+        );
+
+        $emptyGeneratedSlot->forceFill([
+            'is_generated' => true,
+            'is_manually_modified' => false,
+        ])->save();
+        $cancelledStatusClass->forceFill([
+            'status' => ScheduledClassStatus::Cancelled->value,
+            'is_manually_modified' => true,
+        ])->save();
+        ScheduledClassCancellation::create([
+            'account_id' => $activeCancellationClass->account_id,
+            'scheduled_class_id' => $activeCancellationClass->id,
+            'previous_scheduled_class_status' => ScheduledClassStatus::Scheduled->value,
+            'cancellation_mode' => ScheduledClassCancellation::ModeStandard,
+            'pass_effect' => null,
+            'reason' => 'Cancelled class should not be summarized by people counter.',
+            'rules_snapshot' => Account::defaultClassPassCancellationRules(),
+            'cancelled_at' => Carbon::parse('2026-07-16 09:30:00'),
+            'restored_at' => null,
+        ]);
+
+        foreach ([$realClass, $cancelledStatusClass, $activeCancellationClass] as $scheduledClass) {
+            ClassBooking::factory()->for($scheduledClass)->create([
+                'account_id' => $scheduledClass->account_id,
+                'status' => ClassBookingStatus::Attended->value,
+                'attended_at' => Carbon::parse('2026-07-16 11:00:00'),
+            ]);
+        }
+
+        foreach ([$realClass, $emptyGeneratedSlot, $cancelledStatusClass, $activeCancellationClass] as $scheduledClass) {
+            PeopleCounterSample::factory()->for($scheduledClass)->create([
+                'account_id' => $scheduledClass->account_id,
+                'location_id' => $scheduledClass->location_id,
+                'room_id' => $scheduledClass->room_id,
+                'captured_at' => Carbon::parse('2026-07-16 10:30:00'),
+                'status' => PeopleCounterSample::StatusSucceeded,
+                'detected_count' => 2,
+            ]);
+        }
+
+        $this->artisan('people-counter:summarize', ['--debug' => true])
+            ->expectsOutputToContain('[people-counter] summarize.selection')
+            ->assertExitCode(0);
+
+        $this->assertTrue(ScheduledClassPeopleCount::query()->whereBelongsTo($realClass)->exists());
+        $this->assertFalse(ScheduledClassPeopleCount::query()->whereBelongsTo($emptyGeneratedSlot)->exists());
+        $this->assertFalse(ScheduledClassPeopleCount::query()->whereBelongsTo($cancelledStatusClass)->exists());
+        $this->assertFalse(ScheduledClassPeopleCount::query()->whereBelongsTo($activeCancellationClass)->exists());
     }
 
     public function test_prune_command_deletes_old_records_and_images(): void

@@ -2,7 +2,6 @@
 
 namespace App\Support\PeopleCounter;
 
-use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Models\PeopleCounterSample;
 use App\Models\Room;
@@ -48,12 +47,12 @@ class PeopleCounterCaptureService
         $openAccountIds = $this->studioHours->openAccountIds($now, requireRtspCameras: true);
         $candidateCount = ScheduledClass::query()
             ->whereHas('account', fn ($query) => $query->operational())
-            ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->peopleCounterTrackable()
             ->where('starts_at', '<=', $latestStartAt)
             ->where('ends_at', '>=', $earliestEndAt)
             ->count();
         $classes = ScheduledClass::query()
-            ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->peopleCounterTrackable()
             ->where('starts_at', '<=', $latestStartAt)
             ->where('ends_at', '>=', $earliestEndAt)
             ->whereIn('account_id', $openAccountIds)
@@ -99,7 +98,7 @@ class PeopleCounterCaptureService
             ->active()
             ->rtspEnabled()
             ->whereDoesntHave('scheduledClasses', fn ($query) => $query
-                ->where('status', ScheduledClassStatus::Scheduled->value)
+                ->peopleCounterTrackable()
                 ->where('starts_at', '<=', $now)
                 ->where('ends_at', '>=', $protectedAfter))
             ->with(['account:id,status,mode,allow_rtsp_cameras,enable_people_counter,timezone,opening_hours', 'location:id,account_id,name,timezone'])

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
+use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Models\AccountMembership;
 use App\Models\ActivityDirection;
@@ -13,6 +14,7 @@ use App\Models\Location;
 use App\Models\PeopleCounterSample;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\ScheduledClassCancellation;
 use App\Models\ScheduledClassPeopleCount;
 use App\Models\Trainer;
 use App\Models\UnknownPresenceInterval;
@@ -214,6 +216,109 @@ class PeopleCounterReportTest extends TestCase
             ->assertSee(route('dashboard.accounts.people-counter-samples.image', [$account, $olderSample, 'original']), false)
             ->assertDontSee(route('dashboard.accounts.people-counter-samples.image', [$account, $emptySample, 'original']), false)
             ->assertDontSee('href="'.route('dashboard.accounts.people-counter-samples.image', [$account, $sample, 'original']).'"', false);
+    }
+
+    public function test_people_counter_report_excludes_cancelled_classes_and_empty_generated_slots(): void
+    {
+        Carbon::setTestNow('2026-07-16 15:30:00');
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'Europe/Kyiv',
+            'allow_rtsp_cameras' => true,
+            'enable_people_counter' => true,
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'Europe/Kyiv']);
+        $room = Room::factory()->for($account)->for($location)->create([
+            'rtsp_url' => 'rtsp://camera.example.test/live',
+            'rtsp_enabled' => true,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+
+        $realClass = $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-16 13:00:00'),
+            endsAt: Carbon::parse('2026-07-16 14:00:00'),
+            title: 'Exot',
+            location: $location,
+            room: $room,
+            trainer: $trainer,
+        );
+        $emptyGeneratedSlot = $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-16 13:00:00'),
+            endsAt: Carbon::parse('2026-07-16 14:00:00'),
+            title: 'Pole Kids',
+            location: $location,
+            room: $room,
+            trainer: $trainer,
+        );
+        $cancelledStatusClass = $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-16 10:00:00'),
+            endsAt: Carbon::parse('2026-07-16 11:00:00'),
+            title: 'Cancelled By Status',
+            location: $location,
+            room: $room,
+            trainer: $trainer,
+        );
+        $activeCancellationClass = $this->scheduledClass(
+            account: $account,
+            startsAt: Carbon::parse('2026-07-16 11:00:00'),
+            endsAt: Carbon::parse('2026-07-16 12:00:00'),
+            title: 'Cancelled By Event',
+            location: $location,
+            room: $room,
+            trainer: $trainer,
+        );
+
+        $emptyGeneratedSlot->forceFill([
+            'is_generated' => true,
+            'is_manually_modified' => false,
+        ])->save();
+        $cancelledStatusClass->forceFill([
+            'status' => ScheduledClassStatus::Cancelled->value,
+            'is_manually_modified' => true,
+        ])->save();
+
+        ScheduledClassCancellation::create([
+            'account_id' => $account->id,
+            'scheduled_class_id' => $activeCancellationClass->id,
+            'previous_scheduled_class_status' => ScheduledClassStatus::Scheduled->value,
+            'cancellation_mode' => ScheduledClassCancellation::ModeStandard,
+            'pass_effect' => null,
+            'reason' => 'Cancelled class should not be counted in camera report.',
+            'rules_snapshot' => Account::defaultClassPassCancellationRules(),
+            'cancelled_at' => Carbon::parse('2026-07-16 09:30:00'),
+            'restored_at' => null,
+        ]);
+
+        foreach ([$realClass, $cancelledStatusClass, $activeCancellationClass] as $scheduledClass) {
+            ClassBooking::factory()
+                ->for($scheduledClass)
+                ->create([
+                    'account_id' => $account->id,
+                    'status' => ClassBookingStatus::Booked->value,
+                ]);
+        }
+
+        foreach ([$realClass, $emptyGeneratedSlot, $cancelledStatusClass, $activeCancellationClass] as $scheduledClass) {
+            ScheduledClassPeopleCount::factory()->for($scheduledClass)->create([
+                'account_id' => $account->id,
+                'location_id' => $scheduledClass->location_id,
+                'room_id' => $scheduledClass->room_id,
+                'trainer_id' => $scheduledClass->trainer_id,
+                'detected_count' => 4,
+            ]);
+        }
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.people-counter', ['account' => $account, 'date' => '2026-07-16']))
+            ->assertOk()
+            ->assertSee('Exot')
+            ->assertDontSee('Pole Kids')
+            ->assertDontSee('Cancelled By Status')
+            ->assertDontSee('Cancelled By Event');
     }
 
     public function test_people_counter_report_filters_by_location_room_and_trainer(): void
