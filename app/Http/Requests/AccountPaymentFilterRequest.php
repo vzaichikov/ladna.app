@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\CustomerPurchaseStatus;
 use App\Models\Account;
+use App\Models\CustomerPurchase;
 use App\Models\ExpenseCategory;
 use App\Models\Location;
 use App\Models\StudioExpense;
@@ -34,6 +35,8 @@ class AccountPaymentFilterRequest extends FormRequest
         return [
             'date_from' => ['required', 'date_format:Y-m-d'],
             'date_to' => ['required', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'search' => ['nullable', 'string', 'max:255'],
+            'payment_method' => ['nullable', Rule::in(CustomerPurchase::paymentMethods())],
             'status' => ['nullable', Rule::enum(CustomerPurchaseStatus::class)],
             'provider' => ['nullable', 'string', Rule::in($this->providerValues($account))],
             'location_id' => [
@@ -54,7 +57,7 @@ class AccountPaymentFilterRequest extends FormRequest
     }
 
     /**
-     * @return array{date_from: string, date_to: string, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}
+     * @return array{date_from: string, date_to: string, search: string|null, payment_method: string|null, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}
      */
     public function filters(): array
     {
@@ -63,6 +66,8 @@ class AccountPaymentFilterRequest extends FormRequest
         return [
             'date_from' => (string) $validated['date_from'],
             'date_to' => (string) $validated['date_to'],
+            'search' => filled($validated['search'] ?? null) ? trim((string) $validated['search']) : null,
+            'payment_method' => filled($validated['payment_method'] ?? null) ? (string) $validated['payment_method'] : null,
             'status' => filled($validated['status'] ?? null) ? (string) $validated['status'] : null,
             'provider' => filled($validated['provider'] ?? null) ? (string) $validated['provider'] : null,
             'location_id' => filled($validated['location_id'] ?? null) ? (int) $validated['location_id'] : null,
@@ -98,8 +103,10 @@ class AccountPaymentFilterRequest extends FormRequest
         $today = CarbonImmutable::now($timezone);
 
         $this->merge([
-            'date_from' => $this->input('date_from') ?: $today->startOfMonth()->toDateString(),
+            'date_from' => $this->input('date_from') ?: $today->toDateString(),
             'date_to' => $this->input('date_to') ?: $today->toDateString(),
+            'search' => blank($this->input('search')) ? null : trim((string) $this->input('search')),
+            'payment_method' => blank($this->input('payment_method')) ? null : $this->input('payment_method'),
             'status' => blank($this->input('status')) ? null : $this->input('status'),
             'provider' => blank($this->input('provider')) ? null : $this->input('provider'),
             'location_id' => blank($this->input('location_id')) ? null : $this->input('location_id'),

@@ -30,6 +30,10 @@ class CustomerPurchase extends Model
 
     public const SourceManualCashBooking = 'manual_cash_booking';
 
+    public const PaymentMethodCash = 'cash';
+
+    public const PaymentMethodOnline = 'online';
+
     protected $attributes = [
         'status' => 'payment_started',
         'payment_source' => self::SourceOnlineCheckout,
@@ -158,6 +162,14 @@ class CustomerPurchase extends Model
             self::SourceManualCashClassPass,
             self::SourceManualCashBooking,
         ], true);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function paymentMethods(): array
+    {
+        return [self::PaymentMethodCash, self::PaymentMethodOnline];
     }
 
     public function canBeCorrectedAsStudioCash(): bool

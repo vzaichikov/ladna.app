@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.87.0',
+                'date' => '2026-07-20',
+                'title' => 'Clearer studio payment reporting',
+                'items' => ['Reorganized Payments into a concise overview, payment history, cash, and operational expense flow, with today as the default period and a compact mobile layout that reaches payment search before cash and expenses.', 'Payment history now supports client name or phone search, payment method and status filters, with provider and payment location under additional filters. Each row prioritizes the client, service, amount, date, method, and status, while technical, fiscal, and correction details stay inside an expandable view.', 'Cash reporting now separates cash received and collections in the selected period from the current lifetime cash balance by location. The studio remainder subtracts expenses and collections, warning cards appear only when action is needed, and expense filters remain independent from payment filters.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.86.1',
                 'date' => '2026-07-18',
                 'title' => 'Cleaner people counter reports',
@@ -772,6 +779,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.87.0',
+                'date' => '2026-07-20',
+                'title' => 'Зрозуміліший фінансовий звіт студії',
+                'items' => ['Сторінку Платежі перебудовано в послідовний потік: компактний огляд, історія оплат, каса й операційні витрати. За замовчуванням показується сьогодні, а на телефоні пошук оплат зʼявляється до каси та витрат.', 'В історії оплат додано пошук клієнта за імʼям або телефоном, фільтри способу й статусу, а платіжну систему та локацію перенесено до додаткових фільтрів. У рядку залишено клієнта, послугу, суму, дату, спосіб і статус, тоді як технічні, фіскальні дані та виправлення відкриваються в деталях.', 'Каса тепер окремо показує прийняту готівку й інкасації за вибраний період та актуальний залишок за весь час у розрізі локацій. Залишок студії віднімає витрати та інкасації, попередження зʼявляються лише за наявності проблем, а фільтри витрат не впливають на історію оплат.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.86.1',
                 'date' => '2026-07-18',

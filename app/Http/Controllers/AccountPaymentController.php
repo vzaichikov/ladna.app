@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\CustomerPurchaseStatus;
 use App\Http\Requests\AccountPaymentFilterRequest;
 use App\Models\Account;
+use App\Models\CustomerPurchase;
 use App\Models\StudioExpense;
 use App\Support\Fiscalization\FiscalizationAvailability;
 use App\Support\Payments\AccountPaymentDashboardData;
@@ -31,6 +32,7 @@ class AccountPaymentController extends Controller
             'locationId' => $filters['location_id'],
             'locations' => $account->locations()->orderBy('name')->get(),
             'statuses' => CustomerPurchaseStatus::cases(),
+            'paymentMethods' => CustomerPurchase::paymentMethods(),
             'expensePaymentMethods' => StudioExpense::paymentMethods(),
             'expenseStatuses' => StudioExpense::statuses(),
             'fiscalizationEnabled' => $fiscalizationEnabled,

@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
 class AccountPaymentDashboardData
 {
     /**
-     * @param  array{date_from: string, date_to: string, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
+     * @param  array{date_from: string, date_to: string, search: string|null, payment_method: string|null, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
      * @return array<string, mixed>
      */
     public function build(
@@ -27,8 +27,9 @@ class AccountPaymentDashboardData
         CarbonInterface $endsAt,
         bool $fiscalizationEnabled,
     ): array {
-        $paymentQuery = $this->paymentQuery($account, $filters, $startsAt, $endsAt);
-        $cashBalances = $this->cashBalances($account, $filters['location_id']);
+        $periodPaymentQuery = $this->periodPaymentQuery($account, $startsAt, $endsAt);
+        $paymentQuery = $this->paymentQuery(clone $periodPaymentQuery, $filters);
+        $cashBalances = $this->cashBalances($account);
         $expenseQuery = $this->expenseQuery($account, $filters, $startsAt, $endsAt);
 
         return [
@@ -57,14 +58,13 @@ class AccountPaymentDashboardData
             'cashEntries' => $account->studioCashEntries()
                 ->with(['location', 'expense.category'])
                 ->whereBetween('occurred_at', [$startsAt, $endsAt])
-                ->when($filters['location_id'], fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId))
                 ->orderByDesc('occurred_at')
                 ->orderByDesc('id')
                 ->take(20)
                 ->get(),
             'cashBalances' => $cashBalances,
-            'stats' => $this->paymentStats($paymentQuery, $cashBalances, $fiscalizationEnabled),
-            'periodOverview' => $this->periodOverview($account, $filters['location_id'], $startsAt, $endsAt),
+            'stats' => $this->paymentStats($paymentQuery, $periodPaymentQuery, $cashBalances, $fiscalizationEnabled),
+            'periodOverview' => $this->periodOverview($account, $startsAt, $endsAt),
             'expenseCategoryBreakdown' => $this->expenseCategoryBreakdown($account, $filters, $startsAt, $endsAt),
             'expenseCategories' => $account->expenseCategories()->ordered()->get(),
             'activeExpenseCategories' => $account->expenseCategories()->active()->ordered()->get(),
@@ -73,27 +73,47 @@ class AccountPaymentDashboardData
     }
 
     /**
-     * @param  array{date_from: string, date_to: string, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
+     * @param  array{date_from: string, date_to: string, search: string|null, payment_method: string|null, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
      */
-    private function paymentQuery(Account $account, array $filters, CarbonInterface $startsAt, CarbonInterface $endsAt): Builder
+    private function periodPaymentQuery(Account $account, CarbonInterface $startsAt, CarbonInterface $endsAt): Builder
     {
         return CustomerPurchase::query()
             ->whereBelongsTo($account)
-            ->withinEffectiveDateRange($startsAt, $endsAt)
+            ->withinEffectiveDateRange($startsAt, $endsAt);
+    }
+
+    /**
+     * @param  Builder<CustomerPurchase>  $query
+     * @param  array{date_from: string, date_to: string, search: string|null, payment_method: string|null, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
+     */
+    private function paymentQuery(Builder $query, array $filters): Builder
+    {
+        return $query
+            ->when($filters['search'], function (Builder $query, string $search): void {
+                $query->whereHas('customer', function (Builder $query) use ($search): void {
+                    $query
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+            })
+            ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodCash, fn (Builder $query): Builder => $query->whereIn('payment_source', [
+                CustomerPurchase::SourceManualCashClassPass,
+                CustomerPurchase::SourceManualCashBooking,
+            ]))
+            ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodOnline, fn (Builder $query): Builder => $query->where('payment_source', CustomerPurchase::SourceOnlineCheckout))
             ->when($filters['status'], fn (Builder $query, string $status): Builder => $query->where('status', $status))
             ->when($filters['provider'], fn (Builder $query, string $provider): Builder => $query->where('provider', $provider))
             ->when($filters['location_id'], fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId));
     }
 
     /**
-     * @param  array{date_from: string, date_to: string, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
+     * @param  array{date_from: string, date_to: string, search: string|null, payment_method: string|null, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
      */
     private function expenseQuery(Account $account, array $filters, CarbonInterface $startsAt, CarbonInterface $endsAt): Builder
     {
         return StudioExpense::query()
             ->whereBelongsTo($account)
             ->whereBetween('occurred_at', [$startsAt, $endsAt])
-            ->when($filters['location_id'], fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId))
             ->when($filters['expense_category_id'], fn (Builder $query, int $categoryId): Builder => $query->where('expense_category_id', $categoryId))
             ->when($filters['expense_payment_method'], fn (Builder $query, string $paymentMethod): Builder => $query->where('payment_method', $paymentMethod))
             ->when($filters['expense_status'] === StudioExpense::StatusActive, fn (Builder $query): Builder => $query->active())
@@ -102,16 +122,21 @@ class AccountPaymentDashboardData
 
     /**
      * @param  Builder<CustomerPurchase>  $paymentQuery
+     * @param  Builder<CustomerPurchase>  $periodPaymentQuery
      * @param  Collection<int, array{location: mixed, manual_cash_by_currency: array<string, int>, cash_in_by_currency: array<string, int>, cash_out_by_currency: array<string, int>, balance_by_currency: array<string, int>}>  $cashBalances
      * @return array{total: int, paid_amounts_by_currency: array<string, int>, pending: int, failed: int, fiscal_failed: int, cash_balance_by_currency: array<string, int>}
      */
-    private function paymentStats(Builder $paymentQuery, Collection $cashBalances, bool $fiscalizationEnabled): array
-    {
+    private function paymentStats(
+        Builder $paymentQuery,
+        Builder $periodPaymentQuery,
+        Collection $cashBalances,
+        bool $fiscalizationEnabled,
+    ): array {
         $fiscalFailures = $fiscalizationEnabled
             ? FiscalReceipt::query()
                 ->where('status', FiscalReceiptStatus::Failed->value)
                 ->where('payment_type', (new CustomerPurchase)->getMorphClass())
-                ->whereIn('payment_id', (clone $paymentQuery)->select('id'))
+                ->whereIn('payment_id', (clone $periodPaymentQuery)->select('id'))
                 ->count()
             : 0;
 
@@ -120,13 +145,13 @@ class AccountPaymentDashboardData
             'paid_amounts_by_currency' => $this->totalsByCurrency(
                 (clone $paymentQuery)->where('status', CustomerPurchaseStatus::PaymentPaid->value),
             ),
-            'pending' => (clone $paymentQuery)
+            'pending' => (clone $periodPaymentQuery)
                 ->whereIn('status', [
                     CustomerPurchaseStatus::PaymentStarted->value,
                     CustomerPurchaseStatus::PaymentPending->value,
                 ])
                 ->count(),
-            'failed' => (clone $paymentQuery)
+            'failed' => (clone $periodPaymentQuery)
                 ->whereIn('status', [
                     CustomerPurchaseStatus::PaymentFailed->value,
                     CustomerPurchaseStatus::PaymentCancelled->value,
@@ -139,36 +164,45 @@ class AccountPaymentDashboardData
     }
 
     /**
-     * @return array{income_by_currency: array<string, int>, expense_by_currency: array<string, int>, net_by_currency: array<string, int>, owner_withdrawal_by_currency: array<string, int>}
+     * @return array{income_by_currency: array<string, int>, expense_by_currency: array<string, int>, remaining_by_currency: array<string, int>, cash_received_by_currency: array<string, int>, collection_by_currency: array<string, int>}
      */
-    private function periodOverview(Account $account, ?int $locationId, CarbonInterface $startsAt, CarbonInterface $endsAt): array
+    private function periodOverview(Account $account, CarbonInterface $startsAt, CarbonInterface $endsAt): array
     {
         $incomeByCurrency = $this->totalsByCurrency(CustomerPurchase::query()
             ->whereBelongsTo($account)
             ->withinEffectiveDateRange($startsAt, $endsAt)
-            ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
-            ->when($locationId, fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId)));
+            ->where('status', CustomerPurchaseStatus::PaymentPaid->value));
         $expenseByCurrency = $this->totalsByCurrency(StudioExpense::query()
             ->whereBelongsTo($account)
             ->active()
-            ->whereBetween('occurred_at', [$startsAt, $endsAt])
-            ->when($locationId, fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId)));
-        $ownerWithdrawalByCurrency = $this->totalsByCurrency(StudioCashEntry::query()
+            ->whereBetween('occurred_at', [$startsAt, $endsAt]));
+        $cashReceivedByCurrency = $this->totalsByCurrency(CustomerPurchase::query()
+            ->whereBelongsTo($account)
+            ->withinEffectiveDateRange($startsAt, $endsAt)
+            ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
+            ->whereIn('payment_source', [
+                CustomerPurchase::SourceManualCashClassPass,
+                CustomerPurchase::SourceManualCashBooking,
+            ]));
+        $collectionByCurrency = $this->totalsByCurrency(StudioCashEntry::query()
             ->whereBelongsTo($account)
             ->where('purpose', StudioCashEntry::PurposeOwnerWithdrawal)
-            ->whereBetween('occurred_at', [$startsAt, $endsAt])
-            ->when($locationId, fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId)));
+            ->whereBetween('occurred_at', [$startsAt, $endsAt]));
 
         return [
             'income_by_currency' => $incomeByCurrency,
             'expense_by_currency' => $expenseByCurrency,
-            'net_by_currency' => $this->subtractCurrencyTotals($incomeByCurrency, $expenseByCurrency),
-            'owner_withdrawal_by_currency' => $ownerWithdrawalByCurrency,
+            'remaining_by_currency' => $this->subtractCurrencyTotals(
+                $this->subtractCurrencyTotals($incomeByCurrency, $expenseByCurrency),
+                $collectionByCurrency,
+            ),
+            'cash_received_by_currency' => $cashReceivedByCurrency,
+            'collection_by_currency' => $collectionByCurrency,
         ];
     }
 
     /**
-     * @param  array{date_from: string, date_to: string, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
+     * @param  array{date_from: string, date_to: string, search: string|null, payment_method: string|null, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
      * @return Collection<int, array{category: ExpenseCategory, currency: string, amount_cents: int, share: float}>
      */
     private function expenseCategoryBreakdown(Account $account, array $filters, CarbonInterface $startsAt, CarbonInterface $endsAt): Collection
@@ -177,7 +211,6 @@ class AccountPaymentDashboardData
             ->whereBelongsTo($account)
             ->active()
             ->whereBetween('occurred_at', [$startsAt, $endsAt])
-            ->when($filters['location_id'], fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId))
             ->when($filters['expense_category_id'], fn (Builder $query, int $categoryId): Builder => $query->where('expense_category_id', $categoryId))
             ->when($filters['expense_payment_method'], fn (Builder $query, string $paymentMethod): Builder => $query->where('payment_method', $paymentMethod))
             ->selectRaw('expense_category_id, currency, SUM(amount_cents) as amount_cents')
@@ -242,10 +275,9 @@ class AccountPaymentDashboardData
     /**
      * @return Collection<int, array{location: mixed, manual_cash_by_currency: array<string, int>, cash_in_by_currency: array<string, int>, cash_out_by_currency: array<string, int>, balance_by_currency: array<string, int>}>
      */
-    private function cashBalances(Account $account, ?int $locationId): Collection
+    private function cashBalances(Account $account): Collection
     {
         $locations = $account->locations()
-            ->when($locationId, fn (Builder $query, int $locationId): Builder => $query->whereKey($locationId))
             ->orderBy('name')
             ->get();
         $locationIds = $locations->pluck('id');
