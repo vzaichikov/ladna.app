@@ -696,6 +696,7 @@ return [
     'tomorrow' => 'Tomorrow',
     'this_week' => 'This week',
     'next_week' => 'Next week',
+    'week_after_next' => 'Week after next',
     'add_class_record' => 'Add record',
     'add_class_record_short' => 'Class',
     'add_group_class_record' => 'Add group class',

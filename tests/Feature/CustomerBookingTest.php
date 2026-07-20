@@ -950,6 +950,8 @@ class CustomerBookingTest extends TestCase
         $this->scheduledClass($account, $location, $room, $classType, 'Tomorrow Class', '2026-06-18 10:00:00');
         $this->scheduledClass($account, $location, $room, $classType, 'Sunday Class', '2026-06-21 10:00:00');
         $this->scheduledClass($account, $location, $room, $classType, 'Next Monday Class', '2026-06-22 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Following Monday Class', '2026-06-29 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Following Sunday Class', '2026-07-05 10:00:00');
         $this->scheduledClass($otherAccount, $otherLocation, $otherRoom, $otherClassType, 'Other Account Class', '2026-06-17 10:00:00');
 
         $this->actingAs($owner)
@@ -973,6 +975,16 @@ class CustomerBookingTest extends TestCase
             ->assertOk()
             ->assertSee('Next Monday Class')
             ->assertDontSee('Sunday Class')
+            ->assertDontSee('Following Monday Class')
+            ->assertDontSee('Other Account Class');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'week_after_next']))
+            ->assertOk()
+            ->assertSee(__('app.week_after_next'))
+            ->assertSee('Following Monday Class')
+            ->assertSee('Following Sunday Class')
+            ->assertDontSee('Next Monday Class')
             ->assertDontSee('Other Account Class');
 
         Carbon::setTestNow();
@@ -994,6 +1006,8 @@ class CustomerBookingTest extends TestCase
         $this->scheduledClass($account, $location, $room, $classType, 'Sunday Class', '2026-06-21 10:00:00');
         $this->scheduledClass($account, $location, $room, $classType, 'Next Monday Class', '2026-06-22 10:00:00');
         $this->scheduledClass($account, $location, $room, $classType, 'Next Sunday Class', '2026-06-28 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Following Monday Class', '2026-06-29 10:00:00');
+        $this->scheduledClass($account, $location, $room, $classType, 'Following Sunday Class', '2026-07-05 10:00:00');
 
         $currentWeekResponse = $this->actingAs($owner)
             ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'this_week']));
@@ -1036,6 +1050,25 @@ class CustomerBookingTest extends TestCase
             ->assertViewHas('activeWeekday', 1)
             ->assertSee('Next Monday Class')
             ->assertDontSee('Sunday Class')
+            ->assertDontSee('Next Sunday Class');
+
+        $weekAfterNextResponse = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => 'week_after_next']));
+
+        $weekAfterNextResponse->assertOk();
+
+        $this->assertSame([1, 2, 3, 4, 5, 6, 7], collect($weekAfterNextResponse->viewData('weekDayOptions'))->pluck('weekday')->all());
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', [
+                'account' => $account,
+                'tab' => 'week_after_next',
+                'weekday' => 7,
+            ]))
+            ->assertOk()
+            ->assertViewHas('activeWeekday', 7)
+            ->assertSee('Following Sunday Class')
+            ->assertDontSee('Following Monday Class')
             ->assertDontSee('Next Sunday Class');
 
         Carbon::setTestNow();

@@ -134,6 +134,7 @@ class ScheduledClassController extends Controller
             'tomorrow' => __('app.tomorrow'),
             'this_week' => __('app.this_week'),
             'next_week' => __('app.next_week'),
+            'week_after_next' => __('app.week_after_next'),
         ];
     }
 
@@ -148,6 +149,7 @@ class ScheduledClassController extends Controller
             'tomorrow' => [$today->addDay(), $today->addDay()->endOfDay()],
             'this_week' => [$today, $today->endOfWeek(CarbonInterface::SUNDAY)],
             'next_week' => [$today->addWeek()->startOfWeek(CarbonInterface::MONDAY), $today->addWeek()->endOfWeek(CarbonInterface::SUNDAY)],
+            'week_after_next' => [$today->addWeeks(2)->startOfWeek(CarbonInterface::MONDAY), $today->addWeeks(2)->endOfWeek(CarbonInterface::SUNDAY)],
             default => [$today, $today->endOfDay()],
         };
     }
@@ -186,16 +188,18 @@ class ScheduledClassController extends Controller
     private function dateForWeekday(string $tab, int $weekday, string $timezone): CarbonImmutable
     {
         $today = CarbonImmutable::now($timezone)->startOfDay();
-        $weekStart = $tab === 'next_week'
-            ? $today->addWeek()->startOfWeek(CarbonInterface::MONDAY)
-            : $today->startOfWeek(CarbonInterface::MONDAY);
+        $weekStart = match ($tab) {
+            'next_week' => $today->addWeek()->startOfWeek(CarbonInterface::MONDAY),
+            'week_after_next' => $today->addWeeks(2)->startOfWeek(CarbonInterface::MONDAY),
+            default => $today->startOfWeek(CarbonInterface::MONDAY),
+        };
 
         return $weekStart->addDays($weekday - self::ISO_MONDAY)->startOfDay();
     }
 
     private function supportsWeekdayFilter(string $tab): bool
     {
-        return in_array($tab, ['this_week', 'next_week'], true);
+        return in_array($tab, ['this_week', 'next_week', 'week_after_next'], true);
     }
 
     /**

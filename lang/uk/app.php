@@ -696,6 +696,7 @@ return [
     'tomorrow' => 'Завтра',
     'this_week' => 'Цей тиждень',
     'next_week' => 'Наступний тиждень',
+    'week_after_next' => 'Через тиждень',
     'add_class_record' => 'Додати запис',
     'add_class_record_short' => 'Заняття',
     'add_group_class_record' => 'Додати групове',
