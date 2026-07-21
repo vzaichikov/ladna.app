@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\CustomerAuth\CustomerStudioAccess;
 use App\Support\DemoStudioFixture;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
+use App\Support\SaasBilling\PublicPricingPresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -20,6 +21,7 @@ class HomeController extends Controller
     public function __construct(
         private readonly AccountSubscriptionAccess $subscriptionAccess,
         private readonly CustomerStudioAccess $customerStudioAccess,
+        private readonly PublicPricingPresenter $publicPricingPresenter,
     ) {}
 
     public function ukrainian(Request $request): View|RedirectResponse
@@ -107,7 +109,7 @@ class HomeController extends Controller
     }
 
     /**
-     * @return array{demoAvailable: bool, trustedStudios: Collection<int, Account>}
+     * @return array{demoAvailable: bool, trustedStudios: Collection<int, Account>, publicPricing: array<string, mixed>|null}
      */
     private function landingData(): array
     {
@@ -119,6 +121,7 @@ class HomeController extends Controller
         return [
             'demoAvailable' => $demoAccount?->isReadOnlyDemo() ?? false,
             'trustedStudios' => $this->trustedStudios(),
+            'publicPricing' => $this->publicPricingPresenter->current(),
         ];
     }
 

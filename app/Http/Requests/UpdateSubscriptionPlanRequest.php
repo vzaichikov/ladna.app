@@ -28,7 +28,7 @@ class UpdateSubscriptionPlanRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'price_cents' => ['required', 'integer', 'min:0', 'max:99999999'],
+            'price_uah' => ['required', 'numeric', 'min:0', 'max:999999.99', 'decimal:0,2'],
             'currency' => ['required', Rule::in(config('ladna.currencies'))],
             'billing_interval' => ['required', Rule::in(['monthly', 'yearly'])],
             'plan_type' => ['required', Rule::enum(SubscriptionPlanType::class)],

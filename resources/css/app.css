@@ -46,6 +46,17 @@
         @apply mt-2 w-full rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-3 focus:ring-violet-crm-100;
     }
 
+    .public-pricing-number-input {
+        @apply appearance-none;
+        -moz-appearance: textfield;
+    }
+
+    .public-pricing-number-input::-webkit-inner-spin-button,
+    .public-pricing-number-input::-webkit-outer-spin-button {
+        margin: 0;
+        -webkit-appearance: none;
+    }
+
     .spm-wrapper {
         @apply mt-2 w-full;
     }

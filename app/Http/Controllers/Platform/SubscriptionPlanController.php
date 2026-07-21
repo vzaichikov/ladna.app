@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSubscriptionPlanRequest;
 use App\Http\Requests\UpdateSubscriptionPlanRequest;
 use App\Models\SubscriptionPlan;
+use App\Models\SubscriptionPriceVersion;
+use App\Support\Payments\PaymentAmounts;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
@@ -15,11 +17,22 @@ class SubscriptionPlanController extends Controller
 {
     public function index(): View
     {
+        $plans = SubscriptionPlan::withCount(['subscriptions', 'subscriptionPayments', 'priceVersions'])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+        $currentPriceVersions = SubscriptionPriceVersion::query()
+            ->published()
+            ->effectiveAt(now())
+            ->whereIn('subscription_plan_id', $plans->modelKeys())
+            ->with('tiers')
+            ->get()
+            ->unique('subscription_plan_id')
+            ->keyBy('subscription_plan_id');
+
         return view('platform.subscription-plans.index', [
-            'plans' => SubscriptionPlan::withCount('subscriptions')
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(),
+            'plans' => $plans,
+            'currentPriceVersions' => $currentPriceVersions,
         ]);
     }
 
@@ -45,6 +58,8 @@ class SubscriptionPlanController extends Controller
         $validated['is_active'] = $request->boolean('is_active');
         $validated['public_signup_enabled'] = $request->boolean('public_signup_enabled');
         $validated['requires_recurring_payment'] = $request->boolean('requires_recurring_payment');
+        $validated['price_cents'] = PaymentAmounts::decimalToCents($validated['price_uah']);
+        unset($validated['price_uah']);
 
         SubscriptionPlan::create($validated);
 
@@ -71,6 +86,8 @@ class SubscriptionPlanController extends Controller
         $validated['is_active'] = $request->boolean('is_active');
         $validated['public_signup_enabled'] = $request->boolean('public_signup_enabled');
         $validated['requires_recurring_payment'] = $request->boolean('requires_recurring_payment');
+        $validated['price_cents'] = PaymentAmounts::decimalToCents($validated['price_uah']);
+        unset($validated['price_uah']);
 
         $subscriptionPlan->update($validated);
 
@@ -80,6 +97,15 @@ class SubscriptionPlanController extends Controller
 
     public function destroy(SubscriptionPlan $subscriptionPlan): RedirectResponse
     {
+        if (
+            $subscriptionPlan->subscriptions()->exists()
+            || $subscriptionPlan->subscriptionPayments()->exists()
+            || $subscriptionPlan->priceVersions()->exists()
+        ) {
+            return redirect()->route('platform.subscription-plans.index')
+                ->withErrors(['plan' => __('app.subscription_plan_in_use')]);
+        }
+
         $subscriptionPlan->delete();
 
         return redirect()->route('platform.subscription-plans.index')

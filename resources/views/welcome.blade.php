@@ -7,6 +7,7 @@
         $landing = __('app.landing');
         $demoAvailable = $demoAvailable ?? false;
         $trustedStudios = collect($trustedStudios ?? []);
+        $publicPricing = $publicPricing ?? null;
         $primaryLabel = auth()->check() ? __('app.dashboard') : $landing['hero_primary'];
         $currentLandingLocale = app()->getLocale() === 'en' ? 'en' : 'uk';
         $loginHref = $currentLandingLocale === 'en' ? route('login.en') : route('login');
@@ -74,6 +75,9 @@
                         <a href="#passes" class="transition hover:text-[#2B1731]">{{ $landing['nav_passes'] }}</a>
                         <a href="#clients" class="transition hover:text-[#2B1731]">{{ $landing['nav_clients'] }}</a>
                         <a href="#team" class="transition hover:text-[#2B1731]">{{ $landing['nav_team'] }}</a>
+                        @if ($publicPricing)
+                            <a href="#pricing" class="transition hover:text-[#2B1731]">{{ $landing['nav_pricing'] }}</a>
+                        @endif
                     </nav>
 
                     <div class="flex items-center gap-2">
@@ -289,6 +293,10 @@
                 @endforeach
             </div>
         </section>
+
+        @if ($publicPricing)
+            <x-public-pricing :pricing="$publicPricing" />
+        @endif
 
         <section class="relative px-5 py-20 sm:px-8 lg:px-10">
             <div class="absolute inset-0 overflow-hidden" aria-hidden="true">

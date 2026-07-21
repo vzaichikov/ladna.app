@@ -9,6 +9,7 @@ use App\Http\Requests\StorePlatformAccountRequest;
 use App\Http\Requests\UpdatePlatformAccountRequest;
 use App\Models\Account;
 use App\Models\SubscriptionPlan;
+use App\Models\SubscriptionPriceVersion;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\Pwa\StudioPwaIconGenerator;
@@ -17,6 +18,7 @@ use App\Support\SaasBilling\DeleteAccountWithOwnedUsers;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -88,7 +90,14 @@ class PlatformAccountController extends Controller
 
     public function show(Account $account): View
     {
-        $account->load(['locations', 'subscription.plan', 'subscriptionPayments.plan'])
+        $account->load([
+            'locations',
+            'subscription.plan',
+            'subscription.priceVersion',
+            'subscription.pendingPriceVersion.plan',
+            'subscription.paymentMethod',
+            'subscriptionPayments.plan',
+        ])
             ->loadCount(['users', 'scheduledClasses']);
 
         return view('platform.accounts.show', [
@@ -98,6 +107,9 @@ class PlatformAccountController extends Controller
                 ->latest()
                 ->limit(15)
                 ->get(),
+            'assignablePriceVersions' => config('ladna.saas_billing_v2_enabled')
+                ? $this->assignablePriceVersions()
+                : collect(),
         ]);
     }
 
@@ -110,13 +122,16 @@ class PlatformAccountController extends Controller
 
     public function update(UpdatePlatformAccountRequest $request, Account $account, StudioPwaIconGenerator $pwaAssets): RedirectResponse
     {
+        $account->loadMissing('subscription');
         $previousSlug = $account->slug;
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
         $account->update(collect($validated)->except(['logo', 'subscription_plan_id', 'subscription_status', 'subscription_ends_at'])->all());
         $this->storeLogo($request, $account);
-        $this->syncSubscription($account, $validated);
+        if (! $account->subscription?->usesLocationBilling()) {
+            $this->syncSubscription($account, $validated);
+        }
 
         if ($previousSlug !== $account->slug) {
             $pwaAssets->deleteForSlug($previousSlug);
@@ -147,6 +162,31 @@ class PlatformAccountController extends Controller
             'accountStatuses' => AccountStatus::cases(),
             'subscriptionStatuses' => SubscriptionStatus::cases(),
         ];
+    }
+
+    /**
+     * @return Collection<int, SubscriptionPriceVersion>
+     */
+    private function assignablePriceVersions(): Collection
+    {
+        return SubscriptionPlan::query()
+            ->billingV2Assignable()
+            ->with(['priceVersions' => fn ($query) => $query
+                ->published()
+                ->effectiveAt(now())
+                ->with('tiers')])
+            ->orderByDesc('public_signup_enabled')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(function (SubscriptionPlan $plan): ?SubscriptionPriceVersion {
+                $priceVersion = $plan->priceVersions->first();
+                $priceVersion?->setRelation('plan', $plan);
+
+                return $priceVersion;
+            })
+            ->filter()
+            ->values();
     }
 
     /**

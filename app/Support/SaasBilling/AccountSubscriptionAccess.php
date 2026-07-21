@@ -37,6 +37,10 @@ class AccountSubscriptionAccess
             return false;
         }
 
+        if ($subscription->usesLocationBilling() && $subscription->isInGracePeriod()) {
+            return true;
+        }
+
         return $subscription->ends_at === null || $subscription->ends_at->isFuture();
     }
 

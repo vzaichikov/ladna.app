@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-#[Fillable(['account_id', 'account_subscription_id', 'subscription_plan_id', 'account_signup_request_id', 'provider', 'payment_type', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_subscription_id', 'gateway_status', 'status', 'amount_cents', 'currency', 'period_starts_at', 'period_ends_at', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
+#[Fillable(['account_id', 'pending_location_id', 'account_subscription_id', 'subscription_plan_id', 'subscription_price_version_id', 'plan_name_snapshot', 'account_signup_request_id', 'provider', 'payment_type', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_subscription_id', 'gateway_status', 'status', 'amount_cents', 'currency', 'billing_interval_snapshot', 'billable_location_count', 'tier_breakdown_snapshot', 'subtotal_cents', 'discount_cents', 'idempotency_key', 'renewal_attempt', 'period_starts_at', 'period_ends_at', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
 class AccountSubscriptionPayment extends Model
 {
     /** @use HasFactory<AccountSubscriptionPaymentFactory> */
@@ -34,6 +34,11 @@ class AccountSubscriptionPayment extends Model
             'status' => AccountSubscriptionPaymentStatus::class,
             'gateway_checkout_payload' => 'array',
             'last_callback_payload' => 'array',
+            'tier_breakdown_snapshot' => 'array',
+            'billable_location_count' => 'integer',
+            'subtotal_cents' => 'integer',
+            'discount_cents' => 'integer',
+            'renewal_attempt' => 'integer',
             'period_starts_at' => 'datetime',
             'period_ends_at' => 'datetime',
             'started_at' => 'datetime',
@@ -48,6 +53,11 @@ class AccountSubscriptionPayment extends Model
         return $this->belongsTo(Account::class);
     }
 
+    public function pendingLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'pending_location_id');
+    }
+
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(AccountSubscription::class, 'account_subscription_id');
@@ -56,6 +66,11 @@ class AccountSubscriptionPayment extends Model
     public function plan(): BelongsTo
     {
         return $this->belongsTo(SubscriptionPlan::class, 'subscription_plan_id');
+    }
+
+    public function priceVersion(): BelongsTo
+    {
+        return $this->belongsTo(SubscriptionPriceVersion::class, 'subscription_price_version_id');
     }
 
     public function signupRequest(): BelongsTo

@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'updated_at' => '2026-06-21',
+    'updated_at' => '2026-07-20',
     'pages' => [
         'terms' => [
             'en' => [
@@ -56,6 +56,13 @@ return [
                         'title' => '6. Subscriptions, payments, and class passes',
                         'body' => [
                             'A studio subscription is the commercial relationship between the studio owner and Ladna for access to the SaaS platform.',
+                            'An eligible newly enrolled studio may start one 30-day full-feature trial without providing a card. No payment or fiscal receipt is created for the trial, and Ladna will not charge the studio unless its owner expressly subscribes.',
+                            'Subscription fees are calculated by the number of active studio locations, with at least one billable location. Inactive locations are not included. Current prices, the active-location definition, and any separately charged third-party services are disclosed on the pricing and billing pages before payment.',
+                            'A studio owner may choose monthly billing or annual prepayment with a 10% discount. By confirming a subscription and saving a payment method, the owner consents to automatic renewal for the selected interval and the amount disclosed for the then-current billable location count. Subscribing during the trial does not shorten the remaining trial; the first paid period starts when the trial ends.',
+                            'Activating an additional location during a paid period requires the owner to approve the displayed prorated charge. The proration is based on the difference between the previous and new full-period prices for the unused part of the current period. Deactivating a location is immediate, does not create a partial refund, and reduces the billable quantity at the next renewal.',
+                            'The studio owner may cancel automatic renewal at any time. Cancellation takes effect at the end of the current paid period, remains reversible until then, and does not create a partial refund except where required by law.',
+                            'If an automatic renewal fails, the subscription enters a seven-day grace period with full access. Ladna may retry payment on days two and five unless the payment provider requires owner interaction. After the grace period, data and billing access are preserved, but other access may become read-only until payment succeeds.',
+                            'Ladna will give at least 30 days notice before a published price change applies to an enrolled studio. A new price never changes the current paid period and applies no earlier than the first renewal after that notice period.',
                             'A class pass, room rental, private lesson, single visit, or similar studio sale is the commercial relationship between the studio and its own customer. Ladna may store and display these records but does not sell studio services to end customers unless a separate written agreement says otherwise.',
                         ],
                     ],
@@ -90,7 +97,8 @@ return [
                     [
                         'title' => '11. Termination',
                         'body' => [
-                            'You may stop using Ladna at any time. We may suspend or terminate access if you materially breach these Terms, fail to pay applicable fees, create security risk, or use the service unlawfully.',
+                            'You may stop using Ladna at any time. Cancelling a paid subscription follows the end-of-period and no-partial-refund rules in section 6. Once cancellation takes effect, future automatic charges stop while studio data is preserved under the applicable retention terms.',
+                            'We may suspend or terminate access if you materially breach these Terms, fail to pay applicable fees after the stated grace period, create security risk, or use the service unlawfully.',
                             'After termination, data export or deletion requests may be handled according to the Privacy Policy and any active agreement with the studio.',
                         ],
                     ],
@@ -155,6 +163,13 @@ return [
                         'title' => '6. Підписки, оплати та абонементи',
                         'body' => [
                             'Підписка студії є комерційними відносинами між власником студії та Ladna щодо доступу до SaaS-платформи.',
+                            'Нова студія, яку явно підключено до білінгу, може один раз розпочати 30-денний повнофункціональний пробний період без додавання картки. Для пробного періоду не створюються оплата або фіскальний чек, і Ladna не списуватиме кошти, доки власник студії явно не оформить підписку.',
+                            'Плата за підписку залежить від кількості активних локацій студії, але оплачується щонайменше одна локація. Неактивні локації не враховуються. Актуальні ціни, визначення активної локації та окремо оплачувані послуги сторонніх провайдерів показуються на сторінках тарифів і білінгу до оплати.',
+                            'Власник студії може обрати щомісячну оплату або річну передоплату зі знижкою 10%. Підтверджуючи підписку та зберігаючи спосіб оплати, власник погоджується на автоматичне поновлення з обраним інтервалом і на суму, показану для актуальної кількості оплачуваних локацій. Оформлення підписки під час пробного періоду не скорочує його: перший оплачуваний період починається після завершення пробного.',
+                            'Активація додаткової локації протягом оплаченого періоду потребує підтвердження власником показаної доплати. Доплата обчислюється як різниця між попередньою та новою повною ціною періоду за невикористану частину поточного періоду. Деактивація локації відбувається одразу, не створює часткового повернення коштів і зменшує оплачувану кількість під час наступного поновлення.',
+                            'Власник студії може будь-коли скасувати автоматичне поновлення. Скасування набуває чинності наприкінці поточного оплаченого періоду, до цього моменту його можна відкликати, а часткове повернення коштів не здійснюється, крім випадків, передбачених законом.',
+                            'Якщо автоматична оплата не пройшла, підписка переходить у семиденний пільговий період із повним доступом. Ladna може повторити спробу оплати на другий і п’ятий день, якщо платіжний провайдер не вимагає дії власника. Після пільгового періоду дані та доступ до білінгу зберігаються, але інший доступ може перейти в режим лише для читання до успішної оплати.',
+                            'Ladna повідомить щонайменше за 30 днів до того, як опублікована зміна ціни почне діяти для підключеної студії. Нова ціна не змінює поточний оплачений період і застосовується не раніше першого поновлення після завершення строку повідомлення.',
                             'Абонемент, оренда залу, індивідуальне заняття, разовий візит або інший продаж студії є комерційними відносинами між студією та її клієнтом. Ladna може зберігати й показувати такі записи, але не продає послуги студії кінцевим клієнтам, якщо інше не визначено окремою письмовою угодою.',
                         ],
                     ],
@@ -189,7 +204,8 @@ return [
                     [
                         'title' => '11. Припинення доступу',
                         'body' => [
-                            'Ви можете припинити використання Ladna будь-коли. Ми можемо призупинити або припинити доступ, якщо ви суттєво порушуєте цю Угоду, не оплачуєте застосовні платежі, створюєте ризик безпеці або використовуєте сервіс незаконно.',
+                            'Ви можете припинити використання Ladna будь-коли. Скасування оплаченої підписки відбувається за правилами завершення періоду та відсутності часткового повернення коштів, визначеними в розділі 6. Коли скасування набуває чинності, майбутні автоматичні списання припиняються, а дані студії зберігаються відповідно до застосовних строків зберігання.',
+                            'Ми можемо призупинити або припинити доступ, якщо ви суттєво порушуєте цю Угоду, не оплачуєте застосовні платежі після зазначеного пільгового періоду, створюєте ризик безпеці або використовуєте сервіс незаконно.',
                             'Після припинення доступу запити на експорт або видалення даних обробляються відповідно до Політики конфіденційності та чинної угоди зі студією.',
                         ],
                     ],

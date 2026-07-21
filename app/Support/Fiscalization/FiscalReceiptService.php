@@ -223,8 +223,12 @@ class FiscalReceiptService
         }
 
         $payment->loadMissing('plan');
+        $planName = $payment->plan_name_snapshot ?: $payment->plan?->name ?: __('app.subscription_plan');
+        $locations = $payment->billable_location_count
+            ? ' · '.$payment->billable_location_count.' loc.'
+            : '';
 
-        return Str::limit('Ladna: '.($payment->plan?->name ?? __('app.subscription_plan')), 128, '');
+        return Str::limit('Ladna: '.$planName.$locations, 128, '');
     }
 
     /**

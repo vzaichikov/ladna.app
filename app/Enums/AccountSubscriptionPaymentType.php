@@ -8,4 +8,5 @@ enum AccountSubscriptionPaymentType: string
     case FullSubscription = 'full_subscription';
     case ManualRenewal = 'manual_renewal';
     case AutoRenewal = 'auto_renewal';
+    case LocationUpgrade = 'location_upgrade';
 }

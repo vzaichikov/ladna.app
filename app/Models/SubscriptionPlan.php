@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\SubscriptionPlanType;
+use Carbon\CarbonInterface;
 use Database\Factories\SubscriptionPlanFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -68,6 +69,14 @@ class SubscriptionPlan extends Model
         return $query->where('plan_type', SubscriptionPlanType::Standard->value);
     }
 
+    public function scopeBillingV2Assignable(Builder $query): Builder
+    {
+        return $query
+            ->active()
+            ->standard()
+            ->where('requires_recurring_payment', true);
+    }
+
     public function subscriptions(): HasMany
     {
         return $this->hasMany(AccountSubscription::class);
@@ -76,5 +85,19 @@ class SubscriptionPlan extends Model
     public function subscriptionPayments(): HasMany
     {
         return $this->hasMany(AccountSubscriptionPayment::class);
+    }
+
+    public function priceVersions(): HasMany
+    {
+        return $this->hasMany(SubscriptionPriceVersion::class);
+    }
+
+    public function currentPriceVersion(?CarbonInterface $at = null): ?SubscriptionPriceVersion
+    {
+        return $this->priceVersions()
+            ->published()
+            ->effectiveAt($at ?? now())
+            ->with('tiers')
+            ->first();
     }
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountOwnerProfileController;
 use App\Http\Controllers\AccountPaymentController;
+use App\Http\Controllers\AccountSubscriptionController;
 use App\Http\Controllers\AccountTariffPaymentController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\AdminCustomerLoginController;
@@ -41,6 +42,8 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ManualScheduledClassController;
 use App\Http\Controllers\PeopleCounterReportController;
 use App\Http\Controllers\PeopleCounterScreenshotController;
+use App\Http\Controllers\Platform\AccountBillingEnrollmentController;
+use App\Http\Controllers\Platform\AccountBillingTariffController;
 use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
 use App\Http\Controllers\Platform\CustomerNotificationController as PlatformCustomerNotificationController;
@@ -52,6 +55,7 @@ use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\ProfileController as PlatformProfileController;
 use App\Http\Controllers\Platform\ScheduledTaskController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
+use App\Http\Controllers\Platform\SubscriptionPriceVersionController;
 use App\Http\Controllers\Platform\SystemSettingsController;
 use App\Http\Controllers\Platform\TelegramSupportController as PlatformTelegramSupportController;
 use App\Http\Controllers\PublicBookingController;
@@ -269,11 +273,29 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
         Route::get('scheduled-tasks', ScheduledTaskController::class)->name('scheduled-tasks.index');
         Route::get('payments', [PlatformPaymentController::class, 'index'])->name('payments.index');
         Route::resource('accounts', PlatformAccountController::class);
+        Route::post('accounts/{account}/billing/enroll', AccountBillingEnrollmentController::class)
+            ->name('accounts.billing.enroll');
+        Route::patch('accounts/{account}/billing/tariff', AccountBillingTariffController::class)
+            ->name('accounts.billing.tariff.update');
         Route::get('accounts/{account}/customer-auth', [PlatformCustomerAuthSettingsController::class, 'edit'])
             ->name('accounts.customer-auth.edit');
         Route::put('accounts/{account}/customer-auth', [PlatformCustomerAuthSettingsController::class, 'update'])
             ->name('accounts.customer-auth.update');
         Route::resource('subscription-plans', SubscriptionPlanController::class)->except(['show']);
+        Route::prefix('subscription-plans/{subscriptionPlan}/price-versions')
+            ->name('subscription-plans.price-versions.')
+            ->group(function (): void {
+                Route::get('/', [SubscriptionPriceVersionController::class, 'index'])->name('index');
+                Route::get('create', [SubscriptionPriceVersionController::class, 'create'])->name('create');
+                Route::post('/', [SubscriptionPriceVersionController::class, 'store'])->name('store');
+                Route::get('{priceVersion}/edit', [SubscriptionPriceVersionController::class, 'edit'])->name('edit');
+                Route::put('{priceVersion}', [SubscriptionPriceVersionController::class, 'update'])->name('update');
+                Route::get('{priceVersion}/preview', [SubscriptionPriceVersionController::class, 'preview'])->name('preview');
+                Route::post('{priceVersion}/schedule', [SubscriptionPriceVersionController::class, 'schedule'])->name('schedule');
+                Route::post('{priceVersion}/publish', [SubscriptionPriceVersionController::class, 'publish'])->name('publish');
+                Route::post('{priceVersion}/retire', [SubscriptionPriceVersionController::class, 'retire'])->name('retire');
+                Route::delete('{priceVersion}', [SubscriptionPriceVersionController::class, 'destroy'])->name('destroy');
+            });
     });
 
 Route::middleware(['auth:web', PreventReadOnlyDemoMutations::class, PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
@@ -296,6 +318,15 @@ Route::middleware(['auth:web', PreventReadOnlyDemoMutations::class, PreventExpir
             ->name('accounts.tariff-payments.show');
         Route::post('accounts/{account}/tariff-payments/pay-now', [AccountTariffPaymentController::class, 'payNow'])
             ->name('accounts.tariff-payments.pay-now');
+        Route::post('accounts/{account}/tariff-payments/subscribe', [AccountSubscriptionController::class, 'subscribe'])
+            ->name('accounts.tariff-payments.subscribe');
+        Route::delete('accounts/{account}/tariff-payments/subscription', [AccountSubscriptionController::class, 'cancel'])
+            ->name('accounts.tariff-payments.cancel');
+        Route::post('accounts/{account}/tariff-payments/subscription/resume', [AccountSubscriptionController::class, 'resume'])
+            ->name('accounts.tariff-payments.resume');
+        Route::post('accounts/{account}/tariff-payments/locations/{location}/approve', [AccountSubscriptionController::class, 'approveLocation'])
+            ->scopeBindings()
+            ->name('accounts.tariff-payments.locations.approve');
         Route::get('accounts/{account}/payments', [AccountPaymentController::class, 'index'])
             ->name('accounts.payments.index');
         Route::post('accounts/{account}/cash-entries', [StudioCashEntryController::class, 'store'])

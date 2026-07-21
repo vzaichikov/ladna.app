@@ -594,6 +594,11 @@ class Account extends Model
         return $this->hasMany(AccountSubscriptionPayment::class);
     }
 
+    public function subscriptionPaymentMethod(): HasOne
+    {
+        return $this->hasOne(AccountSubscriptionPaymentMethod::class);
+    }
+
     public function fiscalReceipts(): HasMany
     {
         return $this->hasMany(FiscalReceipt::class);

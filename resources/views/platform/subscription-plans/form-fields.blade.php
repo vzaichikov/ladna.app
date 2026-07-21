@@ -19,9 +19,9 @@
 
 <div class="grid gap-4 sm:grid-cols-3">
     <label class="block">
-        <span class="crm-label">{{ __('app.price_cents') }}</span>
-        <input name="price_cents" type="number" min="0" value="{{ old('price_cents', $plan->price_cents ?? 0) }}" required class="crm-field">
-        @error('price_cents') <span class="crm-help">{{ $message }}</span> @enderror
+        <span class="crm-label">{{ __('app.price_uah') }}</span>
+        <input name="price_uah" type="number" min="0" step="0.01" value="{{ old('price_uah', isset($plan->price_cents) ? number_format($plan->price_cents / 100, 2, '.', '') : '0.00') }}" required class="crm-field">
+        @error('price_uah') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="block">
         <span class="crm-label">{{ __('app.currency') }}</span>

@@ -4421,6 +4421,77 @@ function initPeopleCounterScreenshotViewer() {
     });
 }
 
+function initPublicPricingCalculators(root = document) {
+    root.querySelectorAll('[data-public-pricing]').forEach((calculator) => {
+        if (calculator.dataset.publicPricingReady === 'true') {
+            return;
+        }
+
+        const locationInput = calculator.querySelector('[data-pricing-location-count]');
+        const total = calculator.querySelector('[data-pricing-total]');
+        const period = calculator.querySelector('[data-pricing-period]');
+        const annualSavings = calculator.querySelector('[data-pricing-annual-savings]');
+        const locationLabel = calculator.querySelector('[data-pricing-location-label]');
+        const decrementButton = calculator.querySelector('[data-pricing-decrement]');
+        const incrementButton = calculator.querySelector('[data-pricing-increment]');
+        const intervalButtons = calculator.querySelectorAll('[data-pricing-interval]');
+
+        if (!locationInput || !total || !period || !annualSavings || !locationLabel) {
+            return;
+        }
+
+        let quotes;
+
+        try {
+            quotes = JSON.parse(calculator.dataset.pricingQuotes || '{}');
+        } catch {
+            return;
+        }
+
+        const minimumLocationCount = Number.parseInt(locationInput.min, 10);
+        const maximumLocationCount = Number.parseInt(locationInput.max, 10);
+        let interval = 'monthly';
+
+        const update = (requestedLocationCount = Number.parseInt(locationInput.value, 10)) => {
+            const locationCount = Math.min(
+                maximumLocationCount,
+                Math.max(minimumLocationCount, Number.isNaN(requestedLocationCount) ? minimumLocationCount : requestedLocationCount),
+            );
+            const quote = quotes[String(locationCount)];
+
+            if (!quote?.[interval]) {
+                return;
+            }
+
+            locationInput.value = String(locationCount);
+            total.textContent = quote[interval].total;
+            period.textContent = interval === 'annual'
+                ? calculator.dataset.pricingAnnualPeriod
+                : calculator.dataset.pricingMonthlyPeriod;
+            annualSavings.textContent = quote.annual.discount;
+            locationLabel.textContent = quote.location_label;
+            decrementButton?.toggleAttribute('disabled', locationCount <= minimumLocationCount);
+            incrementButton?.toggleAttribute('disabled', locationCount >= maximumLocationCount);
+        };
+
+        intervalButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                interval = button.dataset.pricingInterval;
+                intervalButtons.forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+                update();
+            });
+        });
+
+        decrementButton?.addEventListener('click', () => update(Number.parseInt(locationInput.value, 10) - 1));
+        incrementButton?.addEventListener('click', () => update(Number.parseInt(locationInput.value, 10) + 1));
+        locationInput.addEventListener('input', () => update());
+        locationInput.addEventListener('change', () => update());
+
+        calculator.dataset.publicPricingReady = 'true';
+        update();
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
     initSlugAutofill();
@@ -4452,6 +4523,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initAppUpdatePrompt();
     initPwaInstallPrompt();
     initPeopleCounterScreenshotViewer();
+    initPublicPricingCalculators();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {
         window.history.replaceState({ publicSchedule: true }, '', window.location.href);

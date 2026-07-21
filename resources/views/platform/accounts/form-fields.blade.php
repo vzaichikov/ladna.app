@@ -10,18 +10,30 @@
         </select>
         @error('status') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
-    <label class="block">
-        <span class="crm-label">{{ __('app.subscription_plan') }}</span>
-        <select name="subscription_plan_id" class="crm-field">
-            <option value="">-</option>
-            @foreach ($plans as $plan)
-                <option value="{{ $plan->id }}" @selected((int) old('subscription_plan_id', $account->subscription?->subscription_plan_id) === $plan->id)>{{ $plan->name }}</option>
-            @endforeach
-        </select>
-        @error('subscription_plan_id') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
+    @if ($account->subscription?->usesLocationBilling())
+        <div class="rounded-lg border border-violet-crm-100 bg-brand-50 p-4">
+            <div class="crm-label">{{ __('app.subscription_plan') }}</div>
+            <div class="mt-1 font-semibold text-slate-950">{{ $account->subscription->plan?->name ?? __('app.not_set') }}</div>
+            <p class="mt-2 text-sm leading-6 text-slate-600">{{ __('app.billing_v2_managed_separately') }}</p>
+            <input type="hidden" name="subscription_plan_id" value="{{ $account->subscription->subscription_plan_id }}">
+            <input type="hidden" name="subscription_status" value="{{ $account->subscription->status->value }}">
+            <input type="hidden" name="subscription_ends_at" value="{{ $account->subscription->ends_at?->timezone($account->timezone ?? config('app.timezone'))->toDateString() }}">
+        </div>
+    @else
+        <label class="block">
+            <span class="crm-label">{{ __('app.subscription_plan') }}</span>
+            <select name="subscription_plan_id" class="crm-field">
+                <option value="">-</option>
+                @foreach ($plans as $plan)
+                    <option value="{{ $plan->id }}" @selected((int) old('subscription_plan_id', $account->subscription?->subscription_plan_id) === $plan->id)>{{ $plan->name }}</option>
+                @endforeach
+            </select>
+            @error('subscription_plan_id') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+    @endif
 </div>
 
+@unless ($account->subscription?->usesLocationBilling())
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.subscription_status') }}</span>
@@ -38,6 +50,7 @@
         @error('subscription_ends_at') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
 </div>
+@endunless
 
 @unless ($account->exists)
     <section class="rounded-lg border border-slate-200 bg-slate-50 p-4">

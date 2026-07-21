@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Payments;
 use App\Enums\IntegrationProvider;
 use App\Http\Controllers\Controller;
 use App\Support\Payments\InvalidPaymentCallbackException;
+use App\Support\SaasBilling\ChargeSubscriptionAfterVerification;
 use App\Support\SaasBilling\CompleteAccountSubscriptionPayment;
+use App\Support\SaasBilling\CompletePaymentMethodVerification;
 use App\Support\SaasBilling\MonopaySaasBilling;
 use App\Support\SaasBilling\ResolveAccountSubscriptionPayment;
 use App\Support\SaasBilling\SaasPaymentCallbackLogger;
@@ -21,6 +23,8 @@ class SaasPaymentCallbackController extends Controller
         string $provider,
         MonopaySaasBilling $billing,
         CompleteAccountSubscriptionPayment $completePayment,
+        CompletePaymentMethodVerification $completeVerification,
+        ChargeSubscriptionAfterVerification $chargeAfterVerification,
         ResolveAccountSubscriptionPayment $resolvePayment,
         SaasPaymentCallbackLogger $logger,
     ): Response {
@@ -40,6 +44,17 @@ class SaasPaymentCallbackController extends Controller
 
         try {
             $callback = $billing->handleCallback($request, $setting);
+
+            if ($completeVerification->execute($callback)) {
+                $chargeAfterVerification->execute(
+                    $callback,
+                    $setting,
+                );
+                $logger->log(null, $provider, $orderId, $request, 'payment-method-verification-accepted');
+
+                return response('OK');
+            }
+
             $payment = $resolvePayment->execute(IntegrationProvider::Monopay->value, $callback);
 
             $logger->log($payment, $provider, $orderId, $request, 'received');

@@ -18,6 +18,8 @@ return [
         'EUR' => '€',
     ],
 
+    'saas_billing_v2_enabled' => env('LADNA_SAAS_BILLING_V2_ENABLED', false),
+
     'countries' => [
         'UA' => 'Ukraine',
         'PL' => 'Poland',

@@ -63,8 +63,89 @@
     <section class="mt-6 grid gap-4 md:grid-cols-3">
         <x-ui.metric :label="__('app.locations')" :value="$account->locations->count()" icon="locations" />
         <x-ui.metric :label="__('app.generated_classes')" :value="$account->scheduled_classes_count" icon="generated-classes" accent="brand" />
-        <x-ui.metric :label="__('app.subscription_plan')" :value="$account->subscription?->plan?->name ?? '-'" icon="platform" accent="emerald" />
+        <x-ui.metric :label="__('app.subscription_plan')" :value="$account->subscription?->plan?->name ?? '-'" icon="payments" accent="emerald" />
     </section>
+
+    @if ($account->subscription?->usesLocationBilling())
+        <x-ui.panel padding="lg" class="mt-6">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <div class="crm-page-kicker">{{ __('app.billing_v2') }}</div>
+                    <h2 class="mt-1 text-lg font-semibold text-slate-950">{{ __('app.billing_v2_enrolled') }}</h2>
+                    <p class="mt-2 text-sm text-slate-600">
+                        {{ __('app.billing_v2_account_summary', [
+                            'status' => __('app.'.$account->subscription->status->value),
+                            'locations' => $account->subscription->billable_location_count,
+                            'trial_end' => $account->subscription->trial_ends_at?->timezone($account->timezone)->format('d.m.Y') ?? __('app.not_set'),
+                            'plan' => $account->subscription->plan?->name ?? __('app.not_set'),
+                        ]) }}
+                    </p>
+                </div>
+                <span class="crm-status-active">{{ __('app.billing_v2_explicit_enrollment') }}</span>
+            </div>
+
+            @if ($account->subscription->pendingPriceVersion)
+                <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                    <div class="font-semibold">{{ __('app.billing_tariff_change_pending') }}</div>
+                    <p class="mt-1 leading-6">
+                        {{ __('app.billing_tariff_change_pending_copy', [
+                            'plan' => $account->subscription->pendingPriceVersion->plan?->name ?? __('app.not_set'),
+                            'date' => $account->subscription->pending_tariff_change_at?->timezone($account->timezone)->format('d.m.Y') ?? __('app.not_set'),
+                        ]) }}
+                    </p>
+                </div>
+            @endif
+
+            @if ($assignablePriceVersions->isNotEmpty())
+                <form method="POST" action="{{ route('platform.accounts.billing.tariff.update', $account) }}" class="mt-5 grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                    @csrf
+                    @method('PATCH')
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.billing_tariff_assignment') }}</span>
+                        <select name="subscription_price_version_id" required class="crm-field">
+                            @foreach ($assignablePriceVersions as $priceVersion)
+                                <option value="{{ $priceVersion->id }}" @selected((int) old('subscription_price_version_id', $account->subscription->pending_subscription_price_version_id ?? $account->subscription->subscription_price_version_id) === $priceVersion->id)>
+                                    {{ $priceVersion->plan->name }} · {{ $priceVersion->plan->public_signup_enabled ? __('app.public_tariff') : __('app.private_tariff') }} · {{ __('app.price_version_number', ['version' => $priceVersion->version]) }} · {{ __('app.from_price_per_location', ['price' => $formatMoney($priceVersion->tiers->first()?->unit_price_cents, $priceVersion->currency)]) }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('subscription_price_version_id') <span class="crm-help">{{ $message }}</span> @enderror
+                        @error('tariff') <span class="crm-help">{{ $message }}</span> @enderror
+                        <p class="crm-help">{{ __('app.billing_tariff_assignment_help') }}</p>
+                    </label>
+                    <x-ui.button type="submit">{{ __('app.change_billing_tariff') }}</x-ui.button>
+                </form>
+            @endif
+        </x-ui.panel>
+    @elseif ($assignablePriceVersions->isNotEmpty() && ! $account->isReadOnlyDemo())
+        <x-ui.panel padding="lg" class="mt-6 border-amber-200 bg-amber-50/50">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <div class="crm-page-kicker">{{ __('app.billing_v2') }}</div>
+                    <h2 class="mt-1 text-lg font-semibold text-slate-950">{{ __('app.billing_v2_not_enrolled') }}</h2>
+                    <p class="mt-2 max-w-2xl text-sm text-slate-600">
+                        {{ __('app.billing_v2_enrollment_warning') }}
+                    </p>
+                </div>
+                <form method="POST" action="{{ route('platform.accounts.billing.enroll', $account) }}" class="w-full max-w-xl" data-confirm-delete>
+                    @csrf
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.billing_tariff_assignment') }}</span>
+                        <select name="subscription_price_version_id" required class="crm-field">
+                            @foreach ($assignablePriceVersions as $priceVersion)
+                                <option value="{{ $priceVersion->id }}" @selected((int) old('subscription_price_version_id', $assignablePriceVersions->first()->id) === $priceVersion->id)>
+                                    {{ $priceVersion->plan->name }} · {{ $priceVersion->plan->public_signup_enabled ? __('app.public_tariff') : __('app.private_tariff') }} · {{ trans_choice('app.free_trial_days_count', $priceVersion->trial_days, ['count' => $priceVersion->trial_days]) }} · {{ __('app.from_price_per_location', ['price' => $formatMoney($priceVersion->tiers->first()?->unit_price_cents, $priceVersion->currency)]) }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('subscription_price_version_id') <span class="crm-help">{{ $message }}</span> @enderror
+                        @error('billing') <span class="crm-help">{{ $message }}</span> @enderror
+                    </label>
+                    <x-ui.button type="submit" class="mt-3">{{ __('app.billing_v2_start_trial') }}</x-ui.button>
+                </form>
+            </div>
+        </x-ui.panel>
+    @endif
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         <div class="border-b border-stone-100 p-5">

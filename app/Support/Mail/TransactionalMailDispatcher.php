@@ -2,6 +2,7 @@
 
 namespace App\Support\Mail;
 
+use App\Enums\AccountRole;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\CustomerPurchaseStatus;
 use App\Mail\TransactionalMail;
@@ -283,7 +284,7 @@ class TransactionalMailDispatcher
 
     public function saasPaymentResolved(AccountSubscriptionPayment $payment): void
     {
-        $payment->loadMissing(['account.users', 'subscription.plan', 'plan']);
+        $payment->loadMissing(['account', 'subscription.plan', 'plan']);
 
         if (! $payment->account || ! $payment->status->isFinal()) {
             return;
@@ -298,7 +299,8 @@ class TransactionalMailDispatcher
 
         $baseData = [
             ...$this->accountData($payment->account),
-            'plan_name' => $payment->plan?->name ?? $payment->subscription?->plan?->name,
+            'plan_name' => $payment->plan_name_snapshot ?: ($payment->plan?->name ?? $payment->subscription?->plan?->name),
+            'locations' => $payment->billable_location_count,
             'status' => __('app.'.$payment->status->value),
             'amount' => MoneyFormatter::format($payment->amount_cents, $payment->currency),
             'period' => $this->period($payment->period_starts_at, $payment->period_ends_at, $payment->account),
@@ -321,7 +323,7 @@ class TransactionalMailDispatcher
 
     public function saasSubscriptionExpired(AccountSubscription $subscription): void
     {
-        $subscription->loadMissing(['account.users', 'plan']);
+        $subscription->loadMissing(['account', 'plan']);
 
         if (! $subscription->account) {
             return;
@@ -329,7 +331,7 @@ class TransactionalMailDispatcher
 
         $baseData = [
             ...$this->accountData($subscription->account),
-            'plan_name' => $subscription->plan?->name,
+            'plan_name' => $parameters['plan'] ?? $subscription->plan?->name,
             'period_ends_at' => $this->formatDate($subscription->ends_at, $subscription->account),
             'action_url' => route('dashboard.accounts.tariff-payments.show', $subscription->account),
         ];
@@ -338,6 +340,38 @@ class TransactionalMailDispatcher
             return new TransactionalMail(
                 subjectKey: 'app.mail_subject_saas_subscription_expired',
                 contentView: 'mail.content.saas-subscription-expired',
+                data: [
+                    ...$baseData,
+                    'recipient_name' => $this->recipientName($user->name),
+                ],
+                subjectParameters: ['studio' => $subscription->account->name],
+            );
+        });
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $parameters
+     */
+    public function saasLifecycleNotice(AccountSubscription $subscription, string $type, array $parameters = []): void
+    {
+        $subscription->loadMissing(['account', 'plan']);
+
+        if (! $subscription->account) {
+            return;
+        }
+
+        $baseData = [
+            ...$this->accountData($subscription->account),
+            'notice_type' => $type,
+            'notice_parameters' => $parameters,
+            'plan_name' => $subscription->plan?->name,
+            'action_url' => route('dashboard.accounts.tariff-payments.show', $subscription->account),
+        ];
+
+        $this->sendToAccountOwners($subscription->account, function (User $user) use ($baseData, $subscription, $type): TransactionalMail {
+            return new TransactionalMail(
+                subjectKey: 'app.mail_subject_saas_'.$type,
+                contentView: 'mail.content.saas-lifecycle-notice',
                 data: [
                     ...$baseData,
                     'recipient_name' => $this->recipientName($user->name),
@@ -363,9 +397,9 @@ class TransactionalMailDispatcher
      */
     private function sendToAccountOwners(Account $account, callable $mailFactory): void
     {
-        $account->loadMissing('users');
-
-        $account->users
+        $account->users()
+            ->wherePivot('role', AccountRole::Owner->value)
+            ->get()
             ->filter(fn (User $user): bool => filled($user->email))
             ->unique(fn (User $user): string => mb_strtolower($user->email))
             ->each(function (User $user) use ($account, $mailFactory): void {

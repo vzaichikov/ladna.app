@@ -6,6 +6,7 @@
     __('app.mail_detail_plan') => $data['plan_name'] ?? null,
     __('app.mail_detail_status') => $data['status'] ?? null,
     __('app.mail_detail_amount') => $data['amount'] ?? null,
+    __('app.mail_detail_locations') => $data['locations'] ?? null,
     __('app.mail_detail_reason') => $data['failure_reason'] ?? null,
 ]])
 

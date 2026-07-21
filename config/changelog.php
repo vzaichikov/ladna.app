@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.88.0',
+                'date' => '2026-07-21',
+                'title' => 'Free trial and location-based Ladna billing',
+                'items' => ['Replaced the retired paid-demo flow with an explicitly enrolled 30-day full-feature trial that needs no card, plus database-driven pricing by active location shared by the landing calculator, owner billing, checkout, receipts, and payment history.', 'Owners can choose monthly billing or annual prepayment with a discount, securely verify a card through Mono without a charge, keep the full remaining trial, approve prorated location upgrades, cancel at period end, and retain access during the seven-day renewal grace period.', 'Added immutable price versions and graduated tiers, payment snapshots, advance price-change and renewal notices for owners only, safer signed and idempotent token-payment callbacks, updated terms, and a disabled-by-default rollout flag that leaves existing free and demo studios outside the new lifecycle.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.87.0',
                 'date' => '2026-07-20',
                 'title' => 'Clearer studio payment reporting',
@@ -779,6 +786,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.88.0',
+                'date' => '2026-07-21',
+                'title' => 'Безкоштовний пробний період і білінг за локаціями',
+                'items' => ['Замінили знятий з використання платний демо-процес на явно підключений 30-денний повнофункціональний пробний період без картки та додали ціни за активними локаціями з бази даних для калькулятора на лендінгу, білінгу власниці, оплати, чеків та історії.', 'Власниця може обрати щомісячну оплату або річну передоплату зі знижкою, без списання перевірити картку через Mono, зберегти весь залишок пробного періоду, підтверджувати пропорційну доплату за нові локації, скасувати підписку наприкінці періоду та мати доступ у семиденний пільговий період поновлення.', 'Додали незмінні версії цін і градуйовані рівні, знімки платежів, завчасні повідомлення про зміну ціни та поновлення лише власницям, безпечніші підписані й ідемпотентні callback-и токенізованих оплат, оновлені умови та вимкнений за замовчуванням прапорець запуску, який не підключає наявні безкоштовні й демо-студії.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.87.0',
                 'date' => '2026-07-20',

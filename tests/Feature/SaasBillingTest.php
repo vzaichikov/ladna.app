@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountRole;
+use App\Enums\AccountSignupStatus;
+use App\Enums\AccountStatus;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\IntegrationCategory;
@@ -15,17 +18,22 @@ use App\Models\AccountSubscriptionPayment;
 use App\Models\IntegrationSetting;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Support\DemoStudioFixture;
 use App\Support\Payments\PaymentAmounts;
+use App\Support\ReservedPublicSlugs;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
-use App\Support\SaasBilling\CreateDemoSignup;
 use App\Support\SaasBilling\MonopaySaasBilling;
 use App\Support\SaasBilling\StartAccountSubscriptionPaymentCheckout;
+use App\Support\SlugGenerator;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request as HttpClientRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -50,7 +58,7 @@ class SaasBillingTest extends TestCase
     public function test_demo_route_shows_prefilled_read_only_owner_login(): void
     {
         Account::factory()->demoReadonly()->create([
-            'slug' => 'ladna-demo',
+            'slug' => DemoStudioFixture::AccountSlug,
         ]);
 
         $this->get(route('demo.login'))
@@ -70,7 +78,7 @@ class SaasBillingTest extends TestCase
     public function test_landing_links_to_read_only_demo_without_tariff_prices(): void
     {
         Account::factory()->demoReadonly()->create([
-            'slug' => 'ladna-demo',
+            'slug' => DemoStudioFixture::AccountSlug,
         ]);
 
         $this->get(route('home'))
@@ -128,9 +136,9 @@ class SaasBillingTest extends TestCase
             'owner_password_confirmation' => 'secret123',
         ], $demoPlan);
 
-        $signup = AccountSignupRequest::firstOrFail();
-        $payment = AccountSubscriptionPayment::firstOrFail();
         $account = Account::where('slug', 'studio-one')->firstOrFail();
+        $signup = AccountSignupRequest::where('owner_email', 'owner-demo@example.com')->firstOrFail();
+        $payment = AccountSubscriptionPayment::whereBelongsTo($account)->firstOrFail();
         $owner = User::where('email', 'owner-demo@example.com')->firstOrFail();
         $subscription = $account->subscription()->firstOrFail();
 
@@ -149,8 +157,8 @@ class SaasBillingTest extends TestCase
 
         $this->get(route('dashboard.accounts.tariff-payments.show', $account))
             ->assertOk()
-            ->assertSee(__('app.demo_payment_required_title'))
-            ->assertSee('https://pay.example/demo', false);
+            ->assertSee(__('app.legacy_demo_payment_retired'))
+            ->assertDontSee('https://pay.example/demo', false);
 
         Http::assertSent(fn (HttpClientRequest $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
             && $request['paymentType'] === 'debit'
@@ -324,7 +332,7 @@ class SaasBillingTest extends TestCase
 
         $subscription = $account->subscription()->firstOrFail();
 
-        $this->assertSame('payment_paid', AccountSubscriptionPayment::firstOrFail()->status->value);
+        $this->assertSame('payment_paid', AccountSubscriptionPayment::whereBelongsTo($account)->firstOrFail()->status->value);
         $this->assertSame('account_created', $signup->fresh()->status->value);
         $this->assertSame(1, User::where('email', 'callback-owner@example.com')->count());
         $this->assertSame(SubscriptionStatus::Trialing, $subscription->status);
@@ -393,7 +401,7 @@ class SaasBillingTest extends TestCase
             'owner_password_confirmation' => 'retry-secret',
         ], $demoPlan);
 
-        $signup = AccountSignupRequest::firstOrFail();
+        $signup = AccountSignupRequest::where('owner_email', 'retry-owner@example.com')->firstOrFail();
         $account = Account::where('slug', 'retry-studio')->firstOrFail();
         $owner = User::where('email', 'retry-owner@example.com')->firstOrFail();
         $firstPayment = AccountSubscriptionPayment::whereBelongsTo($account)->firstOrFail();
@@ -417,17 +425,11 @@ class SaasBillingTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.tariff-payments.pay-now', $account))
-            ->assertRedirect(route('dashboard.accounts.tariff-payments.show', $account));
+            ->assertRedirect(route('dashboard.accounts.tariff-payments.show', $account))
+            ->assertSessionHasErrors('billing');
 
-        $retryPayment = AccountSubscriptionPayment::whereBelongsTo($account)
-            ->where('status', AccountSubscriptionPaymentStatus::PaymentStarted)
-            ->latest('id')
-            ->firstOrFail();
-
-        $this->assertNotSame($firstPayment->order_id, $retryPayment->order_id);
-        $this->assertSame(AccountSubscriptionPaymentType::DemoInitial, $retryPayment->payment_type);
-        $this->assertSame('invoice-demo-retry-2', $retryPayment->gateway_invoice_id);
-        $this->assertSame('https://pay.example/demo-retry-2', $retryPayment->checkoutUrl());
+        $this->assertSame(1, AccountSubscriptionPayment::whereBelongsTo($account)->count());
+        $this->assertSame(1, $invoiceCalls);
 
         Carbon::setTestNow();
     }
@@ -537,17 +539,21 @@ class SaasBillingTest extends TestCase
         $this->assertSame(0, AccountSubscriptionPayment::whereBelongsTo($account)->count());
     }
 
-    public function test_charmpole_account_one_can_receive_promo_access_without_payment_attempt(): void
+    public function test_existing_studio_can_receive_promo_access_without_payment_attempt(): void
     {
-        $account = Account::query()->find(1);
-
-        if (! $account) {
-            $this->markTestSkipped('Local Charmpole account #1 is not available.');
-        }
-
-        $owner = $account->users()->wherePivot('role', 'owner')->first() ?? User::factory()->create();
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
         $account->addOwner($owner);
         $paymentsBefore = AccountSubscriptionPayment::whereBelongsTo($account)->count();
+        $this->upsertPlan('standard-monthly', [
+            'name' => 'Standard monthly',
+            'price_cents' => 99900,
+            'currency' => 'UAH',
+            'plan_type' => SubscriptionPlanType::Standard,
+            'access_days' => 30,
+            'requires_recurring_payment' => true,
+            'public_signup_enabled' => false,
+        ]);
         $promoPlan = $this->upsertPlan('promo-access', [
             'name' => 'Gifted promo access',
             'price_cents' => 0,
@@ -654,15 +660,16 @@ class SaasBillingTest extends TestCase
             'owner_password_confirmation' => 'flow-secret',
         ], $demoPlan);
 
+        $signup = AccountSignupRequest::where('owner_email', 'flow-owner@example.com')->firstOrFail();
+
         Http::assertSent(fn (HttpClientRequest $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
             && $request['amount'] === 100
             && $request['ccy'] === PaymentAmounts::iso4217NumericCode('UAH')
             && $request['paymentType'] === 'debit'
             && $request['displayType'] === 'iframe'
-            && ($request['merchantPaymInfo']['reference'] ?? null) === AccountSignupRequest::firstOrFail()->order_id
+            && ($request['merchantPaymInfo']['reference'] ?? null) === $signup->order_id
             && ! array_key_exists('code', $request->data()));
 
-        $signup = AccountSignupRequest::firstOrFail();
         $account = Account::where('slug', 'flow-studio')->firstOrFail();
         $owner = User::where('email', 'flow-owner@example.com')->firstOrFail();
         $subscription = $account->subscription()->firstOrFail();
@@ -686,8 +693,8 @@ class SaasBillingTest extends TestCase
 
         $this->get(route('dashboard.accounts.tariff-payments.show', $account))
             ->assertOk()
-            ->assertSee(__('app.demo_payment_required_title'))
-            ->assertSee('https://pay.example/demo-flow', false);
+            ->assertSee(__('app.legacy_demo_payment_retired'))
+            ->assertDontSee('https://pay.example/demo-flow', false);
 
         $this->postSignedMonopayCallback($privateKey, [
             'invoiceId' => 'invoice-demo-flow',
@@ -878,8 +885,8 @@ class SaasBillingTest extends TestCase
 
         $this->artisan('billing:reconcile')
             ->assertSuccessful()
-            ->expectsOutputToContain('Checked auto-renew subscriptions: 1')
-            ->expectsOutputToContain('Marked past due: 1');
+            ->expectsOutputToContain('Checked legacy auto-renew subscriptions: 1')
+            ->expectsOutputToContain('Marked legacy past due: 1');
 
         $subscription = $subscription->fresh();
         $failedPayment = AccountSubscriptionPayment::whereBelongsTo($account)->firstOrFail();
@@ -955,7 +962,83 @@ class SaasBillingTest extends TestCase
      */
     private function createLegacyDemoSignup(array $attributes, SubscriptionPlan $plan): void
     {
-        [$signup, $payment, , $owner] = app(CreateDemoSignup::class)->execute($attributes, $plan);
+        [$signup, $payment, $owner] = DB::transaction(function () use ($attributes, $plan): array {
+            $slugBase = SlugGenerator::base((string) $attributes['studio_name'], 'studio');
+            $slug = $slugBase;
+            $suffix = 1;
+
+            while (
+                ReservedPublicSlugs::isReserved($slug)
+                || AccountSignupRequest::where('account_slug', $slug)->exists()
+                || Account::where('slug', $slug)->exists()
+            ) {
+                $slug = $slugBase.'-'.$suffix;
+                $suffix++;
+            }
+
+            $orderId = 'LEGACY-DEMO-'.now()->format('YmdHis').'-'.Str::upper(Str::random(10));
+            $account = Account::create([
+                'name' => $attributes['studio_name'],
+                'slug' => $slug,
+                'status' => AccountStatus::Active,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => $plan->currency,
+                'timezone' => 'Europe/Kyiv',
+            ]);
+            $account->ensureDefaultTrainerType();
+            $owner = User::create([
+                'name' => $attributes['owner_name'],
+                'email' => $attributes['owner_email'],
+                'phone' => $attributes['owner_phone'] ?? null,
+                'password' => $attributes['owner_password'],
+                'email_verified_at' => now(),
+            ]);
+            $account->users()->attach($owner, [
+                'role' => AccountRole::Owner->value,
+                'permissions' => null,
+            ]);
+            $subscription = $account->subscription()->create([
+                'subscription_plan_id' => $plan->id,
+                'status' => SubscriptionStatus::PendingPayment,
+                'started_at' => now(),
+                'payment_provider' => IntegrationProvider::Monopay->value,
+                'auto_renew_enabled' => false,
+            ]);
+            $signup = AccountSignupRequest::create([
+                'subscription_plan_id' => $plan->id,
+                'account_id' => $account->id,
+                'status' => AccountSignupStatus::PaymentStarted,
+                'provider' => IntegrationProvider::Monopay->value,
+                'order_id' => $orderId,
+                'studio_name' => $attributes['studio_name'],
+                'account_slug' => $slug,
+                'owner_name' => $attributes['owner_name'],
+                'owner_email' => $attributes['owner_email'],
+                'owner_phone' => $attributes['owner_phone'] ?? null,
+                'owner_password' => Hash::make((string) $attributes['owner_password']),
+                'default_language' => 'uk',
+                'timezone' => 'Europe/Kyiv',
+                'amount_cents' => $plan->price_cents,
+                'currency' => $plan->currency,
+                'expires_at' => now()->addHour(),
+            ]);
+            $payment = AccountSubscriptionPayment::create([
+                'account_id' => $account->id,
+                'account_subscription_id' => $subscription->id,
+                'subscription_plan_id' => $plan->id,
+                'account_signup_request_id' => $signup->id,
+                'provider' => IntegrationProvider::Monopay->value,
+                'payment_type' => AccountSubscriptionPaymentType::DemoInitial,
+                'order_id' => $orderId,
+                'amount_cents' => $plan->price_cents,
+                'currency' => $plan->currency,
+                'started_at' => now(),
+                'expires_at' => now()->addHour(),
+            ]);
+
+            return [$signup, $payment, $owner];
+        });
         $setting = app(MonopaySaasBilling::class)->platformSetting();
 
         $this->assertNotNull($setting);

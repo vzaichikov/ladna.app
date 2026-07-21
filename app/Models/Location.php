@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'name', 'slug', 'address', 'google_maps_embed_url', 'phone', 'email', 'timezone', 'is_active'])]
+#[Fillable(['account_id', 'name', 'slug', 'address', 'google_maps_embed_url', 'phone', 'email', 'timezone', 'is_active', 'billing_activation_pending'])]
 class Location extends Model
 {
     /** @use HasFactory<LocationFactory> */
@@ -28,6 +28,7 @@ class Location extends Model
     {
         return [
             'is_active' => 'boolean',
+            'billing_activation_pending' => 'boolean',
         ];
     }
 

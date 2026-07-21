@@ -88,13 +88,17 @@ class CompleteAccountSubscriptionPayment
                 && $status->isFinal()
                 && $lockedPayment->subscription
             ) {
-                $lockedPayment->subscription->forceFill([
-                    'status' => $lockedPayment->subscription->ends_at?->isFuture()
-                        ? SubscriptionStatus::PastDue
-                        : SubscriptionStatus::Expired,
-                    'provider_status' => $callback->gatewayStatus ?? $lockedPayment->subscription->provider_status,
-                    'auto_renew_enabled' => false,
-                ])->save();
+                if ($lockedPayment->subscription->usesLocationBilling()) {
+                    $this->markBillingV2Failure($lockedPayment, $callback);
+                } else {
+                    $lockedPayment->subscription->forceFill([
+                        'status' => $lockedPayment->subscription->ends_at?->isFuture()
+                            ? SubscriptionStatus::PastDue
+                            : SubscriptionStatus::Expired,
+                        'provider_status' => $callback->gatewayStatus ?? $lockedPayment->subscription->provider_status,
+                        'auto_renew_enabled' => false,
+                    ])->save();
+                }
             }
 
             return $lockedPayment->refresh();
@@ -119,7 +123,9 @@ class CompleteAccountSubscriptionPayment
     {
         $paidAt = $callback->paidAt ?? now();
 
-        if ($payment->payment_type === AccountSubscriptionPaymentType::DemoInitial) {
+        if ($payment->subscription?->usesLocationBilling()) {
+            $this->activateBillingV2($payment, $callback, $paidAt);
+        } elseif ($payment->payment_type === AccountSubscriptionPaymentType::DemoInitial) {
             $account = $this->activateDemoSignup($payment->signupRequest, $paidAt);
             $subscription = $account->subscription()->firstOrFail();
 
@@ -169,6 +175,125 @@ class CompleteAccountSubscriptionPayment
         ])->save();
 
         return $payment->refresh();
+    }
+
+    private function activateBillingV2(
+        AccountSubscriptionPayment $payment,
+        PaymentCallbackResult $callback,
+        Carbon $paidAt,
+    ): void {
+        $subscription = $payment->subscription;
+
+        if (! $subscription || ! $payment->period_ends_at) {
+            throw new InvalidPaymentCallbackException('Billing-v2 subscription period is unavailable.');
+        }
+
+        if ($payment->payment_type === AccountSubscriptionPaymentType::LocationUpgrade) {
+            $location = $payment->pendingLocation;
+
+            if ($location && $location->account_id === $payment->account_id && $location->billing_activation_pending) {
+                $location->forceFill([
+                    'is_active' => true,
+                    'billing_activation_pending' => false,
+                ])->save();
+            }
+
+            $subscription->forceFill([
+                'billable_location_count' => $payment->billable_location_count,
+                'provider_status' => $callback->gatewayStatus,
+            ])->save();
+        } else {
+            $appliesPendingTariff = $subscription->pending_subscription_price_version_id === $payment->subscription_price_version_id
+                && $subscription->pending_tariff_change_at
+                && $payment->period_starts_at?->greaterThanOrEqualTo($subscription->pending_tariff_change_at) === true;
+
+            $subscription->forceFill([
+                'subscription_plan_id' => $payment->subscription_plan_id,
+                'subscription_price_version_id' => $payment->subscription_price_version_id,
+                'pending_subscription_price_version_id' => $appliesPendingTariff
+                    ? null
+                    : $subscription->pending_subscription_price_version_id,
+                'pending_tariff_change_at' => $appliesPendingTariff
+                    ? null
+                    : $subscription->pending_tariff_change_at,
+                'status' => SubscriptionStatus::Active,
+                'billing_interval_v2' => $payment->billing_interval_snapshot,
+                'billable_location_count' => $payment->billable_location_count,
+                'started_at' => $payment->period_starts_at ?? $paidAt,
+                'ends_at' => $payment->period_ends_at,
+                'next_payment_at' => $payment->period_ends_at,
+                'billing_anchor_at' => $subscription->billing_anchor_at ?? $payment->period_starts_at ?? $paidAt,
+                'payment_provider' => $payment->provider,
+                'provider_status' => $callback->gatewayStatus,
+                'auto_renew_enabled' => true,
+                'grace_ends_at' => null,
+                'cancel_at_period_end' => false,
+                'cancellation_requested_at' => null,
+                'renewal_attempts' => 0,
+                'next_retry_at' => null,
+                'cancelled_at' => null,
+            ])->save();
+        }
+
+        $payment->forceFill([
+            'period_starts_at' => $payment->period_starts_at ?? $paidAt,
+            'period_ends_at' => $payment->period_ends_at,
+        ]);
+    }
+
+    private function markBillingV2Failure(
+        AccountSubscriptionPayment $payment,
+        PaymentCallbackResult $callback,
+    ): void {
+        $subscription = $payment->subscription;
+
+        if (! $subscription || $payment->payment_type === AccountSubscriptionPaymentType::LocationUpgrade) {
+            return;
+        }
+
+        if ($payment->payment_type !== AccountSubscriptionPaymentType::AutoRenewal) {
+            $trialIsCurrent = $subscription->trial_ends_at?->isFuture() === true;
+            $subscription->forceFill([
+                'status' => $trialIsCurrent ? SubscriptionStatus::Trialing : SubscriptionStatus::Expired,
+                'provider_status' => $callback->gatewayStatus ?? $subscription->provider_status,
+                'auto_renew_enabled' => false,
+                'grace_ends_at' => null,
+                'renewal_attempts' => 0,
+                'next_payment_at' => null,
+                'next_retry_at' => null,
+            ])->save();
+
+            return;
+        }
+
+        $attempt = max((int) $subscription->renewal_attempts, (int) $payment->renewal_attempt);
+        $requiresOwnerInteraction = $this->requiresOwnerInteraction($callback);
+        $nextRetryAt = match (true) {
+            $requiresOwnerInteraction, $attempt >= 3 => null,
+            $attempt <= 1 => now()->addDays(2),
+            default => now()->addDays(3),
+        };
+
+        $subscription->forceFill([
+            'status' => SubscriptionStatus::PastDue,
+            'provider_status' => $requiresOwnerInteraction
+                ? 'owner_interaction_required'
+                : ($callback->gatewayStatus ?? $subscription->provider_status),
+            'auto_renew_enabled' => true,
+            'grace_ends_at' => $subscription->grace_ends_at ?? now()->addDays(7),
+            'renewal_attempts' => $attempt,
+            'next_retry_at' => $nextRetryAt,
+        ])->save();
+    }
+
+    private function requiresOwnerInteraction(PaymentCallbackResult $callback): bool
+    {
+        $reason = strtolower(implode(' ', array_filter([
+            $callback->failureReason,
+            is_string($callback->payload['errCode'] ?? null) ? $callback->payload['errCode'] : null,
+        ])));
+
+        return str_contains($reason, '3ds') || str_contains($reason, '3-d secure');
     }
 
     private function activateDemoSignup(?AccountSignupRequest $signup, Carbon $paidAt): Account
