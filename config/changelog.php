@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.88.2',
+                'date' => '2026-07-21',
+                'title' => 'Verified card details from Mono',
+                'items' => ['Owner billing now shows the masked card number and brand when Mono returns this display information with the verified tokenized wallet.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.88.1',
                 'date' => '2026-07-21',
                 'title' => 'Accurate free-trial duration labels',
@@ -793,6 +800,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.88.2',
+                'date' => '2026-07-21',
+                'title' => 'Дані перевіреної картки Mono',
+                'items' => ['Білінг власниці тепер показує маскований номер і платіжну систему картки, коли Mono повертає ці дані разом із перевіреним токенізованим гаманцем.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.88.1',
                 'date' => '2026-07-21',

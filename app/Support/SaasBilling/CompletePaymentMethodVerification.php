@@ -75,11 +75,13 @@ class CompletePaymentMethodVerification
             $paymentInfo = is_array($callback->payload['paymentInfo'] ?? null)
                 ? $callback->payload['paymentInfo']
                 : [];
+            $maskedPan = $this->displayValue($paymentInfo, $walletData, 'maskedPan');
+            $paymentSystem = $this->displayValue($paymentInfo, $walletData, 'paymentSystem');
 
             $paymentMethod->forceFill([
                 'provider_card_token' => $cardToken,
-                'masked_pan' => is_string($paymentInfo['maskedPan'] ?? null) ? $paymentInfo['maskedPan'] : null,
-                'card_brand' => is_string($paymentInfo['paymentSystem'] ?? null) ? $paymentInfo['paymentSystem'] : null,
+                'masked_pan' => $maskedPan,
+                'card_brand' => $paymentSystem,
                 'status' => SubscriptionPaymentMethodStatus::Active,
                 'verified_at' => now(),
                 'revoked_at' => null,
@@ -93,5 +95,22 @@ class CompletePaymentMethodVerification
         $paymentMethod->save();
 
         return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $paymentInfo
+     * @param  array<string, mixed>  $walletData
+     */
+    private function displayValue(array $paymentInfo, array $walletData, string $key): ?string
+    {
+        foreach ([$paymentInfo, $walletData] as $source) {
+            $value = $source[$key] ?? null;
+
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 }

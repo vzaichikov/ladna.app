@@ -135,6 +135,53 @@ class MonopayTokenizedBillingTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_verification_accepts_card_display_metadata_inside_mono_wallet_data(): void
+    {
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'verify-wallet-metadata-invoice',
+                'pageUrl' => 'https://pay.example/verify-wallet-metadata-invoice',
+            ]),
+        ]);
+        $setting = $this->monopaySetting();
+        $subscription = $this->trialSubscription();
+
+        app(StartPaymentMethodVerification::class)->execute(
+            $subscription,
+            SubscriptionBillingInterval::Monthly,
+            $setting,
+            'https://ladna.local/return',
+        );
+
+        $paymentMethod = $subscription->paymentMethod()->firstOrFail();
+        $handled = app(CompletePaymentMethodVerification::class)->execute(new PaymentCallbackResult(
+            orderId: $paymentMethod->verification_reference,
+            status: PaymentCallbackStatus::Paid,
+            gatewayStatus: 'success',
+            amountCents: 0,
+            currency: 'UAH',
+            gatewayInvoiceId: 'verify-wallet-metadata-invoice',
+            payload: [
+                'walletData' => [
+                    'walletId' => $paymentMethod->provider_wallet_id,
+                    'cardToken' => 'wallet-metadata-card-token',
+                    'status' => 'created',
+                    'maskedPan' => '44411114******55',
+                    'paymentSystem' => 'visa',
+                ],
+            ],
+        ));
+
+        $paymentMethod->refresh();
+        $this->assertTrue($handled);
+        $this->assertTrue($paymentMethod->isActive());
+        $this->assertSame('44411114******55', $paymentMethod->masked_pan);
+        $this->assertSame('visa', $paymentMethod->card_brand);
+        $this->assertNotSame('wallet-metadata-card-token', DB::table('account_subscription_payment_methods')->where('id', $paymentMethod->id)->value('provider_card_token'));
+        $this->assertDatabaseCount('account_subscription_payments', 0);
+        $this->assertDatabaseCount('fiscal_receipts', 0);
+    }
+
     public function test_token_charge_uses_explicit_snapshot_amount_and_callback_activation_is_idempotent(): void
     {
         Mail::fake();
