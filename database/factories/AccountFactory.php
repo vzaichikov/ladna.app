@@ -53,4 +53,11 @@ class AccountFactory extends Factory
             'mode' => AccountMode::DemoReadonly->value,
         ]);
     }
+
+    public function internal(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'mode' => AccountMode::Internal->value,
+        ]);
+    }
 }

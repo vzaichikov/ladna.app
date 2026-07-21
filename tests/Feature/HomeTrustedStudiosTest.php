@@ -37,6 +37,12 @@ class HomeTrustedStudiosTest extends TestCase
             'ends_at' => now()->subDay(),
         ]);
 
+        $internalStudio = Account::factory()->internal()->create([
+            'name' => 'Internal Billing Verification Studio',
+            'slug' => 'internal-billing-verification-studio',
+        ]);
+        Location::factory()->for($internalStudio)->create(['is_active' => true]);
+
         $this->get(route('home'))
             ->assertOk()
             ->assertSee('Нам довіряють')
@@ -45,6 +51,8 @@ class HomeTrustedStudiosTest extends TestCase
             ->assertSee('brand/charmpole-icon.svg', false)
             ->assertSee(route('public.studio', $trustedStudio->slug), false)
             ->assertDontSee('Hidden Expired Studio')
-            ->assertDontSee(route('public.studio', $hiddenStudio->slug), false);
+            ->assertDontSee(route('public.studio', $hiddenStudio->slug), false)
+            ->assertDontSee('Internal Billing Verification Studio')
+            ->assertDontSee(route('public.studio', $internalStudio->slug), false);
     }
 }

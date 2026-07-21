@@ -38,15 +38,22 @@ class DemoStudioProvisioningTest extends TestCase
     {
         $live = Account::factory()->create();
         $demo = Account::factory()->demoReadonly()->create();
+        $internal = Account::factory()->internal()->create();
 
         $this->assertSame(AccountMode::Live, $live->mode);
         $this->assertSame(AccountMode::DemoReadonly, $demo->mode);
+        $this->assertSame(AccountMode::Internal, $internal->mode);
         $this->assertFalse($live->isReadOnlyDemo());
         $this->assertTrue($demo->isReadOnlyDemo());
+        $this->assertFalse($internal->isReadOnlyDemo());
         $this->assertTrue(Account::operational()->whereKey($live)->exists());
         $this->assertFalse(Account::operational()->whereKey($demo)->exists());
+        $this->assertFalse(Account::operational()->whereKey($internal)->exists());
         $this->assertTrue(Account::eligibleForScheduleGeneration()->whereKey($demo)->exists());
+        $this->assertFalse(Account::eligibleForScheduleGeneration()->whereKey($internal)->exists());
         $this->assertFalse(Account::publiclyDiscoverable()->whereKey($demo)->exists());
+        $this->assertFalse(Account::publiclyDiscoverable()->whereKey($internal)->exists());
+        $this->assertFalse(Account::includedInMetrics()->whereKey($internal)->exists());
     }
 
     public function test_demo_provision_command_is_a_non_mutating_dry_run_by_default(): void
