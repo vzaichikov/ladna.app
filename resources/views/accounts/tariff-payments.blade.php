@@ -40,7 +40,9 @@
             <x-ui.panel padding="lg" class="mt-6 border-emerald-200 bg-emerald-50/60">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                        <div class="crm-page-kicker">{{ __('app.free_trial') }}</div>
+                        <div class="crm-page-kicker">
+                            {{ trans_choice('app.free_trial_days_count', $subscription->priceVersion->trial_days, ['count' => $subscription->priceVersion->trial_days]) }}
+                        </div>
                         <h2 class="mt-1 text-xl font-semibold text-slate-950">
                             {{ __('app.trial_ends_exactly', ['date' => $subscription->trial_ends_at?->timezone($timezone)->format('d.m.Y H:i')]) }}
                         </h2>

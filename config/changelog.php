@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.88.1',
+                'date' => '2026-07-21',
+                'title' => 'Accurate free-trial duration labels',
+                'items' => ['Owner billing now shows the exact free-trial duration configured for the assigned tariff instead of assuming every tariff uses 30 days.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.88.0',
                 'date' => '2026-07-21',
                 'title' => 'Free trial and location-based Ladna billing',
@@ -786,6 +793,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.88.1',
+                'date' => '2026-07-21',
+                'title' => 'Точна тривалість безкоштовного періоду',
+                'items' => ['Сторінка білінгу власниці тепер показує тривалість безкоштовного періоду саме з призначеного тарифу, а не припускає, що кожен тариф має 30 днів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.88.0',
                 'date' => '2026-07-21',

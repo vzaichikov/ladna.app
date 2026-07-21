@@ -121,6 +121,35 @@ class BillingV2TariffAssignmentTest extends TestCase
         $this->assertDatabaseCount('account_subscription_payments', 0);
     }
 
+    public function test_owner_trial_label_uses_the_assigned_price_version_duration_in_both_locales(): void
+    {
+        [, $priceVersion] = $this->publishedTariff(
+            name: 'Ladna Billing Verification',
+            firstLocationPriceCents: 100,
+            public: false,
+            trialDays: 1,
+        );
+        $account = Account::factory()->create();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        Location::factory()->for($account)->create(['is_active' => true]);
+        app(StartAccountTrial::class)->execute($account, $priceVersion);
+
+        $this->actingAs($owner)
+            ->withSession(['locale' => 'uk'])
+            ->get(route('dashboard.accounts.tariff-payments.show', $account))
+            ->assertOk()
+            ->assertSeeText('1 день безкоштовно')
+            ->assertDontSeeText('30 днів безкоштовно');
+
+        $this->actingAs($owner)
+            ->withSession(['locale' => 'en'])
+            ->get(route('dashboard.accounts.tariff-payments.show', $account))
+            ->assertOk()
+            ->assertSeeText('1-day free trial')
+            ->assertDontSeeText('30-day free trial');
+    }
+
     public function test_paid_tariff_change_waits_for_notice_boundary_and_successful_matching_renewal(): void
     {
         [$publicPlan, $publicPrice] = $this->publishedTariff('Ladna Public', 90_000, true, 80_000);
@@ -240,6 +269,7 @@ class BillingV2TariffAssignmentTest extends TestCase
         int $firstLocationPriceCents,
         bool $public,
         ?int $laterLocationPriceCents = null,
+        int $trialDays = 30,
     ): array {
         $plan = SubscriptionPlan::factory()->create([
             'name' => $name,
@@ -249,7 +279,10 @@ class BillingV2TariffAssignmentTest extends TestCase
         ]);
         $priceVersion = SubscriptionPriceVersion::factory()
             ->for($plan, 'plan')
-            ->create(['version' => 1]);
+            ->create([
+                'version' => 1,
+                'trial_days' => $trialDays,
+            ]);
         $priceVersion->tiers()->createMany([
             [
                 'starts_at_location' => 1,
