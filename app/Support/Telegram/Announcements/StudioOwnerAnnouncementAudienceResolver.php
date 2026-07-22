@@ -111,6 +111,7 @@ final class StudioOwnerAnnouncementAudienceResolver
                 $recipients->push([
                     'authorization' => $authorization,
                     'owner' => $owner,
+                    'account' => $account,
                     'locale' => $account->default_language === 'en' ? 'en' : 'uk',
                     'resolution' => $authorization->user_id === null ? 'phone' : 'user_id',
                 ]);

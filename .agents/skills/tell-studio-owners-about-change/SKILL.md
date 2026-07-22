@@ -20,7 +20,7 @@ description: Use when the user explicitly asks to "tell customers about change",
      --en-file /absolute/path/message-en.txt
    ```
 
-6. Read the JSON result. Stop before sending if `ok` is false, the audience is empty, an integrity error exists, or the production/source facts are unexpected. Report eligible chat and language counts in commentary without exposing personal data.
+6. Read the JSON result. Stop before sending if `ok` is false, the audience is empty, an integrity error exists, or the production/source facts are unexpected. Report only eligible chat and language counts in preview commentary; do not expose owner names before execution or expose phone numbers, chat IDs, user IDs, or credentials at any time.
 7. Treat the user's explicit send wording as authorization. Do not ask for a second confirmation. Execute immediately with the previewed audience hash:
 
    ```bash
@@ -33,6 +33,16 @@ description: Use when the user explicitly asks to "tell customers about change",
 
 8. Re-run preview with the same files to monitor campaign statuses. Report sent, pending/processing, and failed counts truthfully; never claim complete delivery while retries remain.
 9. Remove temporary message files after the campaign reaches a terminal state.
+
+## Required Final Report
+
+After the campaign reaches a terminal state, report all of the following from the execute JSON and the final `statuses` without paraphrasing or inferring:
+
+- State the campaign outcome and list eligible chats and owners plus the final `statuses.sent`, `statuses.pending`, `statuses.processing`, and `statuses.failed` totals. Do not use the immediate `delivery` counters as final status. Distinguish the targeted audience from confirmed delivery.
+- List the execute result's `owners` entries as `Owner name — Studio name (Ukrainian|English)`. Label the section `Targeted owners (showing X of N)`. The command returns at most 10 distinct studio-owner memberships. If `owners_omitted` is greater than zero, add `N additional owners omitted` without attempting another query.
+- Reproduce the exact `messages.uk` text when `locales.uk` is greater than zero and the exact `messages.en` text when `locales.en` is greater than zero. Label each with its chat count. Call the text delivered only when `statuses.sent` equals `eligible_chats` and every other status is zero; otherwise call it submitted for delivery. If a variant has zero chats, state that it was not sent.
+- Include the production source ref and campaign hash for auditability.
+- Never include phone numbers, Telegram chat or user IDs, internal database IDs, bot tokens, or authorization-resolution details.
 
 ## Delivery Boundaries
 

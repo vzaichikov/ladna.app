@@ -57,12 +57,12 @@ class StudioOwnerAnnouncementTest extends TestCase
         Http::preventStrayRequests();
         $installation = TelegramBotInstallation::factory()->platformOwner()->create();
 
-        $ukAccount = Account::factory()->create(['default_language' => 'pl']);
-        $ukOwner = $this->addOwner($ukAccount, '+380671110001');
+        $ukAccount = Account::factory()->create(['name' => 'Kyiv Movement', 'default_language' => 'pl']);
+        $ukOwner = $this->addOwner($ukAccount, '+380671110001', 'Anna Owner');
         $this->authorize($installation, $ukAccount, $ukOwner, 'uk-owner-chat');
 
-        $enAccount = Account::factory()->create(['default_language' => 'en']);
-        $enOwner = $this->addOwner($enAccount, '+380671110002');
+        $enAccount = Account::factory()->create(['name' => 'Lviv Flow', 'default_language' => 'en']);
+        $enOwner = $this->addOwner($enAccount, '+380671110002', 'Emma Owner');
         $this->authorize($installation, $enAccount, null, 'en-owner-chat', $enOwner->phone);
 
         $disabledAccount = Account::factory()->create(['enable_telegram_alerts' => false]);
@@ -86,11 +86,56 @@ class StudioOwnerAnnouncementTest extends TestCase
 
         $this->assertSame(2, $result['eligible_chats']);
         $this->assertSame(2, $result['eligible_owners']);
+        $this->assertArrayNotHasKey('owners', $result);
+        $this->assertArrayNotHasKey('owners_omitted', $result);
         $this->assertSame(['uk' => 1, 'en' => 1], $result['locales']);
         $this->assertSame(1, $result['excluded']['owners_with_alerts_disabled']);
 
         $this->assertDatabaseCount((new TelegramAlert)->getTable(), 0);
         Http::assertNothingSent();
+    }
+
+    public function test_execute_limits_the_owner_report_to_ten_distinct_memberships(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['api.telegram.org/*' => Http::response([
+            'ok' => true,
+            'result' => ['message_id' => 100],
+        ])]);
+        $installation = TelegramBotInstallation::factory()->platformOwner()->create();
+
+        foreach (range(1, 12) as $number) {
+            $account = Account::factory()->create(['name' => sprintf('Studio %02d', $number)]);
+            $owner = $this->addOwner(
+                $account,
+                sprintf('+38068%07d', $number),
+                sprintf('Owner %02d', $number),
+            );
+            $this->authorize($installation, $account, $owner, 'owner-chat-'.$number);
+
+            if ($number === 1) {
+                $this->authorize($installation, $account, $owner, 'owner-second-chat-'.$number);
+            }
+        }
+
+        $audienceHash = app(StudioOwnerAnnouncementAudienceResolver::class)
+            ->resolve($installation)
+            ->hash();
+
+        $this->assertSame(0, Artisan::call('telegram:announce-studio-owners', $this->commandOptions([
+            '--execute' => true,
+            '--expected-audience-hash' => $audienceHash,
+        ])));
+        $result = json_decode(trim(Artisan::output()), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertCount(10, $result['owners']);
+        $this->assertSame('Owner 01', $result['owners'][0]['owner_name']);
+        $this->assertSame('Studio 10', $result['owners'][9]['studio_name']);
+        $this->assertSame(2, $result['owners_omitted']);
+        $this->assertSame(['owner_name', 'studio_name', 'locale'], array_keys($result['owners'][0]));
+
+        $this->assertSame(13, $result['statuses']['sent']);
+        $this->assertSame(13, TelegramAlert::query()->where('status', TelegramAlertStatus::Sent->value)->count());
     }
 
     public function test_execute_sends_localized_owner_messages_and_is_idempotent(): void
@@ -101,11 +146,11 @@ class StudioOwnerAnnouncementTest extends TestCase
             ->push(['ok' => true, 'result' => ['message_id' => 102]])]);
 
         $installation = TelegramBotInstallation::factory()->platformOwner()->create();
-        $ukAccount = Account::factory()->create(['default_language' => 'uk']);
-        $ukOwner = $this->addOwner($ukAccount, '+380672220001');
+        $ukAccount = Account::factory()->create(['name' => 'Kyiv Motion', 'default_language' => 'uk']);
+        $ukOwner = $this->addOwner($ukAccount, '+380672220001', 'Olena Owner');
         $ukAuthorization = $this->authorize($installation, $ukAccount, $ukOwner, 'uk-chat');
-        $enAccount = Account::factory()->create(['default_language' => 'en']);
-        $enOwner = $this->addOwner($enAccount, '+380672220002');
+        $enAccount = Account::factory()->create(['name' => 'Odesa Balance', 'default_language' => 'en']);
+        $enOwner = $this->addOwner($enAccount, '+380672220002', 'Emily Owner');
         $enAuthorization = $this->authorize($installation, $enAccount, null, 'en-chat', $enOwner->phone);
 
         $audienceHash = app(StudioOwnerAnnouncementAudienceResolver::class)
@@ -123,6 +168,15 @@ class StudioOwnerAnnouncementTest extends TestCase
         $this->assertSame('codex_skill', $result['execution_origin']);
         $this->assertNull($result['platform_user_id']);
         $this->assertSame(2, $result['delivery']['sent']);
+        $this->assertSame([
+            ['owner_name' => 'Olena Owner', 'studio_name' => 'Kyiv Motion', 'locale' => 'uk'],
+            ['owner_name' => 'Emily Owner', 'studio_name' => 'Odesa Balance', 'locale' => 'en'],
+        ], $result['owners']);
+        $this->assertSame(0, $result['owners_omitted']);
+        $this->assertSame([
+            'uk' => self::UkrainianMessage,
+            'en' => self::EnglishMessage,
+        ], $result['messages']);
 
         $this->assertSame(2, TelegramAlert::query()
             ->where('type', TelegramAlertType::OwnerAnnouncement->value)
@@ -360,9 +414,12 @@ class StudioOwnerAnnouncementTest extends TestCase
         ];
     }
 
-    private function addOwner(Account $account, string $phone): User
+    private function addOwner(Account $account, string $phone, ?string $name = null): User
     {
-        $owner = User::factory()->create(['phone' => $phone]);
+        $owner = User::factory()->create([
+            'phone' => $phone,
+            ...($name !== null ? ['name' => $name] : []),
+        ]);
         $account->addOwner($owner);
 
         return $owner;

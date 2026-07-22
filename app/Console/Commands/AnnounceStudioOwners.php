@@ -29,6 +29,8 @@ use JsonException;
 #[Description('Preview or send an internal CLI-only Ladna Bot announcement to current studio owners.')]
 class AnnounceStudioOwners extends Command
 {
+    private const ReportOwnerLimit = 10;
+
     private const TelegramMessageMaxLength = 4096;
 
     public function handle(
@@ -100,11 +102,14 @@ class AnnounceStudioOwners extends Command
             audienceHash: $audienceHash,
         );
         $delivery = $alertSender->sendAlertIds($alerts->modelKeys());
+        $ownerReport = $audience->ownerReport(self::ReportOwnerLimit);
 
         $this->writeResult([
             ...$result,
             'mode' => 'execute',
             'delivery' => $delivery,
+            'owners' => $ownerReport['owners'],
+            'owners_omitted' => $ownerReport['omitted'],
             'statuses' => $this->statusCounts($campaignHash),
         ]);
 
@@ -258,6 +263,22 @@ class AnnounceStudioOwners extends Command
             ['Ukrainian chats', (string) data_get($result, 'locales.uk', 0)],
             ['English chats', (string) data_get($result, 'locales.en', 0)],
         ]);
+
+        if (isset($result['owners']) && $result['owners'] !== []) {
+            $this->newLine();
+            $this->components->info('Owners (up to '.self::ReportOwnerLimit.')');
+            $this->table(
+                ['Owner', 'Studio', 'Locale'],
+                collect($result['owners'])
+                    ->map(fn (array $owner): array => [$owner['owner_name'], $owner['studio_name'], $owner['locale']])
+                    ->all(),
+            );
+
+            if ($result['owners_omitted'] > 0) {
+                $this->line('+ '.$result['owners_omitted'].' more owners not listed.');
+            }
+        }
+
         $this->newLine();
         $this->components->info('Ukrainian message');
         $this->line((string) data_get($result, 'messages.uk'));

@@ -2,6 +2,7 @@
 
 namespace App\Support\Telegram\Announcements;
 
+use App\Models\Account;
 use App\Models\TelegramChatAuthorization;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -10,7 +11,7 @@ use JsonException;
 final readonly class StudioOwnerAnnouncementAudience
 {
     /**
-     * @param  Collection<int, array{authorization: TelegramChatAuthorization, owner: User, locale: string, resolution: string}>  $recipients
+     * @param  Collection<int, array{authorization: TelegramChatAuthorization, owner: User, account: Account, locale: string, resolution: string}>  $recipients
      * @param  array{owners_without_authorized_chat: int, owners_without_phone: int, owners_with_alerts_disabled: int, ignored_non_owner_authorizations: int}  $excluded
      * @param  array<int, string>  $integrityErrors
      */
@@ -52,5 +53,25 @@ final readonly class StudioOwnerAnnouncementAudience
         return $this->recipients
             ->unique(fn (array $recipient): string => $recipient['authorization']->account_id.':'.$recipient['owner']->id)
             ->count();
+    }
+
+    /**
+     * @return array{owners: array<int, array{owner_name: string, studio_name: string, locale: string}>, omitted: int}
+     */
+    public function ownerReport(int $limit): array
+    {
+        $owners = $this->recipients
+            ->unique(fn (array $recipient): string => $recipient['authorization']->account_id.':'.$recipient['owner']->id)
+            ->map(fn (array $recipient): array => [
+                'owner_name' => $recipient['owner']->name,
+                'studio_name' => $recipient['account']->name,
+                'locale' => $recipient['locale'],
+            ])
+            ->values();
+
+        return [
+            'owners' => $owners->take($limit)->all(),
+            'omitted' => max(0, $owners->count() - $limit),
+        ];
     }
 }
