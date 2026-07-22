@@ -59,9 +59,7 @@
                                     @endforeach
                                 </select>
                             </form>
-                            <a href="{{ route('public.studio-rules', $account->slug) }}" class="text-sm font-semibold text-brand-700 transition hover:text-brand-600">
-                                {{ __('app.studio_rules') }}
-                            </a>
+                            <x-ui.public-legal-links :account="$account" :return-url="request()->fullUrl()" variant="text" />
                         </div>
                     </div>
                 </div>

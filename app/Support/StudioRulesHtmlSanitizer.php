@@ -92,8 +92,9 @@ class StudioRulesHtmlSanitizer
         $this->sanitizeChildren($root);
 
         $cleanHtml = trim($this->innerHtml($root));
+        $meaningfulText = preg_replace('/[\s\x{00A0}]+/u', '', (string) $root->textContent);
 
-        return $cleanHtml === '' ? null : $cleanHtml;
+        return $cleanHtml === '' || $meaningfulText === '' || $meaningfulText === null ? null : $cleanHtml;
     }
 
     private function sanitizeChildren(DOMNode $node): void

@@ -9,7 +9,7 @@
     >
     <span>
         {{ __('app.accept_studio_rules_prefix') }}
-        <a href="{{ route('public.studio-rules', $account->slug) }}" target="_blank" rel="noopener" class="font-semibold text-brand-700 transition hover:text-brand-600">
+        <a href="{{ route('public.studio-rules', ['accountSlug' => $account->slug, 'return_to' => request()->fullUrl()]) }}" target="_blank" rel="noopener" class="font-semibold text-brand-700 transition hover:text-brand-600" data-public-legal-link>
             {{ __('app.studio_rules_link_text') }}
         </a>.
     </span>

@@ -3133,6 +3133,14 @@ function replacePublicScheduleFragment(html) {
     return replacement;
 }
 
+function syncPublicLegalReturnUrls() {
+    document.querySelectorAll('a[data-public-legal-link]').forEach((link) => {
+        const url = new URL(link.href, window.location.origin);
+        url.searchParams.set('return_to', window.location.href);
+        link.href = url.toString();
+    });
+}
+
 async function loadPublicScheduleUrl(url, pushState = true) {
     const fragment = document.querySelector('[data-public-schedule-fragment]');
 
@@ -3169,6 +3177,8 @@ async function loadPublicScheduleUrl(url, pushState = true) {
         if (pushState) {
             window.history.pushState({ publicSchedule: true }, '', url);
         }
+
+        syncPublicLegalReturnUrls();
     } catch (error) {
         if (error.name === 'AbortError') {
             return;
@@ -4620,6 +4630,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPwaInstallPrompt();
     initPeopleCounterScreenshotViewer();
     initPublicPricingCalculators();
+    syncPublicLegalReturnUrls();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {
         window.history.replaceState({ publicSchedule: true }, '', window.location.href);

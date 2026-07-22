@@ -43,6 +43,11 @@
                             @endif
                         </div>
                     </div>
+                    @if (filled($account->studio_rules_html) || filled($account->public_offer_html))
+                        <div class="flex flex-wrap gap-2 lg:justify-end">
+                            <x-ui.public-legal-links :account="$account" :return-url="request()->fullUrl()" variant="landing" />
+                        </div>
+                    @endif
                 </div>
             </header>
 

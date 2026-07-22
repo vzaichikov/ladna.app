@@ -34,9 +34,7 @@
             </a>
         @endif
 
-        <a href="{{ route('public.studio-rules', $account->slug) }}" class="inline-flex items-center rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
-            {{ __('app.studio_rules') }}
-        </a>
+        <x-ui.public-legal-links :account="$account" :return-url="request()->fullUrl()" />
 
         <form method="POST" action="{{ route('locale.update') }}">
             @csrf

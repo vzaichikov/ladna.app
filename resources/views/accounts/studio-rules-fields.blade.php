@@ -26,3 +26,23 @@
         {{ __('app.open_public_studio_rules') }}
     </a>
 </div>
+
+<label class="block">
+    <span class="crm-label">{{ __('app.public_offer') }}</span>
+    <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.public_offer_help') }}</span>
+    <textarea
+        name="public_offer_html"
+        rows="18"
+        class="crm-field min-h-96"
+        data-studio-rules-editor
+        data-placeholder="{{ __('app.public_offer_editor_placeholder') }}"
+    >{{ old('public_offer_html', $account->public_offer_html) }}</textarea>
+    @error('public_offer_html') <span class="crm-help">{{ $message }}</span> @enderror
+</label>
+
+<div class="rounded-lg border border-stone-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+    {{ __('app.public_offer_public_help') }}
+    <a href="{{ route('public.studio-offer', $account->slug) }}" target="_blank" rel="noopener" class="font-semibold text-brand-700 transition hover:text-brand-600">
+        {{ __('app.open_public_offer') }}
+    </a>
+</div>

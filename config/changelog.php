@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.91.0',
+                'date' => '2026-07-23',
+                'title' => 'Studio rules and public offers',
+                'items' => ['Studio owners can now publish studio rules and a public offer agreement separately with the same formatted editor. Each completed document appears on the studio page, class-pass prices, schedules, and their embedded versions, while empty documents stay hidden.', 'Both branded document pages now have a clear Back action that returns clients to the exact public page they opened, including the selected schedule or price filters. General settings also provide separate open and copy actions, and owner help explains the complete flow.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.90.0',
                 'date' => '2026-07-22',
                 'title' => 'A calm path to the first reservation',
@@ -814,6 +821,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.91.0',
+                'date' => '2026-07-23',
+                'title' => 'Правила студії та публічна оферта',
+                'items' => ['Власниці студій тепер можуть окремо опублікувати правила студії та договір публічної оферти в однакових редакторах із форматуванням. Кожен заповнений документ зʼявляється на сторінці студії, у прайсі абонементів, розкладі та їх вбудованих версіях, а порожні документи залишаються прихованими.', 'На обох брендованих сторінках документів є зрозуміла кнопка Назад, яка повертає клієнта саме на відкриту сторінку зі збереженими фільтрами розкладу або прайсу. У Загальних налаштуваннях також є окремі дії для відкриття й копіювання посилань, а допомога пояснює весь процес.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.90.0',
                 'date' => '2026-07-22',

@@ -33,7 +33,7 @@
             href="{{ route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'rules']) }}"
             class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'rules' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
         >
-            {{ __('app.studio_rules') }}
+            {{ __('app.studio_rules_and_offer') }}
         </a>
         <a
             href="{{ route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']) }}"
@@ -275,6 +275,20 @@
                             {{ __('app.open_public_studio_rules') }}
                         </x-ui.button>
                         <x-ui.button type="button" variant="ghost" size="sm" data-copy-button data-copy-value="{{ route('public.studio-rules', $account->slug) }}" data-copy-success-label="{{ __('app.copied') }}">
+                            <x-ui.icon name="copy" class="h-4 w-4" />
+                            <span data-copy-label>{{ __('app.copy_link') }}</span>
+                        </x-ui.button>
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-lg border border-stone-200 bg-slate-50 p-4">
+                    <div class="text-sm font-semibold text-slate-950">{{ __('app.public_offer') }}</div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <x-ui.button :href="route('public.studio-offer', $account->slug)" variant="secondary" size="sm" target="_blank" rel="noopener">
+                            <x-ui.icon name="external" class="h-4 w-4" />
+                            {{ __('app.open_public_offer') }}
+                        </x-ui.button>
+                        <x-ui.button type="button" variant="ghost" size="sm" data-copy-button data-copy-value="{{ route('public.studio-offer', $account->slug) }}" data-copy-success-label="{{ __('app.copied') }}">
                             <x-ui.icon name="copy" class="h-4 w-4" />
                             <span data-copy-label>{{ __('app.copy_link') }}</span>
                         </x-ui.button>

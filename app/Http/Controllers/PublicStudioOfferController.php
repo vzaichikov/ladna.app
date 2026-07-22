@@ -9,7 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
 use Illuminate\View\View;
 
-class PublicStudioRulesController extends Controller
+class PublicStudioOfferController extends Controller
 {
     public function __invoke(Request $request, string $accountSlug, PublicLegalDocumentReturnUrl $returnUrl): View
     {
@@ -18,9 +18,9 @@ class PublicStudioRulesController extends Controller
 
         return view('public.legal-document', [
             'account' => $account,
-            'documentTitle' => __('app.studio_rules'),
-            'documentHtml' => $account->studio_rules_html,
-            'emptyMessage' => __('app.studio_rules_empty'),
+            'documentTitle' => __('app.public_offer'),
+            'documentHtml' => $account->public_offer_html,
+            'emptyMessage' => __('app.public_offer_empty'),
             'returnUrl' => $returnUrl->resolve($request, $account),
         ]);
     }

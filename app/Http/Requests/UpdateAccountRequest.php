@@ -64,6 +64,7 @@ class UpdateAccountRequest extends FormRequest
             'opening_hours.*.opens_at' => ['nullable', 'date_format:H:i'],
             'opening_hours.*.closes_at' => ['nullable', 'date_format:H:i'],
             'studio_rules_html' => ['nullable', 'string', 'max:50000'],
+            'public_offer_html' => ['nullable', 'string', 'max:50000'],
             'class_pass_cancellation_rules_present' => ['nullable', 'boolean'],
             'class_pass_cancellation_rules' => ['required_if:class_pass_cancellation_rules_present,1', 'array:return_sessions_enabled,return_sessions_count,extend_days_enabled,extend_days_count'],
             'class_pass_cancellation_rules.return_sessions_enabled' => ['nullable', 'boolean'],
@@ -166,10 +167,19 @@ class UpdateAccountRequest extends FormRequest
             ]);
         }
 
-        if ($this->input('brand_tab') === 'rules') {
-            $this->merge([
-                'studio_rules_html' => app(StudioRulesHtmlSanitizer::class)->sanitize($this->input('studio_rules_html')),
-            ]);
+        if ($this->has('studio_rules_html') || $this->has('public_offer_html')) {
+            $sanitizer = app(StudioRulesHtmlSanitizer::class);
+            $legalDocuments = [];
+
+            if ($this->has('studio_rules_html')) {
+                $legalDocuments['studio_rules_html'] = $sanitizer->sanitize($this->input('studio_rules_html'));
+            }
+
+            if ($this->has('public_offer_html')) {
+                $legalDocuments['public_offer_html'] = $sanitizer->sanitize($this->input('public_offer_html'));
+            }
+
+            $this->merge($legalDocuments);
         }
 
         if ($this->has('class_pass_cancellation_rules_present')) {

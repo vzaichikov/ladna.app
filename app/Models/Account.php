@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'trainer_private_timeframe_weeks'])]
+#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'public_offer_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'trainer_private_timeframe_weeks'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */

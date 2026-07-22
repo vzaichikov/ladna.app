@@ -67,6 +67,7 @@ use App\Http\Controllers\PublicDemoSignupController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\PublicStudioLandingController;
+use App\Http\Controllers\PublicStudioOfferController;
 use App\Http\Controllers\PublicStudioRulesController;
 use App\Http\Controllers\PwaController;
 use App\Http\Controllers\QuickBookingController;
@@ -624,6 +625,9 @@ Route::get('/{accountSlug}', PublicStudioLandingController::class)
 Route::get('/{accountSlug}/rules', PublicStudioRulesController::class)
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.studio-rules');
+Route::get('/{accountSlug}/offer', PublicStudioOfferController::class)
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->name('public.studio-offer');
 Route::get('/{accountSlug}/{locationSlug}/schedule', [PublicScheduleController::class, 'show'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.schedule');
