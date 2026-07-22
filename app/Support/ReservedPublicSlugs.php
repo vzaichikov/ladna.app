@@ -17,6 +17,7 @@ class ReservedPublicSlugs
         'dashboard',
         'demo',
         'en',
+        'features',
         'help',
         'locale',
         'login',

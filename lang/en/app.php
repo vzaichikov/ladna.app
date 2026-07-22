@@ -46,7 +46,7 @@ return [
         'pain_copy' => 'Ladna is not just a prettier schedule. It understands how boutique studios sell visits, accept bookings, cancel classes, compensate clients, and keep every active pass clear.',
         'pain_items' => [
             ['title' => 'No manual visit counting', 'copy' => 'Used, reserved, and remaining sessions stay tied to the booking ledger.'],
-            ['title' => 'No lost website or Telegram leads', 'copy' => 'Incoming requests can move from website or chat context into real studio bookings.'],
+            ['title' => 'Website leads do not get lost', 'copy' => 'A new website form request can quickly become a real studio booking.'],
             ['title' => 'No confusion after cancelled class', 'copy' => 'Cancelled or restored classes keep bookings and pass reservations understandable.'],
             ['title' => 'No Google Sheets schedule chaos', 'copy' => 'Recurring groups, private lessons, and room rental slots live in one calendar.'],
             ['title' => 'No guessing which pass fits', 'copy' => 'Pass suitability follows class format, trainer level, room, expiry, and available sessions.'],

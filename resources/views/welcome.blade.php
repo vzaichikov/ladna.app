@@ -5,6 +5,7 @@
 @section('content')
     @php
         $landing = __('app.landing');
+        $features = __('features');
         $demoAvailable = $demoAvailable ?? false;
         $trustedStudios = collect($trustedStudios ?? []);
         $publicPricing = $publicPricing ?? null;
@@ -16,6 +17,8 @@
         $loginHref = $currentLandingLocale === 'en' ? route('login.en') : route('login');
         $headerAuthHref = auth()->check() ? route('dashboard.index') : $loginHref;
         $headerAuthLabel = auth()->check() ? __('app.dashboard') : __('app.login');
+        $homeHref = $currentLandingLocale === 'en' ? route('home.en') : route('home');
+        $featuresHref = $currentLandingLocale === 'en' ? route('features.en') : route('features');
         $primaryHref = auth()->check()
             ? route('dashboard.index')
             : ($publicOwnerOnboardingAvailable ? route('register') : route('demo.login', [], false));
@@ -23,35 +26,13 @@
             'uk' => ['label' => 'UA', 'href' => route('home')],
             'en' => ['label' => 'EN', 'href' => route('home.en')],
         ];
-        $featureSections = [
-            [
-                'id' => 'schedule',
-                'title' => $landing['rhythm_title'],
-                'copy' => $landing['rhythm_copy'],
-                'items' => $landing['rhythm_items'],
-                'icon' => 'calendar-days',
-            ],
-            [
-                'id' => 'passes',
-                'title' => $landing['passes_title'],
-                'copy' => $landing['passes_copy'],
-                'items' => $landing['passes_items'],
-                'icon' => 'ticket-check',
-            ],
-            [
-                'id' => 'clients',
-                'title' => $landing['clients_title'],
-                'copy' => $landing['clients_copy'],
-                'items' => $landing['clients_items'],
-                'icon' => 'heart-handshake',
-            ],
-            [
-                'id' => 'team',
-                'title' => $landing['team_title'],
-                'copy' => $landing['team_copy'],
-                'items' => $landing['team_items'],
-                'icon' => 'users-round',
-            ],
+        $landingFeatureIcons = [
+            'today' => 'layout-dashboard',
+            'schedule' => 'calendar-days',
+            'clients' => 'heart-handshake',
+            'passes' => 'ticket-check',
+            'team' => 'users-round',
+            'money' => 'chart-no-axes-combined',
         ];
     @endphp
 
@@ -65,45 +46,17 @@
             </div>
 
             <div class="relative mx-auto flex max-w-7xl flex-col">
-                <header class="flex items-center justify-between gap-4">
-                    <a href="{{ route('home') }}" class="inline-flex items-center gap-3 text-[#2B1731]">
-                        <x-ui.app-logo
-                            mark-class="h-10 w-10"
-                            text-class="text-[#2B1731]"
-                        />
-                    </a>
-
-                    <nav class="hidden items-center gap-8 text-sm font-semibold text-[#4D3152] md:flex" aria-label="Landing navigation">
-                        <a href="#schedule" class="transition hover:text-[#2B1731]">{{ $landing['nav_schedule'] }}</a>
-                        <a href="#passes" class="transition hover:text-[#2B1731]">{{ $landing['nav_passes'] }}</a>
-                        <a href="#clients" class="transition hover:text-[#2B1731]">{{ $landing['nav_clients'] }}</a>
-                        <a href="#team" class="transition hover:text-[#2B1731]">{{ $landing['nav_team'] }}</a>
-                        @if ($publicPricing)
-                            <a href="#pricing" class="transition hover:text-[#2B1731]">{{ $landing['nav_pricing'] }}</a>
-                        @endif
-                    </nav>
-
-                    <div class="flex items-center gap-2">
-                        <nav class="inline-flex h-10 items-center rounded-lg border border-[#A78AB9]/30 bg-white/70 p-1 shadow-xs" aria-label="{{ __('app.default_language') }}">
-                            @foreach ($landingLocales as $locale => $localeOption)
-                                <a
-                                    href="{{ $localeOption['href'] }}"
-                                    @class([
-                                        'flex h-8 min-w-9 items-center justify-center rounded-md px-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2',
-                                        'bg-[#3B223F] text-white shadow-[0_8px_18px_rgba(59,34,63,0.16)]' => $currentLandingLocale === $locale,
-                                        'text-[#4D3152] hover:bg-[#DCCFF0]/45 hover:text-[#2B1731]' => $currentLandingLocale !== $locale,
-                                    ])
-                                >
-                                    {{ $localeOption['label'] }}
-                                </a>
-                            @endforeach
-                        </nav>
-
-                        <a href="{{ $headerAuthHref }}" data-landing-header-auth class="inline-flex h-10 items-center justify-center rounded-lg bg-[#3B223F] px-4 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(59,34,63,0.2)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
-                            {{ $headerAuthLabel }}
-                        </a>
-                    </div>
-                </header>
+                <x-marketing.header
+                    :auth-href="$headerAuthHref"
+                    :auth-label="$headerAuthLabel"
+                    :current-locale="$currentLandingLocale"
+                    :features-href="$featuresHref"
+                    flow-href="#flow"
+                    :home-href="$homeHref"
+                    :locale-links="$landingLocales"
+                    :pricing-href="$publicPricing ? '#pricing' : null"
+                    :studios-href="$trustedStudios->isNotEmpty() ? '#trusted-studios' : null"
+                />
 
                 <div class="grid flex-1 gap-8 py-10 lg:min-h-[calc(86vh-5rem)] lg:grid-cols-[0.94fr_1.06fr] lg:items-center lg:py-6">
                     <div class="max-w-3xl">
@@ -125,7 +78,7 @@
                                     {{ $landing['final_cta'] }}
                                 </a>
                             @endif
-                            <a href="#flow" class="inline-flex h-12 items-center justify-center rounded-lg border border-[#A78AB9]/30 bg-white/70 px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                            <a href="{{ $featuresHref }}" class="inline-flex h-12 items-center justify-center rounded-lg border border-[#A78AB9]/30 bg-white/70 px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
                                 {{ $landing['hero_secondary'] }}
                             </a>
                             <a href="{{ route('customer.login') }}" class="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-[#A78AB9]/30 bg-white/70 px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
@@ -273,32 +226,30 @@
             </section>
         @endif
 
-        <section class="px-5 py-20 sm:px-8 lg:px-10">
-            <div class="mx-auto grid max-w-7xl gap-16">
-                @foreach ($featureSections as $section)
-                    <article id="{{ $section['id'] }}" class="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-start">
-                        <div class="lg:sticky lg:top-8">
-                            <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-[#3B223F] text-white shadow-[0_16px_30px_rgba(59,34,63,0.18)]">
-                                <x-ui.icon :name="$section['icon']" class="h-5 w-5" />
-                            </span>
-                            <h2 class="mt-5 text-3xl font-semibold leading-tight text-[#2B1731] sm:text-4xl">
-                                {{ $section['title'] }}
-                            </h2>
-                            <p class="mt-4 text-base leading-7 text-[#4D3152]/75">
-                                {{ $section['copy'] }}
-                            </p>
-                        </div>
+        <section id="capabilities" class="relative px-5 py-20 sm:px-8 lg:px-10">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_12%_22%,rgba(167,138,185,0.1),transparent_26%),radial-gradient(circle_at_88%_72%,rgba(231,221,201,0.46),transparent_28%)]" aria-hidden="true"></div>
+            <div class="relative mx-auto max-w-7xl">
+                <div class="max-w-3xl">
+                    <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[#7F6189]">{{ $features['landing_overview']['eyebrow'] }}</p>
+                    <h2 class="mt-3 text-3xl font-semibold leading-tight text-[#2B1731] sm:text-5xl">{{ $features['landing_overview']['title'] }}</h2>
+                    <p class="mt-5 text-base leading-7 text-[#4D3152]/75 sm:text-lg sm:leading-8">{{ $features['landing_overview']['copy'] }}</p>
+                </div>
 
-                        <div class="grid gap-3 sm:grid-cols-3">
-                            @foreach ($section['items'] as $item)
-                                <div class="min-h-44 rounded-lg border border-[#E7DDC9]/80 bg-white/70 p-5 shadow-[0_16px_34px_rgba(59,34,63,0.05)]">
-                                    <div class="h-1.5 w-16 rounded-full bg-gradient-to-r from-[#3B223F] via-[#A78AB9] to-[#E7DDC9]"></div>
-                                    <p class="mt-8 text-lg font-semibold leading-7 text-[#2B1731]">{{ $item }}</p>
-                                </div>
-                            @endforeach
-                        </div>
-                    </article>
-                @endforeach
+                <div class="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach ($features['sections'] as $sectionId => $section)
+                        <a href="{{ $featuresHref }}#{{ $sectionId }}" class="group flex min-h-56 flex-col rounded-lg border border-[#E7DDC9]/80 bg-white/78 p-5 shadow-[0_16px_38px_rgba(59,34,63,0.06)] transition hover:-translate-y-0.5 hover:border-[#A78AB9]/55 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                            <span class="flex h-11 w-11 items-center justify-center rounded-lg bg-[#3B223F] text-white shadow-[0_12px_26px_rgba(59,34,63,0.18)]">
+                                <x-ui.icon :name="$landingFeatureIcons[$sectionId]" class="h-5 w-5" />
+                            </span>
+                            <h3 class="mt-5 text-xl font-semibold leading-7 text-[#2B1731]">{{ $section['short_title'] }}</h3>
+                            <p class="mt-3 flex-1 text-sm leading-6 text-[#4D3152]/75">{{ $section['card_copy'] }}</p>
+                            <span class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#3B223F]">
+                                {{ $features['landing_overview']['link'] }}
+                                <x-ui.icon name="arrow-right" class="h-4 w-4 transition group-hover:translate-x-0.5" />
+                            </span>
+                        </a>
+                    @endforeach
+                </div>
             </div>
         </section>
 
@@ -352,31 +303,5 @@
 @endsection
 
 @section('publicFooter')
-    @php
-        $localizedSuffix = app()->getLocale() === 'uk' ? 'ua' : 'en';
-        $applicationVersion = $applicationVersion ?? \App\Support\ApplicationVersion::current();
-    @endphp
-
-    <footer class="border-t border-[#E7DDC9]/80 bg-[#FAF8F5] px-5 py-6 text-sm text-[#4D3152]/70 sm:px-8 lg:px-10">
-        <div class="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p>
-                &copy; {{ now()->year }} {{ __('app.app_name') }}. {{ __('app.app_tagline') }}.
-                <span class="whitespace-nowrap">{{ __('app.version') }} {{ $applicationVersion }}</span>
-            </p>
-            <nav class="flex flex-wrap gap-x-5 gap-y-2 font-semibold" aria-label="{{ __('app.footer_links') }}">
-                <a href="{{ route('terms.'.$localizedSuffix) }}" class="text-[#3B223F] transition hover:text-[#2B1731]">
-                    {{ __('app.terms_of_service') }}
-                </a>
-                <a href="{{ route('privacy.'.$localizedSuffix) }}" class="text-[#3B223F] transition hover:text-[#2B1731]">
-                    {{ __('app.privacy_policy') }}
-                </a>
-                <a href="{{ route('changelog.'.$localizedSuffix) }}" class="text-[#3B223F] transition hover:text-[#2B1731]">
-                    {{ __('app.whats_new') }}
-                </a>
-                <a href="{{ route('help.index') }}" class="text-[#3B223F] transition hover:text-[#2B1731]">
-                    {{ __('app.help') }}
-                </a>
-            </nav>
-        </div>
-    </footer>
+    <x-marketing.footer :application-version="$applicationVersion ?? null" />
 @endsection

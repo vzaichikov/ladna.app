@@ -38,6 +38,16 @@ class HomeController extends Controller
         return $this->show($request, 'en');
     }
 
+    public function featuresUkrainian(Request $request): View|RedirectResponse
+    {
+        return $this->showFeatures($request, 'uk');
+    }
+
+    public function featuresEnglish(Request $request): View|RedirectResponse
+    {
+        return $this->showFeatures($request, 'en');
+    }
+
     public function app(Request $request): RedirectResponse
     {
         if ($redirect = $this->redirectForAuthenticatedUser($request)) {
@@ -53,9 +63,7 @@ class HomeController extends Controller
 
     private function show(Request $request, string $locale): View|RedirectResponse
     {
-        App::setLocale($locale);
-        Carbon::setLocale($locale);
-        $request->session()->put('locale', $locale);
+        $this->setLocale($request, $locale);
 
         if ($redirect = $this->redirectForAuthenticatedUser($request)) {
             return $redirect;
@@ -66,6 +74,23 @@ class HomeController extends Controller
         }
 
         return view('welcome', $this->landingData());
+    }
+
+    private function showFeatures(Request $request, string $locale): View|RedirectResponse
+    {
+        $this->setLocale($request, $locale);
+
+        return view('features', [
+            ...$this->marketingData(),
+            'trustedStudiosAvailable' => $this->trustedStudios()->isNotEmpty(),
+        ]);
+    }
+
+    private function setLocale(Request $request, string $locale): void
+    {
+        App::setLocale($locale);
+        Carbon::setLocale($locale);
+        $request->session()->put('locale', $locale);
     }
 
     private function redirectForAuthenticatedUser(Request $request): ?RedirectResponse
@@ -133,6 +158,17 @@ class HomeController extends Controller
      */
     private function landingData(): array
     {
+        return [
+            ...$this->marketingData(),
+            'trustedStudios' => $this->trustedStudios(),
+        ];
+    }
+
+    /**
+     * @return array{demoAvailable: bool, publicPricing: array<string, mixed>|null, publicOwnerOnboardingAvailable: bool}
+     */
+    private function marketingData(): array
+    {
         $demoAccount = Account::query()
             ->active()
             ->where('slug', DemoStudioFixture::AccountSlug)
@@ -140,7 +176,6 @@ class HomeController extends Controller
 
         return [
             'demoAvailable' => $demoAccount?->isReadOnlyDemo() ?? false,
-            'trustedStudios' => $this->trustedStudios(),
             'publicPricing' => $this->publicPricingPresenter->current(),
             'publicOwnerOnboardingAvailable' => $this->ownerOnboardingAvailability->isAvailable(),
         ];
