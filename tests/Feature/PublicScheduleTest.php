@@ -62,6 +62,7 @@ class PublicScheduleTest extends TestCase
             'default_language' => 'en',
             'timezone' => 'Europe/Kyiv',
             'support_whatsapp_url' => 'https://wa.me/380501234567',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'test-location-1', 'name' => 'Location 1']);
         $otherLocation = Location::factory()->for($account)->create(['slug' => 'test-location-2']);
@@ -111,18 +112,35 @@ class PublicScheduleTest extends TestCase
             ->assertDontSee($serviceRoom->name);
     }
 
-    public function test_public_schedule_defaults_to_classic_view_for_existing_studios(): void
+    public function test_new_studios_default_to_compact_public_schedule_view(): void
     {
         $account = Account::factory()->create([
-            'slug' => 'test-default-classic-studio',
+            'slug' => 'test-default-compact-studio',
             'default_language' => 'en',
             'timezone' => 'UTC',
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
 
+        $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
+
+        $this->get('/test-default-compact-studio/main/schedule')
+            ->assertOk()
+            ->assertSee('group_panel=class_type', false);
+    }
+
+    public function test_existing_studios_can_keep_the_classic_public_schedule_view(): void
+    {
+        $account = Account::factory()->create([
+            'slug' => 'test-explicit-classic-studio',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
+        ]);
+        Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+
         $this->assertSame(PublicScheduleView::Classic, $account->publicScheduleView());
 
-        $this->get('/test-default-classic-studio/main/schedule')
+        $this->get('/test-explicit-classic-studio/main/schedule')
             ->assertOk()
             ->assertSee(__('app.schedule_period_week'))
             ->assertDontSee(__('app.schedule_kind'));
@@ -381,7 +399,11 @@ class PublicScheduleTest extends TestCase
 
     public function test_public_schedule_xhr_returns_only_schedule_fragment(): void
     {
-        $account = Account::factory()->create(['slug' => 'test-fragment-studio', 'timezone' => 'UTC']);
+        $account = Account::factory()->create([
+            'slug' => 'test-fragment-studio',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
+        ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
         $classType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::GroupClass->value]);
@@ -423,6 +445,7 @@ class PublicScheduleTest extends TestCase
             'slug' => 'test-booking-cutoff-studio',
             'default_language' => 'uk',
             'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
@@ -457,7 +480,10 @@ class PublicScheduleTest extends TestCase
 
     public function test_private_lesson_and_room_rental_class_types_are_not_public(): void
     {
-        $account = Account::factory()->create(['slug' => 'test-private-kind-studio']);
+        $account = Account::factory()->create([
+            'slug' => 'test-private-kind-studio',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
+        ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main']);
         $room = Room::factory()->for($account)->for($location)->create();
         $privateType = ClassType::factory()->for($account)->create(['schedule_kind' => 'private_lesson']);
@@ -485,6 +511,7 @@ class PublicScheduleTest extends TestCase
                 ScheduleKind::GroupClass->value,
                 ScheduleKind::PrivateLesson->value,
             ],
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
         ]);
         Location::factory()->for($account)->create(['slug' => 'main']);
 
@@ -502,6 +529,7 @@ class PublicScheduleTest extends TestCase
             'slug' => 'test-full-public-class-studio',
             'default_language' => 'uk',
             'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
@@ -538,6 +566,7 @@ class PublicScheduleTest extends TestCase
             'slug' => 'test-customer-public-schedule-studio',
             'default_language' => 'uk',
             'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
@@ -578,6 +607,7 @@ class PublicScheduleTest extends TestCase
         $account = Account::factory()->create([
             'slug' => 'test-english-studio',
             'default_language' => 'en',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
         ]);
         Location::factory()->for($account)->create(['slug' => 'main']);
 
@@ -594,6 +624,7 @@ class PublicScheduleTest extends TestCase
             'slug' => 'test-ukrainian-studio',
             'default_language' => 'uk',
             'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
@@ -622,6 +653,7 @@ class PublicScheduleTest extends TestCase
             'slug' => 'test-month-public-schedule-studio',
             'default_language' => 'uk',
             'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();

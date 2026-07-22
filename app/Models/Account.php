@@ -39,7 +39,7 @@ class Account extends Model
         'default_language' => 'uk',
         'country_code' => 'UA',
         'default_currency' => 'UAH',
-        'public_schedule_view' => 'classic',
+        'public_schedule_view' => 'compact_booking',
         'allow_guest_public_booking' => false,
         'allow_rtsp_cameras' => false,
         'enable_people_counter' => false,

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AiProvider;
+use App\Enums\PublicScheduleView;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\AiConversation;
@@ -692,6 +693,7 @@ class PlatformAdminTest extends TestCase
             ->where('role', 'owner')
             ->exists());
         $this->assertSame($plan->id, $account->subscription?->subscription_plan_id);
+        $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
     }
 
     public function test_platform_account_create_and_update_reject_reserved_public_slugs(): void

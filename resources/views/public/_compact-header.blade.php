@@ -34,6 +34,10 @@
             </a>
         @endif
 
+        <a href="{{ route('public.studio-rules', $account->slug) }}" class="inline-flex items-center rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
+            {{ __('app.studio_rules') }}
+        </a>
+
         <form method="POST" action="{{ route('locale.update') }}">
             @csrf
             <select name="locale" onchange="this.form.submit()" class="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">

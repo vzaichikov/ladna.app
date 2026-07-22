@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountMode;
+use App\Enums\PublicScheduleView;
 use App\Models\Account;
 use App\Models\AccountSubscription;
 use App\Models\ClassBooking;
@@ -79,6 +80,7 @@ class DemoStudioProvisioningTest extends TestCase
         $owner = User::query()->where('email', config('demo-studio.owner.email'))->sole();
 
         $this->assertTrue($account->isReadOnlyDemo());
+        $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
         $this->assertTrue(Hash::check('demo', $owner->password));
         $this->assertSame(24, Customer::query()->whereBelongsTo($account)->count());
         $this->assertSame(6, $account->trainers()->count());

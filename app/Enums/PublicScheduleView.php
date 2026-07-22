@@ -35,7 +35,7 @@ enum PublicScheduleView
 
     public static function default(): self
     {
-        return self::Classic;
+        return self::CompactBooking;
     }
 
     public static function fromValue(mixed $value): self

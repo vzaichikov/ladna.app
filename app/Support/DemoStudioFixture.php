@@ -48,7 +48,7 @@ class DemoStudioFixture
                 'extend_days_enabled' => false,
                 'extend_days_count' => 1,
             ],
-            'public_schedule_view' => 'classic',
+            'public_schedule_view' => 'compact_booking',
             'allow_guest_public_booking' => false,
             'allow_rtsp_cameras' => true,
             'enable_people_counter' => true,

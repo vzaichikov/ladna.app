@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.89.0',
+                'date' => '2026-07-22',
+                'title' => 'Mobile-first public schedules by default',
+                'items' => ['New studios now start with the compact mobile-first public schedule while existing studio choices remain unchanged. The read-only Ladna demo now uses the same compact view.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.88.2',
                 'date' => '2026-07-21',
                 'title' => 'Verified card details from Mono',
@@ -800,6 +807,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.89.0',
+                'date' => '2026-07-22',
+                'title' => 'Мобільний публічний розклад за замовчуванням',
+                'items' => ['Нові студії тепер одразу використовують компактний мобільний публічний розклад, а вибір наявних студій не змінюється. Демо-студія Ladna лише для перегляду також перейшла на цей компактний вигляд.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.88.2',
                 'date' => '2026-07-21',
