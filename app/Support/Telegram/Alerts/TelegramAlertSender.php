@@ -4,14 +4,17 @@ namespace App\Support\Telegram\Alerts;
 
 use App\Enums\TelegramAlertRecipientKind;
 use App\Enums\TelegramAlertStatus;
+use App\Enums\TelegramAlertType;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\TelegramAlert;
 use App\Models\TelegramBotInstallation;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
+use App\Support\Telegram\Announcements\StudioOwnerAnnouncementAudienceResolver;
 use App\Support\Telegram\TelegramClient;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
@@ -22,6 +25,7 @@ class TelegramAlertSender
 
     public function __construct(
         private readonly TelegramClient $telegramClient,
+        private readonly StudioOwnerAnnouncementAudienceResolver $ownerAudienceResolver,
     ) {}
 
     /**
@@ -30,12 +34,6 @@ class TelegramAlertSender
     public function sendPending(int $limit = 50): array
     {
         $limit = max(1, min(200, $limit));
-        $results = [
-            'processed' => 0,
-            'sent' => 0,
-            'retried' => 0,
-            'failed' => 0,
-        ];
 
         $alertIds = TelegramAlert::query()
             ->whereHas('account', fn ($query) => $query->operational())
@@ -48,7 +46,23 @@ class TelegramAlertSender
             ->limit($limit)
             ->pluck('id');
 
-        foreach ($alertIds as $alertId) {
+        return $this->sendAlertIds($alertIds);
+    }
+
+    /**
+     * @param  iterable<int, int>  $alertIds
+     * @return array{processed: int, sent: int, retried: int, failed: int}
+     */
+    public function sendAlertIds(iterable $alertIds): array
+    {
+        $results = [
+            'processed' => 0,
+            'sent' => 0,
+            'retried' => 0,
+            'failed' => 0,
+        ];
+
+        foreach (Collection::make($alertIds)->map(fn (mixed $alertId): int => (int) $alertId)->unique() as $alertId) {
             $alert = $this->claim((int) $alertId);
 
             if (! $alert) {
@@ -118,7 +132,7 @@ class TelegramAlertSender
         $authorization = $this->authorizationFor($alert, $installation);
 
         if (! $authorization) {
-            return $this->retryOrFail($alert, $alert->trainer_id ? 'trainer_telegram_authorization_missing' : 'trainer_not_assigned', true);
+            return $this->retryOrFail($alert, $this->authorizationMissingError($alert), true);
         }
 
         try {
@@ -140,6 +154,7 @@ class TelegramAlertSender
     {
         return TelegramBotInstallation::query()
             ->where('scope_type', 'platform')
+            ->where('scope_id', 0)
             ->where('profile', TelegramBotProfile::Owner->value)
             ->where('is_enabled', true)
             ->latest('updated_at')
@@ -149,7 +164,15 @@ class TelegramAlertSender
 
     private function authorizationFor(TelegramAlert $alert, TelegramBotInstallation $installation): ?TelegramChatAuthorization
     {
-        if ($alert->recipient_kind !== TelegramAlertRecipientKind::Trainer || ! $alert->trainer_id) {
+        return match ($alert->recipient_kind) {
+            TelegramAlertRecipientKind::Trainer => $this->trainerAuthorization($alert, $installation),
+            TelegramAlertRecipientKind::StudioOwner => $this->studioOwnerAuthorization($alert, $installation),
+        };
+    }
+
+    private function trainerAuthorization(TelegramAlert $alert, TelegramBotInstallation $installation): ?TelegramChatAuthorization
+    {
+        if (! $alert->trainer_id) {
             return null;
         }
 
@@ -163,6 +186,44 @@ class TelegramAlertSender
             ->latest('updated_at')
             ->latest('id')
             ->first();
+    }
+
+    private function studioOwnerAuthorization(TelegramAlert $alert, TelegramBotInstallation $installation): ?TelegramChatAuthorization
+    {
+        $authorizationId = $alert->telegram_chat_authorization_id;
+        $ownerUserId = (int) data_get($alert->payload, 'owner_user_id', 0);
+
+        if (! $authorizationId || $ownerUserId < 1) {
+            return null;
+        }
+
+        $authorization = TelegramChatAuthorization::query()
+            ->whereKey($authorizationId)
+            ->where('account_id', $alert->account_id)
+            ->where('telegram_bot_installation_id', $installation->id)
+            ->where('profile', TelegramBotProfile::Owner->value)
+            ->where('status', TelegramChatAuthorizationStatus::Authorized->value)
+            ->with('account')
+            ->first();
+
+        if (
+            ! $authorization
+            || $authorization->telegram_chat_id !== $alert->telegram_chat_id
+            || ! $this->ownerAudienceResolver->authorizationMatchesCurrentOwner($authorization, $ownerUserId)
+        ) {
+            return null;
+        }
+
+        return $authorization;
+    }
+
+    private function authorizationMissingError(TelegramAlert $alert): string
+    {
+        if ($alert->recipient_kind === TelegramAlertRecipientKind::StudioOwner) {
+            return 'studio_owner_telegram_authorization_missing';
+        }
+
+        return $alert->trainer_id ? 'trainer_telegram_authorization_missing' : 'trainer_not_assigned';
     }
 
     private function responseSucceeded(?Response $response): bool
@@ -225,7 +286,7 @@ class TelegramAlertSender
                 'telegram_message_id' => $telegramMessageId,
                 'telegram_user_id' => $authorization->telegram_user_id,
                 'direction' => 'outbound',
-                'message_type' => 'alert',
+                'message_type' => $alert->type === TelegramAlertType::OwnerAnnouncement ? 'owner_announcement' : 'alert',
                 'text' => $alert->text,
                 'payload' => [
                     'telegram_alert_id' => $alert->id,

@@ -16,12 +16,15 @@
     @error('address') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
 
-<label class="block">
-    <span class="crm-label">{{ __('app.google_maps_embed_url') }}</span>
-    <input name="google_maps_embed_url" type="url" value="{{ old('google_maps_embed_url', $location->google_maps_embed_url) }}" class="crm-field" placeholder="https://www.google.com/maps?...output=embed">
-    <span class="mt-1 block text-sm text-slate-500">{{ __('app.google_maps_embed_url_help') }}</span>
+<div class="block">
+    <label for="google-maps-embed-url" class="crm-label">{{ __('app.google_maps_embed_url') }}</label>
+    <textarea id="google-maps-embed-url" name="google_maps_embed_url" rows="3" class="crm-field" placeholder="{{ __('app.google_maps_embed_url_placeholder') }}">{{ old('google_maps_embed_url', $location->google_maps_embed_url) }}</textarea>
+    <span class="mt-1 block text-sm text-slate-500">
+        {{ __('app.google_maps_embed_url_help') }}
+        <a href="{{ route('help.show', 'public-pages') }}#help-section-public-pages-google-maps-code" target="_blank" rel="noopener" class="font-semibold text-brand-700 transition hover:text-brand-600">{{ __('app.google_maps_embed_url_help_link') }}</a>
+    </span>
     @error('google_maps_embed_url') <span class="crm-help">{{ $message }}</span> @enderror
-</label>
+</div>
 
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">

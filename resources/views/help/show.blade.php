@@ -99,7 +99,8 @@
                         <div class="mt-5 grid gap-3 sm:grid-cols-2">
                             @foreach ($page['sections'] as $sectionIndex => $section)
                                 @if (! empty($section['steps']))
-                                    <a href="#help-section-{{ $slug }}-{{ $sectionIndex + 1 }}" class="group flex items-start justify-between gap-4 rounded-lg border border-stone-100 bg-slate-50 px-4 py-3 transition hover:border-brand-200 hover:bg-brand-50">
+                                    @php($sectionAnchor = $section['anchor'] ?? $sectionIndex + 1)
+                                    <a href="#help-section-{{ $slug }}-{{ $sectionAnchor }}" class="group flex items-start justify-between gap-4 rounded-lg border border-stone-100 bg-slate-50 px-4 py-3 transition hover:border-brand-200 hover:bg-brand-50">
                                         <span>
                                             <span class="block text-sm font-semibold leading-5 text-slate-950">{{ $section['title'] }}</span>
                                             <span class="mt-1 block text-xs font-semibold text-brand-600">{{ $copy['open_action'] }}</span>
@@ -126,8 +127,9 @@
 
                     <section class="mt-8 grid gap-5" aria-label="{{ $page['title'] }}">
                         @foreach ($page['sections'] as $section)
-                            <section class="rounded-xl border border-stone-200 bg-white/90 p-5 shadow-xs sm:p-6" aria-labelledby="help-section-{{ $slug }}-{{ $loop->iteration }}">
-                                <h2 id="help-section-{{ $slug }}-{{ $loop->iteration }}" class="text-2xl font-semibold leading-tight text-slate-950">{{ $section['title'] }}</h2>
+                            @php($sectionAnchor = $section['anchor'] ?? $loop->iteration)
+                            <section class="rounded-xl border border-stone-200 bg-white/90 p-5 shadow-xs sm:p-6" aria-labelledby="help-section-{{ $slug }}-{{ $sectionAnchor }}">
+                                <h2 id="help-section-{{ $slug }}-{{ $sectionAnchor }}" class="text-2xl font-semibold leading-tight text-slate-950">{{ $section['title'] }}</h2>
 
                                 <div class="mt-4 grid gap-4 text-base leading-8 text-slate-600">
                                     @foreach ($section['body'] as $paragraph)

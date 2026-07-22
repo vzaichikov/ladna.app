@@ -82,6 +82,7 @@ class TelegramSupportController extends Controller
                 'scheduledClass.room:id,name',
                 'scheduledClass.classType:id,name,schedule_kind',
                 'authorization:id,user_id,trainer_id,status',
+                'authorization.user:id,name,email,phone',
                 'installation:id,scope_type,profile,bot_username',
             ])
             ->when($search !== '', fn (Builder $query): Builder => $this->applyAlertSearch($query, $search))

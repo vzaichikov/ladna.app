@@ -5,6 +5,7 @@ namespace App\Enums;
 enum TelegramAlertType: string
 {
     case TrainerAssignment = 'trainer_assignment';
+    case OwnerAnnouncement = 'owner_announcement';
 
     public function labelKey(): string
     {

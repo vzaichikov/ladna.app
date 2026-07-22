@@ -574,23 +574,103 @@ class StudioConfigurationTest extends TestCase
         $this->assertSame($updatedMapUrl, $location->fresh()->google_maps_embed_url);
     }
 
+    public function test_owner_can_store_and_update_location_with_google_maps_iframe_code(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $mapUrl = 'https://www.google.com/maps/embed?pb=!1m18!2d24.7066!3d48.9368';
+        $iframe = '<iframe src="'.$mapUrl.'" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.locations.store', $account), [
+                'name' => 'Iframe map location',
+                'slug' => 'iframe-map-location',
+                'google_maps_embed_url' => $iframe,
+                'timezone' => 'Europe/Kyiv',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.locations.index', $account));
+
+        $location = Location::whereBelongsTo($account)
+            ->where('slug', 'iframe-map-location')
+            ->firstOrFail();
+
+        $this->assertSame($mapUrl, $location->google_maps_embed_url);
+
+        $updatedMapUrl = 'https://www.google.com/maps/d/embed?mid=updated-map&ehbc=2E312F';
+        $updatedIframe = '<iframe loading="lazy" src="https://www.google.com/maps/d/embed?mid=updated-map&amp;ehbc=2E312F" width="640" height="480"></iframe>';
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.locations.update', [$account, $location]), [
+                'name' => 'Iframe map location updated',
+                'slug' => 'iframe-map-location',
+                'google_maps_embed_url' => $updatedIframe,
+                'timezone' => 'Europe/Kyiv',
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.locations.index', $account));
+
+        $this->assertSame($updatedMapUrl, $location->fresh()->google_maps_embed_url);
+    }
+
     public function test_location_google_maps_embed_url_must_be_valid_url(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
 
-        $this->actingAs($owner)
-            ->from(route('dashboard.accounts.locations.create', $account))
-            ->post(route('dashboard.accounts.locations.store', $account), [
-                'name' => 'Invalid map location',
-                'slug' => 'invalid-map-location',
-                'google_maps_embed_url' => 'not-a-url',
-                'timezone' => 'Europe/Kyiv',
-                'is_active' => '1',
-            ])
-            ->assertRedirect(route('dashboard.accounts.locations.create', $account))
-            ->assertSessionHasErrors('google_maps_embed_url');
+        $invalidValues = [
+            'not-a-url',
+            'http://www.google.com/maps/embed?pb=example',
+            'https://example.com/maps/embed?pb=example',
+            'https://maps.app.goo.gl/example',
+            'https://www.google.com/maps/place/example',
+            '<iframe src="https://www.google.com/maps/embed?pb=example">',
+            '<iframe width="600"></iframe>',
+            '<iframe src=""></iframe>',
+            '<iframe src="https://example.com/maps/embed?pb=example"></iframe>',
+        ];
+
+        foreach ($invalidValues as $invalidValue) {
+            $this->actingAs($owner)
+                ->from(route('dashboard.accounts.locations.create', $account))
+                ->post(route('dashboard.accounts.locations.store', $account), [
+                    'name' => 'Invalid map location',
+                    'slug' => 'invalid-map-location',
+                    'google_maps_embed_url' => $invalidValue,
+                    'timezone' => 'Europe/Kyiv',
+                    'is_active' => '1',
+                ])
+                ->assertRedirect(route('dashboard.accounts.locations.create', $account))
+                ->assertSessionHasErrors([
+                    'google_maps_embed_url' => __('app.google_maps_embed_url_invalid'),
+                ]);
+        }
+    }
+
+    public function test_location_form_accepts_iframe_code_and_links_to_google_maps_help(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $helpUrl = route('help.show', 'public-pages').'#help-section-public-pages-google-maps-code';
+
+        foreach ([
+            route('dashboard.accounts.locations.create', $account),
+            route('dashboard.accounts.locations.edit', [$account, $location]),
+        ] as $formUrl) {
+            $this->actingAs($owner)
+                ->get($formUrl)
+                ->assertOk()
+                ->assertSee('<textarea id="google-maps-embed-url" name="google_maps_embed_url"', false)
+                ->assertSee('href="'.$helpUrl.'"', false)
+                ->assertSee('target="_blank"', false)
+                ->assertSee('rel="noopener"', false)
+                ->assertSee(__('app.google_maps_embed_url_help_link'))
+                ->assertDontSee('name="google_maps_embed_url" type="url"', false);
+        }
     }
 
     public function test_brand_settings_reject_invalid_opening_hours(): void
