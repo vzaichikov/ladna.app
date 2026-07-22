@@ -26,6 +26,50 @@
         @endforeach
     </nav>
 
+    @if ($centralSmsProviderUpdateRoute ?? null)
+        @php
+            $effectiveCentralSmsProvider = $effectiveCentralSmsSetting?->provider->value;
+            $selectedCentralSmsProvider = old('central_sms_provider', $centralSmsProvider ?? $effectiveCentralSmsProvider);
+        @endphp
+
+        <form method="POST" action="{{ route($centralSmsProviderUpdateRoute) }}" class="mt-6 rounded-xl border border-violet-crm-200 bg-violet-crm-50 p-5 shadow-crm">
+            @csrf
+            @method('PUT')
+
+            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)_auto] lg:items-end">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.central_sms_provider') }}</h2>
+                    <p class="mt-2 text-sm leading-6 text-slate-600">{{ __('app.central_sms_provider_copy') }}</p>
+                    @if (! $centralSmsProvider && $effectiveCentralSmsProvider)
+                        <p class="mt-2 text-sm font-semibold text-amber-800">
+                            {{ __('app.central_sms_provider_legacy_fallback', ['provider' => $providers[$effectiveCentralSmsProvider]['label']]) }}
+                        </p>
+                    @elseif ($centralSmsProvider && ! $effectiveCentralSmsProvider)
+                        <p class="mt-2 text-sm font-semibold text-red-700">{{ __('app.central_sms_provider_unavailable') }}</p>
+                    @endif
+                </div>
+
+                <label class="block" for="central-sms-provider">
+                    <span class="crm-label">{{ __('app.central_sms_provider_label') }}</span>
+                    <select id="central-sms-provider" name="central_sms_provider" class="crm-field" required>
+                        @foreach ($providers as $providerKey => $provider)
+                            <option value="{{ $providerKey }}" @selected($selectedCentralSmsProvider === $providerKey)>
+                                {{ $provider['label'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('central_sms_provider')
+                        <span class="crm-help">{{ $message }}</span>
+                    @enderror
+                </label>
+
+                <x-ui.button type="submit" class="w-full justify-center lg:w-auto">
+                    {{ __('app.save') }}
+                </x-ui.button>
+            </div>
+        </form>
+    @endif
+
     <section class="mt-6 grid gap-5 xl:grid-cols-2">
         @foreach ($providers as $providerKey => $provider)
             @php

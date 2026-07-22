@@ -8,14 +8,17 @@
         $demoAvailable = $demoAvailable ?? false;
         $trustedStudios = collect($trustedStudios ?? []);
         $publicPricing = $publicPricing ?? null;
-        $primaryLabel = auth()->check() ? __('app.dashboard') : $landing['hero_primary'];
+        $publicOwnerOnboardingAvailable = $publicOwnerOnboardingAvailable ?? false;
+        $primaryLabel = auth()->check()
+            ? __('app.dashboard')
+            : ($publicOwnerOnboardingAvailable ? __('app.onboarding.registration_cta') : $landing['hero_primary']);
         $currentLandingLocale = app()->getLocale() === 'en' ? 'en' : 'uk';
         $loginHref = $currentLandingLocale === 'en' ? route('login.en') : route('login');
         $headerAuthHref = auth()->check() ? route('dashboard.index') : $loginHref;
         $headerAuthLabel = auth()->check() ? __('app.dashboard') : __('app.login');
         $primaryHref = auth()->check()
             ? route('dashboard.index')
-            : route('demo.login', [], false);
+            : ($publicOwnerOnboardingAvailable ? route('register') : route('demo.login', [], false));
         $landingLocales = [
             'uk' => ['label' => 'UA', 'href' => route('home')],
             'en' => ['label' => 'EN', 'href' => route('home.en')],
@@ -111,10 +114,15 @@
                             {{ $landing['hero_copy'] }}
                         </p>
 
-                        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-                            @if (auth()->check() || $demoAvailable)
+                        <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                            @if (auth()->check() || $publicOwnerOnboardingAvailable || $demoAvailable)
                                 <a href="{{ $primaryHref }}" class="inline-flex h-12 items-center justify-center rounded-lg bg-[#3B223F] px-6 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(59,34,63,0.2)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
                                     {{ $primaryLabel }}
+                                </a>
+                            @endif
+                            @if (! auth()->check() && $publicOwnerOnboardingAvailable && $demoAvailable)
+                                <a href="{{ route('demo.login', [], false) }}" class="inline-flex h-12 items-center justify-center rounded-lg border border-[#A78AB9]/40 bg-white px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/70 hover:bg-[#DCCFF0]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                                    {{ $landing['final_cta'] }}
                                 </a>
                             @endif
                             <a href="#flow" class="inline-flex h-12 items-center justify-center rounded-lg border border-[#A78AB9]/30 bg-white/70 px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
@@ -295,7 +303,7 @@
         </section>
 
         @if ($publicPricing)
-            <x-public-pricing :pricing="$publicPricing" />
+            <x-public-pricing :pricing="$publicPricing" :registration-available="$publicOwnerOnboardingAvailable" />
         @endif
 
         <section class="relative px-5 py-20 sm:px-8 lg:px-10">
@@ -312,11 +320,18 @@
                     <p class="mt-5 max-w-2xl text-lg leading-8 text-[#4D3152]/75">
                         {{ $landing['final_copy'] }}
                     </p>
-                    @if (auth()->check() || $demoAvailable)
-                        <a href="{{ $primaryHref }}" class="mt-8 inline-flex h-12 items-center justify-center rounded-lg bg-[#3B223F] px-6 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(59,34,63,0.2)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
-                            {{ auth()->check() ? __('app.dashboard') : $landing['final_cta'] }}
-                        </a>
-                    @endif
+                    <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                        @if (auth()->check() || $publicOwnerOnboardingAvailable || $demoAvailable)
+                            <a href="{{ $primaryHref }}" class="inline-flex h-12 items-center justify-center rounded-lg bg-[#3B223F] px-6 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(59,34,63,0.2)] transition hover:bg-[#2B1731] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                                {{ auth()->check() ? __('app.dashboard') : ($publicOwnerOnboardingAvailable ? __('app.onboarding.registration_cta') : $landing['final_cta']) }}
+                            </a>
+                        @endif
+                        @if (! auth()->check() && $publicOwnerOnboardingAvailable && $demoAvailable)
+                            <a href="{{ route('demo.login', [], false) }}" class="inline-flex h-12 items-center justify-center rounded-lg border border-[#A78AB9]/40 bg-white px-6 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/70 hover:bg-[#DCCFF0]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
+                                {{ $landing['final_cta'] }}
+                            </a>
+                        @endif
+                    </div>
                 </div>
 
                 <div class="relative min-h-80 overflow-hidden rounded-lg border border-[#E7DDC9]/80 bg-[#FAF8F5] p-6 shadow-[0_22px_54px_rgba(59,34,63,0.08)]">

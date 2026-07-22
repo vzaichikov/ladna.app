@@ -15,7 +15,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'email', 'phone', 'avatar_path', 'password', 'system_role'])]
+#[Fillable(['name', 'email', 'phone', 'phone_verified_at', 'terms_accepted_at', 'privacy_accepted_at', 'avatar_path', 'password', 'system_role'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -31,6 +31,9 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
+            'terms_accepted_at' => 'datetime',
+            'privacy_accepted_at' => 'datetime',
             'password' => 'hashed',
             'system_role' => SystemRole::class,
         ];
@@ -53,6 +56,11 @@ class User extends Authenticatable
     public function accountMemberships(): HasMany
     {
         return $this->hasMany(AccountMembership::class);
+    }
+
+    public function phoneOtpChallenges(): HasMany
+    {
+        return $this->hasMany(UserPhoneOtpChallenge::class);
     }
 
     public function accounts(): BelongsToMany

@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AccountRole;
 use App\Models\Account;
+use App\Models\AccountOnboarding;
 use App\Models\Customer;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerStudioAccess;
 use App\Support\DemoStudioFixture;
+use App\Support\Onboarding\PublicOwnerOnboardingAvailability;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
 use App\Support\SaasBilling\PublicPricingPresenter;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +25,7 @@ class HomeController extends Controller
         private readonly AccountSubscriptionAccess $subscriptionAccess,
         private readonly CustomerStudioAccess $customerStudioAccess,
         private readonly PublicPricingPresenter $publicPricingPresenter,
+        private readonly PublicOwnerOnboardingAvailability $ownerOnboardingAvailability,
     ) {}
 
     public function ukrainian(Request $request): View|RedirectResponse
@@ -76,6 +80,18 @@ class HomeController extends Controller
             return redirect()->route('platform.index');
         }
 
+        $incompleteOnboarding = AccountOnboarding::query()
+            ->whereHas('account.memberships', fn ($query) => $query
+                ->where('user_id', $user->id)
+                ->where('role', AccountRole::Owner->value))
+            ->whereNull('completed_at')
+            ->latest()
+            ->first();
+
+        if ($incompleteOnboarding) {
+            return redirect()->route('onboarding.show', ['step' => $incompleteOnboarding->current_step]);
+        }
+
         $accounts = $user->accounts()
             ->orderBy('name')
             ->get();
@@ -86,6 +102,10 @@ class HomeController extends Controller
 
         if ($accounts->isNotEmpty()) {
             return redirect()->route('dashboard.index');
+        }
+
+        if ($user->terms_accepted_at !== null) {
+            return redirect()->route('onboarding.show', ['step' => 1]);
         }
 
         return null;
@@ -109,7 +129,7 @@ class HomeController extends Controller
     }
 
     /**
-     * @return array{demoAvailable: bool, trustedStudios: Collection<int, Account>, publicPricing: array<string, mixed>|null}
+     * @return array{demoAvailable: bool, trustedStudios: Collection<int, Account>, publicPricing: array<string, mixed>|null, publicOwnerOnboardingAvailable: bool}
      */
     private function landingData(): array
     {
@@ -122,6 +142,7 @@ class HomeController extends Controller
             'demoAvailable' => $demoAccount?->isReadOnlyDemo() ?? false,
             'trustedStudios' => $this->trustedStudios(),
             'publicPricing' => $this->publicPricingPresenter->current(),
+            'publicOwnerOnboardingAvailable' => $this->ownerOnboardingAvailability->isAvailable(),
         ];
     }
 

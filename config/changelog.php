@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.90.0',
+                'date' => '2026-07-22',
+                'title' => 'A calm path to the first reservation',
+                'items' => ['New studio owners can start with one month free and no card, then use a six-step setup that saves progress and prepares one real weekly class, a public schedule, and a booking link.', 'The flow asks only for the first useful location, hall, trainer, and class. Additional locations stay ready to complete later, while passes, prices, and the rest of the timetable can wait until after launch.', 'Phone verification by SMS protects schedule publishing.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.89.0',
                 'date' => '2026-07-22',
                 'title' => 'Mobile-first public schedules by default',
@@ -807,6 +814,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.90.0',
+                'date' => '2026-07-22',
+                'title' => 'Спокійний шлях до першого запису',
+                'items' => ['Нові власниці студій можуть почати з безкоштовного місяця без картки, а шість коротких кроків зі збереженням прогресу підготують перше реальне щотижневе заняття, публічний розклад і посилання для запису.', 'На старті достатньо додати лише першу корисну локацію, залу, тренерку й заняття. Деталі решти локацій, абонементи, ціни та повний розклад можна спокійно доповнити після запуску.', 'Підтвердження телефону через SMS захищає публікацію розкладу.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.89.0',
                 'date' => '2026-07-22',

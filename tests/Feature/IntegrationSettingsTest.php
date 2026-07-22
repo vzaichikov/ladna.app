@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
 use App\Models\Account;
 use App\Models\IntegrationSetting;
+use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -192,6 +195,70 @@ class IntegrationSettingsTest extends TestCase
         $this->actingAs($owner)
             ->get(route('platform.integrations.index'))
             ->assertForbidden();
+
+        $this->put(route('platform.integrations.central-sms-provider.update'), [
+            'central_sms_provider' => 'smsclub',
+        ])->assertForbidden();
+    }
+
+    public function test_platform_admin_can_select_the_configured_central_sms_provider(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $this->createPlatformSmsIntegration('turbosms', [
+            'api_token' => 'turbo-secret',
+            'sms_sender' => 'Ladna',
+        ]);
+        $smsclub = $this->createPlatformSmsIntegration('smsclub', [
+            'bearer_token' => 'smsclub-secret',
+            'src_addr' => 'Ladna',
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.integrations.index', ['tab' => 'messaging']))
+            ->assertOk()
+            ->assertSee(__('app.central_sms_provider'))
+            ->assertSee('name="central_sms_provider"', false)
+            ->assertSee(__('app.central_sms_provider_legacy_fallback', ['provider' => 'TurboSMS']));
+
+        $this->put(route('platform.integrations.central-sms-provider.update'), [
+            'central_sms_provider' => 'smsclub',
+        ])->assertRedirect(route('platform.integrations.index', ['tab' => 'messaging']));
+
+        $this->assertSame(
+            'smsclub',
+            SystemSetting::stringValue(SystemSetting::CentralSmsProviderKey),
+        );
+        $this->assertSame(
+            'smsclub',
+            app(CustomerAuthAvailability::class)->platformSmsSetting()?->provider->value,
+        );
+
+        $smsclub->forceFill(['is_enabled' => false])->save();
+
+        $this->assertNull(app(CustomerAuthAvailability::class)->platformSmsSetting());
+    }
+
+    public function test_central_sms_provider_must_be_a_configured_platform_messaging_integration(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $this->createPlatformSmsIntegration('smsclub', [
+            'bearer_token' => 'smsclub-secret',
+            'src_addr' => 'Ladna',
+        ], enabled: false);
+
+        $this->actingAs($platformAdmin)
+            ->from(route('platform.integrations.index', ['tab' => 'messaging']))
+            ->put(route('platform.integrations.central-sms-provider.update'), [
+                'central_sms_provider' => 'smsclub',
+            ])
+            ->assertRedirect(route('platform.integrations.index', ['tab' => 'messaging']))
+            ->assertSessionHasErrors('central_sms_provider');
+
+        $this->put(route('platform.integrations.central-sms-provider.update'), [
+            'central_sms_provider' => 'monopay',
+        ])->assertSessionHasErrors('central_sms_provider');
+
+        $this->assertNull(SystemSetting::stringValue(SystemSetting::CentralSmsProviderKey));
     }
 
     public function test_account_owner_can_view_and_update_own_account_integrations(): void
@@ -227,6 +294,19 @@ class IntegrationSettingsTest extends TestCase
         $this->assertSame($account->id, $setting->account_id);
         $this->assertSame('turbo-secret', $setting->credentials['api_token']);
         $this->assertSame('CharmCRM', $setting->credentials['sms_sender']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     */
+    private function createPlatformSmsIntegration(string $provider, array $credentials, bool $enabled = true): IntegrationSetting
+    {
+        return IntegrationSetting::factory()->create([
+            'provider' => $provider,
+            'category' => IntegrationCategory::Messaging->value,
+            'is_enabled' => $enabled,
+            'credentials' => $credentials,
+        ]);
     }
 
     public function test_account_integrations_do_not_show_empty_authentication_category(): void

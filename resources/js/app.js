@@ -2809,6 +2809,100 @@ function initCopyButtons() {
     });
 }
 
+function initOnboardingLogoPreviews() {
+    document.querySelectorAll('[data-onboarding-logo-input]').forEach((input) => {
+        if (input.dataset.onboardingLogoReady === 'true') {
+            return;
+        }
+
+        const preview = document.querySelector('[data-onboarding-logo-preview]');
+        const placeholder = document.querySelector('[data-onboarding-logo-placeholder]');
+        let objectUrl = null;
+
+        if (!preview) {
+            return;
+        }
+
+        input.dataset.onboardingLogoReady = 'true';
+        input.addEventListener('change', () => {
+            const file = input.files?.[0];
+
+            if (!file) {
+                return;
+            }
+
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+
+            objectUrl = URL.createObjectURL(file);
+            preview.src = objectUrl;
+            preview.classList.remove('hidden');
+            placeholder?.classList.add('hidden');
+        });
+    });
+}
+
+async function trackOnboardingShare(button) {
+    const url = button.dataset.onboardingShareTrackUrl;
+    const csrf = button.dataset.onboardingShareCsrf;
+
+    if (!url || !csrf) {
+        return;
+    }
+
+    try {
+        await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+    } catch {}
+}
+
+function initOnboardingShareActions() {
+    document.querySelectorAll('[data-onboarding-share]').forEach((button) => {
+        if (button.dataset.onboardingShareReady === 'true') {
+            return;
+        }
+
+        button.dataset.onboardingShareReady = 'true';
+
+        if (!button.matches('[data-native-share]')) {
+            button.addEventListener('click', () => trackOnboardingShare(button));
+            return;
+        }
+
+        button.addEventListener('click', async () => {
+            const shareData = {
+                title: button.dataset.shareTitle || document.title,
+                text: button.dataset.shareText || '',
+                url: button.dataset.shareUrl || window.location.href,
+            };
+
+            try {
+                if (navigator.share) {
+                    await navigator.share(shareData);
+                } else if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(shareData.url);
+                } else {
+                    fallbackCopy(shareData.url, null);
+                }
+
+                await trackOnboardingShare(button);
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    fallbackCopy(shareData.url, null);
+                }
+            }
+        });
+    });
+}
+
 function asyncStatusElement(form = null) {
     return form?.querySelector('[data-async-form-status]') ?? document.querySelector('[data-async-status]');
 }
@@ -4517,6 +4611,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initQuickBookingModals();
     initCustomerTransferModals();
     initCopyButtons();
+    initOnboardingLogoPreviews();
+    initOnboardingShareActions();
     initActiveScrollTargets();
     initProfilePhoneMergeScroll();
     initAssistantChat();

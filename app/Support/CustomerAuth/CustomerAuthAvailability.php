@@ -9,6 +9,7 @@ use App\Enums\IntegrationScope;
 use App\Models\Account;
 use App\Models\CustomerAuthSetting;
 use App\Models\IntegrationSetting;
+use App\Models\SystemSetting;
 use App\Support\IntegrationCatalog;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -73,6 +74,8 @@ class CustomerAuthAvailability
 
     public function platformSmsSetting(?string $provider = null): ?IntegrationSetting
     {
+        $provider ??= SystemSetting::stringValue(SystemSetting::CentralSmsProviderKey);
+
         return $this->configuredSmsSetting(IntegrationSetting::platform(), $provider);
     }
 

@@ -707,6 +707,11 @@ class Account extends Model
         return $this->hasOne(AccountSubscription::class);
     }
 
+    public function onboarding(): HasOne
+    {
+        return $this->hasOne(AccountOnboarding::class);
+    }
+
     public function isAccessibleBy(User $user): bool
     {
         return $user->isPlatformAdmin() || $this->users()->whereKey($user->getKey())->exists();

@@ -70,6 +70,33 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->string('email')->lower().'|'.$request->ip());
         });
 
+        RateLimiter::for('owner-registration', function (Request $request): array {
+            return [
+                Limit::perHour(10)->by('owner-registration-ip:'.$request->ip()),
+                Limit::perHour(5)->by('owner-registration-email:'.$request->string('email')->lower().'|'.$request->ip()),
+            ];
+        });
+
+        RateLimiter::for('owner-onboarding', function (Request $request): Limit {
+            return Limit::perMinute(30)->by($request->user()?->id.'|'.$request->ip());
+        });
+
+        RateLimiter::for('owner-otp', function (Request $request): array {
+            $userKey = (string) ($request->user()?->id ?? 'guest');
+            $phoneKey = hash('sha256', preg_replace('/\D+/', '', $request->string('phone')->toString()).'|'.$request->ip());
+
+            return [
+                Limit::perMinute(3)->by('owner-otp-user-minute:'.$userKey),
+                Limit::perHour(10)->by('owner-otp-user-hour:'.$userKey),
+                Limit::perMinute(3)->by('owner-otp-phone-minute:'.$phoneKey),
+                Limit::perHour(20)->by('owner-otp-ip-hour:'.$request->ip()),
+            ];
+        });
+
+        RateLimiter::for('owner-otp-verify', function (Request $request): Limit {
+            return Limit::perMinute(5)->by($request->user()?->id.'|'.$request->ip());
+        });
+
         RateLimiter::for('customer-login', function (Request $request): Limit {
             return Limit::perMinute(5)->by($request->string('email')->lower().$request->string('phone').'|'.$request->ip());
         });

@@ -8,6 +8,7 @@ use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Http\Requests\StorePublicBookingRequest;
 use App\Models\Account;
+use App\Models\AccountOnboarding;
 use App\Models\Customer;
 use App\Models\Location;
 use App\Models\ScheduledClass;
@@ -21,6 +22,9 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Throwable;
+
+use function Illuminate\Support\defer;
 
 class PublicBookingController extends Controller
 {
@@ -67,6 +71,7 @@ class PublicBookingController extends Controller
         }
 
         $booking = $createPublicBooking->execute($account, $location, $customer, $validated);
+        $this->recordFirstOnboardingBooking($account);
 
         if ($customer) {
             return redirect()
@@ -81,6 +86,19 @@ class PublicBookingController extends Controller
                 ...$this->scheduleReturnQuery($booking->scheduledClass),
             ])
             ->with('status', __('app.booking_created'));
+    }
+
+    private function recordFirstOnboardingBooking(Account $account): void
+    {
+        defer(function () use ($account): void {
+            try {
+                AccountOnboarding::query()
+                    ->whereBelongsTo($account)
+                    ->first()?->recordMetricOnce('first_booking_at');
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        });
     }
 
     /**

@@ -1,4 +1,4 @@
-@props(['pricing'])
+@props(['pricing', 'registrationAvailable' => false])
 
 @php
     $landing = __('app.landing');
@@ -179,10 +179,17 @@
 
             <div class="flex flex-col justify-between gap-5 rounded-xl border border-[#E7DDC9]/26 bg-[#E7DDC9]/12 p-6">
                 <p class="text-sm leading-6 text-white/68">{{ $landing['pricing_third_party'] }}</p>
-                <a href="{{ route('demo.login', [], false) }}" class="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#E7DDC9] px-6 text-sm font-semibold text-[#2B1731] shadow-[0_18px_34px_rgba(0,0,0,0.16)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7B4D3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2B1731]">
-                    {{ $landing['pricing_cta'] }}
-                    <x-ui.icon name="arrow-right" class="h-4 w-4" />
-                </a>
+                <div class="flex flex-col gap-3">
+                    <a href="{{ $registrationAvailable ? route('register') : route('demo.login', [], false) }}" class="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#E7DDC9] px-6 text-sm font-semibold text-[#2B1731] shadow-[0_18px_34px_rgba(0,0,0,0.16)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7B4D3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2B1731]">
+                        {{ $registrationAvailable ? __('app.onboarding.registration_cta') : $landing['pricing_cta'] }}
+                        <x-ui.icon name="arrow-right" class="h-4 w-4" />
+                    </a>
+                    @if ($registrationAvailable)
+                        <a href="{{ route('demo.login', [], false) }}" data-pricing-demo-cta class="inline-flex h-12 items-center justify-center rounded-lg border border-white/20 bg-white/[0.08] px-6 text-sm font-semibold text-white transition hover:border-white/35 hover:bg-white/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7B4D3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2B1731]">
+                            {{ $landing['pricing_cta'] }}
+                        </a>
+                    @endif
+                </div>
             </div>
         </div>
     </div>

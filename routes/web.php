@@ -15,6 +15,7 @@ use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\AdminCustomerLoginController;
 use App\Http\Controllers\ApiDocumentationController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\CameraController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ClassBookingController;
@@ -40,6 +41,8 @@ use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ManualScheduledClassController;
+use App\Http\Controllers\OwnerOnboardingController;
+use App\Http\Controllers\OwnerOnboardingOtpController;
 use App\Http\Controllers\PeopleCounterReportController;
 use App\Http\Controllers\PeopleCounterScreenshotController;
 use App\Http\Controllers\Platform\AccountBillingEnrollmentController;
@@ -92,6 +95,8 @@ use App\Http\Controllers\UnpaidClassPaymentReportController;
 use App\Http\Controllers\WebsiteLeadController;
 use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
+use App\Http\Middleware\EnsureOwnerOnboardingComplete;
+use App\Http\Middleware\EnsurePublicOwnerOnboardingEnabled;
 use App\Http\Middleware\EnsurePublicSubscriptionIsActive;
 use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Http\Middleware\PreventReadOnlyDemoMutations;
@@ -170,6 +175,11 @@ Route::middleware('guest:web')
         Route::get('login', [LoginController::class, 'create'])->name('login');
         Route::get('en/login', [LoginController::class, 'createEnglish'])->name('login.en');
         Route::post('login', [LoginController::class, 'store'])->middleware('throttle:login');
+        Route::get('register', [RegisterController::class, 'create'])
+            ->middleware(EnsurePublicOwnerOnboardingEnabled::class)
+            ->name('register');
+        Route::post('register', [RegisterController::class, 'store'])
+            ->middleware([EnsurePublicOwnerOnboardingEnabled::class, 'throttle:owner-registration']);
     });
 
 Route::middleware('guest:web')->group(function (): void {
@@ -195,6 +205,32 @@ Route::post('/logout', fn (Request $request): RedirectResponse => $appCompatibil
 Route::post('/app/logout', [LoginController::class, 'destroy'])
     ->middleware('auth:web')
     ->name('logout');
+
+Route::middleware('auth:web')
+    ->prefix('app/onboarding')
+    ->name('onboarding.')
+    ->group(function (): void {
+        Route::get('success', [OwnerOnboardingController::class, 'success'])->name('success');
+        Route::post('share', [OwnerOnboardingController::class, 'trackShare'])
+            ->middleware('throttle:owner-onboarding')
+            ->name('share');
+        Route::post('otp/send', [OwnerOnboardingOtpController::class, 'send'])
+            ->middleware('throttle:owner-otp')
+            ->name('otp.send');
+        Route::post('otp/verify', [OwnerOnboardingOtpController::class, 'verify'])
+            ->middleware('throttle:owner-otp-verify')
+            ->name('otp.verify');
+        Route::post('publish', [OwnerOnboardingController::class, 'publish'])
+            ->middleware('throttle:owner-onboarding')
+            ->name('publish');
+        Route::get('{step?}', [OwnerOnboardingController::class, 'show'])
+            ->whereNumber('step')
+            ->name('show');
+        Route::post('{step}', [OwnerOnboardingController::class, 'store'])
+            ->whereNumber('step')
+            ->middleware('throttle:owner-onboarding')
+            ->name('store');
+    });
 
 Route::post('/locale', LocaleController::class)->name('locale.update');
 Route::get('/customer/login', [CustomerAuthController::class, 'create'])->name('customer.login');
@@ -269,6 +305,8 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
         Route::delete('telegram-support/authorizations/{telegramAuthorization}', [PlatformTelegramSupportController::class, 'revoke'])->name('telegram-support.authorizations.revoke');
         Route::get('customer-notifications', [PlatformCustomerNotificationController::class, 'index'])->name('customer-notifications.index');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
+        Route::put('integrations/central-sms-provider', [PlatformIntegrationController::class, 'updateCentralSmsProvider'])
+            ->name('integrations.central-sms-provider.update');
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::get('scheduled-tasks', ScheduledTaskController::class)->name('scheduled-tasks.index');
         Route::get('payments', [PlatformPaymentController::class, 'index'])->name('payments.index');
@@ -298,7 +336,7 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
             });
     });
 
-Route::middleware(['auth:web', PreventReadOnlyDemoMutations::class, PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
+Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventReadOnlyDemoMutations::class, PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
     ->prefix('app/dashboard')
     ->name('dashboard.')
     ->group(function (): void {

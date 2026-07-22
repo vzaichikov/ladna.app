@@ -16,6 +16,10 @@ class UpdateUserProfile
     {
         $user->fill(Arr::except($validated, ['avatar', 'password', 'password_confirmation']));
 
+        if ($user->isDirty('phone')) {
+            $user->phone_verified_at = null;
+        }
+
         if (filled($validated['password'] ?? null)) {
             $user->password = $validated['password'];
         }

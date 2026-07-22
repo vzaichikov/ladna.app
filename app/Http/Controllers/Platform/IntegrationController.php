@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Platform;
 
+use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateCentralSmsProviderRequest;
 use App\Http\Requests\UpdatePlatformIntegrationRequest;
 use App\Models\IntegrationSetting;
+use App\Models\SystemSetting;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\IntegrationCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,7 +17,7 @@ use Illuminate\View\View;
 
 class IntegrationController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, CustomerAuthAvailability $availability): View
     {
         $categories = IntegrationCatalog::categories(IntegrationScope::Platform);
         $activeCategory = IntegrationCatalog::activeCategory($request->query('tab'), IntegrationScope::Platform);
@@ -34,7 +38,31 @@ class IntegrationController extends Controller
             'tabRouteParameters' => [],
             'updateRoute' => 'platform.integrations.update',
             'updateRouteParameters' => [],
+            'centralSmsProvider' => SystemSetting::stringValue(SystemSetting::CentralSmsProviderKey),
+            'effectiveCentralSmsSetting' => $availability->platformSmsSetting(),
+            'centralSmsProviderUpdateRoute' => $activeCategory === IntegrationCategory::Messaging
+                ? 'platform.integrations.central-sms-provider.update'
+                : null,
         ]);
+    }
+
+    public function updateCentralSmsProvider(
+        UpdateCentralSmsProviderRequest $request,
+        CustomerAuthAvailability $availability,
+    ): RedirectResponse {
+        $provider = $request->provider();
+
+        if (! $availability->platformSmsSetting($provider)) {
+            return back()
+                ->withInput()
+                ->withErrors(['central_sms_provider' => __('app.central_sms_provider_unavailable')]);
+        }
+
+        SystemSetting::setValue(SystemSetting::CentralSmsProviderKey, $provider);
+
+        return redirect()
+            ->route('platform.integrations.index', ['tab' => 'messaging'])
+            ->with('status', __('app.central_sms_provider_updated'));
     }
 
     public function update(UpdatePlatformIntegrationRequest $request, string $provider): RedirectResponse
