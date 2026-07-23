@@ -56,7 +56,7 @@ class AccountAssistantTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Dashboard AI answer.","follow_up_actions":[],"action":null,"reason":"studio question"}',
+                    'content' => '{"disposition":"answer","answer":"Dashboard AI answer.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"studio question"}',
                 ],
             ]),
         ]);
@@ -86,13 +86,58 @@ class AccountAssistantTest extends TestCase
         });
     }
 
+    public function test_dashboard_repairs_a_distracted_owner_weekday_mismatch_before_storing_the_answer(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-23 21:40:00', 'Europe/Kyiv'));
+
+        try {
+            Http::fake([
+                'ollama.com/api/chat' => Http::sequence()
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"disposition":"answer","answer":"У суботу, 26 липня, є пʼять занять.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-26","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"incorrect Saturday schedule"}',
+                        ],
+                    ])
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"disposition":"answer","answer":"У суботу, 25 липня, є одне заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"corrected Saturday schedule"}',
+                        ],
+                    ]),
+            ]);
+
+            $owner = User::factory()->create();
+            $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+            $account->addOwner($owner);
+            $this->configureGlobalOllama();
+
+            $this->actingAs($owner)
+                ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                    'message' => 'а в суботу шо там? бо я вже дні попутала 🙈',
+                ])
+                ->assertOk()
+                ->assertJsonPath('messages.1.content', 'У суботу, 25 липня, є одне заняття.')
+                ->assertJsonPath('messages.1.metadata.calendar_reference.date', '2026-07-25')
+                ->assertJsonPath('messages.1.metadata.calendar_reference.requested_weekday', 'saturday')
+                ->assertJsonPath('messages.1.metadata.calendar_reference.weekday_occurrence', 'first')
+                ->assertJsonPath('messages.1.metadata.calendar_reference.uses_schedule_details', true)
+                ->assertJsonPath('pending_actions', []);
+
+            Http::assertSentCount(2);
+            $this->assertSame(0, AiPendingAction::query()->whereBelongsTo($account)->count());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_dashboard_message_endpoint_streams_transient_statuses_without_persisting_them(): void
     {
         Http::fake([
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Streamed dashboard answer.","follow_up_actions":[],"action":null,"reason":"studio question"}',
+                    'content' => '{"disposition":"answer","answer":"Streamed dashboard answer.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"studio question"}',
                 ],
             ]),
         ]);
@@ -156,7 +201,7 @@ class AccountAssistantTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"У демо є 6 людей у Лавандовій залі.","follow_up_actions":["Покажи навантаження залів"],"action":null,"reason":"demo studio question"}',
+                    'content' => '{"disposition":"answer","answer":"У демо є 6 людей у Лавандовій залі.","follow_up_actions":["Покажи навантаження залів"],"action":null,"calendar_reference":null,"reason":"demo studio question"}',
                 ],
             ]),
         ]);
@@ -213,6 +258,7 @@ class AccountAssistantTest extends TestCase
                             'This fourth suggestion must be ignored',
                         ],
                         'action' => null,
+                        'calendar_reference' => null,
                         'reason' => 'studio analytics question',
                     ]),
                 ],
@@ -242,7 +288,7 @@ class AccountAssistantTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Відкрийте Клієнти й натисніть Додати клієнта.","follow_up_actions":[],"action":null,"reason":"Ladna help question"}',
+                    'content' => '{"disposition":"answer","answer":"Відкрийте Клієнти й натисніть Додати клієнта.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"Ladna help question"}',
                 ],
             ]),
         ]);
@@ -270,7 +316,7 @@ class AccountAssistantTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Третій варіант, Ladna Studio, добре підходить.","follow_up_actions":[],"action":null,"reason":"contextual selection from prior options"}',
+                    'content' => '{"disposition":"answer","answer":"Третій варіант, Ladna Studio, добре підходить.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"contextual selection from prior options"}',
                 ],
             ]),
         ]);
@@ -343,6 +389,7 @@ class AccountAssistantTest extends TestCase
                         'answer' => null,
                         'follow_up_actions' => [],
                         'action' => ['booking_id' => $otherBooking->id],
+                        'calendar_reference' => null,
                         'reason' => 'booking cancellation request',
                     ]),
                 ],
@@ -367,7 +414,7 @@ class AccountAssistantTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"cancel_booking","answer":null,"follow_up_actions":[],"action":{},"reason":"missing booking id"}',
+                    'content' => '{"disposition":"cancel_booking","answer":null,"follow_up_actions":[],"action":{},"calendar_reference":null,"reason":"missing booking id"}',
                 ],
             ]),
         ]);
@@ -459,7 +506,7 @@ class AccountAssistantTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Алина Тестовая","trainer_query":"Катя","date":"2026-06-30","use_actor_trainer":false},"reason":"direct booking request"}',
+                    'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Алина Тестовая","trainer_query":"Катя","date":"2026-06-30","use_actor_trainer":false},"calendar_reference":{"date":"2026-06-30","requested_weekday":null,"weekday_occurrence":null,"uses_schedule_details":false},"reason":"direct booking request"}',
                 ],
             ]),
         ]);
@@ -569,6 +616,7 @@ class AccountAssistantTest extends TestCase
                         'answer' => null,
                         'follow_up_actions' => [],
                         'action' => ['booking_id' => $booking->id],
+                        'calendar_reference' => null,
                         'reason' => 'explicit booking cancellation',
                     ]),
                 ],

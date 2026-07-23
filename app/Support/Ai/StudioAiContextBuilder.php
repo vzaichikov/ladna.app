@@ -38,10 +38,13 @@ class StudioAiContextBuilder
     /**
      * @return array<string, mixed>
      */
-    public function studioContext(Account $account, bool $includeClassBookingDetails = true): array
-    {
+    public function studioContext(
+        Account $account,
+        bool $includeClassBookingDetails = true,
+        ?Carbon $requestClock = null,
+    ): array {
         $timezone = $account->timezone ?: config('app.timezone');
-        $today = now($timezone)->startOfDay();
+        $today = ($requestClock ?? now($timezone))->copy()->timezone($timezone)->startOfDay();
         $tomorrow = $today->copy()->addDay();
         $nextSevenDaysEnd = $today->copy()->addDays(7)->endOfDay();
 

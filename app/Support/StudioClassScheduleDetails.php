@@ -9,6 +9,7 @@ use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class StudioClassScheduleDetails
 {
@@ -44,6 +45,8 @@ class StudioClassScheduleDetails
                 'timezone' => $timezone,
             ],
             'date' => $accountDay->toDateString(),
+            'weekday' => Str::lower($accountDay->englishDayOfWeek),
+            'iso_weekday' => $accountDay->isoWeekday(),
             'include_cancelled_classes' => $includeCancelledClasses,
             'include_cancelled_bookings' => $includeCancelledBookings,
             'truncated' => $truncated,

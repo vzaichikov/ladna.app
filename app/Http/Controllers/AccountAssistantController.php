@@ -325,6 +325,7 @@ class AccountAssistantController extends Controller
                 'follow_up_actions' => $result->followUpActions,
                 'help_sources' => $result->helpSources,
                 'disposition' => $result->disposition->value,
+                'calendar_reference' => $result->calendarReference?->toArray(),
             ],
             'occurred_at' => now(),
         ]);
@@ -347,6 +348,7 @@ class AccountAssistantController extends Controller
                 'provider' => $result?->provider,
                 'model' => $result?->model,
                 'disposition' => $result?->disposition->value,
+                'calendar_reference' => $result?->calendarReference?->toArray(),
                 ...($plan->pendingAction ? ['pending_action_id' => $plan->pendingAction->id] : []),
                 ...$plan->metadata,
             ],

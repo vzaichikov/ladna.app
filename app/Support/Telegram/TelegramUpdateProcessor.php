@@ -336,6 +336,7 @@ class TelegramUpdateProcessor
                         'provider' => $aiResult?->provider,
                         'model' => $aiResult?->model,
                         'disposition' => $aiResult?->disposition->value,
+                        'calendar_reference' => $aiResult?->calendarReference?->toArray(),
                         ...($plan->pendingAction ? ['pending_action_id' => $plan->pendingAction->id] : []),
                         ...$plan->metadata,
                     ],
@@ -354,6 +355,7 @@ class TelegramUpdateProcessor
                     'follow_up_actions' => $aiResult->followUpActions,
                     'help_sources' => $aiResult->helpSources,
                     'disposition' => $aiResult->disposition->value,
+                    'calendar_reference' => $aiResult->calendarReference?->toArray(),
                 ];
                 $result['response'] = $aiResult->text !== '' ? $aiResult->text : __('app.assistant_ai_unavailable');
                 $result['rejected'] = $aiResult->rejected;

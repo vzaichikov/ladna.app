@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AiConversationMessageRole;
 use App\Enums\AiProvider;
 use App\Enums\ScheduleKind;
 use App\Enums\TelegramBotProfile;
@@ -522,7 +523,7 @@ class TelegramWebhookTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"cancel_dialog","answer":null,"follow_up_actions":[],"action":{},"reason":"owner abandoned active booking dialog"}',
+                    'content' => '{"disposition":"cancel_dialog","answer":null,"follow_up_actions":[],"action":{},"calendar_reference":null,"reason":"owner abandoned active booking dialog"}',
                 ],
             ]),
             'api.telegram.org/*' => Http::response(['ok' => true]),
@@ -609,6 +610,7 @@ class TelegramWebhookTest extends TestCase
                         'answer' => 'Якщо ви забули записати людину на заняття, перевірте розклад і додайте запис вручну з картки заняття.',
                         'follow_up_actions' => [],
                         'action' => null,
+                        'calendar_reference' => null,
                         'reason' => 'studio booking workflow question',
                     ]),
                 ],
@@ -897,13 +899,13 @@ class TelegramWebhookTest extends TestCase
                 ->push([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Аліна Тестова","date":"2026-06-30","use_actor_trainer":true},"reason":"direct booking request"}',
+                        'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Аліна Тестова","date":"2026-06-30","use_actor_trainer":true},"calendar_reference":{"date":"2026-06-30","requested_weekday":null,"weekday_occurrence":null,"uses_schedule_details":false},"reason":"direct booking request"}',
                     ],
                 ])
                 ->push([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => '{"disposition":"continue_booking","answer":null,"follow_up_actions":[],"action":{"option_number":1},"reason":"selected visible class option"}',
+                        'content' => '{"disposition":"continue_booking","answer":null,"follow_up_actions":[],"action":{"option_number":1},"calendar_reference":null,"reason":"selected visible class option"}',
                     ],
                 ]),
             'api.telegram.org/*' => Http::response(['ok' => true]),
@@ -1048,6 +1050,7 @@ class TelegramWebhookTest extends TestCase
                         'answer' => "**AI answer** for studio schedule.\n* First item",
                         'follow_up_actions' => [],
                         'action' => null,
+                        'calendar_reference' => null,
                         'reason' => 'studio schedule question',
                     ]),
                 ],
@@ -1124,6 +1127,134 @@ class TelegramWebhookTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_distracted_owner_weekday_conversation_repairs_the_wrong_day_and_keeps_context(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-23 21:40:00', 'Europe/Kyiv'));
+
+        try {
+            Http::fake([
+                'ollama.com/api/chat' => Http::sequence()
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"disposition":"answer","answer":"У Каті завтра є заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-24","requested_weekday":null,"weekday_occurrence":null,"uses_schedule_details":true},"reason":"tomorrow schedule"}',
+                        ],
+                    ])
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"disposition":"answer","answer":"У суботу, 26 липня, є заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-26","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"incorrect Saturday schedule"}',
+                        ],
+                    ])
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"disposition":"answer","answer":"У суботу, 25 липня, є заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"corrected Saturday schedule"}',
+                        ],
+                    ])
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"disposition":"answer","answer":"Так, субота — це 25 липня.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":false},"reason":"confirmed Saturday date"}',
+                        ],
+                    ]),
+                'api.telegram.org/*' => Http::response(['ok' => true]),
+            ]);
+
+            $owner = User::factory()->create(['phone' => '+380671112244']);
+            $account = Account::factory()->create([
+                'name' => 'Skyler owner studio',
+                'country_code' => 'UA',
+                'timezone' => 'Europe/Kyiv',
+            ]);
+            $account->addOwner($owner);
+            PlatformAiSetting::query()->delete();
+            PlatformAiProviderCredential::query()->delete();
+            PlatformAiSetting::factory()->create([
+                'owner_ai_assistant_enabled' => true,
+                'active_provider' => AiProvider::OllamaCloud->value,
+                'active_model' => 'gemma3:27b-cloud',
+            ]);
+            PlatformAiProviderCredential::factory()->create([
+                'provider' => AiProvider::OllamaCloud->value,
+                'model' => 'gemma3:27b-cloud',
+                'credentials' => ['api_key' => 'test-ollama-key'],
+                'is_configured' => true,
+            ]);
+            [$installation, $webhookKey] = $this->ownerInstallation();
+
+            TelegramChatAuthorization::factory()->for($account)->create([
+                'telegram_bot_installation_id' => $installation->id,
+                'user_id' => $owner->id,
+                'profile' => TelegramBotProfile::Owner->value,
+                'telegram_chat_id' => '588',
+                'telegram_user_id' => '808',
+            ]);
+
+            $ownerMessages = [
+                'а шо там в каті зафтра, я шось забула',
+                'ой я вже забула шо питала... а в суботу шо там?',
+                'стоп то субота 25 чи 26 бо я вже нипоняла 😵‍💫',
+            ];
+
+            foreach ($ownerMessages as $index => $ownerMessage) {
+                $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+                    'update_id' => 1100 + $index,
+                    'message' => [
+                        'message_id' => 210 + $index,
+                        'chat' => ['id' => 588],
+                        'from' => ['id' => 808, 'username' => 'owner'],
+                        'text' => $ownerMessage,
+                    ],
+                ], [
+                    'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+                ])->assertNoContent();
+            }
+
+            $conversation = AiConversation::query()
+                ->whereBelongsTo($account)
+                ->where('channel', 'telegram_owner')
+                ->firstOrFail();
+            $messages = $conversation->messages()->oldest('id')->get();
+            $assistantMessages = $messages->where('role', AiConversationMessageRole::Assistant);
+
+            $this->assertCount(6, $messages);
+            $this->assertCount(3, $assistantMessages);
+            $this->assertSame('У суботу, 25 липня, є заняття.', $assistantMessages->values()->get(1)?->content);
+            $this->assertSame('Так, субота — це 25 липня.', $assistantMessages->last()?->content);
+            $this->assertSame(
+                [
+                    'date' => '2026-07-25',
+                    'requested_weekday' => 'saturday',
+                    'weekday_occurrence' => 'first',
+                    'uses_schedule_details' => false,
+                ],
+                data_get($assistantMessages->last()?->metadata, 'calendar_reference'),
+            );
+            $this->assertTrue($assistantMessages->every(
+                fn (AiConversationMessage $message): bool => data_get($message->metadata, 'used_ai') === true
+                    && data_get($message->metadata, 'fallback_reason') === null,
+            ));
+            $this->assertFalse(AiPendingAction::query()->whereBelongsTo($account)->exists());
+
+            $ollamaRequests = collect(Http::recorded())
+                ->map(fn (array $record): Request => $record[0])
+                ->filter(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat'))
+                ->values();
+
+            $this->assertCount(4, $ollamaRequests);
+            $secondRequestText = collect($ollamaRequests->get(1)?->data()['messages'] ?? [])->pluck('content')->implode("\n");
+            $lastRequestText = collect($ollamaRequests->last()?->data()['messages'] ?? [])->pluck('content')->implode("\n");
+
+            $this->assertStringContainsString($ownerMessages[0], $secondRequestText);
+            $this->assertSame(1, substr_count($secondRequestText, $ownerMessages[1]));
+            $this->assertStringContainsString('У суботу, 25 липня, є заняття.', $lastRequestText);
+            $this->assertSame(1, substr_count($lastRequestText, $ownerMessages[2]));
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_telegram_contextual_option_reply_uses_same_conversation_snapshot_once(): void
     {
         $currentText = 'мені більше подобається третій варіант';
@@ -1132,7 +1263,7 @@ class TelegramWebhookTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Тоді обираємо Skyler Studio.","follow_up_actions":[],"action":null,"reason":"contextual selection from prior options"}',
+                    'content' => '{"disposition":"answer","answer":"Тоді обираємо Skyler Studio.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"contextual selection from prior options"}',
                 ],
             ]),
             'api.telegram.org/*' => Http::response(['ok' => true]),
@@ -1236,6 +1367,7 @@ class TelegramWebhookTest extends TestCase
                         'answer' => "**AI answer** for studio schedule.\n* First item",
                         'follow_up_actions' => [],
                         'action' => null,
+                        'calendar_reference' => null,
                         'reason' => 'studio schedule question',
                     ]),
                 ],
@@ -1403,7 +1535,7 @@ class TelegramWebhookTest extends TestCase
                     ->push([
                         'message' => [
                             'role' => 'assistant',
-                            'content' => '{"disposition":"answer","answer":"Перевірено: невідповідностей не знайдено.","follow_up_actions":[],"action":null,"reason":"Ledger evidence."}',
+                            'content' => '{"disposition":"answer","answer":"Перевірено: невідповідностей не знайдено.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"Ledger evidence."}',
                         ],
                     ]),
                 'api.telegram.org/*/sendMessage' => Http::response([
@@ -1485,6 +1617,7 @@ class TelegramWebhookTest extends TestCase
                                 'Show studio profile',
                             ],
                             'action' => null,
+                            'calendar_reference' => null,
                             'reason' => 'studio schedule question',
                         ]),
                     ],
@@ -1497,6 +1630,7 @@ class TelegramWebhookTest extends TestCase
                             'answer' => __('app.telegram_class_count_for_day', ['date' => '2026-06-28', 'count' => 0]),
                             'follow_up_actions' => [],
                             'action' => null,
+                            'calendar_reference' => null,
                             'reason' => 'studio class count follow-up',
                         ]),
                     ],
@@ -1718,6 +1852,7 @@ class TelegramWebhookTest extends TestCase
                             'customer_id' => $customer->id,
                             'scheduled_class_id' => $scheduledClass->id,
                         ],
+                        'calendar_reference' => null,
                         'reason' => 'direct booking request',
                     ]),
                 ],

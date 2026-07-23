@@ -18,14 +18,21 @@ class StudioAiResult
         public readonly array $followUpActions = [],
         public readonly array $helpSources = [],
         public readonly ?StudioAiActionInput $actionInput = null,
+        public readonly ?StudioAiCalendarReference $calendarReference = null,
     ) {}
 
     /**
      * @param  array<int, string>  $followUpActions
      * @param  array<int, array{slug: string, title: string, sections: array<int, string>}>  $helpSources
      */
-    public static function answer(string $text, string $provider, string $model, array $followUpActions = [], array $helpSources = []): self
-    {
+    public static function answer(
+        string $text,
+        string $provider,
+        string $model,
+        array $followUpActions = [],
+        array $helpSources = [],
+        ?StudioAiCalendarReference $calendarReference = null,
+    ): self {
         return new self(
             text: $text,
             usedAi: true,
@@ -33,11 +40,17 @@ class StudioAiResult
             model: $model,
             followUpActions: $followUpActions,
             helpSources: $helpSources,
+            calendarReference: $calendarReference,
         );
     }
 
-    public static function action(StudioAiDisposition $disposition, StudioAiActionInput $actionInput, string $provider, string $model): self
-    {
+    public static function action(
+        StudioAiDisposition $disposition,
+        StudioAiActionInput $actionInput,
+        string $provider,
+        string $model,
+        ?StudioAiCalendarReference $calendarReference = null,
+    ): self {
         return new self(
             text: '',
             usedAi: true,
@@ -45,6 +58,7 @@ class StudioAiResult
             provider: $provider,
             model: $model,
             actionInput: $actionInput,
+            calendarReference: $calendarReference,
         );
     }
 

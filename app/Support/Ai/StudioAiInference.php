@@ -12,6 +12,7 @@ use App\Models\PlatformAiSetting;
 use App\Models\Trainer;
 use App\Models\User;
 use App\Support\OwnerHelpIndex;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -87,6 +88,10 @@ class StudioAiInference
         $helpContext = $this->helpIndex->context($text);
         $channel = $this->channel($conversation);
         $actorContext = $this->contextBuilder->actorContext($actorUser, $actorTrainer, $channel);
+        $timezone = $account->timezone ?: config('app.timezone');
+        $requestClock = now($timezone);
+        $calendarAnchors = $this->calendarAnchors($requestClock);
+        $studioContext = $this->contextBuilder->studioContext($account, requestClock: $requestClock);
         $tools = $this->toolExecutor->definitions($account, $actorUser);
         $requiresInvestigationEvidence = $tools !== [] && $this->requiresInvestigationEvidence($text);
         $toolEvidence = [];
@@ -105,6 +110,9 @@ class StudioAiInference
                 $helpContext,
                 $actorContext,
                 $activeBookingDialog,
+                $studioContext,
+                $requestClock,
+                $calendarAnchors,
                 $channel,
                 $tools !== [],
             );
@@ -144,6 +152,8 @@ class StudioAiInference
                         $setting,
                         $helpContext,
                         $activeBookingDialog,
+                        $studioContext,
+                        $calendarAnchors,
                     );
 
                     if ($result->fallbackReason === 'invalid_ai_response'
@@ -157,6 +167,7 @@ class StudioAiInference
                                 'content' => $this->invalidEnvelopeRepairInstruction(
                                     $requiresInvestigationEvidence
                                         && $this->hasVerifiedInvestigationLedger($toolEvidence),
+                                    $initialValidationError,
                                 ),
                             ],
                         ];
@@ -175,6 +186,8 @@ class StudioAiInference
                                 $setting,
                                 $helpContext,
                                 $activeBookingDialog,
+                                $studioContext,
+                                $calendarAnchors,
                             )
                             : StudioAiResult::fallback(
                                 'invalid_ai_response',
@@ -205,6 +218,7 @@ class StudioAiInference
                             $result->model ?? $setting->active_model,
                             $result->followUpActions,
                             $result->helpSources,
+                            $result->calendarReference,
                         );
                     }
 
@@ -270,13 +284,19 @@ class StudioAiInference
         }
     }
 
-    private function invalidEnvelopeRepairInstruction(bool $requiresEvidenceBackedAnswer): string
-    {
+    private function invalidEnvelopeRepairInstruction(
+        bool $requiresEvidenceBackedAnswer,
+        ?string $validationError,
+    ): string {
+        $calendarCorrection = $validationError === 'invalid_calendar_reference'
+            ? ' The calendar reference did not match the supplied date and weekday anchors. Select the matching class_booking_details entry and correct both the answer and calendar_reference.'
+            : '';
+
         if ($requiresEvidenceBackedAnswer) {
-            return 'Your previous response did not match the required final JSON envelope. Return exactly one JSON object with only these keys: disposition, answer, follow_up_actions, action, reason. Use disposition="answer", a concise evidence-backed answer string, follow_up_actions=[], action=null, and a short reason string. Do not call another tool.';
+            return 'Your previous response did not match the required final JSON envelope.'.$calendarCorrection.' Return exactly one JSON object with only these keys: disposition, answer, follow_up_actions, action, calendar_reference, reason. Use disposition="answer", a concise evidence-backed answer string, follow_up_actions=[], action=null, calendar_reference=null unless the answer uses a calendar date, and a short reason string. Do not call another tool.';
         }
 
-        return 'Your previous response did not match the required final JSON envelope. Re-evaluate the current owner request and return exactly one JSON object with only these keys: disposition, answer, follow_up_actions, action, reason. Follow every field rule from the system message, keep follow_up_actions to at most three strings, and do not add commentary outside the JSON object.';
+        return 'Your previous response did not match the required final JSON envelope.'.$calendarCorrection.' Re-evaluate the current owner request and return exactly one JSON object with only these keys: disposition, answer, follow_up_actions, action, calendar_reference, reason. Follow every field rule from the system message, keep follow_up_actions to at most three strings, and do not add commentary outside the JSON object.';
     }
 
     private function requiresInvestigationEvidence(string $text): bool
@@ -426,6 +446,8 @@ class StudioAiInference
      * @param  array<string, mixed>  $helpContext
      * @param  array<string, mixed>|null  $actorContext
      * @param  array<string, mixed>|null  $activeBookingDialog
+     * @param  array<string, mixed>  $studioContext
+     * @param  array<int, array{date: string, weekday: string, iso_weekday: int}>  $calendarAnchors
      * @return array<int, array{role: string, content: string}>
      */
     private function messages(
@@ -436,6 +458,9 @@ class StudioAiInference
         array $helpContext,
         ?array $actorContext,
         ?array $activeBookingDialog,
+        array $studioContext,
+        Carbon $requestClock,
+        array $calendarAnchors,
         string $channel,
         bool $investigationToolsAvailable,
     ): array {
@@ -445,12 +470,15 @@ class StudioAiInference
             "You are {$displayName}, an assistant for one Ladna studio account.",
             'Interpret the current owner request in the context of the chronological chat history. Short replies such as "the third option", "what about tomorrow?", pronouns, corrections, and confirmations inherit their meaning from recent turns.',
             'Do not mark a request out of scope merely because it is ambiguous in isolation. Resolve it from chat history, actor context, studio context, and the active booking dialog first.',
-            'Return exactly one JSON object with keys: "disposition", "answer", "follow_up_actions", "action", and "reason".',
+            'Return exactly one JSON object with keys: "disposition", "answer", "follow_up_actions", "action", "calendar_reference", and "reason".',
             'Allowed disposition values are: answer, out_of_scope, start_booking, continue_booking, cancel_booking, cancel_dialog.',
             'For disposition=answer, answer must be a non-empty string and action must be null.',
             'For disposition=out_of_scope, answer and action must be null.',
             'For an action disposition, answer must be null and action must be an object using only these keys: customer_id, scheduled_class_id, customer_query, trainer_query, date, booking_id, option_number, option_label, use_actor_trainer.',
-            'Use start_booking only when the owner asks to begin creating a customer booking. Extract known customer/trainer names and resolve relative dates to YYYY-MM-DD using request_clock.',
+            'calendar_reference must always be present. Use null unless an answer depends on a calendar date or a booking action includes a date. Otherwise use exactly {"date":"YYYY-MM-DD","requested_weekday":null|an English weekday,"weekday_occurrence":null|"first"|"next","uses_schedule_details":boolean}. Its date must match the answer evidence or action.date.',
+            'When the owner names a weekday in any language or abbreviation, requested_weekday must copy that meaning instead of being derived from the date. Set weekday_occurrence="first" for an unqualified weekday and "next" only when the owner explicitly asks for the following occurrence. Select the matching request_clock.calendar_anchors date, then use that date in class_booking_details when details are available.',
+            'Set uses_schedule_details=true only when an answer claims classes or bookings from class_booking_details. Set it false for calendar-only answers and booking actions.',
+            'Use start_booking only when the owner asks to begin creating a customer booking. Extract known customer/trainer names and resolve relative dates to YYYY-MM-DD using request_clock and the supplied calendar anchors.',
             'Use continue_booking only when active_booking_dialog is present and the owner supplies the missing value or selects an option. Put a one-based numeric selection in option_number, or an exact visible option label in option_label.',
             'Use cancel_booking only for a request to cancel an existing booking when a positive booking_id is explicit in the request or unambiguous history.',
             'Use cancel_dialog only to abandon the active booking dialog, not to cancel an existing booking.',
@@ -485,15 +513,17 @@ class StudioAiInference
             $platformInstructions !== '' ? 'Internal product-owner instruction: '.$platformInstructions : null,
         ]));
 
-        $timezone = $account->timezone ?: config('app.timezone');
         $userContent = array_filter([
             "Request clock JSON:\n".json_encode([
-                'current_datetime' => now($timezone)->toIso8601String(),
-                'timezone' => $timezone,
+                'current_datetime' => $requestClock->toIso8601String(),
+                'weekday' => Str::lower($requestClock->englishDayOfWeek),
+                'iso_weekday' => $requestClock->isoWeekday(),
+                'timezone' => $requestClock->timezoneName,
                 'channel' => $channel,
+                'calendar_anchors' => $calendarAnchors,
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             "Studio context JSON:\n".json_encode(
-                $this->contextBuilder->studioContext($account),
+                $studioContext,
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
             ),
             $actorContext !== null
@@ -524,6 +554,8 @@ class StudioAiInference
     /**
      * @param  array<string, mixed>  $helpContext
      * @param  array<string, mixed>|null  $activeBookingDialog
+     * @param  array<string, mixed>  $studioContext
+     * @param  array<int, array{date: string, weekday: string, iso_weekday: int}>  $calendarAnchors
      */
     private function parseResult(
         string $content,
@@ -531,6 +563,8 @@ class StudioAiInference
         PlatformAiSetting $setting,
         array $helpContext,
         ?array $activeBookingDialog,
+        array $studioContext,
+        array $calendarAnchors,
     ): StudioAiResult {
         $decoded = $this->decodeJsonObject($content);
         $envelopeError = $this->structuredEnvelopeError($decoded);
@@ -545,11 +579,41 @@ class StudioAiInference
             return $this->invalidStructuredResponse('unsupported_disposition');
         }
 
+        $calendarReference = null;
+
+        if ($decoded['calendar_reference'] !== null) {
+            if (! is_array($decoded['calendar_reference'])) {
+                return $this->invalidStructuredResponse('invalid_calendar_reference');
+            }
+
+            $calendarReference = StudioAiCalendarReference::fromArray($decoded['calendar_reference']);
+
+            if (! $calendarReference
+                || ! $calendarReference->matchesRequestedWeekday()
+                || ! $calendarReference->matchesCalendarAnchors($calendarAnchors)) {
+                return $this->invalidStructuredResponse('invalid_calendar_reference');
+            }
+        }
+
         if ($disposition === StudioAiDisposition::Answer) {
             $answer = $decoded['answer'];
 
             if (! is_string($answer) || trim($answer) === '' || $decoded['action'] !== null) {
                 return $this->invalidStructuredResponse('invalid_answer_fields');
+            }
+
+            $classBookingDetails = data_get($studioContext, 'class_booking_details', []);
+
+            if ($calendarReference !== null) {
+                if (! $calendarReference->existsInCalendarAnchors($calendarAnchors)) {
+                    return $this->invalidStructuredResponse('invalid_calendar_reference');
+                }
+
+                if ($calendarReference->usesScheduleDetails
+                    && (! is_array($classBookingDetails)
+                        || ! $calendarReference->matchesClassBookingDetails($classBookingDetails))) {
+                    return $this->invalidStructuredResponse('invalid_calendar_reference');
+                }
             }
 
             return StudioAiResult::answer(
@@ -558,11 +622,14 @@ class StudioAiInference
                 $setting->active_model,
                 $this->normalizeFollowUpActions($decoded['follow_up_actions'] ?? []),
                 $this->helpIndex->sources($helpContext['results']),
+                $calendarReference,
             );
         }
 
         if ($disposition === StudioAiDisposition::OutOfScope) {
-            if ($decoded['answer'] !== null || $decoded['action'] !== null) {
+            if ($decoded['answer'] !== null
+                || $decoded['action'] !== null
+                || $calendarReference !== null) {
                 return $this->invalidStructuredResponse('invalid_out_of_scope_fields');
             }
 
@@ -583,12 +650,32 @@ class StudioAiInference
             return $this->invalidStructuredResponse('invalid_action_slots');
         }
 
+        if (! $this->validActionCalendarReference($actionInput, $calendarReference)) {
+            return $this->invalidStructuredResponse('invalid_calendar_reference');
+        }
+
         return StudioAiResult::action(
             $disposition,
             $actionInput,
             AiProvider::OllamaCloud->value,
             $setting->active_model,
+            $calendarReference,
         );
+    }
+
+    private function validActionCalendarReference(
+        StudioAiActionInput $actionInput,
+        ?StudioAiCalendarReference $calendarReference,
+    ): bool {
+        if ($calendarReference?->usesScheduleDetails === true) {
+            return false;
+        }
+
+        if ($actionInput->date === null) {
+            return $calendarReference === null;
+        }
+
+        return $calendarReference?->date === $actionInput->date;
     }
 
     /**
@@ -618,7 +705,7 @@ class StudioAiInference
             return 'missing_json_object';
         }
 
-        $requiredKeys = ['disposition', 'answer', 'follow_up_actions', 'action', 'reason'];
+        $requiredKeys = ['disposition', 'answer', 'follow_up_actions', 'action', 'calendar_reference', 'reason'];
 
         if (array_diff($requiredKeys, array_keys($decoded)) !== []) {
             return 'missing_envelope_keys';
@@ -675,6 +762,26 @@ class StudioAiInference
     private function channel(?AiConversation $conversation): string
     {
         return filled($conversation?->channel) ? (string) $conversation->channel : 'dashboard_chat';
+    }
+
+    /**
+     * @return array<int, array{date: string, weekday: string, iso_weekday: int}>
+     */
+    private function calendarAnchors(Carbon $requestClock): array
+    {
+        $today = $requestClock->copy()->startOfDay();
+
+        return collect(range(0, 13))
+            ->map(function (int $offset) use ($today): array {
+                $date = $today->copy()->addDays($offset);
+
+                return [
+                    'date' => $date->toDateString(),
+                    'weekday' => Str::lower($date->englishDayOfWeek),
+                    'iso_weekday' => $date->isoWeekday(),
+                ];
+            })
+            ->all();
     }
 
     /**

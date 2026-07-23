@@ -94,6 +94,7 @@ class StudioAiInvestigationTest extends TestCase
                             'answer' => 'Перевірив реєстр: дублювань або невідповідностей не виявлено.',
                             'follow_up_actions' => [],
                             'action' => null,
+                            'calendar_reference' => null,
                             'reason' => 'Evidence-backed booking ledger investigation.',
                         ], JSON_UNESCAPED_UNICODE),
                     ],
@@ -162,7 +163,7 @@ class StudioAiInvestigationTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Для детальної перевірки потрібен доступ до керування абонементами.","follow_up_actions":[],"action":null,"reason":"Permission is required."}',
+                    'content' => '{"disposition":"answer","answer":"Для детальної перевірки потрібен доступ до керування абонементами.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"Permission is required."}',
                 ],
             ]),
         ]);
@@ -510,6 +511,7 @@ class StudioAiInvestigationTest extends TestCase
             'answer' => $answer,
             'follow_up_actions' => [],
             'action' => null,
+            'calendar_reference' => null,
             'reason' => 'Test response.',
         ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
