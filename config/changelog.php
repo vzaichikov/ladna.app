@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.92.0',
+                'date' => '2026-07-23',
+                'title' => 'Closed classes for the studio team',
+                'items' => ['Studios can now opt in to Closed classes, reserve a room for a one-off internal activity, and assign one main trainer plus any number of additional trainers. The class can be fully edited before it starts, cancelled, and restored while Ladna protects the room and every assigned trainer from overlapping work.', 'Closed classes stay visible only to studio staff. They never accept customers, use capacity, class passes, payments, or attendance, appear in public and customer schedules, or affect trainer compensation reports. People Counter expects all assigned trainers and keeps the class interval out of unknown-presence reporting.', 'Owner help now explains how to enable the format, create an internal class type, add a closed class, and manage multiple trainers.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.91.1',
                 'date' => '2026-07-23',
                 'title' => 'More natural Ladna assistant conversations',
@@ -828,6 +835,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.92.0',
+                'date' => '2026-07-23',
+                'title' => 'Закриті заняття для команди студії',
+                'items' => ['Студії тепер можуть увімкнути Закриті заняття, зарезервувати зал для разової внутрішньої події та призначити одного Основного тренера і будь-яку кількість Додаткових тренерів. До початку заняття можна повністю редагувати, скасовувати й відновлювати, а Ladna захищає зал і час усіх вибраних тренерів від накладок.', 'Закриті заняття видно тільки команді студії. Вони не приймають клієнтів, не використовують місткість, абонементи, оплати чи відвідування, не зʼявляються в публічному та клієнтському розкладі й не впливають на звіт для розрахунку роботи тренерів. People Counter очікує всіх призначених тренерів і не відносить цей проміжок до невідомої присутності.', 'Допомога для власниць тепер пояснює, як увімкнути формат, створити внутрішній тип заняття, додати закрите заняття та працювати з кількома тренерами.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.91.1',
                 'date' => '2026-07-23',

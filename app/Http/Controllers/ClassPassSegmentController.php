@@ -16,30 +16,34 @@ class ClassPassSegmentController extends Controller
     public function index(Account $account): View
     {
         $this->ensureCurrentUserOwns($account);
+        $scheduleKindTabs = $this->scheduleKindTabs($account);
 
         return view('class-pass-segments.index', [
             'account' => $account,
             'classPassSegments' => $account->classPassSegments()
                 ->with('activityDirections')
                 ->withCount('classPassPlans')
+                ->whereIn('schedule_kind', array_keys($scheduleKindTabs))
                 ->ordered()
                 ->get(),
-            'scheduleKindTabs' => $this->scheduleKindTabs($account),
+            'scheduleKindTabs' => $scheduleKindTabs,
         ]);
     }
 
     public function create(Account $account): View
     {
         $this->ensureCurrentUserOwns($account);
+        $scheduleKindTabs = $this->scheduleKindTabs($account);
+        abort_if($scheduleKindTabs === [], 404);
 
         return view('class-pass-segments.create', [
             'account' => $account,
             'classPassSegment' => new ClassPassSegment([
-                'schedule_kind' => $account->enabledScheduleKindValues()[0] ?? 'group_class',
+                'schedule_kind' => array_key_first($scheduleKindTabs) ?? 'group_class',
                 'is_active' => true,
                 'sort_order' => 0,
             ]),
-            ...$this->formData($account),
+            ...$this->formData($account, $scheduleKindTabs),
         ]);
     }
 
@@ -64,6 +68,7 @@ class ClassPassSegmentController extends Controller
     public function edit(Account $account, ClassPassSegment $classPassSegment): View
     {
         $this->ensureBelongsToAccount($account, $classPassSegment);
+        $this->ensureClassPassEligible($account, $classPassSegment);
         $this->ensureCurrentUserOwns($account);
         $classPassSegment->loadMissing('activityDirections');
 
@@ -77,6 +82,7 @@ class ClassPassSegmentController extends Controller
     public function update(UpdateClassPassSegmentRequest $request, Account $account, ClassPassSegment $classPassSegment): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $classPassSegment);
+        $this->ensureClassPassEligible($account, $classPassSegment);
 
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug($account, ($validated['slug'] ?? null) ?: $validated['name'], $classPassSegment);
@@ -105,6 +111,15 @@ class ClassPassSegmentController extends Controller
         abort_unless($classPassSegment->account_id === $account->id, 404);
     }
 
+    private function ensureClassPassEligible(Account $account, ClassPassSegment $classPassSegment): void
+    {
+        abort_unless(
+            $account->hasScheduleKindEnabled($classPassSegment->schedule_kind)
+                && ScheduleKindRegistry::hasCapability($classPassSegment->schedule_kind, 'class_pass_eligible'),
+            404,
+        );
+    }
+
     private function ensureCurrentUserOwns(Account $account): void
     {
         abort_unless($account->isOwnedBy(request()->user()), 403);
@@ -124,17 +139,18 @@ class ClassPassSegmentController extends Controller
     private function scheduleKindTabs(Account $account): array
     {
         return collect(ScheduleKindRegistry::all())
-            ->filter(fn (array $definition, string $value): bool => $account->hasScheduleKindEnabled($value))
+            ->filter(fn (array $definition, string $value): bool => $account->hasScheduleKindEnabled($value)
+                && (bool) $definition['class_pass_eligible'])
             ->all();
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function formData(Account $account): array
+    private function formData(Account $account, ?array $scheduleKindTabs = null): array
     {
         return [
-            'scheduleKindTabs' => $this->scheduleKindTabs($account),
+            'scheduleKindTabs' => $scheduleKindTabs ?? $this->scheduleKindTabs($account),
             'activityDirections' => $account->activityDirections()->active()->orderBy('name')->get(),
         ];
     }

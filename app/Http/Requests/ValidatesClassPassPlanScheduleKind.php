@@ -17,9 +17,14 @@ trait ValidatesClassPassPlanScheduleKind
      */
     protected function scheduleKindRules(?Account $account): array
     {
+        $eligibleValues = array_values(array_intersect(
+            $account?->enabledScheduleKindValues() ?? ScheduleKindRegistry::defaultEnabledValues(),
+            ScheduleKindRegistry::classPassEligibleValues(),
+        ));
+
         return [
             'required',
-            Rule::in($account?->enabledScheduleKindValues() ?? ScheduleKindRegistry::defaultEnabledValues()),
+            Rule::in($eligibleValues),
         ];
     }
 
@@ -33,7 +38,8 @@ trait ValidatesClassPassPlanScheduleKind
 
         $scheduleKindValue = (string) $this->input('schedule_kind');
 
-        if (! in_array($scheduleKindValue, $account->enabledScheduleKindValues(), true)) {
+        if (! in_array($scheduleKindValue, $account->enabledScheduleKindValues(), true)
+            || ! in_array($scheduleKindValue, ScheduleKindRegistry::classPassEligibleValues(), true)) {
             return;
         }
 

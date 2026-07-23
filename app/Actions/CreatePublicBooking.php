@@ -13,6 +13,7 @@ use App\Models\ScheduledClass;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\ScheduleKindRegistry;
+use App\Support\ScheduleOccupancy;
 use App\Support\TrainerActivityDirectionEligibility;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,7 @@ class CreatePublicBooking
         private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
         private readonly ClassBookingNotificationCoordinator $notifications,
         private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
+        private readonly ScheduleOccupancy $scheduleOccupancy,
     ) {}
 
     /**
@@ -131,6 +133,10 @@ class CreatePublicBooking
         $durationMinutes = (int) ($classType->default_duration_minutes ?: 60);
         $endsAt = $startsAt->addMinutes($durationMinutes);
 
+        $this->scheduleOccupancy->lockAccount($account);
+        $trainerIds = $trainer ? [$trainer->id] : [];
+        $this->scheduleOccupancy->lockResources($account, $room->id, $trainerIds);
+
         if ($scheduleKind === ScheduleKind::PrivateLesson && ! $trainer) {
             throw ValidationException::withMessages([
                 'trainer_id' => __('app.private_lesson_trainer_required'),
@@ -162,6 +168,14 @@ class CreatePublicBooking
                 'starts_at' => __('app.manual_slot_unavailable'),
             ]);
         }
+
+        $this->scheduleOccupancy->assertAvailable(
+            $account,
+            $room->id,
+            $trainerIds,
+            $startsAt->timezone(config('app.timezone')),
+            $endsAt->timezone(config('app.timezone')),
+        );
 
         return $account->scheduledClasses()->create([
             'location_id' => $location->id,

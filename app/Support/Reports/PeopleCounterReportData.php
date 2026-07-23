@@ -25,6 +25,7 @@ class PeopleCounterReportData
                 'location:id,account_id,name,timezone',
                 'room:id,account_id,location_id,name,rtsp_enabled,rtsp_url',
                 'trainer:id,account_id,name',
+                'additionalTrainers:id,account_id,name',
                 'classType:id,account_id,name,schedule_kind',
                 'peopleCount',
                 'peopleCounterSamples' => fn ($query) => $query
@@ -55,7 +56,13 @@ class PeopleCounterReportData
             ->when($dateRange !== null, fn ($query) => $query->whereBetween('starts_at', $dateRange))
             ->when($filters['location_id'] !== null, fn ($query) => $query->where('location_id', $filters['location_id']))
             ->when($filters['room_id'] !== null, fn ($query) => $query->where('room_id', $filters['room_id']))
-            ->when($filters['trainer_id'] !== null, fn ($query) => $query->where('trainer_id', $filters['trainer_id']))
+            ->when($filters['trainer_id'] !== null, function ($query) use ($filters): void {
+                $query->where(function ($query) use ($filters): void {
+                    $query
+                        ->where('trainer_id', $filters['trainer_id'])
+                        ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($filters['trainer_id']));
+                });
+            })
             ->orderByDesc('starts_at')
             ->paginate($perPage)
             ->withQueryString();

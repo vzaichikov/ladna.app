@@ -9,7 +9,9 @@
         $scheduleKind = $quickBookingOption['kind'];
         $definition = $quickBookingOption['definition'];
         $modalId = 'manual-class-title-'.$scheduleKind->value;
-        $isPrivateLesson = $scheduleKind === \App\Enums\ScheduleKind::PrivateLesson;
+        $isInternalClass = $scheduleKind === \App\Enums\ScheduleKind::InternalClass;
+        $isTrainerRequired = (bool) $definition['trainer_required'];
+        $isCustomerBookable = (bool) $definition['customer_bookable'];
     @endphp
 
     <div
@@ -104,15 +106,25 @@
                             </label>
 
                             <label class="block">
-                                <span class="crm-label">{{ __('app.trainer') }}</span>
-                                <select name="trainer_id" @required($isPrivateLesson) class="crm-field">
-                                    <option value="">{{ __('app.trainer_not_assigned') }}</option>
+                                <span class="crm-label">{{ $isInternalClass ? __('app.main_trainer') : __('app.trainer') }}</span>
+                                <select name="trainer_id" @required($isTrainerRequired) class="crm-field">
+                                    @unless ($isTrainerRequired)
+                                        <option value="">{{ __('app.trainer_not_assigned') }}</option>
+                                    @endunless
                                     @foreach ($quickBookingTrainers as $trainer)
-                                        <option value="{{ $trainer->id }}">{{ $trainer->name }}</option>
+                                        <option value="{{ $trainer->id }}" @selected($isTrainerRequired && $currentTrainer?->id === $trainer->id)>{{ $trainer->name }}</option>
                                     @endforeach
                                 </select>
                             </label>
                         </div>
+
+                        @if ($isInternalClass)
+                            <x-ui.trainer-multi-select
+                                :trainers="$quickBookingTrainers"
+                                :selected-ids="old('additional_trainer_ids', [])"
+                                input-id="additional-trainers-{{ $scheduleKind->value }}"
+                            />
+                        @endif
 
                         <div class="grid gap-4 sm:grid-cols-2">
                             <label class="block">
@@ -121,28 +133,30 @@
                             </label>
                             <label class="block">
                                 <span class="crm-label">{{ __('app.duration_minutes') }}</span>
-                                <input name="duration_minutes" type="number" min="15" max="480" step="5" class="crm-field" placeholder="60">
+                                <input name="duration_minutes" type="number" min="15" max="480" step="5" @required($isInternalClass) class="crm-field" placeholder="60">
                             </label>
                         </div>
 
-                        <div class="grid gap-4 sm:grid-cols-3">
-                            <label class="block">
-                                <span class="crm-label">{{ __('app.capacity') }}</span>
-                                <input name="capacity" type="number" min="1" max="999" class="crm-field">
-                            </label>
-                            <label class="block">
-                                <span class="crm-label">{{ __('app.booking_cutoff_minutes') }}</span>
-                                <input name="booking_cutoff_minutes" type="number" min="0" max="10080" class="crm-field">
-                            </label>
-                            <label class="block">
-                                <span class="crm-label">{{ __('app.cancellation_cutoff_minutes') }}</span>
-                                <input name="cancellation_cutoff_minutes" type="number" min="0" max="10080" class="crm-field">
-                            </label>
-                        </div>
+                        @if ($isCustomerBookable)
+                            <div class="grid gap-4 sm:grid-cols-3">
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.capacity') }}</span>
+                                    <input name="capacity" type="number" min="1" max="999" class="crm-field">
+                                </label>
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.booking_cutoff_minutes') }}</span>
+                                    <input name="booking_cutoff_minutes" type="number" min="0" max="10080" class="crm-field">
+                                </label>
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.cancellation_cutoff_minutes') }}</span>
+                                    <input name="cancellation_cutoff_minutes" type="number" min="0" max="10080" class="crm-field">
+                                </label>
+                            </div>
+                        @endif
 
                         <label class="block">
                             <span class="crm-label">{{ __('app.title') }}</span>
-                            <input name="title" class="crm-field">
+                            <input name="title" @required($isInternalClass) class="crm-field">
                         </label>
 
                         <label class="block">

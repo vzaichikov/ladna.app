@@ -76,6 +76,13 @@ class Trainer extends Model
         return $this->hasMany(ScheduledClass::class);
     }
 
+    public function additionalScheduledClasses(): BelongsToMany
+    {
+        return $this->belongsToMany(ScheduledClass::class, 'scheduled_class_additional_trainer')
+            ->withPivot('account_id')
+            ->withTimestamps();
+    }
+
     public function scheduleSeries(): HasMany
     {
         return $this->hasMany(ScheduleSeries::class);

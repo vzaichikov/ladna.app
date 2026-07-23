@@ -7,13 +7,19 @@
     $scheduleKind = $scheduledClass->classType?->schedule_kind;
     $isGroupClass = $scheduleKind === \App\Enums\ScheduleKind::GroupClass;
     $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
+    $additionalTrainers = $scheduledClass->relationLoaded('additionalTrainers')
+        ? $scheduledClass->additionalTrainers
+        : collect();
+    $acceptsCustomerBookings = $scheduledClass->acceptsCustomerBookings();
     $activeBookingStatuses = [
         \App\Enums\ClassBookingStatus::Booked->value,
         \App\Enums\ClassBookingStatus::Attended->value,
     ];
-    $activeBookings = $scheduledClass->classBookings->filter(
-        fn ($booking): bool => ! $booking->isCorrectedRemoved() && in_array($booking->status->value, $activeBookingStatuses, true),
-    );
+    $activeBookings = $acceptsCustomerBookings
+        ? $scheduledClass->classBookings->filter(
+            fn ($booking): bool => ! $booking->isCorrectedRemoved() && in_array($booking->status->value, $activeBookingStatuses, true),
+        )
+        : collect();
     $capacity = max(0, (int) ($scheduledClass->capacity ?? 0));
     $loadPercent = $capacity > 0 ? (int) round(($activeBookings->count() / $capacity) * 100) : 0;
     $barWidth = min(100, max(0, $loadPercent));
@@ -44,8 +50,14 @@
     $canCancelClass = $canManageClassCancellation && ! $isCancelledClass && $scheduledClass->isStudioCancellationOpen();
     $canRestoreClass = $canManageClassCancellation && $isCancelledClass && ! $isClosedCorrectionCancellation;
     $isClosedClass = ! $isCancelledClass && $scheduledClass->ends_at->lessThanOrEqualTo(now());
-    $canCorrectClosedClass = (auth()->user()?->can('correctClosedClasses', $account) ?? false) && $isClosedClass;
+    $canCorrectClosedClass = $acceptsCustomerBookings
+        && (auth()->user()?->can('correctClosedClasses', $account) ?? false)
+        && $isClosedClass;
     $canOpenCustomerPage = auth()->user()?->can('manageClients', $account) ?? false;
+    $canEditInternalClass = ! $readonly
+        && $account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::InternalClass)
+        && (auth()->user()?->can('manageSchedule', $account) ?? false)
+        && $scheduledClass->isFullyEditableOccurrence();
     $classBorderColor = $isCancelledClass ? '#94A3B8' : $directionColor;
 @endphp
 
@@ -77,6 +89,14 @@
         </div>
         <div class="flex shrink-0 items-center gap-2">
             <span class="{{ $statusClass }}">{{ __($scheduledClass->displayStatusLabelKey()) }}</span>
+            @if ($canEditInternalClass)
+                <x-ui.action-button
+                    type="button"
+                    icon="edit"
+                    :label="__('app.edit_internal_class')"
+                    data-manual-class-open="internal-edit-{{ $scheduledClass->id }}"
+                />
+            @endif
             @if (! $readonly && $canManageClassCancellation)
                 @if ($canCancelClass)
                     <form
@@ -117,7 +137,7 @@
             <dd class="mt-1 font-semibold text-slate-950">{{ $scheduledClass->location->name }} · {{ $scheduledClass->room?->name ?? __('app.room') }}</dd>
         </div>
         <div>
-            <dt class="text-slate-500">{{ __('app.trainer') }}</dt>
+            <dt class="text-slate-500">{{ $scheduleKind === \App\Enums\ScheduleKind::InternalClass ? __('app.main_trainer') : __('app.trainer') }}</dt>
             <dd class="mt-1 flex items-center gap-2 font-semibold text-slate-950">
                 <span>{{ $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned') }}</span>
                 @if ($canEditScheduledClassTrainer)
@@ -130,6 +150,13 @@
                     />
                 @endif
             </dd>
+            @if ($additionalTrainers->isNotEmpty())
+                <dd class="mt-2 flex flex-wrap gap-2">
+                    @foreach ($additionalTrainers as $additionalTrainer)
+                        <span class="crm-status-muted">{{ $additionalTrainer->name }}</span>
+                    @endforeach
+                </dd>
+            @endif
         </div>
     </dl>
 
@@ -163,7 +190,7 @@
         </div>
     @endif
 
-    @if (! $readonly)
+    @if (! $readonly && $acceptsCustomerBookings)
         @can('manageBookings', $account)
         @unless ($isCancelledClass || $isClosedClass)
         <form method="POST" action="{{ route('dashboard.accounts.scheduled-classes.bookings.store', [$account, $scheduledClass]) }}" data-async-form class="mt-4 space-y-3 rounded-lg bg-slate-50 p-3">
@@ -336,7 +363,7 @@
         </details>
     @endif
 
-    @if ($scheduledClass->classBookings->isNotEmpty())
+    @if ($acceptsCustomerBookings && $scheduledClass->classBookings->isNotEmpty())
         <div class="mt-4 space-y-2">
             @foreach ($scheduledClass->classBookings as $booking)
                 @php

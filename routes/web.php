@@ -460,6 +460,7 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ['group-classes', 'group-classes', ScheduleKind::GroupClass],
             ['private-lessons', 'private-lessons', ScheduleKind::PrivateLesson],
             ['room-rentals', 'room-rentals', ScheduleKind::RoomRental],
+            ['internal-classes', 'internal-classes', ScheduleKind::InternalClass],
         ] as [$uri, $name, $scheduleKind]) {
             Route::get("accounts/{account}/{$uri}", [ClassTypeController::class, 'index'])
                 ->defaults('schedule_kind', $scheduleKind->value)
@@ -595,6 +596,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.quick-bookings.manual-availability');
         Route::post('accounts/{account}/scheduled-classes/manual/{scheduleKind}', [ManualScheduledClassController::class, 'store'])
             ->name('accounts.scheduled-classes.manual.store');
+        Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/internal', [ManualScheduledClassController::class, 'update'])
+            ->name('accounts.scheduled-classes.internal.update');
         Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/trainer', [ScheduledClassTrainerController::class, 'update'])
             ->name('accounts.scheduled-classes.trainer.update');
         Route::patch('accounts/{account}/scheduled-classes/{scheduledClass}/cancel', [ScheduledClassCancellationController::class, 'cancel'])

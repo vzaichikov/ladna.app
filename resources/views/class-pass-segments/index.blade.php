@@ -8,13 +8,18 @@
             <h1 class="crm-page-title">{{ __('app.class_pass_segments') }}</h1>
             <p class="crm-page-copy">{{ __('app.class_pass_segments_copy') }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.class-pass-segments.create', $account)">
-            <x-ui.icon name="plus" class="h-4 w-4" />
-            {{ __('app.create_class_pass_segment') }}
-        </x-ui.button>
+        @if ($scheduleKindTabs !== [])
+            <x-ui.button :href="route('dashboard.accounts.class-pass-segments.create', $account)">
+                <x-ui.icon name="plus" class="h-4 w-4" />
+                {{ __('app.create_class_pass_segment') }}
+            </x-ui.button>
+        @endif
     </div>
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+        @if ($scheduleKindTabs === [])
+            <x-ui.empty-state :title="__('app.no_class_pass_eligible_formats')" icon="class-pass-plans" class="m-5" />
+        @else
         @forelse ($classPassSegments as $classPassSegment)
             @php
                 $scheduleKindValue = $classPassSegment->schedule_kind->value;
@@ -56,5 +61,6 @@
         @empty
             <x-ui.empty-state :title="__('app.no_class_pass_segments')" icon="class-pass-plans" class="m-5" />
         @endforelse
+        @endif
     </x-ui.panel>
 @endsection

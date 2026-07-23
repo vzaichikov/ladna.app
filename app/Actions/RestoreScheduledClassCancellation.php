@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassReservation;
@@ -13,6 +14,7 @@ use App\Models\ScheduledClassCancellationEffect;
 use App\Models\User;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\ScheduleOccupancy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -22,12 +24,16 @@ class RestoreScheduledClassCancellation
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
         private readonly TransactionalMailDispatcher $mailDispatcher,
         private readonly ClassBookingNotificationCoordinator $notifications,
+        private readonly ScheduleOccupancy $scheduleOccupancy,
     ) {}
 
     public function execute(Account $account, ScheduledClass $scheduledClass, ?User $user): ScheduledClassCancellation
     {
         $cancellation = DB::transaction(function () use ($account, $scheduledClass, $user): ScheduledClassCancellation {
+            $this->scheduleOccupancy->lockAccount($account);
+
             $lockedClass = ScheduledClass::query()
+                ->with(['classType', 'additionalTrainers'])
                 ->whereBelongsTo($account)
                 ->whereKey($scheduledClass->id)
                 ->lockForUpdate()
@@ -50,6 +56,44 @@ class RestoreScheduledClassCancellation
                 throw ValidationException::withMessages([
                     'scheduled_class' => __('app.scheduled_class_restore_closed_correction_unavailable'),
                 ]);
+            }
+
+            if ($cancellation->previous_scheduled_class_status === ScheduledClassStatus::Scheduled->value) {
+                if ($lockedClass->classType?->schedule_kind === ScheduleKind::InternalClass && $lockedClass->room_id === null) {
+                    throw ValidationException::withMessages([
+                        'scheduled_class' => __('app.scheduled_class_restore_unavailable'),
+                    ]);
+                }
+
+                $trainerIds = collect([$lockedClass->trainer_id])
+                    ->merge($lockedClass->additionalTrainerIds())
+                    ->filter()
+                    ->map(fn (mixed $trainerId): int => (int) $trainerId)
+                    ->values()
+                    ->all();
+                $this->scheduleOccupancy->lockResources($account, $lockedClass->room_id, $trainerIds);
+
+                if ($lockedClass->classType?->schedule_kind === ScheduleKind::InternalClass) {
+                    $this->scheduleOccupancy->assertAvailable(
+                        $account,
+                        $lockedClass->room_id,
+                        $trainerIds,
+                        $lockedClass->starts_at,
+                        $lockedClass->ends_at,
+                        $lockedClass->id,
+                    );
+                } elseif ($this->scheduleOccupancy->hasInternalClassConflict(
+                    $account,
+                    $lockedClass->room_id,
+                    $trainerIds,
+                    $lockedClass->starts_at,
+                    $lockedClass->ends_at,
+                    $lockedClass->id,
+                )) {
+                    throw ValidationException::withMessages([
+                        'scheduled_class' => __('app.manual_slot_unavailable'),
+                    ]);
+                }
             }
 
             $effects = $cancellation->effects()

@@ -325,7 +325,11 @@ class TrainerPrivateLessonAvailability
                 $timeframe->starts_at->copy()->timezone($timezone)->format('Y-m-d\TH:i') => true,
             ]);
         $ownClasses = $account->scheduledClasses()
-            ->where('trainer_id', $trainer->id)
+            ->where(function ($query) use ($trainer): void {
+                $query
+                    ->where('trainer_id', $trainer->id)
+                    ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($trainer->id));
+            })
             ->where('status', ScheduledClassStatus::Scheduled->value)
             ->where('starts_at', '<=', $weekEnd->timezone(config('app.timezone')))
             ->where('ends_at', '>=', $weekStart->timezone(config('app.timezone')))
@@ -449,7 +453,11 @@ class TrainerPrivateLessonAvailability
     {
         return $account->scheduledClasses()
             ->where('status', ScheduledClassStatus::Scheduled->value)
-            ->where('trainer_id', $trainer->id)
+            ->where(function ($query) use ($trainer): void {
+                $query
+                    ->where('trainer_id', $trainer->id)
+                    ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($trainer->id));
+            })
             ->where('starts_at', '<', $endsAt->timezone(config('app.timezone')))
             ->where('ends_at', '>', $startsAt->timezone(config('app.timezone')))
             ->exists();

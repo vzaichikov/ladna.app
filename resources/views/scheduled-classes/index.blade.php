@@ -9,15 +9,17 @@
             <p class="crm-page-copy">{{ __('app.generated_classes_copy') }}</p>
         </div>
         <div class="flex flex-col gap-2 sm:items-end">
-            @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass))
+            @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass) || $manualClassOptions->isNotEmpty())
                 <div class="flex flex-wrap gap-2" data-schedule-secondary-actions>
-                    <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
+                    @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass))
+                        <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
+                    @endif
                     <x-ui.button :href="route('dashboard.accounts.scheduled-classes-history.index', $account)" variant="secondary">{{ __('app.scheduled_classes_history') }}</x-ui.button>
                     @can('manageSchedule', $account)
                         @foreach ($manualClassOptions as $manualClassOption)
                             <x-ui.button type="button" variant="secondary" data-manual-class-open="{{ $manualClassOption['kind']->value }}">
                                 <x-ui.icon name="plus" class="h-4 w-4" />
-                                <span>{{ __('app.add_class_record_short') }}</span>
+                                <span>{{ __('app.add_'.$manualClassOption['kind']->value.'_record_short') }}</span>
                             </x-ui.button>
                         @endforeach
                     @endcan
@@ -193,6 +195,14 @@
     ])
 
     @include('scheduled-classes._manual-class-modals', [
+        'manualClassOptions' => $manualClassOptions,
+        'quickBookingLocations' => $quickBookingLocations,
+        'quickBookingRooms' => $quickBookingRooms,
+        'quickBookingTrainers' => $quickBookingTrainers,
+    ])
+
+    @include('scheduled-classes._internal-class-edit-modals', [
+        'scheduledClassDays' => $scheduledClassDays,
         'manualClassOptions' => $manualClassOptions,
         'quickBookingLocations' => $quickBookingLocations,
         'quickBookingRooms' => $quickBookingRooms,

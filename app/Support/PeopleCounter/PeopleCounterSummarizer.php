@@ -3,7 +3,6 @@
 namespace App\Support\PeopleCounter;
 
 use App\Enums\ClassBookingStatus;
-use App\Enums\ScheduleKind;
 use App\Models\PeopleCounterSample;
 use App\Models\ScheduledClass;
 use App\Models\ScheduledClassPeopleCount;
@@ -34,7 +33,7 @@ class PeopleCounterSummarizer
             ->where('ends_at', '<=', $endedBefore)
             ->whereDoesntHave('peopleCount')
             ->whereIn('account_id', $openAccountIds)
-            ->with(['account:id,status,mode,enable_people_counter,timezone,opening_hours', 'classType:id,account_id,schedule_kind', 'room'])
+            ->with(['account:id,status,mode,enable_people_counter,timezone,opening_hours', 'classType:id,account_id,schedule_kind', 'room', 'additionalTrainers:id,account_id'])
             ->orderBy('ends_at')
             ->limit($limit)
             ->get();
@@ -59,7 +58,7 @@ class PeopleCounterSummarizer
      */
     public function summarizeClass(ScheduledClass $scheduledClass, ?callable $debug = null): ScheduledClassPeopleCount
     {
-        $scheduledClass->loadMissing(['account', 'classType', 'room']);
+        $scheduledClass->loadMissing(['account', 'classType', 'room', 'additionalTrainers:id,account_id']);
 
         if (! $scheduledClass->account || $scheduledClass->account->isReadOnlyDemo()) {
             throw new RuntimeException('People counter summarization is unavailable for synthetic demo accounts.');
@@ -77,10 +76,12 @@ class PeopleCounterSummarizer
             ->where('status', PeopleCounterSample::StatusSucceeded)
             ->filter(fn (PeopleCounterSample $sample): bool => $sample->detected_count !== null);
         $failedSamplesCount = $samples->count() - $successfulSamples->count();
-        $attendedCount = $scheduledClass->classBookings()
-            ->notCorrectedRemoved()
-            ->where('status', ClassBookingStatus::Attended->value)
-            ->count();
+        $attendedCount = $scheduledClass->acceptsCustomerBookings()
+            ? $scheduledClass->classBookings()
+                ->notCorrectedRemoved()
+                ->where('status', ClassBookingStatus::Attended->value)
+                ->count()
+            : 0;
         $expectedPeopleCount = $this->expectedPeopleCount($scheduledClass, $attendedCount);
 
         $detectedCount = null;
@@ -142,11 +143,7 @@ class PeopleCounterSummarizer
 
     private function expectedPeopleCount(ScheduledClass $scheduledClass, int $attendedCount): int
     {
-        if ($scheduledClass->classType?->schedule_kind === ScheduleKind::GroupClass) {
-            return $attendedCount + 1;
-        }
-
-        return $attendedCount;
+        return $attendedCount + $scheduledClass->peopleCounterTrainerAdjustment();
     }
 
     /**

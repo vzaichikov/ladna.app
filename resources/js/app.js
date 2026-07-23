@@ -384,6 +384,133 @@ function initCustomerAutocomplete(root = document) {
     });
 }
 
+function initTrainerMultiSelect(root = document) {
+    root.querySelectorAll('[data-trainer-multi-select]').forEach((container) => {
+        if (container.dataset.trainerMultiSelectReady === 'true') {
+            return;
+        }
+
+        const valueSelect = container.querySelector('[data-trainer-multi-select-values]');
+        const ui = container.querySelector('[data-trainer-multi-select-ui]');
+        const input = container.querySelector('[data-trainer-multi-select-input]');
+        const selectedContainer = container.querySelector('[data-trainer-multi-select-selected]');
+        const results = container.querySelector('[data-trainer-multi-select-results]');
+        const mainTrainerSelect = container.closest('form')?.querySelector('select[name="trainer_id"]');
+
+        if (!valueSelect || !ui || !input || !selectedContainer || !results) {
+            return;
+        }
+
+        container.dataset.trainerMultiSelectReady = 'true';
+        valueSelect.classList.add('hidden');
+        ui.classList.remove('hidden');
+
+        const options = () => Array.from(valueSelect.options);
+        const selectedOptions = () => options().filter((option) => option.selected);
+        const mainTrainerId = () => mainTrainerSelect?.value ?? '';
+        const hideResults = () => {
+            results.classList.add('hidden');
+            results.innerHTML = '';
+        };
+
+        const renderSelected = () => {
+            selectedContainer.innerHTML = '';
+            const selected = selectedOptions();
+            selectedContainer.classList.toggle('hidden', selected.length === 0);
+
+            selected.forEach((option) => {
+                const chip = document.createElement('span');
+                chip.className = 'inline-flex max-w-full items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-800';
+
+                const label = document.createElement('span');
+                label.className = 'truncate';
+                label.textContent = option.textContent;
+
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'inline-flex size-5 shrink-0 items-center justify-center rounded-full text-brand-700 hover:bg-brand-100 hover:text-brand-950';
+                remove.setAttribute('aria-label', `${container.dataset.removeLabel ?? 'Remove'}: ${option.textContent}`);
+                remove.textContent = '×';
+                remove.addEventListener('click', () => {
+                    option.selected = false;
+                    renderSelected();
+                    renderResults();
+                    input.focus();
+                });
+
+                chip.append(label, remove);
+                selectedContainer.append(chip);
+            });
+        };
+
+        const renderResults = () => {
+            const term = input.value.trim().toLocaleLowerCase();
+            const candidates = options().filter((option) => (
+                !option.selected
+                && option.value !== mainTrainerId()
+                && option.textContent.toLocaleLowerCase().includes(term)
+            ));
+
+            results.innerHTML = '';
+
+            if (candidates.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'px-3 py-2 text-sm text-slate-500';
+                empty.textContent = container.dataset.noResults ?? 'No matching trainers.';
+                results.append(empty);
+            } else {
+                candidates.forEach((option) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-brand-50 hover:text-slate-950';
+                    button.setAttribute('role', 'option');
+                    button.textContent = option.textContent;
+                    button.addEventListener('click', () => {
+                        option.selected = true;
+                        input.value = '';
+                        renderSelected();
+                        renderResults();
+                        input.focus();
+                    });
+                    results.append(button);
+                });
+            }
+
+            results.classList.remove('hidden');
+        };
+
+        const syncMainTrainer = () => {
+            const selectedMain = options().find((option) => option.value === mainTrainerId());
+
+            if (selectedMain?.selected) {
+                selectedMain.selected = false;
+            }
+
+            renderSelected();
+
+            if (!results.classList.contains('hidden')) {
+                renderResults();
+            }
+        };
+
+        input.addEventListener('focus', renderResults);
+        input.addEventListener('input', renderResults);
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hideResults();
+            }
+        });
+        mainTrainerSelect?.addEventListener('change', syncMainTrainer);
+        document.addEventListener('click', (event) => {
+            if (!container.contains(event.target)) {
+                hideResults();
+            }
+        });
+
+        syncMainTrainer();
+    });
+}
+
 function initStudioLoginPickers(root = document) {
     root.querySelectorAll('[data-studio-login-picker]').forEach((container) => {
         if (container.dataset.studioLoginPickerReady === 'true') {
@@ -4602,6 +4729,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initColorPickers();
     initStudioRulesEditors();
     initCustomerAutocomplete();
+    initTrainerMultiSelect();
     initStudioLoginPickers();
     initClassPassPreviews();
     initCustomerAuthTabs();

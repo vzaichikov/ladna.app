@@ -19,25 +19,29 @@ class MobileScheduledClassPayload
             'room',
             'classType.activityDirection',
             'trainer',
+            'additionalTrainers',
         ]);
 
         $activeBookingStatuses = [
             ClassBookingStatus::Booked->value,
             ClassBookingStatus::Attended->value,
         ];
-        $activeBookingsCount = $scheduledClass->relationLoaded('classBookings')
-            ? $scheduledClass->classBookings
-                ->whereNull('corrected_removed_at')
-                ->filter(fn ($booking): bool => in_array($booking->status->value, $activeBookingStatuses, true))
-                ->count()
-            : $scheduledClass->classBookings()
-                ->notCorrectedRemoved()
-                ->whereIn('status', $activeBookingStatuses)
-                ->count();
+        $acceptsCustomerBookings = $scheduledClass->acceptsCustomerBookings();
+        $activeBookingsCount = $acceptsCustomerBookings
+            ? ($scheduledClass->relationLoaded('classBookings')
+                ? $scheduledClass->classBookings
+                    ->whereNull('corrected_removed_at')
+                    ->filter(fn ($booking): bool => in_array($booking->status->value, $activeBookingStatuses, true))
+                    ->count()
+                : $scheduledClass->classBookings()
+                    ->notCorrectedRemoved()
+                    ->whereIn('status', $activeBookingStatuses)
+                    ->count())
+            : 0;
         $capacity = (int) ($scheduledClass->capacity ?? 0);
         $customerBooking = null;
 
-        if ($customer) {
+        if ($customer && $acceptsCustomerBookings) {
             $booking = $scheduledClass->relationLoaded('classBookings')
                 ? $scheduledClass->classBookings
                     ->where('customer_id', $customer->id)
@@ -89,20 +93,30 @@ class MobileScheduledClassPayload
                 'name' => $scheduledClass->trainer->name,
                 'photo_url' => $scheduledClass->trainer->photoUrl(),
             ] : null,
+            'additional_trainers' => $scheduledClass->additionalTrainers
+                ->map(fn ($trainer): array => [
+                    'id' => $trainer->id,
+                    'name' => $trainer->name,
+                    'photo_url' => $trainer->photoUrl(),
+                ])
+                ->values()
+                ->all(),
             'capacity' => $capacity,
             'booked_count' => $activeBookingsCount,
-            'available_spots' => $capacity > 0 ? max(0, $capacity - $activeBookingsCount) : null,
-            'booking_open' => $scheduledClass->isBookingOpen(),
+            'available_spots' => $acceptsCustomerBookings && $capacity > 0 ? max(0, $capacity - $activeBookingsCount) : null,
+            'booking_open' => $acceptsCustomerBookings && $scheduledClass->isBookingOpen(),
             'customer_booking' => $customerBooking,
         ];
 
         if ($includeBookings) {
-            $bookings = $scheduledClass->relationLoaded('classBookings')
-                ? $scheduledClass->classBookings
-                : $scheduledClass->classBookings()
-                    ->notCorrectedRemoved()
-                    ->with(['customer', 'classPassReservation.customerClassPass'])
-                    ->get();
+            $bookings = $acceptsCustomerBookings
+                ? ($scheduledClass->relationLoaded('classBookings')
+                    ? $scheduledClass->classBookings
+                    : $scheduledClass->classBookings()
+                        ->notCorrectedRemoved()
+                        ->with(['customer', 'classPassReservation.customerClassPass'])
+                        ->get())
+                : collect();
 
             $data['bookings'] = $bookings
                 ->whereNull('corrected_removed_at')

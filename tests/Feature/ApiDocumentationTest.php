@@ -91,6 +91,9 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.schemas.MobileCustomerProfilePhoneOtpVerifyRequest.properties.code.example', '123456')
             ->assertJsonPath('components.responses.ValidationError.content.application/json.schema.properties.code.example', 'phone_verification_required')
             ->assertJsonPath('components.schemas.MobileScheduledClass.properties.customer_booking.type.1', 'null')
+            ->assertJsonPath('components.schemas.MobileScheduledClass.properties.schedule_kind.enum.3', 'internal_class')
+            ->assertJsonPath('components.schemas.MobileScheduledClass.properties.additional_trainers.type', 'array')
+            ->assertJsonPath('components.schemas.MobileScheduledClass.properties.additional_trainers.items.$ref', '#/components/schemas/Trainer')
             ->assertJsonPath('components.schemas.MobileDeviceTokenRequest.properties.provider.enum.0', 'fcm')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token.');
 

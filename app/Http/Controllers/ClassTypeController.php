@@ -61,6 +61,7 @@ class ClassTypeController extends Controller
         $validated['schedule_kind'] = $scheduleKind->value;
         $validated['slug'] = $this->uniqueSlug($account, ($validated['slug'] ?? null) ?: $validated['name']);
         $validated['is_active'] = $request->boolean('is_active', true);
+        $validated = $this->normalizeCapabilities($scheduleKind, $validated);
 
         $account->classTypes()->create($validated);
 
@@ -101,6 +102,7 @@ class ClassTypeController extends Controller
         $validated['schedule_kind'] = $scheduleKind->value;
         $validated['slug'] = $this->uniqueSlug($account, ($validated['slug'] ?? null) ?: $validated['name'], $classType);
         $validated['is_active'] = $request->boolean('is_active');
+        $validated = $this->normalizeCapabilities($scheduleKind, $validated);
 
         $classType->update($validated);
         $this->regenerateGroupClassScheduleSeries($account, $scheduleKind, $generateAccountSchedule);
@@ -121,6 +123,7 @@ class ClassTypeController extends Controller
         $copy = $classType->replicate(['slug']);
         $copy->name = $copyName;
         $copy->slug = $this->uniqueSlug($account, $copyName);
+        $copy->forceFill($this->normalizeCapabilities($scheduleKind, $copy->getAttributes()));
         $copy->save();
 
         return redirect()->route(ScheduleKindRegistry::routeName($scheduleKind, 'index'), $account)
@@ -184,5 +187,23 @@ class ClassTypeController extends Controller
         }
 
         $generateAccountSchedule->execute($account);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function normalizeCapabilities(ScheduleKind $scheduleKind, array $attributes): array
+    {
+        if (ScheduleKindRegistry::hasCapability($scheduleKind, 'customer_bookable')) {
+            return $attributes;
+        }
+
+        return [
+            ...$attributes,
+            'default_capacity' => null,
+            'booking_cutoff_minutes' => null,
+            'cancellation_cutoff_minutes' => null,
+        ];
     }
 }

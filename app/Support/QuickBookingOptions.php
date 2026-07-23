@@ -13,7 +13,8 @@ class QuickBookingOptions
      *     rooms: Collection<int, mixed>,
      *     trainers: Collection<int, mixed>,
      *     activityDirections: Collection<int, mixed>,
-     *     options: Collection<int, array{kind: mixed, definition: array<string, mixed>, classTypes: Collection<int, mixed>}>
+     *     options: Collection<int, array{kind: mixed, definition: array<string, mixed>, classTypes: Collection<int, mixed>}>,
+     *     adminOneOffOptions: Collection<int, array{kind: mixed, definition: array<string, mixed>, classTypes: Collection<int, mixed>}>
      * }
      */
     public function forAccount(Account $account): array
@@ -37,7 +38,7 @@ class QuickBookingOptions
             ->active()
             ->orderBy('name')
             ->get(['id', 'name']);
-        $options = collect(ScheduleKindRegistry::all())
+        $allOptions = collect(ScheduleKindRegistry::all())
             ->filter(fn (array $definition, string $scheduleKind): bool => $account->hasScheduleKindEnabled($scheduleKind))
             ->map(fn (array $definition): array => [
                 'kind' => $definition['kind'],
@@ -55,7 +56,12 @@ class QuickBookingOptions
             'rooms' => $rooms,
             'trainers' => $trainers,
             'activityDirections' => $activityDirections,
-            'options' => $options,
+            'options' => $allOptions
+                ->filter(fn (array $option): bool => (bool) $option['definition']['customer_bookable'])
+                ->values(),
+            'adminOneOffOptions' => $allOptions
+                ->filter(fn (array $option): bool => (bool) $option['definition']['admin_one_off'])
+                ->values(),
         ];
     }
 }

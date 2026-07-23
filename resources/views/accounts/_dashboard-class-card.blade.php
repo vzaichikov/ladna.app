@@ -6,9 +6,12 @@
     $timezone = $scheduledClass->displayTimezone();
     $startsAt = $scheduledClass->starts_at->copy()->timezone($timezone);
     $endsAt = $scheduledClass->ends_at->copy()->timezone($timezone);
-    $activeBookings = $scheduledClass->classBookings->filter(
-        fn ($booking): bool => in_array($booking->status->value, $activeBookingStatuses, true),
-    );
+    $acceptsCustomerBookings = $scheduledClass->acceptsCustomerBookings();
+    $activeBookings = $acceptsCustomerBookings
+        ? $scheduledClass->classBookings->filter(
+            fn ($booking): bool => in_array($booking->status->value, $activeBookingStatuses, true),
+        )
+        : collect();
     $capacity = max(0, (int) ($scheduledClass->capacity ?? 0));
     $loadPercent = $capacity > 0 ? (int) round(($activeBookings->count() / $capacity) * 100) : 0;
     $barWidth = min(100, max(0, $loadPercent));
@@ -19,6 +22,9 @@
     };
     $scheduleKind = $scheduledClass->classType?->schedule_kind;
     $isRoomRental = $scheduleKind === \App\Enums\ScheduleKind::RoomRental;
+    $additionalTrainers = $scheduledClass->relationLoaded('additionalTrainers')
+        ? $scheduledClass->additionalTrainers
+        : collect();
     $isCancelledClass = $scheduledClass->status === \App\Enums\ScheduledClassStatus::Cancelled;
     $directionColor = $isRoomRental
         ? $scheduledClass->room?->colorAccent($scheduledClass->classType?->colorAccent('#3B223F') ?? '#3B223F')
@@ -53,19 +59,24 @@
             </span>
         @endif
         <span class="crm-status-muted">{{ $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned') }}</span>
+        @foreach ($additionalTrainers as $additionalTrainer)
+            <span class="crm-status-muted">{{ $additionalTrainer->name }}</span>
+        @endforeach
     </div>
 
-    <div class="mt-4">
-        <div class="flex items-center justify-between gap-3 text-sm">
-            <span class="font-semibold text-slate-700">{{ __('app.booked_capacity') }}</span>
-            <span class="font-semibold text-slate-950">{{ __('app.booked_of_capacity', ['booked' => $activeBookings->count(), 'capacity' => $capacity]) }}</span>
+    @if ($acceptsCustomerBookings)
+        <div class="mt-4">
+            <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="font-semibold text-slate-700">{{ __('app.booked_capacity') }}</span>
+                <span class="font-semibold text-slate-950">{{ __('app.booked_of_capacity', ['booked' => $activeBookings->count(), 'capacity' => $capacity]) }}</span>
+            </div>
+            <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
+                <div class="h-full rounded-full bg-brand-600" style="width: {{ $barWidth }}%"></div>
+            </div>
         </div>
-        <div class="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
-            <div class="h-full rounded-full bg-brand-600" style="width: {{ $barWidth }}%"></div>
-        </div>
-    </div>
+    @endif
 
-    @if ($showRoster)
+    @if ($showRoster && $acceptsCustomerBookings)
         <div class="mt-4 border-t border-stone-100 pt-4">
             <h4 class="text-sm font-semibold text-slate-950">{{ __('app.class_roster') }}</h4>
             @if ($scheduledClass->classBookings->isNotEmpty())

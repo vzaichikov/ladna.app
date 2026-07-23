@@ -30,6 +30,7 @@ class MobileScheduleController extends Controller
                 'room',
                 'classType.activityDirection',
                 'trainer',
+                'additionalTrainers',
                 'classBookings.customer',
                 'classBookings.classPassReservation.customerClassPass',
             ])
@@ -44,7 +45,13 @@ class MobileScheduleController extends Controller
             ->when($session->guard === MobileSession::GuardStaff && $session->role === AccountRole::Trainer->value, function (Builder $query) use ($account, $session): Builder {
                 $trainerId = $account->trainers()->where('user_id', $session->user_id)->value('id');
 
-                return $trainerId ? $query->where('trainer_id', $trainerId) : $query->whereRaw('1 = 0');
+                return $trainerId
+                    ? $query->where(function (Builder $query) use ($trainerId): void {
+                        $query
+                            ->where('trainer_id', $trainerId)
+                            ->orWhereHas('additionalTrainers', fn (Builder $query): Builder => $query->whereKey($trainerId));
+                    })
+                    : $query->whereRaw('1 = 0');
             })
             ->orderBy('starts_at')
             ->limit(100)
@@ -73,6 +80,7 @@ class MobileScheduleController extends Controller
             'room',
             'classType.activityDirection',
             'trainer',
+            'additionalTrainers',
             'classBookings.customer',
             'classBookings.classPassReservation.customerClassPass',
         ]);
@@ -109,7 +117,7 @@ class MobileScheduleController extends Controller
         if ($session->guard === MobileSession::GuardStaff && $session->role === AccountRole::Trainer->value) {
             $trainerId = $session->account->trainers()->where('user_id', $session->user_id)->value('id');
 
-            abort_unless($trainerId && $scheduledClass->trainer_id === $trainerId, 404);
+            abort_unless($trainerId && $scheduledClass->isAssignedToTrainer($trainerId), 404);
         }
     }
 

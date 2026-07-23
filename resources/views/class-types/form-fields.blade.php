@@ -33,7 +33,8 @@
         <span class="crm-label">{{ __('app.color') }}</span>
         @php
             $colorValue = old('color', $classType->color);
-            $colorPickerValue = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $colorValue) ? $colorValue : '#A78AB9';
+            $defaultColor = $scheduleKindDefinition['default_color'];
+            $colorPickerValue = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $colorValue) ? $colorValue : $defaultColor;
         @endphp
         <span class="mt-2 flex items-center gap-3">
             <input
@@ -45,7 +46,7 @@
             <input
                 name="color"
                 value="{{ $colorValue }}"
-                placeholder="#A78AB9"
+                placeholder="{{ $defaultColor }}"
                 class="crm-field mt-0"
                 data-color-value
             >
@@ -54,27 +55,29 @@
     </label>
 </div>
 
-<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+<div class="grid gap-4 sm:grid-cols-2 {{ $scheduleKindDefinition['customer_bookable'] ? 'lg:grid-cols-4' : '' }}">
     <label class="block">
         <span class="crm-label">{{ __('app.default_duration') }}</span>
         <input name="default_duration_minutes" type="number" min="15" value="{{ old('default_duration_minutes', $classType->default_duration_minutes) }}" required class="crm-field">
         @error('default_duration_minutes') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
-    <label class="block">
-        <span class="crm-label">{{ __('app.booking_cutoff') }}</span>
-        <input name="booking_cutoff_minutes" type="number" min="0" value="{{ old('booking_cutoff_minutes', $classType->booking_cutoff_minutes) }}" class="crm-field">
-        @error('booking_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
-    <label class="block">
-        <span class="crm-label">{{ __('app.cancellation_cutoff') }}</span>
-        <input name="cancellation_cutoff_minutes" type="number" min="0" value="{{ old('cancellation_cutoff_minutes', $classType->cancellation_cutoff_minutes ?? 1440) }}" class="crm-field">
-        @error('cancellation_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
-    <label class="block">
-        <span class="crm-label">{{ __('app.'.$scheduleKindDefinition['capacity_label_key']) }}</span>
-        <input name="default_capacity" type="number" min="1" value="{{ old('default_capacity', $classType->default_capacity) }}" class="crm-field">
-        @error('default_capacity') <span class="crm-help">{{ $message }}</span> @enderror
-    </label>
+    @if ($scheduleKindDefinition['customer_bookable'])
+        <label class="block">
+            <span class="crm-label">{{ __('app.booking_cutoff') }}</span>
+            <input name="booking_cutoff_minutes" type="number" min="0" value="{{ old('booking_cutoff_minutes', $classType->booking_cutoff_minutes) }}" class="crm-field">
+            @error('booking_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+        <label class="block">
+            <span class="crm-label">{{ __('app.cancellation_cutoff') }}</span>
+            <input name="cancellation_cutoff_minutes" type="number" min="0" value="{{ old('cancellation_cutoff_minutes', $classType->cancellation_cutoff_minutes ?? 1440) }}" class="crm-field">
+            @error('cancellation_cutoff_minutes') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+        <label class="block">
+            <span class="crm-label">{{ __('app.'.$scheduleKindDefinition['capacity_label_key']) }}</span>
+            <input name="default_capacity" type="number" min="1" value="{{ old('default_capacity', $classType->default_capacity) }}" class="crm-field">
+            @error('default_capacity') <span class="crm-help">{{ $message }}</span> @enderror
+        </label>
+    @endif
 </div>
 
 <label class="flex items-center gap-3 text-sm font-medium text-slate-700">

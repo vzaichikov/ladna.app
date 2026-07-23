@@ -76,6 +76,7 @@ class StudioClassScheduleDetails
                 'location:id,account_id,name,timezone',
                 'room:id,account_id,location_id,name',
                 'trainer:id,account_id,name',
+                'additionalTrainers:id,account_id,name',
                 'classType:id,account_id,activity_direction_id,name,schedule_kind',
                 'classType.activityDirection:id,account_id,name',
                 'classBookings' => function ($query) use ($account, $includeCancelledBookings): void {
@@ -131,6 +132,13 @@ class StudioClassScheduleDetails
                 'id' => $scheduledClass->trainer?->id,
                 'name' => $scheduledClass->trainer?->name,
             ],
+            'additional_trainers' => $scheduledClass->additionalTrainers
+                ->map(fn ($trainer): array => [
+                    'id' => $trainer->id,
+                    'name' => $trainer->name,
+                ])
+                ->values()
+                ->all(),
             'capacity' => $capacity,
             'bookings_count' => $bookingsCount,
             'bookings_truncated' => $scheduledClass->classBookings->count() > $bookingLimitPerClass,

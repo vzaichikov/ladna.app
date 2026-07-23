@@ -23,8 +23,16 @@ class ScheduleKindRegistry
                 'default_color' => '#A3E635',
                 'capacity_label_key' => 'capacity',
                 'manual_record' => false,
+                'enabled_by_default' => true,
+                'admin_one_off' => true,
                 'recurring' => true,
+                'customer_bookable' => true,
+                'class_pass_eligible' => true,
+                'trainer_reportable' => true,
                 'public_schedule' => true,
+                'trainer_required' => false,
+                'people_counter_trainer_adjustment' => 1,
+                'full_occurrence_editable' => false,
                 'default_is_public' => true,
             ],
             ScheduleKind::PrivateLesson->value => [
@@ -38,8 +46,16 @@ class ScheduleKindRegistry
                 'default_color' => '#A78AB9',
                 'capacity_label_key' => 'people_count',
                 'manual_record' => true,
+                'enabled_by_default' => true,
+                'admin_one_off' => false,
                 'recurring' => false,
+                'customer_bookable' => true,
+                'class_pass_eligible' => true,
+                'trainer_reportable' => true,
                 'public_schedule' => false,
+                'trainer_required' => true,
+                'people_counter_trainer_adjustment' => 0,
+                'full_occurrence_editable' => false,
                 'default_is_public' => false,
             ],
             ScheduleKind::RoomRental->value => [
@@ -53,8 +69,39 @@ class ScheduleKindRegistry
                 'default_color' => '#38BDF8',
                 'capacity_label_key' => 'people_count',
                 'manual_record' => true,
+                'enabled_by_default' => true,
+                'admin_one_off' => false,
                 'recurring' => false,
+                'customer_bookable' => true,
+                'class_pass_eligible' => true,
+                'trainer_reportable' => true,
                 'public_schedule' => false,
+                'trainer_required' => false,
+                'people_counter_trainer_adjustment' => 0,
+                'full_occurrence_editable' => false,
+                'default_is_public' => false,
+            ],
+            ScheduleKind::InternalClass->value => [
+                'kind' => ScheduleKind::InternalClass,
+                'route_name' => 'internal-classes',
+                'title_key' => 'internal_classes',
+                'copy_key' => 'internal_classes_copy',
+                'create_key' => 'create_internal_class',
+                'empty_key' => 'no_internal_classes',
+                'icon' => 'lock',
+                'default_color' => '#F59E0B',
+                'capacity_label_key' => 'capacity',
+                'manual_record' => false,
+                'enabled_by_default' => false,
+                'admin_one_off' => true,
+                'recurring' => false,
+                'customer_bookable' => false,
+                'class_pass_eligible' => false,
+                'trainer_reportable' => false,
+                'public_schedule' => false,
+                'trainer_required' => true,
+                'people_counter_trainer_adjustment' => 1,
+                'full_occurrence_editable' => true,
                 'default_is_public' => false,
             ],
         ];
@@ -73,6 +120,17 @@ class ScheduleKindRegistry
      */
     public static function defaultEnabledValues(): array
     {
+        return collect(self::all())
+            ->filter(fn (array $definition): bool => (bool) $definition['enabled_by_default'])
+            ->keys()
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function allValues(): array
+    {
         return array_keys(self::all());
     }
 
@@ -82,7 +140,7 @@ class ScheduleKindRegistry
      */
     public static function validValues(array $values): array
     {
-        $allowedValues = self::defaultEnabledValues();
+        $allowedValues = self::allValues();
 
         return collect($values)
             ->map(fn (mixed $value): string => $value instanceof ScheduleKind ? $value->value : (string) $value)
@@ -107,11 +165,7 @@ class ScheduleKindRegistry
      */
     public static function manualKinds(): array
     {
-        return collect(self::all())
-            ->filter(fn (array $definition): bool => (bool) $definition['manual_record'])
-            ->map(fn (array $definition): ScheduleKind => $definition['kind'])
-            ->values()
-            ->all();
+        return self::kindsWithCapability('manual_record');
     }
 
     /**
@@ -119,11 +173,85 @@ class ScheduleKindRegistry
      */
     public static function oneOffRecordKinds(): array
     {
-        return [ScheduleKind::GroupClass];
+        return self::kindsWithCapability('admin_one_off');
+    }
+
+    /**
+     * @return array<int, ScheduleKind>
+     */
+    public static function customerBookableKinds(): array
+    {
+        return self::kindsWithCapability('customer_bookable');
+    }
+
+    /**
+     * @return array<int, ScheduleKind>
+     */
+    public static function classPassEligibleKinds(): array
+    {
+        return self::kindsWithCapability('class_pass_eligible');
+    }
+
+    /**
+     * @return array<int, ScheduleKind>
+     */
+    public static function trainerReportableKinds(): array
+    {
+        return self::kindsWithCapability('trainer_reportable');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function classPassEligibleValues(): array
+    {
+        return array_map(
+            fn (ScheduleKind $scheduleKind): string => $scheduleKind->value,
+            self::classPassEligibleKinds(),
+        );
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function customerBookableValues(): array
+    {
+        return array_map(
+            fn (ScheduleKind $scheduleKind): string => $scheduleKind->value,
+            self::customerBookableKinds(),
+        );
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function trainerReportableValues(): array
+    {
+        return array_map(
+            fn (ScheduleKind $scheduleKind): string => $scheduleKind->value,
+            self::trainerReportableKinds(),
+        );
+    }
+
+    public static function hasCapability(ScheduleKind $scheduleKind, string $capability): bool
+    {
+        return (bool) (self::get($scheduleKind)[$capability] ?? false);
     }
 
     public static function routeName(ScheduleKind $scheduleKind, string $action): string
     {
         return 'dashboard.accounts.'.self::get($scheduleKind)['route_name'].'.'.$action;
+    }
+
+    /**
+     * @return array<int, ScheduleKind>
+     */
+    private static function kindsWithCapability(string $capability): array
+    {
+        return collect(self::all())
+            ->filter(fn (array $definition): bool => (bool) ($definition[$capability] ?? false))
+            ->map(fn (array $definition): ScheduleKind => $definition['kind'])
+            ->values()
+            ->all();
     }
 }

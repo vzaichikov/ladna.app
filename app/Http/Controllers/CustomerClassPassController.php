@@ -21,6 +21,7 @@ use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Support\DateTimePresenter;
+use App\Support\ScheduleKindRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -37,7 +38,10 @@ class CustomerClassPassController extends Controller
         $term = trim((string) $request->query('q', ''));
         $requestedState = (string) $request->query('state', 'active');
         $state = in_array($requestedState, ['active', 'inactive', 'freezed', 'all'], true) ? $requestedState : 'active';
-        $enabledScheduleKinds = $account->enabledScheduleKindValues();
+        $enabledScheduleKinds = array_values(array_intersect(
+            $account->enabledScheduleKindValues(),
+            ScheduleKindRegistry::classPassEligibleValues(),
+        ));
         $requestedScheduleKind = (string) $request->query('schedule_kind', '');
         $scheduleKind = in_array($requestedScheduleKind, $enabledScheduleKinds, true) ? $requestedScheduleKind : '';
         $requestedPaymentStatus = (string) $request->query('payment_status', '');

@@ -7,13 +7,12 @@ use App\Models\ClassType;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\Trainer;
-use App\Support\ScheduleKindRegistry;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class StoreManualScheduledClassRequest extends FormRequest
+class UpdateInternalScheduledClassRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -31,7 +30,6 @@ class StoreManualScheduledClassRequest extends FormRequest
     public function rules(): array
     {
         $account = $this->route('account');
-        $scheduleKind = $this->scheduleKind();
 
         return [
             'location_id' => ['required', Rule::exists((new Location)->getTable(), 'id')
@@ -42,27 +40,19 @@ class StoreManualScheduledClassRequest extends FormRequest
                 ->where('is_active', true)],
             'class_type_id' => ['required', Rule::exists((new ClassType)->getTable(), 'id')
                 ->where('account_id', $account?->id)
-                ->where('schedule_kind', $scheduleKind?->value ?? '')
+                ->where('schedule_kind', ScheduleKind::InternalClass->value)
                 ->where('is_active', true)],
-            'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')
+            'trainer_id' => ['required', Rule::exists((new Trainer)->getTable(), 'id')
                 ->where('account_id', $account?->id)
                 ->where('is_active', true)],
-            'additional_trainer_ids' => [
-                Rule::prohibitedIf($scheduleKind !== ScheduleKind::InternalClass),
-                'sometimes',
-                'array',
-                'max:100',
-            ],
+            'additional_trainer_ids' => ['sometimes', 'array', 'max:100'],
             'additional_trainer_ids.*' => ['integer', 'distinct:strict', Rule::exists((new Trainer)->getTable(), 'id')
                 ->where('account_id', $account?->id)
                 ->where('is_active', true)],
-            'title' => [Rule::requiredIf($scheduleKind === ScheduleKind::InternalClass), 'nullable', 'string', 'max:255'],
+            'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'starts_at' => ['required', 'date_format:Y-m-d\TH:i'],
-            'duration_minutes' => [Rule::requiredIf($scheduleKind === ScheduleKind::InternalClass), 'nullable', 'integer', 'min:15', 'max:480'],
-            'capacity' => ['nullable', 'integer', 'min:1', 'max:999'],
-            'booking_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
-            'cancellation_cutoff_minutes' => ['nullable', 'integer', 'min:0', 'max:10080'],
+            'duration_minutes' => ['required', 'integer', 'min:15', 'max:480'],
         ];
     }
 
@@ -71,18 +61,6 @@ class StoreManualScheduledClassRequest extends FormRequest
         return [
             function (Validator $validator): void {
                 $account = $this->route('account');
-                $scheduleKind = $this->scheduleKind();
-
-                if (! $scheduleKind || ! in_array($scheduleKind, ScheduleKindRegistry::oneOffRecordKinds(), true)) {
-                    $validator->errors()->add('class_type_id', __('app.manual_class_format_invalid'));
-
-                    return;
-                }
-
-                if (! $account?->hasScheduleKindEnabled($scheduleKind)) {
-                    $validator->errors()->add('class_type_id', __('app.manual_class_format_disabled'));
-                }
-
                 $roomId = (int) $this->input('room_id');
                 $locationId = (int) $this->input('location_id');
 
@@ -92,23 +70,11 @@ class StoreManualScheduledClassRequest extends FormRequest
                     $validator->errors()->add('room_id', __('app.room_location_mismatch'));
                 }
 
-                if ($scheduleKind
-                    && (bool) (ScheduleKindRegistry::get($scheduleKind)['trainer_required'] ?? false)
-                    && blank($this->input('trainer_id'))) {
-                    $validator->errors()->add('trainer_id', __('app.trainer_required'));
-                }
-
-                if ($scheduleKind === ScheduleKind::InternalClass
-                    && collect($this->input('additional_trainer_ids', []))
-                        ->contains(fn (mixed $trainerId): bool => (int) $trainerId === (int) $this->input('trainer_id'))) {
+                if (collect($this->input('additional_trainer_ids', []))
+                    ->contains(fn (mixed $trainerId): bool => (int) $trainerId === (int) $this->input('trainer_id'))) {
                     $validator->errors()->add('additional_trainer_ids', __('app.additional_trainer_cannot_be_main'));
                 }
             },
         ];
-    }
-
-    private function scheduleKind(): ?ScheduleKind
-    {
-        return ScheduleKind::tryFrom((string) $this->route('scheduleKind'));
     }
 }

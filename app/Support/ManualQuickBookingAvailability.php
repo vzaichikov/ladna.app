@@ -215,7 +215,11 @@ class ManualQuickBookingAvailability
                 $query->where('room_id', $roomId);
 
                 if ($trainerId) {
-                    $query->orWhere('trainer_id', $trainerId);
+                    $query->orWhere(function ($query) use ($trainerId): void {
+                        $query
+                            ->where('trainer_id', $trainerId)
+                            ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($trainerId));
+                    });
                 }
 
                 if ($customerId) {

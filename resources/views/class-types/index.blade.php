@@ -16,13 +16,19 @@
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($classTypes as $classType)
-            <div class="crm-row md:grid-cols-[1.2fr_1fr_1fr_auto] md:items-center">
+            <div @class([
+                'crm-row md:items-center',
+                'md:grid-cols-[1.2fr_1fr_1fr_auto]' => $scheduleKindDefinition['customer_bookable'],
+                'md:grid-cols-[1.2fr_1fr_auto]' => ! $scheduleKindDefinition['customer_bookable'],
+            ])>
                 <div>
                     <div class="font-semibold text-slate-950">{{ $classType->name }}</div>
                     <div class="mt-1 text-sm text-slate-500">{{ $classType->activityDirection?->name ?? __('app.direction') }}</div>
                 </div>
                 <div class="text-sm text-slate-500">{{ $classType->default_duration_minutes }} {{ __('app.minutes') }}</div>
-                <div class="text-sm text-slate-500">{{ __('app.'.$scheduleKindDefinition['capacity_label_key']) }} {{ $classType->default_capacity ?? __('app.capacity_not_set') }}</div>
+                @if ($scheduleKindDefinition['customer_bookable'])
+                    <div class="text-sm text-slate-500">{{ __('app.'.$scheduleKindDefinition['capacity_label_key']) }} {{ $classType->default_capacity ?? __('app.capacity_not_set') }}</div>
+                @endif
                 <div class="flex flex-wrap gap-2 md:justify-end">
                     <form method="POST" action="{{ route(\App\Support\ScheduleKindRegistry::routeName($scheduleKind, 'copy'), [$account, $classType]) }}">
                         @csrf

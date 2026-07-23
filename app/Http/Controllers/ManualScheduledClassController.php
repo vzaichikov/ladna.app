@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreateManualScheduledClass;
+use App\Actions\UpdateInternalScheduledClass;
 use App\Enums\ScheduleKind;
 use App\Http\Requests\StoreManualScheduledClassRequest;
+use App\Http\Requests\UpdateInternalScheduledClassRequest;
 use App\Models\Account;
 use App\Models\ScheduledClass;
 use App\Support\ScheduleKindRegistry;
@@ -47,6 +49,46 @@ class ManualScheduledClassController extends Controller
             ->with('status', __('app.manual_class_created'));
     }
 
+    public function update(
+        UpdateInternalScheduledClassRequest $request,
+        Account $account,
+        ScheduledClass $scheduledClass,
+        UpdateInternalScheduledClass $updateInternalScheduledClass,
+    ): RedirectResponse|JsonResponse {
+        abort_unless($scheduledClass->account_id === $account->id, 404);
+        abort_unless($account->hasScheduleKindEnabled(ScheduleKind::InternalClass), 404);
+
+        try {
+            $updatedClass = $updateInternalScheduledClass->execute(
+                $account,
+                $scheduledClass,
+                $request->validated(),
+                $request->user(),
+            );
+        } catch (QueryException $exception) {
+            report($exception);
+
+            return $this->updateFailedResponse($request);
+        }
+
+        if (! $this->classWasPersisted($account, $updatedClass)) {
+            return $this->updateFailedResponse($request);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => __('app.internal_class_updated'),
+                'scheduled_class_id' => $updatedClass->id,
+                'success_modal' => true,
+                'modal_title' => __('app.internal_class_updated_title'),
+                'reload' => true,
+            ]);
+        }
+
+        return redirect()->route('dashboard.accounts.scheduled-classes.index', $account)
+            ->with('status', __('app.internal_class_updated'));
+    }
+
     private function classWasPersisted(Account $account, ScheduledClass $scheduledClass): bool
     {
         return $scheduledClass->exists
@@ -63,6 +105,22 @@ class ManualScheduledClassController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => __('app.manual_class_create_failed'),
+                'errors' => $errors,
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return back()->withErrors($errors)->withInput();
+    }
+
+    private function updateFailedResponse(UpdateInternalScheduledClassRequest $request): RedirectResponse|JsonResponse
+    {
+        $errors = [
+            '_form' => [__('app.internal_class_update_failed')],
+        ];
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => __('app.internal_class_update_failed'),
                 'errors' => $errors,
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }

@@ -45,6 +45,7 @@ class ClassPassPlanController extends Controller
     public function create(Request $request, Account $account): View
     {
         $this->ensureCurrentUserOwns($account);
+        abort_if($this->scheduleKindTabs($account) === [], 404);
         $activeScheduleKindValue = $this->activeScheduleKindValue($account, $request->query('tab'));
         $activeSegmentValue = $this->activeSegmentValue($account, $activeScheduleKindValue, $request->query('segment'));
 
@@ -85,6 +86,7 @@ class ClassPassPlanController extends Controller
     public function edit(Account $account, ClassPassPlan $classPassPlan): View
     {
         $this->ensureBelongsToAccount($account, $classPassPlan);
+        $this->ensureClassPassEligible($account, $classPassPlan);
         $this->ensureCurrentUserOwns($account);
         $classPassPlan->loadMissing(['classPassSegment', 'classTypes', 'trainerTypes', 'rooms']);
 
@@ -98,6 +100,7 @@ class ClassPassPlanController extends Controller
     public function update(UpdateClassPassPlanRequest $request, Account $account, ClassPassPlan $classPassPlan): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $classPassPlan);
+        $this->ensureClassPassEligible($account, $classPassPlan);
 
         $validated = $this->withPricingAttributes($request->validated(), $request->boolean('allows_any_time'));
         $validated['slug'] = $this->uniqueSlug($account, ($validated['slug'] ?? null) ?: $validated['name'], $classPassPlan);
@@ -115,6 +118,7 @@ class ClassPassPlanController extends Controller
     public function copy(Account $account, ClassPassPlan $classPassPlan): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $classPassPlan);
+        $this->ensureClassPassEligible($account, $classPassPlan);
         $this->ensureCurrentUserOwns($account);
 
         $classPassPlan->loadMissing(['activityDirections', 'classTypes', 'trainerTypes', 'rooms']);
@@ -152,6 +156,15 @@ class ClassPassPlanController extends Controller
         abort_unless($classPassPlan->account_id === $account->id, 404);
     }
 
+    private function ensureClassPassEligible(Account $account, ClassPassPlan $classPassPlan): void
+    {
+        abort_unless(
+            $account->hasScheduleKindEnabled($classPassPlan->schedule_kind)
+                && ScheduleKindRegistry::hasCapability($classPassPlan->schedule_kind, 'class_pass_eligible'),
+            404,
+        );
+    }
+
     private function ensureCurrentUserOwns(Account $account): void
     {
         abort_unless($account->isOwnedBy(request()->user()), 403);
@@ -176,7 +189,8 @@ class ClassPassPlanController extends Controller
     private function scheduleKindTabs(Account $account): array
     {
         return collect(ScheduleKindRegistry::all())
-            ->filter(fn (array $definition, string $value): bool => $account->hasScheduleKindEnabled($value))
+            ->filter(fn (array $definition, string $value): bool => $account->hasScheduleKindEnabled($value)
+                && (bool) $definition['class_pass_eligible'])
             ->all();
     }
 
@@ -189,7 +203,7 @@ class ClassPassPlanController extends Controller
             return $value;
         }
 
-        return array_key_first($tabs) ?? ScheduleKindRegistry::defaultEnabledValues()[0];
+        return array_key_first($tabs) ?? '';
     }
 
     /**
@@ -258,7 +272,10 @@ class ClassPassPlanController extends Controller
                 ->get(),
             'classTypes' => $account->classTypes()
                 ->with('activityDirection:id')
-                ->whereIn('schedule_kind', $account->enabledScheduleKindValues())
+                ->whereIn('schedule_kind', array_intersect(
+                    $account->enabledScheduleKindValues(),
+                    ScheduleKindRegistry::classPassEligibleValues(),
+                ))
                 ->orderBy('schedule_kind')
                 ->orderBy('name')
                 ->get(),

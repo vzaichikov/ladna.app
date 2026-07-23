@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ScheduleKind;
+use App\Support\ScheduleKindRegistry;
 use Database\Factories\ClassPassPlanFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -108,6 +109,13 @@ class ClassPassPlan extends Model
 
         $this->loadMissing(['classTypes:id', 'rooms:id', 'trainerTypes:id']);
         $scheduledClass->loadMissing(['account', 'classType', 'location', 'trainer', 'room']);
+
+        if (! $this->schedule_kind instanceof ScheduleKind
+            || ! ScheduleKindRegistry::hasCapability($this->schedule_kind, 'class_pass_eligible')
+            || ! $scheduledClass->supportsClassPasses()) {
+            return false;
+        }
+
         $classTypeId = $scheduledClass->class_type_id;
 
         if (! $classTypeId || ! $this->classTypes->contains('id', $classTypeId)) {

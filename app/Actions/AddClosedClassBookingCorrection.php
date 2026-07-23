@@ -131,6 +131,12 @@ class AddClosedClassBookingCorrection
 
     private function ensureCorrectable(ScheduledClass $scheduledClass): void
     {
+        if (! $scheduledClass->acceptsCustomerBookings()) {
+            throw ValidationException::withMessages([
+                'customer_id' => __('app.class_does_not_accept_customer_bookings'),
+            ]);
+        }
+
         if ($scheduledClass->status === ScheduledClassStatus::Cancelled || $scheduledClass->ends_at->greaterThan(now())) {
             throw ValidationException::withMessages([
                 'reason' => __('app.closed_class_correction_not_available'),

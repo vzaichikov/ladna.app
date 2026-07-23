@@ -205,6 +205,8 @@ class StudioDashboardData
             ->where('status', ScheduledClassStatus::Scheduled->value)
             ->where('ends_at', '<=', now())
             ->whereBetween('starts_at', $this->databaseRange($startsAt, $endsAt->endOfDay()))
+            ->whereHas('classType', fn ($query) => $query
+                ->whereIn('schedule_kind', ScheduleKindRegistry::customerBookableValues()))
             ->whereDoesntHave('classBookings', fn ($query) => $query->notCorrectedRemoved())
             ->count();
     }
@@ -231,7 +233,11 @@ class StudioDashboardData
 
         $classes = $account->scheduledClasses()
             ->with($this->classRelations(includeAllBookings: true))
-            ->whereBelongsTo($trainer)
+            ->where(function ($query) use ($trainer): void {
+                $query
+                    ->whereBelongsTo($trainer)
+                    ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($trainer->id));
+            })
             ->where('status', '!=', ScheduledClassStatus::Draft->value)
             ->whereBetween('starts_at', $this->databaseRange($todayStartsAt, $weekEndsAt))
             ->orderBy('starts_at')
@@ -286,6 +292,7 @@ class StudioDashboardData
             'room.location',
             'classType.activityDirection',
             'trainer.trainerType',
+            'additionalTrainers.trainerType',
             'classBookings' => fn ($query) => $query
                 ->notCorrectedRemoved()
                 ->whereIn('status', $bookingStatuses)

@@ -8,6 +8,7 @@ use App\Models\ClassPassPlan;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
 use App\Models\Location;
+use App\Support\ScheduleKindRegistry;
 use Illuminate\Support\Str;
 
 class CreateCustomerPurchase
@@ -24,6 +25,11 @@ class CreateCustomerPurchase
         }
 
         if ($location && $location->account_id !== $account->id) {
+            abort(404);
+        }
+
+        if (! $account->hasScheduleKindEnabled($classPassPlan->schedule_kind)
+            || ! ScheduleKindRegistry::hasCapability($classPassPlan->schedule_kind, 'class_pass_eligible')) {
             abort(404);
         }
 

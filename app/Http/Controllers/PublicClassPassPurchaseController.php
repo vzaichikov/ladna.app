@@ -12,6 +12,7 @@ use App\Models\ClassPassPlan;
 use App\Models\Customer;
 use App\Models\Location;
 use App\Support\Payments\PaymentGatewayRegistry;
+use App\Support\ScheduleKindRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -127,6 +128,7 @@ class PublicClassPassPurchaseController extends Controller
             ->firstOrFail();
 
         abort_unless($account->hasScheduleKindEnabled($classPassPlan->schedule_kind), 404);
+        abort_unless(ScheduleKindRegistry::hasCapability($classPassPlan->schedule_kind, 'class_pass_eligible'), 404);
         abort_unless($this->planIsVisibleForLocation($classPassPlan, $location), 404);
 
         return [$account, $location, $classPassPlan];

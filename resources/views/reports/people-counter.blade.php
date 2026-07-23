@@ -98,8 +98,11 @@
                         @php
                             $summary = $scheduledClass->peopleCount;
                             $status = $summary?->status ?? \App\Models\ScheduledClassPeopleCount::StatusInsufficientData;
-                            $assigned = (int) $scheduledClass->assigned_bookings_count;
-                            $attended = $summary?->attended_count ?? (int) $scheduledClass->attended_bookings_count;
+                            $acceptsCustomerBookings = $scheduledClass->acceptsCustomerBookings();
+                            $assigned = $acceptsCustomerBookings ? (int) $scheduledClass->assigned_bookings_count : 0;
+                            $attended = $acceptsCustomerBookings
+                                ? ($summary?->attended_count ?? (int) $scheduledClass->attended_bookings_count)
+                                : 0;
                             $rawDetected = $summary?->detected_count;
                             $detected = $rawDetected === null ? null : max(0, $rawDetected - $scheduledClass->peopleCounterTrainerAdjustment());
                             $delta = $detected === null ? null : $detected - $assigned;
@@ -158,7 +161,12 @@
                                 <div class="font-medium text-slate-800">{{ $scheduledClass->location?->name ?? __('app.not_set') }}</div>
                                 <div class="mt-1 text-xs text-slate-500">{{ $scheduledClass->room?->name ?? __('app.not_set') }}</div>
                             </td>
-                            <td class="px-4 py-4 text-slate-700">{{ $scheduledClass->trainer?->name ?? __('app.not_set') }}</td>
+                            <td class="px-4 py-4 text-slate-700">
+                                <div>{{ $scheduledClass->trainer?->name ?? __('app.not_set') }}</div>
+                                @if ($scheduledClass->additionalTrainers->isNotEmpty())
+                                    <div class="mt-1 text-xs text-slate-500">{{ $scheduledClass->additionalTrainers->pluck('name')->join(', ') }}</div>
+                                @endif
+                            </td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">{{ $assigned }}</td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">{{ $attended }}</td>
                             <td class="px-4 py-4 text-center font-semibold text-slate-950">

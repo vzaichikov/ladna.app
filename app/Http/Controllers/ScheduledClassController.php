@@ -7,7 +7,6 @@ use App\Enums\ClassBookingStatus;
 use App\Models\Account;
 use App\Models\Trainer;
 use App\Support\QuickBookingOptions;
-use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
@@ -50,9 +49,7 @@ class ScheduledClassController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'is_active']);
         $quickBookingData = $quickBookingOptions->forAccount($account);
-        $manualClassOptions = $quickBookingData['options']
-            ->filter(fn (array $option): bool => in_array($option['kind'], ScheduleKindRegistry::oneOffRecordKinds(), true))
-            ->values();
+        $manualClassOptions = $quickBookingData['adminOneOffOptions'];
         $selectedLocationIds = $this->selectedIds($request, 'locations', $filterLocations->pluck('id')->all());
         $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
         $currentTrainer = $this->currentTrainerFor($account, $request, $filterTrainers);
@@ -70,6 +67,7 @@ class ScheduledClassController extends Controller
                 'room',
                 'classType.activityDirection',
                 'trainer',
+                'additionalTrainers',
                 'trainerChanges',
                 'scheduleSeries',
                 'activeCancellation.effects',
@@ -84,7 +82,13 @@ class ScheduledClassController extends Controller
             ->when(! $showPassed, fn ($query) => $query->where('ends_at', '>=', $this->pastCutoff($timezone)))
             ->when($selectedLocationIds !== [], fn ($query) => $query->whereIn('location_id', $selectedLocationIds))
             ->when($selectedRoomIds !== [], fn ($query) => $query->whereIn('room_id', $selectedRoomIds))
-            ->when($effectiveTrainerIds !== [], fn ($query) => $query->whereIn('trainer_id', $effectiveTrainerIds))
+            ->when($effectiveTrainerIds !== [], function ($query) use ($effectiveTrainerIds): void {
+                $query->where(function ($query) use ($effectiveTrainerIds): void {
+                    $query
+                        ->whereIn('trainer_id', $effectiveTrainerIds)
+                        ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($effectiveTrainerIds));
+                });
+            })
             ->orderBy('starts_at')
             ->get();
 

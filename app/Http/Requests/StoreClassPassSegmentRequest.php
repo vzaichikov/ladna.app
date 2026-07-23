@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Models\ActivityDirection;
+use App\Support\ScheduleKindRegistry;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -37,7 +38,13 @@ class StoreClassPassSegmentRequest extends FormRequest
         $account = $this->route('account');
 
         return [
-            'schedule_kind' => ['required', Rule::in($account instanceof Account ? $account->enabledScheduleKindValues() : [])],
+            'schedule_kind' => [
+                'required',
+                Rule::in($account instanceof Account ? array_values(array_intersect(
+                    $account->enabledScheduleKindValues(),
+                    ScheduleKindRegistry::classPassEligibleValues(),
+                )) : []),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:32767'],

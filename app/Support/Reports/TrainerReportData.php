@@ -11,6 +11,7 @@ use App\Models\ClassType;
 use App\Models\CustomerClassPassReservation;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
+use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -194,6 +195,8 @@ class TrainerReportData
             ->where($classesTable.'.status', '!=', ScheduledClassStatus::Cancelled->value)
             ->where($classesTable.'.ends_at', '<=', now())
             ->whereBetween($classesTable.'.starts_at', [$startsAt, $endsAt])
+            ->whereHas('classType', fn (Builder $query) => $query
+                ->whereIn('schedule_kind', ScheduleKindRegistry::trainerReportableValues()))
             ->when($filters['location_id'] !== null, fn (Builder $query) => $query->where($classesTable.'.location_id', $filters['location_id']))
             ->whereHas('classBookings', fn (Builder $query) => $query
                 ->notCorrectedRemoved()

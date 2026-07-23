@@ -60,6 +60,13 @@ class MobileBookingController extends Controller
         abort_unless($session->account->userCan($session->user, 'manage_bookings'), 403);
 
         $scheduledClass->loadMissing('classType');
+
+        if (! $scheduledClass->acceptsCustomerBookings()) {
+            throw ValidationException::withMessages([
+                'scheduled_class_id' => __('app.class_does_not_accept_customer_bookings'),
+            ]);
+        }
+
         $customer = $session->account->customers()->whereKey($request->validated('customer_id'))->firstOrFail();
         $this->ensureGroupCapacity($scheduledClass, $customer->id);
 
@@ -246,7 +253,7 @@ class MobileBookingController extends Controller
         if ($session->guard === MobileSession::GuardStaff && $session->role === AccountRole::Trainer->value) {
             $trainerId = $session->account->trainers()->where('user_id', $session->user_id)->value('id');
 
-            abort_unless($trainerId && $scheduledClass->trainer_id === $trainerId, 404);
+            abort_unless($trainerId && $scheduledClass->isAssignedToTrainer($trainerId), 404);
         }
     }
 
@@ -255,10 +262,10 @@ class MobileBookingController extends Controller
         abort_unless($classBooking->account_id === $session->account_id, 404);
 
         if ($session->guard === MobileSession::GuardStaff && $session->role === AccountRole::Trainer->value) {
-            $classBooking->loadMissing('scheduledClass');
+            $classBooking->loadMissing('scheduledClass.additionalTrainers');
             $trainerId = $session->account->trainers()->where('user_id', $session->user_id)->value('id');
 
-            abort_unless($trainerId && $classBooking->scheduledClass?->trainer_id === $trainerId, 404);
+            abort_unless($trainerId && $classBooking->scheduledClass?->isAssignedToTrainer($trainerId), 404);
         }
     }
 

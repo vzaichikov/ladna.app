@@ -8,10 +8,12 @@
             <h1 class="crm-page-title">{{ __('app.class_pass_plans') }}</h1>
             <p class="crm-page-copy">{{ __('app.class_pass_plans_copy') }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.class-pass-plans.create', [$account, 'tab' => $activeScheduleKindValue, 'segment' => $activeSegmentValue])">
-            <x-ui.icon name="plus" class="h-4 w-4" />
-            {{ __('app.create_class_pass_plan') }}
-        </x-ui.button>
+        @if ($scheduleKindTabs !== [])
+            <x-ui.button :href="route('dashboard.accounts.class-pass-plans.create', [$account, 'tab' => $activeScheduleKindValue, 'segment' => $activeSegmentValue])">
+                <x-ui.icon name="plus" class="h-4 w-4" />
+                {{ __('app.create_class_pass_plan') }}
+            </x-ui.button>
+        @endif
     </div>
 
     <nav class="mt-6 flex gap-2 overflow-x-auto border-b border-slate-200" aria-label="{{ __('app.class_pass_plans') }}">
@@ -25,6 +27,7 @@
         @endforeach
     </nav>
 
+    @if ($scheduleKindTabs !== [])
     <nav class="mt-4 flex gap-2 overflow-x-auto" aria-label="{{ __('app.class_pass_segments') }}">
         <a
             href="{{ route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => $activeScheduleKindValue, 'segment' => 'all']) }}"
@@ -47,8 +50,12 @@
             </a>
         @endforeach
     </nav>
+    @endif
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+        @if ($scheduleKindTabs === [])
+            <x-ui.empty-state :title="__('app.no_class_pass_eligible_formats')" icon="class-pass-plans" class="m-5" />
+        @else
         @forelse ($classPassPlans as $classPassPlan)
             @php
                 $fromTime = $classPassPlan->available_from_time ? substr((string) $classPassPlan->available_from_time, 0, 5) : null;
@@ -129,5 +136,6 @@
         @empty
             <x-ui.empty-state :title="__('app.no_class_pass_plans')" icon="class-pass-plans" class="m-5" />
         @endforelse
+        @endif
     </x-ui.panel>
 @endsection

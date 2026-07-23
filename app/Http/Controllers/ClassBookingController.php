@@ -27,6 +27,10 @@ class ClassBookingController extends Controller
         $this->ensureClassBelongsToAccount($account, $scheduledClass);
         $scheduledClass->loadMissing('classType');
 
+        if (! $scheduledClass->acceptsCustomerBookings()) {
+            return $this->bookingBlockedResponse($request, __('app.class_does_not_accept_customer_bookings'), 'customer_id');
+        }
+
         $customer = $account->customers()->whereKey($request->validated('customer_id'))->firstOrFail();
         $exclusiveBookingError = $this->exclusiveBookingError($scheduledClass, $customer->id);
 

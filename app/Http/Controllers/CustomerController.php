@@ -8,6 +8,7 @@ use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Account;
 use App\Models\Customer;
+use App\Support\ScheduleKindRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -135,6 +136,10 @@ class CustomerController extends Controller
             'classPassTab' => $classPassTab,
             'classPassPlans' => $account->classPassPlans()
                 ->active()
+                ->whereIn('schedule_kind', array_intersect(
+                    $account->enabledScheduleKindValues(),
+                    ScheduleKindRegistry::classPassEligibleValues(),
+                ))
                 ->with(['classTypes', 'trainerTypes', 'rooms'])
                 ->orderBy('sort_order')
                 ->orderBy('name')

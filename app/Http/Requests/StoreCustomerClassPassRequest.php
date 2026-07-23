@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\ClassPassPlan;
 use App\Models\Location;
 use App\Support\Payments\PaymentAmounts;
+use App\Support\ScheduleKindRegistry;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -33,7 +34,8 @@ class StoreCustomerClassPassRequest extends FormRequest
                 'integer',
                 Rule::exists((new ClassPassPlan)->getTable(), 'id')
                     ->where('account_id', $account?->id)
-                    ->where('is_active', true),
+                    ->where('is_active', true)
+                    ->whereIn('schedule_kind', ScheduleKindRegistry::classPassEligibleValues()),
             ],
             'issued_location_id' => [
                 'required',

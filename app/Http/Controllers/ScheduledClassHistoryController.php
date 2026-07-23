@@ -61,6 +61,7 @@ class ScheduledClassHistoryController extends Controller
                 'room',
                 'classType.activityDirection',
                 'trainer',
+                'additionalTrainers',
                 'trainerChanges',
                 'scheduleSeries',
                 'activeCancellation.effects',
@@ -75,7 +76,13 @@ class ScheduledClassHistoryController extends Controller
             ->where('ends_at', '<=', now())
             ->when($selectedLocationIds !== [], fn ($query) => $query->whereIn('location_id', $selectedLocationIds))
             ->when($selectedRoomIds !== [], fn ($query) => $query->whereIn('room_id', $selectedRoomIds))
-            ->when($selectedTrainerIds !== [], fn ($query) => $query->whereIn('trainer_id', $selectedTrainerIds))
+            ->when($selectedTrainerIds !== [], function ($query) use ($selectedTrainerIds): void {
+                $query->where(function ($query) use ($selectedTrainerIds): void {
+                    $query
+                        ->whereIn('trainer_id', $selectedTrainerIds)
+                        ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($selectedTrainerIds));
+                });
+            })
             ->when($selectedClassTypeIds !== [], fn ($query) => $query->whereIn('class_type_id', $selectedClassTypeIds))
             ->when($selectedScheduleKinds !== [], function ($query) use ($selectedScheduleKinds): void {
                 $query->whereHas('classType', fn (Builder $query) => $query->whereIn('schedule_kind', $selectedScheduleKinds));
@@ -83,6 +90,8 @@ class ScheduledClassHistoryController extends Controller
             ->when($withoutAttendance, function ($query): void {
                 $query
                     ->where('status', ScheduledClassStatus::Scheduled->value)
+                    ->whereHas('classType', fn (Builder $query) => $query
+                        ->whereIn('schedule_kind', ScheduleKindRegistry::customerBookableValues()))
                     ->whereDoesntHave('classBookings', fn (Builder $query) => $query->notCorrectedRemoved());
             })
             ->orderBy('starts_at')

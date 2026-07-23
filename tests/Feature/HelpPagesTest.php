@@ -238,6 +238,25 @@ class HelpPagesTest extends TestCase
             ->assertSee('Правила абонементів', false);
     }
 
+    public function test_schedule_help_explains_internal_classes_and_multiple_trainers(): void
+    {
+        $this->get(route('help.show', 'schedule', false))
+            ->assertStatus(200)
+            ->assertSee('Як додати закрите заняття для тренерів', false)
+            ->assertSee('Загальні налаштування', false)
+            ->assertSee('Основного тренера', false)
+            ->assertSee('Додаткові тренери', false)
+            ->assertSee('займає зал і час Основного тренера та всіх Додаткових тренерів', false)
+            ->assertSee('Клієнти, місткість, записи, відвідування, абонементи й оплати тут не використовуються', false)
+            ->assertSee('не потрапляє у звіт для розрахунку роботи тренерів', false)
+            ->assertSee('не позначає цей проміжок як невідому присутність', false)
+            ->assertSee('assets/help/screenshots/internal-class-modal.png', false)
+            ->assertDontSee('internal_class', false)
+            ->assertDontSee('additional_trainer_ids', false)
+            ->assertDontSee('tenant', false)
+            ->assertDontSee('payload', false);
+    }
+
     public function test_help_documents_closed_class_corrections_cashflow_and_sensitive_trainer_rights(): void
     {
         $this->get(route('help.show', 'schedule', false))

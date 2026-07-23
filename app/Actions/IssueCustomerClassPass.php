@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\ActorSnapshot;
 use App\Support\ClassPassCodeGenerator;
 use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\ScheduleKindRegistry;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -46,6 +47,11 @@ class IssueCustomerClassPass
         }
 
         if ($issuedLocation && $issuedLocation->account_id !== $account->id) {
+            abort(404);
+        }
+
+        if (! $account->hasScheduleKindEnabled($classPassPlan->schedule_kind)
+            || ! ScheduleKindRegistry::hasCapability($classPassPlan->schedule_kind, 'class_pass_eligible')) {
             abort(404);
         }
 

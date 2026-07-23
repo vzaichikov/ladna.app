@@ -7,17 +7,24 @@ use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
 use App\Models\ScheduledClass;
 use App\Models\ScheduleSeries;
+use App\Support\ScheduleOccupancy;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class GenerateScheduleOccurrences
 {
+    public function __construct(private readonly ScheduleOccupancy $scheduleOccupancy) {}
+
     public function execute(ScheduleSeries $series): int
     {
         $series->loadMissing(['account', 'location', 'room', 'classType', 'trainer']);
 
         return DB::transaction(function () use ($series): int {
+            $this->scheduleOccupancy->lockAccount($series->account);
+            $trainerIds = $series->trainer_id ? [$series->trainer_id] : [];
+            $this->scheduleOccupancy->lockResources($series->account, $series->room_id, $trainerIds);
+
             $timezone = $series->location->timezone
                 ?? $series->account->timezone
                 ?? config('app.timezone');
@@ -61,6 +68,19 @@ class GenerateScheduleOccurrences
             while ($cursor->lessThanOrEqualTo($until)) {
                 $startsAt = CarbonImmutable::parse($cursor->toDateString().' '.$series->start_time, $timezone);
                 $attributes = $this->occurrenceAttributes($series, $startsAt);
+
+                if ($this->scheduleOccupancy->hasInternalClassConflict(
+                    $series->account,
+                    $series->room_id,
+                    $trainerIds,
+                    $attributes['starts_at'],
+                    $attributes['ends_at'],
+                )) {
+                    $cursor = $cursor->addWeek();
+
+                    continue;
+                }
+
                 $desiredOccurrences[$attributes['starts_at']->toDateTimeString()] = $attributes;
                 $cursor = $cursor->addWeek();
             }

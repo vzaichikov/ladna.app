@@ -7,6 +7,7 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
+use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonInterface;
 use Database\Factories\ScheduledClassFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -14,9 +15,11 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 #[Fillable(['account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'schedule_series_id', 'title', 'description', 'starts_at', 'ends_at', 'capacity', 'booking_cutoff_minutes', 'cancellation_cutoff_minutes', 'is_generated', 'is_manually_modified', 'metadata', 'is_public', 'status'])]
@@ -75,6 +78,14 @@ class ScheduledClass extends Model
     public function trainer(): BelongsTo
     {
         return $this->belongsTo(Trainer::class);
+    }
+
+    public function additionalTrainers(): BelongsToMany
+    {
+        return $this->belongsToMany(Trainer::class, 'scheduled_class_additional_trainer')
+            ->withPivot('account_id')
+            ->withTimestamps()
+            ->orderBy('trainers.name');
     }
 
     public function scheduleSeries(): BelongsTo
@@ -195,7 +206,46 @@ class ScheduledClass extends Model
 
     public function peopleCounterTrainerAdjustment(): int
     {
-        return $this->classType?->schedule_kind === ScheduleKind::GroupClass ? 1 : 0;
+        $scheduleKind = $this->classType?->schedule_kind;
+
+        if (! $scheduleKind instanceof ScheduleKind) {
+            return 0;
+        }
+
+        if ($scheduleKind === ScheduleKind::InternalClass) {
+            return ($this->trainer_id ? 1 : 0) + $this->additionalTrainerIds()->count();
+        }
+
+        return (int) (ScheduleKindRegistry::get($scheduleKind)['people_counter_trainer_adjustment'] ?? 0);
+    }
+
+    /**
+     * @return Collection<int, int>
+     */
+    public function additionalTrainerIds(): Collection
+    {
+        if ($this->relationLoaded('additionalTrainers')) {
+            return $this->additionalTrainers
+                ->pluck('id')
+                ->map(fn (mixed $trainerId): int => (int) $trainerId)
+                ->values();
+        }
+
+        return $this->additionalTrainers()
+            ->pluck('trainers.id')
+            ->map(fn (mixed $trainerId): int => (int) $trainerId)
+            ->values();
+    }
+
+    public function isAssignedToTrainer(int $trainerId): bool
+    {
+        if ($this->trainer_id === $trainerId) {
+            return true;
+        }
+
+        return $this->relationLoaded('additionalTrainers')
+            ? $this->additionalTrainers->contains('id', $trainerId)
+            : $this->additionalTrainers()->whereKey($trainerId)->exists();
     }
 
     public function durationMinutes(): int
@@ -309,6 +359,10 @@ class ScheduledClass extends Model
 
     public function isBookingOpen(): bool
     {
+        if (! $this->acceptsCustomerBookings()) {
+            return false;
+        }
+
         $closesAt = $this->bookingClosesAt();
 
         return $closesAt === null || now()->lessThan($closesAt);
@@ -336,5 +390,31 @@ class ScheduledClass extends Model
         }
 
         return ! $this->is_generated || $this->ends_at->lessThanOrEqualTo($at ?? now());
+    }
+
+    public function acceptsCustomerBookings(): bool
+    {
+        $scheduleKind = $this->classType?->schedule_kind;
+
+        return $scheduleKind instanceof ScheduleKind
+            && ScheduleKindRegistry::hasCapability($scheduleKind, 'customer_bookable');
+    }
+
+    public function supportsClassPasses(): bool
+    {
+        $scheduleKind = $this->classType?->schedule_kind;
+
+        return $scheduleKind instanceof ScheduleKind
+            && ScheduleKindRegistry::hasCapability($scheduleKind, 'class_pass_eligible');
+    }
+
+    public function isFullyEditableOccurrence(): bool
+    {
+        $scheduleKind = $this->classType?->schedule_kind;
+
+        return $scheduleKind instanceof ScheduleKind
+            && ScheduleKindRegistry::hasCapability($scheduleKind, 'full_occurrence_editable')
+            && $this->status === ScheduledClassStatus::Scheduled
+            && $this->starts_at->isFuture();
     }
 }

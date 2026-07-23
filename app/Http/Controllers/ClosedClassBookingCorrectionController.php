@@ -23,6 +23,9 @@ class ClosedClassBookingCorrectionController extends Controller
     {
         $this->authorize('correctClosedClasses', $account);
         $this->ensureClassBelongsToAccount($account, $scheduledClass);
+        $scheduledClass->loadMissing('classType');
+
+        abort_unless($scheduledClass->acceptsCustomerBookings(), Response::HTTP_UNPROCESSABLE_ENTITY, __('app.class_does_not_accept_customer_bookings'));
 
         $validated = $request->validate([
             'customer_id' => [
@@ -50,6 +53,21 @@ class ClosedClassBookingCorrectionController extends Controller
     public function store(StoreClosedClassBookingCorrectionRequest $request, Account $account, ScheduledClass $scheduledClass, AddClosedClassBookingCorrection $correction): RedirectResponse|JsonResponse
     {
         $this->ensureClassBelongsToAccount($account, $scheduledClass);
+        $scheduledClass->loadMissing('classType');
+
+        if (! $scheduledClass->acceptsCustomerBookings()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => __('app.class_does_not_accept_customer_bookings'),
+                    'errors' => [
+                        'customer_id' => [__('app.class_does_not_accept_customer_bookings')],
+                    ],
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+
+            return back()->withErrors(['customer_id' => __('app.class_does_not_accept_customer_bookings')]);
+        }
+
         $customer = $account->customers()->whereKey($request->validated('customer_id'))->firstOrFail();
 
         $correction->execute(

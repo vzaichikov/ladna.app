@@ -14,6 +14,7 @@ use App\Models\Customer;
 use App\Models\MobileSession;
 use App\Support\CustomerAuth\CustomerOtpService;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\ScheduleKindRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,10 @@ class MobileCustomerController extends Controller
         $bookings = $session->customer->classBookings()
             ->notCorrectedRemoved()
             ->with(['scheduledClass.location', 'scheduledClass.room', 'scheduledClass.classType.activityDirection', 'scheduledClass.trainer', 'classPassReservation.customerClassPass'])
-            ->whereHas('scheduledClass', fn (Builder $query): Builder => $query->where('account_id', $session->account_id))
+            ->whereHas('scheduledClass', fn (Builder $query): Builder => $query
+                ->where('account_id', $session->account_id)
+                ->whereHas('classType', fn (Builder $query): Builder => $query
+                    ->whereIn('schedule_kind', ScheduleKindRegistry::customerBookableValues())))
             ->latest('id')
             ->limit(50)
             ->get();
