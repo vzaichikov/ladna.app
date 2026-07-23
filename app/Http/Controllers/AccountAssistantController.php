@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AiConversationMessageRole;
+use App\Enums\StudioAiDisposition;
 use App\Enums\StudioPermission;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
@@ -10,15 +11,18 @@ use App\Models\AiConversation;
 use App\Models\AiPendingAction;
 use App\Models\PlatformAiSetting;
 use App\Models\Trainer;
+use App\Support\Ai\StudioAiActionInput;
 use App\Support\Ai\StudioAiInference;
 use App\Support\Ai\StudioAiResult;
 use App\Support\Ai\StudioAssistantActionExecutor;
+use App\Support\Ai\StudioAssistantActionPlan;
 use App\Support\Ai\StudioAssistantActionPlanner;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AccountAssistantController extends Controller
@@ -43,8 +47,9 @@ class AccountAssistantController extends Controller
         ]);
         $conversation = $this->conversationFor($account, $request);
         $text = trim((string) $validated['message']);
+        $trainer = $this->trainerFor($account, $request);
 
-        $conversation->messages()->create([
+        $currentMessage = $conversation->messages()->create([
             'account_id' => $account->id,
             'role' => AiConversationMessageRole::User->value,
             'content' => $text,
@@ -55,41 +60,50 @@ class AccountAssistantController extends Controller
             $this->storeInferenceResponse(
                 $account,
                 $conversation,
-                $inference->respond($account, $text, conversation: $conversation),
+                $inference->respond(
+                    $account,
+                    $text,
+                    conversation: $conversation,
+                    currentMessage: $currentMessage,
+                    actorUser: $request->user(),
+                    actorTrainer: $trainer,
+                ),
             );
         } else {
-            $allowNewBookingDialog = $inference->shouldStartBookingDialog($account, $text);
-            $plan = $planner->plan($account, $request->user(), $this->trainerFor($account, $request), $conversation, $text, $allowNewBookingDialog);
+            $plan = $this->exactActionPlan($account, $request, $conversation, $text, $trainer, $planner);
+            $aiResult = null;
 
-            if ($plan->pendingAction) {
-                $assistantText = $plan->message ?? __('app.assistant_pending_action_created');
-                $conversation->messages()->create([
-                    'account_id' => $account->id,
-                    'role' => AiConversationMessageRole::Assistant->value,
-                    'content' => $assistantText,
-                    'metadata' => [
-                        'pending_action_id' => $plan->pendingAction->id,
-                        'used_ai' => false,
-                        ...$plan->metadata,
-                    ],
-                    'occurred_at' => now(),
-                ]);
-            } elseif ($plan->handled) {
-                $conversation->messages()->create([
-                    'account_id' => $account->id,
-                    'role' => AiConversationMessageRole::Assistant->value,
-                    'content' => $plan->message ?? '',
-                    'metadata' => [
-                        'used_ai' => false,
-                        ...$plan->metadata,
-                    ],
-                    'occurred_at' => now(),
-                ]);
+            if (! $plan) {
+                $aiResult = $inference->respond(
+                    $account,
+                    $text,
+                    conversation: $conversation,
+                    currentMessage: $currentMessage,
+                    actorUser: $request->user(),
+                    actorTrainer: $trainer,
+                );
+
+                if ($aiResult->isAction()) {
+                    $plan = $planner->plan(
+                        $account,
+                        $request->user(),
+                        $trainer,
+                        $conversation,
+                        $aiResult->disposition,
+                        $aiResult->actionInput,
+                    );
+                }
+            }
+
+            if ($plan?->handled) {
+                $this->storeActionPlanResponse($account, $conversation, $plan, $aiResult);
             } else {
                 $this->storeInferenceResponse(
                     $account,
                     $conversation,
-                    $inference->respond($account, $text, conversation: $conversation),
+                    $aiResult?->isAction()
+                        ? StudioAiResult::fallback('invalid_ai_action')
+                        : ($aiResult ?? StudioAiResult::fallback('invalid_ai_response')),
                 );
             }
         }
@@ -223,9 +237,72 @@ class AccountAssistantController extends Controller
                 'fallback_reason' => $result->fallbackReason,
                 'follow_up_actions' => $result->followUpActions,
                 'help_sources' => $result->helpSources,
+                'disposition' => $result->disposition->value,
             ],
             'occurred_at' => now(),
         ]);
+    }
+
+    private function storeActionPlanResponse(
+        Account $account,
+        AiConversation $conversation,
+        StudioAssistantActionPlan $plan,
+        ?StudioAiResult $result = null,
+    ): void {
+        $conversation->messages()->create([
+            'account_id' => $account->id,
+            'role' => AiConversationMessageRole::Assistant->value,
+            'content' => $plan->message ?? ($plan->pendingAction
+                ? __('app.assistant_pending_action_created')
+                : ''),
+            'metadata' => [
+                'used_ai' => $result?->usedAi ?? false,
+                'provider' => $result?->provider,
+                'model' => $result?->model,
+                'disposition' => $result?->disposition->value,
+                ...($plan->pendingAction ? ['pending_action_id' => $plan->pendingAction->id] : []),
+                ...$plan->metadata,
+            ],
+            'occurred_at' => now(),
+        ]);
+    }
+
+    private function exactActionPlan(
+        Account $account,
+        Request $request,
+        AiConversation $conversation,
+        string $text,
+        ?Trainer $trainer,
+        StudioAssistantActionPlanner $planner,
+    ): ?StudioAssistantActionPlan {
+        $normalized = Str::of($text)->lower()->squish()->toString();
+
+        if (preg_match('/^\/help(?:@\w+)?$/u', $normalized) === 1) {
+            return StudioAssistantActionPlan::message(__('app.telegram_owner_help'));
+        }
+
+        if (preg_match('/^\/book(?:@\w+)?$/u', $normalized) === 1) {
+            return $planner->startGroupBookingDialog($account, $request->user(), $trainer, $conversation);
+        }
+
+        if (preg_match('/^\/(?:cancel_booking|cancel)(?:@\w+)?$/u', $normalized) === 1) {
+            return $planner->plan(
+                $account,
+                $request->user(),
+                $trainer,
+                $conversation,
+                StudioAiDisposition::CancelDialog,
+                new StudioAiActionInput,
+            );
+        }
+
+        return $planner->planExactDialogOption(
+            $account,
+            $request->user(),
+            $trainer,
+            $conversation,
+            $text,
+        );
     }
 
     private function authorizeAssistant(Request $request, Account $account): void

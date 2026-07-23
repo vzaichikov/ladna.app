@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.91.1',
+                'date' => '2026-07-23',
+                'title' => 'More natural Ladna assistant conversations',
+                'items' => ['The Ladna assistant now keeps more of the recent conversation in mind, understands short follow-up replies such as choosing one of the options it just suggested, and behaves consistently in the dashboard and Telegram. Booking changes still require the usual confirmation.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.91.0',
                 'date' => '2026-07-23',
                 'title' => 'Studio rules and public offers',
@@ -821,6 +828,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.91.1',
+                'date' => '2026-07-23',
+                'title' => 'Природніші розмови з асистентом Ladna',
+                'items' => ['Асистент Ladna тепер краще памʼятає недавню розмову, розуміє короткі уточнення на кшталт вибору одного із щойно запропонованих варіантів і однаково працює в кабінеті та Telegram. Зміни в записах, як і раніше, потребують звичного підтвердження.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.91.0',
                 'date' => '2026-07-23',

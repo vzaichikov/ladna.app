@@ -3,6 +3,7 @@
 namespace App\Support\Telegram;
 
 use App\Enums\AiConversationMessageRole;
+use App\Enums\StudioAiDisposition;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Enums\TelegramUpdateStatus;
@@ -15,6 +16,8 @@ use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
 use App\Models\Trainer;
+use App\Support\Ai\StudioAiActionInput;
+use App\Support\Ai\StudioAiResult;
 use App\Support\Ai\StudioAssistantActionExecutor;
 use App\Support\Ai\StudioAssistantActionPlan;
 use App\Support\Ai\StudioAssistantActionPlanner;
@@ -271,7 +274,7 @@ class TelegramUpdateProcessor
             }
 
             $conversation = $this->conversationFor($authorization);
-            $conversation->messages()->create([
+            $currentMessage = $conversation->messages()->create([
                 'account_id' => $authorization->account_id,
                 'telegram_message_id' => $inboundMessage->id,
                 'role' => AiConversationMessageRole::User->value,
@@ -282,40 +285,16 @@ class TelegramUpdateProcessor
             $this->updateStatus($statusMessage, 'assistant_status_checking_database');
             $this->refreshTyping($typing, force: true);
 
-            $plan = $authorization->user
-                ? $this->actionPlanForText(
+            $plan = $this->exactActionPlan($account, $authorization, $conversation, $text);
+            $aiResult = null;
+
+            if (! $plan) {
+                $aiResult = $this->ownerResponder->respond(
                     $account,
+                    $text,
                     $authorization,
                     $conversation,
-                    $text,
-                    function (string $statusKey) use ($typing, $statusMessage): ?Response {
-                        $response = $this->updateStatus($statusMessage, $statusKey);
-                        $this->refreshTyping($typing, force: true);
-
-                        return $response;
-                    },
-                )
-                : null;
-
-            if ($plan?->pendingAction || $plan?->handled) {
-                $this->updateStatus($statusMessage, $plan->pendingAction ? 'assistant_status_preparing_action' : 'assistant_status_checking_database');
-                $this->refreshTyping($typing, force: true);
-
-                $result = [
-                    'response' => $plan->message ?? __('app.assistant_pending_action_created'),
-                    'rejected' => false,
-                    'used_ai' => false,
-                    'metadata' => [
-                        'used_ai' => false,
-                        ...($plan->pendingAction ? ['pending_action_id' => $plan->pendingAction->id] : []),
-                        ...$plan->metadata,
-                    ],
-                ];
-            } else {
-                $result = $this->ownerResponder->respond(
-                    $account,
-                    $text,
-                    $authorization,
+                    $currentMessage,
                     function (string $statusKey) use ($typing, $statusMessage): ?Response {
                         $response = $this->updateStatus($statusMessage, $statusKey);
                         $this->refreshTyping($typing, force: true);
@@ -323,14 +302,54 @@ class TelegramUpdateProcessor
                         return $response;
                     },
                 );
-                $result['metadata'] = [
-                    'used_ai' => $result['used_ai'],
-                    'provider' => $result['provider'] ?? null,
-                    'model' => $result['model'] ?? null,
-                    'fallback_reason' => $result['fallback_reason'] ?? null,
-                    'follow_up_actions' => $result['follow_up_actions'] ?? [],
-                    'help_sources' => $result['help_sources'] ?? [],
+
+                if ($aiResult->isAction() && $authorization->user) {
+                    $plan = $this->actionPlanner->plan(
+                        $account,
+                        $authorization->user,
+                        $authorization->trainer,
+                        $conversation,
+                        $aiResult->disposition,
+                        $aiResult->actionInput,
+                    );
+                }
+            }
+
+            if ($plan?->handled) {
+                $this->updateStatus($statusMessage, $plan->pendingAction ? 'assistant_status_preparing_action' : 'assistant_status_checking_database');
+                $this->refreshTyping($typing, force: true);
+
+                $result = [
+                    'response' => $plan->message ?? __('app.assistant_pending_action_created'),
+                    'rejected' => false,
+                    'used_ai' => $aiResult?->usedAi ?? false,
+                    'metadata' => [
+                        'used_ai' => $aiResult?->usedAi ?? false,
+                        'provider' => $aiResult?->provider,
+                        'model' => $aiResult?->model,
+                        'disposition' => $aiResult?->disposition->value,
+                        ...($plan->pendingAction ? ['pending_action_id' => $plan->pendingAction->id] : []),
+                        ...$plan->metadata,
+                    ],
                 ];
+            } else {
+                if ($aiResult?->isAction()) {
+                    $aiResult = StudioAiResult::fallback('invalid_ai_action');
+                }
+
+                $aiResult ??= StudioAiResult::fallback('invalid_ai_response');
+                $result['metadata'] = [
+                    'used_ai' => $aiResult->usedAi,
+                    'provider' => $aiResult->provider,
+                    'model' => $aiResult->model,
+                    'fallback_reason' => $aiResult->fallbackReason,
+                    'follow_up_actions' => $aiResult->followUpActions,
+                    'help_sources' => $aiResult->helpSources,
+                    'disposition' => $aiResult->disposition->value,
+                ];
+                $result['response'] = $aiResult->text !== '' ? $aiResult->text : __('app.assistant_ai_unavailable');
+                $result['rejected'] = $aiResult->rejected;
+                $result['used_ai'] = $aiResult->usedAi;
             }
 
             $assistantMessage = $conversation->messages()->create([
@@ -591,8 +610,14 @@ class TelegramUpdateProcessor
             ->first();
     }
 
-    private function actionPlanForText(Account $account, TelegramChatAuthorization $authorization, AiConversation $conversation, string $text, ?callable $beforeProviderRequest = null): ?StudioAssistantActionPlan
+    private function exactActionPlan(Account $account, TelegramChatAuthorization $authorization, AiConversation $conversation, string $text): ?StudioAssistantActionPlan
     {
+        $normalized = Str::of($text)->lower()->squish()->toString();
+
+        if (preg_match('/^\/help(?:@\w+)?$/u', $normalized) === 1) {
+            return StudioAssistantActionPlan::message(__('app.telegram_owner_help'));
+        }
+
         if (! $authorization->user) {
             return null;
         }
@@ -601,9 +626,24 @@ class TelegramUpdateProcessor
             return $this->actionPlanner->startGroupBookingDialog($account, $authorization->user, $authorization->trainer, $conversation);
         }
 
-        $allowNewBookingDialog = $this->ownerResponder->shouldStartBookingDialog($account, $text, $authorization, $beforeProviderRequest);
+        if (preg_match('/^\/(?:cancel_booking|cancel)(?:@\w+)?$/u', $normalized) === 1) {
+            return $this->actionPlanner->plan(
+                $account,
+                $authorization->user,
+                $authorization->trainer,
+                $conversation,
+                StudioAiDisposition::CancelDialog,
+                new StudioAiActionInput,
+            );
+        }
 
-        return $this->actionPlanner->plan($account, $authorization->user, $authorization->trainer, $conversation, $text, $allowNewBookingDialog);
+        return $this->actionPlanner->planExactDialogOption(
+            $account,
+            $authorization->user,
+            $authorization->trainer,
+            $conversation,
+            $text,
+        );
     }
 
     private function isCreateBookingShortcut(string $text): bool
@@ -611,15 +651,14 @@ class TelegramUpdateProcessor
         $normalized = Str::of($text)->lower()->squish()->toString();
 
         return $normalized === Str::of(__('app.telegram_quick_action_create_booking'))->lower()->squish()->toString()
-            || preg_match('/^\/book(?:@\w+)?(?:\s|$)/u', $normalized) === 1;
+            || preg_match('/^\/book(?:@\w+)?$/u', $normalized) === 1;
     }
 
     private function isRestartShortcut(string $text): bool
     {
         $normalized = Str::of($text)->lower()->squish()->toString();
 
-        return preg_match('/^\/(?:start|restart)(?:@\w+)?(?:\s|$)/u', $normalized) === 1
-            || in_array($normalized, ['restart', 'start over', 'reset', 'почати спочатку', 'почнемо спочатку', 'давай почнемо спочатку', 'спочатку', 'перезапусти', 'перезапустити', 'начать сначала', 'давай начнем сначала', 'заново'], true);
+        return preg_match('/^\/(?:start|restart)(?:@\w+)?$/u', $normalized) === 1;
     }
 
     private function resolveAuthorizedTrainer(TelegramChatAuthorization $authorization): TelegramChatAuthorization

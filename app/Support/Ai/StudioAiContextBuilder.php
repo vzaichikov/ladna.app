@@ -9,18 +9,27 @@ use App\Enums\ScheduledClassStatus;
 use App\Enums\WebsiteLeadStatus;
 use App\Models\Account;
 use App\Models\AiConversation;
+use App\Models\AiConversationMessage;
 use App\Models\ClassBooking;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\ScheduledClass;
-use App\Models\TelegramChatAuthorization;
+use App\Models\Trainer;
+use App\Models\User;
 use App\Models\WebsiteLead;
 use App\Support\StudioClassScheduleDetails;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 
 class StudioAiContextBuilder
 {
     private const ClassBookingDetailsDaysAhead = 7;
+
+    private const ConversationMessageLimit = 24;
+
+    private const ConversationCharacterLimit = 20000;
+
+    private const ConversationMessageCharacterLimit = 2000;
 
     public function __construct(private readonly StudioClassScheduleDetails $classScheduleDetails) {}
 
@@ -111,88 +120,158 @@ class StudioAiContextBuilder
     /**
      * @return array<string, mixed>|null
      */
-    public function actorContext(?TelegramChatAuthorization $authorization): ?array
+    public function actorContext(?User $user, ?Trainer $trainer, string $channel): ?array
     {
-        if (! $authorization) {
+        if (! $user && ! $trainer) {
             return null;
         }
 
-        $authorization->loadMissing(['user', 'trainer']);
-
         return [
-            'channel' => 'telegram_owner',
-            'user' => $authorization->user ? [
-                'id' => $authorization->user->id,
-                'name' => $authorization->user->name,
+            'channel' => $channel,
+            'user' => $user ? [
+                'id' => $user->id,
+                'name' => $user->name,
             ] : null,
-            'trainer' => $authorization->trainer ? [
-                'id' => $authorization->trainer->id,
-                'name' => $authorization->trainer->name,
+            'trainer' => $trainer ? [
+                'id' => $trainer->id,
+                'name' => $trainer->name,
             ] : null,
-            'authorized_phone_matches_trainer' => filled($authorization->phone) && $authorization->trainer !== null,
+            'trainer_is_linked_to_user' => $user !== null
+                && $trainer !== null
+                && (int) $trainer->user_id === (int) $user->id,
         ];
     }
 
     /**
      * @return array<int, array{role: string, content: string}>
      */
-    public function recentMessages(?TelegramChatAuthorization $authorization, int $limit = 8): array
+    public function recentConversationMessages(AiConversation $conversation, ?AiConversationMessage $excludeMessage = null): array
     {
-        if (! $authorization) {
-            return [];
+        if ($excludeMessage
+            && ((int) $excludeMessage->ai_conversation_id !== (int) $conversation->id
+                || (int) $excludeMessage->account_id !== (int) $conversation->account_id)) {
+            throw new InvalidArgumentException('The excluded message must belong to the supplied conversation.');
         }
 
-        $conversation = $authorization->account
-            ->aiConversations()
-            ->where('telegram_chat_authorization_id', $authorization->id)
-            ->where('channel', 'telegram_owner')
-            ->where('status', 'active')
-            ->latest('last_message_at')
-            ->first();
-
-        if (! $conversation) {
-            return [];
-        }
-
-        return $conversation->messages()
+        $messages = $conversation->messages()
+            ->where('account_id', $conversation->account_id)
             ->whereIn('role', [
                 AiConversationMessageRole::User->value,
                 AiConversationMessageRole::Assistant->value,
+                AiConversationMessageRole::RejectedIntent->value,
+                AiConversationMessageRole::Tool->value,
             ])
+            ->when($excludeMessage, fn ($query) => $query->where('id', '!=', $excludeMessage->id))
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
-            ->limit($limit)
+            ->limit(self::ConversationMessageLimit)
             ->get()
+            ->map(fn (AiConversationMessage $message): ?array => $this->conversationMessage($message))
+            ->filter()
             ->reverse()
-            ->map(fn ($message): array => [
-                'role' => $message->role === AiConversationMessageRole::Assistant ? 'assistant' : 'user',
-                'content' => mb_substr($message->content, 0, 1200),
-            ])
-            ->values()
-            ->all();
+            ->values();
+
+        $turns = [];
+        $turn = [];
+
+        foreach ($messages as $message) {
+            if ($message['role'] === 'user') {
+                if ($this->isCompleteTurn($turn)) {
+                    $turns[] = $turn;
+                }
+
+                $turn = [$message];
+
+                continue;
+            }
+
+            if ($turn !== []) {
+                $turn[] = $message;
+            }
+        }
+
+        if ($this->isCompleteTurn($turn)) {
+            $turns[] = $turn;
+        }
+
+        $selectedTurns = [];
+        $messageCount = 0;
+        $characterCount = 0;
+
+        foreach (array_reverse($turns) as $completeTurn) {
+            $turnMessageCount = count($completeTurn);
+            $turnCharacterCount = array_sum(array_map(
+                fn (array $message): int => mb_strlen($message['content']),
+                $completeTurn,
+            ));
+
+            if ($messageCount + $turnMessageCount > self::ConversationMessageLimit
+                || $characterCount + $turnCharacterCount > self::ConversationCharacterLimit) {
+                break;
+            }
+
+            $selectedTurns[] = $completeTurn;
+            $messageCount += $turnMessageCount;
+            $characterCount += $turnCharacterCount;
+        }
+
+        return array_merge(...array_reverse($selectedTurns));
     }
 
     /**
-     * @return array<int, array{role: string, content: string}>
+     * @return array<string, mixed>|null
      */
-    public function recentConversationMessages(AiConversation $conversation, int $limit = 8): array
+    public function activeBookingDialog(AiConversation $conversation): ?array
     {
-        return $conversation->messages()
-            ->whereIn('role', [
-                AiConversationMessageRole::User->value,
-                AiConversationMessageRole::Assistant->value,
-            ])
-            ->orderByDesc('occurred_at')
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get()
-            ->reverse()
-            ->map(fn ($message): array => [
-                'role' => $message->role === AiConversationMessageRole::Assistant ? 'assistant' : 'user',
-                'content' => mb_substr($message->content, 0, 1200),
-            ])
-            ->values()
-            ->all();
+        $message = $conversation->messages()
+            ->where('account_id', $conversation->account_id)
+            ->where('role', AiConversationMessageRole::Assistant->value)
+            ->whereNotNull('metadata')
+            ->latest('occurred_at')
+            ->latest('id')
+            ->first();
+
+        $draft = data_get($message?->metadata, 'booking_dialog');
+        $status = is_array($draft) ? (string) ($draft['status'] ?? '') : '';
+
+        if (! in_array($status, ['awaiting_customer', 'awaiting_trainer', 'awaiting_date', 'awaiting_class'], true)) {
+            return null;
+        }
+
+        return $draft;
+    }
+
+    /**
+     * @return array{role: string, content: string}
+     */
+    private function conversationMessage(AiConversationMessage $message): ?array
+    {
+        $content = $message->content;
+
+        if ($message->role === AiConversationMessageRole::Tool) {
+            if (! is_array(data_get($message->metadata, 'result'))) {
+                return null;
+            }
+
+            $content = '[Confirmed action result] '.$content;
+        }
+
+        return [
+            'role' => $message->role === AiConversationMessageRole::User ? 'user' : 'assistant',
+            'content' => mb_substr($content, 0, self::ConversationMessageCharacterLimit),
+        ];
+    }
+
+    /**
+     * @param  array<int, array{role: string, content: string}>  $turn
+     */
+    private function isCompleteTurn(array $turn): bool
+    {
+        return count($turn) >= 2
+            && $turn[0]['role'] === 'user'
+            && collect(array_slice($turn, 1))->every(
+                fn (array $message): bool => $message['role'] === 'assistant',
+            );
     }
 
     private function scheduledClassCount(Account $account, Carbon $day): int

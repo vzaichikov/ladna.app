@@ -53,9 +53,12 @@ class AccountAssistantTest extends TestCase
     public function test_dashboard_message_endpoint_uses_global_ai_and_stores_user_scoped_history(): void
     {
         Http::fake([
-            'ollama.com/api/chat' => Http::sequence()
-                ->push(['message' => ['role' => 'assistant', 'content' => '{"in_scope":true,"reason":"studio question"}']])
-                ->push(['message' => ['role' => 'assistant', 'content' => 'Dashboard AI answer.']]),
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"Dashboard AI answer.","follow_up_actions":[],"action":null,"reason":"studio question"}',
+                ],
+            ]),
         ]);
 
         $owner = User::factory()->create();
@@ -86,9 +89,12 @@ class AccountAssistantTest extends TestCase
     public function test_readonly_demo_uses_ai_for_readonly_answers_without_preparing_actions(): void
     {
         Http::fake([
-            'ollama.com/api/chat' => Http::sequence()
-                ->push(['message' => ['role' => 'assistant', 'content' => '{"in_scope":true,"reason":"demo studio question"}']])
-                ->push(['message' => ['role' => 'assistant', 'content' => '{"answer":"У демо є 6 людей у Лавандовій залі.","follow_up_actions":["Покажи навантаження залів"]}']]),
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"У демо є 6 людей у Лавандовій залі.","follow_up_actions":["Покажи навантаження залів"],"action":null,"reason":"demo studio question"}',
+                ],
+            ]),
         ]);
 
         $owner = User::factory()->create();
@@ -110,7 +116,7 @@ class AccountAssistantTest extends TestCase
             ->assertJsonPath('pending_actions', []);
 
         $this->assertSame(0, AiPendingAction::query()->whereBelongsTo($account)->count());
-        Http::assertSentCount(2);
+        Http::assertSentCount(1);
 
         $conversation = AiConversation::query()->whereBelongsTo($account)->sole();
         $action = AiPendingAction::factory()
@@ -130,18 +136,23 @@ class AccountAssistantTest extends TestCase
     public function test_dashboard_message_endpoint_stores_ai_follow_up_actions(): void
     {
         Http::fake([
-            'ollama.com/api/chat' => Http::sequence()
-                ->push(['message' => ['role' => 'assistant', 'content' => '{"start_booking":false,"reason":"analytics question"}']])
-                ->push(['message' => ['role' => 'assistant', 'content' => '{"in_scope":true,"reason":"studio analytics question"}']])
-                ->push(['message' => ['role' => 'assistant', 'content' => json_encode([
-                    'answer' => 'Tomorrow has 4 bookings.',
-                    'follow_up_actions' => [
-                        'Show trainer load for tomorrow',
-                        'Show customers without pass reservations',
-                        'Show available spots tomorrow',
-                        'This fourth suggestion must be ignored',
-                    ],
-                ])]]),
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => json_encode([
+                        'disposition' => 'answer',
+                        'answer' => 'Tomorrow has 4 bookings.',
+                        'follow_up_actions' => [
+                            'Show trainer load for tomorrow',
+                            'Show customers without pass reservations',
+                            'Show available spots tomorrow',
+                            'This fourth suggestion must be ignored',
+                        ],
+                        'action' => null,
+                        'reason' => 'studio analytics question',
+                    ]),
+                ],
+            ]),
         ]);
 
         $owner = User::factory()->create();
@@ -164,9 +175,12 @@ class AccountAssistantTest extends TestCase
     public function test_dashboard_message_endpoint_stores_help_sources_without_full_help_text(): void
     {
         Http::fake([
-            'ollama.com/api/chat' => Http::sequence()
-                ->push(['message' => ['role' => 'assistant', 'content' => '{"in_scope":true,"reason":"Ladna help question"}']])
-                ->push(['message' => ['role' => 'assistant', 'content' => '{"answer":"Відкрийте Клієнти й натисніть Додати клієнта.","follow_up_actions":[]}']]),
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"Відкрийте Клієнти й натисніть Додати клієнта.","follow_up_actions":[],"action":null,"reason":"Ladna help question"}',
+                ],
+            ]),
         ]);
 
         $owner = User::factory()->create();
@@ -182,6 +196,133 @@ class AccountAssistantTest extends TestCase
             ->assertJsonPath('messages.1.metadata.help_sources.0.slug', 'customers-bookings')
             ->assertJsonPath('messages.1.metadata.help_sources.0.sections.0', 'Як додати клієнта вручну')
             ->assertJsonMissingPath('messages.1.metadata.help_sources.0.fragments');
+    }
+
+    public function test_dashboard_contextual_option_reply_reaches_model_once_without_current_message_duplication(): void
+    {
+        $currentText = 'мені більше подобається третій варіант';
+        $options = "Ось три варіанти:\n1. Ladna Flow\n2. Ladna Space\n3. Ladna Studio";
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"Третій варіант, Ladna Studio, добре підходить.","follow_up_actions":[],"action":null,"reason":"contextual selection from prior options"}',
+                ],
+            ]),
+        ]);
+
+        $owner = User::factory()->create(['name' => 'Валерія']);
+        $account = Account::factory()->create(['name' => 'Skyler owner studio']);
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+        $conversation = AiConversation::factory()
+            ->for($account)
+            ->for($owner, 'user')
+            ->create([
+                'channel' => 'dashboard_chat',
+                'status' => AiConversation::StatusActive,
+            ]);
+        $conversation->messages()->create([
+            'account_id' => $account->id,
+            'role' => AiConversationMessageRole::User->value,
+            'content' => 'Запропонуй три варіанти назви.',
+            'occurred_at' => now()->subMinute(),
+        ]);
+        $conversation->messages()->create([
+            'account_id' => $account->id,
+            'role' => AiConversationMessageRole::Assistant->value,
+            'content' => $options,
+            'occurred_at' => now()->subSeconds(30),
+        ]);
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => $currentText,
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.3.role', AiConversationMessageRole::Assistant->value)
+            ->assertJsonPath('messages.3.content', 'Третій варіант, Ladna Studio, добре підходить.')
+            ->assertJsonPath('messages.3.metadata.disposition', 'answer');
+
+        Http::assertSent(function (Request $request) use ($currentText, $options): bool {
+            $messages = $request->data()['messages'];
+            $contents = array_column($messages, 'content');
+            $combined = implode("\n", $contents);
+            $priorUserIndex = array_search('Запропонуй три варіанти назви.', $contents, true);
+            $optionsIndex = array_search($options, $contents, true);
+
+            return $priorUserIndex !== false
+                && $optionsIndex !== false
+                && $priorUserIndex < $optionsIndex
+                && $optionsIndex < array_key_last($messages)
+                && substr_count($combined, $currentText) === 1;
+        });
+        Http::assertSentCount(1);
+    }
+
+    public function test_model_proposed_booking_id_is_validated_against_current_account(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $otherOwner = User::factory()->create();
+        $otherAccount = Account::factory()->create();
+        $otherAccount->addOwner($otherOwner);
+        $otherBooking = $this->bookingFor($otherAccount, $otherOwner);
+        $this->configureGlobalOllama();
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => json_encode([
+                        'disposition' => 'cancel_booking',
+                        'answer' => null,
+                        'follow_up_actions' => [],
+                        'action' => ['booking_id' => $otherBooking->id],
+                        'reason' => 'booking cancellation request',
+                    ]),
+                ],
+            ]),
+        ]);
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Скасуй цей запис.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', __('app.assistant_booking_not_found'))
+            ->assertJsonPath('pending_actions', []);
+
+        $this->assertSame(0, AiPendingAction::query()->whereBelongsTo($account)->count());
+        $this->assertSame(ClassBookingStatus::Booked, $otherBooking->fresh()->status);
+    }
+
+    public function test_incomplete_model_action_returns_unavailable_without_pending_action(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"cancel_booking","answer":null,"follow_up_actions":[],"action":{},"reason":"missing booking id"}',
+                ],
+            ]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Скасуй його.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', __('app.assistant_ai_unavailable'))
+            ->assertJsonPath('messages.1.metadata.fallback_reason', 'invalid_ai_response')
+            ->assertJsonPath('pending_actions', []);
+
+        $this->assertSame(0, AiPendingAction::query()->whereBelongsTo($account)->count());
     }
 
     public function test_dashboard_chat_can_clear_current_user_conversation(): void
@@ -254,7 +395,7 @@ class AccountAssistantTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"start_booking":true,"reason":"direct booking request"}',
+                    'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Алина Тестовая","trainer_query":"Катя","date":"2026-06-30","use_actor_trainer":false},"reason":"direct booking request"}',
                 ],
             ]),
         ]);
@@ -353,9 +494,22 @@ class AccountAssistantTest extends TestCase
         $owner = User::factory()->create();
         $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
         $account->addOwner($owner);
-        PlatformAiSetting::query()->delete();
-        PlatformAiSetting::factory()->create(['owner_ai_assistant_enabled' => true]);
+        $this->configureGlobalOllama();
         $booking = $this->bookingFor($account, $owner);
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => json_encode([
+                        'disposition' => 'cancel_booking',
+                        'answer' => null,
+                        'follow_up_actions' => [],
+                        'action' => ['booking_id' => $booking->id],
+                        'reason' => 'explicit booking cancellation',
+                    ]),
+                ],
+            ]),
+        ]);
 
         $response = $this->actingAs($owner)
             ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [

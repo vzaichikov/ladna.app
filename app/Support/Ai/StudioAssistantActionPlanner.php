@@ -2,10 +2,10 @@
 
 namespace App\Support\Ai;
 
-use App\Enums\AiConversationMessageRole;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
+use App\Enums\StudioAiDisposition;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiPendingAction;
@@ -17,9 +17,12 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use LogicException;
 
 class StudioAssistantActionPlanner
 {
+    public function __construct(private readonly StudioAiContextBuilder $contextBuilder) {}
+
     public function startGroupBookingDialog(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation): StudioAssistantActionPlan
     {
         return $this->resolveBookingDraft($account, $user, $trainer, $conversation, [
@@ -27,113 +30,89 @@ class StudioAssistantActionPlanner
         ]);
     }
 
-    public function plan(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $text, bool $allowNewBookingDialog = true): StudioAssistantActionPlan
-    {
-        $normalized = Str::of($text)->lower()->squish()->toString();
-
-        if ($arguments = $this->cancelBookingArguments($normalized)) {
-            return StudioAssistantActionPlan::pending(
-                $this->createPendingAction($account, $user, $trainer, $conversation, 'cancel-booking', $arguments, $this->cancelBookingPreview($account, $arguments)),
-            );
-        }
-
-        if ($allowNewBookingDialog && $arguments = $this->groupBookingArguments($normalized)) {
-            return StudioAssistantActionPlan::pending(
-                $this->createPendingAction($account, $user, $trainer, $conversation, 'create-booking', $arguments, $this->createBookingPreview($account, $arguments)),
-            );
-        }
-
-        if ($bookingPlan = $this->conversationalGroupBookingPlan($account, $user, $trainer, $conversation, $text, $normalized, $allowNewBookingDialog)) {
-            return $bookingPlan;
-        }
-
-        return StudioAssistantActionPlan::none();
+    public function plan(
+        Account $account,
+        User $user,
+        ?Trainer $trainer,
+        AiConversation $conversation,
+        StudioAiDisposition $disposition,
+        StudioAiActionInput $input,
+    ): StudioAssistantActionPlan {
+        return match ($disposition) {
+            StudioAiDisposition::StartBooking => $this->startBookingFromInput($account, $user, $trainer, $conversation, $input),
+            StudioAiDisposition::ContinueBooking => $this->continueBookingFromInput($account, $user, $trainer, $conversation, $input),
+            StudioAiDisposition::CancelBooking => $this->cancelBookingFromInput($account, $user, $trainer, $conversation, $input),
+            StudioAiDisposition::CancelDialog => $this->cancelBookingDialog($conversation),
+            default => StudioAssistantActionPlan::none(),
+        };
     }
 
-    /**
-     * @return array{booking_id: int}|null
-     */
-    private function cancelBookingArguments(string $text): ?array
-    {
-        $hasCancelIntent = str_contains($text, 'cancel')
-            || str_contains($text, 'скас')
-            || str_contains($text, 'отмен');
-
-        if (! $hasCancelIntent || preg_match('/(?:booking|запис|брон)[^\d#]*(?:#\s*)?(\d+)/u', $text, $matches) !== 1) {
+    public function planExactDialogOption(
+        Account $account,
+        User $user,
+        ?Trainer $trainer,
+        AiConversation $conversation,
+        string $text,
+    ): ?StudioAssistantActionPlan {
+        if (preg_match('/^\s*(\d{1,2})\s*$/', $text, $matches) !== 1) {
             return null;
         }
 
-        return ['booking_id' => (int) $matches[1]];
+        $draft = $this->contextBuilder->activeBookingDialog($conversation);
+
+        if (! $draft || ! in_array($draft['status'] ?? null, ['awaiting_customer', 'awaiting_trainer', 'awaiting_class'], true)) {
+            return null;
+        }
+
+        return $this->continueBookingFromInput(
+            $account,
+            $user,
+            $trainer,
+            $conversation,
+            new StudioAiActionInput(optionNumber: (int) $matches[1]),
+        );
     }
 
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function groupBookingArguments(string $text): ?array
-    {
-        if (! $this->hasBookingIntent($text)) {
-            return null;
-        }
-
-        $customerId = null;
-        $scheduledClassId = null;
-
-        if (preg_match('/(?:customer|client|клієнт|клиент)[^\d#]*(?:#\s*)?(\d+)/u', $text, $matches) === 1) {
-            $customerId = (int) $matches[1];
-        }
-
-        if (preg_match('/(?:class|занят|тренув)[^\d#]*(?:#\s*)?(\d+)/u', $text, $matches) === 1) {
-            $scheduledClassId = (int) $matches[1];
-        }
-
-        if (! $customerId || ! $scheduledClassId) {
-            return null;
-        }
-
-        return [
-            'schedule_kind' => ScheduleKind::GroupClass->value,
-            'customer_id' => $customerId,
-            'scheduled_class_id' => $scheduledClassId,
-        ];
-    }
-
-    private function conversationalGroupBookingPlan(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $text, string $normalized, bool $allowNewBookingDialog): ?StudioAssistantActionPlan
-    {
-        $draft = $this->activeBookingDraft($conversation);
-
-        if ($draft) {
-            if ($this->isDialogCancel($normalized)) {
-                return $this->bookingDialogMessage(
-                    __('app.assistant_booking_dialog_cancelled'),
-                    [...$draft, 'status' => 'cancelled'],
-                );
-            }
-
-            return $this->continueBookingDraft($account, $user, $trainer, $conversation, $text, $draft);
-        }
-
-        if ($this->isDialogCancel($normalized)) {
-            return StudioAssistantActionPlan::message(__('app.assistant_booking_dialog_no_active'), [
-                'booking_dialog' => ['status' => 'none'],
-            ]);
-        }
-
-        if (! $allowNewBookingDialog) {
-            return null;
-        }
-
-        if (! $this->hasBookingIntent($normalized)) {
-            return null;
-        }
-
+    private function startBookingFromInput(
+        Account $account,
+        User $user,
+        ?Trainer $trainer,
+        AiConversation $conversation,
+        StudioAiActionInput $input,
+    ): StudioAssistantActionPlan {
         $draft = [
             'status' => 'collecting',
-            'customer_query' => $this->extractCustomerQuery($text),
-            'trainer_query' => $this->extractTrainerQuery($text),
-            'date' => $this->extractDate($text, $account),
+            'customer_query' => $input->customerQuery,
+            'trainer_query' => $input->trainerQuery,
+            'date' => $input->date,
         ];
 
-        if ($trainer && $this->mentionsAuthorizedTrainer($normalized)) {
+        if ($input->customerId !== null) {
+            $customer = $account->customers()->whereKey($input->customerId)->first();
+
+            if (! $customer) {
+                return StudioAssistantActionPlan::message(__('app.assistant_customer_not_found'));
+            }
+
+            $draft['customer_id'] = $customer->id;
+            $draft['customer_name'] = $customer->name;
+            unset($draft['customer_query']);
+        }
+
+        if ($input->scheduledClassId !== null) {
+            $scheduledClass = ScheduledClass::query()
+                ->whereBelongsTo($account)
+                ->whereKey($input->scheduledClassId)
+                ->first();
+
+            if (! $scheduledClass) {
+                return StudioAssistantActionPlan::message(__('app.assistant_class_not_found'));
+            }
+
+            $draft['scheduled_class_id'] = $scheduledClass->id;
+        }
+
+        if ($input->useActorTrainer && $trainer) {
             $draft['trainer_id'] = $trainer->id;
             $draft['trainer_name'] = $trainer->name;
             unset($draft['trainer_query']);
@@ -142,60 +121,69 @@ class StudioAssistantActionPlanner
         return $this->resolveBookingDraft($account, $user, $trainer, $conversation, $draft);
     }
 
-    /**
-     * @param  array<string, mixed>  $draft
-     */
-    private function continueBookingDraft(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $text, array $draft): StudioAssistantActionPlan
-    {
+    private function continueBookingFromInput(
+        Account $account,
+        User $user,
+        ?Trainer $trainer,
+        AiConversation $conversation,
+        StudioAiActionInput $input,
+    ): StudioAssistantActionPlan {
+        $draft = $this->contextBuilder->activeBookingDialog($conversation);
+
+        if (! $draft) {
+            return StudioAssistantActionPlan::message(__('app.assistant_booking_dialog_no_active'), [
+                'booking_dialog' => ['status' => 'none'],
+            ]);
+        }
+
         $status = (string) ($draft['status'] ?? '');
 
         if ($status === 'awaiting_customer') {
-            $selected = $this->selectStoredOption($text, $draft['customer_candidates'] ?? []);
+            $selected = $this->selectModelOption($input, $draft['customer_candidates'] ?? []);
 
             if ($selected) {
                 $draft['customer_id'] = $selected['id'];
                 $draft['customer_name'] = $selected['name'];
-            } else {
-                $draft['customer_query'] = trim($text);
+            } elseif ($input->customerQuery !== null) {
+                $draft['customer_query'] = $input->customerQuery;
                 unset($draft['customer_id'], $draft['customer_name']);
+            } else {
+                return $this->bookingDialogMessage(__('app.assistant_booking_dialog_customer_missing'), $draft);
             }
 
             unset($draft['customer_candidates']);
         } elseif ($status === 'awaiting_trainer') {
-            $selected = $this->selectStoredOption($text, $draft['trainer_candidates'] ?? []);
+            $selected = $this->selectModelOption($input, $draft['trainer_candidates'] ?? []);
 
-            if ($selected) {
+            if ($input->useActorTrainer && $trainer) {
+                $draft['trainer_id'] = $trainer->id;
+                $draft['trainer_name'] = $trainer->name;
+            } elseif ($selected) {
                 $draft['trainer_id'] = $selected['id'];
                 $draft['trainer_name'] = $selected['name'];
-            } else {
-                $draft['trainer_query'] = trim($text);
+            } elseif ($input->trainerQuery !== null) {
+                $draft['trainer_query'] = $input->trainerQuery;
                 unset($draft['trainer_id'], $draft['trainer_name']);
+            } else {
+                return $this->bookingDialogMessage(__('app.assistant_booking_dialog_trainer_missing'), $draft);
             }
 
             unset($draft['trainer_candidates']);
         } elseif ($status === 'awaiting_date') {
-            $date = $this->extractDate($text, $account);
-
-            if (! $date) {
-                return $this->bookingDialogMessage(__('app.assistant_booking_dialog_date_not_understood'), [
-                    ...$draft,
-                    'status' => 'awaiting_date',
-                ]);
+            if ($input->date === null) {
+                return $this->bookingDialogMessage(__('app.assistant_booking_dialog_date_not_understood'), $draft);
             }
 
-            $draft['date'] = $date;
+            $draft['date'] = $input->date;
         } elseif ($status === 'awaiting_class') {
-            $selected = $this->selectClassOption($text, $draft['class_options'] ?? []);
+            $selected = $this->selectModelOption($input, $draft['class_options'] ?? []);
 
             if (! $selected) {
                 return $this->bookingDialogMessage(
                     __('app.assistant_booking_dialog_class_choice_invalid', [
                         'options' => $this->numberedOptions($draft['class_options'] ?? []),
                     ]),
-                    [
-                        ...$draft,
-                        'status' => 'awaiting_class',
-                    ],
+                    $draft,
                     $this->optionFollowUps($draft['class_options'] ?? []),
                 );
             }
@@ -205,6 +193,57 @@ class StudioAssistantActionPlanner
         }
 
         return $this->resolveBookingDraft($account, $user, $trainer, $conversation, $draft);
+    }
+
+    private function cancelBookingFromInput(
+        Account $account,
+        User $user,
+        ?Trainer $trainer,
+        AiConversation $conversation,
+        StudioAiActionInput $input,
+    ): StudioAssistantActionPlan {
+        if ($input->bookingId === null) {
+            return StudioAssistantActionPlan::none();
+        }
+
+        $booking = ClassBooking::query()
+            ->whereBelongsTo($account)
+            ->whereKey($input->bookingId)
+            ->first();
+
+        if (! $booking) {
+            return StudioAssistantActionPlan::message(__('app.assistant_booking_not_found'));
+        }
+
+        $arguments = ['booking_id' => $booking->id];
+
+        return StudioAssistantActionPlan::pending(
+            $this->createPendingAction(
+                $account,
+                $user,
+                $trainer,
+                $conversation,
+                'cancel-booking',
+                $arguments,
+                $this->cancelBookingPreview($account, $arguments),
+            ),
+        );
+    }
+
+    private function cancelBookingDialog(AiConversation $conversation): StudioAssistantActionPlan
+    {
+        $draft = $this->contextBuilder->activeBookingDialog($conversation);
+
+        if (! $draft) {
+            return StudioAssistantActionPlan::message(__('app.assistant_booking_dialog_no_active'), [
+                'booking_dialog' => ['status' => 'none'],
+            ]);
+        }
+
+        return $this->bookingDialogMessage(
+            __('app.assistant_booking_dialog_cancelled'),
+            [...$draft, 'status' => 'cancelled'],
+        );
     }
 
     /**
@@ -253,6 +292,10 @@ class StudioAssistantActionPlanner
             $draft['customer_name'] = $customer['name'];
         }
 
+        if (filled($draft['scheduled_class_id'] ?? null)) {
+            return $this->pendingBookingFromDraft($account, $user, $trainer, $conversation, $draft);
+        }
+
         if (blank($draft['date'] ?? null)) {
             return $this->bookingDialogMessage(__('app.assistant_booking_dialog_date_missing'), [
                 ...$draft,
@@ -299,10 +342,6 @@ class StudioAssistantActionPlanner
             $matchedTrainer = $trainerMatch['candidates'][0];
             $draft['trainer_id'] = $matchedTrainer['id'];
             $draft['trainer_name'] = $matchedTrainer['name'];
-        }
-
-        if (filled($draft['scheduled_class_id'] ?? null)) {
-            return $this->pendingBookingFromDraft($account, $user, $trainer, $conversation, $draft);
         }
 
         $classOptions = $this->classOptions($account, $draft);
@@ -354,9 +393,14 @@ class StudioAssistantActionPlanner
             'customer_id' => (int) $draft['customer_id'],
             'scheduled_class_id' => (int) $draft['scheduled_class_id'],
         ];
+        $preview = $this->createBookingPreview($account, $arguments);
+
+        if (($preview['warnings'] ?? []) !== []) {
+            return StudioAssistantActionPlan::message(implode(' ', $preview['warnings']));
+        }
 
         return StudioAssistantActionPlan::pending(
-            $this->createPendingAction($account, $user, $trainer, $conversation, 'create-booking', $arguments, $this->createBookingPreview($account, $arguments)),
+            $this->createPendingAction($account, $user, $trainer, $conversation, 'create-booking', $arguments, $preview),
             __('app.assistant_pending_action_created'),
             [
                 'booking_dialog' => [
@@ -377,28 +421,6 @@ class StudioAssistantActionPlanner
             'booking_dialog' => $draft,
             'follow_up_actions' => $followUps,
         ]);
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function activeBookingDraft(AiConversation $conversation): ?array
-    {
-        $message = $conversation->messages()
-            ->where('role', AiConversationMessageRole::Assistant->value)
-            ->whereNotNull('metadata')
-            ->latest('occurred_at')
-            ->latest('id')
-            ->first();
-
-        $draft = data_get($message?->metadata, 'booking_dialog');
-        $status = is_array($draft) ? (string) ($draft['status'] ?? '') : '';
-
-        if (! in_array($status, ['awaiting_customer', 'awaiting_trainer', 'awaiting_date', 'awaiting_class'], true)) {
-            return null;
-        }
-
-        return $draft;
     }
 
     /**
@@ -560,41 +582,27 @@ class StudioAssistantActionPlanner
      * @param  array<int, array<string, mixed>>  $options
      * @return array<string, mixed>|null
      */
-    private function selectStoredOption(string $text, array $options): ?array
+    private function selectModelOption(StudioAiActionInput $input, array $options): ?array
     {
-        $index = $this->selectedOptionIndex($text);
-
-        return $index !== null ? ($options[$index] ?? null) : null;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $options
-     * @return array<string, mixed>|null
-     */
-    private function selectClassOption(string $text, array $options): ?array
-    {
-        if ($selected = $this->selectStoredOption($text, $options)) {
-            return $selected;
+        if ($input->optionNumber !== null) {
+            return $options[$input->optionNumber - 1] ?? null;
         }
 
-        return collect($options)
-            ->first(fn (array $option): bool => $this->classChoiceMatches($text, (string) ($option['search_text'] ?? '')));
-    }
-
-    private function selectedOptionIndex(string $text): ?int
-    {
-        $normalized = $this->normalizeName($text);
-
-        if (preg_match('/^\D*(\d{1,2})\D*$/u', $normalized, $matches) === 1) {
-            return max(0, (int) $matches[1] - 1);
+        if ($input->optionLabel === null) {
+            return null;
         }
 
-        return match ($normalized) {
-            'first', 'one', 'перший', 'перше', 'першу', 'первый', 'первое', 'первую' => 0,
-            'second', 'two', 'другий', 'друге', 'другу', 'второй', 'второе', 'вторую' => 1,
-            'third', 'three', 'третій', 'третє', 'третю', 'третий', 'третье', 'третью' => 2,
-            default => null,
-        };
+        $label = $this->normalizeName($input->optionLabel);
+
+        return collect($options)->first(function (array $option) use ($label): bool {
+            return collect([
+                $option['label'] ?? null,
+                $option['name'] ?? null,
+                $option['search_text'] ?? null,
+            ])
+                ->filter(fn (mixed $candidate): bool => is_string($candidate))
+                ->contains(fn (string $candidate): bool => $this->normalizeName($candidate) === $label);
+        });
     }
 
     /**
@@ -620,123 +628,6 @@ class StudioAssistantActionPlanner
             ->values()
             ->map(fn (array $option, int $index): string => ($index + 1).'. '.$option['label'])
             ->implode("\n");
-    }
-
-    private function hasBookingIntent(string $text): bool
-    {
-        if (preg_match('/^\/book(?:@\w+)?(?:\s|$)/u', $text) === 1) {
-            return true;
-        }
-
-        if ($this->asksAboutBookingWorkflow($text)) {
-            return false;
-        }
-
-        return preg_match('/\bbook\s+(?:customer|client)[^\d#]*(?:#\s*)?\d+.+\bclass[^\d#]*(?:#\s*)?\d+/u', $text) === 1
-            || preg_match('/(?:^|\s)(?:запиши|запишіть|запиши-но|запиши\s+будь\s+ласка)(?:\s|$)/u', $text) === 1
-            || preg_match('/(?:^|\s)(?:додай|добавь|створи|создай)\s+запис(?:\s|$)/u', $text) === 1
-            || preg_match('/(?:^|\s)(?:можеш|можете|можемо|можна|давай|будь\s+ласка|пожалуйста|can|could)\b.{0,120}\b(?:записати|записать|book)\b/u', $text) === 1;
-    }
-
-    private function asksAboutBookingWorkflow(string $text): bool
-    {
-        return preg_match('/(?:що|шо|что|what)\s+робити/u', $text) === 1
-            || preg_match('/(?:як|как|how)\s+.{0,80}(?:записати|записать|запис|book)/u', $text) === 1
-            || preg_match('/(?:забула|забув|забыл|забыла|forgot)\s+.{0,80}(?:записати|записать|book)/u', $text) === 1;
-    }
-
-    private function isDialogCancel(string $text): bool
-    {
-        if (preg_match('/^\/(?:cancel_booking|cancel)(?:@\w+)?(?:\s|$)/u', $text) === 1) {
-            return true;
-        }
-
-        if (in_array($text, ['cancel', 'cancel booking', 'exit booking', 'stop booking', 'never mind', 'скасувати', 'відміна', 'отмена', 'отменить', 'не треба'], true)) {
-            return true;
-        }
-
-        return str_contains($text, 'передумала')
-            || str_contains($text, 'передумав')
-            || str_contains($text, 'завершимо запис')
-            || str_contains($text, 'завершити запис')
-            || str_contains($text, 'закінчити запис')
-            || str_contains($text, 'вийти з запису')
-            || str_contains($text, 'выйти из записи');
-    }
-
-    private function mentionsAuthorizedTrainer(string $text): bool
-    {
-        return preg_match('/(?:^|\s)(?:до|к|у)\s+(?:мене|мені|мне|меня)(?:\s|$)/u', $text) === 1
-            || str_contains($text, 'with me');
-    }
-
-    private function extractCustomerQuery(string $text): ?string
-    {
-        if (preg_match('/(?:запиши|запишіть|записати|записать|book)\s+(.+?)(?=\s+(?:на|к|до|у|to|for|with)\b|$)/iu', $text, $matches) !== 1) {
-            if (preg_match('/([\p{L}\'’ʼ -]{2,120})\s+(?:записати|записать)\b/iu', $text, $matches) !== 1) {
-                return null;
-            }
-        }
-
-        $query = $this->cleanCustomerQuery($matches[1]);
-
-        return $query !== '' ? $query : null;
-    }
-
-    private function cleanCustomerQuery(string $query): string
-    {
-        return Str::of($query)
-            ->replaceMatches('/\b(?:можемо|можна|будь\s+ласка|пожалуйста|please|can|could|можешь|можеш)\b/iu', ' ')
-            ->replaceMatches('/\b(?:сьогодні|сегодня|today|завтра|tomorrow)\b/iu', ' ')
-            ->replaceMatches('/(?:^|\s)(?:на|до|к|у|with|to)\s+(?:мене|мені|мне|меня|me)(?=\s|$)/iu', ' ')
-            ->replaceMatches('/\b(?:на|до|к|у|with|to|for)\b/iu', ' ')
-            ->squish()
-            ->trim(" \t\n\r\0\x0B.,!?")
-            ->toString();
-    }
-
-    private function extractTrainerQuery(string $text): ?string
-    {
-        foreach ([
-            '/(?:^|\s)(?:к|до|у)\s+([\p{L}\'’ʼ -]{2,80}?)(?=\s+(?:на|о|об|в|at|today|tomorrow|\d)|[?.!,]|$)/iu',
-            '/(?:trainer|тренер[а-яіїєґ]*|тренер[а-яё]*)\s+([\p{L}\'’ʼ -]{2,80}?)(?=\s+(?:на|о|об|в|at|today|tomorrow|\d)|[?.!,]|$)/iu',
-            '/(?:with)\s+([\p{L}\'’ʼ -]{2,80}?)(?=\s+(?:on|at|today|tomorrow|\d)|[?.!,]|$)/iu',
-        ] as $pattern) {
-            if (preg_match($pattern, $text, $matches) === 1) {
-                $query = trim($matches[1], " \t\n\r\0\x0B.,!?");
-
-                return $query !== '' ? $query : null;
-            }
-        }
-
-        return null;
-    }
-
-    private function extractDate(string $text, Account $account): ?string
-    {
-        $normalized = $this->normalizeName($text);
-        $timezone = $account->timezone ?: config('app.timezone');
-
-        if (str_contains($normalized, 'tomorrow') || str_contains($normalized, 'завтра')) {
-            return Carbon::now($timezone)->addDay()->toDateString();
-        }
-
-        if (str_contains($normalized, 'today') || str_contains($normalized, 'сьогодні') || str_contains($normalized, 'сегодня')) {
-            return Carbon::now($timezone)->toDateString();
-        }
-
-        if (preg_match('/\b(\d{4})-(\d{2})-(\d{2})\b/u', $text, $matches) === 1) {
-            return Carbon::createFromDate((int) $matches[1], (int) $matches[2], (int) $matches[3], $timezone)->toDateString();
-        }
-
-        if (preg_match('/\b(\d{1,2})[.\/-](\d{1,2})(?:[.\/-](\d{2,4}))?\b/u', $text, $matches) === 1) {
-            $year = filled($matches[3] ?? null) ? (int) $matches[3] : Carbon::now($timezone)->year;
-            $year = $year < 100 ? 2000 + $year : $year;
-
-            return Carbon::createFromDate($year, (int) $matches[2], (int) $matches[1], $timezone)->toDateString();
-        }
-
-        return null;
     }
 
     /**
@@ -792,75 +683,6 @@ class StudioAssistantActionPlanner
             ->toString();
     }
 
-    private function classChoiceMatches(string $query, string $searchText): bool
-    {
-        $query = $this->normalizeName($query);
-        $searchText = $this->normalizeName($searchText);
-
-        if ($query === '') {
-            return false;
-        }
-
-        if (str_contains($searchText, $query)) {
-            return true;
-        }
-
-        $queryAscii = Str::ascii($query);
-        $searchAscii = Str::ascii($searchText);
-        $queryAsciiVariants = $this->latinClassSearchVariants($queryAscii);
-        $searchAsciiVariants = $this->latinClassSearchVariants($searchAscii);
-
-        foreach ($queryAsciiVariants as $queryAsciiVariant) {
-            foreach ($searchAsciiVariants as $searchAsciiVariant) {
-                if ($queryAsciiVariant !== '' && str_contains($searchAsciiVariant, $queryAsciiVariant)) {
-                    return true;
-                }
-            }
-        }
-
-        $queryTokens = $queryAsciiVariants
-            ->flatMap(fn (string $variant): array => preg_split('/\s+/u', $variant) ?: [])
-            ->unique()
-            ->all();
-        $searchTokens = $searchAsciiVariants
-            ->flatMap(fn (string $variant): array => preg_split('/\s+/u', $variant) ?: [])
-            ->unique()
-            ->all();
-
-        foreach ($queryTokens as $queryToken) {
-            if (mb_strlen($queryToken) < 3) {
-                continue;
-            }
-
-            foreach ($searchTokens as $searchToken) {
-                if (mb_strlen($searchToken) < 3) {
-                    continue;
-                }
-
-                if (levenshtein($queryToken, $searchToken) <= max(1, (int) floor(mb_strlen($queryToken) * 0.25))) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @return Collection<int, string>
-     */
-    private function latinClassSearchVariants(string $value): Collection
-    {
-        return collect([
-            $value,
-            str_replace(['kz', 'ks'], 'x', $value),
-        ])
-            ->map(fn (string $variant): string => trim($variant))
-            ->filter(fn (string $variant): bool => $variant !== '')
-            ->unique()
-            ->values();
-    }
-
     private function stemNameToken(string $token): string
     {
         if (mb_strlen($token) <= 3) {
@@ -886,6 +708,12 @@ class StudioAssistantActionPlanner
      */
     private function createPendingAction(Account $account, User $user, ?Trainer $trainer, AiConversation $conversation, string $actionName, array $arguments, array $preview): AiPendingAction
     {
+        if ((int) $conversation->account_id !== (int) $account->id
+            || ($conversation->user_id !== null && (int) $conversation->user_id !== (int) $user->id)
+            || ($trainer !== null && (int) $trainer->account_id !== (int) $account->id)) {
+            throw new LogicException('Assistant action context does not belong to the supplied account and actor.');
+        }
+
         return AiPendingAction::create([
             'account_id' => $account->id,
             'ai_conversation_id' => $conversation->id,

@@ -2,8 +2,6 @@
 
 namespace App\Support\Ai;
 
-use Illuminate\Support\Str;
-
 class LadnaAssistantCapabilities
 {
     /**
@@ -29,24 +27,6 @@ class LadnaAssistantCapabilities
     public function forMcp(?string $channel = null): array
     {
         return $this->describe($channel);
-    }
-
-    public function isCapabilityQuestion(string $text): bool
-    {
-        $normalized = $this->normalize($text);
-
-        if ($normalized === '') {
-            return false;
-        }
-
-        foreach ($this->capabilityPhrases() as $phrase) {
-            if (str_contains($normalized, $phrase)) {
-                return true;
-            }
-        }
-
-        return (str_contains($normalized, 'ladna') || str_contains($normalized, 'ладна'))
-            && (str_contains($normalized, 'можеш') || str_contains($normalized, 'можешь') || str_contains($normalized, 'вмієш') || str_contains($normalized, 'вміє') || str_contains($normalized, 'умеешь') || str_contains($normalized, 'умеет'));
     }
 
     /**
@@ -148,56 +128,6 @@ class LadnaAssistantCapabilities
                 'Не виконує зміни в записах або інших бізнес-даних напряму з відповіді моделі: потрібна server-side pending action і явне підтвердження користувача.',
                 'Customer Telegram AI bot ще не реалізований; у цьому етапі customer bot планується як простий bot для запису без owner AI.',
             ],
-        ];
-    }
-
-    private function normalize(string $text): string
-    {
-        $normalized = Str::of($text)->squish()->toString();
-        $normalized = mb_strtolower($normalized);
-        $normalized = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $normalized) ?? '';
-
-        return Str::of($normalized)->squish()->toString();
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function capabilityPhrases(): array
-    {
-        return [
-            'що ти вмієш',
-            'що вмієш',
-            'що ти можеш',
-            'що можеш',
-            'чим допоможеш',
-            'чим можеш допомогти',
-            'хто ти',
-            'хто така ladna',
-            'які в тебе можливості',
-            'що може асистент',
-            'що вміє ladna',
-            'що вміє ладна',
-            'хто така ладна',
-            'что ты умеешь',
-            'что умеешь',
-            'что умеет ladna',
-            'что умеет ладна',
-            'что ты можешь',
-            'что можешь',
-            'чем поможешь',
-            'чем можешь помочь',
-            'кто ты',
-            'кто такая ladna',
-            'кто такая ладна',
-            'какие у тебя возможности',
-            'что может ассистент',
-            'what can you do',
-            'what does ladna do',
-            'who are you',
-            'your capabilities',
-            'assistant capabilities',
-            'what are you able to do',
         ];
     }
 }

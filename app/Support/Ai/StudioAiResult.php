@@ -2,24 +2,28 @@
 
 namespace App\Support\Ai;
 
+use App\Enums\StudioAiDisposition;
+
 class StudioAiResult
 {
     public function __construct(
         public readonly string $text,
         public readonly bool $usedAi,
+        public readonly StudioAiDisposition $disposition = StudioAiDisposition::Answer,
         public readonly bool $rejected = false,
         public readonly ?string $provider = null,
         public readonly ?string $model = null,
         public readonly ?string $fallbackReason = null,
         public readonly array $followUpActions = [],
         public readonly array $helpSources = [],
+        public readonly ?StudioAiActionInput $actionInput = null,
     ) {}
 
     /**
      * @param  array<int, string>  $followUpActions
      * @param  array<int, array{slug: string, title: string, sections: array<int, string>}>  $helpSources
      */
-    public static function ai(string $text, string $provider, string $model, array $followUpActions = [], array $helpSources = []): self
+    public static function answer(string $text, string $provider, string $model, array $followUpActions = [], array $helpSources = []): self
     {
         return new self(
             text: $text,
@@ -28,6 +32,18 @@ class StudioAiResult
             model: $model,
             followUpActions: $followUpActions,
             helpSources: $helpSources,
+        );
+    }
+
+    public static function action(StudioAiDisposition $disposition, StudioAiActionInput $actionInput, string $provider, string $model): self
+    {
+        return new self(
+            text: '',
+            usedAi: true,
+            disposition: $disposition,
+            provider: $provider,
+            model: $model,
+            actionInput: $actionInput,
         );
     }
 
@@ -45,7 +61,13 @@ class StudioAiResult
         return new self(
             text: $text,
             usedAi: false,
+            disposition: StudioAiDisposition::OutOfScope,
             rejected: true,
         );
+    }
+
+    public function isAction(): bool
+    {
+        return $this->disposition->isAction() && $this->actionInput !== null;
     }
 }

@@ -431,7 +431,7 @@ class TelegramWebhookTest extends TestCase
         $this->assertTrue(AiConversationMessage::where('content', 'How many classes today?')->exists());
         $this->assertTrue(TelegramMessage::where('telegram_chat_id', '557')
             ->where('direction', 'outbound')
-            ->where('text', __('app.telegram_class_count_for_day', ['date' => '2026-06-28', 'count' => 0]))
+            ->where('text', __('app.assistant_ai_unavailable'))
             ->exists());
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendChatAction')
             && $request['chat_id'] === '557'
@@ -518,16 +518,31 @@ class TelegramWebhookTest extends TestCase
     public function test_owner_booking_dialog_can_be_cancelled_by_natural_language(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));
-        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"cancel_dialog","answer":null,"follow_up_actions":[],"action":{},"reason":"owner abandoned active booking dialog"}',
+                ],
+            ]),
+            'api.telegram.org/*' => Http::response(['ok' => true]),
+        ]);
 
         $owner = User::factory()->create(['phone' => '+380671112233']);
         $account = Account::factory()->create(['country_code' => 'UA']);
         $account->addOwner($owner);
         PlatformAiSetting::query()->delete();
+        PlatformAiProviderCredential::query()->delete();
         PlatformAiSetting::factory()->create([
             'owner_ai_assistant_enabled' => true,
-            'active_provider' => null,
-            'active_model' => null,
+            'active_provider' => AiProvider::OllamaCloud->value,
+            'active_model' => 'gemma3:27b-cloud',
+        ]);
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OllamaCloud->value,
+            'model' => 'gemma3:27b-cloud',
+            'credentials' => ['api_key' => 'test-ollama-key'],
+            'is_configured' => true,
         ]);
         [$installation, $webhookKey] = $this->ownerInstallation();
 
@@ -586,28 +601,18 @@ class TelegramWebhookTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));
         Http::fake([
-            'ollama.com/api/chat' => Http::sequence()
-                ->push([
-                    'message' => [
-                        'role' => 'assistant',
-                        'content' => '{"start_booking":false,"reason":"help workflow question"}',
-                    ],
-                ])
-                ->push([
-                    'message' => [
-                        'role' => 'assistant',
-                        'content' => '{"in_scope":true,"reason":"studio booking workflow question"}',
-                    ],
-                ])
-                ->push([
-                    'message' => [
-                        'role' => 'assistant',
-                        'content' => json_encode([
-                            'answer' => 'Якщо ви забули записати людину на заняття, перевірте розклад і додайте запис вручну з картки заняття.',
-                            'follow_up_actions' => [],
-                        ]),
-                    ],
-                ]),
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => json_encode([
+                        'disposition' => 'answer',
+                        'answer' => 'Якщо ви забули записати людину на заняття, перевірте розклад і додайте запис вручну з картки заняття.',
+                        'follow_up_actions' => [],
+                        'action' => null,
+                        'reason' => 'studio booking workflow question',
+                    ]),
+                ],
+            ]),
             'api.telegram.org/*' => Http::response(['ok' => true]),
         ]);
 
@@ -665,8 +670,8 @@ class TelegramWebhookTest extends TestCase
             ->filter(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/api/chat'))
             ->values();
 
-        $this->assertCount(3, $ollamaRequests);
-        $this->assertStringContainsString('start_booking', $ollamaRequests->first()->data()['messages'][0]['content'] ?? '');
+        $this->assertCount(1, $ollamaRequests);
+        $this->assertStringContainsString('Allowed disposition values', $ollamaRequests->first()->data()['messages'][0]['content'] ?? '');
 
         Carbon::setTestNow();
     }
@@ -888,12 +893,19 @@ class TelegramWebhookTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-06-29 09:00:00', 'Europe/Kiev'));
         Http::fake([
-            'ollama.com/api/chat' => Http::response([
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => '{"start_booking":true,"reason":"direct booking request"}',
-                ],
-            ]),
+            'ollama.com/api/chat' => Http::sequence()
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Аліна Тестова","date":"2026-06-30","use_actor_trainer":true},"reason":"direct booking request"}',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"continue_booking","answer":null,"follow_up_actions":[],"action":{"option_number":1},"reason":"selected visible class option"}',
+                    ],
+                ]),
             'api.telegram.org/*' => Http::response(['ok' => true]),
         ]);
         Mail::fake();
@@ -1028,22 +1040,18 @@ class TelegramWebhookTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));
         config(['services.telegram.typing_refresh_seconds' => 0]);
         Http::fake([
-            'ollama.com/api/chat' => Http::sequence()
-                ->push([
-                    'message' => [
-                        'role' => 'assistant',
-                        'content' => "```json\n{\"in_scope\":true,\"reason\":\"studio schedule question\"}\n```",
-                    ],
-                ])
-                ->push([
-                    'message' => [
-                        'role' => 'assistant',
-                        'content' => json_encode([
-                            'answer' => "**AI answer** for studio schedule.\n* First item",
-                            'follow_up_actions' => [],
-                        ]),
-                    ],
-                ]),
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => json_encode([
+                        'disposition' => 'answer',
+                        'answer' => "**AI answer** for studio schedule.\n* First item",
+                        'follow_up_actions' => [],
+                        'action' => null,
+                        'reason' => 'studio schedule question',
+                    ]),
+                ],
+            ]),
             'api.telegram.org/*' => Http::response(['ok' => true]),
         ]);
 
@@ -1116,26 +1124,122 @@ class TelegramWebhookTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_telegram_contextual_option_reply_uses_same_conversation_snapshot_once(): void
+    {
+        $currentText = 'мені більше подобається третій варіант';
+        $options = "Можу запропонувати:\n1. Skyler Flow\n2. Skyler Space\n3. Skyler Studio";
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"Тоді обираємо Skyler Studio.","follow_up_actions":[],"action":null,"reason":"contextual selection from prior options"}',
+                ],
+            ]),
+            'api.telegram.org/*' => Http::response(['ok' => true]),
+        ]);
+
+        $owner = User::factory()->create(['name' => 'Валерія', 'phone' => '+380671112299']);
+        $account = Account::factory()->create(['name' => 'Skyler owner studio']);
+        $account->addOwner($owner);
+        PlatformAiSetting::query()->delete();
+        PlatformAiProviderCredential::query()->delete();
+        PlatformAiSetting::factory()->create([
+            'owner_ai_assistant_enabled' => true,
+            'active_provider' => AiProvider::OllamaCloud->value,
+            'active_model' => 'gemma3:27b-cloud',
+        ]);
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OllamaCloud->value,
+            'model' => 'gemma3:27b-cloud',
+            'credentials' => ['api_key' => 'test-ollama-key'],
+            'is_configured' => true,
+        ]);
+        [$installation, $webhookKey] = $this->ownerInstallation();
+        $authorization = TelegramChatAuthorization::factory()->for($account)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'user_id' => $owner->id,
+            'profile' => TelegramBotProfile::Owner->value,
+            'telegram_chat_id' => '576',
+            'telegram_user_id' => '796',
+        ]);
+        $conversation = AiConversation::factory()->for($account)->create([
+            'telegram_chat_authorization_id' => $authorization->id,
+            'user_id' => $owner->id,
+            'channel' => 'telegram_owner',
+            'profile' => TelegramBotProfile::Owner->value,
+            'status' => AiConversation::StatusActive,
+        ]);
+        $conversation->messages()->create([
+            'account_id' => $account->id,
+            'role' => 'user',
+            'content' => 'Дай три варіанти назви.',
+            'occurred_at' => now()->subMinute(),
+        ]);
+        $conversation->messages()->create([
+            'account_id' => $account->id,
+            'role' => 'assistant',
+            'content' => $options,
+            'occurred_at' => now()->subSeconds(30),
+        ]);
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 10131,
+            'message' => [
+                'message_id' => 201,
+                'chat' => ['id' => 576],
+                'from' => ['id' => 796, 'username' => 'owner'],
+                'text' => $currentText,
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        $this->assertDatabaseHas('telegram_messages', [
+            'telegram_chat_id' => '576',
+            'direction' => 'outbound',
+            'text' => 'Тоді обираємо Skyler Studio.',
+        ]);
+        $this->assertDatabaseHas('ai_conversation_messages', [
+            'ai_conversation_id' => $conversation->id,
+            'role' => 'assistant',
+            'content' => 'Тоді обираємо Skyler Studio.',
+        ]);
+        $this->assertDatabaseMissing('ai_conversation_messages', [
+            'ai_conversation_id' => $conversation->id,
+            'role' => 'rejected_intent',
+            'content' => __('app.telegram_out_of_scope'),
+        ]);
+
+        $ollamaRequests = collect(Http::recorded())
+            ->map(fn (array $record): Request => $record[0])
+            ->filter(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/api/chat'))
+            ->values();
+
+        $this->assertCount(1, $ollamaRequests);
+        $requestMessages = $ollamaRequests->sole()->data()['messages'];
+        $requestText = implode("\n", array_column($requestMessages, 'content'));
+        $this->assertTrue(collect($requestMessages)->contains(
+            fn (array $message): bool => $message['role'] === 'assistant' && $message['content'] === $options,
+        ));
+        $this->assertSame(1, substr_count($requestText, $currentText));
+    }
+
     public function test_authorized_owner_ai_status_message_is_edited_through_processing_stages(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));
         Http::fake([
-            'ollama.com/api/chat' => Http::sequence()
-                ->push([
-                    'message' => [
-                        'role' => 'assistant',
-                        'content' => '{"in_scope":true,"reason":"studio schedule question"}',
-                    ],
-                ])
-                ->push([
-                    'message' => [
-                        'role' => 'assistant',
-                        'content' => json_encode([
-                            'answer' => "**AI answer** for studio schedule.\n* First item",
-                            'follow_up_actions' => [],
-                        ]),
-                    ],
-                ]),
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => json_encode([
+                        'disposition' => 'answer',
+                        'answer' => "**AI answer** for studio schedule.\n* First item",
+                        'follow_up_actions' => [],
+                        'action' => null,
+                        'reason' => 'studio schedule question',
+                    ]),
+                ],
+            ]),
             'api.telegram.org/*/sendMessage' => Http::sequence()
                 ->push(['ok' => true, 'result' => ['message_id' => 9001]]),
             'api.telegram.org/*/sendChatAction' => Http::response(['ok' => true]),
@@ -1219,14 +1323,13 @@ class TelegramWebhookTest extends TestCase
             })
             ->values();
         $checkingRequestIndex = $requestEvents->search(fn (array $event): bool => $event['method'] === 'editMessageText' && $event['text'] === __('app.assistant_status_checking_request'));
-        $firstLlmIndex = $requestEvents->search(fn (array $event): bool => $event['method'] === 'ollama_chat');
         $thinkingIndex = $requestEvents->search(fn (array $event): bool => $event['method'] === 'editMessageText' && $event['text'] === __('app.assistant_status_thinking'));
-        $secondLlmIndex = $requestEvents->search(fn (array $event, int $index): bool => $event['method'] === 'ollama_chat' && $index > $firstLlmIndex);
+        $llmIndex = $requestEvents->search(fn (array $event): bool => $event['method'] === 'ollama_chat');
 
         $this->assertSame('sendChatAction', $requestEvents->get($checkingRequestIndex + 1)['method']);
-        $this->assertGreaterThan($checkingRequestIndex + 1, $firstLlmIndex);
         $this->assertSame('sendChatAction', $requestEvents->get($thinkingIndex + 1)['method']);
-        $this->assertGreaterThan($thinkingIndex + 1, $secondLlmIndex);
+        $this->assertGreaterThan($thinkingIndex + 1, $llmIndex);
+        $this->assertSame(1, $requestEvents->where('method', 'ollama_chat')->count());
 
         $this->assertDatabaseHas('telegram_messages', [
             'telegram_chat_id' => '571',
@@ -1246,18 +1349,27 @@ class TelegramWebhookTest extends TestCase
                 ->push([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => '{"in_scope":true,"reason":"studio schedule question"}',
+                        'content' => json_encode([
+                            'disposition' => 'answer',
+                            'answer' => 'Choose a next step.',
+                            'follow_up_actions' => [
+                                'How many classes today?',
+                                'Show studio profile',
+                            ],
+                            'action' => null,
+                            'reason' => 'studio schedule question',
+                        ]),
                     ],
                 ])
                 ->push([
                     'message' => [
                         'role' => 'assistant',
                         'content' => json_encode([
-                            'answer' => 'Choose a next step.',
-                            'follow_up_actions' => [
-                                'How many classes today?',
-                                'Show studio profile',
-                            ],
+                            'disposition' => 'answer',
+                            'answer' => __('app.telegram_class_count_for_day', ['date' => '2026-06-28', 'count' => 0]),
+                            'follow_up_actions' => [],
+                            'action' => null,
+                            'reason' => 'studio class count follow-up',
                         ]),
                     ],
                 ]),
@@ -1309,11 +1421,6 @@ class TelegramWebhookTest extends TestCase
             && $request['text'] === 'Choose a next step.'
             && data_get($request->data(), 'reply_markup.inline_keyboard.0.0.text') === 'How many classes today?'
             && data_get($request->data(), 'reply_markup.inline_keyboard.0.0.callback_data') === 'tg_follow:'.$assistantMessage->id.':0');
-
-        PlatformAiSetting::query()->firstOrFail()->update([
-            'active_provider' => null,
-            'active_model' => null,
-        ]);
 
         $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
             'update_id' => 1014,
@@ -1432,15 +1539,6 @@ class TelegramWebhookTest extends TestCase
     public function test_owner_pending_action_inline_confirm_executes_booking_action(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));
-        Http::fake([
-            'ollama.com/api/chat' => Http::response([
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => '{"start_booking":true,"reason":"direct booking request"}',
-                ],
-            ]),
-            'api.telegram.org/*' => Http::response(['ok' => true]),
-        ]);
         Mail::fake();
 
         $owner = User::factory()->create(['phone' => '+380671112233']);
@@ -1480,6 +1578,24 @@ class TelegramWebhookTest extends TestCase
                 'title' => 'Pole Beginner',
             ]);
         $customer = Customer::factory()->for($account)->create(['name' => 'Аліна Тестова']);
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => json_encode([
+                        'disposition' => 'start_booking',
+                        'answer' => null,
+                        'follow_up_actions' => [],
+                        'action' => [
+                            'customer_id' => $customer->id,
+                            'scheduled_class_id' => $scheduledClass->id,
+                        ],
+                        'reason' => 'direct booking request',
+                    ]),
+                ],
+            ]),
+            'api.telegram.org/*' => Http::response(['ok' => true]),
+        ]);
 
         TelegramChatAuthorization::factory()->for($account)->create([
             'telegram_bot_installation_id' => $installation->id,
