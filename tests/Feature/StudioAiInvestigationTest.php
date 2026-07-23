@@ -39,7 +39,7 @@ class StudioAiInvestigationTest extends TestCase
         $currentMessage = $conversation->messages()->create([
             'account_id' => $account->id,
             'role' => AiConversationMessageRole::User->value,
-            'content' => 'Чому записи Test Customer розподілились між старим і новим абонементом?',
+            'content' => 'Перевір, чому записи Test Customer розподілились між старим і новим абонементом.',
             'occurred_at' => now(),
         ]);
         Http::fake([
@@ -133,6 +133,10 @@ class StudioAiInvestigationTest extends TestCase
             ->filter(fn (Request $request): bool => $request->url() === 'https://ollama.com/api/chat')
             ->values();
         $this->assertCount(4, $requests);
+        $this->assertArrayNotHasKey('format', $requests[0]->data());
+        $this->assertArrayNotHasKey('format', $requests[1]->data());
+        $this->assertSame('json', $requests[2]->data()['format']);
+        $this->assertSame('json', $requests[3]->data()['format']);
         $this->assertSame(
             ['search_customers', 'investigate_customer_booking_ledger', 'get_business_logic_reference'],
             collect($requests[0]->data()['tools'])->pluck('function.name')->all(),
