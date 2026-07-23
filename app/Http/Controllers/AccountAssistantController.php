@@ -8,6 +8,7 @@ use App\Enums\StudioPermission;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\AiConversation;
+use App\Models\AiConversationMessage;
 use App\Models\AiPendingAction;
 use App\Models\PlatformAiSetting;
 use App\Models\Trainer;
@@ -24,6 +25,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class AccountAssistantController extends Controller
 {
@@ -38,8 +41,12 @@ class AccountAssistantController extends Controller
         ]);
     }
 
-    public function store(Request $request, Account $account, StudioAiInference $inference, StudioAssistantActionPlanner $planner): JsonResponse
-    {
+    public function store(
+        Request $request,
+        Account $account,
+        StudioAiInference $inference,
+        StudioAssistantActionPlanner $planner,
+    ): JsonResponse|StreamedResponse {
         $this->authorizeAssistant($request, $account);
 
         $validated = $request->validate([
@@ -56,6 +63,80 @@ class AccountAssistantController extends Controller
             'occurred_at' => now(),
         ]);
 
+        if (Str::contains((string) $request->header('Accept'), 'application/x-ndjson')) {
+            return response()->stream(function () use (
+                $account,
+                $request,
+                $inference,
+                $planner,
+                $conversation,
+                $currentMessage,
+                $text,
+                $trainer,
+            ): void {
+                try {
+                    $payload = $this->processAssistantMessage(
+                        $account,
+                        $request,
+                        $inference,
+                        $planner,
+                        $conversation,
+                        $currentMessage,
+                        $text,
+                        $trainer,
+                        fn (string $statusKey) => $this->writeNdjson([
+                            'type' => 'status',
+                            'key' => $statusKey,
+                            'message' => __('app.'.$statusKey),
+                        ]),
+                    );
+                    $this->writeNdjson([
+                        'type' => 'result',
+                        'payload' => $payload,
+                    ]);
+                } catch (Throwable $throwable) {
+                    report($throwable);
+                    $this->writeNdjson([
+                        'type' => 'error',
+                        'message' => __('app.assistant_chat_error'),
+                    ]);
+                }
+            }, 200, [
+                'Content-Type' => 'application/x-ndjson; charset=UTF-8',
+                'Cache-Control' => 'no-cache, no-store, no-transform',
+                'X-Accel-Buffering' => 'no',
+            ]);
+        }
+
+        return response()->json($this->processAssistantMessage(
+            $account,
+            $request,
+            $inference,
+            $planner,
+            $conversation,
+            $currentMessage,
+            $text,
+            $trainer,
+        ));
+    }
+
+    /**
+     * @param  callable(string): mixed|null  $progress
+     * @return array<string, mixed>
+     */
+    private function processAssistantMessage(
+        Account $account,
+        Request $request,
+        StudioAiInference $inference,
+        StudioAssistantActionPlanner $planner,
+        AiConversation $conversation,
+        AiConversationMessage $currentMessage,
+        string $text,
+        ?Trainer $trainer,
+        ?callable $progress = null,
+    ): array {
+        $this->progress($progress, 'assistant_status_checking_database');
+
         if ($account->isReadOnlyDemo()) {
             $this->storeInferenceResponse(
                 $account,
@@ -67,6 +148,7 @@ class AccountAssistantController extends Controller
                     currentMessage: $currentMessage,
                     actorUser: $request->user(),
                     actorTrainer: $trainer,
+                    beforeProviderRequest: $progress,
                 ),
             );
         } else {
@@ -81,6 +163,7 @@ class AccountAssistantController extends Controller
                     currentMessage: $currentMessage,
                     actorUser: $request->user(),
                     actorTrainer: $trainer,
+                    beforeProviderRequest: $progress,
                 );
 
                 if ($aiResult->isAction()) {
@@ -96,6 +179,10 @@ class AccountAssistantController extends Controller
             }
 
             if ($plan?->handled) {
+                $this->progress(
+                    $progress,
+                    $plan->pendingAction ? 'assistant_status_preparing_action' : 'assistant_status_checking_database',
+                );
                 $this->storeActionPlanResponse($account, $conversation, $plan, $aiResult);
             } else {
                 $this->storeInferenceResponse(
@@ -110,10 +197,10 @@ class AccountAssistantController extends Controller
 
         $conversation->update(['last_message_at' => now()]);
 
-        return response()->json([
+        return [
             'messages' => $this->messagePayload($conversation->refresh()),
             'pending_actions' => $this->pendingActionPayload($conversation),
-        ]);
+        ];
     }
 
     public function destroy(Request $request, Account $account): JsonResponse
@@ -406,5 +493,32 @@ class AccountAssistantController extends Controller
     private function ensureActionBelongsToAccount(Account $account, AiPendingAction $action): void
     {
         abort_unless((int) $action->account_id === (int) $account->id, 404);
+    }
+
+    /**
+     * @param  callable(string): mixed|null  $progress
+     */
+    private function progress(?callable $progress, string $statusKey): void
+    {
+        if ($progress) {
+            $progress($statusKey);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    private function writeNdjson(array $event): void
+    {
+        echo json_encode(
+            $event,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+        )."\n";
+
+        if (ob_get_level() > 0) {
+            ob_flush();
+        }
+
+        flush();
     }
 }

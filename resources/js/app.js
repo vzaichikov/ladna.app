@@ -4158,6 +4158,97 @@ function initAssistantChat() {
             renderFollowUps([]);
         };
 
+        const updateThinkingStatus = (statusMessage) => {
+            for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+                if (currentMessages[index].role === 'thinking') {
+                    currentMessages[index] = {
+                        ...currentMessages[index],
+                        content: statusMessage,
+                    };
+                    renderMessages(currentMessages);
+                    return;
+                }
+            }
+        };
+
+        const requestAssistantStream = async (message) => {
+            const response = await fetch(widget.dataset.sendUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/x-ndjson',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({ message }),
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                throw new Error(payload.message || widget.dataset.errorMessage || 'Request failed');
+            }
+
+            if (!(response.headers.get('content-type') || '').includes('application/x-ndjson')) {
+                const payload = await response.json();
+                loaded = true;
+                render(payload);
+                return;
+            }
+
+            if (!response.body) {
+                throw new Error(widget.dataset.errorMessage || 'Request failed');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let receivedResult = false;
+
+            const processLine = (line) => {
+                if (!line.trim()) {
+                    return;
+                }
+
+                const event = JSON.parse(line);
+
+                if (event.type === 'status' && event.message) {
+                    updateThinkingStatus(event.message);
+                    return;
+                }
+
+                if (event.type === 'result' && event.payload) {
+                    receivedResult = true;
+                    loaded = true;
+                    render(event.payload);
+                    return;
+                }
+
+                if (event.type === 'error') {
+                    throw new Error(event.message || widget.dataset.errorMessage || 'Request failed');
+                }
+            };
+
+            while (true) {
+                const { value, done } = await reader.read();
+                buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                lines.forEach(processLine);
+
+                if (done) {
+                    break;
+                }
+            }
+
+            if (buffer.trim()) {
+                processLine(buffer);
+            }
+
+            if (!receivedResult) {
+                throw new Error(widget.dataset.errorMessage || 'Request failed');
+            }
+        };
+
         const showError = (message) => {
             currentMessages = currentMessages.filter((item) => item.role !== 'thinking');
 
@@ -4246,14 +4337,7 @@ function initAssistantChat() {
             input.value = '';
             renderWithLocalMessage(message);
             setLoading(true);
-            requestJson(widget.dataset.sendUrl, {
-                method: 'POST',
-                body: JSON.stringify({ message }),
-            })
-                .then((payload) => {
-                    loaded = true;
-                    render(payload);
-                })
+            requestAssistantStream(message)
                 .catch((error) => showError(error.message))
                 .finally(() => setLoading(false));
         });

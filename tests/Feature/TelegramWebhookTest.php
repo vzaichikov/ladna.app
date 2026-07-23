@@ -1341,6 +1341,134 @@ class TelegramWebhookTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_authorized_owner_investigation_reuses_transient_telegram_status_updates(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-23 09:00:00', 'Europe/Kyiv'));
+
+        try {
+            $owner = User::factory()->create(['phone' => '+380671112244']);
+            $account = Account::factory()->create([
+                'country_code' => 'UA',
+                'timezone' => 'Europe/Kyiv',
+            ]);
+            $account->addOwner($owner);
+            $customer = Customer::factory()->for($account)->create(['name' => 'Investigation Customer']);
+            PlatformAiSetting::query()->delete();
+            PlatformAiProviderCredential::query()->delete();
+            PlatformAiSetting::factory()->create([
+                'owner_ai_assistant_enabled' => true,
+                'active_provider' => AiProvider::OllamaCloud->value,
+                'active_model' => 'gemma4:31b',
+            ]);
+            PlatformAiProviderCredential::factory()->create([
+                'provider' => AiProvider::OllamaCloud->value,
+                'model' => 'gemma4:31b',
+                'credentials' => ['api_key' => 'test-ollama-key'],
+                'is_configured' => true,
+            ]);
+            [$installation, $webhookKey] = $this->ownerInstallation();
+            TelegramChatAuthorization::factory()->for($account)->create([
+                'telegram_bot_installation_id' => $installation->id,
+                'user_id' => $owner->id,
+                'profile' => TelegramBotProfile::Owner->value,
+                'telegram_chat_id' => '572',
+                'telegram_user_id' => '792',
+            ]);
+            Http::fake([
+                'ollama.com/api/chat' => Http::sequence()
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '',
+                            'tool_calls' => [[
+                                'function' => [
+                                    'name' => 'search_customers',
+                                    'arguments' => ['query' => 'Investigation Customer'],
+                                ],
+                            ]],
+                        ],
+                    ])
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '',
+                            'tool_calls' => [[
+                                'function' => [
+                                    'name' => 'investigate_customer_booking_ledger',
+                                    'arguments' => ['customer_id' => $customer->id],
+                                ],
+                            ]],
+                        ],
+                    ])
+                    ->push([
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => '{"disposition":"answer","answer":"Перевірено: невідповідностей не знайдено.","follow_up_actions":[],"action":null,"reason":"Ledger evidence."}',
+                        ],
+                    ]),
+                'api.telegram.org/*/sendMessage' => Http::response([
+                    'ok' => true,
+                    'result' => ['message_id' => 9002],
+                ]),
+                'api.telegram.org/*/sendChatAction' => Http::response(['ok' => true]),
+                'api.telegram.org/*/editMessageText' => Http::response([
+                    'ok' => true,
+                    'result' => ['message_id' => 9002],
+                ]),
+            ]);
+
+            $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+                'update_id' => 10130,
+                'message' => [
+                    'message_id' => 200,
+                    'chat' => ['id' => 572],
+                    'from' => ['id' => 792, 'username' => 'owner'],
+                    'text' => 'Перевір записи Investigation Customer',
+                ],
+            ], [
+                'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+            ])->assertNoContent();
+
+            $editTexts = collect(Http::recorded())
+                ->map(fn (array $record): Request => $record[0])
+                ->filter(fn (Request $request): bool => str_ends_with($request->url(), '/editMessageText'))
+                ->map(fn (Request $request): string => (string) $request['text'])
+                ->values()
+                ->all();
+
+            $this->assertSame([
+                __('app.assistant_status_checking_database'),
+                __('app.assistant_status_checking_request'),
+                __('app.assistant_status_thinking'),
+                __('app.assistant_status_searching_customer'),
+                __('app.assistant_status_preparing_answer'),
+                __('app.assistant_status_checking_bookings'),
+                __('app.assistant_status_checking_class_passes'),
+                __('app.assistant_status_preparing_answer'),
+                'Перевірено: невідповідностей не знайдено.',
+            ], $editTexts);
+            $this->assertDatabaseHas('telegram_messages', [
+                'account_id' => $account->id,
+                'telegram_chat_id' => '572',
+                'direction' => 'outbound',
+                'telegram_message_id' => '9002',
+                'text' => 'Перевірено: невідповідностей не знайдено.',
+            ]);
+            $this->assertFalse(TelegramMessage::query()
+                ->whereBelongsTo($account)
+                ->whereIn('text', [
+                    __('app.assistant_status_searching_customer'),
+                    __('app.assistant_status_checking_bookings'),
+                    __('app.assistant_status_checking_class_passes'),
+                    __('app.assistant_status_preparing_answer'),
+                ])
+                ->exists());
+            $this->assertSame(2, AiConversationMessage::query()->whereBelongsTo($account)->count());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_owner_ai_follow_up_actions_are_sent_as_inline_buttons_and_callbacks(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));

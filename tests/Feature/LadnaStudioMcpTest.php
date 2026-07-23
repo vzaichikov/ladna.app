@@ -252,6 +252,188 @@ class LadnaStudioMcpTest extends TestCase
         ]);
     }
 
+    public function test_mcp_search_customers_is_account_scoped_and_masks_contacts(): void
+    {
+        $account = Account::factory()->create();
+        Customer::factory()->for($account)->create([
+            'name' => 'Anna Inside',
+            'phone' => '+380671112233',
+            'email' => 'anna@example.com',
+        ]);
+        Customer::factory()->for($account)->create([
+            'name' => 'Anna Second',
+            'phone' => '+380679990011',
+        ]);
+        Customer::factory()->for(Account::factory())->create([
+            'name' => 'Anna Outside',
+            'phone' => '+380679998877',
+        ]);
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'MCP customers', [
+            AccountApiTokenAbility::McpCustomersRead,
+        ]);
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('search-customers', [
+                'query' => 'Anna Inside',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.status', 'unique')
+            ->assertJsonPath('result.structuredContent.matches.0.name', 'Anna Inside')
+            ->assertJsonPath('result.structuredContent.matches.0.email_masked', 'a***@example.com')
+            ->assertJsonMissing(['name' => 'Anna Outside'])
+            ->assertJsonMissing(['phone_masked' => '+380671112233']);
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('search-customers', [
+                'query' => 'Anna',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.status', 'ambiguous')
+            ->assertJsonCount(2, 'result.structuredContent.matches')
+            ->assertJsonMissing(['name' => 'Anna Outside']);
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('search-customers', [
+                'query' => 'Missing Customer',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.status', 'not_found')
+            ->assertJsonCount(0, 'result.structuredContent.matches');
+
+        $this->assertDatabaseHas('mcp_tool_invocations', [
+            'account_id' => $account->id,
+            'account_api_token_id' => $apiToken->id,
+            'tool_name' => 'search-customers',
+            'required_ability' => AccountApiTokenAbility::McpCustomersRead->value,
+            'status' => 'succeeded',
+        ]);
+    }
+
+    public function test_mcp_booking_ledger_investigation_requires_both_read_abilities_and_remains_tenant_scoped(): void
+    {
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $otherAccount = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Ledger Customer']);
+        $otherCustomer = Customer::factory()->for($otherAccount)->create(['name' => 'Outside Customer']);
+        $scheduledClass = ScheduledClass::factory()->for($account)->create([
+            'starts_at' => Carbon::parse('2026-07-14 10:00:00', 'Europe/Kyiv')->utc(),
+            'ends_at' => Carbon::parse('2026-07-14 11:00:00', 'Europe/Kyiv')->utc(),
+        ]);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer, 'customer')
+            ->create();
+        $classPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->create([
+                'code' => 'PASS-READ',
+                'reserved_sessions_count' => 1,
+            ]);
+        CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($classPass)
+            ->for($booking)
+            ->for($scheduledClass)
+            ->create();
+        $customerOnlyToken = app(AccountApiTokenIssuer::class)->issue($account, 'Customers only', [
+            AccountApiTokenAbility::McpCustomersRead,
+        ]);
+        $investigationToken = app(AccountApiTokenIssuer::class)->issue($account, 'Investigation', [
+            AccountApiTokenAbility::McpCustomersRead,
+            AccountApiTokenAbility::McpClassPassesRead,
+        ]);
+
+        $this->withToken($customerOnlyToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('investigate-customer-booking-ledger', [
+                'customer_id' => $customer->id,
+                'from_date' => '2026-07-01',
+                'to_date' => '2026-07-31',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.isError', true)
+            ->assertJsonPath('result.content.0.text', __('app.api_token_forbidden'));
+
+        $this->withToken($investigationToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('investigate-customer-booking-ledger', [
+                'customer_id' => $customer->id,
+                'from_date' => '2026-07-01',
+                'to_date' => '2026-07-31',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.status', 'found')
+            ->assertJsonPath('result.structuredContent.customer.name', 'Ledger Customer')
+            ->assertJsonPath('result.structuredContent.bookings.0.reservation.pass_code', 'PASS-READ')
+            ->assertJsonPath('result.structuredContent.summary.has_detected_anomalies', false);
+
+        $this->withToken($investigationToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('investigate-customer-booking-ledger', [
+                'customer_id' => $otherCustomer->id,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.status', 'not_found')
+            ->assertJsonMissingPath('result.structuredContent.customer');
+
+        $this->assertDatabaseHas('mcp_tool_invocations', [
+            'account_id' => $account->id,
+            'account_api_token_id' => $customerOnlyToken->id,
+            'tool_name' => 'investigate-customer-booking-ledger',
+            'required_ability' => AccountApiTokenAbility::McpClassPassesRead->value,
+            'status' => 'denied',
+        ]);
+        $this->assertDatabaseHas('mcp_tool_invocations', [
+            'account_id' => $account->id,
+            'account_api_token_id' => $investigationToken->id,
+            'tool_name' => 'investigate-customer-booking-ledger',
+            'required_ability' => AccountApiTokenAbility::McpClassPassesRead->value,
+            'status' => 'succeeded',
+        ]);
+    }
+
+    public function test_mcp_booking_ledger_rejects_periods_longer_than_366_days_and_audits_the_failure(): void
+    {
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $customer = Customer::factory()->for($account)->create();
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Investigation', [
+            AccountApiTokenAbility::McpCustomersRead,
+            AccountApiTokenAbility::McpClassPassesRead,
+        ]);
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('investigate-customer-booking-ledger', [
+                'customer_id' => $customer->id,
+                'from_date' => '2025-01-01',
+                'to_date' => '2026-07-31',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.isError', true);
+
+        $this->assertDatabaseHas('mcp_tool_invocations', [
+            'account_id' => $account->id,
+            'account_api_token_id' => $apiToken->id,
+            'tool_name' => 'investigate-customer-booking-ledger',
+            'required_ability' => AccountApiTokenAbility::McpClassPassesRead->value,
+            'status' => 'failed',
+        ]);
+    }
+
+    public function test_mcp_booking_ledger_rejects_malformed_customer_ids(): void
+    {
+        $account = Account::factory()->create();
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Investigation', [
+            AccountApiTokenAbility::McpCustomersRead,
+            AccountApiTokenAbility::McpClassPassesRead,
+        ]);
+
+        $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('investigate-customer-booking-ledger', [
+                'customer_id' => 'not-an-id',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.isError', true);
+    }
+
     public function test_mcp_endpoint_requires_mcp_read_ability(): void
     {
         $account = Account::factory()->create();
@@ -340,6 +522,13 @@ class LadnaStudioMcpTest extends TestCase
             ]))
             ->assertOk()
             ->assertJsonPath('result.structuredContent.reference.symbol', 'App\\Actions\\CreateQuickBooking::execute');
+
+        $this->withToken($logicToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('get-business-logic-reference', [
+                'key' => 'class_pass_issuance_backfill',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.reference.symbol', 'App\\Actions\\ReconcileUnreservedCustomerBookingsForIssuedClassPass::execute');
 
         $this->withToken($logicToken->tokenValue())
             ->postJson('/mcp/ladna-studio', $this->toolPayload('get-business-logic-reference', [

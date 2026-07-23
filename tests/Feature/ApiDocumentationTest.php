@@ -21,6 +21,8 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('/mcp/ladna-studio')
             ->assertSee('describe-ladna-skills')
             ->assertSee('get-class-bookings-for-day')
+            ->assertSee('search-customers')
+            ->assertSee('investigate-customer-booking-ledger')
             ->assertSee('search-owner-help')
             ->assertSee('PHP')
             ->assertSee('Python')
@@ -65,6 +67,9 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.class_bookings_for_day.value.params.name', 'get-class-bookings-for-day')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.owner_help_search.value.params.name', 'search-owner-help')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.owner_help_search.value.params.arguments.query', 'як додати клієнта')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.customer_search.value.params.name', 'search-customers')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.customer_booking_investigation.value.params.name', 'investigate-customer-booking-ledger')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.customer_booking_investigation.value.params.arguments.customer_id', 63)
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.describe_ladna_skills.value.params.name', 'describe-ladna-skills')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.describe_ladna_skills.value.params.arguments.channel', 'dashboard_chat')
             ->assertJsonPath('paths./mcp/ladna-studio.post.responses.401.$ref', '#/components/responses/Unauthorized')
@@ -72,6 +77,8 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.schemas.McpOwnerHelpSearchResult.properties.score.type', 'integer')
             ->assertJsonPath('components.schemas.McpOwnerHelpFragment.properties.steps.maxItems', 6)
             ->assertJsonPath('components.schemas.McpLadnaSkillsResponse.properties.read_capabilities.items.$ref', '#/components/schemas/McpLadnaCapability')
+            ->assertJsonPath('components.schemas.McpLadnaCapability.properties.required_abilities.items.type', 'string')
+            ->assertJsonPath('components.schemas.McpLadnaCapability.properties.required_user_permission.example', 'manage_customer_class_passes')
             ->assertJsonPath('components.schemas.McpLadnaActionCapability.properties.confirmation_required.type', 'boolean')
             ->assertJsonPath('components.schemas.WebsiteLeadRequest.required.0', 'phone')
             ->assertJsonPath('components.schemas.ClassPassPlan.properties.total_validity_days.type', 'integer')
@@ -101,5 +108,7 @@ class ApiDocumentationTest extends TestCase
 
         $this->assertContains('describe-ladna-skills', $toolNames);
         $this->assertContains('get-class-bookings-for-day', $toolNames);
+        $this->assertContains('search-customers', $toolNames);
+        $this->assertContains('investigate-customer-booking-ledger', $toolNames);
     }
 }

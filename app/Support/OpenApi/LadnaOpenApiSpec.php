@@ -120,6 +120,25 @@ class LadnaOpenApiSpec
                     'date' => '2026-06-30',
                 ])),
             ],
+            'mcp_customer_search' => [
+                'title' => __('app.api_docs_example_mcp_customer_search'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('search-customers', [
+                    'query' => 'Тетяна',
+                    'limit' => 5,
+                ])),
+            ],
+            'mcp_booking_investigation' => [
+                'title' => __('app.api_docs_example_mcp_booking_investigation'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('investigate-customer-booking-ledger', [
+                    'customer_id' => 63,
+                    'from_date' => '2026-07-01',
+                    'to_date' => '2026-07-31',
+                ])),
+            ],
             'mcp_owner_help' => [
                 'title' => __('app.api_docs_example_mcp_owner_help'),
                 'method' => 'POST',
@@ -776,7 +795,7 @@ class LadnaOpenApiSpec
             'post' => [
                 'tags' => ['MCP'],
                 'summary' => 'Calls Ladna studio MCP tools through JSON-RPC in the bearer token account scope.',
-                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, such as mcp:read, mcp:customers:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Tool calls never accept account_id or tenant_id arguments for scoping. Read tools remain available for a read-only demo; mutation abilities return HTTP 423.',
+                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, such as mcp:read, mcp:customers:read, mcp:class-passes:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Customer booking-ledger investigation requires both mcp:customers:read and mcp:class-passes:read. Tool calls never accept account_id or tenant_id arguments for scoping. Read tools remain available for a read-only demo; mutation abilities return HTTP 423.',
                 'security' => [
                     ['AccountBearerToken' => []],
                 ],
@@ -795,6 +814,19 @@ class LadnaOpenApiSpec
                                     'value' => $this->mcpToolCallBody('search-owner-help', [
                                         'query' => 'як додати клієнта',
                                         'limit' => 3,
+                                    ]),
+                                ],
+                                'customer_search' => [
+                                    'value' => $this->mcpToolCallBody('search-customers', [
+                                        'query' => 'Кіслань',
+                                        'limit' => 5,
+                                    ]),
+                                ],
+                                'customer_booking_investigation' => [
+                                    'value' => $this->mcpToolCallBody('investigate-customer-booking-ledger', [
+                                        'customer_id' => 63,
+                                        'from_date' => '2026-07-01',
+                                        'to_date' => '2026-07-31',
                                     ]),
                                 ],
                                 'describe_ladna_skills' => [
@@ -1518,6 +1550,8 @@ class LadnaOpenApiSpec
                                     'get-studio-profile',
                                     'get-class-counts-for-day',
                                     'get-class-bookings-for-day',
+                                    'search-customers',
+                                    'investigate-customer-booking-ledger',
                                     'search-owner-help',
                                     'get-owner-help-page',
                                     'get-business-logic-reference',
@@ -1612,6 +1646,12 @@ class LadnaOpenApiSpec
                         'items' => ['type' => 'string'],
                     ],
                     'required_ability' => ['type' => ['string', 'null'], 'example' => 'mcp:customers:read'],
+                    'required_abilities' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                        'example' => ['mcp:customers:read', 'mcp:class-passes:read'],
+                    ],
+                    'required_user_permission' => ['type' => ['string', 'null'], 'example' => 'manage_customer_class_passes'],
                 ],
             ],
             'McpLadnaActionCapability' => [

@@ -8,6 +8,8 @@ use App\Mcp\Tools\GetClassBookingsForDayTool;
 use App\Mcp\Tools\GetClassCountsForDayTool;
 use App\Mcp\Tools\GetOwnerHelpPageTool;
 use App\Mcp\Tools\GetStudioProfileTool;
+use App\Mcp\Tools\InvestigateCustomerBookingLedgerTool;
+use App\Mcp\Tools\SearchCustomersTool;
 use App\Mcp\Tools\SearchOwnerHelpTool;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Instructions;
@@ -26,6 +28,8 @@ class LadnaStudioServer extends Server
         GetBusinessLogicReferenceTool::class,
         GetOwnerHelpPageTool::class,
         GetStudioProfileTool::class,
+        SearchCustomersTool::class,
+        InvestigateCustomerBookingLedgerTool::class,
         SearchOwnerHelpTool::class,
     ];
 

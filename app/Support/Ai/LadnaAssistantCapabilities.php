@@ -71,6 +71,15 @@ class LadnaAssistantCapabilities
                     'required_ability' => 'mcp:customers:read',
                 ],
                 [
+                    'key' => 'customer_booking_investigation',
+                    'title' => 'Розслідування записів і абонементів',
+                    'description' => 'Може знайти клієнта, відновити хронологію записів, резервів, абонементів і коригувань та пояснити виявлені невідповідності або штатний backfill після видачі абонемента.',
+                    'tools' => ['search-customers', 'investigate-customer-booking-ledger'],
+                    'required_ability' => 'mcp:class-passes:read',
+                    'required_abilities' => ['mcp:customers:read', 'mcp:class-passes:read'],
+                    'required_user_permission' => 'manage_customer_class_passes',
+                ],
+                [
                     'key' => 'owner_help',
                     'title' => 'Довідка по інтерфейсу та процесах',
                     'description' => 'Може пояснювати, як додати клієнта, записати людину на заняття, видати абонемент, скасувати заняття, працювати з оплатами, публічним розкладом, прайсом і типовими процесами студії.',
@@ -87,7 +96,7 @@ class LadnaAssistantCapabilities
                 [
                     'key' => 'business_rules_reference',
                     'title' => 'Бізнес-правила Ladna',
-                    'description' => 'Для авторизованих MCP-клієнтів може повернути лише curated reference по дозволених темах: quick booking, статуси і скасування записів, manual availability, reservation абонементів.',
+                    'description' => 'Для авторизованих MCP-клієнтів може повернути лише curated reference по дозволених темах: quick booking, статуси і скасування записів, manual availability, резерви, backfill після видачі абонемента, нормалізація та коригування.',
                     'tools' => ['get-business-logic-reference'],
                     'required_ability' => 'mcp:logic:read',
                 ],

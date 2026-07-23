@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.93.0',
+                'date' => '2026-07-23',
+                'title' => 'AI-assisted booking and class-pass investigations',
+                'items' => ['Studio owners with class-pass management access can now ask Ladna to investigate confusing customer bookings and debits. The assistant finds the customer, reconstructs the booking, reservation, pass, adjustment, and correction timeline, checks deterministic inconsistencies, and explains the evidence without changing studio data.', 'The same investigation is available through tenant-scoped MCP tools. Dashboard and Telegram conversations show a single updating operational status while Ladna searches and checks records; these temporary statuses and internal evidence never enter conversation history.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.92.0',
                 'date' => '2026-07-23',
                 'title' => 'Closed classes for the studio team',
@@ -835,6 +842,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.93.0',
+                'date' => '2026-07-23',
+                'title' => 'AI-розслідування записів і абонементів',
+                'items' => ['Власниці студій із доступом до керування абонементами тепер можуть попросити Ladna розібрати незрозумілі записи та списання клієнта. Асистент знаходить клієнта, відновлює хронологію записів, резервів, абонементів, коригувань і виправлень, перевіряє визначені невідповідності та пояснює докази без жодних змін у даних студії.', 'Таке саме розслідування доступне через MCP-інструменти з ізоляцією даних студії. У кабінеті й Telegram Ladna показує один тимчасовий статус, що оновлюється під час пошуку та перевірки; ці статуси й внутрішні докази не потрапляють до історії розмови.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.92.0',
                 'date' => '2026-07-23',

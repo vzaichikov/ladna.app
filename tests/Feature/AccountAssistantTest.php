@@ -86,6 +86,70 @@ class AccountAssistantTest extends TestCase
         });
     }
 
+    public function test_dashboard_message_endpoint_streams_transient_statuses_without_persisting_them(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"Streamed dashboard answer.","follow_up_actions":[],"action":null,"reason":"studio question"}',
+                ],
+            ]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Check the studio data',
+            ], [
+                'Accept' => 'application/x-ndjson',
+            ])
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/x-ndjson; charset=UTF-8')
+            ->assertHeader('X-Accel-Buffering', 'no');
+
+        $events = collect(explode("\n", trim($response->streamedContent())))
+            ->filter()
+            ->map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR))
+            ->values();
+        $statusKeys = $events
+            ->where('type', 'status')
+            ->pluck('key')
+            ->all();
+        $result = $events->firstWhere('type', 'result');
+
+        $this->assertSame([
+            'assistant_status_checking_database',
+            'assistant_status_checking_request',
+            'assistant_status_thinking',
+        ], $statusKeys);
+        $this->assertSame('Streamed dashboard answer.', $result['payload']['messages'][1]['content']);
+        $this->assertSame(
+            [
+                AiConversationMessageRole::User->value,
+                AiConversationMessageRole::Assistant->value,
+            ],
+            AiConversationMessage::query()
+                ->whereBelongsTo($account)
+                ->orderBy('id')
+                ->pluck('role')
+                ->map(fn (AiConversationMessageRole $role): string => $role->value)
+                ->all(),
+        );
+        $this->assertFalse(AiConversationMessage::query()
+            ->whereBelongsTo($account)
+            ->whereIn('content', [
+                __('app.assistant_status_checking_database'),
+                __('app.assistant_status_checking_request'),
+                __('app.assistant_status_thinking'),
+            ])
+            ->exists());
+    }
+
     public function test_readonly_demo_uses_ai_for_readonly_answers_without_preparing_actions(): void
     {
         Http::fake([
