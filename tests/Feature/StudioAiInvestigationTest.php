@@ -192,6 +192,75 @@ class StudioAiInvestigationTest extends TestCase
         $this->assertSame(0, McpToolInvocation::query()->whereBelongsTo($account)->count());
     }
 
+    public function test_verified_investigation_retries_one_invalid_final_envelope(): void
+    {
+        Http::preventStrayRequests();
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Retry Customer']);
+        $this->configureOllama();
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '',
+                        'tool_calls' => [[
+                            'function' => [
+                                'name' => 'search_customers',
+                                'arguments' => ['query' => 'Retry Customer'],
+                            ],
+                        ]],
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '',
+                        'tool_calls' => [[
+                            'function' => [
+                                'name' => 'investigate_customer_booking_ledger',
+                                'arguments' => ['customer_id' => $customer->id],
+                            ],
+                        ]],
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"answer":"No duplicates."}',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => $this->answerEnvelope('Перевірено: дублювань немає.'),
+                    ],
+                ]),
+        ]);
+
+        $result = app(StudioAiInference::class)->respond(
+            $account,
+            'Перевір незрозуміле списання абонемента Retry Customer.',
+            actorUser: $owner,
+        );
+
+        $this->assertTrue($result->usedAi);
+        $this->assertSame('Перевірено: дублювань немає.', $result->text);
+        $this->assertSame(2, McpToolInvocation::query()->whereBelongsTo($account)->count());
+
+        $requests = collect(Http::recorded())
+            ->map(fn (array $record): Request => $record[0])
+            ->filter(fn (Request $request): bool => $request->url() === 'https://ollama.com/api/chat')
+            ->values();
+        $this->assertCount(4, $requests);
+        $this->assertTrue(collect($requests[3]->data()['messages'])->contains(
+            fn (array $message): bool => ($message['role'] ?? null) === 'user'
+                && str_contains($message['content'] ?? '', 'required final JSON envelope'),
+        ));
+    }
+
     public function test_account_specific_pass_claims_are_blocked_when_the_model_skips_evidence_tools(): void
     {
         Http::preventStrayRequests();

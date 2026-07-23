@@ -138,6 +138,19 @@ class StudioAiInference
                         $activeBookingDialog,
                     );
 
+                    if ($result->fallbackReason === 'invalid_ai_response'
+                        && $requiresInvestigationEvidence
+                        && $this->hasVerifiedInvestigationLedger($toolEvidence)
+                        && $round < self::MaxProviderRounds - 1) {
+                        $messages[] = $response['message'];
+                        $messages[] = [
+                            'role' => 'user',
+                            'content' => 'Your previous response did not match the required final JSON envelope. Return exactly one JSON object with only these keys: disposition, answer, follow_up_actions, action, reason. Use disposition="answer", a concise evidence-backed answer string, follow_up_actions=[], action=null, and a short reason string. Do not call another tool.',
+                        ];
+
+                        continue;
+                    }
+
                     if ($evidenceOutcome['partial']
                         && $result->usedAi
                         && ! $result->isAction()
