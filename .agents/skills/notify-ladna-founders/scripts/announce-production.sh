@@ -4,14 +4,13 @@ set -euo pipefail
 usage() {
     printf '%s\n' \
         'Usage:' \
-        '  announce-production.sh --preview --uk-file PATH --en-file PATH' \
-        '  announce-production.sh --execute --expected-audience-hash HASH --uk-file PATH --en-file PATH'
+        '  announce-production.sh --preview --message-file PATH' \
+        '  announce-production.sh --execute --expected-target-hash HASH --message-file PATH'
 }
 
 mode="preview"
-uk_file=""
-en_file=""
-expected_audience_hash=""
+message_file=""
+expected_target_hash=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -23,16 +22,12 @@ while [[ $# -gt 0 ]]; do
             mode="execute"
             shift
             ;;
-        --uk-file)
-            uk_file="${2:-}"
+        --message-file)
+            message_file="${2:-}"
             shift 2
             ;;
-        --en-file)
-            en_file="${2:-}"
-            shift 2
-            ;;
-        --expected-audience-hash)
-            expected_audience_hash="${2:-}"
+        --expected-target-hash)
+            expected_target_hash="${2:-}"
             shift 2
             ;;
         -h|--help)
@@ -47,18 +42,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$uk_file" || ! -f "$uk_file" ]]; then
-    printf 'Missing Ukrainian message file: %s\n' "$uk_file" >&2
+if [[ -z "$message_file" || ! -f "$message_file" ]]; then
+    printf 'Missing Ukrainian message file: %s\n' "$message_file" >&2
     exit 1
 fi
 
-if [[ -z "$en_file" || ! -f "$en_file" ]]; then
-    printf 'Missing English message file: %s\n' "$en_file" >&2
-    exit 1
-fi
-
-if [[ "$mode" == "execute" && ! "$expected_audience_hash" =~ ^[0-9a-f]{64}$ ]]; then
-    printf 'Execute mode requires a 64-character --expected-audience-hash.\n' >&2
+if [[ "$mode" == "execute" && ! "$expected_target_hash" =~ ^[0-9a-f]{64}$ ]]; then
+    printf 'Execute mode requires a 64-character --expected-target-hash.\n' >&2
     exit 1
 fi
 
@@ -85,15 +75,13 @@ if [[ -z "${LADNA_PRODUCTION_ROOT:-}" ]]; then
     exit 1
 fi
 
-uk_base64="$(base64 < "$uk_file" | tr -d '\n')"
-en_base64="$(base64 < "$en_file" | tr -d '\n')"
+message_base64="$(base64 < "$message_file" | tr -d '\n')"
 root_q="$(printf '%q' "$LADNA_PRODUCTION_ROOT")"
 mode_q="$(printf '%q' "$mode")"
-uk_q="$(printf '%q' "$uk_base64")"
-en_q="$(printf '%q' "$en_base64")"
-hash_q="$(printf '%q' "$expected_audience_hash")"
+message_q="$(printf '%q' "$message_base64")"
+hash_q="$(printf '%q' "$expected_target_hash")"
 
-"$ssh_wrapper" "LADNA_PRODUCTION_ROOT=${root_q} ANNOUNCE_MODE=${mode_q} UK_BASE64=${uk_q} EN_BASE64=${en_q} EXPECTED_AUDIENCE_HASH=${hash_q} bash -se" <<'REMOTE'
+"$ssh_wrapper" "LADNA_PRODUCTION_ROOT=${root_q} ANNOUNCE_MODE=${mode_q} MESSAGE_BASE64=${message_q} EXPECTED_TARGET_HASH=${hash_q} bash -se" <<'REMOTE'
 set -euo pipefail
 
 cd "$LADNA_PRODUCTION_ROOT"
@@ -111,10 +99,9 @@ fi
 source_ref="$(git rev-parse HEAD)"
 arguments=(
     env
-    LADNA_OWNER_ANNOUNCEMENT_ORIGIN=codex_skill
-    php artisan telegram:announce-studio-owners
-    "--uk-base64=${UK_BASE64}"
-    "--en-base64=${EN_BASE64}"
+    LADNA_FOUNDERS_ANNOUNCEMENT_ORIGIN=codex_skill
+    php artisan telegram:announce-ladna-founders
+    "--message-base64=${MESSAGE_BASE64}"
     "--source-ref=${source_ref}"
     --json
     --no-interaction
@@ -124,7 +111,7 @@ if [[ "$ANNOUNCE_MODE" == "execute" ]]; then
     arguments+=(
         --execute
         --force
-        "--expected-audience-hash=${EXPECTED_AUDIENCE_HASH}"
+        "--expected-target-hash=${EXPECTED_TARGET_HASH}"
     )
 fi
 

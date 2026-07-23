@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'trainer_id', 'scheduled_class_id', 'class_booking_id', 'telegram_bot_installation_id', 'telegram_chat_authorization_id', 'type', 'status', 'recipient_kind', 'dedupe_key', 'telegram_chat_id', 'telegram_message_id', 'telegram_user_id', 'text', 'payload', 'attempts', 'next_attempt_at', 'sent_at', 'failed_at', 'last_error'])]
+#[Fillable(['account_id', 'trainer_id', 'scheduled_class_id', 'class_booking_id', 'telegram_bot_installation_id', 'telegram_chat_authorization_id', 'telegram_broadcast_target_id', 'type', 'status', 'recipient_kind', 'dedupe_key', 'telegram_chat_id', 'telegram_message_id', 'telegram_user_id', 'text', 'payload', 'attempts', 'next_attempt_at', 'sent_at', 'failed_at', 'last_error'])]
 class TelegramAlert extends Model
 {
     /** @use HasFactory<TelegramAlertFactory> */
@@ -69,5 +69,10 @@ class TelegramAlert extends Model
     public function authorization(): BelongsTo
     {
         return $this->belongsTo(TelegramChatAuthorization::class, 'telegram_chat_authorization_id');
+    }
+
+    public function broadcastTarget(): BelongsTo
+    {
+        return $this->belongsTo(TelegramBroadcastTarget::class, 'telegram_broadcast_target_id');
     }
 }

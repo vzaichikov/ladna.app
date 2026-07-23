@@ -6,6 +6,7 @@ enum TelegramAlertType: string
 {
     case TrainerAssignment = 'trainer_assignment';
     case OwnerAnnouncement = 'owner_announcement';
+    case FoundersAnnouncement = 'founders_announcement';
 
     public function labelKey(): string
     {

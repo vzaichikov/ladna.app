@@ -10,19 +10,27 @@ use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\SystemSetting;
 use App\Models\TelegramBotInstallation;
+use App\Models\TelegramBroadcastTarget;
 use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
+use App\Support\Telegram\Announcements\TelegramBroadcastTargetVerifier;
 use App\Support\Telegram\TelegramWebhookManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use InvalidArgumentException;
 
 class SystemSettingsController extends Controller
 {
     public function edit(): View
     {
         $fontOptions = SystemAppearance::fontOptions();
+        $ownerTelegramBotInstallation = TelegramBotInstallation::query()
+            ->where('scope_type', 'platform')
+            ->where('scope_id', 0)
+            ->where('profile', TelegramBotProfile::Owner->value)
+            ->first();
 
         return view('platform.settings.edit', [
             'fontOptions' => $fontOptions,
@@ -38,16 +46,18 @@ class SystemSettingsController extends Controller
             'platformAiProviderCredentials' => PlatformAiProviderCredential::query()
                 ->get()
                 ->keyBy(fn (PlatformAiProviderCredential $credential): string => $credential->provider->value),
-            'ownerTelegramBotInstallation' => TelegramBotInstallation::query()
-                ->where('scope_type', 'platform')
-                ->where('scope_id', 0)
-                ->where('profile', TelegramBotProfile::Owner->value)
+            'ownerTelegramBotInstallation' => $ownerTelegramBotInstallation,
+            'foundersTelegramTarget' => $ownerTelegramBotInstallation?->broadcastTargets()
+                ->where('purpose', TelegramBroadcastTarget::PurposeLadnaFounders)
                 ->first(),
         ]);
     }
 
-    public function update(UpdateSystemSettingsRequest $request, TelegramWebhookManager $telegramWebhooks): RedirectResponse
-    {
+    public function update(
+        UpdateSystemSettingsRequest $request,
+        TelegramWebhookManager $telegramWebhooks,
+        TelegramBroadcastTargetVerifier $targetVerifier,
+    ): RedirectResponse {
         $validated = $request->validated();
 
         $ownerTelegramBotInstallation = DB::transaction(function () use ($request, $validated): TelegramBotInstallation {
@@ -68,6 +78,11 @@ class SystemSettingsController extends Controller
         });
 
         $activeTab = $validated['settings_tab'] ?? null;
+        $foundersWarning = $this->saveFoundersTelegramTarget(
+            $validated,
+            $ownerTelegramBotInstallation,
+            $targetVerifier,
+        );
         $telegramWebhookResult = null;
 
         if ($ownerTelegramBotInstallation->is_enabled && $ownerTelegramBotInstallation->tokenValue()) {
@@ -78,8 +93,15 @@ class SystemSettingsController extends Controller
             ->route('platform.settings.edit', $activeTab ? ['tab' => $activeTab] : [])
             ->with('status', __('app.system_settings_updated'));
 
-        if ($telegramWebhookResult && ! $telegramWebhookResult['ok']) {
-            $redirect->with('warning', $telegramWebhookResult['message']);
+        $warnings = array_values(array_filter([
+            $foundersWarning,
+            $telegramWebhookResult && ! $telegramWebhookResult['ok']
+                ? $telegramWebhookResult['message']
+                : null,
+        ]));
+
+        if ($warnings !== []) {
+            $redirect->with('warning', implode(' ', $warnings));
         }
 
         return $redirect;
@@ -171,6 +193,78 @@ class SystemSettingsController extends Controller
         ])->save();
 
         return $installation;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function saveFoundersTelegramTarget(
+        array $validated,
+        TelegramBotInstallation $installation,
+        TelegramBroadcastTargetVerifier $verifier,
+    ): ?string {
+        $chatId = trim((string) ($validated['founders_telegram_chat_id'] ?? ''));
+        $title = trim((string) ($validated['founders_telegram_title'] ?? ''));
+        $shouldEnable = (bool) ($validated['founders_telegram_enabled'] ?? false);
+        $target = TelegramBroadcastTarget::query()->firstOrNew([
+            'telegram_bot_installation_id' => $installation->id,
+            'purpose' => TelegramBroadcastTarget::PurposeLadnaFounders,
+        ]);
+
+        if ($chatId === '') {
+            if ($target->exists) {
+                $target->forceFill(['is_enabled' => false])->save();
+            }
+
+            return null;
+        }
+
+        $changed = ! $target->exists
+            || $target->telegram_chat_id !== $chatId
+            || $target->title !== $title;
+
+        $target->fill([
+            'telegram_chat_id' => $chatId,
+            'title' => $title,
+        ]);
+
+        if ($changed) {
+            $target->forceFill([
+                'chat_type' => null,
+                'verified_at' => null,
+                'is_enabled' => false,
+            ]);
+        }
+
+        if (! $shouldEnable) {
+            $target->forceFill(['is_enabled' => false])->save();
+
+            return null;
+        }
+
+        if (! $changed && $target->is_enabled && $target->verified_at) {
+            return null;
+        }
+
+        try {
+            $verified = $verifier->verify($installation, $chatId, $title);
+        } catch (InvalidArgumentException $exception) {
+            $target->forceFill(['is_enabled' => false])->save();
+
+            return __('app.telegram_founders_verification_failed', [
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        $target->forceFill([
+            'telegram_chat_id' => $verified->chatId,
+            'title' => $verified->title,
+            'chat_type' => $verified->chatType,
+            'is_enabled' => true,
+            'verified_at' => now(),
+        ])->save();
+
+        return null;
     }
 
     private function credentialKey(AiProvider $provider): string

@@ -9,10 +9,12 @@ use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\TelegramAlert;
 use App\Models\TelegramBotInstallation;
+use App\Models\TelegramBroadcastTarget;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
-use App\Support\Telegram\Announcements\StudioOwnerAnnouncementAudienceResolver;
+use App\Support\Telegram\Announcements\TelegramBroadcastTargetVerifier;
 use App\Support\Telegram\TelegramClient;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +27,7 @@ class TelegramAlertSender
 
     public function __construct(
         private readonly TelegramClient $telegramClient,
-        private readonly StudioOwnerAnnouncementAudienceResolver $ownerAudienceResolver,
+        private readonly TelegramBroadcastTargetVerifier $targetVerifier,
     ) {}
 
     /**
@@ -36,7 +38,9 @@ class TelegramAlertSender
         $limit = max(1, min(200, $limit));
 
         $alertIds = TelegramAlert::query()
-            ->whereHas('account', fn ($query) => $query->operational())
+            ->where(fn (Builder $query): Builder => $query
+                ->where('recipient_kind', TelegramAlertRecipientKind::FoundersGroup->value)
+                ->orWhereHas('account', fn (Builder $query): Builder => $query->operational()))
             ->where('status', TelegramAlertStatus::Pending->value)
             ->where(fn ($query) => $query
                 ->whereNull('next_attempt_at')
@@ -81,7 +85,9 @@ class TelegramAlertSender
     {
         return DB::transaction(function () use ($alertId): ?TelegramAlert {
             $alert = TelegramAlert::query()
-                ->whereHas('account', fn ($query) => $query->operational())
+                ->where(fn (Builder $query): Builder => $query
+                    ->where('recipient_kind', TelegramAlertRecipientKind::FoundersGroup->value)
+                    ->orWhereHas('account', fn (Builder $query): Builder => $query->operational()))
                 ->whereKey($alertId)
                 ->lockForUpdate()
                 ->first();
@@ -105,7 +111,15 @@ class TelegramAlertSender
 
     private function send(TelegramAlert $alert): string
     {
-        $alert->loadMissing(['account', 'trainer']);
+        $alert->loadMissing(['account', 'trainer', 'broadcastTarget.installation']);
+
+        if ($alert->recipient_kind === TelegramAlertRecipientKind::FoundersGroup) {
+            return $this->sendFoundersAnnouncement($alert);
+        }
+
+        if ($alert->recipient_kind === TelegramAlertRecipientKind::StudioOwner) {
+            return $this->retryOrFail($alert, 'studio_owner_broadcast_retired', true);
+        }
 
         if (! $alert->account) {
             return $this->retryOrFail($alert, 'alert_account_missing', true);
@@ -150,6 +164,67 @@ class TelegramAlertSender
         return 'sent';
     }
 
+    private function sendFoundersAnnouncement(TelegramAlert $alert): string
+    {
+        $target = $alert->broadcastTarget;
+        $installation = $target?->installation;
+
+        if (
+            ! $target
+            || ! $installation
+            || $target->purpose !== TelegramBroadcastTarget::PurposeLadnaFounders
+            || ! $target->is_enabled
+            || ! $target->verified_at
+            || $alert->telegram_bot_installation_id !== $installation->id
+            || $alert->telegram_chat_id !== $target->telegram_chat_id
+            || ! $installation->isPlatformScoped()
+            || $installation->profile !== TelegramBotProfile::Owner
+            || ! $installation->is_enabled
+            || ! $installation->tokenValue()
+        ) {
+            return $this->retryOrFail($alert, 'founders_target_not_available', true);
+        }
+
+        try {
+            $verified = $this->targetVerifier->verify(
+                $installation,
+                $target->telegram_chat_id,
+                $target->title,
+            );
+            $expectedTargetHash = (string) data_get($alert->payload, 'target_hash', '');
+            $currentTargetHash = $verified->hash($installation->id, $target->purpose);
+
+            if (
+                $target->chat_type !== $verified->chatType
+                || $expectedTargetHash === ''
+                || ! hash_equals($expectedTargetHash, $currentTargetHash)
+            ) {
+                return $this->retryOrFail($alert, 'founders_target_changed', true);
+            }
+
+            $response = $this->telegramClient->sendMessage(
+                $installation,
+                $target->telegram_chat_id,
+                (string) $alert->text,
+            );
+        } catch (Throwable $exception) {
+            return $this->retryOrFail($alert, $exception->getMessage() ?: 'telegram_request_failed');
+        }
+
+        if (! $this->responseSucceeded($response)) {
+            return $this->retryOrFail($alert, $this->responseError($response));
+        }
+
+        $this->markSent(
+            $alert,
+            $installation,
+            null,
+            (string) data_get($response?->json(), 'result.message_id'),
+        );
+
+        return 'sent';
+    }
+
     private function ownerBotInstallation(): ?TelegramBotInstallation
     {
         return TelegramBotInstallation::query()
@@ -166,7 +241,8 @@ class TelegramAlertSender
     {
         return match ($alert->recipient_kind) {
             TelegramAlertRecipientKind::Trainer => $this->trainerAuthorization($alert, $installation),
-            TelegramAlertRecipientKind::StudioOwner => $this->studioOwnerAuthorization($alert, $installation),
+            TelegramAlertRecipientKind::StudioOwner,
+            TelegramAlertRecipientKind::FoundersGroup => null,
         };
     }
 
@@ -188,41 +264,8 @@ class TelegramAlertSender
             ->first();
     }
 
-    private function studioOwnerAuthorization(TelegramAlert $alert, TelegramBotInstallation $installation): ?TelegramChatAuthorization
-    {
-        $authorizationId = $alert->telegram_chat_authorization_id;
-        $ownerUserId = (int) data_get($alert->payload, 'owner_user_id', 0);
-
-        if (! $authorizationId || $ownerUserId < 1) {
-            return null;
-        }
-
-        $authorization = TelegramChatAuthorization::query()
-            ->whereKey($authorizationId)
-            ->where('account_id', $alert->account_id)
-            ->where('telegram_bot_installation_id', $installation->id)
-            ->where('profile', TelegramBotProfile::Owner->value)
-            ->where('status', TelegramChatAuthorizationStatus::Authorized->value)
-            ->with('account')
-            ->first();
-
-        if (
-            ! $authorization
-            || $authorization->telegram_chat_id !== $alert->telegram_chat_id
-            || ! $this->ownerAudienceResolver->authorizationMatchesCurrentOwner($authorization, $ownerUserId)
-        ) {
-            return null;
-        }
-
-        return $authorization;
-    }
-
     private function authorizationMissingError(TelegramAlert $alert): string
     {
-        if ($alert->recipient_kind === TelegramAlertRecipientKind::StudioOwner) {
-            return 'studio_owner_telegram_authorization_missing';
-        }
-
         return $alert->trainer_id ? 'trainer_telegram_authorization_missing' : 'trainer_not_assigned';
     }
 
@@ -272,21 +315,27 @@ class TelegramAlertSender
     private function markSent(
         TelegramAlert $alert,
         TelegramBotInstallation $installation,
-        TelegramChatAuthorization $authorization,
+        ?TelegramChatAuthorization $authorization,
         ?string $telegramMessageId,
     ): void {
         DB::transaction(function () use ($alert, $installation, $authorization, $telegramMessageId): void {
+            $telegramChatId = $authorization?->telegram_chat_id ?? (string) $alert->telegram_chat_id;
+
             $message = TelegramMessage::create([
                 'account_id' => $alert->account_id,
                 'telegram_bot_installation_id' => $installation->id,
-                'telegram_chat_authorization_id' => $authorization->id,
+                'telegram_chat_authorization_id' => $authorization?->id,
                 'telegram_update_id' => null,
                 'profile' => TelegramBotProfile::Owner->value,
-                'telegram_chat_id' => $authorization->telegram_chat_id,
+                'telegram_chat_id' => $telegramChatId,
                 'telegram_message_id' => $telegramMessageId,
-                'telegram_user_id' => $authorization->telegram_user_id,
+                'telegram_user_id' => $authorization?->telegram_user_id,
                 'direction' => 'outbound',
-                'message_type' => $alert->type === TelegramAlertType::OwnerAnnouncement ? 'owner_announcement' : 'alert',
+                'message_type' => match ($alert->type) {
+                    TelegramAlertType::OwnerAnnouncement => 'owner_announcement',
+                    TelegramAlertType::FoundersAnnouncement => 'founders_announcement',
+                    default => 'alert',
+                },
                 'text' => $alert->text,
                 'payload' => [
                     'telegram_alert_id' => $alert->id,
@@ -298,10 +347,10 @@ class TelegramAlertSender
 
             $alert->forceFill([
                 'telegram_bot_installation_id' => $installation->id,
-                'telegram_chat_authorization_id' => $authorization->id,
-                'telegram_chat_id' => $authorization->telegram_chat_id,
+                'telegram_chat_authorization_id' => $authorization?->id,
+                'telegram_chat_id' => $telegramChatId,
                 'telegram_message_id' => $telegramMessageId,
-                'telegram_user_id' => $authorization->telegram_user_id,
+                'telegram_user_id' => $authorization?->telegram_user_id,
                 'status' => TelegramAlertStatus::Sent->value,
                 'next_attempt_at' => null,
                 'sent_at' => $message->sent_at,

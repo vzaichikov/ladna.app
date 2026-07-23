@@ -120,6 +120,53 @@ class TelegramClient
             ->get($this->methodUrl($token, 'getWebhookInfo'));
     }
 
+    public function getMe(TelegramBotInstallation $installation): ?Response
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token) {
+            return null;
+        }
+
+        return Http::timeout(8)
+            ->connectTimeout(3)
+            ->retry([100, 300], throw: false)
+            ->get($this->methodUrl($token, 'getMe'));
+    }
+
+    public function getChat(TelegramBotInstallation $installation, string|int $chatId): ?Response
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token || (string) $chatId === '') {
+            return null;
+        }
+
+        return Http::timeout(8)
+            ->connectTimeout(3)
+            ->retry([100, 300], throw: false)
+            ->get($this->methodUrl($token, 'getChat'), [
+                'chat_id' => $chatId,
+            ]);
+    }
+
+    public function getChatMember(TelegramBotInstallation $installation, string|int $chatId, string|int $userId): ?Response
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token || (string) $chatId === '' || (string) $userId === '') {
+            return null;
+        }
+
+        return Http::timeout(8)
+            ->connectTimeout(3)
+            ->retry([100, 300], throw: false)
+            ->get($this->methodUrl($token, 'getChatMember'), [
+                'chat_id' => $chatId,
+                'user_id' => $userId,
+            ]);
+    }
+
     public function answerCallbackQuery(TelegramBotInstallation $installation, string $callbackQueryId): ?Response
     {
         $token = $installation->tokenValue();

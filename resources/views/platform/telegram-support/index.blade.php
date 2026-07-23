@@ -262,6 +262,7 @@
                     ?? $alert->scheduledClass?->room?->name
                     ?? __('app.not_set');
                 $isOwnerAnnouncement = $alertType === \App\Enums\TelegramAlertType::OwnerAnnouncement->value;
+                $isFoundersAnnouncement = $alertType === \App\Enums\TelegramAlertType::FoundersAnnouncement->value;
             @endphp
             <article class="crm-row lg:grid-cols-[150px_minmax(0,1fr)_minmax(0,2fr)_minmax(0,1.4fr)_160px] lg:items-start">
                 <div>
@@ -270,12 +271,15 @@
                     <div class="mt-1 text-xs text-slate-500">{{ __('app.attempts') }}: {{ $alert->attempts }}</div>
                 </div>
                 <div class="min-w-0">
-                    <div class="font-semibold text-slate-950">{{ $alert->account?->name ?? __('app.not_set') }}</div>
-                    <div class="mt-1 text-sm text-slate-500">{{ $alert->account?->slug ?? __('app.not_set') }}</div>
+                    <div class="font-semibold text-slate-950">{{ $isFoundersAnnouncement ? __('app.platform') : ($alert->account?->name ?? __('app.not_set')) }}</div>
+                    <div class="mt-1 text-sm text-slate-500">{{ $isFoundersAnnouncement ? __('app.telegram_founders_destination') : ($alert->account?->slug ?? __('app.not_set')) }}</div>
                     <div class="mt-2 text-xs text-slate-500">{{ $alert->installation?->bot_username ?? __('app.telegram_bot_profile_owner') }}</div>
                 </div>
                 <div class="min-w-0 text-sm leading-6 text-slate-700">
-                    @if ($isOwnerAnnouncement)
+                    @if ($isFoundersAnnouncement)
+                        <div class="font-semibold text-slate-950">{{ __('app.telegram_alert_type_founders_announcement') }}</div>
+                        <div class="text-slate-500">{{ \Illuminate\Support\Str::limit((string) data_get($alert->payload, 'source_ref'), 12, '') }}</div>
+                    @elseif ($isOwnerAnnouncement)
                         <div class="font-semibold text-slate-950">{{ __('app.telegram_alert_type_owner_announcement') }}</div>
                         <div class="text-slate-500">{{ data_get($alert->payload, 'locale', 'uk') }} · {{ \Illuminate\Support\Str::limit((string) data_get($alert->payload, 'source_ref'), 12, '') }}</div>
                     @else
@@ -286,7 +290,15 @@
                     <div class="mt-1">{{ \Illuminate\Support\Str::limit((string) $alert->text, 220) }}</div>
                 </div>
                 <div class="min-w-0 text-sm leading-6 text-slate-700">
-                    <div class="font-semibold text-slate-950">{{ $isOwnerAnnouncement ? ($alert->authorization?->user?->name ?? __('app.telegram_alert_recipient_kind_studio_owner')) : ($alert->trainer?->name ?? __('app.trainer_not_assigned')) }}</div>
+                    <div class="font-semibold text-slate-950">
+                        @if ($isFoundersAnnouncement)
+                            {{ $alert->broadcastTarget?->title ?? __('app.telegram_alert_recipient_kind_founders_group') }}
+                        @elseif ($isOwnerAnnouncement)
+                            {{ $alert->authorization?->user?->name ?? __('app.telegram_alert_recipient_kind_studio_owner') }}
+                        @else
+                            {{ $alert->trainer?->name ?? __('app.trainer_not_assigned') }}
+                        @endif
+                    </div>
                     <div class="text-slate-500">{{ __('app.telegram_chat') }}: {{ $alert->telegram_chat_id ?? __('app.not_set') }}</div>
                     @if ($alert->last_error)
                         <div class="mt-1 font-medium text-rose-700">{{ \Illuminate\Support\Str::limit($alert->last_error, 180) }}</div>

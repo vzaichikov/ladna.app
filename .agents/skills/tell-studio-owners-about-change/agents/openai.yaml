@@ -1,6 +1,0 @@
-interface:
-  display_name: "Tell Studio Owners About Change"
-  short_description: "Safely announce deployed changes to studio owners"
-  default_prompt: "Use $tell-studio-owners-about-change to notify eligible studio owners about a deployed Ladna change."
-policy:
-  allow_implicit_invocation: true

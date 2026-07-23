@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notify Ladna Founders"
+  short_description: "Safely announce deployed Ladna updates to the founders group"
+  default_prompt: "Use $notify-ladna-founders to announce an explicitly requested deployed Ladna update in Ukrainian."

@@ -313,6 +313,56 @@
                                     <input value="{{ $ownerTelegramBotInstallation->webhook_url }}" readonly class="crm-field font-mono text-xs">
                                 </label>
                             @endif
+
+                            <div class="rounded-lg border border-stone-200 bg-stone-50 p-4 lg:col-span-2">
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-slate-950">{{ __('app.telegram_founders_destination') }}</h4>
+                                        <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.telegram_founders_destination_copy') }}</p>
+                                    </div>
+                                    @if ($foundersTelegramTarget?->is_enabled && $foundersTelegramTarget?->verified_at)
+                                        <span class="crm-status-active">{{ __('app.telegram_founders_verified') }}</span>
+                                    @else
+                                        <span class="crm-status-muted">{{ __('app.telegram_founders_not_verified') }}</span>
+                                    @endif
+                                </div>
+
+                                <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                                    <label class="block">
+                                        <span class="crm-label">{{ __('app.telegram_founders_chat_id') }}</span>
+                                        <input name="founders_telegram_chat_id" value="{{ old('founders_telegram_chat_id', $foundersTelegramTarget?->telegram_chat_id) }}" class="crm-field font-mono" maxlength="32" placeholder="-1001234567890">
+                                        @error('founders_telegram_chat_id')
+                                            <span class="crm-help">{{ $message }}</span>
+                                        @enderror
+                                    </label>
+
+                                    <label class="block">
+                                        <span class="crm-label">{{ __('app.telegram_founders_title') }}</span>
+                                        <input name="founders_telegram_title" value="{{ old('founders_telegram_title', $foundersTelegramTarget?->title ?? 'Ladna Founders') }}" class="crm-field" maxlength="255" placeholder="Ladna Founders">
+                                        @error('founders_telegram_title')
+                                            <span class="crm-help">{{ $message }}</span>
+                                        @enderror
+                                    </label>
+
+                                    <label class="flex items-start gap-3 lg:col-span-2">
+                                        <input type="hidden" name="founders_telegram_enabled" value="0">
+                                        <input type="checkbox" name="founders_telegram_enabled" value="1" class="crm-checkbox mt-1" @checked((bool) old('founders_telegram_enabled', $foundersTelegramTarget?->is_enabled ?? false))>
+                                        <span>
+                                            <span class="block text-sm font-semibold text-slate-950">{{ __('app.telegram_founders_enabled') }}</span>
+                                            <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.telegram_founders_enabled_copy') }}</span>
+                                        </span>
+                                    </label>
+                                </div>
+
+                                @if ($foundersTelegramTarget?->verified_at)
+                                    <p class="mt-4 text-xs text-slate-500">
+                                        {{ __('app.telegram_founders_verified_at', [
+                                            'date' => $foundersTelegramTarget->verified_at->format('Y-m-d H:i'),
+                                            'type' => $foundersTelegramTarget->chat_type,
+                                        ]) }}
+                                    </p>
+                                @endif
+                            </div>
                         </div>
 
                         <div class="mt-5 rounded-lg border border-stone-200 bg-stone-50 p-4" data-telegram-webhook-panel>

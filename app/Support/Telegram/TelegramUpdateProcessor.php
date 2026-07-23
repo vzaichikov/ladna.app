@@ -78,6 +78,10 @@ class TelegramUpdateProcessor
             return false;
         }
 
+        if ((string) data_get($callbackQuery, 'message.chat.type', 'private') !== 'private') {
+            return true;
+        }
+
         $installation = $telegramUpdate->installation;
         $chatId = (string) data_get($callbackQuery, 'message.chat.id');
         $telegramUserId = (string) data_get($callbackQuery, 'from.id');
@@ -152,6 +156,10 @@ class TelegramUpdateProcessor
         if (! is_array($message)) {
             $telegramUpdate->update(['status' => TelegramUpdateStatus::Ignored->value, 'processed_at' => now()]);
 
+            return true;
+        }
+
+        if ((string) data_get($message, 'chat.type', 'private') !== 'private') {
             return true;
         }
 

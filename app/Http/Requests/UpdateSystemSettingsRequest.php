@@ -45,6 +45,9 @@ class UpdateSystemSettingsRequest extends FormRequest
             'owner_telegram_bot_enabled' => ['nullable', 'boolean'],
             'owner_telegram_bot_token' => ['nullable', 'string', 'max:255'],
             'owner_telegram_bot_username' => ['nullable', 'string', 'max:255'],
+            'founders_telegram_chat_id' => ['nullable', 'string', 'max:32', 'regex:/\A-?\d+\z/'],
+            'founders_telegram_title' => ['nullable', 'string', 'max:255'],
+            'founders_telegram_enabled' => ['nullable', 'boolean'],
             'settings_tab' => ['nullable', Rule::in(['appearance', 'support', 'activity-log', 'ai-owner'])],
         ];
     }
@@ -78,6 +81,19 @@ class UpdateSystemSettingsRequest extends FormRequest
 
                 if (blank($this->input('owner_telegram_bot_token')) && ! $hasExistingToken) {
                     $validator->errors()->add('owner_telegram_bot_token', __('app.telegram_bot_token_required'));
+                }
+            },
+            function (Validator $validator): void {
+                if (! filter_var($this->input('founders_telegram_enabled', false), FILTER_VALIDATE_BOOLEAN)) {
+                    return;
+                }
+
+                if (blank($this->input('founders_telegram_chat_id'))) {
+                    $validator->errors()->add('founders_telegram_chat_id', __('app.telegram_founders_chat_id_required'));
+                }
+
+                if (blank($this->input('founders_telegram_title'))) {
+                    $validator->errors()->add('founders_telegram_title', __('app.telegram_founders_title_required'));
                 }
             },
         ];

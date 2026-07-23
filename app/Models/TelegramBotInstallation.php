@@ -68,6 +68,11 @@ class TelegramBotInstallation extends Model
         return $this->hasMany(TelegramAuthorizationSelection::class);
     }
 
+    public function broadcastTargets(): HasMany
+    {
+        return $this->hasMany(TelegramBroadcastTarget::class);
+    }
+
     public function isPlatformScoped(): bool
     {
         return $this->scope_type === 'platform';

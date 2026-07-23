@@ -14,6 +14,7 @@ use App\Models\SubscriptionPlan;
 use App\Models\SystemSetting;
 use App\Models\TelegramAlert;
 use App\Models\TelegramBotInstallation;
+use App\Models\TelegramBroadcastTarget;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
@@ -193,6 +194,22 @@ class PlatformAdminTest extends TestCase
         Http::fake([
             'api.telegram.org/*/setWebhook' => Http::response(['ok' => true, 'result' => true]),
             'api.telegram.org/*/setMyCommands' => Http::response(['ok' => true, 'result' => true]),
+            'api.telegram.org/*/getChatMember*' => Http::response([
+                'ok' => true,
+                'result' => ['status' => 'member'],
+            ]),
+            'api.telegram.org/*/getChat*' => Http::response([
+                'ok' => true,
+                'result' => [
+                    'id' => -5208558952,
+                    'type' => 'group',
+                    'title' => 'Ladna Founders',
+                ],
+            ]),
+            'api.telegram.org/*/getMe' => Http::response([
+                'ok' => true,
+                'result' => ['id' => 777, 'is_bot' => true],
+            ]),
             'api.telegram.org/*/getWebhookInfo' => Http::response([
                 'ok' => true,
                 'result' => [
@@ -213,7 +230,9 @@ class PlatformAdminTest extends TestCase
             ->assertSee(__('app.platform_ai_owner_bot'))
             ->assertSee('name="owner_ai_assistant_enabled"', false)
             ->assertSee('data-ai-model-select="'.AiProvider::OllamaCloud->value.'"', false)
-            ->assertSee('name="owner_telegram_bot_token"', false);
+            ->assertSee('name="owner_telegram_bot_token"', false)
+            ->assertSee('name="founders_telegram_chat_id"', false)
+            ->assertSee('name="founders_telegram_enabled"', false);
 
         $this->actingAs($platformAdmin)
             ->put(route('platform.settings.update'), [
@@ -232,6 +251,9 @@ class PlatformAdminTest extends TestCase
                 'owner_telegram_bot_enabled' => '1',
                 'owner_telegram_bot_username' => 'ladna_owner_bot',
                 'owner_telegram_bot_token' => '123456:owner-secret',
+                'founders_telegram_chat_id' => '-5208558952',
+                'founders_telegram_title' => 'Ladna Founders',
+                'founders_telegram_enabled' => '1',
                 'settings_tab' => 'ai-owner',
             ])
             ->assertRedirect(route('platform.settings.edit', ['tab' => 'ai-owner']));
@@ -257,6 +279,14 @@ class PlatformAdminTest extends TestCase
         $this->assertSame('owner-secret', substr((string) $installation->tokenValue(), -12));
         $this->assertSame('webhook_synced', $installation->status);
         $this->assertNotNull($installation->last_webhook_synced_at);
+
+        $foundersTarget = TelegramBroadcastTarget::query()->firstOrFail();
+        $this->assertSame($installation->id, $foundersTarget->telegram_bot_installation_id);
+        $this->assertSame('-5208558952', $foundersTarget->telegram_chat_id);
+        $this->assertSame('Ladna Founders', $foundersTarget->title);
+        $this->assertSame('group', $foundersTarget->chat_type);
+        $this->assertTrue($foundersTarget->is_enabled);
+        $this->assertNotNull($foundersTarget->verified_at);
 
         Http::assertSent(function (Request $request) use ($installation): bool {
             return str_ends_with($request->url(), '/setWebhook')

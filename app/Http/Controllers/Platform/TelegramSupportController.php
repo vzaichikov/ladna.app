@@ -84,6 +84,7 @@ class TelegramSupportController extends Controller
                 'authorization:id,user_id,trainer_id,status',
                 'authorization.user:id,name,email,phone',
                 'installation:id,scope_type,profile,bot_username',
+                'broadcastTarget:id,title,chat_type',
             ])
             ->when($search !== '', fn (Builder $query): Builder => $this->applyAlertSearch($query, $search))
             ->when($alertStatus !== '', fn (Builder $query): Builder => $query->where('status', $alertStatus))
