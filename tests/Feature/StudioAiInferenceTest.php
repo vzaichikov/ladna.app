@@ -273,7 +273,7 @@ class StudioAiInferenceTest extends TestCase
             'ollama.com/api/chat' => Http::response([
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Tomorrow details are available.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-06-30","requested_weekday":null,"weekday_occurrence":null,"uses_schedule_details":true},"reason":"studio booking details question"}',
+                    'content' => '{"disposition":"answer","answer":"Tomorrow details are available.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-06-30","uses_schedule_details":true},"reason":"studio booking details question"}',
                 ],
             ]),
         ]);
@@ -328,7 +328,7 @@ class StudioAiInferenceTest extends TestCase
                 'ollama.com/api/chat' => Http::response([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => '{"disposition":"answer","answer":"На четвер до Софія записані Анна та Дарина.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-02","requested_weekday":"thursday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"studio booking details question"}',
+                        'content' => '{"disposition":"answer","answer":"На четвер до Софія записані Анна та Дарина.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-02","uses_schedule_details":true},"reason":"studio booking details question"}',
                     ],
                 ]),
             ]);
@@ -410,25 +410,18 @@ class StudioAiInferenceTest extends TestCase
         }
     }
 
-    public function test_typo_heavy_weekday_question_repairs_a_mismatched_calendar_reference(): void
+    public function test_typo_heavy_weekday_question_uses_the_supplied_calendar_anchors(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-23 21:40:00', 'Europe/Kyiv'));
 
         try {
             Http::fake([
-                'ollama.com/api/chat' => Http::sequence()
-                    ->push([
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '{"disposition":"answer","answer":"У суботу, 26 липня, заплановано пʼять занять.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-26","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"owner asked about Saturday"}',
-                        ],
-                    ])
-                    ->push([
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '{"disposition":"answer","answer":"У суботу, 25 липня, заплановано одне заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"corrected Saturday schedule"}',
-                        ],
-                    ]),
+                'ollama.com/api/chat' => Http::response([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"answer","answer":"У суботу, 25 липня, заплановано одне заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","uses_schedule_details":true},"reason":"Saturday schedule from supplied calendar"}',
+                    ],
+                ]),
             ]);
 
             $account = $this->accountWithOllamaSettings();
@@ -440,54 +433,66 @@ class StudioAiInferenceTest extends TestCase
             $this->assertTrue($result->usedAi);
             $this->assertSame('У суботу, 25 липня, заплановано одне заняття.', $result->text);
             $this->assertSame('2026-07-25', $result->calendarReference?->date);
-            $this->assertSame('saturday', $result->calendarReference?->requestedWeekday);
-            $this->assertSame('first', $result->calendarReference?->weekdayOccurrence);
             $this->assertTrue($result->calendarReference?->usesScheduleDetails);
 
-            $requests = collect(Http::recorded())
-                ->map(fn (array $record): Request => $record[0])
-                ->filter(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat'))
-                ->values();
+            Http::assertSent(function (Request $request): bool {
+                $content = $request->data()['messages'][1]['content'] ?? '';
 
-            $this->assertCount(2, $requests);
-            $initialContent = $requests->first()->data()['messages'][1]['content'] ?? '';
-            $repairMessages = $requests->last()->data()['messages'] ?? [];
-
-            $this->assertStringContainsString('"current_datetime":"2026-07-23T21:40:00+03:00"', $initialContent);
-            $this->assertStringContainsString('"weekday":"thursday","iso_weekday":4', $initialContent);
-            $this->assertStringContainsString('"date":"2026-07-25","weekday":"saturday","iso_weekday":6', $initialContent);
-            $this->assertStringContainsString('"date":"2026-07-26","weekday":"sunday","iso_weekday":7', $initialContent);
-            $this->assertStringContainsString('"date":"2026-08-01","weekday":"saturday","iso_weekday":6', $initialContent);
-            $this->assertSame(23, substr_count($initialContent, '"weekday":'));
-            $this->assertSame(23, substr_count($initialContent, '"iso_weekday":'));
-            $this->assertTrue(collect($repairMessages)->contains(
-                fn (array $message): bool => ($message['role'] ?? null) === 'user'
-                    && str_contains($message['content'] ?? '', 'calendar reference did not match'),
-            ));
+                return str_contains($content, '"current_datetime":"2026-07-23T21:40:00+03:00"')
+                    && str_contains($content, '"weekday":"thursday","iso_weekday":4')
+                    && str_contains($content, '"date":"2026-07-25","weekday":"saturday","iso_weekday":6')
+                    && str_contains($content, '"date":"2026-07-26","weekday":"sunday","iso_weekday":7')
+                    && str_contains($content, '"date":"2026-08-01","weekday":"saturday","iso_weekday":6')
+                    && substr_count($content, '"weekday":') === 23
+                    && substr_count($content, '"iso_weekday":') === 23;
+            });
+            Http::assertSentCount(1);
         } finally {
             Carbon::setTestNow();
         }
     }
 
-    public function test_typo_heavy_weekday_booking_repairs_the_action_date_before_planning(): void
+    public function test_calendar_validation_is_independent_of_the_answer_language(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-23 21:40:00', 'Europe/Kyiv'));
 
         try {
             Http::fake([
-                'ollama.com/api/chat' => Http::sequence()
-                    ->push([
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Таня","date":"2026-07-26","use_actor_trainer":false},"calendar_reference":{"date":"2026-07-26","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":false},"reason":"owner asked to book on Saturday"}',
-                        ],
-                    ])
-                    ->push([
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Таня","date":"2026-07-25","use_actor_trainer":false},"calendar_reference":{"date":"2026-07-25","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":false},"reason":"corrected Saturday booking date"}',
-                        ],
-                    ]),
+                'ollama.com/api/chat' => Http::response([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"answer","answer":"У суботу, 25 липня, заплановано одне заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","uses_schedule_details":true},"reason":"owner asked about Saturday"}',
+                    ],
+                ]),
+            ]);
+
+            $result = app(StudioAiInference::class)->respond(
+                $this->accountWithOllamaSettings(),
+                'слухай я вже дні попутала, сьодні 23, а в суботу шо там по треням?',
+            );
+
+            $this->assertTrue($result->usedAi);
+            $this->assertSame('У суботу, 25 липня, заплановано одне заняття.', $result->text);
+            $this->assertSame('2026-07-25', $result->calendarReference?->date);
+            $this->assertTrue($result->calendarReference?->usesScheduleDetails);
+            Http::assertSentCount(1);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_typo_heavy_weekday_booking_uses_the_date_selected_from_calendar_anchors(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-23 21:40:00', 'Europe/Kyiv'));
+
+        try {
+            Http::fake([
+                'ollama.com/api/chat' => Http::response([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Таня","date":"2026-07-25","use_actor_trainer":false},"calendar_reference":{"date":"2026-07-25","uses_schedule_details":false},"reason":"Saturday booking date from supplied calendar"}',
+                    ],
+                ]),
             ]);
 
             $result = app(StudioAiInference::class)->respond(
@@ -498,10 +503,8 @@ class StudioAiInferenceTest extends TestCase
             $this->assertTrue($result->isAction());
             $this->assertSame('2026-07-25', $result->actionInput?->date);
             $this->assertSame('2026-07-25', $result->calendarReference?->date);
-            $this->assertSame('saturday', $result->calendarReference?->requestedWeekday);
-            $this->assertSame('first', $result->calendarReference?->weekdayOccurrence);
             $this->assertFalse($result->calendarReference?->usesScheduleDetails);
-            Http::assertSentCount(2);
+            Http::assertSentCount(1);
         } finally {
             Carbon::setTestNow();
         }
@@ -513,19 +516,12 @@ class StudioAiInferenceTest extends TestCase
 
         try {
             Http::fake([
-                'ollama.com/api/chat' => Http::sequence()
-                    ->push([
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Таня","date":"2026-07-25","use_actor_trainer":false},"calendar_reference":{"date":"2026-07-25","requested_weekday":"saturday","weekday_occurrence":"next","uses_schedule_details":false},"reason":"used first Saturday instead of next"}',
-                        ],
-                    ])
-                    ->push([
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Таня","date":"2026-08-01","use_actor_trainer":false},"calendar_reference":{"date":"2026-08-01","requested_weekday":"saturday","weekday_occurrence":"next","uses_schedule_details":false},"reason":"corrected next Saturday booking date"}',
-                        ],
-                    ]),
+                'ollama.com/api/chat' => Http::response([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Таня","date":"2026-08-01","use_actor_trainer":false},"calendar_reference":{"date":"2026-08-01","uses_schedule_details":false},"reason":"next Saturday booking date from supplied calendar"}',
+                    ],
+                ]),
             ]);
 
             $result = app(StudioAiInference::class)->respond(
@@ -535,8 +531,7 @@ class StudioAiInferenceTest extends TestCase
 
             $this->assertTrue($result->isAction());
             $this->assertSame('2026-08-01', $result->actionInput?->date);
-            $this->assertSame('next', $result->calendarReference?->weekdayOccurrence);
-            Http::assertSentCount(2);
+            Http::assertSentCount(1);
         } finally {
             Carbon::setTestNow();
         }
@@ -551,7 +546,7 @@ class StudioAiInferenceTest extends TestCase
                 'ollama.com/api/chat' => Http::response([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => '{"disposition":"answer","answer":"Наступна субота — 1 серпня.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-08-01","requested_weekday":"saturday","weekday_occurrence":"next","uses_schedule_details":false},"reason":"calendar-only next Saturday answer"}',
+                        'content' => '{"disposition":"answer","answer":"Наступна субота — 1 серпня.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-08-01","uses_schedule_details":false},"reason":"calendar-only next Saturday answer"}',
                     ],
                 ]),
             ]);
@@ -571,7 +566,7 @@ class StudioAiInferenceTest extends TestCase
         }
     }
 
-    public function test_repeated_calendar_mismatch_fails_closed_without_an_action(): void
+    public function test_repeated_date_outside_supplied_calendar_fails_closed_without_an_action(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-23 21:40:00', 'Europe/Kyiv'));
         Log::spy();
@@ -580,7 +575,7 @@ class StudioAiInferenceTest extends TestCase
             $invalidResponse = [
                 'message' => [
                     'role' => 'assistant',
-                    'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Таня","date":"2026-07-26","use_actor_trainer":false},"calendar_reference":{"date":"2026-07-26","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":false},"reason":"incorrect Saturday date"}',
+                    'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Таня","date":"2026-08-15","use_actor_trainer":false},"calendar_reference":{"date":"2026-08-15","uses_schedule_details":false},"reason":"date is outside supplied calendar"}',
                 ],
             ];
 

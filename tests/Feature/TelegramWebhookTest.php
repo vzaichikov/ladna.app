@@ -899,7 +899,7 @@ class TelegramWebhookTest extends TestCase
                 ->push([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Аліна Тестова","date":"2026-06-30","use_actor_trainer":true},"calendar_reference":{"date":"2026-06-30","requested_weekday":null,"weekday_occurrence":null,"uses_schedule_details":false},"reason":"direct booking request"}',
+                        'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"customer_query":"Аліна Тестова","date":"2026-06-30","use_actor_trainer":true},"calendar_reference":{"date":"2026-06-30","uses_schedule_details":false},"reason":"direct booking request"}',
                     ],
                 ])
                 ->push([
@@ -1127,7 +1127,7 @@ class TelegramWebhookTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_distracted_owner_weekday_conversation_repairs_the_wrong_day_and_keeps_context(): void
+    public function test_distracted_owner_weekday_conversation_uses_calendar_anchors_and_keeps_context(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-23 21:40:00', 'Europe/Kyiv'));
 
@@ -1137,25 +1137,19 @@ class TelegramWebhookTest extends TestCase
                     ->push([
                         'message' => [
                             'role' => 'assistant',
-                            'content' => '{"disposition":"answer","answer":"У Каті завтра є заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-24","requested_weekday":null,"weekday_occurrence":null,"uses_schedule_details":true},"reason":"tomorrow schedule"}',
+                            'content' => '{"disposition":"answer","answer":"У Каті завтра є заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-24","uses_schedule_details":true},"reason":"tomorrow schedule"}',
                         ],
                     ])
                     ->push([
                         'message' => [
                             'role' => 'assistant',
-                            'content' => '{"disposition":"answer","answer":"У суботу, 26 липня, є заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-26","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"incorrect Saturday schedule"}',
+                            'content' => '{"disposition":"answer","answer":"У суботу, 25 липня, є заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","uses_schedule_details":true},"reason":"Saturday schedule from supplied calendar"}',
                         ],
                     ])
                     ->push([
                         'message' => [
                             'role' => 'assistant',
-                            'content' => '{"disposition":"answer","answer":"У суботу, 25 липня, є заняття.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":true},"reason":"corrected Saturday schedule"}',
-                        ],
-                    ])
-                    ->push([
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => '{"disposition":"answer","answer":"Так, субота — це 25 липня.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","requested_weekday":"saturday","weekday_occurrence":"first","uses_schedule_details":false},"reason":"confirmed Saturday date"}',
+                            'content' => '{"disposition":"answer","answer":"Так, субота — це 25 липня.","follow_up_actions":[],"action":null,"calendar_reference":{"date":"2026-07-25","uses_schedule_details":false},"reason":"confirmed Saturday date"}',
                         ],
                     ]),
                 'api.telegram.org/*' => Http::response(['ok' => true]),
@@ -1225,8 +1219,6 @@ class TelegramWebhookTest extends TestCase
             $this->assertSame(
                 [
                     'date' => '2026-07-25',
-                    'requested_weekday' => 'saturday',
-                    'weekday_occurrence' => 'first',
                     'uses_schedule_details' => false,
                 ],
                 data_get($assistantMessages->last()?->metadata, 'calendar_reference'),
@@ -1242,7 +1234,7 @@ class TelegramWebhookTest extends TestCase
                 ->filter(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat'))
                 ->values();
 
-            $this->assertCount(4, $ollamaRequests);
+            $this->assertCount(3, $ollamaRequests);
             $secondRequestText = collect($ollamaRequests->get(1)?->data()['messages'] ?? [])->pluck('content')->implode("\n");
             $lastRequestText = collect($ollamaRequests->last()?->data()['messages'] ?? [])->pluck('content')->implode("\n");
 
