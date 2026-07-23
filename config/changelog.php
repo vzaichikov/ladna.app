@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.93.1',
+                'date' => '2026-07-23',
+                'title' => 'More reliable Ladna AI answers',
+                'items' => ['Ladna now keeps the active studio trainer roster in context and makes a safe second attempt when an AI response cannot be understood. If it still cannot answer, the message is clearer and no longer incorrectly blames the AI provider.', 'Telegram typing status is now quieter and no longer creates distracting server errors while Ladna prepares an answer.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.93.0',
                 'date' => '2026-07-23',
                 'title' => 'AI-assisted booking and class-pass investigations',
@@ -842,6 +849,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.93.1',
+                'date' => '2026-07-23',
+                'title' => 'Надійніші відповіді Ladna AI',
+                'items' => ['Ladna тепер враховує повний список активних тренерів студії та безпечно пробує відповісти ще раз, якщо першу відповідь AI не вдалося зрозуміти. Якщо відповісти все одно не виходить, повідомлення стало зрозумілішим і більше не звинувачує AI-провайдера.', 'Статус набору повідомлення в Telegram став тихішим і більше не створює зайвих серверних помилок, поки Ladna готує відповідь.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.93.0',
                 'date' => '2026-07-23',

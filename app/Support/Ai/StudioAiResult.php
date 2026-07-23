@@ -14,6 +14,7 @@ class StudioAiResult
         public readonly ?string $provider = null,
         public readonly ?string $model = null,
         public readonly ?string $fallbackReason = null,
+        public readonly ?string $fallbackDetail = null,
         public readonly array $followUpActions = [],
         public readonly array $helpSources = [],
         public readonly ?StudioAiActionInput $actionInput = null,
@@ -47,12 +48,13 @@ class StudioAiResult
         );
     }
 
-    public static function fallback(string $reason): self
+    public static function fallback(string $reason, ?string $detail = null): self
     {
         return new self(
             text: '',
             usedAi: false,
             fallbackReason: $reason,
+            fallbackDetail: $detail,
         );
     }
 

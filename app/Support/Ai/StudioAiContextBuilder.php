@@ -31,6 +31,8 @@ class StudioAiContextBuilder
 
     private const ConversationMessageCharacterLimit = 2000;
 
+    private const TrainerContextLimit = 100;
+
     public function __construct(private readonly StudioClassScheduleDetails $classScheduleDetails) {}
 
     /**
@@ -86,6 +88,7 @@ class StudioAiContextBuilder
                     'timezone' => $location->timezone ?: $timezone,
                 ])
                 ->all(),
+            'trainers' => $this->activeTrainerContext($account),
             'class_counts' => [
                 'today' => [
                     'date' => $today->toDateString(),
@@ -277,6 +280,35 @@ class StudioAiContextBuilder
     private function scheduledClassCount(Account $account, Carbon $day): int
     {
         return $this->scheduledClassCountBetween($account, $day->copy()->startOfDay(), $day->copy()->endOfDay());
+    }
+
+    /**
+     * @return array{
+     *     active_total: int,
+     *     returned: int,
+     *     truncated: bool,
+     *     items: array<int, array{name: string}>
+     * }
+     */
+    private function activeTrainerContext(Account $account): array
+    {
+        $activeTotal = $account->trainers()->active()->count();
+        $trainers = $account->trainers()
+            ->active()
+            ->orderBy('name')
+            ->limit(self::TrainerContextLimit)
+            ->get(['id', 'account_id', 'name'])
+            ->map(fn (Trainer $trainer): array => [
+                'name' => $trainer->name,
+            ])
+            ->all();
+
+        return [
+            'active_total' => $activeTotal,
+            'returned' => count($trainers),
+            'truncated' => $activeTotal > count($trainers),
+            'items' => $trainers,
+        ];
     }
 
     private function scheduledClassCountBetween(Account $account, Carbon $from, Carbon $to): int

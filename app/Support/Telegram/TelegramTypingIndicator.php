@@ -106,7 +106,6 @@ class TelegramTypingIndicator
             }
 
             $process = new Process([$php, base_path('artisan'), 'telegram:typing-pulse', $key], base_path());
-            $process->disableOutput();
             $process->setTimeout(null);
             $process->start();
 

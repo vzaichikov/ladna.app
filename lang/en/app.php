@@ -1434,7 +1434,7 @@ return [
     'assistant_booking_dialog_class_not_found' => 'There are no available group classes for :trainer on :date. You can send another trainer or date.',
     'assistant_booking_dialog_class_choose' => "I found customer :customer and trainer :trainer. There are several classes on :date. Choose a number:\n:options",
     'assistant_booking_dialog_class_choice_invalid' => "I could not tell which class to choose. Send a number from the list:\n:options",
-    'assistant_ai_unavailable' => 'The AI provider is unavailable right now.',
+    'assistant_ai_unavailable' => 'Ladna AI could not answer right now. Please try again.',
     'assistant_investigation_unable_to_verify' => 'I could not verify this against the customer booking and class-pass ledger. No conclusion was made.',
     'assistant_investigation_customer_not_found' => 'I could not find that customer in this studio. Please send a more precise name or phone fragment.',
     'assistant_investigation_customer_ambiguous' => 'I found several matching customers. Please specify which one you mean:',

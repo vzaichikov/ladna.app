@@ -1434,7 +1434,7 @@ return [
     'assistant_booking_dialog_class_not_found' => 'На :date у тренера :trainer немає доступних групових занять для запису. Можете вказати іншого тренера або дату.',
     'assistant_booking_dialog_class_choose' => "Знайшла клієнта :customer і тренера :trainer. На :date є кілька занять. Оберіть номер:\n:options",
     'assistant_booking_dialog_class_choice_invalid' => "Не зрозуміла, яке заняття обрати. Напишіть номер зі списку:\n:options",
-    'assistant_ai_unavailable' => 'AI provider зараз недоступний.',
+    'assistant_ai_unavailable' => 'Ladna AI зараз не змогла відповісти. Спробуйте ще раз.',
     'assistant_investigation_unable_to_verify' => 'Не змогла звірити це з реєстром записів і абонементів клієнта, тому не роблю висновків.',
     'assistant_investigation_customer_not_found' => 'Не знайшла такого клієнта в цій студії. Напишіть точніше імʼя або фрагмент телефону.',
     'assistant_investigation_customer_ambiguous' => 'Знайшла кількох схожих клієнтів. Уточніть, кого саме маєте на увазі:',

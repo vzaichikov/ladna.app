@@ -26,6 +26,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class StudioAiInferenceTest extends TestCase
@@ -59,6 +60,7 @@ class StudioAiInferenceTest extends TestCase
             return $request->url() === 'https://ollama.com/api/chat'
                 && $payload['model'] === 'gemma3:27b-cloud'
                 && ($payload['format'] ?? null) === 'json'
+                && data_get($payload, 'options.temperature') === 0.0
                 && str_contains($payload['messages'][0]['content'], 'Allowed disposition values')
                 && str_contains($payload['messages'][1]['content'], 'How many classes today?')
                 && $payload['stream'] === false
@@ -69,6 +71,46 @@ class StudioAiInferenceTest extends TestCase
                 && str_contains($payload['messages'][1]['content'], 'next_7_days');
         });
 
+        Http::assertSentCount(1);
+    }
+
+    public function test_inference_context_includes_only_the_current_studio_active_trainer_roster(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"У студії працюють Марта та Софія.","follow_up_actions":[],"action":null,"reason":"active trainer roster"}',
+                ],
+            ]),
+        ]);
+
+        $account = $this->accountWithOllamaSettings();
+        Trainer::factory()->for($account)->create([
+            'name' => 'Софія',
+            'email' => 'private-trainer@example.test',
+            'phone' => '+380671234567',
+        ]);
+        Trainer::factory()->for($account)->create(['name' => 'Марта']);
+        Trainer::factory()->for($account)->create(['name' => 'Неактивна', 'is_active' => false]);
+        $otherAccount = Account::factory()->create();
+        Trainer::factory()->for($otherAccount)->create(['name' => 'Інша студія']);
+
+        $result = app(StudioAiInference::class)->respond($account, 'Які взагалі в мене тренери є?');
+
+        $this->assertTrue($result->usedAi);
+        $this->assertSame('У студії працюють Марта та Софія.', $result->text);
+
+        Http::assertSent(function (Request $request): bool {
+            $content = $request->data()['messages'][1]['content'] ?? '';
+
+            return str_contains($content, '"trainers":{"active_total":2,"returned":2,"truncated":false')
+                && str_contains($content, '"items":[{"name":"Марта"},{"name":"Софія"}]')
+                && ! str_contains($content, 'Неактивна')
+                && ! str_contains($content, 'Інша студія')
+                && ! str_contains($content, 'private-trainer@example.test')
+                && ! str_contains($content, '+380671234567');
+        });
         Http::assertSentCount(1);
     }
 
@@ -390,15 +432,69 @@ class StudioAiInferenceTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    public function test_invalid_structured_response_fails_closed_without_rejection(): void
+    public function test_invalid_structured_response_is_repaired_once(): void
     {
+        Log::spy();
         Http::fake([
-            'ollama.com/api/chat' => Http::response([
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => 'Yes, this looks fine.',
-                ],
-            ]),
+            'ollama.com/api/chat' => Http::sequence()
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => 'Yes, this looks fine.',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"answer","answer":"There are no scheduled classes today.","follow_up_actions":[],"action":null,"reason":"studio schedule question"}',
+                    ],
+                ]),
+        ]);
+
+        $account = $this->accountWithOllamaSettings();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $result = app(StudioAiInference::class)->respond(
+            $account,
+            'How many classes today?',
+            actorUser: $owner,
+        );
+
+        $this->assertTrue($result->usedAi);
+        $this->assertSame('There are no scheduled classes today.', $result->text);
+        Http::assertSentCount(2);
+        Http::assertSent(function (Request $request): bool {
+            $payload = $request->data();
+
+            return collect($payload['messages'] ?? [])->contains(
+                fn (array $message): bool => ($message['role'] ?? null) === 'user'
+                    && str_contains($message['content'] ?? '', 'required final JSON envelope'),
+            )
+                && ($payload['format'] ?? null) === 'json'
+                && data_get($payload, 'options.temperature') === 0.0
+                && ! array_key_exists('tools', $payload);
+        });
+        Log::shouldNotHaveReceived('warning');
+    }
+
+    public function test_invalid_structured_response_still_fails_closed_after_one_repair(): void
+    {
+        Log::spy();
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => 'Yes, this looks fine.',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => 'Still not JSON.',
+                    ],
+                ]),
         ]);
 
         $account = $this->accountWithOllamaSettings();
@@ -410,7 +506,17 @@ class StudioAiInferenceTest extends TestCase
         $this->assertSame('', $result->text);
         $this->assertSame('invalid_ai_response', $result->fallbackReason);
 
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(function (string $message, array $context): bool {
+                return $message === 'Studio AI returned an invalid structured response.'
+                    && $context['validation_error'] === 'missing_json_object'
+                    && $context['initial_validation_error'] === 'missing_json_object'
+                    && $context['response_length'] === mb_strlen('Still not JSON.')
+                    && $context['response_sha256'] === hash('sha256', 'Still not JSON.')
+                    && ! array_key_exists('response_content', $context);
+            });
     }
 
     public function test_unsupported_disposition_fails_closed(): void
@@ -446,7 +552,19 @@ class StudioAiInferenceTest extends TestCase
                 ->push([
                     'message' => [
                         'role' => 'assistant',
+                        'content' => '{"disposition":"cancel_booking","answer":null,"follow_up_actions":[],"action":{},"reason":"still missing booking id"}',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
                         'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"date":"tomorrow","unexpected_slot":"value"},"reason":"invalid action slots"}',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"start_booking","answer":null,"follow_up_actions":[],"action":{"date":"tomorrow","unexpected_slot":"value"},"reason":"still invalid action slots"}',
                     ],
                 ]),
         ]);
@@ -679,6 +797,24 @@ class StudioAiInferenceTest extends TestCase
             'What happened?',
             conversation: $otherConversation,
             currentMessage: $otherMessage,
+        );
+
+        $this->assertSame('invalid_ai_context', $result->fallbackReason);
+        Http::assertNothingSent();
+    }
+
+    public function test_cross_account_actor_trainer_is_rejected_before_provider_call(): void
+    {
+        Http::preventStrayRequests();
+
+        $account = $this->accountWithOllamaSettings();
+        $otherAccount = Account::factory()->create();
+        $otherTrainer = Trainer::factory()->for($otherAccount)->create();
+
+        $result = app(StudioAiInference::class)->respond(
+            $account,
+            'What classes do I teach tomorrow?',
+            actorTrainer: $otherTrainer,
         );
 
         $this->assertSame('invalid_ai_context', $result->fallbackReason);
