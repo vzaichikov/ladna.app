@@ -437,8 +437,13 @@ class StudioAiInferenceTest extends TestCase
 
             Http::assertSent(function (Request $request): bool {
                 $content = $request->data()['messages'][1]['content'] ?? '';
+                $calendarPosition = mb_strpos($content, 'Authoritative calendar JSON');
+                $ownerRequestPosition = mb_strpos($content, 'Owner request:');
 
-                return str_contains($content, '"current_datetime":"2026-07-23T21:40:00+03:00"')
+                return is_int($calendarPosition)
+                    && is_int($ownerRequestPosition)
+                    && $calendarPosition < $ownerRequestPosition
+                    && str_contains($content, '"current_datetime":"2026-07-23T21:40:00+03:00"')
                     && str_contains($content, '"weekday":"thursday","iso_weekday":4')
                     && str_contains($content, '"date":"2026-07-25","weekday":"saturday","iso_weekday":6')
                     && str_contains($content, '"date":"2026-07-26","weekday":"sunday","iso_weekday":7')

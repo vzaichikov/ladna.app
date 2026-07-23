@@ -475,8 +475,8 @@ class StudioAiInference
             'For disposition=answer, answer must be a non-empty string and action must be null.',
             'For disposition=out_of_scope, answer and action must be null.',
             'For an action disposition, answer must be null and action must be an object using only these keys: customer_id, scheduled_class_id, customer_query, trainer_query, date, booking_id, option_number, option_label, use_actor_trainer.',
-            'calendar_reference must always be present. Use null unless an answer depends on a calendar date or a booking action includes a date. Otherwise use exactly {"date":"YYYY-MM-DD","uses_schedule_details":boolean}. Select the correct date from request_clock.calendar_anchors and use the same date in the answer evidence or action.date.',
-            'Resolve weekdays in any language or abbreviation from request_clock.calendar_anchors. An unqualified weekday means its first listed occurrence; wording such as "next" means the following listed occurrence. The answer may name weekdays in the owner’s language.',
+            'calendar_reference must always be present. Use null unless an answer depends on a calendar date or a booking action includes a date. Otherwise use exactly {"date":"YYYY-MM-DD","uses_schedule_details":boolean}. Copy its date from the authoritative calendar’s calendar_anchors and use the same date in the answer evidence or action.date.',
+            'authoritative_calendar overrides internal calendar knowledge. Never calculate or recall weekday/date relationships yourself. Resolve weekdays, relative dates, and date confirmations only by looking them up there. An unqualified weekday means its first listed occurrence; wording such as "next" means the following listed occurrence. The answer may name weekdays in the owner’s language.',
             'Set uses_schedule_details=true only when an answer claims classes or bookings from class_booking_details. Set it false for calendar-only answers and booking actions.',
             'Use start_booking only when the owner asks to begin creating a customer booking. Extract known customer/trainer names and resolve relative dates to YYYY-MM-DD using request_clock and the supplied calendar anchors.',
             'Use continue_booking only when active_booking_dialog is present and the owner supplies the missing value or selects an option. Put a one-based numeric selection in option_number, or an exact visible option label in option_label.',
@@ -514,14 +514,6 @@ class StudioAiInference
         ]));
 
         $userContent = array_filter([
-            "Request clock JSON:\n".json_encode([
-                'current_datetime' => $requestClock->toIso8601String(),
-                'weekday' => Str::lower($requestClock->englishDayOfWeek),
-                'iso_weekday' => $requestClock->isoWeekday(),
-                'timezone' => $requestClock->timezoneName,
-                'channel' => $channel,
-                'calendar_anchors' => $calendarAnchors,
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             "Studio context JSON:\n".json_encode(
                 $studioContext,
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
@@ -541,6 +533,14 @@ class StudioAiInference
                 $activeBookingDialog,
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
             ),
+            "Authoritative calendar JSON (copy dates; do not calculate):\n".json_encode([
+                'current_datetime' => $requestClock->toIso8601String(),
+                'weekday' => Str::lower($requestClock->englishDayOfWeek),
+                'iso_weekday' => $requestClock->isoWeekday(),
+                'timezone' => $requestClock->timezoneName,
+                'channel' => $channel,
+                'calendar_anchors' => $calendarAnchors,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             "Owner request:\n".$text,
         ]);
 
