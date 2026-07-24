@@ -283,7 +283,9 @@ class StudioConfigurationTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.public_schedule_view'))
             ->assertSee(__('app.public_schedule_view_classic'))
-            ->assertSee(__('app.public_schedule_view_compact_booking'));
+            ->assertSee(__('app.public_schedule_view_compact_booking'))
+            ->assertSee(__('app.public_schedule_view_calendar_booking'))
+            ->assertSee('value="'.PublicScheduleView::CalendarBooking->value().'"', false);
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.update', $account), [
@@ -295,13 +297,13 @@ class StudioConfigurationTest extends TestCase
                 'default_currency' => 'UAH',
                 'brand_color' => '#3B223F',
                 'timezone' => 'Europe/Kyiv',
-                'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+                'public_schedule_view' => PublicScheduleView::CalendarBooking->value(),
             ])
             ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'schedule_view']));
 
         $account->refresh();
 
-        $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
+        $this->assertSame(PublicScheduleView::CalendarBooking, $account->publicScheduleView());
         $this->assertFalse($account->allowsGuestPublicBooking());
 
         $this->actingAs($owner)
@@ -344,7 +346,7 @@ class StudioConfigurationTest extends TestCase
         $this->assertTrue($account->trainerPrivateTimeframesEnabled());
         $this->assertNull($account->trainer_private_timeframe_weeks);
         $this->assertSame(6, $account->trainerPrivateTimeframeWeeks());
-        $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
+        $this->assertSame(PublicScheduleView::CalendarBooking, $account->publicScheduleView());
     }
 
     public function test_brand_settings_persist_opening_hours(): void

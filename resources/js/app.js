@@ -6,6 +6,7 @@ import 'summernote/dist/summernote-lite.css';
 let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
 let publicScheduleAbortController = null;
+let publicCalendarSwipeStart = null;
 let trainerPrivateLessonsAbortController = null;
 
 const confirmationButtonVariants = {
@@ -3327,6 +3328,57 @@ async function loadPublicScheduleUrl(url, pushState = true) {
     }
 }
 
+function initPublicCalendarSwipe() {
+    document.addEventListener('pointerdown', (event) => {
+        const calendar = event.target.closest('[data-public-calendar]');
+
+        if (!calendar || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) {
+            return;
+        }
+
+        publicCalendarSwipeStart = {
+            calendar,
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+        };
+    });
+
+    document.addEventListener('pointerup', (event) => {
+        if (!publicCalendarSwipeStart || publicCalendarSwipeStart.pointerId !== event.pointerId) {
+            return;
+        }
+
+        const swipe = publicCalendarSwipeStart;
+        publicCalendarSwipeStart = null;
+        const horizontalDistance = event.clientX - swipe.x;
+        const verticalDistance = event.clientY - swipe.y;
+
+        if (Math.abs(horizontalDistance) < 50 || Math.abs(horizontalDistance) <= Math.abs(verticalDistance) * 1.25) {
+            return;
+        }
+
+        const url = horizontalDistance < 0
+            ? swipe.calendar.dataset.nextUrl
+            : swipe.calendar.dataset.previousUrl;
+
+        if (!url) {
+            return;
+        }
+
+        event.preventDefault();
+        swipe.calendar.dataset.swiping = 'true';
+        window.setTimeout(() => {
+            delete swipe.calendar.dataset.swiping;
+        }, 500);
+        loadPublicScheduleUrl(url);
+    });
+
+    document.addEventListener('pointercancel', () => {
+        publicCalendarSwipeStart = null;
+    });
+}
+
 async function submitAsyncForm(form) {
     const fallbackCard = form.closest('[data-scheduled-class-card]');
     const formData = new FormData(form);
@@ -4842,6 +4894,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPwaInstallPrompt();
     initPeopleCounterScreenshotViewer();
     initPublicPricingCalculators();
+    initPublicCalendarSwipe();
     syncPublicLegalReturnUrls();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {
@@ -4901,6 +4954,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const link = event.target.closest('a[data-public-schedule-link]');
 
         if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target) {
+            return;
+        }
+
+        if (link.closest('[data-public-calendar]')?.dataset.swiping === 'true') {
+            event.preventDefault();
+
             return;
         }
 

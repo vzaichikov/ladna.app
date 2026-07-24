@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.94.0',
+                'date' => '2026-07-24',
+                'title' => 'Four-week public schedule calendar',
+                'items' => ['Studios can now choose Calendar booking in public schedule settings. It keeps the mobile booking flow while opening a filtered 28-day calendar by default, split into month sections, with four-week arrow and swipe navigation.', 'Clients can switch between Month and Week below the private-lesson and room-rental actions. Week always returns to today while preserving class type, trainer, and room filters.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.93.1',
                 'date' => '2026-07-23',
                 'title' => 'More reliable Ladna AI answers',
@@ -849,6 +856,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.94.0',
+                'date' => '2026-07-24',
+                'title' => 'Публічний календар на чотири тижні',
+                'items' => ['У налаштуваннях публічного розкладу студія може вибрати «Запис через календар». Мобільний запис відкриває відфільтрований календар на 28 днів, поділений за місяцями, з переходом на чотири тижні стрілками або свайпом.', 'Перемикач «Тиждень / Місяць» розташований під діями індивідуального запису й оренди залу. Тиждень завжди повертається до сьогодні, зберігаючи фільтри формату, тренера та залу.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.93.1',
                 'date' => '2026-07-23',

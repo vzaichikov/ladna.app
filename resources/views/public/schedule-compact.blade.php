@@ -22,6 +22,9 @@
         $selectedGroupPanel = $compact['groupPanel'];
         $selectedManualPanel = $compact['manualPanel'];
         $usesTrainerPrivateTimeframes = (bool) ($compact['usesTrainerPrivateTimeframes'] ?? false);
+        $isCalendarSchedule = (bool) ($isCalendarSchedule ?? false);
+        $calendar = $calendarSchedule ?? [];
+        $isCalendarDisplay = $isCalendarSchedule && ($calendar['display'] ?? 'list') === 'calendar' && ! $selectedManualKind;
         $routeName = $isEmbed ? 'public.schedule.embed' : 'public.schedule';
         $routeParams = ['accountSlug' => $account->slug, 'locationSlug' => $location->slug];
         $compactUrl = static fn (array $query): string => route($routeName, [...$routeParams, ...array_filter($query, fn ($value) => $value !== null && $value !== '')]);
@@ -53,6 +56,33 @@
                                     {{ $manualAction['label'] }}
                                 </a>
                             @endforeach
+                        </nav>
+                    @endif
+
+                    @if ($isCalendarSchedule && ! $selectedManualKind)
+                        <nav class="mt-3 flex justify-end" aria-label="{{ __('app.public_schedule_display') }}">
+                            <span class="grid w-full grid-cols-2 rounded-lg border border-stone-200 bg-white p-1 shadow-xs sm:w-auto">
+                                <a
+                                    href="{{ $calendar['listUrl'] }}"
+                                    data-public-schedule-link
+                                    class="flex min-h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition {{ $isCalendarDisplay ? 'text-slate-600 hover:bg-slate-50 hover:text-slate-950' : 'bg-brand-600 text-white shadow-sm shadow-brand-600/20' }}"
+                                    aria-label="{{ __('app.public_schedule_week_view') }}"
+                                    @if (! $isCalendarDisplay) aria-current="page" @endif
+                                >
+                                    <x-ui.icon name="calendar-days" class="h-4 w-4" />
+                                    <span>{{ __('app.public_schedule_week_view') }}</span>
+                                </a>
+                                <a
+                                    href="{{ $calendar['calendarUrl'] }}"
+                                    data-public-schedule-link
+                                    class="flex min-h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition {{ $isCalendarDisplay ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/20' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950' }}"
+                                    aria-label="{{ __('app.public_schedule_month_view') }}"
+                                    @if ($isCalendarDisplay) aria-current="page" @endif
+                                >
+                                    <x-ui.icon name="calendar" class="h-4 w-4" />
+                                    <span>{{ __('app.public_schedule_month_view') }}</span>
+                                </a>
+                            </span>
                         </nav>
                     @endif
 
@@ -309,7 +339,109 @@
                         </section>
                     @endif
 
-                    @if ($compact['monthOptions'] !== [])
+                    @if ($isCalendarDisplay)
+                        <section
+                            class="mt-3"
+                            data-public-calendar
+                            data-calendar-start="{{ $calendar['rangeStart']->toDateString() }}"
+                            data-calendar-end="{{ $calendar['rangeEnd']->toDateString() }}"
+                            data-previous-url="{{ $calendar['previousUrl'] }}"
+                            data-next-url="{{ $calendar['nextUrl'] }}"
+                        >
+                            <div class="flex items-center justify-between gap-3 border-y border-stone-200 py-3">
+                                <p class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700">
+                                    {{ $selectedClassType?->name ?? __('app.any_class_type') }}
+                                    <span class="text-slate-300">·</span>
+                                    {{ $selectedTrainer?->name ?? __('app.any_trainer') }}
+                                    <span class="text-slate-300">·</span>
+                                    {{ $selectedRoom?->name ?? __('app.any_room') }}
+                                </p>
+                                <a href="{{ $calendar['filterPanelUrl'] }}" data-public-schedule-link class="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-50">
+                                    <x-ui.icon name="sliders-horizontal" class="h-4 w-4" />
+                                    {{ __('app.change') }}
+                                </a>
+                            </div>
+
+                            <div class="mt-4 flex items-center justify-between gap-3">
+                                @if ($calendar['previousUrl'])
+                                    <a href="{{ $calendar['previousUrl'] }}" data-public-schedule-link class="flex h-11 w-11 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-xs transition hover:border-brand-100 hover:bg-brand-50" aria-label="{{ __('app.previous_four_weeks') }}">
+                                        <x-ui.icon name="chevron-left" class="h-5 w-5" />
+                                    </a>
+                                @else
+                                    <button type="button" disabled class="flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-lg border border-stone-100 bg-stone-50 text-slate-300" aria-label="{{ __('app.previous_four_weeks') }}">
+                                        <x-ui.icon name="chevron-left" class="h-5 w-5" />
+                                    </button>
+                                @endif
+
+                                <h2 class="text-center text-lg font-semibold text-slate-950" aria-live="polite" aria-atomic="true">{{ $calendar['rangeLabel'] }}</h2>
+
+                                @if ($calendar['nextUrl'])
+                                    <a href="{{ $calendar['nextUrl'] }}" data-public-schedule-link class="flex h-11 w-11 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-xs transition hover:border-brand-100 hover:bg-brand-50" aria-label="{{ __('app.next_four_weeks') }}">
+                                        <x-ui.icon name="chevron-right" class="h-5 w-5" />
+                                    </a>
+                                @else
+                                    <button type="button" disabled class="flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-lg border border-stone-100 bg-stone-50 text-slate-300" aria-label="{{ __('app.next_four_weeks') }}">
+                                        <x-ui.icon name="chevron-right" class="h-5 w-5" />
+                                    </button>
+                                @endif
+                            </div>
+
+                            <div class="touch-pan-y">
+                                @foreach ($calendar['monthSections'] as $monthSection)
+                                    <section class="mt-5 first:mt-4">
+                                        <h3 class="text-base font-semibold text-slate-950">{{ $monthSection['label'] }}</h3>
+
+                                        <div class="mt-2 grid grid-cols-7 text-center" aria-hidden="true">
+                                            @foreach ($monthSection['weekdayLabels'] as $weekdayLabel)
+                                                <span class="py-2 text-xs font-semibold text-slate-500">{{ $weekdayLabel }}</span>
+                                            @endforeach
+                                        </div>
+
+                                        <div class="grid grid-cols-7 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs">
+                                            @foreach ($monthSection['days'] as $day)
+                                                @if ($day['isPlaceholder'])
+                                                    <span class="min-h-14 border-b border-r border-stone-100 bg-stone-50/60 sm:min-h-16" aria-hidden="true"></span>
+                                                @else
+                                                    @php
+                                                        $dateClasses = $day['isSelected']
+                                                            ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/20'
+                                                            : ($day['isToday'] ? 'ring-2 ring-brand-500 ring-offset-1' : '');
+                                                        $dateAriaLabel = $day['isToday']
+                                                            ? __('app.today').', '.$day['date']
+                                                            : $day['date'];
+
+                                                        if ($day['classCount'] > 0) {
+                                                            $dateAriaLabel .= ', '.trans_choice('app.filtered_classes_count', $day['classCount'], ['count' => $day['classCount']]);
+                                                        }
+                                                    @endphp
+                                                    <a
+                                                        href="{{ $day['url'] }}"
+                                                        data-public-schedule-link
+                                                        data-calendar-date="{{ $day['date'] }}"
+                                                        class="relative flex min-h-14 flex-col items-center justify-start border-b border-r border-stone-100 px-1 py-2 text-center text-slate-950 transition hover:bg-brand-50 focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 sm:min-h-16"
+                                                        @if ($day['isSelected']) aria-current="date" @endif
+                                                        aria-label="{{ $dateAriaLabel }}"
+                                                    >
+                                                        <span class="flex h-7 min-w-7 items-center justify-center rounded-full text-sm font-semibold {{ $dateClasses }}">{{ $day['day'] }}</span>
+                                                        @if ($day['classCount'] > 0)
+                                                            <span class="mt-1 flex min-h-3 items-center justify-center gap-0.5" aria-hidden="true">
+                                                                @foreach (range(1, min(3, $day['classCount'])) as $marker)
+                                                                    <span class="h-1.5 w-1.5 rounded-full bg-brand-500"></span>
+                                                                @endforeach
+                                                                @if ($day['classCount'] > 3)
+                                                                    <span class="ml-0.5 text-[9px] font-semibold text-brand-700">+{{ $day['classCount'] - 3 }}</span>
+                                                                @endif
+                                                            </span>
+                                                        @endif
+                                                    </a>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    </section>
+                                @endforeach
+                            </div>
+                        </section>
+                    @elseif ($compact['monthOptions'] !== [])
                         <nav class="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" aria-label="{{ __('app.schedule_months') }}">
                             @foreach ($compact['monthOptions'] as $monthOption)
                                 <a
@@ -324,6 +456,7 @@
                         </nav>
                     @endif
 
+                    @unless ($isCalendarDisplay)
                     <nav class="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" aria-label="{{ __('app.schedule_dates') }}">
                         @foreach ($compact['dateOptions'] as $dateOption)
                             <a
@@ -371,6 +504,7 @@
                             <x-ui.icon name="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" />
                         </a>
                     </section>
+                    @endunless
 
                     @if ($selectedGroupPanel)
                         @php
@@ -382,7 +516,9 @@
                                     <header class="sticky top-0 z-10 rounded-t-xl border-b border-stone-200 bg-white px-4 py-3">
                                         <div class="flex items-center justify-between gap-3">
                                             <h2 id="group-filter-title" class="truncate text-lg font-semibold text-slate-950">
-                                                @if ($selectedGroupPanel === 'class_type')
+                                                @if ($selectedGroupPanel === 'filters')
+                                                    {{ __('app.filters') }}
+                                                @elseif ($selectedGroupPanel === 'class_type')
                                                     {{ __('app.choose_class_type') }}
                                                 @elseif ($selectedGroupPanel === 'trainer')
                                                     {{ __('app.choose_trainer') }}
@@ -397,7 +533,38 @@
                                     </header>
 
                                     <div class="space-y-2 p-4">
-                                        @if ($selectedGroupPanel === 'class_type')
+                                        @if ($selectedGroupPanel === 'filters')
+                                            <a href="{{ $compactUrl([...$selectedQuery, 'group_panel' => 'class_type']) }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                    <x-ui.icon name="class-pass-plans" class="h-4 w-4" />
+                                                </span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_class_type') }}</span>
+                                                    <span class="block text-sm font-semibold leading-snug text-slate-950">{{ $selectedClassType?->name ?? __('app.any_option') }}</span>
+                                                </span>
+                                                <x-ui.icon name="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" />
+                                            </a>
+                                            <a href="{{ $compactUrl([...$selectedQuery, 'group_panel' => 'trainer']) }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                    <x-ui.icon name="trainers" class="h-4 w-4" />
+                                                </span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_trainer') }}</span>
+                                                    <span class="block text-sm font-semibold leading-snug text-slate-950">{{ $selectedTrainer?->name ?? __('app.any_option') }}</span>
+                                                </span>
+                                                <x-ui.icon name="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" />
+                                            </a>
+                                            <a href="{{ $compactUrl([...$selectedQuery, 'group_panel' => 'room']) }}" data-public-schedule-link class="flex min-h-14 items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 shadow-xs transition hover:border-brand-100 hover:bg-brand-50">
+                                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+                                                    <x-ui.icon name="rooms" class="h-4 w-4" />
+                                                </span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block text-[11px] font-semibold uppercase text-slate-500">{{ __('app.choose_room') }}</span>
+                                                    <span class="block text-sm font-semibold leading-snug text-slate-950">{{ $selectedRoom?->name ?? __('app.any_option') }}</span>
+                                                </span>
+                                                <x-ui.icon name="chevron-right" class="h-4 w-4 shrink-0 text-slate-400" />
+                                            </a>
+                                        @elseif ($selectedGroupPanel === 'class_type')
                                             <a href="{{ $compactUrl($withoutQuery($selectedQuery, 'group_class_type')) }}" data-public-schedule-link class="flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition {{ $compact['selectedClassTypeId'] ? 'bg-slate-50 text-slate-800 hover:bg-brand-50' : 'bg-brand-600 text-white' }}">
                                                 <span>{{ __('app.any_option') }}</span>
                                                 @unless ($compact['selectedClassTypeId'])
@@ -463,6 +630,13 @@
                                 </div>
                             </div>
                         </section>
+                    @endif
+
+                    @if ($isCalendarDisplay)
+                        <div class="mt-5 flex items-center justify-between gap-3 border-t border-stone-200 pt-4">
+                            <h2 class="text-lg font-semibold text-slate-950">{{ $calendar['selectedDate']->translatedFormat('l, j F') }}</h2>
+                            <span class="text-sm font-medium text-slate-500">{{ trans_choice('app.filtered_classes_count', $compact['classes']->count(), ['count' => $compact['classes']->count()]) }}</span>
+                        </div>
                     @endif
 
                     <section class="mt-3 space-y-3">

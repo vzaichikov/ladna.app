@@ -6,12 +6,14 @@ enum PublicScheduleView
 {
     case Classic;
     case CompactBooking;
+    case CalendarBooking;
 
     public function value(): string
     {
         return match ($this) {
             self::Classic => 'classic',
             self::CompactBooking => 'compact_booking',
+            self::CalendarBooking => 'calendar_booking',
         };
     }
 
@@ -30,7 +32,13 @@ enum PublicScheduleView
         return match ($this) {
             self::Classic => 'public.schedule',
             self::CompactBooking => 'public.schedule-compact',
+            self::CalendarBooking => 'public.schedule-calendar',
         };
+    }
+
+    public function usesCompactBookingFlow(): bool
+    {
+        return in_array($this, [self::CompactBooking, self::CalendarBooking], true);
     }
 
     public static function default(): self

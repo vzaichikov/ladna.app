@@ -81,8 +81,22 @@ class PublicScheduleController extends Controller
             'isEmbed' => $isEmbed,
         ];
 
-        if ($scheduleView === PublicScheduleView::CompactBooking) {
-            $data['compactSchedule'] = $this->compactScheduleData($request, $account, $location, $isEmbed);
+        if ($scheduleView->usesCompactBookingFlow()) {
+            $calendarDisplay = $scheduleView === PublicScheduleView::CalendarBooking
+                ? ($request->query('display') === 'list' ? 'list' : 'calendar')
+                : null;
+            $data['compactSchedule'] = $this->compactScheduleData($request, $account, $location, $isEmbed, $calendarDisplay);
+
+            if ($scheduleView === PublicScheduleView::CalendarBooking) {
+                $calendarDisplay = $data['compactSchedule']['selectedManualKind'] ? null : $calendarDisplay;
+                $data['calendarSchedule'] = $this->calendarScheduleData(
+                    $account,
+                    $location,
+                    $isEmbed,
+                    $data['compactSchedule'],
+                    $calendarDisplay,
+                );
+            }
         }
 
         return $data;
@@ -215,7 +229,7 @@ class PublicScheduleController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function compactScheduleData(Request $request, Account $account, Location $location, bool $isEmbed): array
+    private function compactScheduleData(Request $request, Account $account, Location $location, bool $isEmbed, ?string $display = null): array
     {
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $scheduleKinds = $this->enabledScheduleKinds($account);
@@ -272,7 +286,17 @@ class PublicScheduleController extends Controller
         $selectedGroupRoomId = $this->selectedModelId($request->query('group_room', $selectedManualKind ? null : $request->query('room')), $rooms);
         $selectedGroupTrainerId = $this->selectedModelId($request->query('group_trainer', $selectedManualKind ? null : $request->query('trainer')), $trainers);
         $scheduledMonths = $this->compactScheduledMonths($location, $selectedGroupClassTypeId, $selectedGroupTrainerId, $selectedGroupRoomId, $timezone);
+        $calendarStart = $display ? $this->selectedCalendarStart($request, $timezone) : null;
         $selectedDate = $this->selectedCompactDate($request, $timezone, $scheduledMonths);
+
+        if ($display === 'calendar' && $calendarStart) {
+            $calendarEnd = $calendarStart->copy()->addDays(27);
+
+            if (! $request->has('date') || $selectedDate->lessThan($calendarStart) || $selectedDate->greaterThan($calendarEnd)) {
+                $selectedDate = $calendarStart->copy();
+            }
+        }
+
         $selectedMonth = $selectedDate->copy()->startOfMonth();
         $selectedManualClassTypeId = $this->selectedModelId($request->query('class_type'), $manualClassTypes);
         $selectedManualRoomId = $this->selectedModelId($request->query('room'), $rooms);
@@ -282,9 +306,15 @@ class PublicScheduleController extends Controller
             false,
         );
         $selectedManualStartsAt = $this->selectedManualStartsAt($request, $selectedDate, $timezone);
-        $groupQuery = $this->compactGroupQuery($selectedManualKind, $selectedDate, $selectedGroupClassTypeId, $selectedGroupTrainerId, $selectedGroupRoomId);
-        $manualQuery = $this->compactManualQuery($selectedManualKind, $selectedDate, $selectedManualActivityDirectionId, $selectedManualClassTypeId, $selectedManualTrainerId, $selectedManualRoomId, $selectedManualStartsAt);
-        $groupPanel = $this->selectedCompactPanel($request->query('group_panel'), ['class_type', 'trainer', 'room']);
+        $groupQuery = $this->compactGroupQuery($selectedManualKind, $selectedDate, $selectedGroupClassTypeId, $selectedGroupTrainerId, $selectedGroupRoomId, $display, $calendarStart);
+        $manualQuery = $this->compactManualQuery($selectedManualKind, $selectedDate, $selectedManualActivityDirectionId, $selectedManualClassTypeId, $selectedManualTrainerId, $selectedManualRoomId, $selectedManualStartsAt, $display, $calendarStart);
+        $groupPanels = ['class_type', 'trainer', 'room'];
+
+        if ($display === 'calendar') {
+            $groupPanels[] = 'filters';
+        }
+
+        $groupPanel = $this->selectedCompactPanel($request->query('group_panel'), $groupPanels);
         $manualPanel = $selectedManualKind
             ? $this->selectedCompactPanel($request->query('manual_panel'), $selectedManualKind === ScheduleKind::PrivateLesson ? ['activity_direction', 'service', 'date', 'trainer', 'room'] : ['service', 'date', 'room'])
             : null;
@@ -339,6 +369,7 @@ class PublicScheduleController extends Controller
             'selectedClassTypeId' => $selectedGroupClassTypeId,
             'selectedTrainerId' => $selectedGroupTrainerId,
             'selectedRoomId' => $selectedGroupRoomId,
+            'calendarStart' => $calendarStart,
             'selectedManualClassTypeId' => $selectedManualClassTypeId,
             'selectedManualActivityDirectionId' => $selectedManualActivityDirectionId,
             'selectedManualTrainerId' => $selectedManualTrainerId,
@@ -456,6 +487,28 @@ class PublicScheduleController extends Controller
         return $today;
     }
 
+    private function selectedCalendarStart(Request $request, string $timezone): Carbon
+    {
+        $today = now($timezone)->startOfDay();
+
+        foreach (['calendar_start', 'date'] as $queryKey) {
+            $date = (string) $request->query($queryKey, '');
+
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) {
+                continue;
+            }
+
+            try {
+                $selectedDate = Carbon::createFromFormat('Y-m-d H:i:s', $date.' 00:00:00', $timezone)->startOfDay();
+
+                return $selectedDate->lessThan($today) ? $today : $selectedDate;
+            } catch (\Throwable) {
+            }
+        }
+
+        return $today;
+    }
+
     /**
      * @param  SupportCollection<int, ClassType|Room|Trainer>  $models
      */
@@ -534,6 +587,8 @@ class PublicScheduleController extends Controller
         ?int $selectedClassTypeId,
         ?int $selectedTrainerId,
         ?int $selectedRoomId,
+        ?string $display = null,
+        ?Carbon $calendarStart = null,
     ): array {
         return array_filter([
             'kind' => $selectedManualKind?->value,
@@ -541,6 +596,8 @@ class PublicScheduleController extends Controller
             'group_class_type' => $selectedClassTypeId,
             'group_trainer' => $selectedTrainerId,
             'group_room' => $selectedRoomId,
+            'display' => $display,
+            'calendar_start' => $calendarStart?->toDateString(),
         ], fn (mixed $value): bool => $value !== null && $value !== '');
     }
 
@@ -555,6 +612,8 @@ class PublicScheduleController extends Controller
         ?int $selectedTrainerId,
         ?int $selectedRoomId,
         ?string $selectedStartsAt,
+        ?string $display = null,
+        ?Carbon $calendarStart = null,
     ): array {
         return array_filter([
             'kind' => $selectedManualKind?->value,
@@ -564,6 +623,8 @@ class PublicScheduleController extends Controller
             'trainer' => $selectedManualKind === ScheduleKind::PrivateLesson ? $selectedTrainerId : null,
             'room' => $selectedRoomId,
             'starts_at' => $selectedStartsAt,
+            'display' => $display,
+            'calendar_start' => $calendarStart?->toDateString(),
         ], fn (mixed $value): bool => $value !== null && $value !== '');
     }
 
@@ -726,6 +787,147 @@ class PublicScheduleController extends Controller
                 'month' => $option['month'],
                 'first_date' => $option['first_date'],
             ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $compact
+     * @return array<string, mixed>
+     */
+    private function calendarScheduleData(
+        Account $account,
+        Location $location,
+        bool $isEmbed,
+        array $compact,
+        ?string $display,
+    ): array {
+        $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
+        $today = now($timezone)->startOfDay();
+        $selectedDate = $compact['selectedDate']->copy();
+        $rangeStart = ($compact['calendarStart'] ?? $today)->copy()->startOfDay();
+        $rangeEnd = $rangeStart->copy()->addDays(27);
+        $baseQuery = $compact['selectedQuery'];
+        unset($baseQuery['date'], $baseQuery['month'], $baseQuery['group_panel'], $baseQuery['display'], $baseQuery['calendar_start']);
+
+        $listUrl = $this->scheduleUrl($account, $location, $isEmbed, [
+            ...$baseQuery,
+            'date' => $today->toDateString(),
+            'month' => $today->format('Y-m'),
+            'display' => 'list',
+            'calendar_start' => $rangeStart->toDateString(),
+        ]);
+        $calendarUrl = $this->scheduleUrl($account, $location, $isEmbed, [
+            ...$baseQuery,
+            'date' => $selectedDate->toDateString(),
+            'display' => 'calendar',
+            'calendar_start' => $rangeStart->toDateString(),
+        ]);
+
+        if ($display !== 'calendar') {
+            return [
+                'display' => 'list',
+                'listUrl' => $listUrl,
+                'calendarUrl' => $calendarUrl,
+            ];
+        }
+
+        $classesByDate = $location->scheduledClasses()
+            ->publicUpcoming()
+            ->when($compact['selectedClassTypeId'], fn ($query) => $query->where('class_type_id', $compact['selectedClassTypeId']))
+            ->when($compact['selectedTrainerId'], fn ($query) => $query->where('trainer_id', $compact['selectedTrainerId']))
+            ->when($compact['selectedRoomId'], fn ($query) => $query->where('room_id', $compact['selectedRoomId']))
+            ->whereBetween('starts_at', [
+                $rangeStart->copy()->startOfDay()->timezone(config('app.timezone')),
+                $rangeEnd->copy()->endOfDay()->timezone(config('app.timezone')),
+            ])
+            ->reorder()
+            ->get(['id', 'starts_at'])
+            ->groupBy(fn (ScheduledClass $scheduledClass): string => $scheduledClass->starts_at->copy()->timezone($timezone)->toDateString())
+            ->map(fn (SupportCollection $classes): int => $classes->count());
+        $dayQuery = [
+            ...$baseQuery,
+            'display' => 'calendar',
+            'calendar_start' => $rangeStart->toDateString(),
+        ];
+        $weekdayLabels = collect(range(0, 6))
+            ->map(fn (int $offset): string => $rangeStart->copy()->startOfWeek(Carbon::MONDAY)->addDays($offset)->translatedFormat('D'))
+            ->all();
+        $monthSections = collect();
+        $monthCursor = $rangeStart->copy()->startOfMonth();
+
+        while ($monthCursor->lessThanOrEqualTo($rangeEnd)) {
+            $monthStart = $monthCursor->copy()->startOfMonth();
+            $sectionStart = $rangeStart->copy()->max($monthStart);
+            $sectionEnd = $rangeEnd->copy()->min($monthStart->copy()->endOfMonth());
+            $gridStart = $sectionStart->copy()->startOfWeek(Carbon::MONDAY);
+            $gridEnd = $sectionEnd->copy()->endOfWeek(Carbon::SUNDAY);
+            $days = collect(range(0, (int) $gridStart->diffInDays($gridEnd)))
+                ->map(function (int $offset) use ($account, $location, $isEmbed, $gridStart, $monthStart, $sectionStart, $sectionEnd, $today, $selectedDate, $classesByDate, $dayQuery): array {
+                    $date = $gridStart->copy()->addDays($offset);
+                    $isInSection = $date->isSameMonth($monthStart)
+                        && $date->betweenIncluded($sectionStart, $sectionEnd);
+
+                    if (! $isInSection) {
+                        return ['isPlaceholder' => true];
+                    }
+
+                    return [
+                        'isPlaceholder' => false,
+                        'date' => $date->toDateString(),
+                        'day' => $date->format('j'),
+                        'isToday' => $date->isSameDay($today),
+                        'isSelected' => $date->isSameDay($selectedDate),
+                        'classCount' => (int) ($classesByDate->get($date->toDateString()) ?? 0),
+                        'url' => $this->scheduleUrl($account, $location, $isEmbed, [
+                            ...$dayQuery,
+                            'date' => $date->toDateString(),
+                        ]),
+                    ];
+                })
+                ->all();
+
+            $monthSections->push([
+                'label' => $monthStart->translatedFormat('F Y'),
+                'weekdayLabels' => $weekdayLabels,
+                'days' => $days,
+            ]);
+            $monthCursor->addMonth();
+        }
+
+        $previousStart = $rangeStart->greaterThan($today)
+            ? $rangeStart->copy()->subDays(28)->max($today)
+            : null;
+        $nextStart = $rangeStart->copy()->addDays(28);
+        $rangeQuery = [
+            ...$baseQuery,
+            'display' => 'calendar',
+        ];
+        $rangeUrl = fn (?Carbon $start): ?string => $start
+            ? $this->scheduleUrl($account, $location, $isEmbed, [
+                ...$rangeQuery,
+                'date' => $start->toDateString(),
+                'calendar_start' => $start->toDateString(),
+            ])
+            : null;
+        $rangeLabel = $rangeStart->isSameMonth($rangeEnd)
+            ? $rangeStart->format('j').'–'.$rangeEnd->translatedFormat('j F Y')
+            : $rangeStart->translatedFormat('j M').' — '.$rangeEnd->translatedFormat('j M Y');
+
+        return [
+            'display' => 'calendar',
+            'listUrl' => $listUrl,
+            'calendarUrl' => $calendarUrl,
+            'selectedDate' => $selectedDate,
+            'rangeStart' => $rangeStart,
+            'rangeEnd' => $rangeEnd,
+            'rangeLabel' => $rangeLabel,
+            'monthSections' => $monthSections->all(),
+            'previousUrl' => $rangeUrl($previousStart),
+            'nextUrl' => $rangeUrl($nextStart),
+            'filterPanelUrl' => $this->scheduleUrl($account, $location, $isEmbed, [
+                ...$compact['selectedQuery'],
+                'group_panel' => 'filters',
+            ]),
+        ];
     }
 
     /**

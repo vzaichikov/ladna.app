@@ -250,6 +250,278 @@ class PublicScheduleTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_public_schedule_calendar_view_preserves_filters_and_renders_filtered_four_week_navigation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-24 08:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-calendar-public-schedule-studio',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::CalendarBooking->value(),
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $otherLocation = Location::factory()->for($account)->create(['slug' => 'other', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Lavender Hall']);
+        $otherRoom = Room::factory()->for($account)->for($otherLocation)->create(['name' => 'Other Hall']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Barre',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $otherClassType = ClassType::factory()->for($account)->create([
+            'name' => 'Stretching',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Natalia']);
+        $otherTrainer = Trainer::factory()->for($account)->create(['name' => 'Olena']);
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'Barre Start',
+                'starts_at' => Carbon::parse('2026-07-24 10:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-24 10:55:00', 'UTC'),
+                'capacity' => 10,
+            ]);
+        $eveningClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'Barre Balance',
+                'starts_at' => Carbon::parse('2026-07-24 18:30:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-24 19:25:00', 'UTC'),
+                'capacity' => 10,
+            ]);
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($otherClassType)
+            ->for($otherTrainer)
+            ->create([
+                'title' => 'Filtered Out Class',
+                'starts_at' => Carbon::parse('2026-07-24 12:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-24 13:00:00', 'UTC'),
+            ]);
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($otherLocation)
+            ->for($otherRoom)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'Other Location Class',
+                'starts_at' => Carbon::parse('2026-07-24 11:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-24 12:00:00', 'UTC'),
+            ]);
+        ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->for($trainer)
+            ->create([
+                'title' => 'August Barre',
+                'starts_at' => Carbon::parse('2026-08-24 10:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-08-24 11:00:00', 'UTC'),
+            ]);
+
+        $baseQuery = http_build_query([
+            'date' => '2026-07-24',
+            'group_class_type' => $classType->id,
+            'group_trainer' => $trainer->id,
+            'group_room' => $room->id,
+        ]);
+
+        $this->get('/test-calendar-public-schedule-studio/main/schedule?'.$baseQuery)
+            ->assertOk()
+            ->assertSee('data-public-calendar', false)
+            ->assertSee('data-calendar-start="2026-07-24"', false)
+            ->assertSee('data-calendar-end="2026-08-20"', false)
+            ->assertSee('display=list', false)
+            ->assertSee(__('app.public_schedule_week_view'))
+            ->assertSee(__('app.public_schedule_month_view'))
+            ->assertSee('data-lucide="calendar-days"', false)
+            ->assertSeeInOrder([
+                __('app.public_booking_private_lesson_cta'),
+                __('app.public_booking_room_rental_cta'),
+                __('app.public_schedule_week_view'),
+                __('app.public_schedule_month_view'),
+            ])
+            ->assertDontSee(__('app.schedule_dates'));
+
+        $this->get('/test-calendar-public-schedule-studio/main/schedule?'.$baseQuery.'&display=list')
+            ->assertOk()
+            ->assertSee('display=calendar', false)
+            ->assertDontSee('data-public-calendar', false)
+            ->assertSee(__('app.schedule_dates'));
+
+        $calendarResponse = $this->get('/test-calendar-public-schedule-studio/main/schedule?'.$baseQuery.'&display=calendar');
+
+        $calendarResponse
+            ->assertOk()
+            ->assertSee('data-public-calendar', false)
+            ->assertSee('data-next-url=', false)
+            ->assertSee('calendar_start=2026-08-21', false)
+            ->assertSee('group_class_type='.$classType->id, false)
+            ->assertSee('group_trainer='.$trainer->id, false)
+            ->assertSee('group_room='.$room->id, false)
+            ->assertSee('group_panel=filters', false)
+            ->assertSee('July 2026')
+            ->assertSee('August 2026')
+            ->assertSee('24 Jul — 20 Aug 2026')
+            ->assertSee('aria-label="Previous 4 weeks"', false)
+            ->assertSee('aria-label="Next 4 weeks"', false)
+            ->assertDontSee('data-calendar-date="2026-07-23"', false)
+            ->assertSee('data-calendar-date="2026-07-24"', false)
+            ->assertSee('data-calendar-date="2026-08-20"', false)
+            ->assertDontSee('data-calendar-date="2026-08-21"', false)
+            ->assertSee('Barre Start')
+            ->assertSee('Barre Balance')
+            ->assertDontSee('August Barre')
+            ->assertSee(trans_choice('app.filtered_classes_count', 2, ['count' => 2]))
+            ->assertSee('schedule/book?schedule_kind=group_class&amp;scheduled_class_id='.$eveningClass->id, false)
+            ->assertDontSee(__('app.schedule_dates'))
+            ->assertDontSee('Filtered Out Class')
+            ->assertDontSee('Other Location Class');
+
+        $this->get('/test-calendar-public-schedule-studio/main/schedule?'.$baseQuery.'&display=calendar&group_panel=filters')
+            ->assertOk()
+            ->assertSee('id="group-filter-title"', false)
+            ->assertSee(__('app.filters'))
+            ->assertSee(__('app.choose_class_type'))
+            ->assertSee(__('app.choose_trainer'))
+            ->assertSee(__('app.choose_room'));
+
+        $this->get('/test-calendar-public-schedule-studio/main/schedule?'.$baseQuery.'&display=calendar', ['X-Requested-With' => 'XMLHttpRequest'])
+            ->assertOk()
+            ->assertSee('data-public-schedule-fragment', false)
+            ->assertSee('data-public-calendar', false)
+            ->assertDontSee('<main', false)
+            ->assertDontSee('<html', false);
+
+        $this->get('/test-calendar-public-schedule-studio/main/schedule?'.http_build_query([
+            'calendar_start' => '2026-08-21',
+            'date' => '2026-08-24',
+            'display' => 'calendar',
+            'group_class_type' => $classType->id,
+            'group_trainer' => $trainer->id,
+            'group_room' => $room->id,
+        ]))
+            ->assertOk()
+            ->assertSee('August 2026')
+            ->assertSee('September 2026')
+            ->assertSee('August Barre')
+            ->assertSee('calendar_start=2026-07-24', false)
+            ->assertSee('calendar_start=2026-09-18', false)
+            ->assertSee('date=2026-07-24&amp;month=2026-07&amp;display=list&amp;calendar_start=2026-08-21', false)
+            ->assertSee('aria-label="Previous 4 weeks"', false)
+            ->assertSee('aria-label="Next 4 weeks"', false)
+            ->assertSee('data-calendar-date="2026-08-21"', false)
+            ->assertSee('data-calendar-date="2026-09-17"', false)
+            ->assertDontSee('data-calendar-date="2026-09-18"', false);
+
+        $this->get('/test-calendar-public-schedule-studio/main/schedule?'.http_build_query([
+            'calendar_start' => '2026-08-21',
+            'date' => '2026-07-24',
+            'month' => '2026-07',
+            'display' => 'list',
+            'group_class_type' => $classType->id,
+            'group_trainer' => $trainer->id,
+            'group_room' => $room->id,
+        ]))
+            ->assertOk()
+            ->assertDontSee('data-public-calendar', false)
+            ->assertSee(__('app.today'))
+            ->assertSee('Barre Start')
+            ->assertDontSee('Filtered Out Class')
+            ->assertDontSee('August Barre')
+            ->assertSee('display=calendar', false)
+            ->assertSee('calendar_start=2026-08-21', false);
+
+        $this->get('/test-calendar-public-schedule-studio/main/schedule?'.http_build_query([
+            'calendar_start' => '2026-08-21',
+            'date' => '2026-08-24',
+            'display' => 'calendar',
+            'group_class_type' => $otherClassType->id,
+            'group_trainer' => $trainer->id,
+            'group_room' => $room->id,
+        ]))
+            ->assertOk()
+            ->assertSee('August 2026')
+            ->assertSee(__('app.no_public_booking_slots'))
+            ->assertDontSee('August Barre');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_public_schedule_calendar_variant_keeps_compact_manual_booking_flow(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-24 08:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-calendar-manual-booking-studio',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::CalendarBooking->value(),
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Private Room']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Natalia']);
+
+        $this->get('/test-calendar-manual-booking-studio/main/schedule?display=calendar&date=2026-09-25')
+            ->assertOk()
+            ->assertSee('September 2026')
+            ->assertSee('October 2026')
+            ->assertSee('Friday, 25 September');
+
+        $this->get('/test-calendar-manual-booking-studio/main/schedule?'.http_build_query([
+            'display' => 'calendar',
+            'kind' => ScheduleKind::PrivateLesson->value,
+            'date' => '2026-07-25',
+            'class_type' => $classType->id,
+            'trainer' => $trainer->id,
+            'room' => $room->id,
+        ]))
+            ->assertOk()
+            ->assertDontSee('data-public-calendar', false)
+            ->assertSee(__('app.choose_date_and_time'))
+            ->assertSee('Private 60')
+            ->assertSee('Natalia')
+            ->assertSee('Private Room')
+            ->assertSee('display=calendar', false)
+            ->assertSee('calendar_start=2026-07-25', false)
+            ->assertSee('calendar_start=2026-07-25&amp;manual_panel=service', false)
+            ->assertSee('schedule/book?schedule_kind=private_lesson', false);
+
+        $this->get('/test-calendar-manual-booking-studio/main/schedule?'.http_build_query([
+            'display' => 'list',
+            'kind' => ScheduleKind::PrivateLesson->value,
+            'date' => '2026-07-25',
+            'class_type' => $classType->id,
+            'trainer' => $trainer->id,
+            'room' => $room->id,
+        ]))
+            ->assertOk()
+            ->assertSee('display=list', false)
+            ->assertSee('calendar_start=2026-07-25', false)
+            ->assertSee('calendar_start=2026-07-25&amp;manual_panel=service', false)
+            ->assertDontSee('data-public-calendar', false);
+
+        Carbon::setTestNow();
+    }
+
     public function test_public_schedule_compact_manual_service_selector_links_to_confirmation(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));

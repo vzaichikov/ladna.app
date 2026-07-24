@@ -15,7 +15,7 @@
     <legend class="crm-label">{{ __('app.public_schedule_view') }}</legend>
     <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.public_schedule_view_help') }}</p>
 
-    <div class="mt-5 grid gap-4 md:grid-cols-2">
+    <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         @foreach ($publicScheduleViewOptions as $option)
             <label class="group block cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-xs transition hover:border-violet-crm-200 has-checked:border-violet-crm-600 has-checked:ring-2 has-checked:ring-violet-crm-100 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500 has-[:focus-visible]:ring-offset-2">
                 <input
@@ -37,7 +37,22 @@
 
                 <span class="mt-4 block overflow-hidden rounded-lg border border-stone-200 bg-slate-50 p-3">
                     <span class="block rounded-md border border-stone-200 bg-white p-3">
-                        @if ($option['value'] === 'compact_booking')
+                        @if ($option['value'] === 'calendar_booking')
+                            <span class="mb-2 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-slate-700">{{ now()->translatedFormat('F Y') }}</span>
+                                <span class="flex gap-1">
+                                    <span class="h-5 w-5 rounded-md border border-stone-200 bg-stone-50"></span>
+                                    <span class="h-5 w-5 rounded-md bg-violet-crm-600"></span>
+                                </span>
+                            </span>
+                            <span class="grid grid-cols-7 gap-1">
+                                @foreach (range(1, 35) as $day)
+                                    <span class="flex aspect-square items-center justify-center rounded text-[9px] font-semibold {{ $day === 18 ? 'bg-violet-crm-600 text-white' : 'bg-stone-50 text-slate-500' }}">
+                                        {{ (($day - 1) % 31) + 1 }}
+                                    </span>
+                                @endforeach
+                            </span>
+                        @elseif ($option['value'] === 'compact_booking')
                             <span class="mb-3 flex gap-1.5 overflow-hidden">
                                 @foreach (range(0, 4) as $index)
                                     <span class="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg {{ $index === 1 ? 'bg-violet-crm-600 text-white' : 'bg-stone-100 text-slate-500' }}">
