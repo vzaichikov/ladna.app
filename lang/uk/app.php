@@ -867,7 +867,7 @@ return [
     'studio_dashboard_copy' => 'Живі заняття, попит, завантаження, абонементи та заявки для щоденного контролю студії.',
     'studio_problem_moments' => 'Проблемні моменти',
     'studio_problem_moments_copy' => 'Операційні питання, які потребують уваги власника.',
-    'problem_unpaid_class_passes' => 'Неоплачені активні абонементи',
+    'problem_unpaid_class_passes' => 'Неоплачені абонементи',
     'problem_partial_class_passes' => 'Частково оплачені абонементи',
     'problem_unreserved_bookings' => 'Записи без резерву в абонементі',
     'problem_unpaid_class_booking_payments' => 'Не внесена оплата за записи',

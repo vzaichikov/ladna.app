@@ -62,16 +62,14 @@ class StudioAiContextBuilder
                     ->where('status', CustomerClassPassStatus::Active->value)
                     ->where('is_active', true)
                     ->count(),
-                'unpaid_active_class_passes' => CustomerClassPass::query()
+                'unpaid_class_passes' => CustomerClassPass::query()
                     ->whereBelongsTo($account)
-                    ->where('status', CustomerClassPassStatus::Active->value)
-                    ->where('is_active', true)
+                    ->outstandingBalance()
                     ->unpaid()
                     ->count(),
-                'partial_active_class_passes' => CustomerClassPass::query()
+                'partial_class_passes' => CustomerClassPass::query()
                     ->whereBelongsTo($account)
-                    ->where('status', CustomerClassPassStatus::Active->value)
-                    ->where('is_active', true)
+                    ->outstandingBalance()
                     ->partiallyPaid()
                     ->count(),
                 'open_website_leads' => WebsiteLead::query()

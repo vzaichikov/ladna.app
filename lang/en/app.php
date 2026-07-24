@@ -867,7 +867,7 @@ return [
     'studio_dashboard_copy' => 'Live classes, demand, load, passes, and leads for everyday studio control.',
     'studio_problem_moments' => 'Problem moments',
     'studio_problem_moments_copy' => 'Operational items that need owner attention.',
-    'problem_unpaid_class_passes' => 'Unpaid active passes',
+    'problem_unpaid_class_passes' => 'Unpaid passes',
     'problem_partial_class_passes' => 'Partially paid passes',
     'problem_unreserved_bookings' => 'Bookings without pass reservation',
     'problem_unpaid_class_booking_payments' => 'Booking payments not recorded',

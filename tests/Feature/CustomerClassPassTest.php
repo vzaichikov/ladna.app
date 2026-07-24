@@ -425,38 +425,110 @@ class CustomerClassPassTest extends TestCase
         $paidPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location, isPaid: true);
         $partialPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location, paidAmountCents: (int) floor($plan->price_cents / 2));
         $unpaidPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $plan, issuedLocation: $location);
+        $usedUnpaidPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($plan, 'classPassPlan')
+            ->create([
+                'code' => 'USED-UNPAID',
+                'price_cents' => $plan->price_cents,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::UsedUp->value,
+                'is_active' => false,
+                'closed_at' => now()->subDay(),
+            ]);
+        $expiredPartialPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($plan, 'classPassPlan')
+            ->create([
+                'code' => 'EXPIRED-PARTIAL',
+                'price_cents' => $plan->price_cents,
+                'paid_amount_cents' => (int) floor($plan->price_cents / 2),
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Expired->value,
+                'is_active' => false,
+                'closed_at' => now()->subDay(),
+            ]);
+        $cancelledUnpaidPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($plan, 'classPassPlan')
+            ->create([
+                'code' => 'CANCELLED-UNPAID',
+                'price_cents' => $plan->price_cents,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Cancelled->value,
+                'is_active' => false,
+                'closed_at' => now()->subDay(),
+            ]);
+        $otherAccount = Account::factory()->create();
+        $otherCustomer = Customer::factory()->for($otherAccount)->create();
+        $otherPlan = ClassPassPlan::factory()->for($otherAccount)->create();
+        $otherAccountUnpaidPass = CustomerClassPass::factory()
+            ->for($otherAccount)
+            ->for($otherCustomer, 'customer')
+            ->for($otherPlan, 'classPassPlan')
+            ->create([
+                'code' => 'OTHER-UNPAID',
+                'price_cents' => $otherPlan->price_cents,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+            ]);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customer-class-passes.index', $account))
             ->assertOk()
-            ->assertSee(__('app.unpaid_class_passes_notice', ['count' => 1]))
+            ->assertSee(__('app.unpaid_class_passes_notice', ['count' => 2]))
             ->assertSee(__('app.show_unpaid_class_passes'))
-            ->assertSee(__('app.partial_class_passes_notice', ['count' => 1]))
+            ->assertSee(__('app.partial_class_passes_notice', ['count' => 2]))
             ->assertSee(__('app.show_partial_class_passes'))
+            ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
+                'account' => $account,
+                'state' => 'all',
+                'payment_status' => 'unpaid',
+            ]))
             ->assertSee($paidPass->code)
             ->assertSee($partialPass->code)
-            ->assertSee($unpaidPass->code);
+            ->assertSee($unpaidPass->code)
+            ->assertDontSee($usedUnpaidPass->code)
+            ->assertDontSee($expiredPartialPass->code)
+            ->assertDontSee($cancelledUnpaidPass->code)
+            ->assertDontSee($otherAccountUnpaidPass->code);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customer-class-passes.index', [
                 'account' => $account,
+                'state' => 'all',
                 'payment_status' => 'unpaid',
             ]))
             ->assertOk()
             ->assertSee($unpaidPass->code)
+            ->assertSee($usedUnpaidPass->code)
             ->assertSee(__('app.class_pass_unpaid'))
-            ->assertDontSee($paidPass->code);
+            ->assertDontSee($paidPass->code)
+            ->assertDontSee($partialPass->code)
+            ->assertDontSee($expiredPartialPass->code)
+            ->assertDontSee($cancelledUnpaidPass->code)
+            ->assertDontSee($otherAccountUnpaidPass->code);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customer-class-passes.index', [
                 'account' => $account,
+                'state' => 'all',
                 'payment_status' => 'partial',
             ]))
             ->assertOk()
             ->assertSee($partialPass->code)
+            ->assertSee($expiredPartialPass->code)
             ->assertSee(__('app.class_pass_partial'))
             ->assertDontSee($paidPass->code)
-            ->assertDontSee($unpaidPass->code);
+            ->assertDontSee($unpaidPass->code)
+            ->assertDontSee($usedUnpaidPass->code)
+            ->assertDontSee($cancelledUnpaidPass->code)
+            ->assertDontSee($otherAccountUnpaidPass->code);
     }
 
     public function test_manual_class_pass_issue_form_requires_confirmation(): void

@@ -127,8 +127,10 @@ class HelpPagesTest extends TestCase
         $this->get(route('help.show', 'passes-prices', false))
             ->assertStatus(200)
             ->assertSee('Проблемні моменти на головному екрані', false)
-            ->assertSee('неоплачені активні абонементи', false)
+            ->assertSee('неоплачені та частково оплачені абонементи', false)
             ->assertSee('частково оплачені абонементи', false)
+            ->assertSee('Використання, заморозка або завершення строку дії абонемента не погашає залишок оплати', false)
+            ->assertSee('Скасовані абонементи боргами не рахуються', false)
             ->assertSee('записи без резерву в абонементі', false)
             ->assertSee('заморожені абонементи', false)
             ->assertSee('assets/help/screenshots/studio-problems.png', false);

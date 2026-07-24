@@ -329,6 +329,9 @@ class LadnaStudioMcpTest extends TestCase
             ->for($customer, 'customer')
             ->create([
                 'code' => 'PASS-READ',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
                 'reserved_sessions_count' => 1,
             ]);
         CustomerClassPassReservation::factory()
@@ -365,6 +368,13 @@ class LadnaStudioMcpTest extends TestCase
             ->assertJsonPath('result.structuredContent.status', 'found')
             ->assertJsonPath('result.structuredContent.customer.name', 'Ledger Customer')
             ->assertJsonPath('result.structuredContent.bookings.0.reservation.pass_code', 'PASS-READ')
+            ->assertJsonPath('result.structuredContent.summary.outstanding_unpaid_passes_count', 1)
+            ->assertJsonPath('result.structuredContent.summary.outstanding_partial_passes_count', 0)
+            ->assertJsonPath('result.structuredContent.passes.0.payment_status', 'unpaid')
+            ->assertJsonPath('result.structuredContent.passes.0.price_cents', 100000)
+            ->assertJsonPath('result.structuredContent.passes.0.paid_amount_cents', 0)
+            ->assertJsonPath('result.structuredContent.passes.0.remaining_payment_cents', 100000)
+            ->assertJsonPath('result.structuredContent.passes.0.has_outstanding_balance', true)
             ->assertJsonPath('result.structuredContent.summary.has_detected_anomalies', false);
 
         $this->withToken($investigationToken->tokenValue())

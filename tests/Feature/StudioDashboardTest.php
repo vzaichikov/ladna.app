@@ -24,6 +24,7 @@ use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\User;
 use App\Models\WebsiteLead;
+use App\Support\StudioDashboardData;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -138,12 +139,74 @@ class StudioDashboardTest extends TestCase
             ->for(Customer::factory()->for($account))
             ->for(ClassPassPlan::factory()->for($account), 'classPassPlan')
             ->create([
+                'code' => 'USED-UNPAID-001',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::UsedUp->value,
+                'is_active' => false,
+                'closed_at' => Carbon::parse('2026-06-23 10:00:00'),
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for(Customer::factory()->for($account))
+            ->for(ClassPassPlan::factory()->for($account), 'classPassPlan')
+            ->create([
+                'code' => 'EXP-PART-001',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 40000,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Expired->value,
+                'is_active' => false,
+                'closed_at' => Carbon::parse('2026-06-23 10:00:00'),
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for(Customer::factory()->for($account))
+            ->for(ClassPassPlan::factory()->for($account), 'classPassPlan')
+            ->create([
+                'code' => 'CANC-DEBT-001',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Cancelled->value,
+                'is_active' => false,
+                'closed_at' => Carbon::parse('2026-06-23 10:00:00'),
+            ]);
+        CustomerClassPass::factory()
+            ->for(Account::factory())
+            ->create([
+                'code' => 'OTHER-DEBT-001',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for(Customer::factory()->for($account))
+            ->for(ClassPassPlan::factory()->for($account), 'classPassPlan')
+            ->create([
                 'code' => 'FROZEN-001',
                 'is_paid' => true,
                 'status' => CustomerClassPassStatus::Freezed->value,
                 'is_active' => true,
                 'frozen_at' => Carbon::parse('2026-06-24 09:00:00'),
             ]);
+        $problems = collect(app(StudioDashboardData::class)->forAccount($account, $owner)['ownerDashboard']['problems'])
+            ->keyBy('key');
+
+        $this->assertSame(2, $problems['unpaid_class_passes']['count']);
+        $this->assertSame(2, $problems['partial_class_passes']['count']);
+        $this->assertSame(route('dashboard.accounts.customer-class-passes.index', [
+            'account' => $account,
+            'state' => 'all',
+            'payment_status' => 'unpaid',
+        ]), $problems['unpaid_class_passes']['url']);
+        $this->assertSame(route('dashboard.accounts.customer-class-passes.index', [
+            'account' => $account,
+            'state' => 'all',
+            'payment_status' => 'partial',
+        ]), $problems['partial_class_passes']['url']);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.show', $account))
@@ -156,12 +219,12 @@ class StudioDashboardTest extends TestCase
             ->assertSee(__('app.problem_classes_without_attendance'))
             ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
                 'account' => $account,
-                'state' => 'active',
+                'state' => 'all',
                 'payment_status' => 'unpaid',
             ]))
             ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
                 'account' => $account,
-                'state' => 'active',
+                'state' => 'all',
                 'payment_status' => 'partial',
             ]))
             ->assertSee(route('dashboard.accounts.trainers.index', $account), false)

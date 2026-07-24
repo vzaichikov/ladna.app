@@ -46,12 +46,12 @@ class CustomerClassPassController extends Controller
         $scheduleKind = in_array($requestedScheduleKind, $enabledScheduleKinds, true) ? $requestedScheduleKind : '';
         $requestedPaymentStatus = (string) $request->query('payment_status', '');
         $paymentStatus = in_array($requestedPaymentStatus, ['paid', 'partial', 'unpaid'], true) ? $requestedPaymentStatus : '';
-        $unpaidActiveClassPassesCount = $account->customerClassPasses()
-            ->active()
+        $unpaidClassPassesCount = $account->customerClassPasses()
+            ->outstandingBalance()
             ->unpaid()
             ->count();
-        $partialActiveClassPassesCount = $account->customerClassPasses()
-            ->active()
+        $partialClassPassesCount = $account->customerClassPasses()
+            ->outstandingBalance()
             ->partiallyPaid()
             ->count();
 
@@ -71,8 +71,8 @@ class CustomerClassPassController extends Controller
             ->when($state === 'inactive', fn ($query) => $query->where('is_active', false))
             ->when($state === 'freezed', fn ($query) => $query->freezed())
             ->when($paymentStatus === 'paid', fn ($query) => $query->paid())
-            ->when($paymentStatus === 'partial', fn ($query) => $query->partiallyPaid())
-            ->when($paymentStatus === 'unpaid', fn ($query) => $query->unpaid())
+            ->when($paymentStatus === 'partial', fn ($query) => $query->outstandingBalance()->partiallyPaid())
+            ->when($paymentStatus === 'unpaid', fn ($query) => $query->outstandingBalance()->unpaid())
             ->when($scheduleKind !== '', function ($query) use ($scheduleKind): void {
                 $query->whereHas('classPassPlan', fn ($query) => $query->where('schedule_kind', $scheduleKind));
             })
@@ -89,8 +89,8 @@ class CustomerClassPassController extends Controller
             'scheduleKind' => $scheduleKind,
             'paymentStatus' => $paymentStatus,
             'enabledScheduleKinds' => $enabledScheduleKinds,
-            'unpaidActiveClassPassesCount' => $unpaidActiveClassPassesCount,
-            'partialActiveClassPassesCount' => $partialActiveClassPassesCount,
+            'unpaidClassPassesCount' => $unpaidClassPassesCount,
+            'partialClassPassesCount' => $partialClassPassesCount,
         ]);
     }
 

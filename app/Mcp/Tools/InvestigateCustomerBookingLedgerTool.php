@@ -19,7 +19,7 @@ use Laravel\Mcp\Server\Tool;
 use Throwable;
 
 #[Name('investigate-customer-booking-ledger')]
-#[Description('Reconstructs a customer booking and class-pass ledger in the bearer token account scope, including deterministic inconsistency and issuance-backfill findings. This tool is strictly read-only.')]
+#[Description('Reconstructs a customer booking, class-pass, and outstanding-payment ledger in the bearer token account scope, including deterministic inconsistency and issuance-backfill findings. This tool is strictly read-only.')]
 class InvestigateCustomerBookingLedgerTool extends Tool
 {
     public function handle(

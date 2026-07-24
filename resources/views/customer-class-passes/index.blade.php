@@ -12,17 +12,19 @@
             return \App\Support\MoneyFormatter::format($priceCents, $currency);
         };
         $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
-        $unpaidActiveClassPassesCount ??= 0;
-        $partialActiveClassPassesCount ??= 0;
+        $unpaidClassPassesCount ??= 0;
+        $partialClassPassesCount ??= 0;
         $paymentStatus ??= '';
-        $unpaidFilterUrl = route('dashboard.accounts.customer-class-passes.index', array_merge(['account' => $account], request()->except('page'), [
-            'state' => 'active',
+        $unpaidFilterUrl = route('dashboard.accounts.customer-class-passes.index', [
+            'account' => $account,
+            'state' => 'all',
             'payment_status' => 'unpaid',
-        ]));
-        $partialFilterUrl = route('dashboard.accounts.customer-class-passes.index', array_merge(['account' => $account], request()->except('page'), [
-            'state' => 'active',
+        ]);
+        $partialFilterUrl = route('dashboard.accounts.customer-class-passes.index', [
+            'account' => $account,
+            'state' => 'all',
             'payment_status' => 'partial',
-        ]));
+        ]);
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -32,17 +34,17 @@
         </div>
     </div>
 
-    @if ($unpaidActiveClassPassesCount > 0 && ! ($state === 'active' && $paymentStatus === 'unpaid'))
+    @if ($unpaidClassPassesCount > 0 && ! ($state === 'all' && $paymentStatus === 'unpaid'))
         <div class="mt-6 flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
-            <div class="font-medium">{{ __('app.unpaid_class_passes_notice', ['count' => $unpaidActiveClassPassesCount]) }}</div>
+            <div class="font-medium">{{ __('app.unpaid_class_passes_notice', ['count' => $unpaidClassPassesCount]) }}</div>
             <x-ui.button :href="$unpaidFilterUrl" variant="secondary" size="sm">
                 {{ __('app.show_unpaid_class_passes') }}
             </x-ui.button>
         </div>
     @endif
-    @if ($partialActiveClassPassesCount > 0 && ! ($state === 'active' && $paymentStatus === 'partial'))
+    @if ($partialClassPassesCount > 0 && ! ($state === 'all' && $paymentStatus === 'partial'))
         <div class="mt-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
-            <div class="font-medium">{{ __('app.partial_class_passes_notice', ['count' => $partialActiveClassPassesCount]) }}</div>
+            <div class="font-medium">{{ __('app.partial_class_passes_notice', ['count' => $partialClassPassesCount]) }}</div>
             <x-ui.button :href="$partialFilterUrl" variant="secondary" size="sm">
                 {{ __('app.show_partial_class_passes') }}
             </x-ui.button>

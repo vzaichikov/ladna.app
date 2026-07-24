@@ -27,6 +27,115 @@ class CustomerBookingLedgerInvestigationTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_it_includes_outstanding_passes_outside_the_period_and_excludes_cancelled_paid_and_other_tenant_passes(): void
+    {
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $customer = Customer::factory()->for($account)->create();
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create([
+            'price_cents' => 100000,
+        ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($classPassPlan)
+            ->create([
+                'code' => 'USED-DEBT',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::UsedUp->value,
+                'is_active' => false,
+                'purchased_at' => Carbon::parse('2025-01-01 10:00:00', 'Europe/Kyiv')->utc(),
+                'closed_at' => Carbon::parse('2025-01-15 10:00:00', 'Europe/Kyiv')->utc(),
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($classPassPlan)
+            ->create([
+                'code' => 'EXPIRED-PARTIAL',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 40000,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Expired->value,
+                'is_active' => false,
+                'purchased_at' => Carbon::parse('2025-02-01 10:00:00', 'Europe/Kyiv')->utc(),
+                'closed_at' => Carbon::parse('2025-03-01 10:00:00', 'Europe/Kyiv')->utc(),
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($classPassPlan)
+            ->create([
+                'code' => 'CANCELLED-DEBT',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Cancelled->value,
+                'is_active' => false,
+                'purchased_at' => Carbon::parse('2025-03-01 10:00:00', 'Europe/Kyiv')->utc(),
+                'closed_at' => Carbon::parse('2025-03-02 10:00:00', 'Europe/Kyiv')->utc(),
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($classPassPlan)
+            ->create([
+                'code' => 'USED-PAID',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 100000,
+                'is_paid' => true,
+                'status' => CustomerClassPassStatus::UsedUp->value,
+                'is_active' => false,
+                'purchased_at' => Carbon::parse('2025-04-01 10:00:00', 'Europe/Kyiv')->utc(),
+                'closed_at' => Carbon::parse('2025-04-15 10:00:00', 'Europe/Kyiv')->utc(),
+            ]);
+        $otherAccount = Account::factory()->create();
+        $otherCustomer = Customer::factory()->for($otherAccount)->create();
+        $otherPlan = ClassPassPlan::factory()->for($otherAccount)->create([
+            'price_cents' => 100000,
+        ]);
+        CustomerClassPass::factory()
+            ->for($otherAccount)
+            ->for($otherCustomer, 'customer')
+            ->for($otherPlan)
+            ->create([
+                'code' => 'OTHER-DEBT',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::UsedUp->value,
+                'is_active' => false,
+                'purchased_at' => Carbon::parse('2025-01-01 10:00:00', 'Europe/Kyiv')->utc(),
+            ]);
+
+        $result = app(CustomerBookingLedgerInvestigation::class)->investigate(
+            $account,
+            $customer->id,
+            '2026-07-01',
+            '2026-07-31',
+        );
+
+        $usedDebt = collect($result['passes'])->firstWhere('code', 'USED-DEBT');
+        $expiredPartial = collect($result['passes'])->firstWhere('code', 'EXPIRED-PARTIAL');
+
+        $this->assertSame(1, $result['summary']['outstanding_unpaid_passes_count']);
+        $this->assertSame(1, $result['summary']['outstanding_partial_passes_count']);
+        $this->assertSame(['USED-DEBT', 'EXPIRED-PARTIAL'], array_column($result['passes'], 'code'));
+        $this->assertSame('unpaid', $usedDebt['payment_status']);
+        $this->assertTrue($usedDebt['has_outstanding_balance']);
+        $this->assertSame(100000, $usedDebt['price_cents']);
+        $this->assertSame(0, $usedDebt['paid_amount_cents']);
+        $this->assertSame(100000, $usedDebt['remaining_payment_cents']);
+        $this->assertSame('partial', $expiredPartial['payment_status']);
+        $this->assertTrue($expiredPartial['has_outstanding_balance']);
+        $this->assertSame(40000, $expiredPartial['paid_amount_cents']);
+        $this->assertSame(60000, $expiredPartial['remaining_payment_cents']);
+        $this->assertNotContains('CANCELLED-DEBT', array_column($result['passes'], 'code'));
+        $this->assertNotContains('USED-PAID', array_column($result['passes'], 'code'));
+        $this->assertNotContains('OTHER-DEBT', array_column($result['passes'], 'code'));
+    }
+
     public function test_it_explains_the_adjusted_old_pass_and_issuance_backfill_timeline_without_false_anomalies(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-15 12:00:00', 'Europe/Kyiv'));

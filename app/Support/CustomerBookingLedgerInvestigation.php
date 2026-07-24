@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\CustomerClassPassReservationStatus;
+use App\Enums\CustomerClassPassStatus;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ClassBookingCorrection;
@@ -97,6 +98,18 @@ class CustomerBookingLedgerInvestigation
             ->orderBy('id')
             ->get();
         $reservationPassIds = $reservations->pluck('customer_class_pass_id')->unique()->values()->all();
+        $outstandingUnpaidPassesCount = CustomerClassPass::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($customer)
+            ->outstandingBalance()
+            ->unpaid()
+            ->count();
+        $outstandingPartialPassesCount = CustomerClassPass::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($customer)
+            ->outstandingBalance()
+            ->partiallyPaid()
+            ->count();
 
         $passesQuery = CustomerClassPass::query()
             ->whereBelongsTo($account)
@@ -106,7 +119,8 @@ class CustomerBookingLedgerInvestigation
                     ->orWhereBetween('purchased_at', [$from, $to])
                     ->orWhereBetween('closed_at', [$from, $to])
                     ->orWhereHas('reservations.scheduledClass', fn (Builder $query) => $query
-                        ->whereBetween('starts_at', [$from, $to]));
+                        ->whereBetween('starts_at', [$from, $to]))
+                    ->orWhere(fn (Builder $query) => $query->outstandingBalance());
 
                 if ($reservationPassIds !== []) {
                     $query->orWhereIn('id', $reservationPassIds);
@@ -128,6 +142,10 @@ class CustomerBookingLedgerInvestigation
                 'issued_by_actor_role',
                 'status',
                 'plan_name',
+                'price_cents',
+                'paid_amount_cents',
+                'currency',
+                'is_paid',
                 'sessions_count',
                 'reserved_sessions_count',
                 'used_sessions_count',
@@ -140,6 +158,10 @@ class CustomerBookingLedgerInvestigation
                 'created_at',
                 'updated_at',
             ])
+            ->orderByRaw(
+                'CASE WHEN is_paid = 0 AND status != ? AND paid_amount_cents < price_cents THEN 0 ELSE 1 END',
+                [CustomerClassPassStatus::Cancelled->value],
+            )
             ->orderByDesc('purchased_at')
             ->orderByDesc('id');
         $passCount = (clone $passesQuery)->count();
@@ -196,6 +218,8 @@ class CustomerBookingLedgerInvestigation
             'summary' => [
                 'bookings_count' => $bookingCount,
                 'passes_count' => $passCount,
+                'outstanding_unpaid_passes_count' => $outstandingUnpaidPassesCount,
+                'outstanding_partial_passes_count' => $outstandingPartialPassesCount,
                 'adjustments_count' => $adjustmentCount,
                 'corrections_count' => $correctionCount,
                 'has_detected_anomalies' => collect($findings)->contains(
@@ -564,6 +588,12 @@ class CustomerBookingLedgerInvestigation
             'source' => $pass->source,
             'status' => $pass->status->value,
             'is_active' => $pass->is_active,
+            'payment_status' => $pass->paymentStatus(),
+            'has_outstanding_balance' => $pass->hasOutstandingBalance(),
+            'price_cents' => (int) $pass->price_cents,
+            'paid_amount_cents' => $pass->paidAmountCents(),
+            'remaining_payment_cents' => $pass->remainingPaymentCents(),
+            'currency' => $pass->currency,
             'sessions_count' => (int) $pass->sessions_count,
             'stored_reserved_sessions_count' => (int) $pass->reserved_sessions_count,
             'stored_used_sessions_count' => (int) $pass->used_sessions_count,

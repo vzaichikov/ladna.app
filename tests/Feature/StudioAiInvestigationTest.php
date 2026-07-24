@@ -5,16 +5,20 @@ namespace Tests\Feature;
 use App\Enums\AccountRole;
 use App\Enums\AiConversationMessageRole;
 use App\Enums\AiProvider;
+use App\Enums\CustomerClassPassStatus;
 use App\Enums\McpToolInvocationStatus;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AccountMembership;
 use App\Models\AiConversation;
+use App\Models\ClassPassPlan;
 use App\Models\Customer;
+use App\Models\CustomerClassPass;
 use App\Models\McpToolInvocation;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\User;
+use App\Support\Ai\StudioAiContextBuilder;
 use App\Support\Ai\StudioAiInference;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
@@ -24,6 +28,92 @@ use Tests\TestCase;
 class StudioAiInvestigationTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_ai_context_counts_outstanding_debt_across_pass_lifecycle_and_keeps_tenant_scope(): void
+    {
+        $account = Account::factory()->create();
+        $customer = Customer::factory()->for($account)->create();
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create([
+            'price_cents' => 100000,
+        ]);
+
+        foreach ([
+            ['ACTIVE-DEBT', CustomerClassPassStatus::Active, true],
+            ['FROZEN-DEBT', CustomerClassPassStatus::Freezed, false],
+            ['USED-DEBT', CustomerClassPassStatus::UsedUp, false],
+        ] as [$code, $status, $isActive]) {
+            CustomerClassPass::factory()
+                ->for($account)
+                ->for($customer, 'customer')
+                ->for($classPassPlan)
+                ->create([
+                    'code' => $code,
+                    'price_cents' => 100000,
+                    'paid_amount_cents' => 0,
+                    'is_paid' => false,
+                    'status' => $status->value,
+                    'is_active' => $isActive,
+                ]);
+        }
+
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($classPassPlan)
+            ->create([
+                'code' => 'EXPIRED-PARTIAL',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 40000,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Expired->value,
+                'is_active' => false,
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($classPassPlan)
+            ->create([
+                'code' => 'USED-PAID',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 100000,
+                'is_paid' => true,
+                'status' => CustomerClassPassStatus::UsedUp->value,
+                'is_active' => false,
+            ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($classPassPlan)
+            ->create([
+                'code' => 'CANCELLED-DEBT',
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::Cancelled->value,
+                'is_active' => false,
+            ]);
+        $otherAccount = Account::factory()->create();
+        CustomerClassPass::factory()
+            ->for($otherAccount)
+            ->create([
+                'price_cents' => 100000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+                'status' => CustomerClassPassStatus::UsedUp->value,
+                'is_active' => false,
+            ]);
+
+        $context = app(StudioAiContextBuilder::class)->studioContext(
+            $account,
+            includeClassBookingDetails: false,
+        );
+
+        $this->assertSame(1, $context['metrics']['active_class_passes']);
+        $this->assertSame(3, $context['metrics']['unpaid_class_passes']);
+        $this->assertSame(1, $context['metrics']['partial_class_passes']);
+        $this->assertArrayNotHasKey('unpaid_active_class_passes', $context['metrics']);
+        $this->assertArrayNotHasKey('partial_active_class_passes', $context['metrics']);
+    }
 
     public function test_authorized_owner_can_run_an_ephemeral_audited_customer_investigation_tool_loop(): void
     {
@@ -142,6 +232,13 @@ class StudioAiInvestigationTest extends TestCase
             ['search_customers', 'investigate_customer_booking_ledger', 'get_business_logic_reference'],
             collect($requests[0]->data()['tools'])->pluck('function.name')->all(),
         );
+        $this->assertTrue(collect($requests[0]->data()['messages'])->contains(
+            fn (array $message): bool => ($message['role'] ?? null) === 'system'
+                && str_contains(
+                    $message['content'] ?? '',
+                    'Class-pass lifecycle and payment state are independent.',
+                ),
+        ));
         $this->assertTrue(collect($requests[1]->data()['messages'])->contains(
             fn (array $message): bool => ($message['role'] ?? null) === 'tool'
                 && ($message['tool_name'] ?? null) === 'search_customers',
@@ -281,6 +378,33 @@ class StudioAiInvestigationTest extends TestCase
         $result = app(StudioAiInference::class)->respond(
             $account,
             'Перевір, чому в клієнта абонемент списався двічі.',
+            actorUser: $owner,
+        );
+
+        $this->assertTrue($result->usedAi);
+        $this->assertSame(__('app.assistant_investigation_unable_to_verify'), $result->text);
+        $this->assertSame(0, McpToolInvocation::query()->whereBelongsTo($account)->count());
+    }
+
+    public function test_pass_count_discrepancy_wording_requires_customer_ledger_evidence(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => $this->answerEnvelope('У клієнтки один неоплачений абонемент.'),
+                ],
+            ]),
+        ]);
+        $account = Account::factory()->create();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->configureOllama();
+
+        $result = app(StudioAiInference::class)->respond(
+            $account,
+            'Слесаренко Анна показує 1 неоплачений абон, а в картці клієнта інша кількість.',
             actorUser: $owner,
         );
 

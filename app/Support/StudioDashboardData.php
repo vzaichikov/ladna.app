@@ -130,22 +130,22 @@ class StudioDashboardData
         return [
             [
                 'key' => 'unpaid_class_passes',
-                'count' => $account->customerClassPasses()->active()->unpaid()->count(),
+                'count' => $account->customerClassPasses()->outstandingBalance()->unpaid()->count(),
                 'label' => __('app.problem_unpaid_class_passes'),
                 'url' => route('dashboard.accounts.customer-class-passes.index', [
                     'account' => $account,
-                    'state' => 'active',
+                    'state' => 'all',
                     'payment_status' => 'unpaid',
                 ]),
                 'accent' => 'danger',
             ],
             [
                 'key' => 'partial_class_passes',
-                'count' => $account->customerClassPasses()->active()->partiallyPaid()->count(),
+                'count' => $account->customerClassPasses()->outstandingBalance()->partiallyPaid()->count(),
                 'label' => __('app.problem_partial_class_passes'),
                 'url' => route('dashboard.accounts.customer-class-passes.index', [
                     'account' => $account,
-                    'state' => 'active',
+                    'state' => 'all',
                     'payment_status' => 'partial',
                 ]),
                 'accent' => 'warning',

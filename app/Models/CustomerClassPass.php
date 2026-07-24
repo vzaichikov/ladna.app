@@ -78,6 +78,14 @@ class CustomerClassPass extends Model
             ->where('paid_amount_cents', '>', 0);
     }
 
+    public function scopeOutstandingBalance(Builder $query): Builder
+    {
+        return $query
+            ->where('is_paid', false)
+            ->where('status', '!=', CustomerClassPassStatus::Cancelled->value)
+            ->whereColumn('paid_amount_cents', '<', 'price_cents');
+    }
+
     public function scopeFreezed(Builder $query): Builder
     {
         return $query->where('status', CustomerClassPassStatus::Freezed->value);
@@ -136,6 +144,13 @@ class CustomerClassPass extends Model
     public function remainingPaymentCents(): int
     {
         return max(0, (int) $this->price_cents - $this->paidAmountCents());
+    }
+
+    public function hasOutstandingBalance(): bool
+    {
+        return ! $this->is_paid
+            && $this->status !== CustomerClassPassStatus::Cancelled
+            && $this->remainingPaymentCents() > 0;
     }
 
     public function isPartiallyPaid(): bool
