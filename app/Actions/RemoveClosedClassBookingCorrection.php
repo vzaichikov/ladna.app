@@ -18,6 +18,7 @@ class RemoveClosedClassBookingCorrection
 {
     public function __construct(
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
+        private readonly ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings,
         private readonly ActorSnapshot $actorSnapshot,
     ) {}
 
@@ -87,7 +88,7 @@ class RemoveClosedClassBookingCorrection
                 $reservation->refresh();
             }
 
-            return ClassBookingCorrection::query()->create([
+            $correction = ClassBookingCorrection::query()->create([
                 'account_id' => $account->id,
                 'scheduled_class_id' => $scheduledClass->id,
                 'class_booking_id' => $booking->id,
@@ -111,6 +112,16 @@ class RemoveClosedClassBookingCorrection
                 ...$this->actorSnapshot->capture($account, $user),
                 'reason' => $reason,
             ]);
+
+            if (
+                $passEffect === ClassBookingCorrection::PassEffectReturnSession
+                && $reservation
+                && $pass
+            ) {
+                $this->reconcileUnreservedCustomerBookings->execute($pass);
+            }
+
+            return $correction;
         });
     }
 

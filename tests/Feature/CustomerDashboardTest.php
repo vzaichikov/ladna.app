@@ -230,6 +230,71 @@ class CustomerDashboardTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_used_up_pass_still_covers_the_booking_that_consumed_it(): void
+    {
+        app()->setLocale('uk');
+        Carbon::setTestNow(Carbon::parse('2026-07-08 08:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'slug' => 'customer-dashboard-used-up-pass',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Ганна',
+            'phone' => '+380501112239',
+        ]);
+        $customerClassPass = $this->classPass($account, $customer, [
+            'code' => 'USED-UP-001',
+            'plan_name' => 'Trial Exot',
+            'sessions_count' => 1,
+            'used_sessions_count' => 1,
+            'reserved_sessions_count' => 0,
+            'status' => CustomerClassPassStatus::UsedUp->value,
+            'is_active' => false,
+            'opened_at' => Carbon::parse('2026-07-07 10:00:00', 'UTC'),
+            'closed_at' => Carbon::parse('2026-07-07 12:00:00', 'UTC'),
+        ]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => 'Covered Used Exot',
+                'starts_at' => Carbon::parse('2026-07-07 10:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-07 11:00:00', 'UTC'),
+            ]);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass, 'scheduledClass')
+            ->for($customer)
+            ->create();
+        CustomerClassPassReservation::factory()->create([
+            'account_id' => $account->id,
+            'customer_class_pass_id' => $customerClassPass->id,
+            'class_booking_id' => $booking->id,
+            'scheduled_class_id' => $scheduledClass->id,
+            'status' => 'used',
+            'reserved_at' => Carbon::parse('2026-07-06 08:10:00', 'UTC'),
+            'used_at' => $scheduledClass->starts_at,
+        ]);
+
+        $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSeeInOrder(['Залишок занять', '0', 'активних абонементів', '0'], false)
+            ->assertSee('Covered Used Exot', false)
+            ->assertSee('USED-UP-001', false)
+            ->assertDontSee('На це заняття немає активного абонемента.', false);
+
+        Carbon::setTestNow();
+    }
+
     public function test_default_classes_tab_shows_any_time_addon_instead_of_missing_pass_alert(): void
     {
         app()->setLocale('uk');

@@ -107,6 +107,55 @@ class ClosedClassCorrectionTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_returned_session_is_reassigned_to_an_existing_uncovered_booking(): void
+    {
+        Carbon::setTestNow('2026-07-04 10:00:00');
+        [$owner, $account, $scheduledClass, $customer, $customerClassPass, $coveredBooking] = $this->closedBookingContext(sessions: 1);
+        $uncoveredClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($scheduledClass->location)
+            ->for($scheduledClass->room)
+            ->for($scheduledClass->classType)
+            ->create([
+                'starts_at' => Carbon::parse('2026-07-03 11:00:00', 'UTC'),
+                'ends_at' => Carbon::parse('2026-07-03 12:00:00', 'UTC'),
+            ]);
+        $uncoveredBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($uncoveredClass)
+            ->for($customer)
+            ->create([
+                'status' => ClassBookingStatus::Attended->value,
+                'attended_at' => $uncoveredClass->starts_at,
+            ]);
+
+        app(ReconcileCustomerClassPassForBooking::class)->execute($uncoveredBooking);
+
+        $this->assertFalse($uncoveredBooking->classPassReservation()->exists());
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.bookings.corrections.remove', [$account, $coveredBooking]), [
+                'pass_effect' => ClassBookingCorrection::PassEffectReturnSession,
+                'reason' => 'Return the session to the correct existing booking.',
+            ])
+            ->assertOk();
+
+        $coveredReservation = $coveredBooking->classPassReservation()->firstOrFail();
+        $reassignedReservation = $uncoveredBooking->classPassReservation()->firstOrFail();
+        $customerClassPass->refresh();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $coveredReservation->status);
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $reassignedReservation->status);
+        $this->assertSame($customerClassPass->id, $reassignedReservation->customer_class_pass_id);
+        $this->assertTrue($reassignedReservation->used_at->equalTo($uncoveredClass->starts_at));
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(CustomerClassPassStatus::UsedUp, $customerClassPass->status);
+        $this->assertFalse($customerClassPass->is_active);
+
+        Carbon::setTestNow();
+    }
+
     public function test_remove_wrong_private_customer_can_keep_session_consumed(): void
     {
         Carbon::setTestNow('2026-07-04 10:00:00');
