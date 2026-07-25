@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
+use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
@@ -13,9 +14,12 @@ use App\Models\Account;
 use App\Models\AccountMembership;
 use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
+use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerAuthSetting;
+use App\Models\CustomerClassPass;
+use App\Models\CustomerClassPassReservation;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
 use App\Models\MobileDeviceToken;
@@ -320,6 +324,163 @@ class MobileApiTest extends TestCase
             ->assertJsonPath('data.0.booked_count', 1)
             ->assertJsonPath('data.0.available_spots', 2)
             ->assertJsonPath('data.0.customer_booking.status', 'booked');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_customer_mobile_cancellation_releases_class_pass_session_before_cutoff(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, , , $scheduledClass] = $this->groupClassContext(
+            ['slug' => 'mobile-customer-cancellation'],
+            [
+                'starts_at' => '2026-06-18 15:00:00',
+                'ends_at' => '2026-06-18 16:00:00',
+                'cancellation_cutoff_minutes' => 60,
+            ],
+        );
+        $customer = Customer::factory()->for($account)->create();
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create(['sessions_count' => 1]);
+        $customerClassPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($classPassPlan)
+            ->create([
+                'sessions_count' => 1,
+                'reserved_sessions_count' => 1,
+                'used_sessions_count' => 0,
+            ]);
+        $reservation = CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($customerClassPass)
+            ->for($booking)
+            ->for($scheduledClass)
+            ->create([
+                'status' => CustomerClassPassReservationStatus::Reserved->value,
+                'reserved_at' => now(),
+            ]);
+
+        $this->deleteJson("/api/v1/mobile/bookings/{$booking->id}")
+            ->assertUnauthorized();
+
+        $this->withToken($this->customerToken($account, $customer))
+            ->deleteJson("/api/v1/mobile/bookings/{$booking->id}")
+            ->assertOk()
+            ->assertJsonPath('data.status', ClassBookingStatus::Cancelled->value);
+
+        $reservation->refresh();
+        $customerClassPass->refresh();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->status);
+        $this->assertNull($reservation->used_at);
+        $this->assertNotNull($reservation->released_at);
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->remainingSessionsCount());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_staff_mobile_cancellation_keeps_class_pass_session_consumed(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, , , $scheduledClass] = $this->groupClassContext(
+            ['slug' => 'mobile-staff-cancellation'],
+            [
+                'starts_at' => '2026-06-18 15:00:00',
+                'ends_at' => '2026-06-18 16:00:00',
+                'cancellation_cutoff_minutes' => 60,
+            ],
+        );
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $customer = Customer::factory()->for($account)->create();
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create(['sessions_count' => 1]);
+        $customerClassPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($classPassPlan)
+            ->create([
+                'sessions_count' => 1,
+                'reserved_sessions_count' => 1,
+                'used_sessions_count' => 0,
+            ]);
+        $reservation = CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($customerClassPass)
+            ->for($booking)
+            ->for($scheduledClass)
+            ->create([
+                'status' => CustomerClassPassReservationStatus::Reserved->value,
+                'reserved_at' => now(),
+            ]);
+
+        $this->withToken($this->staffToken($account, $owner))
+            ->deleteJson("/api/v1/mobile/bookings/{$booking->id}")
+            ->assertOk()
+            ->assertJsonPath('data.status', ClassBookingStatus::Cancelled->value);
+
+        $reservation->refresh();
+        $customerClassPass->refresh();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->status);
+        $this->assertNotNull($reservation->used_at);
+        $this->assertNull($reservation->released_at);
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+        $this->assertSame(0, $customerClassPass->remainingSessionsCount());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_customer_mobile_cancellation_inside_cutoff_keeps_booking_and_reservation(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-18 14:30:00', 'UTC'));
+
+        [$account, , , $scheduledClass] = $this->groupClassContext(
+            ['slug' => 'mobile-customer-cancellation-locked'],
+            [
+                'starts_at' => '2026-06-18 15:00:00',
+                'ends_at' => '2026-06-18 16:00:00',
+                'cancellation_cutoff_minutes' => 60,
+            ],
+        );
+        $customer = Customer::factory()->for($account)->create();
+        $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create(['sessions_count' => 1]);
+        $customerClassPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($classPassPlan)
+            ->create([
+                'sessions_count' => 1,
+                'reserved_sessions_count' => 1,
+                'used_sessions_count' => 0,
+            ]);
+        $reservation = CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($customerClassPass)
+            ->for($booking)
+            ->for($scheduledClass)
+            ->create([
+                'status' => CustomerClassPassReservationStatus::Reserved->value,
+                'reserved_at' => now(),
+            ]);
+
+        $this->withToken($this->customerToken($account, $customer))
+            ->deleteJson("/api/v1/mobile/bookings/{$booking->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('booking');
+
+        $this->assertSame(ClassBookingStatus::Booked, $booking->fresh()->status);
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $reservation->fresh()->status);
+        $this->assertSame(1, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->used_sessions_count);
+        $this->assertSame(0, $customerClassPass->remainingSessionsCount());
 
         Carbon::setTestNow();
     }

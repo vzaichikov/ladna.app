@@ -41,7 +41,7 @@ class CustomerBookingCancellationController extends Controller
             'status' => ClassBookingStatus::Cancelled->value,
             'attended_at' => null,
         ]);
-        $reconcileCustomerClassPassForBooking->execute($classBooking);
+        $reconcileCustomerClassPassForBooking->execute($classBooking, releaseCancelledReservation: true);
         $notifications->bookingCancelled($classBooking);
 
         return redirect()

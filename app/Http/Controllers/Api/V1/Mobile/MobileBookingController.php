@@ -175,7 +175,10 @@ class MobileBookingController extends Controller
             'status' => ClassBookingStatus::Cancelled->value,
             'attended_at' => null,
         ]);
-        $reconcileCustomerClassPassForBooking->execute($classBooking);
+        $reconcileCustomerClassPassForBooking->execute(
+            $classBooking,
+            releaseCancelledReservation: $session->guard === MobileSession::GuardCustomer,
+        );
         $notifications->bookingCancelled($classBooking);
 
         return $this->bookingResponse($classBooking);

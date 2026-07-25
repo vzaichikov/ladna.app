@@ -16,10 +16,10 @@ class ReconcileCustomerClassPassForBooking
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
     ) {}
 
-    public function execute(ClassBooking $classBooking): ?CustomerClassPassReservation
+    public function execute(ClassBooking $classBooking, bool $releaseCancelledReservation = false): ?CustomerClassPassReservation
     {
-        return DB::transaction(function () use ($classBooking): ?CustomerClassPassReservation {
-            $classBooking->loadMissing('classPassReservation.customerClassPass', 'scheduledClass');
+        return DB::transaction(function () use ($classBooking, $releaseCancelledReservation): ?CustomerClassPassReservation {
+            $classBooking->load('classPassReservation.customerClassPass', 'scheduledClass');
 
             if ($classBooking->skip_class_pass_reservation) {
                 return null;
@@ -42,6 +42,22 @@ class ReconcileCustomerClassPassForBooking
                 }
 
                 return $this->reserveCustomerClassPassForBooking->execute($classBooking);
+            }
+
+            if ($classBooking->status === ClassBookingStatus::Cancelled && $releaseCancelledReservation) {
+                if (! $reservation || $reservation->status === CustomerClassPassReservationStatus::Released) {
+                    return $reservation?->refresh();
+                }
+
+                $reservation->update([
+                    'status' => CustomerClassPassReservationStatus::Released->value,
+                    'used_at' => null,
+                    'released_at' => now(),
+                ]);
+
+                $this->normalizeCustomerClassPasses->forPass($reservation->customerClassPass()->lockForUpdate()->firstOrFail());
+
+                return $reservation->refresh();
             }
 
             if (in_array($classBooking->status, [

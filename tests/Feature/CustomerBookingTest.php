@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\CreateManualScheduledClass;
 use App\Enums\AccountRole;
+use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
@@ -13,8 +14,11 @@ use App\Models\Account;
 use App\Models\AccountMembership;
 use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
+use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
+use App\Models\CustomerClassPass;
+use App\Models\CustomerClassPassReservation;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -800,6 +804,25 @@ class CustomerBookingTest extends TestCase
         ]);
         $customer = Customer::factory()->for($account)->create(['name' => 'Client One', 'phone' => '+380501111111']);
         $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create(['sessions_count' => 1]);
+        $customerClassPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($classPassPlan)
+            ->create([
+                'sessions_count' => 1,
+                'reserved_sessions_count' => 1,
+                'used_sessions_count' => 0,
+            ]);
+        $reservation = CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($customerClassPass)
+            ->for($booking)
+            ->for($scheduledClass)
+            ->create([
+                'status' => CustomerClassPassReservationStatus::Reserved->value,
+                'reserved_at' => now(),
+            ]);
 
         $this->actingAs($customer, 'customer')
             ->get(route('customer.dashboard', $account->slug))
@@ -812,6 +835,15 @@ class CustomerBookingTest extends TestCase
             ->assertSessionHas('status', __('app.customer_booking_cancelled'));
 
         $this->assertSame('cancelled', $booking->fresh()->status->value);
+        $reservation->refresh();
+        $customerClassPass->refresh();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->status);
+        $this->assertNull($reservation->used_at);
+        $this->assertNotNull($reservation->released_at);
+        $this->assertSame(0, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->remainingSessionsCount());
 
         Carbon::setTestNow();
     }

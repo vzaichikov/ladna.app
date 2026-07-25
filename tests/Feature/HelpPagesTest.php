@@ -48,6 +48,16 @@ class HelpPagesTest extends TestCase
             ->assertSee('навіть тоді, коли заняття ще залишилися або клієнт ще не прийшов на перше заняття', false);
     }
 
+    public function test_booking_help_explains_timely_customer_cancellation_returns_session(): void
+    {
+        foreach (['schedule', 'customers-bookings'] as $slug) {
+            $this->get(route('help.show', $slug, false))
+                ->assertStatus(200)
+                ->assertSee('скасування самим клієнтом', false)
+                ->assertSee('заняття повертається в абонемент', false);
+        }
+    }
+
     public function test_passes_prices_help_explains_class_pass_segments(): void
     {
         $this->get(route('help.show', 'passes-prices', false))

@@ -575,7 +575,7 @@ class LadnaOpenApiSpec
             ],
             'delete' => [
                 'tags' => ['Mobile bookings'],
-                'summary' => 'Cancels a booking. Customers can cancel their own future bookings; staff need manage_bookings.',
+                'summary' => 'Cancels a booking. A timely customer cancellation releases the class-pass session; staff need manage_bookings and their cancellation keeps the session consumed.',
                 'security' => $this->mobileSecurity(),
                 'parameters' => [$this->classBookingParameter()],
                 'responses' => [
