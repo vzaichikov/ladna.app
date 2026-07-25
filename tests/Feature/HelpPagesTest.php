@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Support\OwnerHelpIndex;
 use Tests\TestCase;
 
 class HelpPagesTest extends TestCase
@@ -442,8 +443,47 @@ class HelpPagesTest extends TestCase
             ->assertSee('Керувати касою студії також бачить суму одного заняття', false)
             ->assertSee('Суму не вказано', false)
             ->assertSee('Кнопка з іконкою фільтра', false)
-            ->assertSee('Моделі оплати тренерів поки має статус Не налаштовано', false)
+            ->assertSee('автоматично нараховану зарплату', false)
+            ->assertSee('Як налаштувати автоматичний розрахунок зарплати', false)
+            ->assertSee('Мінімум людей 2', false)
+            ->assertSee('Стала ставка розподіляється за календарними днями', false)
+            ->assertSee('assets/help/screenshots/salary-models.png', false)
             ->assertSee('assets/help/screenshots/trainer-report.png', false);
+    }
+
+    public function test_salary_models_help_explains_every_model_with_real_studio_examples(): void
+    {
+        $this->get(route('help.show', 'salary-models', false))
+            ->assertStatus(200)
+            ->assertSee('Налаштування зарплати тренерів', false)
+            ->assertSee('Налаштування студії → Налаштування зарплати → Створити модель', false)
+            ->assertSee('Стала ставка за місяць, тиждень або день', false)
+            ->assertSee('Стала сума за заняття', false)
+            ->assertSee('Ставка за людину: як одну людину рахувати як дві', false)
+            ->assertSee('2 × 120 = 240 грн', false)
+            ->assertSee('База + люди понад поріг', false)
+            ->assertSee('500 + 2 × 80 = 660 грн', false)
+            ->assertSee('Погодинно + люди понад поріг', false)
+            ->assertSee('90 хв × 400 ÷ 60 = 600 грн', false)
+            ->assertSee('Діапазони відвідуваності', false)
+            ->assertSee('від 0 до 2 людей — 350 грн, від 3 до 5 — 500 грн, від 6 і більше — 700 грн', false)
+            ->assertSee('Оплачувати заняття без людей', false)
+            ->assertSee('Фактичних записів', false)
+            ->assertSee('Враховано людей', false)
+            ->assertSee('Стала ставка від локації не залежить', false)
+            ->assertSee('не виплачує гроші тренеру, не створює платіж і не записує витрату студії автоматично', false)
+            ->assertSee('assets/help/screenshots/salary-models.png', false)
+            ->assertSee('assets/help/screenshots/trainer-report.png', false);
+
+        foreach ([
+            'якщо на занятті одна людина рахувати її як дві',
+            'погодинна ставка і надбавка за кожну наступну людину',
+            'стала сума якщо на занятті менше трьох людей',
+        ] as $question) {
+            $result = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame('salary-models', $result[0]['slug'] ?? null, $question);
+        }
     }
 
     public function test_real_workflows_help_uses_submenu_and_question_pages(): void

@@ -138,6 +138,12 @@ class ClassTypeController extends Controller
         $this->ensureScheduleKindEnabled($account, $scheduleKind);
         $this->authorize('update', $account);
 
+        if ($classType->scheduleSeries()->exists()
+            || $classType->scheduledClasses()->exists()
+            || $classType->salaryModelClassRules()->exists()) {
+            return back()->withErrors(['class_type' => __('app.class_type_delete_history_blocked')]);
+        }
+
         $classType->scheduleSeries()->with('scheduledClasses')->get()
             ->each(fn ($scheduleSeries) => $scheduleSeries->scheduledClasses()->delete());
         $classType->scheduledClasses()->delete();

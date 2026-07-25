@@ -89,6 +89,8 @@ use App\Http\Controllers\TrainerController;
 use App\Http\Controllers\TrainerPrivateLessonReportController;
 use App\Http\Controllers\TrainerPrivateTimeframeController;
 use App\Http\Controllers\TrainerReportController;
+use App\Http\Controllers\TrainerSalaryAssignmentController;
+use App\Http\Controllers\TrainerSalaryReportController;
 use App\Http\Controllers\TrainerSubstitutionController;
 use App\Http\Controllers\TrainerTypeController;
 use App\Http\Controllers\UnknownPresenceReportController;
@@ -394,8 +396,26 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
         Route::get('accounts/{account}/reports/trainers/{trainer}/private-lessons', TrainerPrivateLessonReportController::class)
             ->scopeBindings()
             ->name('accounts.reports.trainers.private-lessons');
-        Route::get('accounts/{account}/salary-models', SalaryModelController::class)
+        Route::get('accounts/{account}/reports/trainers/{trainer}/salary', TrainerSalaryReportController::class)
+            ->scopeBindings()
+            ->name('accounts.reports.trainers.salary');
+        Route::get('accounts/{account}/salary-models', [SalaryModelController::class, 'index'])
             ->name('accounts.salary-models.index');
+        Route::get('accounts/{account}/salary-models/create', [SalaryModelController::class, 'create'])
+            ->name('accounts.salary-models.create');
+        Route::post('accounts/{account}/salary-models', [SalaryModelController::class, 'store'])
+            ->name('accounts.salary-models.store');
+        Route::get('accounts/{account}/salary-models/{salaryModel}/edit', [SalaryModelController::class, 'edit'])
+            ->scopeBindings()
+            ->name('accounts.salary-models.edit');
+        Route::put('accounts/{account}/salary-models/{salaryModel}', [SalaryModelController::class, 'update'])
+            ->scopeBindings()
+            ->name('accounts.salary-models.update');
+        Route::patch('accounts/{account}/salary-models/{salaryModel}/archive', [SalaryModelController::class, 'archive'])
+            ->scopeBindings()
+            ->name('accounts.salary-models.archive');
+        Route::post('accounts/{account}/salary-model-assignments', [TrainerSalaryAssignmentController::class, 'store'])
+            ->name('accounts.salary-model-assignments.store');
         Route::get('accounts/{account}/reports/unpaid-class-payments', UnpaidClassPaymentReportController::class)
             ->name('accounts.reports.unpaid-class-payments');
         Route::get('accounts/{account}/reports/people-counter', PeopleCounterReportController::class)

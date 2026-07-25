@@ -84,7 +84,7 @@ class StudioConfigurationTest extends TestCase
         $this->assertModelMissing($room);
     }
 
-    public function test_deleting_class_type_removes_its_scheduled_classes(): void
+    public function test_class_type_with_scheduled_classes_cannot_be_deleted(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create();
@@ -96,10 +96,10 @@ class StudioConfigurationTest extends TestCase
 
         $this->actingAs($owner)
             ->delete(route('dashboard.accounts.group-classes.destroy', [$account, $classType]))
-            ->assertRedirect(route('dashboard.accounts.group-classes.index', $account));
+            ->assertSessionHasErrors('class_type');
 
-        $this->assertModelMissing($classType);
-        $this->assertModelMissing($scheduledClass);
+        $this->assertModelExists($classType);
+        $this->assertModelExists($scheduledClass);
     }
 
     public function test_cyrillic_slugs_are_normalized_and_suffixed_within_account(): void

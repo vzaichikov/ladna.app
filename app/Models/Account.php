@@ -624,6 +624,21 @@ class Account extends Model
         return $this->hasMany(Trainer::class);
     }
 
+    public function salaryModels(): HasMany
+    {
+        return $this->hasMany(SalaryModel::class);
+    }
+
+    public function salaryModelVersions(): HasMany
+    {
+        return $this->hasMany(SalaryModelVersion::class);
+    }
+
+    public function trainerSalaryAssignments(): HasMany
+    {
+        return $this->hasMany(TrainerSalaryAssignment::class);
+    }
+
     public function trainerPrivateTimeframes(): HasMany
     {
         return $this->hasMany(TrainerPrivateTimeframe::class);

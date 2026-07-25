@@ -91,4 +91,9 @@ class ClassType extends Model
     {
         return $this->hasMany(ScheduledClass::class);
     }
+
+    public function salaryModelClassRules(): HasMany
+    {
+        return $this->hasMany(SalaryModelClassRule::class);
+    }
 }

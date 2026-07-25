@@ -85,13 +85,56 @@
         <x-ui.metric :label="__('app.trainer_report_private_people_count')" :value="$totals['private_people_count']" icon="user" accent="amber" />
     </section>
 
+    @if ($canManageStudioCashflow && $salaryReport)
+        @if ($salaryReport['incomplete'])
+            <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div class="flex items-start gap-3">
+                    <x-ui.icon name="triangle-alert" class="mt-0.5 h-5 w-5 shrink-0" />
+                    <div>
+                        <div class="font-semibold">{{ __('app.salary_report_incomplete') }}</div>
+                        <p class="mt-1 leading-6">{{ __('app.salary_report_incomplete_copy') }}</p>
+                    </div>
+                </div>
+            </div>
+        @endif
+        @if ($salaryReport['fixed_ignores_location'])
+            <div class="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+                {{ __('app.fixed_salary_location_filter_notice') }}
+            </div>
+        @endif
+        <x-ui.panel class="mt-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.salary_period_total') }}</h2>
+                    <p class="mt-1 text-sm text-slate-500">{{ __('app.salary_period_total_copy') }}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    @forelse ($salaryReport['totals'] as $currency => $amountCents)
+                        <span class="rounded-full bg-emerald-100 px-4 py-2 text-lg font-semibold text-emerald-800">
+                            {{ \App\Support\MoneyFormatter::format($amountCents, $currency) }}
+                        </span>
+                    @empty
+                        <span class="text-sm font-semibold text-slate-500">{{ __('app.amount_not_specified') }}</span>
+                    @endforelse
+                </div>
+            </div>
+        </x-ui.panel>
+    @endif
+
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
-        <div class="hidden gap-3 border-b border-stone-100 px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-5">
+        <div @class([
+            'hidden gap-3 border-b border-stone-100 px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid',
+            'lg:grid-cols-6' => $canManageStudioCashflow,
+            'lg:grid-cols-5' => ! $canManageStudioCashflow,
+        ])>
             <div>{{ __('app.trainer') }}</div>
             <div>{{ __('app.trainer_report_total_classes') }}</div>
             <div>{{ __('app.private_lessons') }}</div>
             <div>{{ __('app.trainer_report_group_people_count') }}</div>
             <div>{{ __('app.trainer_report_private_people_count') }}</div>
+            @if ($canManageStudioCashflow)
+                <div>{{ __('app.salary') }}</div>
+            @endif
         </div>
 
         @forelse ($rows as $row)
@@ -108,9 +151,19 @@
                 if ($selectedLocationId !== null) {
                     $historyParameters['locations'] = [$selectedLocationId];
                 }
+                $salary = $row['salary'] ?? null;
+                $salaryDetailParameters = [
+                    'account' => $account,
+                    'trainer' => $trainer,
+                    ...$filters,
+                ];
             @endphp
             <article
-                class="crm-row lg:grid-cols-5 lg:items-center"
+                @class([
+                    'crm-row lg:items-center',
+                    'lg:grid-cols-6' => $canManageStudioCashflow,
+                    'lg:grid-cols-5' => ! $canManageStudioCashflow,
+                ])
                 data-trainer-report-row
                 data-trainer-id="{{ $trainer->id }}"
                 data-classes-count="{{ $row['classes_count'] }}"
@@ -167,6 +220,32 @@
                     <div class="text-2xl font-semibold text-slate-950">{{ $row['private_people_count'] }}</div>
                     <div class="mt-1 text-xs font-medium text-slate-500">{{ __('app.trainer_report_private_people_count') }}</div>
                 </div>
+                @if ($canManageStudioCashflow)
+                    <div>
+                        @if ($salary && $salary['amounts'] !== [])
+                            <div class="flex flex-col items-start gap-1">
+                                @foreach ($salary['amounts'] as $currency => $amountCents)
+                                    <a href="{{ route('dashboard.accounts.reports.trainers.salary', $salaryDetailParameters) }}" class="text-lg font-semibold text-brand-700 underline decoration-brand-200 underline-offset-4 hover:text-brand-900">
+                                        {{ \App\Support\MoneyFormatter::format($amountCents, $currency) }}
+                                    </a>
+                                @endforeach
+                            </div>
+                            <div class="mt-1 text-xs font-medium text-slate-500">
+                                {{ implode(', ', $salary['model_names']) ?: __('app.salary_model_not_assigned') }}
+                            </div>
+                            @if ($salary['incomplete'])
+                                <div class="mt-1 text-xs font-semibold text-amber-700">{{ __('app.salary_incomplete_short') }}</div>
+                            @endif
+                        @else
+                            <a href="{{ route('dashboard.accounts.reports.trainers.salary', $salaryDetailParameters) }}" class="text-sm font-semibold text-amber-700 underline underline-offset-4">
+                                {{ $salary && $salary['current_model'] ? __('app.salary_no_accruals') : __('app.salary_model_not_assigned') }}
+                            </a>
+                            @if ($salary && $salary['current_model'])
+                                <div class="mt-1 text-xs font-medium text-slate-500">{{ $salary['current_model']->name }}</div>
+                            @endif
+                        @endif
+                    </div>
+                @endif
             </article>
         @empty
             <x-ui.empty-state :title="__('app.no_trainer_report_rows')" icon="trainers" class="m-5" />

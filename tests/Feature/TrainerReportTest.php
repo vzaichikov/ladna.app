@@ -332,7 +332,7 @@ class TrainerReportTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.salary-models.index', $account))
             ->assertOk()
-            ->assertSee(__('app.salary_models_not_configured'));
+            ->assertSee(__('app.salary_models_empty'));
     }
 
     public function test_private_lesson_details_are_paginated_twenty_per_page(): void

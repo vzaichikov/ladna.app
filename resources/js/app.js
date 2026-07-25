@@ -115,6 +115,128 @@ function updateAnyTimeCurrencies(form) {
     });
 }
 
+function setSalaryFieldGroupEnabled(group, enabled) {
+    if (!group) {
+        return;
+    }
+
+    group.classList.toggle('hidden', !enabled);
+    group.querySelectorAll('input, select, textarea, button').forEach((field) => {
+        field.disabled = !enabled;
+    });
+}
+
+function renameSalaryTierFields(rule) {
+    const ruleIndex = rule.dataset.ruleIndex;
+
+    rule.querySelectorAll('[data-salary-tier-row]').forEach((row, tierIndex) => {
+        row.querySelectorAll('[data-salary-tier-field]').forEach((field) => {
+            field.name = `rules[${ruleIndex}][tiers][${tierIndex}][${field.dataset.salaryTierField}]`;
+        });
+    });
+}
+
+function updateSalaryRule(rule, formulaDescriptions) {
+    const overrideToggle = rule.querySelector('[data-salary-override-toggle]');
+    const ruleFields = rule.querySelector('[data-salary-rule-fields]');
+    const overrideEnabled = !overrideToggle || overrideToggle.checked;
+
+    setSalaryFieldGroupEnabled(ruleFields, overrideEnabled);
+
+    if (!overrideEnabled) {
+        return;
+    }
+
+    const formula = rule.querySelector('[data-salary-formula]')?.value;
+    const description = rule.querySelector('[data-salary-formula-description]');
+
+    if (description) {
+        description.textContent = formulaDescriptions[formula] || '';
+    }
+
+    rule.querySelectorAll('[data-salary-formula-fields]').forEach((group) => {
+        setSalaryFieldGroupEnabled(group, group.dataset.salaryFormulaFields === formula);
+    });
+    renameSalaryTierFields(rule);
+}
+
+function initSalaryModelForms() {
+    document.querySelectorAll('[data-salary-model-form]').forEach((form) => {
+        let formulaDescriptions = {};
+
+        try {
+            formulaDescriptions = JSON.parse(form.dataset.formulaDescriptions || '{}');
+        } catch {
+            formulaDescriptions = {};
+        }
+
+        const updateModelType = () => {
+            const modelType = form.querySelector('[data-salary-model-type]:checked')?.value
+                || form.querySelector('input[name="type"][type="hidden"]')?.value;
+            const isFixed = modelType === 'fixed_period';
+
+            setSalaryFieldGroupEnabled(form.querySelector('[data-salary-fixed-fields]'), isFixed);
+            setSalaryFieldGroupEnabled(form.querySelector('[data-salary-per-class-fields]'), !isFixed);
+
+            if (!isFixed) {
+                form.querySelectorAll('[data-salary-rule]').forEach((rule) => {
+                    updateSalaryRule(rule, formulaDescriptions);
+                });
+            }
+        };
+
+        form.querySelectorAll('[data-salary-rule]').forEach((rule) => {
+            updateSalaryRule(rule, formulaDescriptions);
+
+            rule.querySelector('[data-salary-formula]')?.addEventListener('change', () => {
+                updateSalaryRule(rule, formulaDescriptions);
+            });
+            rule.querySelector('[data-salary-override-toggle]')?.addEventListener('change', () => {
+                updateSalaryRule(rule, formulaDescriptions);
+            });
+            rule.querySelector('[data-salary-add-tier]')?.addEventListener('click', () => {
+                const template = rule.querySelector('[data-salary-tier-template]');
+                const rows = rule.querySelector('[data-salary-tier-rows]');
+
+                if (!template || !rows) {
+                    return;
+                }
+
+                rows.append(template.content.cloneNode(true));
+                renameSalaryTierFields(rule);
+            });
+            rule.querySelector('[data-salary-tier-rows]')?.addEventListener('click', (event) => {
+                const removeButton = event.target.closest('[data-salary-remove-tier]');
+
+                if (!removeButton) {
+                    return;
+                }
+
+                removeButton.closest('[data-salary-tier-row]')?.remove();
+                renameSalaryTierFields(rule);
+            });
+        });
+
+        form.querySelectorAll('[data-salary-model-type]').forEach((input) => {
+            input.addEventListener('change', updateModelType);
+        });
+        updateModelType();
+    });
+
+    document.querySelectorAll('[data-salary-assignment-form]').forEach((form) => {
+        form.querySelector('[data-salary-select-unassigned]')?.addEventListener('click', () => {
+            form.querySelectorAll('[data-salary-trainer]').forEach((checkbox) => {
+                checkbox.checked = checkbox.dataset.unassigned === 'true';
+            });
+        });
+        form.querySelector('[data-salary-clear-trainers]')?.addEventListener('click', () => {
+            form.querySelectorAll('[data-salary-trainer]').forEach((checkbox) => {
+                checkbox.checked = false;
+            });
+        });
+    });
+}
+
 function updateClassPassScheduleKind(form) {
     const select = form?.querySelector('[data-class-pass-schedule-kind]');
 
@@ -4895,6 +5017,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPeopleCounterScreenshotViewer();
     initPublicPricingCalculators();
     initPublicCalendarSwipe();
+    initSalaryModelForms();
     syncPublicLegalReturnUrls();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {

@@ -133,6 +133,15 @@ class TrainerController extends Controller
         $this->ensureBelongsToAccount($account, $trainer);
         $this->authorize('manageTrainers', $account);
 
+        if ($trainer->scheduledClasses()->exists()
+            || $trainer->additionalScheduledClasses()->exists()
+            || $trainer->scheduleSeries()->exists()
+            || $trainer->salaryAssignments()->exists()
+            || $trainer->substitutionsAsReplacedTrainer()->exists()
+            || $trainer->substitutionsAsSubstituteTrainer()->exists()) {
+            return back()->withErrors(['trainer' => __('app.trainer_delete_history_blocked')]);
+        }
+
         if ($trainer->photo_path) {
             Storage::disk('public')->delete($trainer->photo_path);
         }

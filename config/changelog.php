@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.95.0',
+                'date' => '2026-07-25',
+                'title' => 'Preliminary salary models for trainers',
+                'items' => ['Studio owners can now create fixed monthly, weekly, or daily salary models and flexible per-class models: a flat amount, a per-person rate with minimum paid attendance, a base with supplements above a threshold, an hourly rate with supplements, or fixed attendance tiers. Empty-class handling, counted booking statuses, class-specific rules, and minimum or maximum pay limits keep each studio policy explicit.', 'Models can be assigned to one or more trainers from an effective date, while later rule changes create dated versions without rewriting earlier periods. Trainer reports calculate completed work, show every class or fixed-period share with the people count, formula, and result, and flag missing configuration instead of hiding an incomplete total.', 'Salary settings now have a dedicated studio-menu entry and a full owner help guide with practical examples. This first framework version establishes the foundation and will be expanded with studio feedback.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.94.0',
                 'date' => '2026-07-24',
                 'title' => 'Four-week public schedule calendar',
@@ -856,6 +863,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.95.0',
+                'date' => '2026-07-25',
+                'title' => 'Попередня версія моделей зарплати тренерів',
+                'items' => ['Власниця студії тепер може створювати сталі моделі зарплати за місяць, тиждень або день і гнучкі моделі за заняття: сталу суму, ставку за людину з мінімально оплачуваною кількістю, базу з надбавкою понад поріг, погодинну ставку з надбавкою або сталі суми за діапазонами відвідуваності. Оплата занять без людей, статуси записів, окремі правила для форматів і мінімальна чи максимальна сума дозволяють точно описати правила студії.', 'Моделі можна призначати одному або кільком тренерам із потрібної дати, а подальші зміни правил створюють датовані версії без переписування попередніх періодів. Звіт по тренерах рахує завершену роботу, показує кожне заняття або частку сталої ставки з кількістю людей, формулою і результатом та попереджає про відсутні налаштування замість приховування неповної суми.', 'Налаштування зарплати отримали окремий пункт у меню студії та повний гід із практичними прикладами. Ця перша версія створює основу фреймворку й надалі буде розширюватися за відгуками студій.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.94.0',
                 'date' => '2026-07-24',

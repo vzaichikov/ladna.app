@@ -83,6 +83,11 @@ class Trainer extends Model
             ->withTimestamps();
     }
 
+    public function salaryAssignments(): HasMany
+    {
+        return $this->hasMany(TrainerSalaryAssignment::class);
+    }
+
     public function scheduleSeries(): HasMany
     {
         return $this->hasMany(ScheduleSeries::class);

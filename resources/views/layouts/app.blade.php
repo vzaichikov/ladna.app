@@ -227,6 +227,12 @@
             'href' => route('dashboard.accounts.class-pass-segments.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.class-pass-segments.*'),
         ]] : []),
+        ...($canManageStudioCashflow ? [[
+            'label' => __('app.salary_settings'),
+            'icon' => 'payments',
+            'href' => route('dashboard.accounts.salary-models.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.salary-models.*'),
+        ]] : []),
         ...($canManageTrainers ? [[
             'label' => __('app.trainers'),
             'icon' => 'trainers',
