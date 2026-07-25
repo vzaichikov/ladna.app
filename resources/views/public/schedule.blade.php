@@ -3,7 +3,7 @@
 @section('title', $account->name.' '.$location->name.' '.strtolower(__('app.schedule')))
 
 @section('publicFooter')
-    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+    <x-ui.powered-footer :account="$account" :show-locale-switcher="! $isEmbed" class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
 @endsection
 
 @section('content')
@@ -21,13 +21,7 @@
                 $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
             @endphp
 
-            @unless ($isEmbed)
-                <a href="{{ route('home') }}" class="inline-flex items-center gap-3 text-sm font-semibold text-slate-600 hover:text-slate-950">
-                    <x-ui.app-logo mark-class="h-9 w-9" />
-                </a>
-            @endunless
-
-            <header class="mt-6 rounded-2xl border border-stone-200 bg-white p-6 shadow-crm">
+            <header class="rounded-2xl border border-stone-200 bg-white p-6 shadow-crm">
                 <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                     <div class="flex gap-4">
                         <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-stone-200 bg-slate-50 shadow-xs">
@@ -51,15 +45,27 @@
                             @endforeach
                         </div>
                         <div class="flex flex-wrap items-center gap-3 lg:justify-end">
-                            <form method="POST" action="{{ route('locale.update') }}">
-                                @csrf
-                                <select name="locale" onchange="this.form.submit()" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-xs">
-                                    @foreach (config('ladna.locales') as $locale => $label)
-                                        <option value="{{ $locale }}" @selected(app()->getLocale() === $locale)>{{ strtoupper($locale) }}</option>
-                                    @endforeach
-                                </select>
-                            </form>
-                            <x-ui.public-legal-links :account="$account" :return-url="request()->fullUrl()" variant="text" />
+                            @if ($customer)
+                                <a
+                                    href="{{ route('customer.dashboard', $account->slug) }}"
+                                    class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100"
+                                    data-customer-dashboard-link
+                                >
+                                    <x-ui.icon name="user" class="h-3.5 w-3.5" />
+                                    {{ __('app.public_schedule_logged_in_as', ['name' => $customerDisplayName ?? __('app.customer_section')]) }}
+                                </a>
+                            @else
+                                <a href="{{ route('customer.studio.login', $account->slug) }}" class="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
+                                    <x-ui.icon name="log-in" class="h-3.5 w-3.5" />
+                                    {{ __('app.customer_login') }}
+                                </a>
+                            @endif
+
+                            <x-ui.public-legal-links
+                                :account="$account"
+                                :return-url="request()->fullUrl()"
+                                :show-offer="false"
+                            />
                         </div>
                     </div>
                 </div>
@@ -67,19 +73,9 @@
 
             @if ($customer)
                 <section class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-xs">
-                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                            <div class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-sm font-semibold text-emerald-800">
-                                <x-ui.icon name="user" class="h-4 w-4" />
-                                {{ __('app.public_schedule_logged_in_as', ['name' => $customerDisplayName ?? __('app.customer_section')]) }}
-                            </div>
-                            <h2 class="mt-4 text-lg font-semibold text-slate-950">{{ __('app.customer_class_passes') }}</h2>
-                        </div>
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_class_passes') }}</h2>
                         <div class="flex flex-wrap gap-2">
-                            <x-ui.button :href="route('customer.dashboard', $account->slug)" variant="secondary">
-                                <x-ui.icon name="dashboard" class="h-4 w-4" />
-                                {{ __('app.customer_portal') }}
-                            </x-ui.button>
                             <x-ui.button :href="route('customer.profile.edit', $account->slug)" variant="ghost">
                                 <x-ui.icon name="user" class="h-4 w-4" />
                                 {{ __('app.profile') }}

@@ -19,13 +19,13 @@
 
     <div class="mt-3 flex flex-wrap items-center gap-2">
         @if ($customer)
-            <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+            <a
+                href="{{ route('customer.dashboard', $account->slug) }}"
+                class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100"
+                data-customer-dashboard-link
+            >
                 <x-ui.icon name="user" class="h-3.5 w-3.5" />
                 {{ __('app.public_schedule_logged_in_as', ['name' => $customerDisplayName ?? __('app.customer_section')]) }}
-            </span>
-            <a href="{{ route('customer.dashboard', $account->slug) }}" class="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
-                <x-ui.icon name="layout-dashboard" class="h-3.5 w-3.5" />
-                {{ __('app.customer_portal') }}
             </a>
         @else
             <a href="{{ route('customer.studio.login', $account->slug) }}" class="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
@@ -34,15 +34,10 @@
             </a>
         @endif
 
-        <x-ui.public-legal-links :account="$account" :return-url="request()->fullUrl()" />
-
-        <form method="POST" action="{{ route('locale.update') }}">
-            @csrf
-            <select name="locale" onchange="this.form.submit()" class="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
-                @foreach (config('ladna.locales') as $locale => $label)
-                    <option value="{{ $locale }}" @selected(app()->getLocale() === $locale)>{{ strtoupper($locale) }}</option>
-                @endforeach
-            </select>
-        </form>
+        <x-ui.public-legal-links
+            :account="$account"
+            :return-url="request()->fullUrl()"
+            :show-offer="false"
+        />
     </div>
 </header>

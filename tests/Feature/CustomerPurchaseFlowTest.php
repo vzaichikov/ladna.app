@@ -45,6 +45,10 @@ class CustomerPurchaseFlowTest extends TestCase
     public function test_checkout_page_shows_configured_payment_buttons(): void
     {
         [$account, $location, $plan, $customer] = $this->purchaseContext();
+        $account->update([
+            'studio_rules_html' => '<p>Checkout rules</p>',
+            'public_offer_html' => '<p>Checkout offer</p>',
+        ]);
         $this->accountIntegration($account, IntegrationProvider::Liqpay, [
             'public_key' => 'public-key',
             'private_key' => 'private-key',
@@ -55,6 +59,12 @@ class CustomerPurchaseFlowTest extends TestCase
             ->assertOk()
             ->assertSee($plan->name)
             ->assertSee('LiqPay')
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
             ->assertDontSee('We will create a payment attempt before sending you to the provider.')
             ->assertSee('name="provider"', false)
             ->assertSee('name="studio_rules_accepted"', false)

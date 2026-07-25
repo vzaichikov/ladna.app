@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.96.0',
+                'date' => '2026-07-25',
+                'title' => 'Simpler customer navigation',
+                'items' => ['Public studio pages, prices, and schedules now keep customer login or the signed-in identity beside Studio rules. The signed-in identity opens the customer cabinet directly, while duplicate cabinet actions have been removed.', 'Studio rules and the public offer agreement now share a quiet legal-links row above the Powered by Ladna footer throughout the studio customer journey. The language switcher has moved into the same footer, while embedded prices and schedules stay free of Ladna navigation and branding.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.95.1',
                 'date' => '2026-07-25',
                 'title' => 'Consistent booking cancellation',
@@ -870,6 +877,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.96.0',
+                'date' => '2026-07-25',
+                'title' => 'Простіша клієнтська навігація',
+                'items' => ['На публічній сторінці студії, цінах і розкладі клієнтський вхід або ім’я авторизованого клієнта тепер розташовані поруч із правилами студії. Натискання на ім’я одразу відкриває кабінет клієнта, а дублікати кнопки кабінету прибрано.', 'Правила студії та договір публічної оферти тепер зібрані в спокійному рядку юридичних посилань над футером «Працює на Ladna» на всьому клієнтському шляху студії. Перемикач мови перенесено в цей же футер, а вбудовані ціни й розклад залишилися без навігації та брендингу Ladna.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.95.1',
                 'date' => '2026-07-25',

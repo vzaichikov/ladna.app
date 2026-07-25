@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Account;
+use App\Models\Customer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class PublicStudioLandingController extends Controller
@@ -24,8 +26,16 @@ class PublicStudioLandingController extends Controller
 
         return view('public.studio', [
             'account' => $account,
+            'customer' => $this->currentCustomerFor($account),
             'locations' => $locations,
         ]);
+    }
+
+    private function currentCustomerFor(Account $account): ?Customer
+    {
+        $customer = Auth::guard('customer')->user();
+
+        return $customer instanceof Customer && $customer->account_id === $account->id ? $customer : null;
     }
 
     private function setAccountLocale(Account $account): void

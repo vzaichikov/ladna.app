@@ -59,6 +59,8 @@ class CustomerAuthFlowTest extends TestCase
             ->assertSee(__('app.customer_studio_login_title'))
             ->assertSee(__('app.customer_studio_search_placeholder'))
             ->assertSee(__('app.staff_owner_login_cta'))
+            ->assertSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
             ->assertSee('data-studio-login-picker', false)
             ->assertSee('data-studio-login-picker-option', false)
             ->assertSee('data-studio-login-picker-card', false)
@@ -75,6 +77,8 @@ class CustomerAuthFlowTest extends TestCase
         $account = Account::factory()->create([
             'default_language' => 'en',
             'slug' => 'global-google-'.fake()->unique()->numberBetween(1000, 9999),
+            'studio_rules_html' => '<p>Login rules</p>',
+            'public_offer_html' => '<p>Login offer</p>',
         ]);
 
         $this->platformIntegration('google_oauth', IntegrationCategory::Authentication->value, [
@@ -84,6 +88,12 @@ class CustomerAuthFlowTest extends TestCase
 
         $this->get(route('customer.studio.login', $account->slug))
             ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
             ->assertSee('Email', false)
             ->assertSee('Sign in with Google', false)
             ->assertDontSee('role="tablist"', false)
@@ -200,9 +210,58 @@ class CustomerAuthFlowTest extends TestCase
             ->assertSee('Номер телефону заповнено коректно.', false)
             ->assertSee('Новий пароль', false)
             ->assertSee('Підтвердження нового пароля', false)
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
             ->assertSee('Залиште порожнім, якщо не хочете змінювати пароль. Новий пароль має містити щонайменше 6 символів.', false)
             ->assertDontSee('Please enter a complete phone number.')
             ->assertDontSee('Looks good');
+    }
+
+    public function test_customer_dashboard_and_profile_show_locale_in_footer_and_return_to_current_page(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'slug' => 'customer-topbar-'.fake()->unique()->numberBetween(1000, 9999),
+            'studio_rules_html' => '<p>Dashboard rules</p>',
+            'public_offer_html' => '<p>Dashboard offer</p>',
+        ]);
+        Location::factory()->for($account)->create(['slug' => 'main']);
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Topbar Customer',
+            'phone' => '+380501112255',
+        ]);
+        $dashboardUrl = route('customer.dashboard', $account->slug).'?tab=passes';
+
+        $this->actingAs($customer, 'customer')
+            ->get($dashboardUrl)
+            ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
+            ->assertSeeInOrder([
+                'value="uk"',
+                'UA',
+                'value="en"',
+                'EN',
+            ], false);
+
+        $this->get(route('customer.profile.edit', $account->slug))
+            ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false);
+
+        $this->from($dashboardUrl)
+            ->post(route('locale.update'), ['locale' => 'uk'])
+            ->assertRedirect($dashboardUrl)
+            ->assertSessionHas('locale', 'uk');
     }
 
     public function test_customer_profile_rejects_incomplete_phone_in_ukrainian(): void
@@ -546,6 +605,8 @@ class CustomerAuthFlowTest extends TestCase
 
         $this->get(route('customer.studios.index'))
             ->assertOk()
+            ->assertSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
             ->assertSee('First Studio', false)
             ->assertSee('Second Studio', false)
             ->assertSee(route('customer.studios.switch', $secondStudioCustomer), false);
@@ -879,6 +940,8 @@ class CustomerAuthFlowTest extends TestCase
             'default_language' => 'en',
             'country_code' => 'UA',
             'slug' => 'google-phone-link-'.fake()->unique()->numberBetween(1000, 9999),
+            'studio_rules_html' => '<p>Phone confirmation rules</p>',
+            'public_offer_html' => '<p>Phone confirmation offer</p>',
         ]);
 
         $customer = Customer::factory()->for($account)->create([
@@ -917,6 +980,12 @@ class CustomerAuthFlowTest extends TestCase
 
         $this->get(route('customer.google.phone', $account->slug))
             ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
             ->assertSee('Enter your phone number', false);
 
         $this->post(route('customer.google.phone.send', $account->slug), [

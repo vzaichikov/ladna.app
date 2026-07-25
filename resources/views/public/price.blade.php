@@ -3,7 +3,7 @@
 @section('title', $account->name.' '.$location->name.' '.__('app.public_price_title'))
 
 @section('publicFooter')
-    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+    <x-ui.powered-footer :account="$account" :show-locale-switcher="! $isEmbed" class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
 @endsection
 
 @section('content')

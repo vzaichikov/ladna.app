@@ -3,7 +3,7 @@
 @section('title', $documentTitle.' - '.$account->name)
 
 @section('publicFooter')
-    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+    <x-ui.powered-footer :account="$account" :show-locale-switcher="true" class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
 @endsection
 
 @section('content')
@@ -14,7 +14,7 @@
                 {{ __('app.back') }}
             </a>
 
-            <header class="mt-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <header class="mt-6">
                 <div class="flex items-center gap-4">
                     <span class="flex h-16 w-16 items-center justify-center rounded-2xl border border-stone-200 bg-white shadow-xs">
                         <img src="{{ $account->logoUrl() }}" alt="" class="max-h-11 max-w-11 object-contain">
@@ -24,15 +24,6 @@
                         <h1 class="mt-1 text-3xl font-semibold text-slate-950">{{ $documentTitle }}</h1>
                     </div>
                 </div>
-
-                <form method="POST" action="{{ route('locale.update') }}">
-                    @csrf
-                    <select name="locale" onchange="this.form.submit()" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-xs">
-                        @foreach (config('ladna.locales') as $locale => $label)
-                            <option value="{{ $locale }}" @selected(app()->getLocale() === $locale)>{{ strtoupper($locale) }}</option>
-                        @endforeach
-                    </select>
-                </form>
             </header>
 
             <article class="mt-8 rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-8">

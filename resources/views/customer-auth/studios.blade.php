@@ -13,9 +13,7 @@
 
     <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8">
         <section class="mx-auto max-w-4xl">
-            <div class="flex items-center gap-4">
-                <x-ui.app-logo mark-class="h-12 w-12" text-class="text-slate-950" />
-            </div>
+            <x-ui.customer-page-topbar />
 
             <header class="mt-8 rounded-2xl border border-stone-200 bg-white p-6 shadow-crm">
                 <div class="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-600">

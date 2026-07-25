@@ -125,7 +125,16 @@ class PublicScheduleTest extends TestCase
 
         $this->get('/test-default-compact-studio/main/schedule')
             ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
             ->assertSee('group_panel=class_type', false);
+
+        $this->get('/test-default-compact-studio/main/schedule/embed')
+            ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertDontSee('data-customer-locale-switcher', false)
+            ->assertDontSee('data-customer-footer-locale-switcher', false);
     }
 
     public function test_existing_studios_can_keep_the_classic_public_schedule_view(): void
@@ -142,6 +151,9 @@ class PublicScheduleTest extends TestCase
 
         $this->get('/test-explicit-classic-studio/main/schedule')
             ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
             ->assertSee(__('app.schedule_period_week'))
             ->assertDontSee(__('app.schedule_kind'));
     }
@@ -736,8 +748,7 @@ class PublicScheduleTest extends TestCase
         $this->get('/test-booking-cutoff-studio/main/schedule')
             ->assertOk()
             ->assertSee(__('app.booking_cutoff_closed'))
-            ->assertSee(__('app.booking_closed'))
-            ->assertDontSee(route('customer.studio.login', $account->slug), false);
+            ->assertSee(__('app.booking_closed'));
 
         Carbon::setTestNow();
     }
@@ -824,8 +835,7 @@ class PublicScheduleTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.available_slots'))
             ->assertSee(__('app.no_available_group_slots'))
-            ->assertSee(__('app.booking_full'))
-            ->assertDontSee(route('customer.studio.login', $account->slug), false);
+            ->assertSee(__('app.booking_full'));
 
         Carbon::setTestNow();
     }
@@ -839,6 +849,8 @@ class PublicScheduleTest extends TestCase
             'default_language' => 'uk',
             'timezone' => 'UTC',
             'public_schedule_view' => PublicScheduleView::Classic->value(),
+            'studio_rules_html' => '<p>Customer schedule rules</p>',
+            'public_offer_html' => '<p>Customer schedule offer</p>',
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
         $room = Room::factory()->for($account)->for($location)->create();
@@ -863,13 +875,26 @@ class PublicScheduleTest extends TestCase
                 'used_sessions_count' => 2,
             ]);
 
-        $this->actingAs($customer, 'customer')
+        $response = $this->actingAs($customer, 'customer')
             ->get('/test-customer-public-schedule-studio/main/schedule')
             ->assertOk()
             ->assertSee('Ви увійшли як Olena Client')
+            ->assertSee('data-customer-dashboard-link', false)
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
             ->assertSee('BASE 8')
             ->assertSee('ABCD-1234')
-            ->assertSee(route('customer.dashboard', $account->slug), false);
+            ->assertSee(route('customer.dashboard', $account->slug), false)
+            ->assertSee(route('public.studio-rules', $account->slug), false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
+            ->assertDontSee(__('app.customer_portal'));
+
+        $this->assertSame(
+            1,
+            substr_count($response->getContent(), 'data-customer-dashboard-link'),
+        );
 
         Carbon::setTestNow();
     }

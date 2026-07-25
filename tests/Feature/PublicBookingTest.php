@@ -48,6 +48,35 @@ class PublicBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_booking_confirmation_uses_customer_locale_switcher_in_footer(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-booking-topbar-studio',
+            'studio_rules_html' => '<p>Booking rules</p>',
+            'public_offer_html' => '<p>Booking offer</p>',
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('public.booking.show', [
+                'accountSlug' => $account->slug,
+                'locationSlug' => $location->slug,
+                'schedule_kind' => ScheduleKind::GroupClass->value,
+                'scheduled_class_id' => $scheduledClass->id,
+            ]))
+            ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false);
+
+        Carbon::setTestNow();
+    }
+
     public function test_authenticated_customer_can_book_group_class_and_reserve_matching_pass(): void
     {
         Mail::fake();

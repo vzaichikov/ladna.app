@@ -124,6 +124,12 @@ class StudioRulesTest extends TestCase
             ->assertSee('Studio rules')
             ->assertSee(__('app.powered_by_ladna'))
             ->assertSee('brand/ladna-mark.svg', false)
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
             ->assertDontSee(__('app.terms_of_service'))
             ->assertSee('href="'.$fallbackPath.'"', false)
             ->assertSee('class="studio-rules-content"', false)
@@ -136,6 +142,12 @@ class StudioRulesTest extends TestCase
             ->assertSee('Public offer agreement')
             ->assertSee(__('app.powered_by_ladna'))
             ->assertSee('brand/ladna-mark.svg', false)
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
             ->assertDontSee(__('app.terms_of_service'))
             ->assertSee('href="'.$fallbackPath.'"', false)
             ->assertSee('class="studio-rules-content"', false)
@@ -207,7 +219,7 @@ class StudioRulesTest extends TestCase
             ->assertSee('href="'.$fallbackPath.'"', false);
     }
 
-    public function test_landing_price_and_both_schedule_layouts_show_configured_legal_links(): void
+    public function test_customer_information_pages_keep_rules_near_navigation_and_offer_in_footer(): void
     {
         $account = Account::factory()->create([
             'slug' => 'legal-links-studio',
@@ -219,9 +231,7 @@ class StudioRulesTest extends TestCase
         $sourceUrls = [
             route('public.studio', $account->slug),
             route('public.price', [$account->slug, $location->slug]),
-            route('public.price.embed', [$account->slug, $location->slug]),
             route('public.schedule', [$account->slug, $location->slug]),
-            route('public.schedule.embed', [$account->slug, $location->slug]),
         ];
 
         foreach ($sourceUrls as $sourceUrl) {
@@ -234,7 +244,35 @@ class StudioRulesTest extends TestCase
                 ->assertSee(route('public.studio-offer', [
                     'accountSlug' => $account->slug,
                     'return_to' => $sourceUrl,
-                ]), false);
+                ]), false)
+                ->assertSee('data-customer-footer-legal-links', false)
+                ->assertSee('data-public-rules-footer-link', false)
+                ->assertSee('data-public-offer-footer-link', false)
+                ->assertSeeInOrder([
+                    'data-customer-footer-legal-links',
+                    'data-public-rules-footer-link',
+                    'data-public-offer-footer-link',
+                    __('app.powered_by_ladna'),
+                ], false);
+        }
+
+        $embedUrls = [
+            route('public.price.embed', [$account->slug, $location->slug]),
+            route('public.schedule.embed', [$account->slug, $location->slug]),
+        ];
+
+        foreach ($embedUrls as $embedUrl) {
+            $this->get($embedUrl)
+                ->assertOk()
+                ->assertSee(route('public.studio-rules', [
+                    'accountSlug' => $account->slug,
+                    'return_to' => $embedUrl,
+                ]), false)
+                ->assertDontSee(route('public.studio-offer', $account->slug), false)
+                ->assertDontSee('data-customer-page-topbar', false)
+                ->assertDontSee('data-customer-footer-legal-links', false)
+                ->assertDontSee('data-public-rules-footer-link', false)
+                ->assertDontSee('data-public-offer-footer-link', false);
         }
 
         $account->update(['public_schedule_view' => PublicScheduleView::Classic->value()]);
@@ -249,7 +287,10 @@ class StudioRulesTest extends TestCase
             ->assertSee(route('public.studio-offer', [
                 'accountSlug' => $account->slug,
                 'return_to' => $classicScheduleUrl,
-            ]), false);
+            ]), false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false);
     }
 
     public function test_public_legal_links_are_hidden_independently(): void
@@ -264,7 +305,10 @@ class StudioRulesTest extends TestCase
         $this->get(route('public.price', [$account->slug, $location->slug]))
             ->assertOk()
             ->assertSee(route('public.studio-rules', $account->slug), false)
-            ->assertDontSee(route('public.studio-offer', $account->slug), false);
+            ->assertDontSee(route('public.studio-offer', $account->slug), false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertDontSee('data-public-offer-footer-link', false);
 
         $account->update([
             'studio_rules_html' => null,
@@ -274,7 +318,11 @@ class StudioRulesTest extends TestCase
         $this->get(route('public.schedule', [$account->slug, $location->slug]))
             ->assertOk()
             ->assertDontSee(route('public.studio-rules', $account->slug), false)
-            ->assertSee(route('public.studio-offer', $account->slug), false);
+            ->assertSee(route('public.studio-offer', $account->slug), false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertDontSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
+            ->assertDontSee(__('app.public_contact_title', ['studio' => $account->name]));
     }
 
     /**

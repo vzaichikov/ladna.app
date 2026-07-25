@@ -3,11 +3,12 @@
 @section('title', $account->name.' - '.__('app.studio_public_landing_title'))
 
 @section('publicFooter')
-    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+    <x-ui.powered-footer :account="$account" :show-locale-switcher="true" class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
 @endsection
 
 @section('content')
     @php
+        $customerDisplayName = $customer?->name ?? $customer?->phone ?? $customer?->email;
         $studioColor = is_string($account->brand_color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $account->brand_color)
             ? $account->brand_color
             : '#3B223F';
@@ -15,21 +16,7 @@
 
     <main class="min-h-[calc(100vh-8rem)] bg-canvas text-slate-950" style="--studio-brand-color: {{ $studioColor }};">
         <section class="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
-            <div class="flex items-center justify-between gap-4">
-                <a href="{{ route('home') }}" class="inline-flex items-center gap-3 text-sm font-semibold text-slate-600 transition hover:text-slate-950">
-                    <x-ui.app-logo mark-class="h-9 w-9" />
-                </a>
-                <form method="POST" action="{{ route('locale.update') }}">
-                    @csrf
-                    <select name="locale" onchange="this.form.submit()" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-xs">
-                        @foreach (config('ladna.locales') as $locale => $label)
-                            <option value="{{ $locale }}" @selected(app()->getLocale() === $locale)>{{ strtoupper($locale) }}</option>
-                        @endforeach
-                    </select>
-                </form>
-            </div>
-
-            <header class="mt-8 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-crm">
+            <header class="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-crm">
                 <div class="h-2" style="background-color: var(--studio-brand-color);"></div>
                 <div class="grid gap-6 p-5 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-end">
                     <div class="flex items-center gap-4 sm:gap-5">
@@ -43,10 +30,20 @@
                             @endif
                         </div>
                     </div>
-                    @if (filled($account->studio_rules_html) || filled($account->public_offer_html))
-                        <div class="flex flex-wrap gap-2 lg:justify-end">
-                            <x-ui.public-legal-links :account="$account" :return-url="request()->fullUrl()" variant="landing" />
-                        </div>
+                    @if ($customer)
+                        <a
+                            href="{{ route('customer.dashboard', $account->slug) }}"
+                            class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-xs transition hover:border-emerald-300 hover:bg-emerald-100"
+                            data-customer-dashboard-link
+                        >
+                            <x-ui.icon name="user" class="h-4 w-4" />
+                            {{ __('app.public_schedule_logged_in_as', ['name' => $customerDisplayName ?? __('app.customer_section')]) }}
+                        </a>
+                    @else
+                        <x-ui.button :href="route('customer.studio.login', $account->slug)" variant="brand">
+                            <x-ui.icon name="log-in" class="h-4 w-4" />
+                            {{ __('app.customer_login') }}
+                        </x-ui.button>
                     @endif
                 </div>
             </header>
@@ -93,10 +90,14 @@
                                     @endif
                                 </div>
                                 <div class="flex flex-col gap-3 sm:flex-row lg:justify-end">
-                                    <x-ui.button :href="route('customer.studio.login', $account->slug)" variant="brand" class="w-full sm:w-auto">
-                                        <x-ui.icon name="log-in" class="h-4 w-4" />
-                                        {{ __('app.customer_login') }}
-                                    </x-ui.button>
+                                    @if (filled($account->studio_rules_html))
+                                        <x-ui.public-legal-links
+                                            :account="$account"
+                                            :return-url="request()->fullUrl()"
+                                            variant="landing"
+                                            :show-offer="false"
+                                        />
+                                    @endif
                                     <x-ui.button :href="route('public.price', [$account->slug, $location->slug])" variant="secondary" class="w-full sm:w-auto">
                                         <x-ui.icon name="class-pass-plans" class="h-4 w-4" />
                                         {{ __('app.studio_landing_price_cta') }}

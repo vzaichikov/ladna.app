@@ -3,7 +3,7 @@
 @section('title', __('app.customer_google_phone_title').' - '.$account->name)
 
 @section('publicFooter')
-    <x-ui.powered-footer class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
+    <x-ui.powered-footer :account="$account" :show-locale-switcher="true" class="mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8" />
 @endsection
 
 @section('content')

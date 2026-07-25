@@ -30,6 +30,9 @@ class PublicPriceTest extends TestCase
             ->assertSee(__('app.room_rental_price'))
             ->assertSee(__('app.powered_by_ladna'))
             ->assertSee('brand/ladna-mark.svg', false)
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
             ->assertDontSee(__('app.terms_of_service'))
             ->assertSee($plans['group']->name)
             ->assertSee(__('app.validity_days_after_first_class'))
@@ -39,7 +42,32 @@ class PublicPriceTest extends TestCase
             ->assertSee(__('app.public_contact_title', ['studio' => $account->name]))
             ->assertSee('https://instagram.example/price-studio', false)
             ->assertSee('assets/social/instagram.svg', false)
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
+            ->assertSeeInOrder([
+                __('app.public_contact_title', ['studio' => $account->name]),
+                'data-customer-footer-legal-links',
+                'data-public-rules-footer-link',
+                'data-public-offer-footer-link',
+                __('app.powered_by_ladna'),
+            ], false)
             ->assertDontSee($plans['inactive']->name);
+    }
+
+    public function test_public_price_embed_omits_customer_topbar_and_offer_footer(): void
+    {
+        [$account, $location] = $this->priceContext();
+
+        $this->get(route('public.price.embed', [$account->slug, $location->slug]))
+            ->assertOk()
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertDontSee('data-customer-locale-switcher', false)
+            ->assertDontSee('data-customer-footer-locale-switcher', false)
+            ->assertDontSee('data-customer-footer-legal-links', false)
+            ->assertDontSee('data-public-rules-footer-link', false)
+            ->assertDontSee('data-public-offer-footer-link', false)
+            ->assertSee(route('public.studio-rules', $account->slug), false);
     }
 
     public function test_price_api_returns_embeddable_grouped_json(): void
@@ -77,12 +105,18 @@ class PublicPriceTest extends TestCase
         [$account, $location] = $this->priceContext();
         $customer = Customer::factory()->for($account)->create(['name' => 'Olena Client']);
 
-        $this->actingAs($customer, 'customer')
+        $response = $this->actingAs($customer, 'customer')
             ->get(route('public.price', [$account->slug, $location->slug]))
             ->assertOk()
             ->assertSee(__('app.public_schedule_logged_in_as', ['name' => $customer->name]))
-            ->assertSee(__('app.customer_portal'))
+            ->assertSee('data-customer-dashboard-link', false)
+            ->assertDontSee(__('app.customer_portal'))
             ->assertSee('href="'.route('customer.dashboard', $account->slug).'"', false);
+
+        $this->assertSame(
+            1,
+            substr_count($response->getContent(), 'href="'.route('customer.dashboard', $account->slug).'"'),
+        );
     }
 
     public function test_public_price_does_not_expose_customer_session_from_another_studio(): void
@@ -210,6 +244,8 @@ class PublicPriceTest extends TestCase
             'default_language' => 'en',
             'default_currency' => 'UAH',
             'support_instagram_url' => 'https://instagram.example/price-studio',
+            'studio_rules_html' => '<p>Price rules</p>',
+            'public_offer_html' => '<p>Price offer</p>',
         ]);
         $location = Location::factory()->for($account)->create(['slug' => 'main-studio', 'name' => 'Main studio']);
         $room = Room::factory()->for($account)->for($location)->create(['slug' => 'big-hall', 'name' => 'Big hall']);

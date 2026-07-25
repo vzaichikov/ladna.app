@@ -3,7 +3,7 @@
 @section('title', __('app.booking_confirmation').' · '.$account->name)
 
 @section('publicFooter')
-    <x-ui.powered-footer class="mx-auto max-w-xl bg-canvas px-4 pb-6 sm:px-6" />
+    <x-ui.powered-footer :account="$account" :show-locale-switcher="true" class="mx-auto max-w-xl bg-canvas px-4 pb-6 sm:px-6" />
 @endsection
 
 @section('content')

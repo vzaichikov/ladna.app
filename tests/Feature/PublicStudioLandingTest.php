@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\SubscriptionPlanType;
 use App\Enums\SubscriptionStatus;
 use App\Models\Account;
+use App\Models\Customer;
 use App\Models\Location;
 use App\Models\SubscriptionPlan;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -28,6 +29,8 @@ class PublicStudioLandingTest extends TestCase
             'support_telegram_url' => 'tg://resolve?domain=landingstudio',
             'support_phone_url' => '+380501234567',
             'support_secondary_phone_url' => '+380671234567',
+            'studio_rules_html' => '<p>Landing rules</p>',
+            'public_offer_html' => '<p>Landing offer</p>',
         ]);
         $activeLocation = Location::factory()->for($account)->create([
             'name' => 'Main location',
@@ -51,8 +54,13 @@ class PublicStudioLandingTest extends TestCase
             ->assertSee(route('customer.studio.login', $account->slug), false)
             ->assertSee(route('public.price', [$account->slug, $activeLocation->slug]), false)
             ->assertSee(route('public.schedule', [$account->slug, $activeLocation->slug]), false)
+            ->assertDontSee('data-customer-page-topbar', false)
+            ->assertSee('data-customer-locale-switcher', false)
+            ->assertSee('data-customer-footer-locale-switcher', false)
+            ->assertDontSee('data-customer-dashboard-link', false)
             ->assertSeeInOrder([
                 route('customer.studio.login', $account->slug),
+                route('public.studio-rules', $account->slug),
                 route('public.price', [$account->slug, $activeLocation->slug]),
                 route('public.schedule', [$account->slug, $activeLocation->slug]),
             ], false)
@@ -69,8 +77,45 @@ class PublicStudioLandingTest extends TestCase
             ->assertSee('brand/charmpole-icon.svg', false)
             ->assertSee('brand/ladna-mark.svg', false)
             ->assertSee(__('app.powered_by_ladna'))
+            ->assertSee('data-customer-footer-legal-links', false)
+            ->assertSee('data-public-rules-footer-link', false)
+            ->assertSee('data-public-offer-footer-link', false)
+            ->assertSeeInOrder([
+                __('app.public_contact_title', ['studio' => $account->name]),
+                'data-customer-footer-legal-links',
+                'data-public-rules-footer-link',
+                'data-public-offer-footer-link',
+                __('app.powered_by_ladna'),
+            ], false)
             ->assertDontSee($inactiveLocation->name)
             ->assertDontSee(route('public.price', [$account->slug, $inactiveLocation->slug]), false);
+    }
+
+    public function test_public_studio_landing_links_same_account_customer_identity_to_dashboard_only(): void
+    {
+        $account = Account::factory()->create([
+            'slug' => 'customer-landing-studio',
+            'default_language' => 'en',
+        ]);
+        Location::factory()->for($account)->create(['slug' => 'main']);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Landing Customer']);
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('public.studio', $account->slug))
+            ->assertOk()
+            ->assertSee(__('app.public_schedule_logged_in_as', ['name' => $customer->name]))
+            ->assertSee('data-customer-dashboard-link', false)
+            ->assertSee('href="'.route('customer.dashboard', $account->slug).'"', false)
+            ->assertDontSee('href="'.route('customer.studio.login', $account->slug).'"', false);
+
+        $otherAccount = Account::factory()->create(['slug' => 'other-customer-landing-studio']);
+        Location::factory()->for($otherAccount)->create(['slug' => 'main']);
+
+        $this->get(route('public.studio', $otherAccount->slug))
+            ->assertOk()
+            ->assertDontSee($customer->name)
+            ->assertDontSee('data-customer-dashboard-link', false)
+            ->assertSee('href="'.route('customer.studio.login', $otherAccount->slug).'"', false);
     }
 
     public function test_public_studio_landing_shows_selector_for_multiple_active_locations(): void

@@ -20,18 +20,16 @@
         </div>
 
         <section class="relative mx-auto max-w-7xl px-5 py-5 pb-10 sm:px-8 lg:px-10">
-            <header class="flex items-center justify-between gap-4">
-                <a href="{{ route('home') }}" class="inline-flex items-center gap-3 text-[#2B1731]">
-                    <x-ui.app-logo
-                        mark-class="h-10 w-10"
-                        text-class="text-[#2B1731]"
-                    />
+            <x-ui.customer-page-topbar>
+                <a
+                    href="{{ route('login') }}"
+                    class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#A78AB9]/30 bg-white/70 px-3 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2 sm:px-4"
+                    aria-label="{{ __('app.staff_owner_login_cta') }}"
+                >
+                    <x-ui.icon name="log-in" class="h-4 w-4 sm:hidden" />
+                    <span class="hidden sm:inline">{{ __('app.staff_owner_login_cta') }}</span>
                 </a>
-
-                <a href="{{ route('login') }}" class="inline-flex h-10 items-center justify-center rounded-lg border border-[#A78AB9]/30 bg-white/70 px-4 text-sm font-semibold text-[#3B223F] shadow-xs transition hover:border-[#A78AB9]/60 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
-                    {{ __('app.staff_owner_login_cta') }}
-                </a>
-            </header>
+            </x-ui.customer-page-topbar>
 
             <div class="grid gap-8 py-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:py-8">
                 <div class="max-w-2xl">
