@@ -15,10 +15,10 @@ class LadnaBusinessLogicReference
             'excerpt' => 'Group bookings use an existing scheduled class and capacity check; private/rental bookings create a manual scheduled class after ManualQuickBookingAvailability confirms the slot.',
         ],
         'class_booking_status_cancel' => [
-            'path' => 'app/Http/Controllers/ClassBookingController.php',
-            'symbol' => 'App\\Http\\Controllers\\ClassBookingController::update',
-            'summary' => 'Changes booking status, blocks cancellation after cutoff, reconciles class pass reservation, and sends cancellation or booking notifications.',
-            'excerpt' => 'Cancelled bookings are status changes, not deletes. Deletion is a separate controller action and is not used by assistant actions.',
+            'path' => 'app/Actions/CancelClassBooking.php',
+            'symbol' => 'App\\Actions\\CancelClassBooking::execute',
+            'summary' => 'Cancels an individual booking before the cutoff, keeps it for history, releases its class-pass reservation, and sends one cancellation notification.',
+            'excerpt' => 'Web, mobile, and assistant cancellations use this action. Booking deletion and whole-class studio cancellation remain separate workflows.',
         ],
         'manual_availability' => [
             'path' => 'app/Support/ManualQuickBookingAvailability.php',
@@ -35,8 +35,8 @@ class LadnaBusinessLogicReference
         'class_pass_issuance_backfill' => [
             'path' => 'app/Actions/ReconcileUnreservedCustomerBookingsForIssuedClassPass.php',
             'symbol' => 'App\\Actions\\ReconcileUnreservedCustomerBookingsForIssuedClassPass::execute',
-            'summary' => 'Issuing a pass rechecks the customer’s unreserved bookings and attaches eligible bookings in chronological order.',
-            'excerpt' => 'An existing booking may receive a reservation immediately after a new pass is issued. This is expected backfill, not a second booking.',
+            'summary' => 'Issuing a pass rechecks eligible non-cancelled unreserved bookings, while explicit manual normalization can also release legacy consumed cancellations.',
+            'excerpt' => 'Cancelled bookings are never attached as used sessions. Legacy repairs require the owner-facing preview and Apply flow.',
         ],
         'class_pass_reservation_chronology' => [
             'path' => 'app/Actions/ReserveCustomerClassPassForBooking.php',
@@ -48,7 +48,7 @@ class LadnaBusinessLogicReference
             'path' => 'app/Actions/NormalizeCustomerClassPasses.php',
             'symbol' => 'App\\Actions\\NormalizeCustomerClassPasses::forPass',
             'summary' => 'Rebuilds reserved and used counters from reservation ledger rows and closes used-up or expired passes.',
-            'excerpt' => 'A reserved class becomes used only after the scheduled class end plus the studio 60-minute grace window. The pass closes when ledger usage reaches its session snapshot.',
+            'excerpt' => 'A non-cancelled reserved class becomes used only after the scheduled class end plus the studio 60-minute grace window. Cancelled bookings stay released.',
         ],
         'closed_booking_corrections' => [
             'path' => 'app/Actions/AddClosedClassBookingCorrection.php',

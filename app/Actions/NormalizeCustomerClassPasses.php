@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduledClassStatus;
@@ -118,7 +119,7 @@ class NormalizeCustomerClassPasses
             ])->save();
 
             return $customerClassPass->refresh();
-        });
+        }, attempts: 3);
     }
 
     private function consumeElapsedReservations(CustomerClassPass $customerClassPass, Carbon $now): void
@@ -128,6 +129,10 @@ class NormalizeCustomerClassPasses
             ->whereHas('scheduledClass', fn ($query) => $query
                 ->where('status', ScheduledClassStatus::Scheduled->value)
                 ->where('ends_at', '<', $now->copy()->subMinutes(ScheduledClass::STUDIO_CANCELLATION_GRACE_MINUTES)))
+            ->whereHas('classBooking', fn ($query) => $query
+                ->where('status', '!=', ClassBookingStatus::Cancelled->value)
+                ->whereNull('corrected_removed_at')
+                ->where('skip_class_pass_reservation', false))
             ->with('scheduledClass:id,starts_at')
             ->get()
             ->each(function (CustomerClassPassReservation $reservation): void {

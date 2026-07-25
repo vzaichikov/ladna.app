@@ -373,7 +373,7 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_staff_cancelled_and_no_show_bookings_consume_sessions_and_normalizer_is_idempotent(): void
+    public function test_staff_cancelled_booking_releases_session_while_no_show_consumes_and_normalizer_is_idempotent(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
 
@@ -405,9 +405,9 @@ class CustomerClassPassBusinessFlowTest extends TestCase
 
         $customerClassPass->refresh();
         $this->assertSame(1, $customerClassPass->reserved_sessions_count);
-        $this->assertSame(2, $customerClassPass->used_sessions_count);
-        $this->assertSame(0, $customerClassPass->remainingSessionsCount());
-        $this->assertSame(CustomerClassPassReservationStatus::Used, $cancelledBooking->classPassReservation()->firstOrFail()->status);
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->remainingSessionsCount());
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $cancelledBooking->classPassReservation()->firstOrFail()->status);
         $this->assertSame(CustomerClassPassReservationStatus::Used, $noShowBooking->classPassReservation()->firstOrFail()->status);
 
         Carbon::setTestNow();
@@ -425,14 +425,18 @@ class CustomerClassPassBusinessFlowTest extends TestCase
 
         app(ReconcileCustomerClassPassForBooking::class)->execute($booking);
 
-        $booking->update(['status' => 'cancelled']);
+        $booking->update([
+            'status' => 'attended',
+            'attended_at' => Carbon::parse('2026-06-20 10:00:00'),
+        ]);
         app(ReconcileCustomerClassPassForBooking::class)->execute($booking);
 
         $this->assertSame(CustomerClassPassStatus::UsedUp, $customerClassPass->fresh()->status);
         $this->assertSame(CustomerClassPassReservationStatus::Used, $booking->classPassReservation()->firstOrFail()->status);
 
-        app(ReconcileCustomerClassPassForBooking::class)->execute($booking, releaseCancelledReservation: true);
-        app(ReconcileCustomerClassPassForBooking::class)->execute($booking, releaseCancelledReservation: true);
+        $booking->update(['status' => 'cancelled', 'attended_at' => null]);
+        app(ReconcileCustomerClassPassForBooking::class)->execute($booking);
+        app(ReconcileCustomerClassPassForBooking::class)->execute($booking);
 
         $reservation = $booking->classPassReservation()->firstOrFail();
         $customerClassPass->refresh();

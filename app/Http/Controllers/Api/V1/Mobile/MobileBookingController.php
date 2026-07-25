@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Mobile;
 
+use App\Actions\CancelClassBooking;
 use App\Actions\CreatePublicBooking;
 use App\Actions\ReconcileCustomerClassPassForBooking;
 use App\Actions\ReserveCustomerClassPassForBooking;
@@ -16,7 +17,6 @@ use App\Models\ClassBooking;
 use App\Models\MobileSession;
 use App\Models\ScheduledClass;
 use App\Support\ActorSnapshot;
-use App\Support\ClassBookingCancellationWindow;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,8 +101,8 @@ class MobileBookingController extends Controller
     public function updateStatus(
         MobileBookingStatusRequest $request,
         ClassBooking $classBooking,
+        CancelClassBooking $cancelClassBooking,
         ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
-        ClassBookingCancellationWindow $cancellationWindow,
         ClassBookingNotificationCoordinator $notifications,
     ): JsonResponse {
         $session = $this->staffSession($request);
@@ -114,23 +114,24 @@ class MobileBookingController extends Controller
 
         abort_unless($canMarkAttendance || $canManageBookings, 403);
 
-        if ($status === ClassBookingStatus::Cancelled && $cancellationWindow->isLockedForBooking($classBooking)) {
-            throw ValidationException::withMessages([
-                'status' => __('app.booking_cancellation_cutoff_locked'),
+        $previousStatus = $classBooking->status;
+
+        if ($status === ClassBookingStatus::Cancelled) {
+            $classBooking = $cancelClassBooking->execute(
+                $classBooking,
+                ['notes' => $request->validated('notes', $classBooking->notes)],
+                cutoffErrorKey: 'status',
+            );
+        } else {
+            $classBooking->update([
+                'status' => $status->value,
+                'attended_at' => $status === ClassBookingStatus::Attended ? now() : null,
+                'notes' => $request->validated('notes', $classBooking->notes),
             ]);
+            $reconcileCustomerClassPassForBooking->execute($classBooking);
         }
 
-        $previousStatus = $classBooking->status;
-        $classBooking->update([
-            'status' => $status->value,
-            'attended_at' => $status === ClassBookingStatus::Attended ? now() : null,
-            'notes' => $request->validated('notes', $classBooking->notes),
-        ]);
-        $reconcileCustomerClassPassForBooking->execute($classBooking);
-
-        if ($status === ClassBookingStatus::Cancelled && $previousStatus !== ClassBookingStatus::Cancelled) {
-            $notifications->bookingCancelled($classBooking);
-        } elseif ($status === ClassBookingStatus::Booked && $previousStatus !== ClassBookingStatus::Booked) {
+        if ($status === ClassBookingStatus::Booked && $previousStatus !== ClassBookingStatus::Booked) {
             $notifications->bookingCreated($classBooking);
         } elseif ($status === ClassBookingStatus::Attended && $previousStatus !== ClassBookingStatus::Attended) {
             $notifications->bookingUpdatedToActive($classBooking);
@@ -144,9 +145,7 @@ class MobileBookingController extends Controller
     public function cancel(
         Request $request,
         ClassBooking $classBooking,
-        ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
-        ClassBookingCancellationWindow $cancellationWindow,
-        ClassBookingNotificationCoordinator $notifications,
+        CancelClassBooking $cancelClassBooking,
     ): JsonResponse {
         $session = $request->attributes->get('mobileSession');
         abort_unless($session instanceof MobileSession, 403);
@@ -156,7 +155,10 @@ class MobileBookingController extends Controller
             abort_unless($classBooking->customer_id === $session->customer_id, 404);
             $classBooking->loadMissing('scheduledClass.classType');
 
-            if ($classBooking->status !== ClassBookingStatus::Booked || $classBooking->scheduledClass?->starts_at?->lessThanOrEqualTo(now())) {
+            if (
+                ! in_array($classBooking->status, [ClassBookingStatus::Booked, ClassBookingStatus::Cancelled], true)
+                || $classBooking->scheduledClass?->starts_at?->lessThanOrEqualTo(now())
+            ) {
                 throw ValidationException::withMessages([
                     'booking' => __('app.customer_booking_cancel_unavailable'),
                 ]);
@@ -165,21 +167,10 @@ class MobileBookingController extends Controller
             abort_unless($session->account->userCan($session->user, 'manage_bookings'), 403);
         }
 
-        if ($cancellationWindow->isLockedForBooking($classBooking)) {
-            throw ValidationException::withMessages([
-                'booking' => __('app.booking_cancellation_cutoff_locked'),
-            ]);
-        }
-
-        $classBooking->update([
-            'status' => ClassBookingStatus::Cancelled->value,
-            'attended_at' => null,
-        ]);
-        $reconcileCustomerClassPassForBooking->execute(
+        $classBooking = $cancelClassBooking->execute(
             $classBooking,
-            releaseCancelledReservation: $session->guard === MobileSession::GuardCustomer,
+            requireBookedUpcoming: $session->guard === MobileSession::GuardCustomer,
         );
-        $notifications->bookingCancelled($classBooking);
 
         return $this->bookingResponse($classBooking);
     }

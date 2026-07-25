@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\CreateManualScheduledClass;
 use App\Enums\AccountRole;
+use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
@@ -768,6 +769,11 @@ class CustomerBookingTest extends TestCase
         $booking = ClassBooking::factory()->for($account)->for($scheduledClass)->for($customer)->create();
 
         $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertDontSee('<option value="cancelled"', false);
+
+        $this->actingAs($owner)
             ->patchJson(route('dashboard.accounts.bookings.update', [$account, $booking]), ['status' => 'cancelled'])
             ->assertUnprocessable()
             ->assertJsonPath('errors.status.0', __('app.booking_cancellation_cutoff_locked'));
@@ -785,6 +791,13 @@ class CustomerBookingTest extends TestCase
             ->assertOk();
 
         $this->assertSame('no_show', $booking->fresh()->status->value);
+
+        $booking->update(['status' => ClassBookingStatus::Cancelled->value]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee('<option value="cancelled" selected', false);
 
         Carbon::setTestNow();
     }

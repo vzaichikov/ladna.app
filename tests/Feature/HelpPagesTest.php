@@ -49,13 +49,14 @@ class HelpPagesTest extends TestCase
             ->assertSee('навіть тоді, коли заняття ще залишилися або клієнт ще не прийшов на перше заняття', false);
     }
 
-    public function test_booking_help_explains_timely_customer_cancellation_returns_session(): void
+    public function test_booking_help_explains_timely_cancellation_returns_session_for_customer_and_staff(): void
     {
         foreach (['schedule', 'customers-bookings'] as $slug) {
             $this->get(route('help.show', $slug, false))
                 ->assertStatus(200)
-                ->assertSee('скасування самим клієнтом', false)
-                ->assertSee('заняття повертається в абонемент', false);
+                ->assertSee('команди студії', false)
+                ->assertSee('клієнта', false)
+                ->assertSee('повертає заняття', false);
         }
     }
 
@@ -80,6 +81,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('попередній перегляд', false)
             ->assertSee('Застосувати нормалізацію', false)
             ->assertSee('Статус самого запису не змінюється', false)
+            ->assertSee('списано, зарезервовано або повернуто', false)
             ->assertSee('assets/help/screenshots/customer-pass-normalization.png', false);
     }
 

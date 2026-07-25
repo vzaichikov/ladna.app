@@ -33,6 +33,7 @@
     $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
     $showRoster = $showRoster ?? false;
     $classBorderColor = $isCancelledClass ? '#94A3B8' : $directionColor;
+    $bookingCancellationLocked = app(\App\Support\ClassBookingCancellationWindow::class)->isLockedForClass($scheduledClass);
 @endphp
 
 <article
@@ -104,6 +105,7 @@
                                     @method('PATCH')
                                     <select name="status" class="crm-field mt-0 sm:min-w-40">
                                         @foreach ($bookingStatuses as $status)
+                                            @continue($bookingCancellationLocked && $status === \App\Enums\ClassBookingStatus::Cancelled && $booking->status !== $status)
                                             <option value="{{ $status->value }}" @selected($booking->status === $status)>{{ __('app.'.$status->value) }}</option>
                                         @endforeach
                                     </select>

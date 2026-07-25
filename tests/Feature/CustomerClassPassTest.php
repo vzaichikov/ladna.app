@@ -577,7 +577,8 @@ class CustomerClassPassTest extends TestCase
             ->assertSee(__('app.class_pass_backfill_title'))
             ->assertSee($customerClassPass->code)
             ->assertSee(__('app.used').': 1')
-            ->assertSee(__('app.reserved').': 1');
+            ->assertSee(__('app.reserved').': 1')
+            ->assertSee(__('app.released').': 0');
 
         $this->assertFalse($pastBooking->classPassReservation()->exists());
         $this->assertFalse($futureBooking->classPassReservation()->exists());
@@ -590,6 +591,7 @@ class CustomerClassPassTest extends TestCase
             ->assertSessionHas('status', __('app.customer_class_pass_backfill_applied', [
                 'used' => 1,
                 'reserved' => 1,
+                'released' => 0,
             ]));
 
         $pastReservation = $pastBooking->classPassReservation()->firstOrFail();

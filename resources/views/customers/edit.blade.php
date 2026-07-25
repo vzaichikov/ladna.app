@@ -138,7 +138,7 @@
             <x-ui.panel padding="none" class="overflow-hidden">
                 <div class="flex flex-col gap-3 border-b border-stone-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_class_passes_panel') }}</h2>
-                    @if ($canManageCustomerClassPasses && $customerClassPasses->total() > 0)
+                    @if ($canManageCustomerClassPasses && ($customerClassPasses->total() > 0 || $customerClassPassHistory->total() > 0))
                         <x-ui.button
                             :href="route('dashboard.accounts.customers.edit', [$account, $customer, 'class_pass_backfill_preview' => 1])"
                             variant="secondary"
@@ -278,7 +278,7 @@
                             {{ __('app.class_pass_backfill_empty') }}
                         </div>
                     @else
-                        <div class="grid gap-3 sm:grid-cols-2">
+                        <div class="grid gap-3 sm:grid-cols-3">
                             <div class="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
                                 <div class="text-xs font-semibold uppercase text-emerald-700">{{ __('app.used_sessions') }}</div>
                                 <div class="mt-1 text-2xl font-semibold text-emerald-900">{{ $classPassBackfillPreview['totals']['used'] }}</div>
@@ -286,6 +286,10 @@
                             <div class="rounded-lg border border-sky-100 bg-sky-50 px-4 py-3">
                                 <div class="text-xs font-semibold uppercase text-sky-700">{{ __('app.reserved_sessions') }}</div>
                                 <div class="mt-1 text-2xl font-semibold text-sky-900">{{ $classPassBackfillPreview['totals']['reserved'] }}</div>
+                            </div>
+                            <div class="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">
+                                <div class="text-xs font-semibold uppercase text-amber-700">{{ __('app.released_sessions') }}</div>
+                                <div class="mt-1 text-2xl font-semibold text-amber-900">{{ $classPassBackfillPreview['totals']['released'] }}</div>
                             </div>
                         </div>
 
@@ -299,6 +303,7 @@
                                     <div class="flex flex-wrap gap-2 text-sm">
                                         <span class="rounded-md bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">{{ __('app.used') }}: {{ $passSummary['used_count'] }}</span>
                                         <span class="rounded-md bg-sky-50 px-2 py-1 font-semibold text-sky-700">{{ __('app.reserved') }}: {{ $passSummary['reserved_count'] }}</span>
+                                        <span class="rounded-md bg-amber-50 px-2 py-1 font-semibold text-amber-700">{{ __('app.released') }}: {{ $passSummary['released_count'] }}</span>
                                     </div>
                                 </div>
                                 <div class="mt-3 divide-y divide-stone-100 text-sm">

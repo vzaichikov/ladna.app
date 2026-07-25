@@ -210,6 +210,46 @@ class ClosedClassCorrectionTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_closed_class_correction_can_cancel_existing_booking_without_consuming_session(): void
+    {
+        Carbon::setTestNow('2026-07-04 10:00:00');
+        [$owner, $account, $scheduledClass, $customer, $customerClassPass, $booking] = $this->closedBookingContext(sessions: 1);
+        $reservation = $booking->classPassReservation()->firstOrFail();
+
+        $this->assertSame(CustomerClassPassReservationStatus::Used, $reservation->status);
+        $this->assertSame(CustomerClassPassStatus::UsedUp, $customerClassPass->fresh()->status);
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.scheduled-classes.corrections.bookings.store', [$account, $scheduledClass]), [
+                'customer_id' => $customer->id,
+                'status' => ClassBookingStatus::Cancelled->value,
+                'reason' => 'Late audit correction: client cancelled in time.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message', __('app.closed_class_booking_added_corrected'));
+
+        $booking->refresh();
+        $reservation->refresh();
+        $customerClassPass->refresh();
+        $correction = ClassBookingCorrection::latest('id')->firstOrFail();
+
+        $this->assertSame(ClassBookingStatus::Cancelled, $booking->status);
+        $this->assertNull($booking->attended_at);
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->status);
+        $this->assertNull($reservation->used_at);
+        $this->assertNotNull($reservation->released_at);
+        $this->assertSame(0, $customerClassPass->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->remainingSessionsCount());
+        $this->assertSame(CustomerClassPassStatus::Active, $customerClassPass->status);
+        $this->assertSame(ClassBookingStatus::Attended->value, $correction->previous_booking_status);
+        $this->assertSame(ClassBookingStatus::Cancelled->value, $correction->new_booking_status);
+        $this->assertSame(CustomerClassPassReservationStatus::Used->value, $correction->previous_reservation_status);
+        $this->assertSame(CustomerClassPassReservationStatus::Released->value, $correction->new_reservation_status);
+        $this->assertSame('Late audit correction: client cancelled in time.', $correction->reason);
+
+        Carbon::setTestNow();
+    }
+
     public function test_add_correct_customer_without_matching_pass_keeps_no_pass_alert(): void
     {
         Carbon::setTestNow('2026-07-04 10:00:00');

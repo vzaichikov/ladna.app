@@ -120,12 +120,16 @@ class CustomerClassPassController extends Controller
         $this->authorize('manageCustomerClassPasses', $account);
 
         $preview = $reconcileUnreservedCustomerBookings->previewForCustomer($customer);
-        $reconcileUnreservedCustomerBookings->executeForCustomer($customer);
+        $reconcileUnreservedCustomerBookings->executeForCustomer(
+            $customer,
+            repairCancelledReservations: true,
+        );
 
         return redirect()->route('dashboard.accounts.customers.edit', [$account, $customer])
             ->with('status', __('app.customer_class_pass_backfill_applied', [
                 'used' => $preview['totals']['used'],
                 'reserved' => $preview['totals']['reserved'],
+                'released' => $preview['totals']['released'],
             ]));
     }
 

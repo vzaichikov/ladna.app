@@ -35,10 +35,11 @@ class UnreservedClassPassBookingIssues
             ->join($scheduledClassTable, "{$scheduledClassTable}.id", '=', "{$classBookingTable}.scheduled_class_id")
             ->where("{$classBookingTable}.account_id", $accountId)
             ->whereNull("{$classBookingTable}.corrected_removed_at")
-            ->whereIn("{$classBookingTable}.status", array_map(
-                fn (ClassBookingStatus $status): string => $status->value,
-                ClassBookingStatus::cases(),
-            ))
+            ->whereIn("{$classBookingTable}.status", [
+                ClassBookingStatus::Booked->value,
+                ClassBookingStatus::Attended->value,
+                ClassBookingStatus::NoShow->value,
+            ])
             ->where("{$classBookingTable}.skip_class_pass_reservation", false)
             ->where("{$scheduledClassTable}.account_id", $accountId)
             ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)

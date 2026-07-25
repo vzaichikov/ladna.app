@@ -16,16 +16,19 @@ class ReconcileCustomerClassPassForBooking
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
     ) {}
 
-    public function execute(ClassBooking $classBooking, bool $releaseCancelledReservation = false): ?CustomerClassPassReservation
+    public function execute(ClassBooking $classBooking): ?CustomerClassPassReservation
     {
-        return DB::transaction(function () use ($classBooking, $releaseCancelledReservation): ?CustomerClassPassReservation {
-            $classBooking->load('classPassReservation.customerClassPass', 'scheduledClass');
+        return DB::transaction(function () use ($classBooking): ?CustomerClassPassReservation {
+            $classBooking->load('scheduledClass');
+            $reservation = $classBooking->classPassReservation()
+                ->with('customerClassPass')
+                ->lockForUpdate()
+                ->first();
+            $classBooking->setRelation('classPassReservation', $reservation);
 
             if ($classBooking->skip_class_pass_reservation) {
                 return null;
             }
-
-            $reservation = $classBooking->classPassReservation;
 
             if ($classBooking->status === ClassBookingStatus::Booked) {
                 if ($reservation && $reservation->status !== CustomerClassPassReservationStatus::Released) {
@@ -44,7 +47,7 @@ class ReconcileCustomerClassPassForBooking
                 return $this->reserveCustomerClassPassForBooking->execute($classBooking);
             }
 
-            if ($classBooking->status === ClassBookingStatus::Cancelled && $releaseCancelledReservation) {
+            if ($classBooking->status === ClassBookingStatus::Cancelled) {
                 if (! $reservation || $reservation->status === CustomerClassPassReservationStatus::Released) {
                     return $reservation?->refresh();
                 }
@@ -62,7 +65,6 @@ class ReconcileCustomerClassPassForBooking
 
             if (in_array($classBooking->status, [
                 ClassBookingStatus::Attended,
-                ClassBookingStatus::Cancelled,
                 ClassBookingStatus::NoShow,
             ], true)) {
                 $reservation ??= $this->reserveCustomerClassPassForBooking->execute($classBooking);

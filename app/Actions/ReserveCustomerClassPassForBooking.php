@@ -19,7 +19,11 @@ class ReserveCustomerClassPassForBooking
             return null;
         }
 
-        if (! in_array($classBooking->status, ClassBookingStatus::cases(), true)) {
+        if (! in_array($classBooking->status, [
+            ClassBookingStatus::Booked,
+            ClassBookingStatus::Attended,
+            ClassBookingStatus::NoShow,
+        ], true)) {
             return null;
         }
 

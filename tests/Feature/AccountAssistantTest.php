@@ -5,14 +5,18 @@ namespace Tests\Feature;
 use App\Enums\AiConversationMessageRole;
 use App\Enums\AiProvider;
 use App\Enums\ClassBookingStatus;
+use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiPendingAction;
 use App\Models\ClassBooking;
+use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
+use App\Models\CustomerClassPass;
+use App\Models\CustomerClassPassReservation;
 use App\Models\Location;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
@@ -598,6 +602,23 @@ class AccountAssistantTest extends TestCase
         $account->addOwner($owner);
         $this->configureGlobalOllama();
         $booking = $this->bookingFor($account, $owner);
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create(['sessions_count' => 1]);
+        $customerClassPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($booking->customer()->firstOrFail())
+            ->for($classPassPlan)
+            ->create([
+                'sessions_count' => 1,
+                'reserved_sessions_count' => 1,
+            ]);
+        $reservation = CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($customerClassPass)
+            ->for($booking)
+            ->for($booking->scheduledClass()->firstOrFail())
+            ->create([
+                'status' => CustomerClassPassReservationStatus::Reserved->value,
+            ]);
         Http::fake([
             'ollama.com/api/chat' => Http::response([
                 'message' => [
@@ -633,6 +654,9 @@ class AccountAssistantTest extends TestCase
 
         $booking->refresh();
         $this->assertSame(ClassBookingStatus::Cancelled, $booking->status);
+        $this->assertSame(CustomerClassPassReservationStatus::Released, $reservation->fresh()->status);
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(1, $customerClassPass->fresh()->remainingSessionsCount());
         $this->assertDatabaseHas('ai_pending_actions', [
             'id' => $actionId,
             'status' => AiPendingAction::StatusExecuted,

@@ -2,15 +2,13 @@
 
 namespace App\Support\Ai;
 
+use App\Actions\CancelClassBooking;
 use App\Actions\CreateQuickBooking;
-use App\Actions\ReconcileCustomerClassPassForBooking;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduleKind;
 use App\Models\AiPendingAction;
 use App\Models\ClassBooking;
 use App\Models\User;
-use App\Support\ClassBookingCancellationWindow;
-use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\ScheduleKindRegistry;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -22,9 +20,7 @@ class StudioAssistantActionExecutor
 {
     public function __construct(
         private readonly CreateQuickBooking $createQuickBooking,
-        private readonly ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking,
-        private readonly ClassBookingCancellationWindow $cancellationWindow,
-        private readonly ClassBookingNotificationCoordinator $notifications,
+        private readonly CancelClassBooking $cancelClassBooking,
         private readonly PhoneNumberNormalizer $phoneNumberNormalizer,
     ) {}
 
@@ -94,23 +90,7 @@ class StudioAssistantActionExecutor
             ->with('scheduledClass')
             ->findOrFail((int) $arguments['booking_id']);
 
-        if ($this->cancellationWindow->isLockedForBooking($booking)) {
-            throw ValidationException::withMessages([
-                'booking' => __('app.booking_cancellation_cutoff_locked'),
-            ]);
-        }
-
-        $previousStatus = $booking->status;
-
-        $booking->update([
-            'status' => ClassBookingStatus::Cancelled->value,
-            'attended_at' => null,
-        ]);
-        $this->reconcileCustomerClassPassForBooking->execute($booking);
-
-        if ($previousStatus !== ClassBookingStatus::Cancelled) {
-            $this->notifications->bookingCancelled($booking);
-        }
+        $booking = $this->cancelClassBooking->execute($booking);
 
         $action->update([
             'status' => AiPendingAction::StatusExecuted,

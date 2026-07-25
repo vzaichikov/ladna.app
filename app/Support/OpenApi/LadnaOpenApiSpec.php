@@ -559,7 +559,7 @@ class LadnaOpenApiSpec
         return [
             'patch' => [
                 'tags' => ['Mobile bookings'],
-                'summary' => 'Updates booking status from a staff session with mark_attendance or manage_bookings permission.',
+                'summary' => 'Updates booking status from a staff session. Setting cancelled before the cutoff releases the class-pass session and keeps the booking in history.',
                 'security' => $this->mobileSecurity(),
                 'parameters' => [$this->classBookingParameter()],
                 'requestBody' => $this->jsonRequestBody('#/components/schemas/MobileBookingStatusRequest'),
@@ -575,7 +575,7 @@ class LadnaOpenApiSpec
             ],
             'delete' => [
                 'tags' => ['Mobile bookings'],
-                'summary' => 'Cancels a booking. A timely customer cancellation releases the class-pass session; staff need manage_bookings and their cancellation keeps the session consumed.',
+                'summary' => 'Cancels a booking before the cutoff and releases the class-pass session while keeping the booking in history. Staff need manage_bookings.',
                 'security' => $this->mobileSecurity(),
                 'parameters' => [$this->classBookingParameter()],
                 'responses' => [

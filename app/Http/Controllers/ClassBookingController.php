@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\CancelClassBooking;
 use App\Actions\NormalizeCustomerClassPasses;
 use App\Actions\ReconcileCustomerClassPassForBooking;
 use App\Actions\ReserveCustomerClassPassForBooking;
@@ -73,27 +74,29 @@ class ClassBookingController extends Controller
             ->with('status', __('app.booking_created'));
     }
 
-    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking, ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking, ClassBookingCancellationWindow $cancellationWindow, ClassBookingNotificationCoordinator $notifications): RedirectResponse|JsonResponse
+    public function update(UpdateClassBookingStatusRequest $request, Account $account, ClassBooking $classBooking, CancelClassBooking $cancelClassBooking, ReconcileCustomerClassPassForBooking $reconcileCustomerClassPassForBooking, ClassBookingNotificationCoordinator $notifications): RedirectResponse|JsonResponse
     {
         $this->ensureBookingBelongsToAccount($account, $classBooking);
 
         $status = ClassBookingStatus::from($request->validated('status'));
         $previousStatus = $classBooking->status;
 
-        if ($status === ClassBookingStatus::Cancelled && $cancellationWindow->isLockedForBooking($classBooking)) {
-            return $this->bookingBlockedResponse($request, __('app.booking_cancellation_cutoff_locked'), 'status');
+        if ($status === ClassBookingStatus::Cancelled) {
+            $classBooking = $cancelClassBooking->execute(
+                $classBooking,
+                ['notes' => $request->validated('notes', $classBooking->notes)],
+                cutoffErrorKey: 'status',
+            );
+        } else {
+            $classBooking->update([
+                'status' => $status->value,
+                'attended_at' => $status === ClassBookingStatus::Attended ? now() : null,
+                'notes' => $request->validated('notes', $classBooking->notes),
+            ]);
+            $reconcileCustomerClassPassForBooking->execute($classBooking);
         }
 
-        $classBooking->update([
-            'status' => $status->value,
-            'attended_at' => $status === ClassBookingStatus::Attended ? now() : null,
-            'notes' => $request->validated('notes', $classBooking->notes),
-        ]);
-        $reconcileCustomerClassPassForBooking->execute($classBooking);
-
-        if ($status === ClassBookingStatus::Cancelled && $previousStatus !== ClassBookingStatus::Cancelled) {
-            $notifications->bookingCancelled($classBooking);
-        } elseif ($status === ClassBookingStatus::Booked && $previousStatus !== ClassBookingStatus::Booked) {
+        if ($status === ClassBookingStatus::Booked && $previousStatus !== ClassBookingStatus::Booked) {
             $notifications->bookingCreated($classBooking);
         } elseif ($status === ClassBookingStatus::Attended && $previousStatus !== ClassBookingStatus::Attended) {
             $notifications->bookingUpdatedToActive($classBooking);

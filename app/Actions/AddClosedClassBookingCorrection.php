@@ -54,6 +54,14 @@ class AddClosedClassBookingCorrection
                 ->lockForUpdate()
                 ->first();
             $previousReservation = $existingBooking?->classPassReservation()->lockForUpdate()->first();
+            $previousBookingStatus = $existingBooking?->status?->value;
+            $previousReservationSnapshot = $previousReservation ? [
+                'customer_class_pass_id' => $previousReservation->customer_class_pass_id,
+                'status' => $previousReservation->status?->value,
+                'reserved_at' => $previousReservation->reserved_at,
+                'used_at' => $previousReservation->used_at,
+                'released_at' => $previousReservation->released_at,
+            ] : null;
 
             $bookingAttributes = [
                 'account_id' => $account->id,
@@ -87,7 +95,7 @@ class AddClosedClassBookingCorrection
                 'scheduled_class_id' => $lockedClass->id,
                 'class_booking_id' => $booking->id,
                 'new_customer_id' => $customer->id,
-                'previous_customer_class_pass_id' => $previousReservation?->customer_class_pass_id,
+                'previous_customer_class_pass_id' => $previousReservationSnapshot['customer_class_pass_id'] ?? null,
                 'new_customer_class_pass_id' => $reservation?->customer_class_pass_id,
                 'customer_class_pass_reservation_id' => $reservation?->id,
                 'manual_cash_payment_id' => $booking->manualCashPayment?->id,
@@ -96,15 +104,15 @@ class AddClosedClassBookingCorrection
                     ? ClassBookingCorrection::PassEffectAutoMatched
                     : ClassBookingCorrection::PassEffectNoMatchingPass,
                 'new_customer_name' => $customer->name,
-                'previous_booking_status' => $existingBooking?->status?->value,
+                'previous_booking_status' => $previousBookingStatus,
                 'new_booking_status' => $booking->status?->value,
-                'previous_reservation_status' => $previousReservation?->status?->value,
+                'previous_reservation_status' => $previousReservationSnapshot['status'] ?? null,
                 'new_reservation_status' => $reservation?->status?->value,
-                'previous_reserved_at' => $previousReservation?->reserved_at,
+                'previous_reserved_at' => $previousReservationSnapshot['reserved_at'] ?? null,
                 'new_reserved_at' => $reservation?->reserved_at,
-                'previous_used_at' => $previousReservation?->used_at,
+                'previous_used_at' => $previousReservationSnapshot['used_at'] ?? null,
                 'new_used_at' => $reservation?->used_at,
-                'previous_released_at' => $previousReservation?->released_at,
+                'previous_released_at' => $previousReservationSnapshot['released_at'] ?? null,
                 'new_released_at' => $reservation?->released_at,
                 ...$this->actorSnapshot->capture($account, $user),
                 'reason' => $reason,

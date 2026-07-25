@@ -408,6 +408,42 @@ class StudioDashboardTest extends TestCase
             ->assertDontSee('Швидкі дії');
     }
 
+    public function test_compact_dashboard_hides_cancelled_transition_at_cutoff_but_keeps_cancelled_history_visible(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-24 08:00:00', 'UTC'));
+
+        $trainerUser = User::factory()->create(['name' => 'Cutoff Trainer']);
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        AccountMembership::factory()
+            ->for($account)
+            ->for($trainerUser, 'user')
+            ->create(['role' => AccountRole::Trainer->value, 'permissions' => null]);
+        $context = $this->classContext($account, trainerName: 'Cutoff Trainer', trainerUser: $trainerUser);
+        $context['classType']->update(['cancellation_cutoff_minutes' => 60]);
+        $scheduledClass = $this->scheduledClass(
+            $context,
+            'Cutoff Dashboard Class',
+            '2026-06-24 09:00:00',
+            '2026-06-24 10:00:00',
+            8,
+        );
+        $booking = $this->booking($account, $scheduledClass, ClassBookingStatus::Booked, 'Cutoff Client');
+
+        $this->actingAs($trainerUser)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee('Cutoff Client')
+            ->assertDontSee('<option value="cancelled"', false);
+
+        $booking->update(['status' => ClassBookingStatus::Cancelled->value]);
+
+        $this->actingAs($trainerUser)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee('Cutoff Client')
+            ->assertSee('<option value="cancelled" selected', false);
+    }
+
     public function test_trainer_without_attendance_permission_sees_agenda_without_attendance_controls(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-24 08:00:00', 'UTC'));

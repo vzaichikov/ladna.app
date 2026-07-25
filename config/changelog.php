@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.95.1',
+                'date' => '2026-07-25',
+                'title' => 'Consistent booking cancellation',
+                'items' => ['A timely cancellation now behaves consistently in the studio dashboard, customer cabinet, mobile API, and Ladna assistant: the booking stays in history while its class-pass session is returned. The Cancelled option is unavailable after the studio cutoff, while Attended and No show continue to consume the session.', 'Customer-level normalization now previews and repairs legacy cancelled bookings that still hold reserved or used sessions, including reopening a valid used-up pass when appropriate. The repair runs only after an explicit preview and Apply; scheduled normalization never returns historical sessions globally.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.95.0',
                 'date' => '2026-07-25',
                 'title' => 'Preliminary salary models for trainers',
@@ -863,6 +870,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.95.1',
+                'date' => '2026-07-25',
+                'title' => 'Єдине скасування записів',
+                'items' => ['Своєчасне скасування тепер однаково працює в адмінці студії, кабінеті клієнта, mobile API та асистенті Ladna: запис лишається в історії, а заняття повертається в абонемент. Після дедлайну статус Скасовано недоступний, тоді як Відвідала та Не прийшла й далі списують заняття.', 'Нормалізація конкретного клієнта тепер показує й виправляє старі скасовані записи з активним резервом або списанням, а за потреби знову відкриває чинний використаний абонемент. Виправлення виконується лише після preview та Apply; планова нормалізація не повертає старі заняття глобально.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.95.0',
                 'date' => '2026-07-25',
