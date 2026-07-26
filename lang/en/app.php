@@ -376,6 +376,8 @@ return [
     'inactive' => 'Disabled',
     'accounts' => 'Studios',
     'activity_directions' => 'Directions',
+    'room_activity_directions_help' => 'If no direction is selected, the room is available for all active directions.',
+    'room_activity_direction_mismatch' => 'This room does not support the selected activity direction.',
     'no_accounts' => 'No studios yet.',
     'no_locations' => 'No locations yet.',
     'google_maps_embed_url' => 'Google Maps embed URL',

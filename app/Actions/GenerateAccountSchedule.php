@@ -15,20 +15,31 @@ class GenerateAccountSchedule
     ) {}
 
     /**
-     * @return array{created: int, series: int, pruned: int}
+     * @return array{created: int, series: int, blocked: int, pruned: int}
      */
     public function execute(Account $account, ?int $seriesId = null): array
     {
         $totalCreated = 0;
         $totalSeries = 0;
+        $totalBlocked = 0;
 
         $account->scheduleSeries()
             ->where('status', ScheduleSeriesStatus::Active->value)
             ->when($seriesId, fn ($query) => $query->whereKey($seriesId))
-            ->with(['account', 'location', 'room', 'classType', 'trainer'])
-            ->chunkById(100, function ($seriesBatch) use (&$totalCreated, &$totalSeries): void {
+            ->with([
+                'account',
+                'location',
+                'room.activityDirections',
+                'classType.activityDirection',
+                'trainer',
+            ])
+            ->chunkById(100, function ($seriesBatch) use (&$totalCreated, &$totalSeries, &$totalBlocked): void {
                 foreach ($seriesBatch as $series) {
                     /** @var ScheduleSeries $series */
+                    if ($this->generateScheduleOccurrences->isBlockedByRoomDirection($series)) {
+                        $totalBlocked++;
+                    }
+
                     $totalCreated += $this->generateScheduleOccurrences->execute($series);
                     $totalSeries++;
                 }
@@ -39,6 +50,7 @@ class GenerateAccountSchedule
         return [
             'created' => $totalCreated,
             'series' => $totalSeries,
+            'blocked' => $totalBlocked,
             'pruned' => $this->pruneStaleGeneratedScheduledClasses->execute($account),
         ];
     }

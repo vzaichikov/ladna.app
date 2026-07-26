@@ -1931,6 +1931,7 @@ function cachedRoomOptions(roomSelect) {
             value: option.value,
             text: option.textContent,
             locationId: option.dataset.locationId || '',
+            activityDirectionIds: option.dataset.activityDirectionIds || '',
         })));
     }
 
@@ -1986,6 +1987,10 @@ function replaceQuickBookingRoomOptions(form, options, preferredRoomId = '', emp
             element.dataset.locationId = String(option.locationId);
         }
 
+        if (option.activityDirectionIds) {
+            element.dataset.activityDirectionIds = String(option.activityDirectionIds);
+        }
+
         roomSelect.append(element);
     });
 
@@ -2008,7 +2013,7 @@ function roomsForQuickBookingLocation(form) {
     const roomSelect = form?.querySelector('[data-quick-booking-room]');
 
     return cachedRoomOptions(roomSelect)
-        .filter((option) => !option.locationId || option.locationId === locationId);
+        .filter((option) => roomOptionIsAllowed(form, option, locationId));
 }
 
 function updateQuickBookingModalRooms(form, preferredRoomId = '') {
@@ -2100,6 +2105,58 @@ function optionMatchesActivityDirection(option, activityDirectionId, multiple = 
     return !option.dataset.activityDirectionId || option.dataset.activityDirectionId === activityDirectionId;
 }
 
+function roomFilterScheduleKind(form) {
+    return form?.querySelector('input[name="schedule_kind"]')?.value
+        || form?.closest('[data-manual-class-modal]')?.dataset.manualClassModal
+        || (form?.matches('[data-schedule-series-form]') ? 'group_class' : '');
+}
+
+function selectedRoomFilterDirectionId(form) {
+    const classTypeSelect = form?.querySelector(
+        '[data-manual-booking-class-type], [data-manual-class-type], [data-schedule-series-class-type]',
+    );
+    const classTypeDirectionId = classTypeSelect?.selectedOptions[0]?.dataset.activityDirectionId || '';
+
+    if (classTypeDirectionId) {
+        return classTypeDirectionId;
+    }
+
+    return form?.querySelector('[data-manual-booking-activity-direction]')?.value || '';
+}
+
+function roomOptionDirectionIds(option) {
+    const rawIds = option?.dataset?.activityDirectionIds ?? option?.activityDirectionIds ?? '';
+
+    return String(rawIds)
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+}
+
+function roomOptionIsAllowed(form, option, locationId) {
+    const optionLocationId = option?.dataset?.locationId ?? option?.locationId ?? '';
+
+    if (optionLocationId && optionLocationId !== locationId) {
+        return false;
+    }
+
+    const scheduleKind = roomFilterScheduleKind(form);
+
+    if (!['group_class', 'private_lesson'].includes(scheduleKind)) {
+        return true;
+    }
+
+    const roomDirectionIds = roomOptionDirectionIds(option);
+
+    if (roomDirectionIds.length === 0) {
+        return true;
+    }
+
+    const activityDirectionId = selectedRoomFilterDirectionId(form);
+
+    return Boolean(activityDirectionId) && roomDirectionIds.includes(activityDirectionId);
+}
+
 function selectFirstEnabledOption(select) {
     if (!select || !select.value || !select.selectedOptions[0]?.disabled) {
         return;
@@ -2129,13 +2186,15 @@ function updateManualBookingDirectionFilters(form) {
     });
 
     selectFirstEnabledOption(classTypeSelect);
+    activityDirectionSelect.required = !classTypeSelect?.selectedOptions[0]?.dataset.activityDirectionId;
+    const effectiveActivityDirectionId = selectedRoomFilterDirectionId(form);
 
     Array.from(trainerSelect?.options || []).forEach((option) => {
         if (!option.value) {
             return;
         }
 
-        const isAllowed = optionMatchesActivityDirection(option, activityDirectionId, true);
+        const isAllowed = optionMatchesActivityDirection(option, effectiveActivityDirectionId, true);
 
         option.disabled = !isAllowed;
         option.hidden = !isAllowed;
@@ -2317,7 +2376,7 @@ function updateQuickBookingRooms(form) {
     let selectedOptionAllowed = false;
 
     Array.from(roomSelect.options).forEach((option) => {
-        const isAllowed = !option.dataset.locationId || option.dataset.locationId === locationId;
+        const isAllowed = roomOptionIsAllowed(form, option, locationId);
 
         option.disabled = !isAllowed;
         option.hidden = !isAllowed;
@@ -2330,10 +2389,48 @@ function updateQuickBookingRooms(form) {
     if (!selectedOptionAllowed) {
         const firstAllowedOption = Array.from(roomSelect.options).find((option) => !option.disabled);
 
-        if (firstAllowedOption) {
-            roomSelect.value = firstAllowedOption.value;
-        }
+        roomSelect.value = firstAllowedOption?.value || '';
     }
+}
+
+function updateScheduleSeriesRooms(form) {
+    const locationSelect = form?.querySelector('[data-schedule-series-location]');
+    const roomSelect = form?.querySelector('[data-schedule-series-room]');
+
+    if (!locationSelect || !roomSelect) {
+        return;
+    }
+
+    const locationId = locationSelect.value;
+    let selectedOptionAllowed = false;
+
+    Array.from(roomSelect.options).forEach((option) => {
+        const isAllowed = roomOptionIsAllowed(form, option, locationId);
+
+        option.disabled = !isAllowed;
+        option.hidden = !isAllowed;
+
+        if (option.selected && isAllowed) {
+            selectedOptionAllowed = true;
+        }
+    });
+
+    if (!selectedOptionAllowed) {
+        roomSelect.value = Array.from(roomSelect.options).find((option) => !option.disabled)?.value || '';
+    }
+}
+
+function initScheduleSeriesForms() {
+    document.querySelectorAll('[data-schedule-series-form]').forEach((form) => {
+        if (form.dataset.scheduleSeriesReady === 'true') {
+            return;
+        }
+
+        form.dataset.scheduleSeriesReady = 'true';
+        form.querySelector('[data-schedule-series-location]')?.addEventListener('change', () => updateScheduleSeriesRooms(form));
+        form.querySelector('[data-schedule-series-class-type]')?.addEventListener('change', () => updateScheduleSeriesRooms(form));
+        updateScheduleSeriesRooms(form);
+    });
 }
 
 function initTrainerPrivateTimeframes() {
@@ -2663,6 +2760,16 @@ function initManualClassModals() {
         updateQuickBookingRooms(input.closest('form'));
     });
 
+    document.querySelectorAll('[data-manual-class-type]').forEach((input) => {
+        if (input.dataset.manualClassTypeReady === 'true') {
+            return;
+        }
+
+        input.dataset.manualClassTypeReady = 'true';
+        input.addEventListener('change', () => updateQuickBookingRooms(input.closest('form')));
+        updateQuickBookingRooms(input.closest('form'));
+    });
+
     document.querySelectorAll('[data-manual-class-close]').forEach((button) => {
         if (button.dataset.manualClassCloseReady === 'true') {
             return;
@@ -2910,6 +3017,10 @@ function initQuickBookingModals() {
             const form = input.closest('form');
 
             updateManualBookingDirectionFilters(form);
+
+            if (input.matches('[data-manual-booking-activity-direction], [data-manual-booking-class-type]')) {
+                updateQuickBookingModalRooms(form);
+            }
 
             if (input.matches('[data-quick-booking-room]') && privateTrainerTimeframeMode(form)) {
                 const roomValueInput = form?.querySelector('[data-quick-booking-room-value]');
@@ -4998,6 +5109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initOtpCountdowns();
     initPrintButtons();
     initPeopleCounterMaskEditors();
+    initScheduleSeriesForms();
     initManualClassModals();
     initTrainerSubstitutionModals();
     initScheduledClassTrainerModals();

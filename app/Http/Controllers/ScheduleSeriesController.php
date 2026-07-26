@@ -9,23 +9,42 @@ use App\Http\Requests\StoreScheduleSeriesRequest;
 use App\Http\Requests\UpdateScheduleSeriesRequest;
 use App\Models\Account;
 use App\Models\ScheduleSeries;
+use App\Support\RoomActivityDirectionEligibility;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 class ScheduleSeriesController extends Controller
 {
-    public function index(Account $account): View
+    public function index(Account $account, RoomActivityDirectionEligibility $roomActivityDirectionEligibility): View
     {
         $this->authorize('view', $account);
         $this->ensureGroupClassesEnabled($account);
 
+        $series = $account->scheduleSeries()
+            ->with([
+                'location',
+                'room.activityDirections',
+                'classType.activityDirection',
+                'trainer',
+            ])
+            ->orderBy('weekday')
+            ->orderBy('start_time')
+            ->get();
+
         return view('schedule-series.index', [
             'account' => $account,
-            'series' => $account->scheduleSeries()
-                ->with(['location', 'room', 'classType.activityDirection', 'trainer'])
-                ->orderBy('weekday')
-                ->orderBy('start_time')
-                ->get(),
+            'series' => $series,
+            'roomDirectionConflictSeriesIds' => $series
+                ->filter(fn (ScheduleSeries $scheduleSeries): bool => $scheduleSeries->status === ScheduleSeriesStatus::Active
+                    && $scheduleSeries->room
+                    && $scheduleSeries->classType
+                    && $scheduleSeries->classType->is_active
+                    && ! $roomActivityDirectionEligibility->roomCanHost(
+                        $account,
+                        $scheduleSeries->room,
+                        $scheduleSeries->classType,
+                    ))
+                ->modelKeys(),
             'weekdays' => $this->weekdays(),
         ]);
     }
@@ -107,7 +126,11 @@ class ScheduleSeriesController extends Controller
             'account' => $account,
             'scheduleSeries' => $scheduleSeries,
             'locations' => $account->locations()->active()->orderBy('name')->get(),
-            'rooms' => $account->rooms()->active()->with('location')->orderBy('name')->get(),
+            'rooms' => $account->rooms()
+                ->active()
+                ->with(['location', 'activityDirections:id'])
+                ->orderBy('name')
+                ->get(),
             'classTypes' => $account->classTypes()
                 ->active()
                 ->with('activityDirection')

@@ -376,6 +376,8 @@ return [
     'inactive' => 'Вимкнений',
     'accounts' => 'Студії',
     'activity_directions' => 'Напрями',
+    'room_activity_directions_help' => 'Якщо не вибрати жодного напряму, зал буде доступний для всіх активних напрямів.',
+    'room_activity_direction_mismatch' => 'Цей зал не підтримує вибраний напрям.',
     'no_accounts' => 'Ще немає студій.',
     'no_locations' => 'Ще немає локацій.',
     'google_maps_embed_url' => 'Google Maps embed URL',

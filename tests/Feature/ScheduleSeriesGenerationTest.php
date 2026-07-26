@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Actions\GenerateScheduleOccurrences;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
 use App\Models\ClassType;
 use App\Models\Customer;
@@ -416,6 +417,198 @@ class ScheduleSeriesGenerationTest extends TestCase
         $this->assertModelExists($manualOrphan);
         $this->assertModelExists($pastOrphan);
         $this->assertModelExists($manualClass);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_incompatible_room_direction_blocks_generation_without_pruning_existing_occurrences(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $classType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => $poleDirection->id,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $series = ScheduleSeries::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'weekday' => now('UTC')->isoWeekday(),
+                'start_time' => '14:00',
+                'start_date' => now('UTC')->toDateString(),
+            ]);
+        $generator = app(GenerateScheduleOccurrences::class);
+
+        $this->assertSame(3, $generator->execute($series));
+        $generatedClassIds = $series->scheduledClasses()->orderBy('id')->pluck('id')->all();
+        $generatedUntil = $series->fresh()->generated_until?->toDateString();
+        $room->activityDirections()->sync([
+            $exoticDirection->id => ['account_id' => $account->id],
+        ]);
+
+        $this->assertSame(0, $generator->execute($series->fresh()));
+        $this->assertSame($generatedClassIds, $series->scheduledClasses()->orderBy('id')->pluck('id')->all());
+        $this->assertSame($generatedUntil, $series->fresh()->generated_until?->toDateString());
+
+        $this->artisan('schedule:generate', ['--account' => $account->id])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Skipped 1 series with incompatible room directions.');
+
+        $this->assertSame($generatedClassIds, $series->scheduledClasses()->orderBy('id')->pluck('id')->all());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_schedule_series_write_paths_reject_rooms_that_do_not_support_the_group_direction(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $room->activityDirections()->sync([
+            $exoticDirection->id => ['account_id' => $account->id],
+        ]);
+        $classType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => $poleDirection->id,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $directionlessClassType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => null,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $payload = [
+            'location_id' => $location->id,
+            'room_id' => $room->id,
+            'class_type_id' => $classType->id,
+            'trainer_id' => null,
+            'weekday' => 3,
+            'start_time' => '18:00',
+            'start_date' => '2026-06-17',
+            'end_date' => null,
+            'status' => 'active',
+        ];
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.schedule-series.store', $account), $payload)
+            ->assertSessionHasErrors(['room_id' => __('app.room_activity_direction_mismatch')]);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.schedule-series.store', $account), [
+                ...$payload,
+                'class_type_id' => $directionlessClassType->id,
+            ])
+            ->assertSessionHasErrors(['room_id' => __('app.room_activity_direction_mismatch')]);
+
+        $existingSeries = ScheduleSeries::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create(['start_time' => '16:00']);
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.schedule-series.update', [$account, $existingSeries]), $payload)
+            ->assertSessionHasErrors(['room_id' => __('app.room_activity_direction_mismatch')]);
+
+        $this->assertSame('16:00', substr((string) $existingSeries->fresh()->start_time, 0, 5));
+        $this->assertSame(1, ScheduleSeries::whereBelongsTo($account)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_schedule_series_index_warns_about_existing_room_direction_conflicts(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create();
+        $room = Room::factory()->for($account)->for($location)->create();
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $room->activityDirections()->sync([
+            $exoticDirection->id => ['account_id' => $account->id],
+        ]);
+        $classType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => $poleDirection->id,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        ScheduleSeries::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.schedule-series.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.room_activity_direction_mismatch'));
+    }
+
+    public function test_manual_group_class_creation_rejects_an_incompatible_room_but_internal_classes_bypass_the_restriction(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'enabled_schedule_kinds' => [
+                ScheduleKind::GroupClass->value,
+                ScheduleKind::InternalClass->value,
+            ],
+        ]);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $room->activityDirections()->sync([
+            $exoticDirection->id => ['account_id' => $account->id],
+        ]);
+        $groupClassType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => $poleDirection->id,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $internalClassType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => $poleDirection->id,
+            'schedule_kind' => ScheduleKind::InternalClass->value,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.scheduled-classes.manual.store', [$account, ScheduleKind::GroupClass->value]), [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $groupClassType->id,
+                'starts_at' => '2026-06-17T15:00',
+            ])
+            ->assertSessionHasErrors(['room_id' => __('app.room_activity_direction_mismatch')]);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.scheduled-classes.manual.store', [$account, ScheduleKind::InternalClass->value]), [
+                'location_id' => $location->id,
+                'room_id' => $room->id,
+                'class_type_id' => $internalClassType->id,
+                'trainer_id' => $trainer->id,
+                'title' => 'Staff training',
+                'starts_at' => '2026-06-17T15:00',
+                'duration_minutes' => 60,
+            ])
+            ->assertRedirect(route('dashboard.accounts.scheduled-classes.index', $account));
+
+        $this->assertSame(1, ScheduledClass::whereBelongsTo($account)->count());
 
         Carbon::setTestNow();
     }

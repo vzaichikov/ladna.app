@@ -15,6 +15,7 @@ use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleKindRegistry;
 use App\Support\TrainerActivityDirectionEligibility;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -69,10 +70,10 @@ class StorePublicBookingRequest extends FormRequest
     /**
      * @return array<int, callable(Validator): void>
      */
-    public function after(): array
+    public function after(RoomActivityDirectionEligibility $roomActivityDirectionEligibility): array
     {
         return [
-            function (Validator $validator): void {
+            function (Validator $validator) use ($roomActivityDirectionEligibility): void {
                 $account = $this->publicAccount();
                 $location = $this->publicLocation();
                 $scheduleKind = ScheduleKind::tryFrom((string) $this->input('schedule_kind'));
@@ -105,7 +106,7 @@ class StorePublicBookingRequest extends FormRequest
                     return;
                 }
 
-                $this->validateManualSelection($validator, $account, $location, $scheduleKind);
+                $this->validateManualSelection($validator, $account, $location, $scheduleKind, $roomActivityDirectionEligibility);
             },
         ];
     }
@@ -187,8 +188,13 @@ class StorePublicBookingRequest extends FormRequest
         }
     }
 
-    private function validateManualSelection(Validator $validator, Account $account, Location $location, ScheduleKind $scheduleKind): void
-    {
+    private function validateManualSelection(
+        Validator $validator,
+        Account $account,
+        Location $location,
+        ScheduleKind $scheduleKind,
+        RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
+    ): void {
         if (! in_array($scheduleKind, ScheduleKindRegistry::manualKinds(), true)) {
             $validator->errors()->add('schedule_kind', __('app.manual_class_format_invalid'));
 
@@ -210,22 +216,28 @@ class StorePublicBookingRequest extends FormRequest
             ->whereKey($classTypeId)
             ->where('schedule_kind', $scheduleKind->value)
             ->first();
-        $roomExists = $account->rooms()
+        $room = $account->rooms()
             ->active()
             ->whereKey($roomId)
             ->where('location_id', $location->id)
-            ->exists();
+            ->first();
 
         if (! $classType) {
             $validator->errors()->add('class_type_id', __('app.manual_class_format_invalid'));
         }
 
-        if (! $roomExists) {
+        if (! $room) {
             $validator->errors()->add('room_id', __('app.room_location_mismatch'));
+        } elseif ($classType && ! $roomActivityDirectionEligibility->roomCanHost($account, $room, $classType, $activityDirectionId)) {
+            $validator->errors()->add('room_id', __('app.room_activity_direction_mismatch'));
         }
 
         if ($scheduleKind === ScheduleKind::PrivateLesson) {
-            if ($trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $activityDirectionId) {
+            $effectiveActivityDirectionId = $classType
+                ? $trainerActivityDirectionEligibility->effectiveDirectionId($account, $classType, $activityDirectionId)
+                : null;
+
+            if ($trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $effectiveActivityDirectionId) {
                 $validator->errors()->add('activity_direction_id', __('app.private_lesson_activity_direction_required'));
             }
 

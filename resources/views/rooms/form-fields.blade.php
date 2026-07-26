@@ -27,6 +27,35 @@
     @error('description') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
 
+@if ($availableActivityDirections->isNotEmpty())
+    @php
+        $activityDirectionSelection = old('activity_direction_ids', $selectedActivityDirectionIds ?? []);
+    @endphp
+    <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+        <legend class="crm-label px-1">{{ __('app.activity_directions') }}</legend>
+        <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.room_activity_directions_help') }}</p>
+        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            @foreach ($availableActivityDirections as $activityDirection)
+                <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                    <input
+                        name="activity_direction_ids[]"
+                        type="checkbox"
+                        value="{{ $activityDirection->id }}"
+                        @checked(in_array($activityDirection->id, array_map('intval', $activityDirectionSelection), true))
+                        class="crm-checkbox"
+                    >
+                    {{ $activityDirection->name }}
+                    @unless ($activityDirection->is_active)
+                        <span class="crm-status-muted">{{ __('app.inactive') }}</span>
+                    @endunless
+                </label>
+            @endforeach
+        </div>
+        @error('activity_direction_ids') <span class="crm-help">{{ $message }}</span> @enderror
+        @error('activity_direction_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
+    </fieldset>
+@endif
+
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.capacity') }}</span>

@@ -12,6 +12,7 @@ use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\WebsiteLead;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleKindRegistry;
 use App\Support\TrainerActivityDirectionEligibility;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -99,10 +100,12 @@ class StoreQuickBookingRequest extends FormRequest
         ];
     }
 
-    public function after(): array
-    {
+    public function after(
+        TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
+        RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
+    ): array {
         return [
-            function (Validator $validator): void {
+            function (Validator $validator) use ($trainerActivityDirectionEligibility, $roomActivityDirectionEligibility): void {
                 $account = $this->route('account');
                 $scheduleKind = ScheduleKind::tryFrom((string) $this->input('schedule_kind'));
 
@@ -148,18 +151,29 @@ class StoreQuickBookingRequest extends FormRequest
                 }
 
                 if ($scheduleKind === ScheduleKind::PrivateLesson) {
-                    $trainerActivityDirectionEligibility = app(TrainerActivityDirectionEligibility::class);
                     $activityDirectionId = $trainerActivityDirectionEligibility->activeDirectionId($account, $this->input('activity_direction_id'));
+                    $room = $account->rooms()
+                        ->whereKey($roomId)
+                        ->where('location_id', $locationId)
+                        ->first();
+                    $classType = $account->classTypes()
+                        ->whereKey($classTypeId)
+                        ->where('schedule_kind', $scheduleKind->value)
+                        ->first();
 
-                    if ($trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $activityDirectionId) {
+                    if (
+                        $classType
+                        && $trainerActivityDirectionEligibility->accountHasActiveDirections($account)
+                        && ! $trainerActivityDirectionEligibility->effectiveDirectionId($account, $classType, $activityDirectionId)
+                    ) {
                         $validator->errors()->add('activity_direction_id', __('app.private_lesson_activity_direction_required'));
                     }
 
+                    if ($room && $classType && ! $roomActivityDirectionEligibility->roomCanHost($account, $room, $classType, $activityDirectionId)) {
+                        $validator->errors()->add('room_id', __('app.room_activity_direction_mismatch'));
+                    }
+
                     if ($classTypeId > 0 && filled($this->input('trainer_id'))) {
-                        $classType = $account->classTypes()
-                            ->whereKey($classTypeId)
-                            ->where('schedule_kind', $scheduleKind->value)
-                            ->first();
                         $trainer = $account->trainers()
                             ->whereKey((int) $this->input('trainer_id'))
                             ->first();

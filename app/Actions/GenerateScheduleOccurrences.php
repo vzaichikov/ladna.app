@@ -7,6 +7,7 @@ use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
 use App\Models\ScheduledClass;
 use App\Models\ScheduleSeries;
+use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleOccupancy;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -14,11 +15,20 @@ use Illuminate\Support\Facades\DB;
 
 class GenerateScheduleOccurrences
 {
-    public function __construct(private readonly ScheduleOccupancy $scheduleOccupancy) {}
+    public function __construct(
+        private readonly ScheduleOccupancy $scheduleOccupancy,
+        private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
+    ) {}
 
     public function execute(ScheduleSeries $series): int
     {
-        $series->loadMissing(['account', 'location', 'room', 'classType', 'trainer']);
+        $series->loadMissing([
+            'account',
+            'location',
+            'room.activityDirections',
+            'classType.activityDirection',
+            'trainer',
+        ]);
 
         return DB::transaction(function () use ($series): int {
             $this->scheduleOccupancy->lockAccount($series->account);
@@ -34,6 +44,14 @@ class GenerateScheduleOccurrences
 
             if ($series->end_date && $series->end_date->copy()->timezone($timezone)->endOfDay()->lessThan($until)) {
                 $until = CarbonImmutable::parse($series->end_date->toDateString(), $timezone)->endOfDay();
+            }
+
+            if ($this->isBlockedByRoomDirection($series)) {
+                $series->forceFill([
+                    'generated_at' => now(),
+                ])->save();
+
+                return 0;
             }
 
             $futureGeneratedClasses = $series->scheduledClasses()
@@ -95,6 +113,31 @@ class GenerateScheduleOccurrences
 
             return $created;
         });
+    }
+
+    public function isBlockedByRoomDirection(ScheduleSeries $series): bool
+    {
+        $series->loadMissing([
+            'account',
+            'room.activityDirections',
+            'classType.activityDirection',
+        ]);
+
+        if (
+            $series->status !== ScheduleSeriesStatus::Active
+            || ! $series->room
+            || ! $series->classType
+            || ! $series->classType->is_active
+            || $series->classType->schedule_kind !== ScheduleKind::GroupClass
+        ) {
+            return false;
+        }
+
+        return ! $this->roomActivityDirectionEligibility->roomCanHost(
+            $series->account,
+            $series->room,
+            $series->classType,
+        );
     }
 
     private function nextIsoWeekday(CarbonImmutable $date, int $weekday): CarbonImmutable

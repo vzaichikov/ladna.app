@@ -89,7 +89,11 @@
                                 <span class="crm-label">{{ __('app.room') }}</span>
                                 <select name="room_id" required class="crm-field" data-quick-booking-room>
                                     @foreach ($quickBookingRooms as $room)
-                                        <option value="{{ $room->id }}" data-location-id="{{ $room->location_id }}">{{ $room->location?->name }} · {{ $room->name }}</option>
+                                        <option
+                                            value="{{ $room->id }}"
+                                            data-location-id="{{ $room->location_id }}"
+                                            data-activity-direction-ids="{{ $room->activityDirections->pluck('id')->implode(',') }}"
+                                        >{{ $room->location?->name }} · {{ $room->name }}</option>
                                     @endforeach
                                 </select>
                             </label>
@@ -98,9 +102,9 @@
                         <div class="grid gap-4 sm:grid-cols-2">
                             <label class="block">
                                 <span class="crm-label">{{ __('app.class_type') }}</span>
-                                <select name="class_type_id" required class="crm-field">
+                                <select name="class_type_id" required class="crm-field" data-manual-class-type>
                                     @foreach ($quickBookingOption['classTypes'] as $classType)
-                                        <option value="{{ $classType->id }}">{{ $classType->name }}</option>
+                                        <option value="{{ $classType->id }}" data-activity-direction-id="{{ $classType->activity_direction_id }}">{{ $classType->name }}</option>
                                     @endforeach
                                 </select>
                             </label>

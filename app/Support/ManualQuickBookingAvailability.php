@@ -16,6 +16,7 @@ class ManualQuickBookingAvailability
     public function __construct(
         private readonly TrainerPrivateLessonAvailability $trainerPrivateLessonAvailability,
         private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
+        private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
     ) {}
 
     /**
@@ -46,6 +47,16 @@ class ManualQuickBookingAvailability
         $trainer = $trainerId ? $account->trainers()->whereKey($trainerId)->firstOrFail() : null;
         $activityDirectionId = $this->trainerActivityDirectionEligibility->activeDirectionId($account, $input['activity_direction_id'] ?? null);
         $customerId = $this->customerIdFor($account, $input['customer_id'] ?? null);
+        $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
+
+        if (! $this->roomActivityDirectionEligibility->roomCanHost($account, $room, $classType, $activityDirectionId)) {
+            return [
+                'date' => $input['date'],
+                'timezone' => $timezone,
+                'closed' => false,
+                'slots' => [],
+            ];
+        }
 
         if (
             $scheduleKind === ScheduleKind::PrivateLesson
@@ -53,13 +64,12 @@ class ManualQuickBookingAvailability
         ) {
             return [
                 'date' => $input['date'],
-                'timezone' => $location->timezone ?? $account->timezone ?? config('app.timezone'),
+                'timezone' => $timezone,
                 'closed' => false,
                 'slots' => [],
             ];
         }
 
-        $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $localDate = CarbonImmutable::createFromFormat('Y-m-d H:i:s', $input['date'].' 00:00:00', $timezone);
         $openingHours = $account->openingHoursForIsoWeekday($localDate->isoWeekday());
         $durationMinutes = (int) ($classType->default_duration_minutes ?: 60);

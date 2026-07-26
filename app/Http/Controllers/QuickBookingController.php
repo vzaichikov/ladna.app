@@ -146,11 +146,21 @@ class QuickBookingController extends Controller
         if (
             $scheduleKind === ScheduleKind::PrivateLesson
             && $trainerActivityDirectionEligibility->accountHasActiveDirections($account)
-            && blank($validated['activity_direction_id'] ?? null)
         ) {
-            throw ValidationException::withMessages([
-                'activity_direction_id' => __('app.private_lesson_activity_direction_required'),
-            ]);
+            $classType = $account->classTypes()
+                ->whereKey((int) $validated['class_type_id'])
+                ->where('schedule_kind', $scheduleKind->value)
+                ->first();
+            $activityDirectionId = $trainerActivityDirectionEligibility->activeDirectionId(
+                $account,
+                $validated['activity_direction_id'] ?? null,
+            );
+
+            if ($classType && ! $trainerActivityDirectionEligibility->effectiveDirectionId($account, $classType, $activityDirectionId)) {
+                throw ValidationException::withMessages([
+                    'activity_direction_id' => __('app.private_lesson_activity_direction_required'),
+                ]);
+            }
         }
 
         if (! $usesTrainerTimeframes && blank($validated['room_id'] ?? null)) {

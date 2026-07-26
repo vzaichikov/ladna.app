@@ -12,6 +12,7 @@ use App\Models\Location;
 use App\Models\ScheduledClass;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\ManualQuickBookingAvailability;
+use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleKindRegistry;
 use App\Support\ScheduleOccupancy;
 use App\Support\TrainerActivityDirectionEligibility;
@@ -27,6 +28,7 @@ class CreatePublicBooking
         private readonly ManualQuickBookingAvailability $manualQuickBookingAvailability,
         private readonly ClassBookingNotificationCoordinator $notifications,
         private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
+        private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
         private readonly ScheduleOccupancy $scheduleOccupancy,
     ) {}
 
@@ -133,6 +135,12 @@ class CreatePublicBooking
         $durationMinutes = (int) ($classType->default_duration_minutes ?: 60);
         $endsAt = $startsAt->addMinutes($durationMinutes);
 
+        if (! $this->roomActivityDirectionEligibility->roomCanHost($account, $room, $classType, $activityDirectionId)) {
+            throw ValidationException::withMessages([
+                'room_id' => __('app.room_activity_direction_mismatch'),
+            ]);
+        }
+
         $this->scheduleOccupancy->lockAccount($account);
         $trainerIds = $trainer ? [$trainer->id] : [];
         $this->scheduleOccupancy->lockResources($account, $room->id, $trainerIds);
@@ -144,7 +152,13 @@ class CreatePublicBooking
         }
 
         if ($scheduleKind === ScheduleKind::PrivateLesson) {
-            if ($this->trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $activityDirectionId) {
+            $effectiveActivityDirectionId = $this->trainerActivityDirectionEligibility->effectiveDirectionId(
+                $account,
+                $classType,
+                $activityDirectionId,
+            );
+
+            if ($this->trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $effectiveActivityDirectionId) {
                 throw ValidationException::withMessages([
                     'activity_direction_id' => __('app.private_lesson_activity_direction_required'),
                 ]);

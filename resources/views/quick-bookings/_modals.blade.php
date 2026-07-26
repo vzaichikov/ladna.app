@@ -159,6 +159,7 @@
                                                 <option
                                                     value="{{ $room->id }}"
                                                     data-location-id="{{ $room->location_id }}"
+                                                    data-activity-direction-ids="{{ $room->activityDirections->pluck('id')->implode(',') }}"
                                                     @selected($room->id === $defaultQuickBookingRooms->first()?->id)
                                                 >{{ $room->name }}</option>
                                             @endforeach

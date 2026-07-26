@@ -14,6 +14,7 @@ use App\Support\ActorSnapshot;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\ManualQuickBookingAvailability;
 use App\Support\Payments\PaymentAmounts;
+use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleKindRegistry;
 use App\Support\ScheduleOccupancy;
 use App\Support\TrainerActivityDirectionEligibility;
@@ -31,6 +32,7 @@ class CreateQuickBooking
         private readonly RecordManualClassBookingPayment $recordManualClassBookingPayment,
         private readonly ClassBookingNotificationCoordinator $notifications,
         private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
+        private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
         private readonly ScheduleOccupancy $scheduleOccupancy,
     ) {}
 
@@ -102,7 +104,10 @@ class CreateQuickBooking
         }
 
         $location = $account->locations()->whereKey((int) $validated['location_id'])->firstOrFail();
-        $room = $account->rooms()->whereKey((int) $validated['room_id'])->firstOrFail();
+        $room = $account->rooms()
+            ->whereKey((int) $validated['room_id'])
+            ->where('location_id', $location->id)
+            ->firstOrFail();
         $classType = $account->classTypes()
             ->whereKey((int) $validated['class_type_id'])
             ->where('schedule_kind', $scheduleKind->value)
@@ -121,12 +126,21 @@ class CreateQuickBooking
             ? CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['ends_at'], $timezone)
             : $startsAt->addMinutes((int) ($classType->default_duration_minutes ?: 60));
 
+        if (! $this->roomActivityDirectionEligibility->roomCanHost($account, $room, $classType, $activityDirectionId)) {
+            throw ValidationException::withMessages([
+                'room_id' => __('app.room_activity_direction_mismatch'),
+            ]);
+        }
+
         $this->scheduleOccupancy->lockAccount($account);
         $trainerIds = $trainer ? [$trainer->id] : [];
         $this->scheduleOccupancy->lockResources($account, $room->id, $trainerIds);
 
         if ($scheduleKind === ScheduleKind::PrivateLesson) {
-            if ($this->trainerActivityDirectionEligibility->accountHasActiveDirections($account) && ! $activityDirectionId) {
+            if (
+                $this->trainerActivityDirectionEligibility->accountHasActiveDirections($account)
+                && ! $this->trainerActivityDirectionEligibility->effectiveDirectionId($account, $classType, $activityDirectionId)
+            ) {
                 throw ValidationException::withMessages([
                     'activity_direction_id' => __('app.private_lesson_activity_direction_required'),
                 ]);

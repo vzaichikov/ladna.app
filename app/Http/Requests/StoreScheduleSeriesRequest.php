@@ -8,7 +8,9 @@ use App\Models\ClassType;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\Trainer;
+use App\Support\RoomActivityDirectionEligibility;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -45,6 +47,29 @@ class StoreScheduleSeriesRequest extends FormRequest
             'start_date' => ['required', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'status' => ['required', Rule::enum(ScheduleSeriesStatus::class)],
+        ];
+    }
+
+    public function after(RoomActivityDirectionEligibility $roomActivityDirectionEligibility): array
+    {
+        return [
+            function (Validator $validator) use ($roomActivityDirectionEligibility): void {
+                $account = $this->route('account');
+
+                if (! $account) {
+                    return;
+                }
+
+                $room = $account->rooms()->whereKey((int) $this->input('room_id'))->first();
+                $classType = $account->classTypes()
+                    ->whereKey((int) $this->input('class_type_id'))
+                    ->where('schedule_kind', ScheduleKind::GroupClass->value)
+                    ->first();
+
+                if ($room && $classType && ! $roomActivityDirectionEligibility->roomCanHost($account, $room, $classType)) {
+                    $validator->errors()->add('room_id', __('app.room_activity_direction_mismatch'));
+                }
+            },
         ];
     }
 }

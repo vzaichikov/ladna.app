@@ -29,6 +29,11 @@
                 <div class="text-sm text-slate-500">{{ $scheduleSeries->trainer?->name ?? __('app.trainer_not_assigned') }}</div>
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="{{ $scheduleSeries->status->value === 'active' ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$scheduleSeries->status->value) }}</span>
+                    @if (in_array($scheduleSeries->id, $roomDirectionConflictSeriesIds, true))
+                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                            {{ __('app.room_activity_direction_mismatch') }}
+                        </span>
+                    @endif
                     <x-ui.action-button :href="route('dashboard.accounts.schedule-series.edit', [$account, $scheduleSeries])" icon="edit" :label="__('app.edit')" />
                     <form method="POST" action="{{ route('dashboard.accounts.schedule-series.destroy', [$account, $scheduleSeries]) }}" data-confirm-delete>
                         @csrf

@@ -663,7 +663,13 @@ class PublicScheduleTest extends TestCase
         $this->get('/test-compact-private-directions-studio/main/schedule?kind=private_lesson')
             ->assertOk()
             ->assertSee(__('app.choose_activity_direction'))
-            ->assertSee(__('app.public_booking_choose_filters', ['filters' => __('app.direction')]));
+            ->assertSee(__('app.public_booking_choose_filters', [
+                'filters' => implode(', ', [
+                    __('app.class_type'),
+                    __('app.trainer'),
+                    __('app.room'),
+                ]),
+            ]));
 
         $this->get('/test-compact-private-directions-studio/main/schedule?kind=private_lesson&manual_panel=activity_direction')
             ->assertOk()
@@ -679,6 +685,86 @@ class PublicScheduleTest extends TestCase
             ->assertOk()
             ->assertSee('Pole Trainer')
             ->assertDontSee('Exotic Trainer');
+    }
+
+    public function test_all_manual_public_schedule_variants_filter_rooms_by_effective_activity_direction(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-25 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'slug' => 'test-public-manual-room-directions',
+            'default_language' => 'en',
+            'timezone' => 'UTC',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+        ]);
+        $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $matchingRoom = Room::factory()->for($account)->for($location)->create(['name' => 'Pole Room']);
+        $mismatchingRoom = Room::factory()->for($account)->for($location)->create(['name' => 'Exotic Room']);
+        $wildcardRoom = Room::factory()->for($account)->for($location)->create(['name' => 'Universal Room']);
+        $matchingRoom->activityDirections()->sync([$poleDirection->id => ['account_id' => $account->id]]);
+        $mismatchingRoom->activityDirections()->sync([$exoticDirection->id => ['account_id' => $account->id]]);
+        $classType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => null,
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $directedClassType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => $poleDirection->id,
+            'name' => 'Directed Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create(['name' => 'Direction Trainer']);
+        $query = http_build_query([
+            'kind' => ScheduleKind::PrivateLesson->value,
+            'manual_panel' => 'room',
+            'date' => '2026-07-26',
+            'activity_direction' => $poleDirection->id,
+            'class_type' => $classType->id,
+            'trainer' => $trainer->id,
+        ]);
+        $directedQuery = http_build_query([
+            'kind' => ScheduleKind::PrivateLesson->value,
+            'manual_panel' => 'room',
+            'date' => '2026-07-26',
+            'class_type' => $directedClassType->id,
+            'trainer' => $trainer->id,
+        ]);
+
+        foreach (['schedule', 'schedule/embed'] as $path) {
+            $this->get('/test-public-manual-room-directions/main/'.$path.'?'.$query)
+                ->assertOk()
+                ->assertSee('Pole Room')
+                ->assertSee('Universal Room')
+                ->assertDontSee('Exotic Room');
+
+            $this->get('/test-public-manual-room-directions/main/'.$path.'?'.$directedQuery)
+                ->assertOk()
+                ->assertSee('Pole Room')
+                ->assertSee('Universal Room')
+                ->assertDontSee('Exotic Room');
+        }
+
+        $account->update(['public_schedule_view' => PublicScheduleView::CalendarBooking->value()]);
+
+        foreach (['schedule', 'schedule/embed'] as $path) {
+            $this->get('/test-public-manual-room-directions/main/'.$path.'?display=list&'.$query)
+                ->assertOk()
+                ->assertSee('Pole Room')
+                ->assertSee('Universal Room')
+                ->assertDontSee('Exotic Room');
+
+            $this->get('/test-public-manual-room-directions/main/'.$path.'?display=list&'.$directedQuery)
+                ->assertOk()
+                ->assertSee('Pole Room')
+                ->assertSee('Universal Room')
+                ->assertDontSee('Exotic Room');
+        }
+
+        Carbon::setTestNow();
     }
 
     public function test_public_schedule_xhr_returns_only_schedule_fragment(): void

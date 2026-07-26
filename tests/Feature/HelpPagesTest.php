@@ -335,6 +335,22 @@ class HelpPagesTest extends TestCase
             ->assertSee('assets/help/screenshots/studio-dashboard.png', false);
     }
 
+    public function test_start_help_explains_room_activity_direction_restrictions(): void
+    {
+        $this->get(route('help.show', 'start', false))
+            ->assertStatus(200)
+            ->assertSee('Якщо не вибрати жодного напряму, зал підходить для всіх активних напрямів студії', false)
+            ->assertSee('в усіх варіантах публічного розкладу Ladna пропонує тільки зали', false)
+            ->assertSee('сумісні з напрямом заняття', false)
+            ->assertSee('Оренда залу та закриті заняття цим обмеженням не підпорядковуються', false)
+            ->assertSee('уже створені заняття та їхня історія залишаються на місці', false)
+            ->assertSee('несумісна активна серія отримує попередження й не створює нові заняття', false)
+            ->assertSee('assets/help/screenshots/room-activity-directions.png', false)
+            ->assertDontSee('room_activity_direction', false)
+            ->assertDontSee('endpoint', false)
+            ->assertDontSee('tenant', false);
+    }
+
     public function test_integrations_help_explains_api_mcp_payments_and_ladna_tariff(): void
     {
         $this->get(route('help.show', 'integrations-payments', false))

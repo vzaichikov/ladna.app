@@ -32,6 +32,10 @@
                     <div>
                         <h2 class="font-semibold text-slate-950">{{ $room->name }}</h2>
                         <p class="mt-1 text-sm text-slate-500">{{ $room->location->name }} · {{ $room->slug }}</p>
+                        <p class="mt-1 text-sm text-slate-500">
+                            {{ __('app.activity_directions') }}:
+                            {{ $room->activityDirections->isEmpty() ? __('app.all_activity_directions') : $room->activityDirections->pluck('name')->join(', ') }}
+                        </p>
                     </div>
                 </div>
                 <span class="{{ $room->is_active ? 'crm-status-active' : 'crm-status-muted' }}">

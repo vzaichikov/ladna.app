@@ -13,6 +13,7 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\ScheduledClass;
 use App\Support\ManualQuickBookingAvailability;
+use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleKindRegistry;
 use App\Support\TrainerActivityDirectionEligibility;
 use Illuminate\Http\RedirectResponse;
@@ -28,6 +29,10 @@ use function Illuminate\Support\defer;
 
 class PublicBookingController extends Controller
 {
+    public function __construct(
+        private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
+    ) {}
+
     public function show(Request $request, string $accountSlug, string $locationSlug): View|RedirectResponse
     {
         [$account, $location] = $this->publicContext($accountSlug, $locationSlug);
@@ -248,16 +253,26 @@ class PublicBookingController extends Controller
             ]);
         }
 
+        if (! $this->roomActivityDirectionEligibility->roomCanHost($account, $room, $classType, $activityDirectionId)) {
+            throw ValidationException::withMessages([
+                'room_id' => __('app.room_activity_direction_mismatch'),
+            ]);
+        }
+
         if ($scheduleKind === ScheduleKind::PrivateLesson && ! $trainer) {
             throw ValidationException::withMessages([
                 'trainer_id' => __('app.private_lesson_trainer_required'),
             ]);
         }
 
+        $effectiveActivityDirectionId = $scheduleKind === ScheduleKind::PrivateLesson
+            ? $trainerActivityDirectionEligibility->effectiveDirectionId($account, $classType, $activityDirectionId)
+            : null;
+
         if (
             $scheduleKind === ScheduleKind::PrivateLesson
             && $trainerActivityDirectionEligibility->accountHasActiveDirections($account)
-            && ! $activityDirectionId
+            && ! $effectiveActivityDirectionId
         ) {
             throw ValidationException::withMessages([
                 'activity_direction_id' => __('app.private_lesson_activity_direction_required'),

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\ClassBookingStatus;
+use App\Enums\PublicScheduleView;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ActivityDirection;
@@ -384,6 +385,165 @@ class PublicBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_public_private_lesson_rejects_incompatible_room_and_accepts_matching_room(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $matchingRoom] = $this->manualBookingSetup('public-private-room-direction-studio');
+        $mismatchingRoom = Room::factory()->for($account)->for($location)->create(['capacity' => 1]);
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $matchingRoom->activityDirections()->sync([$poleDirection->id => ['account_id' => $account->id]]);
+        $mismatchingRoom->activityDirections()->sync([$exoticDirection->id => ['account_id' => $account->id]]);
+        $classType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => null,
+            'name' => 'Private Direction 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create();
+        $payload = [
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'date' => '2026-06-18',
+            'starts_at' => '2026-06-18T15:00',
+            'class_type_id' => $classType->id,
+            'activity_direction_id' => $poleDirection->id,
+            'room_id' => $mismatchingRoom->id,
+            'trainer_id' => $trainer->id,
+            'people_count' => 1,
+        ];
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('public.booking.show', [
+                'accountSlug' => $account->slug,
+                'locationSlug' => $location->slug,
+                ...$payload,
+            ]))
+            ->assertRedirect(route('public.schedule', [$account->slug, $location->slug]))
+            ->assertSessionHasErrors('room_id');
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), $payload)
+            ->assertSessionHasErrors('room_id');
+
+        $this->assertSame(0, ScheduledClass::whereBelongsTo($account)->count());
+
+        $payload['room_id'] = $matchingRoom->id;
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), $payload)
+            ->assertRedirect(route('customer.dashboard', $account->slug));
+
+        $this->assertSame(1, ScheduledClass::whereBelongsTo($account)->whereBelongsTo($matchingRoom)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_public_private_lesson_uses_class_type_direction_without_requiring_an_explicit_direction(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $room] = $this->manualBookingSetup('public-directed-private-class-type');
+        $direction = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $room->activityDirections()->sync([$direction->id => ['account_id' => $account->id]]);
+        $classType = ClassType::factory()->for($account)->create([
+            'activity_direction_id' => $direction->id,
+            'name' => 'Directed Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create();
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-18',
+                'starts_at' => '2026-06-18T15:00',
+                'class_type_id' => $classType->id,
+                'room_id' => $room->id,
+                'trainer_id' => $trainer->id,
+                'people_count' => 1,
+            ])
+            ->assertRedirect(route('customer.dashboard', $account->slug))
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertSame(
+            1,
+            ScheduledClass::whereBelongsTo($account)
+                ->whereBelongsTo($room)
+                ->whereBelongsTo($classType)
+                ->count(),
+        );
+
+        Carbon::setTestNow();
+    }
+
+    public function test_existing_group_class_in_incompatible_room_remains_publicly_bookable(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass, $classType] = $this->publicGroupClass([
+            'slug' => 'public-existing-room-direction-conflict',
+        ]);
+        $poleDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Pole']);
+        $exoticDirection = ActivityDirection::factory()->for($account)->create(['name' => 'Exotic']);
+        $classType->update(['activity_direction_id' => $poleDirection->id]);
+        $scheduledClass->room->activityDirections()->sync([$exoticDirection->id => ['account_id' => $account->id]]);
+        $customer = Customer::factory()->for($account)->create();
+        $this->actingAs($customer, 'customer');
+        $bookingUrl = route('public.booking.show', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'scheduled_class_id' => $scheduledClass->id,
+        ]);
+
+        foreach (PublicScheduleView::cases() as $scheduleView) {
+            $account->update(['public_schedule_view' => $scheduleView->value()]);
+            $query = match ($scheduleView) {
+                PublicScheduleView::Classic => ['period' => 'week'],
+                PublicScheduleView::CompactBooking => ['date' => '2026-06-18'],
+                PublicScheduleView::CalendarBooking => ['display' => 'list', 'date' => '2026-06-18'],
+            };
+
+            foreach (['public.schedule', 'public.schedule.embed'] as $routeName) {
+                $response = $this->get(route($routeName, [
+                    'accountSlug' => $account->slug,
+                    'locationSlug' => $location->slug,
+                    ...$query,
+                ]));
+
+                $response
+                    ->assertOk()
+                    ->assertSee('Public Pole');
+
+                if ($scheduleView !== PublicScheduleView::Classic) {
+                    $response->assertSee('schedule/book?schedule_kind=group_class&amp;scheduled_class_id='.$scheduledClass->id, false);
+                }
+            }
+        }
+
+        $this->actingAs($customer, 'customer')
+            ->get($bookingUrl)
+            ->assertOk();
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), [
+                'schedule_kind' => ScheduleKind::GroupClass->value,
+                'scheduled_class_id' => $scheduledClass->id,
+            ])
+            ->assertRedirect(route('customer.dashboard', $account->slug));
+
+        $this->assertSame(1, ClassBooking::whereBelongsTo($scheduledClass)->whereBelongsTo($customer)->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_room_rental_public_booking_allows_one_active_customer_per_slot(): void
     {
         Mail::fake();
@@ -396,6 +556,8 @@ class PublicBookingTest extends TestCase
             'default_duration_minutes' => 60,
             'default_capacity' => 1,
         ]);
+        $direction = ActivityDirection::factory()->for($account)->create();
+        $room->activityDirections()->sync([$direction->id => ['account_id' => $account->id]]);
         $firstCustomer = Customer::factory()->for($account)->create(['phone' => '+380501112249']);
         $secondCustomer = Customer::factory()->for($account)->create(['phone' => '+380501112250']);
         $payload = [

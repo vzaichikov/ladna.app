@@ -21,6 +21,7 @@ class TrainerPrivateLessonAvailability
 
     public function __construct(
         private readonly TrainerActivityDirectionEligibility $trainerActivityDirectionEligibility,
+        private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
     ) {}
 
     /**
@@ -89,7 +90,14 @@ class TrainerPrivateLessonAvailability
                 continue;
             }
 
-            $rooms = $this->freeRoomsForRange($account, $location, $slotStart, $slotEnd);
+            $rooms = $this->freeRoomsForRange(
+                $account,
+                $location,
+                $slotStart,
+                $slotEnd,
+                $classType,
+                $activityDirectionId,
+            );
 
             if ($rooms->isEmpty()) {
                 continue;
@@ -214,13 +222,30 @@ class TrainerPrivateLessonAvailability
     /**
      * @return Collection<int, Room>
      */
-    public function freeRoomsForRange(Account $account, Location $location, CarbonImmutable $startsAt, CarbonImmutable $endsAt): Collection
-    {
-        $rooms = $account->rooms()
+    public function freeRoomsForRange(
+        Account $account,
+        Location $location,
+        CarbonImmutable $startsAt,
+        CarbonImmutable $endsAt,
+        ?ClassType $classType = null,
+        ?int $activityDirectionId = null,
+    ): Collection {
+        $roomQuery = $account->rooms()
             ->active()
             ->where('location_id', $location->id)
-            ->orderBy('name')
-            ->get();
+            ->with('activityDirections:id')
+            ->orderBy('name');
+
+        if ($classType) {
+            $this->roomActivityDirectionEligibility->scopeRoomQuery(
+                $roomQuery,
+                $account,
+                $classType,
+                $activityDirectionId,
+            );
+        }
+
+        $rooms = $roomQuery->get();
 
         if ($rooms->isEmpty()) {
             return $rooms;

@@ -8,6 +8,8 @@ use App\Models\Account;
 use App\Models\Room;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class RoomController extends Controller
@@ -18,7 +20,13 @@ class RoomController extends Controller
 
         return view('rooms.index', [
             'account' => $account,
-            'rooms' => $account->rooms()->with('location')->orderBy('name')->get(),
+            'rooms' => $account->rooms()
+                ->with([
+                    'location',
+                    'activityDirections' => fn ($query) => $query->orderBy('name'),
+                ])
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -30,6 +38,8 @@ class RoomController extends Controller
             'account' => $account,
             'room' => new Room(['is_active' => true]),
             'locations' => $account->locations()->orderBy('name')->get(),
+            'availableActivityDirections' => $account->activityDirections()->active()->orderBy('name')->get(),
+            'selectedActivityDirectionIds' => [],
         ]);
     }
 
@@ -45,7 +55,14 @@ class RoomController extends Controller
             $validated['people_counter_capture_delay_seconds'] = $validated['people_counter_capture_delay_seconds'] ?? null;
         }
 
-        $account->rooms()->create($validated);
+        DB::transaction(function () use ($account, $validated): void {
+            $room = $account->rooms()->create(Arr::except($validated, 'activity_direction_ids'));
+
+            $room->activityDirections()->syncWithPivotValues(
+                $validated['activity_direction_ids'],
+                ['account_id' => $account->id],
+            );
+        });
 
         return redirect()->route('dashboard.accounts.rooms.index', $account)
             ->with('status', __('app.room_created'));
@@ -60,11 +77,22 @@ class RoomController extends Controller
     {
         $this->ensureBelongsToAccount($account, $room);
         $this->authorize('update', $account);
+        $room->loadMissing('activityDirections');
+        $availableActivityDirections = $account->activityDirections()
+            ->active()
+            ->orderBy('name')
+            ->get()
+            ->concat($room->activityDirections)
+            ->unique('id')
+            ->sortBy('name')
+            ->values();
 
         return view('rooms.edit', [
             'account' => $account,
             'room' => $room,
             'locations' => $account->locations()->orderBy('name')->get(),
+            'availableActivityDirections' => $availableActivityDirections,
+            'selectedActivityDirectionIds' => $room->activityDirections->pluck('id')->all(),
         ]);
     }
 
@@ -82,7 +110,14 @@ class RoomController extends Controller
             $validated['people_counter_capture_delay_seconds'] = $validated['people_counter_capture_delay_seconds'] ?? null;
         }
 
-        $room->update($validated);
+        DB::transaction(function () use ($account, $room, $validated): void {
+            $room->update(Arr::except($validated, 'activity_direction_ids'));
+
+            $room->activityDirections()->syncWithPivotValues(
+                $validated['activity_direction_ids'],
+                ['account_id' => $account->id],
+            );
+        });
 
         return redirect()->route('dashboard.accounts.rooms.index', $account)
             ->with('status', __('app.room_updated'));

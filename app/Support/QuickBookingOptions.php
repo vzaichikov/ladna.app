@@ -25,7 +25,7 @@ class QuickBookingOptions
             ->get(['id', 'name']);
         $rooms = $account->rooms()
             ->active()
-            ->with('location:id,name')
+            ->with(['location:id,name', 'activityDirections:id'])
             ->orderBy('location_id')
             ->orderBy('name')
             ->get(['id', 'location_id', 'name']);

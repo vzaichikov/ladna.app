@@ -84,4 +84,11 @@ class ActivityDirection extends Model
             ->withPivot('account_id')
             ->withTimestamps();
     }
+
+    public function rooms(): BelongsToMany
+    {
+        return $this->belongsToMany(Room::class, 'room_activity_direction')
+            ->withPivot('account_id')
+            ->withTimestamps();
+    }
 }

@@ -7,6 +7,7 @@ use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
+use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleKindRegistry;
 use App\Support\ScheduleOccupancy;
 use Carbon\CarbonImmutable;
@@ -18,9 +19,14 @@ class CreateManualScheduledClass
 {
     private readonly ScheduleOccupancy $scheduleOccupancy;
 
-    public function __construct(?ScheduleOccupancy $scheduleOccupancy = null)
-    {
+    private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility;
+
+    public function __construct(
+        ?ScheduleOccupancy $scheduleOccupancy = null,
+        ?RoomActivityDirectionEligibility $roomActivityDirectionEligibility = null,
+    ) {
         $this->scheduleOccupancy = $scheduleOccupancy ?? app(ScheduleOccupancy::class);
+        $this->roomActivityDirectionEligibility = $roomActivityDirectionEligibility ?? app(RoomActivityDirectionEligibility::class);
     }
 
     /**
@@ -47,6 +53,12 @@ class CreateManualScheduledClass
                 : null;
             $additionalTrainers = $this->additionalTrainers($account, $scheduleKind, $validated, $trainer?->id);
             $definition = ScheduleKindRegistry::get($scheduleKind);
+
+            if (! $this->roomActivityDirectionEligibility->roomCanHost($account, $room, $classType)) {
+                throw ValidationException::withMessages([
+                    'room_id' => __('app.room_activity_direction_mismatch'),
+                ]);
+            }
 
             if ((bool) $definition['trainer_required'] && ! $trainer) {
                 throw ValidationException::withMessages([

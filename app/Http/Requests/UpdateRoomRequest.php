@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\ActivityDirection;
 use App\Models\Location;
 use App\Rules\RtspUrl;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -34,6 +35,12 @@ class UpdateRoomRequest extends FormRequest
             'capacity' => ['nullable', 'integer', 'min:1', 'max:999'],
             'color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'is_active' => ['nullable', 'boolean'],
+            'activity_direction_ids' => ['nullable', 'array'],
+            'activity_direction_ids.*' => [
+                'integer',
+                'distinct:strict',
+                Rule::exists((new ActivityDirection)->getTable(), 'id')->where('account_id', $account?->id),
+            ],
         ];
 
         if ($this->canManageCameraSettings() && $account?->allowsRtspCameras()) {
@@ -56,7 +63,17 @@ class UpdateRoomRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $values = [];
+        $activityDirectionIds = $this->input('activity_direction_ids', []);
+        $values = [
+            'activity_direction_ids' => is_array($activityDirectionIds)
+                ? collect($activityDirectionIds)
+                    ->filter(fn (mixed $activityDirectionId): bool => filled($activityDirectionId))
+                    ->map(fn (mixed $activityDirectionId): int => (int) $activityDirectionId)
+                    ->unique()
+                    ->values()
+                    ->all()
+                : $activityDirectionIds,
+        ];
 
         if ($this->has('rtsp_url')) {
             $values['rtsp_url'] = blank($this->input('rtsp_url')) ? null : trim((string) $this->input('rtsp_url'));
@@ -68,8 +85,6 @@ class UpdateRoomRequest extends FormRequest
                 : $this->input('people_counter_capture_delay_seconds');
         }
 
-        if ($values !== []) {
-            $this->merge($values);
-        }
+        $this->merge($values);
     }
 }

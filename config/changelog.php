@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.97.0',
+                'date' => '2026-07-26',
+                'title' => 'Activity directions for every room',
+                'items' => ['Studios can now choose which activity directions each room supports. Leaving the selection empty keeps the room available for every active direction.', 'Weekly schedules, one-off classes, quick and admin booking, and every public booking flow now offer only compatible rooms for group and private lessons. Room rental and closed classes remain unrestricted.', 'Existing classes and booking history remain visible after room settings change. An incompatible active weekly series is highlighted and pauses future generation until its room or class format is corrected. Owner help now explains the complete setup.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.96.0',
                 'date' => '2026-07-25',
                 'title' => 'Simpler customer navigation',
@@ -877,6 +884,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.97.0',
+                'date' => '2026-07-26',
+                'title' => 'Напрями для кожного залу',
+                'items' => ['Студії тепер можуть вказати, які напрями підтримує кожен зал. Якщо не вибрати жодного, зал залишається доступним для всіх активних напрямів.', 'Тижневий розклад, разові заняття, швидкий запис, запис в адмінці та всі публічні способи запису тепер пропонують лише сумісні зали для групових та індивідуальних занять. Оренда залу й закриті заняття працюють без цих обмежень.', 'Наявні заняття та історія записів залишаються видимими після зміни налаштувань залу. Несумісна активна тижнева серія отримує попередження й призупиняє створення майбутніх занять, доки зал або формат не буде виправлено. Повне налаштування вже описане в Довідці.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.96.0',
                 'date' => '2026-07-25',

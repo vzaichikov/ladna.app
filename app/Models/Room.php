@@ -155,6 +155,13 @@ class Room extends Model
         return $this->hasMany(ScheduledClassPeopleCount::class);
     }
 
+    public function activityDirections(): BelongsToMany
+    {
+        return $this->belongsToMany(ActivityDirection::class, 'room_activity_direction')
+            ->withPivot('account_id')
+            ->withTimestamps();
+    }
+
     public function classPassPlans(): BelongsToMany
     {
         return $this->belongsToMany(ClassPassPlan::class, 'class_pass_plan_room')

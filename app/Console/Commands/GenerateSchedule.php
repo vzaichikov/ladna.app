@@ -51,7 +51,7 @@ class GenerateSchedule extends Command
                 ->first();
 
             if (! $series) {
-                $this->info($this->summaryLine(['created' => 0, 'series' => 0, 'pruned' => 0]));
+                $this->info($this->summaryLine(['created' => 0, 'series' => 0, 'blocked' => 0, 'pruned' => 0]));
 
                 return self::SUCCESS;
             }
@@ -63,30 +63,37 @@ class GenerateSchedule extends Command
 
         $totalCreated = 0;
         $totalSeries = 0;
+        $totalBlocked = 0;
         $totalPruned = 0;
 
         Account::query()
             ->eligibleForScheduleGeneration()
-            ->chunkById(100, function ($accounts) use (&$totalCreated, &$totalSeries, &$totalPruned, $generateAccountSchedule): void {
+            ->chunkById(100, function ($accounts) use (&$totalCreated, &$totalSeries, &$totalBlocked, &$totalPruned, $generateAccountSchedule): void {
                 foreach ($accounts as $account) {
                     /** @var Account $account */
                     $result = $generateAccountSchedule->execute($account);
                     $totalCreated += $result['created'];
                     $totalSeries += $result['series'];
+                    $totalBlocked += $result['blocked'];
                     $totalPruned += $result['pruned'];
                 }
             });
 
-        $this->info($this->summaryLine(['created' => $totalCreated, 'series' => $totalSeries, 'pruned' => $totalPruned]));
+        $this->info($this->summaryLine([
+            'created' => $totalCreated,
+            'series' => $totalSeries,
+            'blocked' => $totalBlocked,
+            'pruned' => $totalPruned,
+        ]));
 
         return self::SUCCESS;
     }
 
     /**
-     * @param  array{created: int, series: int, pruned: int}  $result
+     * @param  array{created: int, series: int, blocked: int, pruned: int}  $result
      */
     private function summaryLine(array $result): string
     {
-        return "Generated {$result['created']} scheduled classes from {$result['series']} schedule series. Pruned {$result['pruned']} stale generated scheduled classes.";
+        return "Generated {$result['created']} scheduled classes from {$result['series']} schedule series. Skipped {$result['blocked']} series with incompatible room directions. Pruned {$result['pruned']} stale generated scheduled classes.";
     }
 }

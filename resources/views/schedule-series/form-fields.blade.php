@@ -1,7 +1,7 @@
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.location') }}</span>
-        <select name="location_id" required class="crm-field">
+        <select name="location_id" required class="crm-field" data-schedule-series-location>
             @foreach ($locations as $location)
                 <option value="{{ $location->id }}" @selected((int) old('location_id', $scheduleSeries->location_id) === $location->id)>{{ $location->name }}</option>
             @endforeach
@@ -10,9 +10,14 @@
     </label>
     <label class="block">
         <span class="crm-label">{{ __('app.room') }}</span>
-        <select name="room_id" required class="crm-field">
+        <select name="room_id" required class="crm-field" data-schedule-series-room>
             @foreach ($rooms as $room)
-                <option value="{{ $room->id }}" @selected((int) old('room_id', $scheduleSeries->room_id) === $room->id)>{{ $room->location->name }} · {{ $room->name }}</option>
+                <option
+                    value="{{ $room->id }}"
+                    data-location-id="{{ $room->location_id }}"
+                    data-activity-direction-ids="{{ $room->activityDirections->pluck('id')->implode(',') }}"
+                    @selected((int) old('room_id', $scheduleSeries->room_id) === $room->id)
+                >{{ $room->location->name }} · {{ $room->name }}</option>
             @endforeach
         </select>
         @error('room_id') <span class="crm-help">{{ $message }}</span> @enderror
@@ -22,9 +27,13 @@
 <div class="grid gap-4 sm:grid-cols-2">
     <label class="block">
         <span class="crm-label">{{ __('app.class_type') }}</span>
-        <select name="class_type_id" required class="crm-field">
+        <select name="class_type_id" required class="crm-field" data-schedule-series-class-type>
             @foreach ($classTypes as $classType)
-                <option value="{{ $classType->id }}" @selected((int) old('class_type_id', $scheduleSeries->class_type_id) === $classType->id)>{{ $classType->name }}</option>
+                <option
+                    value="{{ $classType->id }}"
+                    data-activity-direction-id="{{ $classType->activity_direction_id }}"
+                    @selected((int) old('class_type_id', $scheduleSeries->class_type_id) === $classType->id)
+                >{{ $classType->name }}</option>
             @endforeach
         </select>
         @error('class_type_id') <span class="crm-help">{{ $message }}</span> @enderror

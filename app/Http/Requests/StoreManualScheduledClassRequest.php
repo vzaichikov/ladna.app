@@ -7,6 +7,7 @@ use App\Models\ClassType;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\Trainer;
+use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleKindRegistry;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
@@ -66,10 +67,10 @@ class StoreManualScheduledClassRequest extends FormRequest
         ];
     }
 
-    public function after(): array
+    public function after(RoomActivityDirectionEligibility $roomActivityDirectionEligibility): array
     {
         return [
-            function (Validator $validator): void {
+            function (Validator $validator) use ($roomActivityDirectionEligibility): void {
                 $account = $this->route('account');
                 $scheduleKind = $this->scheduleKind();
 
@@ -90,6 +91,21 @@ class StoreManualScheduledClassRequest extends FormRequest
                     && $locationId > 0
                     && ! $account?->rooms()->active()->whereKey($roomId)->where('location_id', $locationId)->exists()) {
                     $validator->errors()->add('room_id', __('app.room_location_mismatch'));
+                }
+
+                $room = $account?->rooms()
+                    ->active()
+                    ->whereKey($roomId)
+                    ->where('location_id', $locationId)
+                    ->first();
+                $classType = $account?->classTypes()
+                    ->active()
+                    ->whereKey((int) $this->input('class_type_id'))
+                    ->where('schedule_kind', $scheduleKind?->value ?? '')
+                    ->first();
+
+                if ($account && $room && $classType && ! $roomActivityDirectionEligibility->roomCanHost($account, $room, $classType)) {
+                    $validator->errors()->add('room_id', __('app.room_activity_direction_mismatch'));
                 }
 
                 if ($scheduleKind
