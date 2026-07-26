@@ -36,6 +36,7 @@ class TelegramUpdateProcessor
         private readonly StudioAssistantActionPlanner $actionPlanner,
         private readonly StudioAssistantActionExecutor $actionExecutor,
         private readonly TelegramConversationResetter $conversationResetter,
+        private readonly TelegramAssistantTextFormatter $assistantTextFormatter,
     ) {}
 
     public function process(int $telegramUpdateId): void
@@ -380,7 +381,7 @@ class TelegramUpdateProcessor
                 $this->assistantTelegramReplyMarkup($assistantMessage),
                 $account->id,
                 $authorization,
-                $this->assistantTelegramText($result['response']),
+                $this->assistantTextFormatter->format($result['response']),
                 $statusMessage,
             );
 
@@ -847,34 +848,6 @@ class TelegramUpdateProcessor
                 'remove_keyboard' => true,
             ],
         ];
-    }
-
-    private function assistantTelegramText(string $text): string
-    {
-        $bulletMarker = '__LADNA_TELEGRAM_BULLET__';
-        $text = preg_replace('/(^|\R)[ \t]*[*-][ \t]+/u', '$1'.$bulletMarker.' ', $text) ?? $text;
-        $parts = preg_split('/(\*\*.+?\*\*)/us', $text, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
-
-        if (! is_array($parts)) {
-            return str_replace($bulletMarker, '&#8226;', $this->escapeTelegramHtml($text));
-        }
-
-        $formatted = collect($parts)
-            ->map(function (string $part): string {
-                if (str_starts_with($part, '**') && str_ends_with($part, '**') && mb_strlen($part) > 4) {
-                    return '<b>'.$this->escapeTelegramHtml(mb_substr($part, 2, -2)).'</b>';
-                }
-
-                return $this->escapeTelegramHtml($part);
-            })
-            ->implode('');
-
-        return str_replace($bulletMarker, '&#8226;', $formatted);
-    }
-
-    private function escapeTelegramHtml(string $text): string
-    {
-        return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     private function conversationFor(TelegramChatAuthorization $authorization): AiConversation

@@ -227,7 +227,7 @@
                         <div class="mt-1 text-xs text-slate-500">{{ __('app.user') }}: {{ $message->authorization->user->name }}</div>
                     @endif
                 </div>
-                <div class="min-w-0 text-sm leading-6 text-slate-700">{{ \Illuminate\Support\Str::limit($messageText, 280) }}</div>
+                <div class="min-w-0 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{{ \Illuminate\Support\Str::limit($messageText, 280) }}</div>
                 <div class="text-sm text-slate-500">{{ $formatDate($message->sent_at ?? $message->created_at) }}</div>
             </article>
         @empty

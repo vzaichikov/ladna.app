@@ -122,6 +122,17 @@ class StudioAiInvestigationTest extends TestCase
         $owner = User::factory()->create();
         $account->addOwner($owner);
         $customer = Customer::factory()->for($account)->create(['name' => 'Test Customer']);
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create(['price_cents' => 110000]);
+        CustomerClassPass::factory()
+            ->count(2)
+            ->for($account)
+            ->for($customer, 'customer')
+            ->for($classPassPlan)
+            ->create([
+                'price_cents' => 110000,
+                'paid_amount_cents' => 0,
+                'is_paid' => false,
+            ]);
         $this->configureOllama();
         $conversation = AiConversation::factory()->for($account)->for($owner, 'user')->create([
             'channel' => 'dashboard_chat',
@@ -237,6 +248,14 @@ class StudioAiInvestigationTest extends TestCase
                 && str_contains(
                     $message['content'] ?? '',
                     'Class-pass lifecycle and payment state are independent.',
+                )
+                && str_contains(
+                    $message['content'] ?? '',
+                    'Copy monetary_summary totals exactly as calculated by Ladna',
+                )
+                && str_contains(
+                    $message['content'] ?? '',
+                    'Do not use Markdown headings, tables, LaTeX',
                 ),
         ));
         $this->assertTrue(collect($requests[1]->data()['messages'])->contains(
@@ -247,6 +266,16 @@ class StudioAiInvestigationTest extends TestCase
             fn (array $message): bool => ($message['role'] ?? null) === 'tool'
                 && ($message['tool_name'] ?? null) === 'investigate_customer_booking_ledger',
         ));
+        $ledgerToolMessage = collect($requests[2]->data()['messages'])->first(
+            fn (array $message): bool => ($message['role'] ?? null) === 'tool'
+                && ($message['tool_name'] ?? null) === 'investigate_customer_booking_ledger',
+        );
+        $ledgerToolPayload = json_decode((string) ($ledgerToolMessage['content'] ?? ''), true);
+
+        $this->assertIsArray($ledgerToolPayload);
+        $this->assertSame('2200.00', data_get($ledgerToolPayload, 'monetary_summary.outstanding_by_currency.0.amount'));
+        $this->assertSame('UAH', data_get($ledgerToolPayload, 'monetary_summary.outstanding_by_currency.0.currency'));
+        $this->assertStringNotContainsString('_cents', (string) ($ledgerToolMessage['content'] ?? ''));
         $this->assertTrue(collect($requests[3]->data()['messages'])->contains(
             fn (array $message): bool => ($message['role'] ?? null) === 'tool'
                 && ($message['tool_name'] ?? null) === 'get_business_logic_reference',

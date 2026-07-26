@@ -31,6 +31,7 @@ class StudioAiToolExecutor
         private readonly CustomerInvestigationSearch $customerSearch,
         private readonly CustomerBookingLedgerInvestigation $bookingLedgerInvestigation,
         private readonly LadnaBusinessLogicReference $businessLogicReference,
+        private readonly StudioAiLedgerEvidencePresenter $ledgerEvidencePresenter,
     ) {}
 
     public function availableFor(Account $account, ?User $actorUser): bool
@@ -269,7 +270,7 @@ class StudioAiToolExecutor
         );
         $this->progress($progress, 'assistant_status_checking_class_passes');
 
-        return $payload;
+        return $this->ledgerEvidencePresenter->present($payload);
     }
 
     /**

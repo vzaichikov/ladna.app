@@ -1047,7 +1047,7 @@ class TelegramWebhookTest extends TestCase
                     'role' => 'assistant',
                     'content' => json_encode([
                         'disposition' => 'answer',
-                        'answer' => "**AI answer** for studio schedule.\n* First item",
+                        'answer' => "### Summary\n\n**AI answer** for studio schedule.\n* `B8V2-LJ7L` \$\\rightarrow\$ First item",
                         'follow_up_actions' => [],
                         'action' => null,
                         'calendar_reference' => null,
@@ -1099,9 +1099,9 @@ class TelegramWebhookTest extends TestCase
         $this->assertDatabaseHas('telegram_messages', [
             'telegram_chat_id' => '558',
             'direction' => 'outbound',
-            'text' => "**AI answer** for studio schedule.\n* First item",
+            'text' => "### Summary\n\n**AI answer** for studio schedule.\n* `B8V2-LJ7L` \$\\rightarrow\$ First item",
         ]);
-        $this->assertTrue(AiConversationMessage::where('content', "**AI answer** for studio schedule.\n* First item")
+        $this->assertTrue(AiConversationMessage::where('content', "### Summary\n\n**AI answer** for studio schedule.\n* `B8V2-LJ7L` \$\\rightarrow\$ First item")
             ->where('metadata->used_ai', true)
             ->exists());
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendChatAction')
@@ -1113,7 +1113,7 @@ class TelegramWebhookTest extends TestCase
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendMessage')
             && $request['chat_id'] === '558'
             && data_get($request->data(), 'parse_mode') === 'HTML'
-            && $request['text'] === "<b>AI answer</b> for studio schedule.\n&#8226; First item");
+            && $request['text'] === "<b>Summary</b>\n\n<b>AI answer</b> for studio schedule.\n&#8226; <code>B8V2-LJ7L</code> → First item");
 
         $telegramMethods = collect(Http::recorded())
             ->map(fn (array $record): Request => $record[0])

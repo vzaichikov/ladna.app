@@ -4137,6 +4137,8 @@ function initProfilePhoneMergeScroll() {
 function normalizeAssistantText(content) {
     return String(content || '')
         .replace(/\r\n?/g, '\n')
+        .replace(/\$\\(?:rightarrow|to)\$/gu, '→')
+        .replace(/\\(?:rightarrow|to)\b/gu, '→')
         .replace(/:\s+-\s+/gu, ':\n- ')
         .replace(/\s+-\s+(?=(?:\d{1,2}:\d{2}|[A-ZА-ЯІЇЄҐ][A-Za-zА-Яа-яІіЇїЄєҐґ'’ʼ .-]{0,80}:))/gu, '\n- ')
         .trim();
@@ -4144,19 +4146,27 @@ function normalizeAssistantText(content) {
 
 function appendAssistantInlineText(container, content) {
     const text = String(content || '');
-    const boldPattern = /\*\*(.+?)\*\*/gu;
+    const inlinePattern = /\*\*(.+?)\*\*|`([^`\n]+)`/gu;
     let lastIndex = 0;
     let match;
 
-    while ((match = boldPattern.exec(text)) !== null) {
+    while ((match = inlinePattern.exec(text)) !== null) {
         if (match.index > lastIndex) {
             container.append(document.createTextNode(text.slice(lastIndex, match.index)));
         }
 
-        const strong = document.createElement('strong');
-        strong.className = 'font-semibold text-inherit';
-        strong.textContent = match[1];
-        container.append(strong);
+        if (match[1] !== undefined) {
+            const strong = document.createElement('strong');
+            strong.className = 'font-semibold text-inherit';
+            strong.textContent = match[1];
+            container.append(strong);
+        } else {
+            const code = document.createElement('code');
+            code.className = 'rounded bg-black/5 px-1 py-0.5 font-mono text-[0.92em] text-inherit';
+            code.textContent = match[2];
+            container.append(code);
+        }
+
         lastIndex = match.index + match[0].length;
     }
 
@@ -4172,7 +4182,7 @@ function appendAssistantText(container, content) {
         return;
     }
 
-    const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
+    const lines = normalized.split('\n').map((line) => line.trim());
     let paragraphLines = [];
     let currentList = null;
 
@@ -4203,6 +4213,24 @@ function appendAssistantText(container, content) {
     };
 
     lines.forEach((line) => {
+        if (line === '') {
+            flushParagraph();
+            currentList = null;
+            return;
+        }
+
+        const heading = line.match(/^#{1,6}\s+(.+)$/u);
+
+        if (heading) {
+            flushParagraph();
+            currentList = null;
+            const paragraph = document.createElement('p');
+            paragraph.className = 'font-semibold text-inherit';
+            appendAssistantInlineText(paragraph, heading[1].replace(/^\*\*(.+)\*\*$/u, '$1'));
+            container.append(paragraph);
+            return;
+        }
+
         const numbered = line.match(/^(\d+)[.)]\s+(.+)$/u);
 
         if (numbered) {
