@@ -61,11 +61,11 @@ class CameraMonitoringTest extends TestCase
         }
     }
 
-    public function test_platform_admin_can_toggle_camera_features_near_otp(): void
+    public function test_platform_admin_can_toggle_camera_features_without_changing_studio_telegram_alerts(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
         $owner = User::factory()->create();
-        $account = Account::factory()->create();
+        $account = Account::factory()->create(['enable_telegram_alerts' => false]);
         $account->addOwner($owner);
 
         $this->actingAs($platformAdmin)
@@ -91,7 +91,22 @@ class CameraMonitoringTest extends TestCase
             ->assertSee(__('app.enable_customer_otp_tariff'), false)
             ->assertSee(__('app.enable_rtsp_camera_support'), false)
             ->assertSee(__('app.enable_people_counter'), false)
-            ->assertSee(__('app.enable_telegram_alerts'), false);
+            ->assertDontSee('name="enable_telegram_alerts"', false);
+
+        $account->update(['enable_telegram_alerts' => true]);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.accounts.customer-auth.update', $account), [
+                'allow_otp' => '0',
+                'allow_rtsp_cameras' => '0',
+                'enable_people_counter' => '0',
+                'enable_telegram_alerts' => '0',
+                'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
+                'otp_provider' => null,
+            ])
+            ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
+
+        $this->assertTrue($account->fresh()->enable_telegram_alerts);
 
         $this->actingAs($owner)
             ->put(route('platform.accounts.customer-auth.update', $account), [

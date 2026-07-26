@@ -386,6 +386,7 @@ class HelpPagesTest extends TestCase
             ->assertStatus(200)
             ->assertSee('Публічна сторінка, розклад, прайс і QR-посилання', false)
             ->assertSee('одна публічна сторінка за коротким посиланням', false)
+            ->assertSee('У блоці Посилання відкрийте QR та посилання', false)
             ->assertSee('Скопіюйте посилання на сторінку студії', false)
             ->assertSee('Як додати правила студії та договір публічної оферти', false)
             ->assertSee('Загальні налаштування -&gt; Правила та оферта', false)
@@ -409,6 +410,25 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('endpoint', false)
             ->assertDontSee('public_offer_html', false)
             ->assertDontSee('return_to', false)
+            ->assertDontSee('tenant', false);
+    }
+
+    public function test_notification_settings_help_explains_independent_customer_and_trainer_channels(): void
+    {
+        $this->get(route('help.show', 'notifications', false))
+            ->assertStatus(200)
+            ->assertSee('Налаштування сповіщень', false)
+            ->assertSee('Сповіщення клієнтам', false)
+            ->assertSee('Вихідні сповіщення клієнтам зараз надсилаються тільки через SMS', false)
+            ->assertSee('Telegram-бота клієнтів не змінює SMS-нагадування', false)
+            ->assertSee('Сповіщення тренерам', false)
+            ->assertSee('через загального бота Ladna', false)
+            ->assertSee('Для індивідуального заняття тренер отримує повідомлення про кожне бронювання', false)
+            ->assertSee('лише після першого активного бронювання', false)
+            ->assertSee('assets/help/screenshots/notification-settings-customers.png', false)
+            ->assertSee('assets/help/screenshots/notification-settings-trainers.png', false)
+            ->assertDontSee('endpoint', false)
+            ->assertDontSee('database', false)
             ->assertDontSee('tenant', false);
     }
 

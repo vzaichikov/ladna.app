@@ -16,6 +16,7 @@ class CustomerNotificationSettingsTest extends TestCase
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
         $account = Account::factory()->create([
+            'enable_telegram_alerts' => false,
             'enable_customer_notifications' => false,
         ]);
 
@@ -37,6 +38,7 @@ class CustomerNotificationSettingsTest extends TestCase
         $settings = $account->customerAuthSetting()->firstOrFail();
 
         $this->assertTrue($account->customerNotificationsEnabled());
+        $this->assertFalse($account->telegramAlertsEnabled());
         $this->assertSame(CustomerOtpSenderScope::Account, $settings->customer_sms_sender_scope);
         $this->assertSame('smsclub', $settings->customer_sms_provider);
     }
@@ -50,9 +52,11 @@ class CustomerNotificationSettingsTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'customer_notifications']))
+            ->get(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']))
             ->assertOk()
             ->assertSee(__('app.customer_notifications'), false)
+            ->assertSee(__('app.customer_notifications_sms_only_legend'))
+            ->assertSee(__('app.customer_telegram_bot_settings'))
             ->assertSee('name="class_reminder_hours_before"', false);
 
         $this->actingAs($owner)
@@ -61,7 +65,7 @@ class CustomerNotificationSettingsTest extends TestCase
                 'class_reminder_enabled' => '1',
                 'class_reminder_hours_before' => '7',
             ])
-            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'customer_notifications']));
+            ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']));
 
         $this->assertDatabaseHas('customer_notification_settings', [
             'account_id' => $account->id,
@@ -71,7 +75,7 @@ class CustomerNotificationSettingsTest extends TestCase
         ]);
     }
 
-    public function test_customer_notification_tab_and_update_are_hidden_when_platform_disabled(): void
+    public function test_customer_notification_controls_are_hidden_when_platform_disabled_but_customer_bot_remains_available(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create([
@@ -80,9 +84,11 @@ class CustomerNotificationSettingsTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'customer_notifications']))
+            ->get(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']))
             ->assertOk()
-            ->assertDontSee(__('app.customer_notifications'), false);
+            ->assertSee(__('app.customer_notifications_platform_disabled'))
+            ->assertSee(__('app.customer_telegram_bot_settings'))
+            ->assertDontSee('name="class_reminder_hours_before"', false);
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.customer-notification-settings.update', $account), [

@@ -18,6 +18,7 @@ use App\Models\TelegramBotInstallation;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\Trainer;
+use App\Models\TrainerNotificationSetting;
 use App\Support\Telegram\Alerts\QueueTrainerAssignmentTelegramAlert;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
@@ -47,15 +48,28 @@ class TelegramAlertTest extends TestCase
         $this->assertStringContainsString('Customer: Anna', (string) $alert->text);
     }
 
-    public function test_disabled_studio_still_queues_pending_assignment_alert(): void
+    public function test_disabled_studio_does_not_queue_assignment_alert(): void
     {
         ['account' => $account, 'booking' => $booking] = $this->bookingFixture(ScheduleKind::PrivateLesson);
         $account->update(['enable_telegram_alerts' => false]);
 
         $alert = app(QueueTrainerAssignmentTelegramAlert::class)->execute($booking);
 
-        $this->assertNotNull($alert);
-        $this->assertSame(TelegramAlertStatus::Pending, $alert->status);
+        $this->assertNull($alert);
+        $this->assertDatabaseCount((new TelegramAlert)->getTable(), 0);
+    }
+
+    public function test_disabled_assignment_scenario_does_not_queue_alert(): void
+    {
+        ['account' => $account, 'booking' => $booking] = $this->bookingFixture(ScheduleKind::PrivateLesson);
+        TrainerNotificationSetting::factory()->for($account)->create([
+            'trainer_assignment_enabled' => false,
+        ]);
+
+        $alert = app(QueueTrainerAssignmentTelegramAlert::class)->execute($booking);
+
+        $this->assertNull($alert);
+        $this->assertDatabaseCount((new TelegramAlert)->getTable(), 0);
     }
 
     public function test_group_booking_queues_only_first_active_assignment_alert(): void
@@ -201,6 +215,41 @@ class TelegramAlertTest extends TestCase
         $this->assertSame(TelegramAlertStatus::Failed, $alert->status);
         $this->assertSame(1, $alert->attempts);
         $this->assertSame('telegram_alerts_disabled_for_studio', $alert->last_error);
+        $this->assertNull($alert->telegram_chat_id);
+        Http::assertNothingSent();
+    }
+
+    public function test_send_command_fails_alert_when_assignment_scenario_was_disabled_after_queueing(): void
+    {
+        Http::fake();
+
+        ['account' => $account, 'trainer' => $trainer] = $this->bookingFixture(ScheduleKind::PrivateLesson);
+        $installation = $this->platformOwnerInstallation([
+            'encrypted_token' => '123456:owner-secret',
+            'is_enabled' => true,
+        ]);
+        TelegramChatAuthorization::factory()->for($account)->for($trainer, 'trainer')->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'telegram_chat_id' => 'scenario-disabled-chat',
+        ]);
+        $alert = TelegramAlert::factory()->for($account)->for($trainer)->create();
+        TrainerNotificationSetting::factory()->for($account)->create([
+            'trainer_assignment_enabled' => false,
+        ]);
+
+        $this->artisan('telegram-alerts:send')
+            ->expectsOutput(__('app.telegram_alerts_send_command_result', [
+                'processed' => 1,
+                'sent' => 0,
+                'retried' => 0,
+                'failed' => 1,
+            ]))
+            ->assertSuccessful();
+
+        $alert->refresh();
+
+        $this->assertSame(TelegramAlertStatus::Failed, $alert->status);
+        $this->assertSame('trainer_assignment_alerts_disabled_for_studio', $alert->last_error);
         $this->assertNull($alert->telegram_chat_id);
         Http::assertNothingSent();
     }

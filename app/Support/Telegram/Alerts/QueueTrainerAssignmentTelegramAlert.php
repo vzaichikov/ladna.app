@@ -33,7 +33,14 @@ class QueueTrainerAssignmentTelegramAlert
         $scheduledClass = $booking->scheduledClass;
         $scheduleKind = $scheduledClass?->classType?->schedule_kind;
 
-        if (! $account || $account->isReadOnlyDemo() || ! $scheduledClass || ! $scheduleKind || ! $this->bookingIsActive($booking)) {
+        if (
+            ! $account
+            || $account->isReadOnlyDemo()
+            || ! $account->trainerAssignmentTelegramAlertsEnabled()
+            || ! $scheduledClass
+            || ! $scheduleKind
+            || ! $this->bookingIsActive($booking)
+        ) {
             return null;
         }
 

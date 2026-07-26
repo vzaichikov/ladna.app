@@ -206,7 +206,7 @@ class AccountTenancyTest extends TestCase
         $account->addOwner($owner);
         $this->platformOwnerTelegramBot(['is_enabled' => false]);
 
-        $this->actingAs($owner)
+        $response = $this->actingAs($owner)
             ->get(route('dashboard.accounts.show', $account))
             ->assertOk()
             ->assertSeeInOrder([
@@ -215,6 +215,8 @@ class AccountTenancyTest extends TestCase
                 'Заняття',
                 'Клієнти',
                 'Посилання',
+                'QR та посилання',
+                'QR-коди та публічні посилання',
                 'Лендінг студії',
                 'публічна сторінка студії',
                 'Налаштування студії',
@@ -230,6 +232,7 @@ class AccountTenancyTest extends TestCase
                 'Рівні тренерів',
                 'Інтеграції',
                 'Загальні налаштування',
+                'Налаштування сповіщень',
                 'Налаштування акаунта',
                 'Мій акаунт',
                 'Тариф та платежі',
@@ -250,6 +253,17 @@ class AccountTenancyTest extends TestCase
             ->assertSee(route('dashboard.accounts.activity-logs.index', $account), false)
             ->assertDontSee('tab=business', false)
             ->assertDontSee('tab=account', false);
+
+        $qrLinksUrl = route('dashboard.accounts.qr-links.show', $account);
+        $this->assertStringContainsString('href="'.$qrLinksUrl.'"', $response->getContent());
+        $this->assertDoesNotMatchRegularExpression(
+            '/href="'.preg_quote($qrLinksUrl, '/').'"[^>]*target="_blank"/',
+            $response->getContent(),
+        );
+        $this->assertStringContainsString(
+            'href="'.route('dashboard.accounts.notification-settings.edit', $account).'"',
+            $response->getContent(),
+        );
     }
 
     public function test_studio_owner_sidebar_links_to_enabled_platform_owner_telegram_bot(): void

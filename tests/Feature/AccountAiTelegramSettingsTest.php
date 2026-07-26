@@ -15,16 +15,16 @@ class AccountAiTelegramSettingsTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_owner_can_view_ai_and_telegram_settings_tab(): void
+    public function test_owner_can_view_customer_telegram_settings_on_customer_notifications_tab(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'ai']))
+            ->get(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']))
             ->assertOk()
-            ->assertSee(__('app.ai_and_telegram'))
+            ->assertSee(__('app.notifications_customers'))
             ->assertSee(__('app.customer_telegram_bot_settings'))
             ->assertDontSee(__('app.ai_provider_openai_api_key'))
             ->assertDontSee(__('app.telegram_bot_profile_owner'));
@@ -52,7 +52,7 @@ class AccountAiTelegramSettingsTest extends TestCase
                     ],
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'ai']))
+            ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']))
             ->assertSessionHas('status', __('app.ai_telegram_settings_updated'));
 
         $installation = TelegramBotInstallation::whereBelongsTo($account)
@@ -80,7 +80,7 @@ class AccountAiTelegramSettingsTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->from(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'ai']))
+            ->from(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']))
             ->put(route('dashboard.accounts.ai-telegram-settings.update', $account), [
                 'telegram_profiles' => [
                     TelegramBotProfile::Customer->value => [
@@ -94,7 +94,7 @@ class AccountAiTelegramSettingsTest extends TestCase
                     ],
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'ai']))
+            ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']))
             ->assertSessionHasErrors('telegram_bots.customer.token');
 
         $this->assertFalse(TelegramBotProfileSetting::whereBelongsTo($account)->exists());

@@ -111,7 +111,7 @@ class TelegramAlertSender
 
     private function send(TelegramAlert $alert): string
     {
-        $alert->loadMissing(['account', 'trainer', 'broadcastTarget.installation']);
+        $alert->loadMissing(['account.trainerNotificationSetting', 'trainer', 'broadcastTarget.installation']);
 
         if ($alert->recipient_kind === TelegramAlertRecipientKind::FoundersGroup) {
             return $this->sendFoundersAnnouncement($alert);
@@ -131,6 +131,13 @@ class TelegramAlertSender
 
         if (! $alert->account->telegramAlertsEnabled()) {
             return $this->retryOrFail($alert, 'telegram_alerts_disabled_for_studio', true);
+        }
+
+        if (
+            $alert->type === TelegramAlertType::TrainerAssignment
+            && ! $alert->account->trainerAssignmentAlertScenarioEnabled()
+        ) {
+            return $this->retryOrFail($alert, 'trainer_assignment_alerts_disabled_for_studio', true);
         }
 
         $installation = $this->ownerBotInstallation();

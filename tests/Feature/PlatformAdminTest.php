@@ -48,6 +48,24 @@ class PlatformAdminTest extends TestCase
             ->assertSee(route('dashboard.accounts.show', Account::where('name', 'Studio A')->firstOrFail()), false);
     }
 
+    public function test_platform_sidebar_separates_settings_from_system_logs(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($platformAdmin)
+            ->get(route('platform.accounts.index'))
+            ->assertOk()
+            ->assertSeeInOrder([
+                __('app.configuration'),
+                __('app.system_settings'),
+                __('app.integrations'),
+                __('app.system_logs'),
+                __('app.telegram_support'),
+                __('app.customer_notifications_queue_short'),
+                __('app.scheduled_tasks'),
+            ]);
+    }
+
     public function test_platform_accounts_list_is_paginated(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();

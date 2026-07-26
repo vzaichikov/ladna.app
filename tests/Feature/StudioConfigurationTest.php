@@ -489,7 +489,7 @@ class StudioConfigurationTest extends TestCase
             ->assertSessionHasErrors(['support_instagram_url', 'support_phone_url']);
     }
 
-    public function test_qr_tab_lists_public_links_for_active_locations(): void
+    public function test_qr_page_lists_one_row_per_public_link_for_active_locations(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create(['slug' => 'qr-links-studio']);
@@ -510,9 +510,9 @@ class StudioConfigurationTest extends TestCase
         ]);
 
         $response = $this->actingAs($owner)
-            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'qr']))
+            ->get(route('dashboard.accounts.qr-links.show', $account))
             ->assertOk()
-            ->assertSee(__('app.login_qr_codes_and_links'))
+            ->assertSee(__('app.qr_links_title'))
             ->assertSee(__('app.studio_public_landing'))
             ->assertSee(__('app.public_links'))
             ->assertSee(__('app.public_url'))
@@ -533,6 +533,9 @@ class StudioConfigurationTest extends TestCase
 
         $this->assertSame(6, substr_count($response->getContent(), 'data-print-section'));
         $this->assertSame(6, substr_count($response->getContent(), 'data-qr-print-poster'));
+        $this->assertSame(11, substr_count($response->getContent(), 'data-public-link-row'));
+        $this->assertSame(4, substr_count($response->getContent(), 'data-location-id="'.$firstLocation->id.'"'));
+        $this->assertSame(4, substr_count($response->getContent(), 'data-location-id="'.$secondLocation->id.'"'));
         $this->assertGreaterThanOrEqual(12, substr_count($response->getContent(), 'data-copy-button'));
     }
 

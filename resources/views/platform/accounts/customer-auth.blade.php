@@ -49,14 +49,6 @@
                         </span>
                     </label>
                     <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
-                        <input type="hidden" name="enable_telegram_alerts" value="0">
-                        <input name="enable_telegram_alerts" type="checkbox" value="1" @checked(old('enable_telegram_alerts', $account->enable_telegram_alerts)) class="crm-checkbox mt-0.5">
-                        <span class="grid gap-1">
-                            <span>{{ __('app.enable_telegram_alerts') }}</span>
-                            <span class="text-sm font-normal leading-6 text-slate-500">{{ __('app.studio_capability_telegram_alerts_hint') }}</span>
-                        </span>
-                    </label>
-                    <label class="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800">
                         <input type="hidden" name="enable_customer_notifications" value="0">
                         <input name="enable_customer_notifications" type="checkbox" value="1" @checked(old('enable_customer_notifications', $account->enable_customer_notifications)) class="crm-checkbox mt-0.5">
                         <span class="grid gap-1">

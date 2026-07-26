@@ -174,17 +174,29 @@
     ] : [];
 
     $sidebarLinksNav = $showAccountNav ? [
+        ...($canManageStudioSettings ? [[
+            'label' => __('app.qr_links_title'),
+            'description' => __('app.qr_links_sidebar_help'),
+            'icon' => 'qr-code',
+            'href' => route('dashboard.accounts.qr-links.show', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.qr-links.*'),
+            'external' => false,
+        ]] : []),
         [
             'label' => __('app.studio_landing_link'),
             'description' => __('app.studio_landing_link_help'),
             'icon' => 'globe',
             'href' => route('public.studio', $activeAccount->slug),
+            'active' => false,
+            'external' => true,
         ],
         ...($ownerTelegramBotUrl ? [[
             'label' => __('app.telegram_support_bot_link'),
             'description' => __('app.telegram_support_bot_link_help'),
             'icon' => 'telegram',
             'href' => $ownerTelegramBotUrl,
+            'active' => false,
+            'external' => true,
         ]] : []),
     ] : [];
 
@@ -255,12 +267,25 @@
                 'active' => request()->routeIs('dashboard.accounts.integrations.*'),
             ],
         ] : []),
-        ...($canManageStudioSettings ? [[
-            'label' => __('app.my_brand'),
-            'icon' => 'sparkles',
-            'href' => route('dashboard.accounts.general-settings.edit', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.general-settings.*', 'dashboard.accounts.brand.*'),
-        ]] : []),
+        ...($canManageStudioSettings ? [
+            [
+                'label' => __('app.my_brand'),
+                'icon' => 'sparkles',
+                'href' => route('dashboard.accounts.general-settings.edit', $activeAccount),
+                'active' => request()->routeIs('dashboard.accounts.general-settings.*', 'dashboard.accounts.brand.*'),
+            ],
+            [
+                'label' => __('app.notification_settings'),
+                'icon' => 'bell',
+                'href' => route('dashboard.accounts.notification-settings.edit', $activeAccount),
+                'active' => request()->routeIs(
+                    'dashboard.accounts.notification-settings.*',
+                    'dashboard.accounts.customer-notification-settings.*',
+                    'dashboard.accounts.trainer-notification-settings.*',
+                    'dashboard.accounts.ai-telegram-settings.*',
+                ),
+            ],
+        ] : []),
     ] : [];
 
     $accountSettingsNav = $showAccountNav ? [
@@ -297,6 +322,9 @@
             'href' => route('platform.integrations.index'),
             'active' => request()->routeIs('platform.integrations.*'),
         ],
+    ] : [];
+
+    $platformLogsNav = $isPlatformAdmin ? [
         [
             'label' => __('app.telegram_support'),
             'icon' => 'telegram',
@@ -413,12 +441,18 @@
                             <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.links') }}</div>
                             <div class="mt-3 space-y-1">
                                 @foreach ($sidebarLinksNav as $item)
-                                    <a href="{{ $item['href'] }}" target="_blank" rel="noopener" class="group flex items-start gap-3 rounded-lg px-3 py-2.5 transition text-slate-300 hover:bg-white/10 hover:text-white">
-                                        <x-ui.icon :name="$item['icon']" class="mt-0.5 h-5 w-5 text-slate-400 group-hover:text-brand-500" />
+                                    <a
+                                        href="{{ $item['href'] }}"
+                                        @if ($item['external']) target="_blank" rel="noopener" @endif
+                                        class="group flex items-start gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}"
+                                    >
+                                        <x-ui.icon :name="$item['icon']" class="mt-0.5 h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400 group-hover:text-brand-500' }}" />
                                         <span class="min-w-0 flex-1">
                                             <span class="flex min-w-0 items-center gap-1">
                                                 <span class="truncate">{{ $item['label'] }}</span>
-                                                <x-ui.icon name="external" class="h-3.5 w-3.5 shrink-0 text-slate-500 group-hover:text-violet-crm-100" />
+                                                @if ($item['external'])
+                                                    <x-ui.icon name="external" class="h-3.5 w-3.5 shrink-0 text-slate-500 group-hover:text-violet-crm-100" />
+                                                @endif
                                             </span>
                                             <span class="mt-0.5 block truncate text-[0.68rem] font-medium leading-4 text-violet-crm-100/65">{{ $item['description'] }}</span>
                                         </span>
@@ -463,6 +497,20 @@
                             <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.configuration') }}</div>
                             <div class="mt-3 space-y-1">
                                 @foreach ($platformSettingsNav as $item)
+                                    <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
+                                        <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
+                                        <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($platformLogsNav)
+                        <div>
+                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.system_logs') }}</div>
+                            <div class="mt-3 space-y-1">
+                                @foreach ($platformLogsNav as $item)
                                     <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
                                         <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
                                         <span>{{ $item['label'] }}</span>

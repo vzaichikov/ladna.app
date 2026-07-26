@@ -3,24 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AccountApiTokenAbility;
-use App\Enums\TelegramBotMode;
-use App\Enums\TelegramBotProfile;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
-use App\Models\Location;
 use App\Support\PublicScheduleViewRegistry;
 use App\Support\Pwa\StudioPwaIconGenerator;
 use App\Support\ReservedPublicSlugs;
 use App\Support\SlugGenerator;
 use App\Support\StudioDashboardData;
-use BaconQrCode\Renderer\Image\SvgImageBackEnd;
-use BaconQrCode\Renderer\ImageRenderer;
-use BaconQrCode\Renderer\RendererStyle\RendererStyle;
-use BaconQrCode\Writer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -100,51 +92,31 @@ class AccountController extends Controller
         return redirect()->route('dashboard.accounts.owner-profile.edit', $account);
     }
 
-    public function editBrand(Request $request, Account $account): View
+    public function editBrand(Request $request, Account $account): View|RedirectResponse
     {
         $this->authorize('update', $account);
-        $studioLandingUrl = route('public.studio', $account->slug);
-        $customerLoginUrl = route('customer.studio.login', $account->slug);
-        $allowedTabs = ['formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view', 'qr', 'api', 'ai'];
 
-        if ($account->customerNotificationsEnabled()) {
-            $allowedTabs[] = 'customer_notifications';
+        $legacyRoute = match ($request->query('tab')) {
+            'qr' => route('dashboard.accounts.qr-links.show', $account),
+            'customer_notifications', 'ai' => route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']),
+            default => null,
+        };
+
+        if ($legacyRoute) {
+            return redirect($legacyRoute);
         }
 
+        $allowedTabs = ['formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view', 'api'];
         $activeTab = in_array($request->query('tab'), $allowedTabs, true) ? $request->query('tab') : 'business';
 
         return view('accounts.brand-edit', [
             'account' => $account,
             'activeTab' => $activeTab,
             'publicScheduleViewOptions' => PublicScheduleViewRegistry::options(),
-            'studioLandingUrl' => $studioLandingUrl,
-            'studioLandingQrSvg' => $this->qrCodeSvg($studioLandingUrl),
-            'customerLoginUrl' => $customerLoginUrl,
-            'customerLoginQrSvg' => $this->qrCodeSvg($customerLoginUrl),
-            'publicLinkLocations' => $activeTab === 'qr'
-                ? $this->publicLinkLocations($account)
-                : collect(),
             'apiTokens' => $activeTab === 'api'
                 ? $account->apiTokens()->latest()->get()
                 : collect(),
             'apiTokenAbilities' => AccountApiTokenAbility::cases(),
-            'customerNotificationSetting' => $activeTab === 'customer_notifications'
-                ? $account->customerNotificationSetting()->first()
-                : null,
-            'telegramBotProfilesList' => [TelegramBotProfile::Customer],
-            'telegramBotModes' => [TelegramBotMode::Disabled, TelegramBotMode::Simple],
-            'telegramBotInstallations' => $activeTab === 'ai'
-                ? $account->telegramBotInstallations()
-                    ->where('profile', TelegramBotProfile::Customer->value)
-                    ->get()
-                    ->keyBy(fn ($installation): string => $installation->profile->value)
-                : collect(),
-            'telegramBotProfiles' => $activeTab === 'ai'
-                ? $account->telegramBotProfiles()
-                    ->where('profile', TelegramBotProfile::Customer->value)
-                    ->get()
-                    ->keyBy(fn ($profile): string => $profile->profile->value)
-                : collect(),
         ]);
     }
 
@@ -206,52 +178,5 @@ class AccountController extends Controller
         $account->forceFill([
             'logo_path' => $request->file('logo')->store('account-logos/'.$account->id, 'public'),
         ])->save();
-    }
-
-    private function qrCodeSvg(string $url): string
-    {
-        $renderer = new ImageRenderer(
-            new RendererStyle(320),
-            new SvgImageBackEnd,
-        );
-
-        return (new Writer($renderer))->writeString($url);
-    }
-
-    /**
-     * @return Collection<int, array{location: Location, schedule_url: string, schedule_embed_url: string, price_url: string, price_embed_url: string, printable_links: array<int, array{label_key: string, icon: string, url: string, qr_svg: string}>}>
-     */
-    private function publicLinkLocations(Account $account): Collection
-    {
-        return $account->locations()
-            ->active()
-            ->orderBy('name')
-            ->get(['id', 'account_id', 'name', 'slug', 'address'])
-            ->map(function (Location $location) use ($account): array {
-                $scheduleUrl = route('public.schedule', [$account->slug, $location->slug]);
-                $priceUrl = route('public.price', [$account->slug, $location->slug]);
-
-                return [
-                    'location' => $location,
-                    'schedule_url' => $scheduleUrl,
-                    'schedule_embed_url' => route('public.schedule.embed', [$account->slug, $location->slug]),
-                    'price_url' => $priceUrl,
-                    'price_embed_url' => route('public.price.embed', [$account->slug, $location->slug]),
-                    'printable_links' => [
-                        [
-                            'label_key' => 'app.public_schedule',
-                            'icon' => 'schedule',
-                            'url' => $scheduleUrl,
-                            'qr_svg' => $this->qrCodeSvg($scheduleUrl),
-                        ],
-                        [
-                            'label_key' => 'app.public_price',
-                            'icon' => 'class-pass-plans',
-                            'url' => $priceUrl,
-                            'qr_svg' => $this->qrCodeSvg($priceUrl),
-                        ],
-                    ],
-                ];
-            });
     }
 }

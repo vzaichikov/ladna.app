@@ -18,7 +18,7 @@ class CustomerNotificationSettingsController extends Controller
         );
 
         return redirect()
-            ->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'customer_notifications'])
+            ->route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers'])
             ->with('status', __('app.customer_notification_settings_updated'));
     }
 }

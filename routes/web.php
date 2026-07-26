@@ -7,8 +7,10 @@ use App\Http\Controllers\AccountApiTokenController;
 use App\Http\Controllers\AccountAssistantController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountIntegrationController;
+use App\Http\Controllers\AccountNotificationSettingsController;
 use App\Http\Controllers\AccountOwnerProfileController;
 use App\Http\Controllers\AccountPaymentController;
+use App\Http\Controllers\AccountQrLinksController;
 use App\Http\Controllers\AccountSubscriptionController;
 use App\Http\Controllers\AccountTariffPaymentController;
 use App\Http\Controllers\ActivityDirectionController;
@@ -86,6 +88,7 @@ use App\Http\Controllers\StudioCashEntryController;
 use App\Http\Controllers\StudioExpenseController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
+use App\Http\Controllers\TrainerNotificationSettingsController;
 use App\Http\Controllers\TrainerPrivateLessonReportController;
 use App\Http\Controllers\TrainerPrivateTimeframeController;
 use App\Http\Controllers\TrainerReportController;
@@ -349,6 +352,10 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
         Route::resource('accounts', AccountController::class);
         Route::get('accounts/{account}/general-settings', [AccountController::class, 'editBrand'])
             ->name('accounts.general-settings.edit');
+        Route::get('accounts/{account}/qr-links', AccountQrLinksController::class)
+            ->name('accounts.qr-links.show');
+        Route::get('accounts/{account}/notification-settings', [AccountNotificationSettingsController::class, 'edit'])
+            ->name('accounts.notification-settings.edit');
         Route::get('accounts/{account}/brand', function (Request $request, Account $account): RedirectResponse {
             return redirect()->route('dashboard.accounts.general-settings.edit', ['account' => $account] + $request->query());
         })
@@ -439,6 +446,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.customer-notification-settings.update');
         Route::put('accounts/{account}/ai-telegram-settings', [AccountAiTelegramSettingsController::class, 'update'])
             ->name('accounts.ai-telegram-settings.update');
+        Route::put('accounts/{account}/trainer-notification-settings', [TrainerNotificationSettingsController::class, 'update'])
+            ->name('accounts.trainer-notification-settings.update');
         Route::get('accounts/{account}/assistant', [AccountAssistantController::class, 'show'])
             ->name('accounts.assistant.show');
         Route::post('accounts/{account}/assistant/messages', [AccountAssistantController::class, 'store'])

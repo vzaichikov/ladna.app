@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.98.0',
+                'date' => '2026-07-26',
+                'title' => 'Clear notification and link settings',
+                'items' => ['QR codes and public studio, schedule, price, rules, and offer links now have their own page under Links. Every location link is shown on a separate row with open and copy actions.', 'Notification settings now have dedicated Customer notifications and Trainer notifications tabs. Studios can control trainer Telegram alerts through the general Ladna bot and independently enable the trainer-assignment scenario, while customer SMS reminders and the customer Telegram bot remain separate.', 'Platform settings now separate system logs from configuration, and owner help explains each notification channel and scenario with updated screens.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.97.0',
                 'date' => '2026-07-26',
                 'title' => 'Activity directions for every room',
@@ -884,6 +891,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.98.0',
+                'date' => '2026-07-26',
+                'title' => 'Зрозумілі налаштування сповіщень і посилань',
+                'items' => ['QR-коди й публічні посилання на сторінку студії, розклад, прайс, правила та оферту тепер зібрані на окремій сторінці в блоці Посилання. Кожне посилання локації показано в окремому рядку з діями відкриття й копіювання.', 'Налаштування сповіщень отримали окремі вкладки Сповіщення клієнтам і Сповіщення тренерам. Студія може керувати Telegram-сповіщеннями тренерам через загального бота Ladna й окремо вмикати сценарій призначення тренера, а SMS-нагадування клієнтам і клієнтський Telegram-бот залишаються незалежними.', 'У налаштуваннях платформи системні логи відокремлено від конфігурації, а допомога для власниці пояснює кожен канал і сценарій на оновлених екранах.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.97.0',
                 'date' => '2026-07-26',

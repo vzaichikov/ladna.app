@@ -253,6 +253,11 @@ class Account extends Model
         return $this->hasOne(CustomerNotificationSetting::class);
     }
 
+    public function trainerNotificationSetting(): HasOne
+    {
+        return $this->hasOne(TrainerNotificationSetting::class);
+    }
+
     public function customerNotifications(): HasMany
     {
         return $this->hasMany(CustomerNotification::class);
@@ -348,6 +353,20 @@ class Account extends Model
     public function telegramAlertsEnabled(): bool
     {
         return (bool) $this->enable_telegram_alerts;
+    }
+
+    public function trainerAssignmentAlertScenarioEnabled(): bool
+    {
+        $settings = $this->relationLoaded('trainerNotificationSetting')
+            ? $this->getRelation('trainerNotificationSetting')
+            : $this->trainerNotificationSetting()->first();
+
+        return (bool) ($settings?->trainer_assignment_enabled ?? true);
+    }
+
+    public function trainerAssignmentTelegramAlertsEnabled(): bool
+    {
+        return $this->telegramAlertsEnabled() && $this->trainerAssignmentAlertScenarioEnabled();
     }
 
     public function customerNotificationsEnabled(): bool
