@@ -89,7 +89,7 @@ class StudioAiToolExecutor
                     'type' => 'function',
                     'function' => [
                         'name' => self::GetOwnerHelpPage,
-                        'description' => 'Read the complete curated Ladna owner help page selected from search_owner_help results before answering the owner.',
+                        'description' => 'Read the complete curated Ladna owner help page selected from search_owner_help when the returned excerpts and steps are not sufficient for an accurate answer.',
                         'parameters' => [
                             'type' => 'object',
                             'additionalProperties' => false,

@@ -490,8 +490,8 @@ class StudioAiInvestigationTest extends TestCase
             ->values();
         $this->assertCount(4, $requests);
         $this->assertArrayNotHasKey('format', $requests[0]->data());
-        $this->assertArrayNotHasKey('format', $requests[1]->data());
-        $this->assertArrayNotHasKey('format', $requests[2]->data());
+        $this->assertSame('json', $requests[1]->data()['format']);
+        $this->assertSame('json', $requests[2]->data()['format']);
         $this->assertSame('json', $requests[3]->data()['format']);
         $firstSearchResult = collect($requests[1]->data()['messages'])->first(
             fn (array $message): bool => ($message['role'] ?? null) === 'tool'

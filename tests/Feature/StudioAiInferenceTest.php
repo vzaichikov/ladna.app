@@ -153,9 +153,8 @@ class StudioAiInferenceTest extends TestCase
         $owner = User::factory()->create();
         $account->addOwner($owner);
         $question = 'прівєт 😅 я знов загубилась. де там додати нову тринершу і дати їй вхід? тікі коротко пліз';
-        $this->fakeHelpToolLoop(
+        $this->fakeHelpSearchLoop(
             'додати тренера доступ до системи',
-            'trainers',
             'Відкрийте Тренери, натисніть Додати тренера, увімкніть вхід у систему й оберіть права.',
         );
 
@@ -172,7 +171,7 @@ class StudioAiInferenceTest extends TestCase
                 && str_contains($payload['messages'][0]['content'] ?? '', 'decide the topic yourself')
                 && str_contains($payload['messages'][0]['content'] ?? '', 'misspelled guidance questions');
         });
-        Http::assertSentCount(3);
+        Http::assertSentCount(2);
     }
 
     public function test_inference_includes_class_pass_help_context_for_no_pass_questions(): void
@@ -1125,6 +1124,41 @@ class StudioAiInferenceTest extends TestCase
                             'action' => null,
                             'calendar_reference' => null,
                             'reason' => 'Answer from the selected Ladna help page.',
+                        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    ],
+                ]),
+        ]);
+    }
+
+    private function fakeHelpSearchLoop(string $query, string $answer): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '',
+                        'tool_calls' => [[
+                            'function' => [
+                                'name' => 'search_owner_help',
+                                'arguments' => [
+                                    'query' => $query,
+                                    'limit' => 5,
+                                ],
+                            ],
+                        ]],
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => json_encode([
+                            'disposition' => 'answer',
+                            'answer' => $answer,
+                            'follow_up_actions' => [],
+                            'action' => null,
+                            'calendar_reference' => null,
+                            'reason' => 'Answer from the selected Ladna help search result.',
                         ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                     ],
                 ]),
