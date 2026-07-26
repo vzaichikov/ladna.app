@@ -21,6 +21,7 @@ use App\Models\SubscriptionPriceVersion;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\UserPhoneOtpChallenge;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\DemoStudioFixture;
 use App\Support\Onboarding\OwnerPhoneOtpService;
 use App\Support\Pwa\StudioPwaIconGenerator;
@@ -242,6 +243,21 @@ class PublicOwnerOnboardingTest extends TestCase
         } finally {
             app()->detectEnvironment(fn (): string => $originalEnvironment);
         }
+    }
+
+    public function test_owner_onboarding_does_not_fallback_to_an_unselected_platform_sms_provider(): void
+    {
+        $this->preparePublicOnboarding();
+        SystemSetting::setValue(SystemSetting::CentralSmsProviderKey, null);
+
+        $this->assertNotNull(
+            IntegrationSetting::platform()
+                ->where('provider', IntegrationProvider::Turbosms->value)
+                ->where('is_enabled', true)
+                ->first(),
+        );
+        $this->assertNull(app(CustomerAuthAvailability::class)->platformSmsSetting());
+        $this->get(route('register'))->assertNotFound();
     }
 
     public function test_registration_creates_only_an_authenticated_owner_user_with_legal_evidence(): void
@@ -677,6 +693,7 @@ class PublicOwnerOnboardingTest extends TestCase
                 'sms_sender' => 'Ladna',
             ],
         ]);
+        SystemSetting::setValue(SystemSetting::CentralSmsProviderKey, IntegrationProvider::Turbosms->value);
     }
 
     private function fakeSuccessfulGateways(): void

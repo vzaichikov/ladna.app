@@ -37,6 +37,10 @@ return [
 
     'mailers' => [
 
+        'ladna_transactional' => [
+            'transport' => 'ladna_transactional',
+        ],
+
         'smtp' => [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),

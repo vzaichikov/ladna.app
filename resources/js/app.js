@@ -5092,6 +5092,45 @@ function initPublicPricingCalculators(root = document) {
     });
 }
 
+function initIntegrationForms(root = document) {
+    root.querySelectorAll('[data-integration-form]').forEach((form) => {
+        if (form.dataset.integrationFormReady === 'true') {
+            return;
+        }
+
+        const updateFieldVisibility = () => {
+            form.querySelectorAll('[data-integration-field-wrapper][data-visible-when]').forEach((wrapper) => {
+                let conditions = {};
+
+                try {
+                    conditions = JSON.parse(wrapper.dataset.visibleWhen || '{}');
+                } catch {
+                    conditions = {};
+                }
+
+                const isVisible = Object.entries(conditions).every(([field, expected]) => {
+                    const control = form.querySelector(`[name="credentials[${field}]"]`);
+                    const expectedValues = Array.isArray(expected) ? expected : [expected];
+
+                    return control && expectedValues.includes(control.value);
+                });
+
+                wrapper.classList.toggle('hidden', !isVisible);
+                wrapper.classList.toggle('block', isVisible);
+            });
+        };
+
+        form.addEventListener('change', (event) => {
+            if (event.target.matches('[name^="credentials["]')) {
+                updateFieldVisibility();
+            }
+        });
+
+        form.dataset.integrationFormReady = 'true';
+        updateFieldVisibility();
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     createIcons({ icons });
     initSlugAutofill();
@@ -5130,6 +5169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPublicPricingCalculators();
     initPublicCalendarSwipe();
     initSalaryModelForms();
+    initIntegrationForms();
     syncPublicLegalReturnUrls();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {

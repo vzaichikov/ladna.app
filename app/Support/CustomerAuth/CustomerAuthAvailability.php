@@ -62,19 +62,23 @@ class CustomerAuthAvailability
     {
         return $settings->otp_sender_scope === CustomerOtpSenderScope::Account
             ? $this->accountSmsSetting($account, $settings->otp_provider)
-            : $this->platformSmsSetting($settings->otp_provider);
+            : $this->assignedPlatformSmsSetting($settings->otp_provider);
     }
 
     public function customerSmsSettingFor(Account $account, CustomerAuthSetting $settings): ?IntegrationSetting
     {
         return $settings->customer_sms_sender_scope === CustomerOtpSenderScope::Account
             ? $this->accountSmsSetting($account, $settings->customer_sms_provider)
-            : $this->platformSmsSetting($settings->customer_sms_provider);
+            : $this->assignedPlatformSmsSetting($settings->customer_sms_provider);
     }
 
     public function platformSmsSetting(?string $provider = null): ?IntegrationSetting
     {
         $provider ??= SystemSetting::stringValue(SystemSetting::CentralSmsProviderKey);
+
+        if (blank($provider)) {
+            return null;
+        }
 
         return $this->configuredSmsSetting(IntegrationSetting::platform(), $provider);
     }
@@ -95,13 +99,22 @@ class CustomerAuthAvailability
         return [
             'google' => $this->googleSetting() !== null,
             'turnstile' => $this->turnstileSetting() !== null,
-            'platform_sms' => $this->platformSmsSetting($settings->otp_provider) !== null,
+            'platform_sms' => $this->assignedPlatformSmsSetting($settings->otp_provider) !== null,
             'account_sms' => $this->accountSmsSetting($account, $settings->otp_provider) !== null,
-            'customer_platform_sms' => $this->platformSmsSetting($settings->customer_sms_provider) !== null,
+            'customer_platform_sms' => $this->assignedPlatformSmsSetting($settings->customer_sms_provider) !== null,
             'customer_account_sms' => $this->accountSmsSetting($account, $settings->customer_sms_provider) !== null,
             'otp' => $methods->otp,
             'otp_enabled' => $settings->allow_otp,
         ];
+    }
+
+    private function assignedPlatformSmsSetting(?string $provider): ?IntegrationSetting
+    {
+        if (blank($provider)) {
+            return null;
+        }
+
+        return $this->configuredSmsSetting(IntegrationSetting::platform(), $provider);
     }
 
     private function platformProvider(IntegrationProvider $provider): ?IntegrationSetting

@@ -2,7 +2,7 @@
 
 namespace App\Support\CustomerAuth;
 
-use Illuminate\Support\Facades\Http;
+use App\Support\SendPulse\SendPulseApiClient;
 
 class SendPulseSmsGateway implements SmsGateway
 {
@@ -18,9 +18,9 @@ class SendPulseSmsGateway implements SmsGateway
 
     public function sendSms(string $phone, string $message): SmsGatewayResult
     {
-        $token = $this->accessToken();
+        $apiKey = trim((string) ($this->credentials['api_key'] ?? ''));
 
-        if (! $token) {
+        if ($apiKey === '') {
             return SmsGatewayResult::failed('SendPulse token is not configured.');
         }
 
@@ -30,42 +30,18 @@ class SendPulseSmsGateway implements SmsGateway
             'body' => $message,
         ];
 
-        if (filled($this->credentials['sms_route'] ?? null)) {
-            $payload['route'] = (string) $this->credentials['sms_route'];
-        }
-
-        $response = Http::withToken($token)
-            ->acceptJson()
-            ->timeout(10)
-            ->retry(1, 200)
-            ->post('https://api.sendpulse.com/sms/send', $payload);
+        $response = (new SendPulseApiClient($apiKey))->post('/sms/send', $payload);
 
         if ($response->successful()) {
             return SmsGatewayResult::sent((string) ($response->json('data.id') ?? ''));
         }
 
-        return SmsGatewayResult::failed($response->body() ?: 'SendPulse request failed.');
-    }
+        $message = $response->json('message');
 
-    private function accessToken(): ?string
-    {
-        if (($this->credentials['auth_mode'] ?? 'api_key') === 'api_key') {
-            return filled($this->credentials['api_key'] ?? null) ? (string) $this->credentials['api_key'] : null;
-        }
-
-        $response = Http::acceptJson()
-            ->timeout(10)
-            ->retry(1, 200)
-            ->post('https://api.sendpulse.com/oauth/access_token', [
-                'grant_type' => 'client_credentials',
-                'client_id' => (string) ($this->credentials['client_id'] ?? ''),
-                'client_secret' => (string) ($this->credentials['client_secret'] ?? ''),
-            ]);
-
-        if (! $response->successful()) {
-            return null;
-        }
-
-        return $response->json('access_token');
+        return SmsGatewayResult::failed(
+            is_string($message) && $message !== ''
+                ? $message
+                : sprintf('SendPulse request failed with HTTP %d.', $response->status()),
+        );
     }
 }

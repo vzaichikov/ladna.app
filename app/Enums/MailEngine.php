@@ -4,6 +4,7 @@ namespace App\Enums;
 
 enum MailEngine: string
 {
+    case SendpulseApi = 'sendpulse_api';
     case SendpulseSmtp = 'sendpulse_smtp';
     case Smtp = 'smtp';
     case Sendmail = 'sendmail';

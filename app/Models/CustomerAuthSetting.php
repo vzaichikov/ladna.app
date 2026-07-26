@@ -14,8 +14,8 @@ class CustomerAuthSetting extends Model
         'allow_email_password' => true,
         'allow_otp' => false,
         'allow_google' => false,
-        'otp_sender_scope' => 'platform',
-        'customer_sms_sender_scope' => 'platform',
+        'otp_sender_scope' => 'account',
+        'customer_sms_sender_scope' => 'account',
     ];
 
     /**

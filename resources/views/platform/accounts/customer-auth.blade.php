@@ -76,7 +76,7 @@
                         <span class="crm-label">{{ __('app.otp_sender_scope') }}</span>
                         <select name="otp_sender_scope" class="crm-field">
                             @foreach ($senderScopes as $scope)
-                                <option value="{{ $scope->value }}" @selected(old('otp_sender_scope', $settings->otp_sender_scope?->value ?? 'platform') === $scope->value)>
+                                <option value="{{ $scope->value }}" @selected(old('otp_sender_scope', $settings->otp_sender_scope?->value ?? 'account') === $scope->value)>
                                     {{ __('app.otp_sender_scope_'.$scope->value) }}
                                 </option>
                             @endforeach
@@ -101,7 +101,7 @@
                         <span class="crm-label">{{ __('app.customer_notification_sender_scope') }}</span>
                         <select name="customer_sms_sender_scope" class="crm-field">
                             @foreach ($senderScopes as $scope)
-                                <option value="{{ $scope->value }}" @selected(old('customer_sms_sender_scope', $settings->customer_sms_sender_scope?->value ?? 'platform') === $scope->value)>
+                                <option value="{{ $scope->value }}" @selected(old('customer_sms_sender_scope', $settings->customer_sms_sender_scope?->value ?? 'account') === $scope->value)>
                                     {{ __('app.otp_sender_scope_'.$scope->value) }}
                                 </option>
                             @endforeach

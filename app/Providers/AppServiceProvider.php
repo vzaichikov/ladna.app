@@ -8,12 +8,15 @@ use App\Models\Location;
 use App\Policies\AccountPolicy;
 use App\Policies\LocationPolicy;
 use App\Support\ApplicationVersion;
+use App\Support\Mail\LadnaTransactionalTransport;
+use App\Support\Mail\MailDeliveryTransportResolver;
 use App\Support\SystemAppearance;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -35,6 +38,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Mail::extend('ladna_transactional', fn (array $config = []): LadnaTransactionalTransport => new LadnaTransactionalTransport(
+            $this->app->make(MailDeliveryTransportResolver::class),
+        ));
+
         Carbon::setLocale(app()->getLocale());
 
         Model::preventLazyLoading(! app()->isProduction());

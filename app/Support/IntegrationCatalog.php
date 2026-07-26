@@ -104,8 +104,13 @@ class IntegrationCatalog
     public static function credentialsForStorage(string $provider, array $submitted, array $existing = []): array
     {
         $credentials = [];
+        $context = array_replace(self::defaults($provider), $existing, $submitted);
 
         foreach (self::provider($provider)['fields'] as $field => $definition) {
+            if (! self::fieldIsVisible($definition, $context)) {
+                continue;
+            }
+
             $value = $submitted[$field] ?? null;
 
             if (($definition['sensitive'] ?? false) && self::blank($value)) {
@@ -207,6 +212,21 @@ class IntegrationCatalog
     public static function hasRequiredCredentials(string $provider, array $credentials): bool
     {
         return self::missingRequiredFields($provider, $credentials, $credentials) === [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     * @param  array<string, mixed>  $credentials
+     */
+    public static function fieldIsVisible(array $definition, array $credentials): bool
+    {
+        foreach (($definition['visible_when'] ?? []) as $field => $value) {
+            if (! in_array($credentials[$field] ?? null, Arr::wrap($value), true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

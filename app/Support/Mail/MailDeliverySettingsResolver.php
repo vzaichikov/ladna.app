@@ -6,16 +6,10 @@ use App\Enums\IntegrationProvider;
 use App\Enums\MailEngine;
 use App\Models\IntegrationSetting;
 use App\Support\IntegrationCatalog;
-use Illuminate\Mail\MailManager;
-use Illuminate\Support\Arr;
 
 class MailDeliverySettingsResolver
 {
-    private const MailerName = 'ladna_transactional';
-
-    private const PrimaryMailerName = 'ladna_transactional_primary';
-
-    private const FallbackMailerName = 'ladna_transactional_fallback';
+    public const MailerName = 'ladna_transactional';
 
     public function resolve(): MailDeliverySettings
     {
@@ -37,8 +31,6 @@ class MailDeliverySettingsResolver
             return $this->fallbackSettings();
         }
 
-        $this->configureMailer($engine, $credentials);
-
         return new MailDeliverySettings(
             mailer: self::MailerName,
             fromEmail: $fromEmail,
@@ -59,72 +51,5 @@ class MailDeliverySettingsResolver
             engine: MailEngine::tryFrom($mailer) ?? MailEngine::Log,
             configured: false,
         );
-    }
-
-    /**
-     * @param  array<string, mixed>  $credentials
-     */
-    private function configureMailer(MailEngine $engine, array $credentials): void
-    {
-        if ($engine === MailEngine::SendpulseSmtp || $engine === MailEngine::Smtp) {
-            config([
-                'mail.mailers.'.self::PrimaryMailerName => $this->smtpConfig($credentials),
-                'mail.mailers.'.self::FallbackMailerName => $this->localConfig((string) ($credentials['fallback_engine'] ?? MailEngine::Log->value)),
-                'mail.mailers.'.self::MailerName => [
-                    'transport' => 'failover',
-                    'mailers' => [
-                        self::PrimaryMailerName,
-                        self::FallbackMailerName,
-                    ],
-                    'retry_after' => 60,
-                ],
-            ]);
-        } else {
-            config([
-                'mail.mailers.'.self::MailerName => $this->localConfig($engine->value),
-            ]);
-        }
-
-        $mailManager = app('mail.manager');
-
-        if (! $mailManager instanceof MailManager) {
-            return;
-        }
-
-        foreach ([self::MailerName, self::PrimaryMailerName, self::FallbackMailerName] as $mailer) {
-            $mailManager->purge($mailer);
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $credentials
-     * @return array<string, mixed>
-     */
-    private function smtpConfig(array $credentials): array
-    {
-        $encryption = (string) ($credentials['smtp_encryption'] ?? 'tls');
-
-        return [
-            'transport' => 'smtp',
-            'scheme' => $encryption === 'ssl' ? 'smtps' : 'smtp',
-            'url' => null,
-            'host' => (string) $credentials['smtp_host'],
-            'port' => (int) $credentials['smtp_port'],
-            'username' => (string) $credentials['smtp_login'],
-            'password' => (string) $credentials['smtp_password'],
-            'timeout' => 10,
-            'local_domain' => parse_url((string) config('app.url'), PHP_URL_HOST),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function localConfig(string $engine): array
-    {
-        return match ($engine) {
-            MailEngine::Sendmail->value => Arr::except(config('mail.mailers.sendmail', ['transport' => 'sendmail']), ['url']),
-            default => Arr::except(config('mail.mailers.log', ['transport' => 'log']), ['url']),
-        };
     }
 }

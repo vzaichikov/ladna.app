@@ -7,6 +7,7 @@ use App\Enums\IntegrationProvider;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateCustomerAuthSettingsRequest extends FormRequest
 {
@@ -74,11 +75,37 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
         ];
     }
 
+    /**
+     * @return array<int, callable(Validator): void>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if (
+                    $this->boolean('allow_otp')
+                    && $this->input('otp_sender_scope') === CustomerOtpSenderScope::Platform->value
+                    && blank($this->input('otp_provider'))
+                ) {
+                    $validator->errors()->add('otp_provider', __('app.sms_provider_required_for_platform_scope'));
+                }
+
+                if (
+                    $this->boolean('enable_customer_notifications')
+                    && $this->input('customer_sms_sender_scope') === CustomerOtpSenderScope::Platform->value
+                    && blank($this->input('customer_sms_provider'))
+                ) {
+                    $validator->errors()->add('customer_sms_provider', __('app.sms_provider_required_for_platform_scope'));
+                }
+            },
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (! $this->has('customer_sms_sender_scope')) {
             $this->merge([
-                'customer_sms_sender_scope' => CustomerOtpSenderScope::Platform->value,
+                'customer_sms_sender_scope' => CustomerOtpSenderScope::Account->value,
             ]);
         }
     }

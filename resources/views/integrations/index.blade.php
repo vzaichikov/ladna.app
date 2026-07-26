@@ -29,7 +29,7 @@
     @if ($centralSmsProviderUpdateRoute ?? null)
         @php
             $effectiveCentralSmsProvider = $effectiveCentralSmsSetting?->provider->value;
-            $selectedCentralSmsProvider = old('central_sms_provider', $centralSmsProvider ?? $effectiveCentralSmsProvider);
+            $selectedCentralSmsProvider = old('central_sms_provider', $centralSmsProvider);
         @endphp
 
         <form method="POST" action="{{ route($centralSmsProviderUpdateRoute) }}" class="mt-6 rounded-xl border border-violet-crm-200 bg-violet-crm-50 p-5 shadow-crm">
@@ -40,11 +40,7 @@
                 <div>
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.central_sms_provider') }}</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-600">{{ __('app.central_sms_provider_copy') }}</p>
-                    @if (! $centralSmsProvider && $effectiveCentralSmsProvider)
-                        <p class="mt-2 text-sm font-semibold text-amber-800">
-                            {{ __('app.central_sms_provider_legacy_fallback', ['provider' => $providers[$effectiveCentralSmsProvider]['label']]) }}
-                        </p>
-                    @elseif ($centralSmsProvider && ! $effectiveCentralSmsProvider)
+                    @if ($centralSmsProvider && ! $effectiveCentralSmsProvider)
                         <p class="mt-2 text-sm font-semibold text-red-700">{{ __('app.central_sms_provider_unavailable') }}</p>
                     @endif
                 </div>
@@ -52,6 +48,7 @@
                 <label class="block" for="central-sms-provider">
                     <span class="crm-label">{{ __('app.central_sms_provider_label') }}</span>
                     <select id="central-sms-provider" name="central_sms_provider" class="crm-field" required>
+                        <option value="" disabled @selected(blank($selectedCentralSmsProvider))>{{ __('app.choose') }}</option>
                         @foreach ($providers as $providerKey => $provider)
                             <option value="{{ $providerKey }}" @selected($selectedCentralSmsProvider === $providerKey)>
                                 {{ $provider['label'] }}
@@ -81,7 +78,7 @@
                 $updateParameters = [...$updateRouteParameters, 'provider' => $providerKey];
             @endphp
 
-            <form method="POST" action="{{ route($updateRoute, $updateParameters) }}" class="rounded-xl border border-slate-200 bg-white shadow-crm">
+            <form method="POST" action="{{ route($updateRoute, $updateParameters) }}" data-integration-form class="rounded-xl border border-slate-200 bg-white shadow-crm">
                 @csrf
                 @method('PUT')
 
@@ -127,9 +124,15 @@
                             $hasSecretValue = $isSensitive && filled($credentials[$fieldKey] ?? null);
                             $fieldValue = old('credentials.'.$fieldKey, $isSensitive ? '' : ($credentials[$fieldKey] ?? ''));
                             $fieldType = $field['type'] ?? 'text';
+                            $isVisible = \App\Support\IntegrationCatalog::fieldIsVisible($field, $credentials);
                         @endphp
 
-                        <label class="block" for="{{ $fieldId }}">
+                        <label
+                            class="{{ $isVisible ? 'block' : 'hidden' }}"
+                            for="{{ $fieldId }}"
+                            data-integration-field-wrapper
+                            @if (isset($field['visible_when'])) data-visible-when="{{ json_encode($field['visible_when'], JSON_THROW_ON_ERROR) }}" @endif
+                        >
                             <span class="crm-label">{{ __($field['label_key']) }}</span>
 
                             @if ($fieldType === 'select')

@@ -154,22 +154,22 @@ class IntegrationSettingsTest extends TestCase
             ->assertOk()
             ->assertSee('Email delivery')
             ->assertSee('name="credentials[engine]"', false)
+            ->assertSee('SendPulse API')
             ->assertSee('SendPulse SMTP')
+            ->assertSee('name="credentials[sendpulse_api_key]"', false)
             ->assertSee(route('platform.integrations.index', ['tab' => 'email']), false);
 
         $this->actingAs($platformAdmin)
             ->put(route('platform.integrations.update', 'mail_delivery'), [
                 'is_enabled' => '1',
                 'credentials' => [
-                    'engine' => 'sendpulse_smtp',
+                    'engine' => 'sendpulse_api',
                     'fallback_engine' => 'log',
-                    'mail_from_email' => 'studio@example.com',
+                    'mail_from_email' => 'mail@ladna.example',
                     'mail_from_name' => 'Ladna Mail',
-                    'smtp_host' => 'smtp-pulse.com',
-                    'smtp_port' => 587,
-                    'smtp_login' => 'smtp-user',
-                    'smtp_password' => 'smtp-secret',
-                    'smtp_encryption' => 'tls',
+                    'sendpulse_api_key' => 'sendpulse-email-api-key',
+                    'smtp_login' => 'must-not-be-stored',
+                    'smtp_password' => 'must-not-be-stored',
                 ],
             ])
             ->assertRedirect(route('platform.integrations.index', ['tab' => 'email']));
@@ -178,14 +178,23 @@ class IntegrationSettingsTest extends TestCase
 
         $this->assertTrue($setting->is_enabled);
         $this->assertSame('email', $setting->category->value);
-        $this->assertSame('sendpulse_smtp', $setting->credentials['engine']);
+        $this->assertSame('sendpulse_api', $setting->credentials['engine']);
         $this->assertSame('log', $setting->credentials['fallback_engine']);
-        $this->assertSame('studio@example.com', $setting->credentials['mail_from_email']);
+        $this->assertSame('mail@ladna.example', $setting->credentials['mail_from_email']);
         $this->assertSame('Ladna Mail', $setting->credentials['mail_from_name']);
-        $this->assertSame('smtp-pulse.com', $setting->credentials['smtp_host']);
-        $this->assertSame(587, $setting->credentials['smtp_port']);
-        $this->assertSame('smtp-user', $setting->credentials['smtp_login']);
-        $this->assertSame('smtp-secret', $setting->credentials['smtp_password']);
+        $this->assertSame('sendpulse-email-api-key', $setting->credentials['sendpulse_api_key']);
+        $this->assertArrayNotHasKey('smtp_host', $setting->credentials);
+        $this->assertArrayNotHasKey('smtp_port', $setting->credentials);
+        $this->assertArrayNotHasKey('smtp_login', $setting->credentials);
+        $this->assertArrayNotHasKey('smtp_password', $setting->credentials);
+        $this->assertArrayNotHasKey('smtp_encryption', $setting->credentials);
+
+        $rawCredentials = DB::table((new IntegrationSetting)->getTable())
+            ->where('id', $setting->id)
+            ->value('credentials');
+
+        $this->assertIsString($rawCredentials);
+        $this->assertStringNotContainsString('sendpulse-email-api-key', $rawCredentials);
     }
 
     public function test_normal_studio_owner_cannot_access_platform_integrations(): void
@@ -218,7 +227,10 @@ class IntegrationSettingsTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.central_sms_provider'))
             ->assertSee('name="central_sms_provider"', false)
-            ->assertSee(__('app.central_sms_provider_legacy_fallback', ['provider' => 'TurboSMS']));
+            ->assertDontSee('falls back to TurboSMS')
+            ->assertDontSee('Ladna currently falls back');
+
+        $this->assertNull(app(CustomerAuthAvailability::class)->platformSmsSetting());
 
         $this->put(route('platform.integrations.central-sms-provider.update'), [
             'central_sms_provider' => 'smsclub',
@@ -294,6 +306,49 @@ class IntegrationSettingsTest extends TestCase
         $this->assertSame($account->id, $setting->account_id);
         $this->assertSame('turbo-secret', $setting->credentials['api_token']);
         $this->assertSame('CharmCRM', $setting->credentials['sms_sender']);
+    }
+
+    public function test_sendpulse_messaging_uses_only_api_key_and_sender_name(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
+            ->assertOk()
+            ->assertSee('name="credentials[api_key]"', false)
+            ->assertSee('name="credentials[sms_sender]"', false)
+            ->assertDontSee('name="credentials[auth_mode]"', false)
+            ->assertDontSee('name="credentials[client_id]"', false)
+            ->assertDontSee('name="credentials[client_secret]"', false)
+            ->assertDontSee('name="credentials[smtp_host]"', false)
+            ->assertDontSee('name="credentials[mail_from_email]"', false)
+            ->assertDontSee('name="credentials[sms_route]"', false);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.integrations.update', [$account, 'sendpulse']), [
+                'is_enabled' => '1',
+                'credentials' => [
+                    'api_key' => 'sendpulse-sms-api-key',
+                    'sms_sender' => 'Ladna Studio',
+                    'auth_mode' => 'oauth',
+                    'client_id' => 'legacy-client-id',
+                    'smtp_host' => 'legacy-smtp-host',
+                    'mail_from_email' => 'legacy@example.com',
+                    'sms_route' => 'legacy-route',
+                ],
+            ])
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']));
+
+        $setting = IntegrationSetting::forAccount($account)
+            ->where('provider', 'sendpulse')
+            ->firstOrFail();
+
+        $this->assertSame([
+            'api_key' => 'sendpulse-sms-api-key',
+            'sms_sender' => 'Ladna Studio',
+        ], $setting->credentials);
     }
 
     /**

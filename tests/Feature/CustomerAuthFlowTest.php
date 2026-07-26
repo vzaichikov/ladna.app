@@ -14,8 +14,10 @@ use App\Models\CustomerRememberToken;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
 use App\Models\SubscriptionPlan;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\WebsiteLead;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\CustomerAuth\CustomerOtpService;
 use App\Support\CustomerAuth\CustomerRememberTokenService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -692,6 +694,55 @@ class CustomerAuthFlowTest extends TestCase
         $this->actingAs($owner)
             ->get(route('platform.accounts.customer-auth.edit', $account))
             ->assertForbidden();
+    }
+
+    public function test_platform_sms_scope_requires_an_explicit_provider_assignment(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $account = Account::factory()->create();
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.accounts.customer-auth.update', $account), [
+                'allow_otp' => '1',
+                'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
+                'otp_provider' => null,
+                'customer_sms_sender_scope' => CustomerOtpSenderScope::Account->value,
+            ])
+            ->assertSessionHasErrors('otp_provider');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.accounts.customer-auth.update', $account), [
+                'allow_otp' => '0',
+                'enable_customer_notifications' => '1',
+                'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
+                'customer_sms_sender_scope' => CustomerOtpSenderScope::Platform->value,
+                'customer_sms_provider' => null,
+            ])
+            ->assertSessionHasErrors('customer_sms_provider');
+    }
+
+    public function test_legacy_platform_scope_without_provider_does_not_use_central_sms(): void
+    {
+        $account = Account::factory()->create();
+
+        CustomerAuthSetting::create([
+            'account_id' => $account->id,
+            'allow_otp' => true,
+            'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
+            'otp_provider' => null,
+        ]);
+
+        $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
+            'site_key' => 'test-site-key',
+            'secret_key' => 'test-secret-key',
+        ]);
+        $this->platformIntegration('turbosms', IntegrationCategory::Messaging->value, [
+            'api_token' => 'turbo-token',
+            'sms_sender' => 'Ladna',
+        ]);
+        SystemSetting::setValue(SystemSetting::CentralSmsProviderKey, 'turbosms');
+
+        $this->assertFalse(app(CustomerAuthAvailability::class)->methodsFor($account)->otp);
     }
 
     public function test_customer_can_login_with_otp_and_is_forced_to_complete_profile(): void

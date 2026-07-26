@@ -74,7 +74,7 @@ class CameraMonitoringTest extends TestCase
                 'allow_rtsp_cameras' => '1',
                 'enable_people_counter' => '1',
                 'enable_telegram_alerts' => '0',
-                'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
+                'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
                 'otp_provider' => null,
             ])
             ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
