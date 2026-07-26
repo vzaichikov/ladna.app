@@ -1,0 +1,7 @@
+interface:
+  display_name: "Ladna Trello Card"
+  short_description: "Inspect and execute explicit Ladna Trello card work"
+  default_prompt: "Use $ladna-trello-card to view this Ladna Trello card and follow the requested read-only or implementation workflow."
+
+policy:
+  allow_implicit_invocation: true
