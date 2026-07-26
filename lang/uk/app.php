@@ -1458,7 +1458,7 @@ return [
     'telegram_last_synced_at' => 'Остання синхронізація',
     'telegram_registered_url' => 'Зареєстрований URL',
     'telegram_not_checked' => 'Не перевірено',
-    'telegram_support' => 'Підтримка Telegram',
+    'telegram_support' => 'Telegram сповіщення',
     'telegram_support_copy' => 'Привʼязані користувачі owner бота, керування діалогами та webhook-логи для підтримки.',
     'telegram_support_search_placeholder' => 'Студія, користувач, тренер, телефон, chat ID або повідомлення',
     'telegram_linked_users' => 'Привʼязані користувачі',

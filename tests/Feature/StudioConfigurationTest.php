@@ -534,6 +534,10 @@ class StudioConfigurationTest extends TestCase
         $this->assertSame(6, substr_count($response->getContent(), 'data-print-section'));
         $this->assertSame(6, substr_count($response->getContent(), 'data-qr-print-poster'));
         $this->assertSame(11, substr_count($response->getContent(), 'data-public-link-row'));
+        $this->assertSame(11, substr_count(
+            $response->getContent(),
+            'class="flex flex-col gap-3 rounded-lg border border-stone-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between" data-public-link-row',
+        ));
         $this->assertSame(4, substr_count($response->getContent(), 'data-location-id="'.$firstLocation->id.'"'));
         $this->assertSame(4, substr_count($response->getContent(), 'data-location-id="'.$secondLocation->id.'"'));
         $this->assertGreaterThanOrEqual(12, substr_count($response->getContent(), 'data-copy-button'));

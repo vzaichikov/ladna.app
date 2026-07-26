@@ -1458,7 +1458,7 @@ return [
     'telegram_last_synced_at' => 'Last synced',
     'telegram_registered_url' => 'Registered URL',
     'telegram_not_checked' => 'Not checked',
-    'telegram_support' => 'Telegram support',
+    'telegram_support' => 'Telegram notifications',
     'telegram_support_copy' => 'Linked owner bot users, conversation controls, and webhook logs for support.',
     'telegram_support_search_placeholder' => 'Studio, user, trainer, phone, chat ID, or message',
     'telegram_linked_users' => 'Linked users',

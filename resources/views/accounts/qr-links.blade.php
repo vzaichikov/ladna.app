@@ -77,9 +77,9 @@
 
             <div class="mt-5 grid gap-3">
                 @foreach ($generalPublicLinks as $publicLink)
-                    <div class="rounded-lg border border-stone-200 bg-slate-50 p-4" data-public-link-row>
+                    <div class="flex flex-col gap-3 rounded-lg border border-stone-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between" data-public-link-row>
                         <div class="text-sm font-semibold text-slate-950">{{ $publicLink['label'] }}</div>
-                        <div class="mt-3 flex flex-wrap gap-2">
+                        <div class="flex flex-wrap gap-2">
                             <x-ui.button :href="$publicLink['url']" variant="secondary" size="sm" target="_blank" rel="noopener">
                                 <x-ui.icon name="external" class="h-4 w-4" />
                                 {{ $publicLink['open_label'] }}
