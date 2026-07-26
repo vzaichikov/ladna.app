@@ -139,6 +139,8 @@ return [
     'class_type' => 'Формат заняття',
     'rental_type' => 'Тип оренди',
     'class_types' => 'Формати занять',
+    'more_class_types' => 'і ще :count...',
+    'less_class_types' => 'згорнути',
     'group_classes' => 'Групові заняття',
     'internal_classes' => 'Закриті заняття',
     'private_lessons' => 'Індивідуальні заняття',

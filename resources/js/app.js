@@ -78,6 +78,28 @@ function applyClassVariant(element, allVariantClasses, variantClasses) {
     element.classList.add(...variantClasses.split(' '));
 }
 
+function toggleClassTypeList(toggle) {
+    const list = toggle.closest('[data-class-type-list]');
+
+    if (!list) {
+        return;
+    }
+
+    const expanded = toggle.getAttribute('aria-expanded') !== 'true';
+
+    list.querySelectorAll('[data-class-type-list-extra]').forEach((classType) => {
+        classType.classList.toggle('hidden', !expanded);
+    });
+
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+    const label = toggle.querySelector('[data-class-type-list-toggle-label]');
+
+    if (label) {
+        label.textContent = expanded ? toggle.dataset.expandedLabel : toggle.dataset.collapsedLabel;
+    }
+}
+
 function applyConfirmationIcon(container, iconName) {
     if (!container) {
         return;
@@ -5223,6 +5245,14 @@ document.addEventListener('DOMContentLoaded', () => {
         group?.querySelectorAll('[data-class-type-checkbox]:not(:disabled)').forEach((checkbox) => {
             checkbox.checked = true;
         });
+    });
+
+    document.addEventListener('click', (event) => {
+        const classTypeListToggle = event.target.closest('[data-class-type-list-toggle]');
+
+        if (classTypeListToggle) {
+            toggleClassTypeList(classTypeListToggle);
+        }
     });
 
     document.addEventListener('click', (event) => {

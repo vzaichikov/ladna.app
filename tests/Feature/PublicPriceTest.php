@@ -55,6 +55,31 @@ class PublicPriceTest extends TestCase
             ->assertDontSee($plans['inactive']->name);
     }
 
+    public function test_public_price_collapses_class_types_after_the_first_two(): void
+    {
+        [$account, $location, $plans] = $this->priceContext();
+        $extraClassTypes = ClassType::factory()
+            ->count(3)
+            ->for($account)
+            ->create(['schedule_kind' => 'group_class']);
+
+        $plans['group']->classTypes()->sync(
+            $plans['group']->classTypes()->pluck('class_types.id')
+                ->concat($extraClassTypes->modelKeys()),
+        );
+
+        $response = $this->get(route('public.price', [$account->slug, $location->slug]));
+
+        $response->assertOk()
+            ->assertSee('data-class-type-list', false)
+            ->assertSee('data-class-type-list-toggle', false)
+            ->assertSee('type="button"', false)
+            ->assertSee('aria-expanded="false"', false)
+            ->assertSee(__('app.more_class_types', ['count' => 2]));
+
+        $this->assertSame(2, substr_count($response->getContent(), 'data-class-type-list-extra'));
+    }
+
     public function test_public_price_embed_omits_customer_topbar_and_offer_footer(): void
     {
         [$account, $location] = $this->priceContext();

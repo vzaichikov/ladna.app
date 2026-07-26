@@ -139,6 +139,8 @@ return [
     'class_type' => 'Class format',
     'rental_type' => 'Rental type',
     'class_types' => 'Class formats',
+    'more_class_types' => 'and :count more...',
+    'less_class_types' => 'show fewer',
     'group_classes' => 'Group classes',
     'internal_classes' => 'Internal classes',
     'private_lessons' => 'Private lessons',

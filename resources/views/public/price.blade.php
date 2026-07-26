@@ -65,10 +65,31 @@
                                                         <dd class="mt-1 font-semibold text-slate-950">{{ $classPassPlan->total_validity_days }}</dd>
                                                     </div>
                                                 </dl>
-                                                <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+                                                <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600" data-class-type-list>
                                                     @foreach ($classPassPlan->classTypes as $classType)
-                                                        <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">{{ $classType->name }}</span>
+                                                        <span
+                                                            @class([
+                                                                'rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1',
+                                                                'hidden' => $loop->index >= 2,
+                                                            ])
+                                                            @if ($loop->index >= 2) data-class-type-list-extra @endif
+                                                        >
+                                                            {{ $classType->name }}
+                                                        </span>
                                                     @endforeach
+                                                    @if ($classPassPlan->classTypes->count() > 2)
+                                                        @php($hiddenClassTypesCount = $classPassPlan->classTypes->count() - 2)
+                                                        <button
+                                                            type="button"
+                                                            class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 transition hover:border-slate-300 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                                                            data-class-type-list-toggle
+                                                            data-collapsed-label="{{ __('app.more_class_types', ['count' => $hiddenClassTypesCount]) }}"
+                                                            data-expanded-label="{{ __('app.less_class_types') }}"
+                                                            aria-expanded="false"
+                                                        >
+                                                            <span data-class-type-list-toggle-label>{{ __('app.more_class_types', ['count' => $hiddenClassTypesCount]) }}</span>
+                                                        </button>
+                                                    @endif
                                                     @foreach ($classPassPlan->trainerTypes as $trainerType)
                                                         <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">{{ $trainerType->name }}</span>
                                                     @endforeach
