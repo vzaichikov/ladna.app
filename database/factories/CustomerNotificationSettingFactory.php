@@ -23,6 +23,7 @@ class CustomerNotificationSettingFactory extends Factory
             'is_enabled' => false,
             'class_reminder_enabled' => false,
             'class_reminder_hours_before' => 5,
+            'class_cancellation_enabled' => false,
         ];
     }
 }

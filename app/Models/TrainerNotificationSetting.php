@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'trainer_assignment_enabled'])]
+#[Fillable(['account_id', 'trainer_assignment_enabled', 'class_cancellation_enabled'])]
 class TrainerNotificationSetting extends Model
 {
     /** @use HasFactory<TrainerNotificationSettingFactory> */
@@ -16,6 +16,7 @@ class TrainerNotificationSetting extends Model
 
     protected $attributes = [
         'trainer_assignment_enabled' => true,
+        'class_cancellation_enabled' => false,
     ];
 
     /**
@@ -25,6 +26,7 @@ class TrainerNotificationSetting extends Model
     {
         return [
             'trainer_assignment_enabled' => 'boolean',
+            'class_cancellation_enabled' => 'boolean',
         ];
     }
 

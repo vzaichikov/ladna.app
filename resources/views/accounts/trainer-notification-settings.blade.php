@@ -28,6 +28,15 @@
                     <span class="text-sm font-normal leading-6 text-slate-600">{{ __('app.trainer_notification_assignment_hint') }}</span>
                 </span>
             </label>
+
+            <label class="mt-4 flex items-start gap-3 rounded-lg border border-stone-200 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-900">
+                <input type="hidden" name="class_cancellation_enabled" value="0">
+                <input name="class_cancellation_enabled" type="checkbox" value="1" @checked(old('class_cancellation_enabled', $trainerNotificationSetting->class_cancellation_enabled)) class="crm-checkbox mt-0.5">
+                <span class="grid gap-1">
+                    <span>{{ __('app.trainer_notification_class_cancellation') }}</span>
+                    <span class="text-sm font-normal leading-6 text-slate-600">{{ __('app.trainer_notification_class_cancellation_hint') }}</span>
+                </span>
+            </label>
         </div>
     </section>
 

@@ -369,6 +369,20 @@ class Account extends Model
         return $this->telegramAlertsEnabled() && $this->trainerAssignmentAlertScenarioEnabled();
     }
 
+    public function trainerClassCancellationAlertScenarioEnabled(): bool
+    {
+        $settings = $this->relationLoaded('trainerNotificationSetting')
+            ? $this->getRelation('trainerNotificationSetting')
+            : $this->trainerNotificationSetting()->first();
+
+        return (bool) ($settings?->class_cancellation_enabled ?? false);
+    }
+
+    public function trainerClassCancellationTelegramAlertsEnabled(): bool
+    {
+        return $this->telegramAlertsEnabled() && $this->trainerClassCancellationAlertScenarioEnabled();
+    }
+
     public function customerNotificationsEnabled(): bool
     {
         return (bool) $this->enable_customer_notifications;

@@ -20,6 +20,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ClassBookingController extends Controller
 {
@@ -119,11 +121,39 @@ class ClassBookingController extends Controller
 
         $this->authorize($bookingCancellationLocked ? 'correctClosedClasses' : 'manageBookings', $account);
 
-        $scheduledClass = $classBooking->scheduledClass;
-        $classBooking->loadMissing('classPassReservation.customerClassPass');
-        $customerClassPass = $classBooking->classPassReservation?->customerClassPass;
-        $classBooking->delete();
-        $notifications->bookingCancelled($classBooking);
+        [$scheduledClass, $customerClassPass, $wasActive, $becameEmpty, $cancellationEventId, $deletedBooking] = DB::transaction(function () use ($account, $classBooking): array {
+            $scheduledClass = ScheduledClass::query()
+                ->whereBelongsTo($account)
+                ->whereKey($classBooking->scheduled_class_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedBooking = ClassBooking::query()
+                ->whereBelongsTo($account)
+                ->whereKey($classBooking->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedBooking->loadMissing(['customer', 'classPassReservation.customerClassPass']);
+            $lockedBooking->setRelation('scheduledClass', $scheduledClass);
+            $customerClassPass = $lockedBooking->classPassReservation?->customerClassPass;
+            $wasActive = ! $lockedBooking->isCorrectedRemoved()
+                && in_array($lockedBooking->status, [
+                    ClassBookingStatus::Booked,
+                    ClassBookingStatus::Attended,
+                ], true);
+            $lockedBooking->delete();
+            $becameEmpty = $wasActive && ! $scheduledClass->classBookings()
+                ->notCorrectedRemoved()
+                ->whereIn('status', [
+                    ClassBookingStatus::Booked->value,
+                    ClassBookingStatus::Attended->value,
+                ])
+                ->exists();
+            $cancellationEventId = $wasActive ? (string) Str::uuid() : null;
+
+            return [$scheduledClass, $customerClassPass, $wasActive, $becameEmpty, $cancellationEventId, $lockedBooking];
+        }, attempts: 3);
+
+        $notifications->bookingCancelled($deletedBooking, $wasActive, $becameEmpty, $cancellationEventId);
 
         if ($customerClassPass) {
             $normalizeCustomerClassPasses->forPass($customerClassPass);

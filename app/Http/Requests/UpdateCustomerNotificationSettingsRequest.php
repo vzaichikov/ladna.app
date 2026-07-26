@@ -23,11 +23,12 @@ class UpdateCustomerNotificationSettingsRequest extends FormRequest
             'is_enabled' => ['nullable', 'boolean'],
             'class_reminder_enabled' => ['nullable', 'boolean'],
             'class_reminder_hours_before' => ['required', 'integer', 'min:1', 'max:168'],
+            'class_cancellation_enabled' => ['nullable', 'boolean'],
         ];
     }
 
     /**
-     * @return array{is_enabled: bool, class_reminder_enabled: bool, class_reminder_hours_before: int}
+     * @return array{is_enabled: bool, class_reminder_enabled: bool, class_reminder_hours_before: int, class_cancellation_enabled: bool}
      */
     public function payload(): array
     {
@@ -35,6 +36,7 @@ class UpdateCustomerNotificationSettingsRequest extends FormRequest
             'is_enabled' => $this->boolean('is_enabled'),
             'class_reminder_enabled' => $this->boolean('class_reminder_enabled'),
             'class_reminder_hours_before' => (int) $this->validated('class_reminder_hours_before'),
+            'class_cancellation_enabled' => $this->boolean('class_cancellation_enabled'),
         ];
     }
 
@@ -44,6 +46,7 @@ class UpdateCustomerNotificationSettingsRequest extends FormRequest
             'is_enabled' => $this->boolean('is_enabled'),
             'class_reminder_enabled' => $this->boolean('class_reminder_enabled'),
             'class_reminder_hours_before' => $this->input('class_reminder_hours_before', 5),
+            'class_cancellation_enabled' => $this->boolean('class_cancellation_enabled'),
         ]);
     }
 }

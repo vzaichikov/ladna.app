@@ -10,6 +10,7 @@ class TelegramAlertRendererRegistry
 {
     public function __construct(
         private readonly TrainerAssignmentTelegramAlertRenderer $trainerAssignmentRenderer,
+        private readonly TrainerClassCancellationTelegramAlertRenderer $trainerClassCancellationRenderer,
     ) {}
 
     /**
@@ -24,6 +25,7 @@ class TelegramAlertRendererRegistry
     {
         return match ($type) {
             TelegramAlertType::TrainerAssignment => $this->trainerAssignmentRenderer,
+            TelegramAlertType::TrainerClassCancellation => $this->trainerClassCancellationRenderer,
             default => throw new InvalidArgumentException('Unsupported Telegram alert type: '.$type->value),
         };
     }

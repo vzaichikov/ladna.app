@@ -25,17 +25,19 @@ class UpdateTrainerNotificationSettingsRequest extends FormRequest
         return [
             'enable_telegram_alerts' => ['nullable', 'boolean'],
             'trainer_assignment_enabled' => ['nullable', 'boolean'],
+            'class_cancellation_enabled' => ['nullable', 'boolean'],
         ];
     }
 
     /**
-     * @return array{enable_telegram_alerts: bool, trainer_assignment_enabled: bool}
+     * @return array{enable_telegram_alerts: bool, trainer_assignment_enabled: bool, class_cancellation_enabled: bool}
      */
     public function payload(): array
     {
         return [
             'enable_telegram_alerts' => $this->boolean('enable_telegram_alerts'),
             'trainer_assignment_enabled' => $this->boolean('trainer_assignment_enabled'),
+            'class_cancellation_enabled' => $this->boolean('class_cancellation_enabled'),
         ];
     }
 
@@ -44,6 +46,7 @@ class UpdateTrainerNotificationSettingsRequest extends FormRequest
         $this->merge([
             'enable_telegram_alerts' => $this->boolean('enable_telegram_alerts'),
             'trainer_assignment_enabled' => $this->boolean('trainer_assignment_enabled'),
+            'class_cancellation_enabled' => $this->boolean('class_cancellation_enabled'),
         ]);
     }
 }

@@ -21,6 +21,7 @@ class TrainerNotificationSettingFactory extends Factory
         return [
             'account_id' => Account::factory(),
             'trainer_assignment_enabled' => true,
+            'class_cancellation_enabled' => false,
         ];
     }
 }

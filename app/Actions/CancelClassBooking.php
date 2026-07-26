@@ -4,9 +4,11 @@ namespace App\Actions;
 
 use App\Enums\ClassBookingStatus;
 use App\Models\ClassBooking;
+use App\Models\ScheduledClass;
 use App\Support\ClassBookingCancellationWindow;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CancelClassBooking
@@ -26,14 +28,20 @@ class CancelClassBooking
         string $cutoffErrorKey = 'booking',
         bool $requireBookedUpcoming = false,
     ): ClassBooking {
-        [$cancelledBooking, $statusChanged] = DB::transaction(function () use ($classBooking, $attributes, $cutoffErrorKey, $requireBookedUpcoming): array {
+        [$cancelledBooking, $statusChanged, $wasActive, $becameEmpty, $cancellationEventId] = DB::transaction(function () use ($classBooking, $attributes, $cutoffErrorKey, $requireBookedUpcoming): array {
+            $lockedScheduledClass = ScheduledClass::query()
+                ->where('account_id', $classBooking->account_id)
+                ->whereKey($classBooking->scheduled_class_id)
+                ->lockForUpdate()
+                ->firstOrFail();
             $lockedBooking = ClassBooking::query()
                 ->where('account_id', $classBooking->account_id)
                 ->whereKey($classBooking->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $lockedBooking->loadMissing('scheduledClass.classType');
+            $lockedScheduledClass->loadMissing('classType');
+            $lockedBooking->setRelation('scheduledClass', $lockedScheduledClass);
 
             if ($requireBookedUpcoming && (
                 ! in_array($lockedBooking->status, [
@@ -54,6 +62,12 @@ class CancelClassBooking
             }
 
             $statusChanged = $lockedBooking->status !== ClassBookingStatus::Cancelled;
+            $wasActive = $statusChanged
+                && ! $lockedBooking->isCorrectedRemoved()
+                && in_array($lockedBooking->status, [
+                    ClassBookingStatus::Booked,
+                    ClassBookingStatus::Attended,
+                ], true);
             $lockedBooking->forceFill([
                 ...$attributes,
                 'status' => ClassBookingStatus::Cancelled->value,
@@ -61,12 +75,20 @@ class CancelClassBooking
             ])->save();
 
             $this->reconcileCustomerClassPassForBooking->execute($lockedBooking);
+            $becameEmpty = $wasActive && ! $lockedScheduledClass->classBookings()
+                ->notCorrectedRemoved()
+                ->whereIn('status', [
+                    ClassBookingStatus::Booked->value,
+                    ClassBookingStatus::Attended->value,
+                ])
+                ->exists();
+            $cancellationEventId = $wasActive ? (string) Str::uuid() : null;
 
-            return [$lockedBooking->refresh(), $statusChanged];
+            return [$lockedBooking->refresh(), $statusChanged, $wasActive, $becameEmpty, $cancellationEventId];
         }, attempts: 3);
 
         if ($statusChanged) {
-            $this->notifications->bookingCancelled($cancelledBooking);
+            $this->notifications->bookingCancelled($cancelledBooking, $wasActive, $becameEmpty, $cancellationEventId);
         }
 
         return $cancelledBooking;

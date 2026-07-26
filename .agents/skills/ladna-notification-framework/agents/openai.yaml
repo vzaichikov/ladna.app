@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Notification Framework"
+  short_description: "Add safe Ladna notification scenarios"
+  default_prompt: "Use $ladna-notification-framework to add a tenant-safe notification scenario with configurable delivery gates."

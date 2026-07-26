@@ -6,7 +6,9 @@ use App\Enums\CustomerNotificationChannel;
 use App\Enums\CustomerNotificationStatus;
 use App\Enums\CustomerNotificationType;
 use App\Enums\ScheduledClassStatus;
+use App\Models\ClassBooking;
 use App\Models\CustomerNotification;
+use App\Models\ScheduledClassCancellation;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\CustomerAuth\SmsGatewayResolver;
 use App\Support\PhoneNumberNormalizer;
@@ -120,7 +122,10 @@ class CustomerNotificationSender
             return $this->skip($notification, 'unsupported_customer_notification_channel');
         }
 
-        if ($notification->type !== CustomerNotificationType::ClassReminder) {
+        if (! in_array($notification->type, [
+            CustomerNotificationType::ClassReminder,
+            CustomerNotificationType::ClassCancellation,
+        ], true)) {
             return $this->skip($notification, 'unsupported_customer_notification_type');
         }
 
@@ -129,7 +134,12 @@ class CustomerNotificationSender
         $account = $booking?->account ?? $scheduledClass?->account ?? $notification->account;
         $customer = $booking?->customer ?? $notification->customer;
 
-        if (! $booking || ! $scheduledClass || ! $account || ! $customer) {
+        if (
+            ! $scheduledClass
+            || ! $account
+            || ! $customer
+            || ($notification->type === CustomerNotificationType::ClassReminder && ! $booking)
+        ) {
             return $this->cancel($notification, 'customer_notification_context_missing');
         }
 
@@ -137,33 +147,56 @@ class CustomerNotificationSender
             return $this->cancel($notification, 'read_only_demo');
         }
 
-        if (! $this->producer->bookingIsActiveForClassReminder($booking, $scheduledClass)) {
-            return $this->cancel($notification, 'booking_not_active');
-        }
-
-        if (! $this->producer->settingsAreEnabled($account)) {
-            return $this->cancel($notification, 'customer_notifications_disabled');
-        }
-
-        if (! $this->planner->isAllowedSendTime($scheduledClass)) {
-            $nextAllowed = $this->planner->nextAllowedSendAt($scheduledClass);
-
-            if (! $nextAllowed) {
-                return $this->cancel($notification, 'customer_notification_quiet_hours_window_expired');
+        if ($notification->type === CustomerNotificationType::ClassReminder) {
+            /** @var ClassBooking $booking */
+            if (! $this->producer->bookingIsActiveForClassReminder($booking, $scheduledClass)) {
+                return $this->cancel($notification, 'booking_not_active');
             }
 
-            $notification->forceFill([
-                'status' => CustomerNotificationStatus::Pending->value,
-                'scheduled_send_at' => $nextAllowed,
-                'next_attempt_at' => null,
-                'last_error' => 'rescheduled_after_quiet_hours',
-            ])->save();
+            if (! $this->producer->settingsAreEnabled($account)) {
+                return $this->cancel($notification, 'customer_notifications_disabled');
+            }
 
-            return 'rescheduled';
-        }
+            if (! $this->planner->isAllowedSendTime($scheduledClass)) {
+                $nextAllowed = $this->planner->nextAllowedSendAt($scheduledClass);
 
-        if ($scheduledClass->status !== ScheduledClassStatus::Scheduled || $scheduledClass->starts_at->isPast()) {
-            return $this->cancel($notification, 'scheduled_class_not_sendable');
+                if (! $nextAllowed) {
+                    return $this->cancel($notification, 'customer_notification_quiet_hours_window_expired');
+                }
+
+                $notification->forceFill([
+                    'status' => CustomerNotificationStatus::Pending->value,
+                    'scheduled_send_at' => $nextAllowed,
+                    'next_attempt_at' => null,
+                    'last_error' => 'rescheduled_after_quiet_hours',
+                ])->save();
+
+                return 'rescheduled';
+            }
+
+            if ($scheduledClass->status !== ScheduledClassStatus::Scheduled || $scheduledClass->starts_at->isPast()) {
+                return $this->cancel($notification, 'scheduled_class_not_sendable');
+            }
+        } else {
+            if (! $this->producer->classCancellationSettingsAreEnabled($account)) {
+                return $this->cancel($notification, 'customer_class_cancellation_notifications_disabled');
+            }
+
+            if ($scheduledClass->status !== ScheduledClassStatus::Cancelled) {
+                return $this->cancel($notification, 'scheduled_class_not_cancelled');
+            }
+
+            $cancellationId = (int) data_get($notification->payload, 'scheduled_class_cancellation_id', 0);
+            $activeCancellationExists = $cancellationId > 0
+                && ScheduledClassCancellation::query()
+                    ->whereKey($cancellationId)
+                    ->where('scheduled_class_id', $scheduledClass->id)
+                    ->whereNull('restored_at')
+                    ->exists();
+
+            if (! $activeCancellationExists) {
+                return $this->cancel($notification, 'scheduled_class_cancellation_restored');
+            }
         }
 
         $phone = $this->phones->normalize($notification->recipient_phone ?: $customer->phone, $account->country_code ?? 'UA');
@@ -179,7 +212,20 @@ class CustomerNotificationSender
             return $this->retryOrFail($notification, 'customer_sms_not_configured');
         }
 
-        $text = (string) ($notification->text ?: $this->renderer->renderClassReminder($account, $scheduledClass, $customer));
+        $text = (string) ($notification->text ?: match ($notification->type) {
+            CustomerNotificationType::ClassReminder => $this->renderer->renderClassReminder($account, $scheduledClass, $customer),
+            CustomerNotificationType::ClassCancellation => $this->renderer->renderClassCancellation($account, $scheduledClass, $customer),
+        });
+        $currentStatus = $notification->fresh()->status;
+
+        if ($currentStatus !== CustomerNotificationStatus::Processing) {
+            return match ($currentStatus) {
+                CustomerNotificationStatus::Cancelled => 'cancelled',
+                CustomerNotificationStatus::Failed => 'failed',
+                CustomerNotificationStatus::Skipped => 'skipped',
+                default => 'cancelled',
+            };
+        }
 
         try {
             $result = $this->gateways->resolve($smsSetting)->sendSms($phone, $text);

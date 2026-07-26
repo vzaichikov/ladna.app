@@ -13,6 +13,7 @@ use App\Models\ClassBooking;
 use App\Models\CustomerNotification;
 use App\Models\CustomerNotificationSetting;
 use App\Models\ScheduledClass;
+use App\Models\ScheduledClassCancellation;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\PhoneNumberNormalizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -167,6 +168,116 @@ class CustomerNotificationProducer
             ]);
     }
 
+    public function queueClassCancellations(ScheduledClassCancellation $cancellation): int
+    {
+        $cancellation->loadMissing([
+            'account.customerAuthSetting',
+            'account.customerNotificationSetting',
+            'effects.classBooking.customer',
+            'scheduledClass.account.customerAuthSetting',
+            'scheduledClass.account.customerNotificationSetting',
+            'scheduledClass.location',
+            'scheduledClass.classType',
+        ]);
+
+        if ($cancellation->isClosedCorrection()) {
+            return 0;
+        }
+
+        $scheduledClass = $cancellation->scheduledClass;
+        $account = $cancellation->account ?? $scheduledClass?->account;
+
+        if (! $account || ! $scheduledClass || ! $this->classCancellationSettingsAreEnabled($account)) {
+            return 0;
+        }
+
+        $authSettings = $this->availability->settingsFor($account);
+        $smsSetting = $this->availability->customerSmsSettingFor($account, $authSettings);
+        $queued = 0;
+
+        foreach ($cancellation->effects as $effect) {
+            $booking = $effect->classBooking;
+            $customer = $booking?->customer;
+
+            if (! $booking || ! $customer) {
+                continue;
+            }
+
+            $recipientPhone = $this->phones->normalize($customer->phone, $account->country_code ?? 'UA');
+
+            if (! $this->phones->isValid($recipientPhone, $account->country_code ?? 'UA')) {
+                continue;
+            }
+
+            $dedupeKey = $this->classCancellationDedupeKey($cancellation, $booking);
+            $notification = CustomerNotification::query()
+                ->where('dedupe_key', $dedupeKey)
+                ->first();
+
+            if ($notification?->status === CustomerNotificationStatus::Sent) {
+                continue;
+            }
+
+            $notification ??= new CustomerNotification(['dedupe_key' => $dedupeKey]);
+            $notification->fill([
+                'account_id' => $account->id,
+                'customer_id' => $customer->id,
+                'scheduled_class_id' => $scheduledClass->id,
+                'class_booking_id' => $booking->id,
+                'channel' => CustomerNotificationChannel::Sms->value,
+                'type' => CustomerNotificationType::ClassCancellation->value,
+                'status' => CustomerNotificationStatus::Pending->value,
+                'recipient_kind' => CustomerNotificationRecipientKind::Customer->value,
+                'recipient_name' => $customer->name,
+                'recipient_phone' => $recipientPhone,
+                'text' => $this->renderer->renderClassCancellation($account, $scheduledClass, $customer),
+                'payload' => [
+                    'account_id' => $account->id,
+                    'customer_id' => $customer->id,
+                    'scheduled_class_id' => $scheduledClass->id,
+                    'class_booking_id' => $booking->id,
+                    'scheduled_class_cancellation_id' => $cancellation->id,
+                    'class_title' => $scheduledClass->displayTitle(),
+                    'timezone' => $scheduledClass->displayTimezone(),
+                    'starts_at' => $scheduledClass->starts_at?->toIso8601String(),
+                ],
+                'provider_scope' => $authSettings->customer_sms_sender_scope->value,
+                'provider' => $smsSetting?->provider->value,
+                'provider_message_id' => null,
+                'attempts' => 0,
+                'scheduled_send_at' => now(),
+                'next_attempt_at' => null,
+                'sent_at' => null,
+                'failed_at' => null,
+                'cancelled_at' => null,
+                'skipped_at' => null,
+                'last_error' => null,
+            ]);
+            $notification->save();
+            $queued++;
+        }
+
+        return $queued;
+    }
+
+    public function cancelClassCancellations(ScheduledClassCancellation $cancellation, string $reason = 'scheduled_class_restored'): int
+    {
+        return CustomerNotification::query()
+            ->where('type', CustomerNotificationType::ClassCancellation->value)
+            ->where('dedupe_key', 'like', 'class_cancellation:cancellation:'.$cancellation->id.':%')
+            ->whereIn('status', [
+                CustomerNotificationStatus::Pending->value,
+                CustomerNotificationStatus::Processing->value,
+                CustomerNotificationStatus::Failed->value,
+            ])
+            ->update([
+                'status' => CustomerNotificationStatus::Cancelled->value,
+                'next_attempt_at' => null,
+                'cancelled_at' => now(),
+                'last_error' => Str::limit($reason, 2000),
+            ]);
+    }
+
     public function cancelClassRemindersForScheduledClass(ScheduledClass $scheduledClass, string $reason = 'scheduled_class_cancelled'): int
     {
         return CustomerNotification::query()
@@ -226,6 +337,16 @@ class CustomerNotificationProducer
             && $setting->class_reminder_enabled;
     }
 
+    public function classCancellationSettingsAreEnabled(Account $account): bool
+    {
+        $setting = $this->notificationSettingFor($account);
+
+        return ! $account->isReadOnlyDemo()
+            && $account->customerNotificationsEnabled()
+            && $setting->is_enabled
+            && $setting->class_cancellation_enabled;
+    }
+
     public function notificationSettingFor(Account $account): CustomerNotificationSetting
     {
         $setting = $account->relationLoaded('customerNotificationSetting')
@@ -240,6 +361,11 @@ class CustomerNotificationProducer
     public function classReminderDedupeKey(ClassBooking $booking): string
     {
         return 'class_reminder:booking:'.$booking->id;
+    }
+
+    public function classCancellationDedupeKey(ScheduledClassCancellation $cancellation, ClassBooking $booking): string
+    {
+        return 'class_cancellation:cancellation:'.$cancellation->id.':booking:'.$booking->id;
     }
 
     /**

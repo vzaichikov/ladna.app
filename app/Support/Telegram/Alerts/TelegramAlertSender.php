@@ -2,11 +2,14 @@
 
 namespace App\Support\Telegram\Alerts;
 
+use App\Enums\ClassBookingStatus;
+use App\Enums\ScheduledClassStatus;
 use App\Enums\TelegramAlertRecipientKind;
 use App\Enums\TelegramAlertStatus;
 use App\Enums\TelegramAlertType;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
+use App\Models\ScheduledClassCancellation;
 use App\Models\TelegramAlert;
 use App\Models\TelegramBotInstallation;
 use App\Models\TelegramBroadcastTarget;
@@ -111,7 +114,13 @@ class TelegramAlertSender
 
     private function send(TelegramAlert $alert): string
     {
-        $alert->loadMissing(['account.trainerNotificationSetting', 'trainer', 'broadcastTarget.installation']);
+        $alert->loadMissing([
+            'account.trainerNotificationSetting',
+            'trainer',
+            'classBooking',
+            'scheduledClass',
+            'broadcastTarget.installation',
+        ]);
 
         if ($alert->recipient_kind === TelegramAlertRecipientKind::FoundersGroup) {
             return $this->sendFoundersAnnouncement($alert);
@@ -140,6 +149,27 @@ class TelegramAlertSender
             return $this->retryOrFail($alert, 'trainer_assignment_alerts_disabled_for_studio', true);
         }
 
+        if (
+            $alert->type === TelegramAlertType::TrainerAssignment
+            && ! $this->trainerAssignmentIsStillRelevant($alert)
+        ) {
+            return $this->retryOrFail($alert, 'trainer_assignment_alert_no_longer_relevant', true);
+        }
+
+        if (
+            $alert->type === TelegramAlertType::TrainerClassCancellation
+            && ! $alert->account->trainerClassCancellationAlertScenarioEnabled()
+        ) {
+            return $this->retryOrFail($alert, 'trainer_class_cancellation_alerts_disabled_for_studio', true);
+        }
+
+        if (
+            $alert->type === TelegramAlertType::TrainerClassCancellation
+            && ! $this->trainerClassCancellationIsStillRelevant($alert)
+        ) {
+            return $this->retryOrFail($alert, 'trainer_class_cancellation_alert_no_longer_relevant', true);
+        }
+
         $installation = $this->ownerBotInstallation();
 
         if (! $installation) {
@@ -154,6 +184,10 @@ class TelegramAlertSender
 
         if (! $authorization) {
             return $this->retryOrFail($alert, $this->authorizationMissingError($alert), true);
+        }
+
+        if ($alert->fresh()->status !== TelegramAlertStatus::Processing) {
+            return 'failed';
         }
 
         try {
@@ -274,6 +308,57 @@ class TelegramAlertSender
     private function authorizationMissingError(TelegramAlert $alert): string
     {
         return $alert->trainer_id ? 'trainer_telegram_authorization_missing' : 'trainer_not_assigned';
+    }
+
+    private function trainerAssignmentIsStillRelevant(TelegramAlert $alert): bool
+    {
+        if (! $alert->class_booking_id && ! $alert->scheduled_class_id) {
+            return true;
+        }
+
+        $booking = $alert->classBooking;
+        $scheduledClass = $alert->scheduledClass;
+
+        return $booking !== null
+            && $scheduledClass !== null
+            && ! $booking->isCorrectedRemoved()
+            && in_array($booking->status, [
+                ClassBookingStatus::Booked,
+                ClassBookingStatus::Attended,
+            ], true)
+            && $scheduledClass->status === ScheduledClassStatus::Scheduled
+            && $scheduledClass->trainer_id === $alert->trainer_id;
+    }
+
+    private function trainerClassCancellationIsStillRelevant(TelegramAlert $alert): bool
+    {
+        $scheduledClass = $alert->scheduledClass;
+
+        if (! $scheduledClass || $scheduledClass->trainer_id !== $alert->trainer_id) {
+            return false;
+        }
+
+        if (($alert->payload['reason'] ?? null) === QueueTrainerClassCancellationTelegramAlert::ReasonAllBookingsCancelled) {
+            return $scheduledClass->status === ScheduledClassStatus::Scheduled
+                && $scheduledClass->starts_at->isFuture()
+                && ! $scheduledClass->classBookings()
+                    ->notCorrectedRemoved()
+                    ->whereIn('status', [
+                        ClassBookingStatus::Booked->value,
+                        ClassBookingStatus::Attended->value,
+                    ])
+                    ->exists();
+        }
+
+        $cancellationId = (int) ($alert->payload['scheduled_class_cancellation_id'] ?? 0);
+
+        return $scheduledClass->status === ScheduledClassStatus::Cancelled
+            && $cancellationId > 0
+            && ScheduledClassCancellation::query()
+                ->whereKey($cancellationId)
+                ->where('scheduled_class_id', $scheduledClass->id)
+                ->whereNull('restored_at')
+                ->exists();
     }
 
     private function responseSucceeded(?Response $response): bool

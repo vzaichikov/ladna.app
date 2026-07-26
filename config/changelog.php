@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.99.0',
+                'date' => '2026-07-26',
+                'title' => 'Cancellation alerts for trainers and customers',
+                'items' => ['Studios can now explicitly enable a trainer Telegram scenario for classes cancelled by the studio after bookings appeared and for classes where every customer cancels. The general Ladna bot authorization and studio master switch still apply.', 'Customer SMS settings now use the same clear scenario layout as trainer alerts. A new opt-in scenario politely notifies every booked customer immediately when the studio cancels their class, including during quiet hours because the change is time-sensitive.', 'Both new scenarios start disabled, so existing studios keep their current delivery behavior until an owner enables them. Customer cancellation messages also require the customer SMS capability and a configured SMS channel.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.98.0',
                 'date' => '2026-07-26',
                 'title' => 'Clear notification and link settings',
@@ -891,6 +898,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.99.0',
+                'date' => '2026-07-26',
+                'title' => 'Сповіщення про скасування для тренерів і клієнтів',
+                'items' => ['Студія тепер може окремо увімкнути Telegram-сценарій для тренера: коли студія скасовує заняття, на яке вже були записи, або коли всі клієнти скасовують свої записи. Авторизація в загальному боті Ladna та головний перемикач студії залишаються обовʼязковими.', 'Клієнтські SMS-налаштування тепер мають таку саму зрозумілу структуру сценаріїв, як сповіщення тренерам. Новий сценарій одразу й ввічливо повідомляє кожного записаного клієнта про скасування заняття студією, навіть у тихі години, бо зміна є терміновою.', 'Обидва нові сценарії початково вимкнені, тому чинна поведінка студій не зміниться, доки власниця не ввімкне їх явно. Для SMS про скасування також потрібні доступна можливість клієнтських сповіщень і налаштований SMS-канал.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.98.0',
                 'date' => '2026-07-26',

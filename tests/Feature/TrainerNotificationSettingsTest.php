@@ -22,6 +22,7 @@ class TrainerNotificationSettingsTest extends TestCase
 
         $this->assertFalse($account->trainerNotificationSetting()->exists());
         $this->assertTrue($account->trainerAssignmentTelegramAlertsEnabled());
+        $this->assertFalse($account->trainerClassCancellationTelegramAlertsEnabled());
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'trainers']))
@@ -29,8 +30,10 @@ class TrainerNotificationSettingsTest extends TestCase
             ->assertSee(__('app.notifications_trainers'))
             ->assertSee(__('app.trainer_notifications_master_hint'))
             ->assertSee(__('app.trainer_notification_assignment_hint'))
+            ->assertSee(__('app.trainer_notification_class_cancellation_hint'))
             ->assertSee('name="enable_telegram_alerts"', false)
             ->assertSee('name="trainer_assignment_enabled"', false)
+            ->assertSee('name="class_cancellation_enabled"', false)
             ->assertDontSee('name="class_reminder_hours_before"', false)
             ->assertDontSee('name="telegram_bots[customer][token]"', false);
 
@@ -54,6 +57,7 @@ class TrainerNotificationSettingsTest extends TestCase
             ->put(route('dashboard.accounts.trainer-notification-settings.update', $account), [
                 'enable_telegram_alerts' => '0',
                 'trainer_assignment_enabled' => '0',
+                'class_cancellation_enabled' => '1',
             ])
             ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'trainers']))
             ->assertSessionHas('status', __('app.trainer_notification_settings_updated'));
@@ -62,16 +66,19 @@ class TrainerNotificationSettingsTest extends TestCase
         $this->assertDatabaseHas((new TrainerNotificationSetting)->getTable(), [
             'account_id' => $account->id,
             'trainer_assignment_enabled' => false,
+            'class_cancellation_enabled' => true,
         ]);
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.trainer-notification-settings.update', $account), [
                 'enable_telegram_alerts' => '1',
                 'trainer_assignment_enabled' => '1',
+                'class_cancellation_enabled' => '1',
             ])
             ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'trainers']));
 
         $this->assertTrue($account->fresh()->trainerAssignmentTelegramAlertsEnabled());
+        $this->assertTrue($account->fresh()->trainerClassCancellationTelegramAlertsEnabled());
     }
 
     public function test_staff_needs_manage_studio_settings_permission_and_cannot_cross_tenants(): void

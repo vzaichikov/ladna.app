@@ -57,13 +57,16 @@ class CustomerNotificationSettingsTest extends TestCase
             ->assertSee(__('app.customer_notifications'), false)
             ->assertSee(__('app.customer_notifications_sms_only_legend'))
             ->assertSee(__('app.customer_telegram_bot_settings'))
-            ->assertSee('name="class_reminder_hours_before"', false);
+            ->assertSee(__('app.notification_scenarios'))
+            ->assertSee('name="class_reminder_hours_before"', false)
+            ->assertSee('name="class_cancellation_enabled"', false);
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.customer-notification-settings.update', $account), [
                 'is_enabled' => '1',
                 'class_reminder_enabled' => '1',
                 'class_reminder_hours_before' => '7',
+                'class_cancellation_enabled' => '1',
             ])
             ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']));
 
@@ -72,6 +75,7 @@ class CustomerNotificationSettingsTest extends TestCase
             'is_enabled' => true,
             'class_reminder_enabled' => true,
             'class_reminder_hours_before' => 7,
+            'class_cancellation_enabled' => true,
         ]);
     }
 

@@ -5,6 +5,7 @@ namespace App\Enums;
 enum TelegramAlertType: string
 {
     case TrainerAssignment = 'trainer_assignment';
+    case TrainerClassCancellation = 'trainer_class_cancellation';
     case OwnerAnnouncement = 'owner_announcement';
     case FoundersAnnouncement = 'founders_announcement';
 

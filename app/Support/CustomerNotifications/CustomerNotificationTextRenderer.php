@@ -20,6 +20,19 @@ class CustomerNotificationTextRenderer
         ], $locale);
     }
 
+    public function renderClassCancellation(Account $account, ScheduledClass $scheduledClass, Customer $customer): string
+    {
+        $locale = $this->localeFor($account, $customer);
+        $startsAt = $scheduledClass->starts_at->copy()->timezone($scheduledClass->displayTimezone());
+
+        return __('app.customer_notification_class_cancellation_sms', [
+            'studio' => $account->name,
+            'class' => $scheduledClass->displayTitle(),
+            'date' => $startsAt->format('d.m.Y'),
+            'time' => $startsAt->format('H:i'),
+        ], $locale);
+    }
+
     private function localeFor(Account $account, Customer $customer): string
     {
         $locales = array_keys(config('ladna.locales', []));

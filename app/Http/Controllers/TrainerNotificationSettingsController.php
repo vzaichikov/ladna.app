@@ -20,7 +20,10 @@ class TrainerNotificationSettingsController extends Controller
 
             $account->trainerNotificationSetting()->updateOrCreate(
                 ['account_id' => $account->id],
-                ['trainer_assignment_enabled' => $payload['trainer_assignment_enabled']],
+                [
+                    'trainer_assignment_enabled' => $payload['trainer_assignment_enabled'],
+                    'class_cancellation_enabled' => $payload['class_cancellation_enabled'],
+                ],
             );
         });
 

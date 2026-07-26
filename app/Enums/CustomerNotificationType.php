@@ -5,6 +5,7 @@ namespace App\Enums;
 enum CustomerNotificationType: string
 {
     case ClassReminder = 'class_reminder';
+    case ClassCancellation = 'class_cancellation';
 
     public function labelKey(): string
     {
