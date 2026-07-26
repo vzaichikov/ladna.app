@@ -144,6 +144,36 @@ class StudioAiInferenceTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_inference_includes_trainer_access_help_for_misspelled_owner_question(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"Відкрийте Тренери, натисніть Додати тренера, увімкніть вхід у систему й оберіть права.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"Ladna trainer access workflow question"}',
+                ],
+            ]),
+        ]);
+
+        $account = $this->accountWithOllamaSettings();
+        $question = 'прівєт 😅 я знов загубилась. де там додати нову тринершу і дати їй вхід? тікі коротко пліз';
+
+        $result = app(StudioAiInference::class)->respond($account, $question);
+
+        $this->assertTrue($result->usedAi);
+        $this->assertSame('trainers', $result->helpSources[0]['slug']);
+
+        Http::assertSent(function (Request $request): bool {
+            $content = $request->data()['messages'][1]['content'] ?? '';
+
+            return str_contains($content, 'Help context JSON')
+                && str_contains($content, 'trainers')
+                && str_contains($content, 'Як додати тренера')
+                && str_contains($content, 'увімкніть вхід у систему');
+        });
+        Http::assertSentCount(1);
+    }
+
     public function test_inference_includes_class_pass_help_context_for_no_pass_questions(): void
     {
         Http::fake([
