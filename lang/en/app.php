@@ -1564,6 +1564,8 @@ return [
     'assistant_status_preparing_action' => 'Ladna is preparing the action...',
     'assistant_status_executing_action' => 'Ladna is executing the action...',
     'assistant_status_searching_customer' => 'Ladna is looking for the customer...',
+    'assistant_status_searching_help' => 'Ladna is searching the help center...',
+    'assistant_status_reading_help' => 'Ladna is reading the instructions...',
     'assistant_status_checking_bookings' => 'Ladna is checking bookings...',
     'assistant_status_checking_class_passes' => 'Ladna is checking class passes...',
     'assistant_status_checking_business_rules' => 'Ladna is checking business rules...',

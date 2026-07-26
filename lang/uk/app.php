@@ -1564,6 +1564,8 @@ return [
     'assistant_status_preparing_action' => 'Ladna готує дію...',
     'assistant_status_executing_action' => 'Ladna виконує дію...',
     'assistant_status_searching_customer' => 'Ladna шукає клієнта...',
+    'assistant_status_searching_help' => 'Ladna шукає у довідці...',
+    'assistant_status_reading_help' => 'Ladna читає інструкцію...',
     'assistant_status_checking_bookings' => 'Ladna перевіряє записи...',
     'assistant_status_checking_class_passes' => 'Ladna звіряє абонементи...',
     'assistant_status_checking_business_rules' => 'Ladna звіряє бізнес-правила...',

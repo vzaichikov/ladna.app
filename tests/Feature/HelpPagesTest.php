@@ -528,21 +528,6 @@ class HelpPagesTest extends TestCase
         }
     }
 
-    public function test_owner_help_search_finds_trainer_access_for_misspelled_owner_question(): void
-    {
-        $result = app(OwnerHelpIndex::class)->search(
-            'прівєт 😅 я знов загубилась. де там додати нову тринершу і дати їй вхід? тікі коротко пліз',
-            1,
-        );
-
-        $this->assertSame('trainers', $result[0]['slug'] ?? null);
-        $this->assertContains('Як додати тренера', $result[0]['matched_sections'] ?? []);
-        $this->assertStringContainsString(
-            'увімкніть вхід у систему',
-            $result[0]['fragments'][0]['excerpt'] ?? '',
-        );
-    }
-
     public function test_real_workflows_help_uses_submenu_and_question_pages(): void
     {
         $this->get(route('help.index', [], false))

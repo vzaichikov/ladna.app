@@ -65,7 +65,7 @@ class StudioAiInferenceTest extends TestCase
                 && str_contains($payload['messages'][1]['content'], 'How many classes today?')
                 && $payload['stream'] === false
                 && str_contains($payload['messages'][1]['content'], 'Studio context JSON')
-                && str_contains($payload['messages'][1]['content'], 'Help context JSON')
+                && ! str_contains($payload['messages'][1]['content'], 'Help context JSON')
                 && str_contains($payload['messages'][1]['content'], 'Assistant capabilities JSON')
                 && str_contains($payload['messages'][1]['content'], 'customers_total')
                 && str_contains($payload['messages'][1]['content'], 'next_7_days');
@@ -116,119 +116,128 @@ class StudioAiInferenceTest extends TestCase
 
     public function test_inference_includes_owner_help_context_for_customer_how_to_questions(): void
     {
-        Http::fake([
-            'ollama.com/api/chat' => Http::response([
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Відкрийте Клієнти й натисніть Додати клієнта.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"Ladna customer workflow question"}',
-                ],
-            ]),
-        ]);
-
         $account = $this->accountWithOllamaSettings();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->fakeHelpToolLoop(
+            'додати клієнта',
+            'customers-bookings',
+            'Відкрийте Клієнти й натисніть Додати клієнта.',
+        );
 
-        $result = app(StudioAiInference::class)->respond($account, 'А розкажи мені, як додати клієнта?');
+        $result = app(StudioAiInference::class)->respond(
+            $account,
+            'А розкажи мені, як додати клієнта?',
+            actorUser: $owner,
+        );
 
         $this->assertTrue($result->usedAi);
         $this->assertSame('Відкрийте Клієнти й натисніть Додати клієнта.', $result->text);
         $this->assertSame('customers-bookings', $result->helpSources[0]['slug']);
 
         Http::assertSent(function (Request $request): bool {
-            $content = $request->data()['messages'][1]['content'] ?? '';
+            $messages = $request->data()['messages'] ?? [];
 
-            return str_contains($content, 'Help context JSON')
-                && str_contains($content, 'customers-bookings')
-                && str_contains($content, 'Як додати клієнта вручну')
-                && str_contains($content, 'Натисніть Додати клієнта.');
+            return collect($messages)->contains(
+                fn (array $message): bool => ($message['role'] ?? null) === 'tool'
+                    && ($message['tool_name'] ?? null) === 'get_owner_help_page'
+                    && str_contains($message['content'] ?? '', 'Як додати клієнта вручну'),
+            );
         });
-        Http::assertSentCount(1);
+        Http::assertSentCount(3);
     }
 
     public function test_inference_includes_trainer_access_help_for_misspelled_owner_question(): void
     {
-        Http::fake([
-            'ollama.com/api/chat' => Http::response([
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Відкрийте Тренери, натисніть Додати тренера, увімкніть вхід у систему й оберіть права.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"Ladna trainer access workflow question"}',
-                ],
-            ]),
-        ]);
-
         $account = $this->accountWithOllamaSettings();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
         $question = 'прівєт 😅 я знов загубилась. де там додати нову тринершу і дати їй вхід? тікі коротко пліз';
+        $this->fakeHelpToolLoop(
+            'додати тренера доступ до системи',
+            'trainers',
+            'Відкрийте Тренери, натисніть Додати тренера, увімкніть вхід у систему й оберіть права.',
+        );
 
-        $result = app(StudioAiInference::class)->respond($account, $question);
+        $result = app(StudioAiInference::class)->respond($account, $question, actorUser: $owner);
 
         $this->assertTrue($result->usedAi);
         $this->assertSame('trainers', $result->helpSources[0]['slug']);
 
         Http::assertSent(function (Request $request): bool {
-            $content = $request->data()['messages'][1]['content'] ?? '';
+            $payload = $request->data();
 
-            return str_contains($content, 'Help context JSON')
-                && str_contains($content, 'trainers')
-                && str_contains($content, 'Як додати тренера')
-                && str_contains($content, 'увімкніть вхід у систему');
+            return collect($payload['tools'] ?? [])->pluck('function.name')->contains('search_owner_help')
+                && collect($payload['tools'] ?? [])->pluck('function.name')->contains('get_owner_help_page')
+                && str_contains($payload['messages'][0]['content'] ?? '', 'decide the topic yourself')
+                && str_contains($payload['messages'][0]['content'] ?? '', 'misspelled guidance questions');
         });
-        Http::assertSentCount(1);
+        Http::assertSentCount(3);
     }
 
     public function test_inference_includes_class_pass_help_context_for_no_pass_questions(): void
     {
-        Http::fake([
-            'ollama.com/api/chat' => Http::response([
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Перевірте активні абонементи клієнта і записи без резерву.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"class pass workflow question"}',
-                ],
-            ]),
-        ]);
-
         $account = $this->accountWithOllamaSettings();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->fakeHelpToolLoop(
+            'чому запис може бути без абонемента',
+            'passes-prices',
+            'Перевірте активні абонементи клієнта і записи без резерву.',
+        );
 
-        $result = app(StudioAiInference::class)->respond($account, 'Що робити, якщо клієнт без абонемента?');
+        $result = app(StudioAiInference::class)->respond(
+            $account,
+            'Що робити, якщо клієнт без абонемента?',
+            actorUser: $owner,
+        );
 
         $this->assertTrue($result->usedAi);
         $this->assertTrue(collect($result->helpSources)->contains(fn (array $source): bool => $source['slug'] === 'passes-prices'));
 
         Http::assertSent(function (Request $request): bool {
-            $content = $request->data()['messages'][1]['content'] ?? '';
+            $messages = $request->data()['messages'] ?? [];
 
-            return str_contains($content, 'Help context JSON')
-                && str_contains($content, 'Чому запис може бути без абонемента')
-                && str_contains($content, 'запис без резерву');
+            return collect($messages)->contains(
+                fn (array $message): bool => ($message['role'] ?? null) === 'tool'
+                    && ($message['tool_name'] ?? null) === 'get_owner_help_page'
+                    && str_contains($message['content'] ?? '', 'Чому запис може бути без абонемента'),
+            );
         });
-        Http::assertSentCount(1);
+        Http::assertSentCount(3);
     }
 
     public function test_inference_includes_real_workflow_context_for_trainer_no_show_question(): void
     {
-        Http::fake([
-            'ollama.com/api/chat' => Http::response([
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Оберіть статус Не прийшов/прийшла.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"studio no-show workflow question"}',
-                ],
-            ]),
-        ]);
-
         $account = $this->accountWithOllamaSettings();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->fakeHelpToolLoop(
+            'що робити якщо клієнт не прийшов а заняття має списатися',
+            'case-no-show-with-pass',
+            'Оберіть статус Не прийшов/прийшла.',
+        );
 
-        $result = app(StudioAiInference::class)->respond($account, 'якщо людина не приходить, що обирати, щоб пропуск списався?');
+        $result = app(StudioAiInference::class)->respond(
+            $account,
+            'якщо людина не приходить, що обирати, щоб пропуск списався?',
+            actorUser: $owner,
+        );
 
         $this->assertTrue($result->usedAi);
         $this->assertTrue(collect($result->helpSources)->contains(fn (array $source): bool => $source['slug'] === 'case-no-show-with-pass'));
 
         Http::assertSent(function (Request $request): bool {
-            $content = $request->data()['messages'][1]['content'] ?? '';
+            $messages = $request->data()['messages'] ?? [];
 
-            return str_contains($content, 'Help context JSON')
-                && str_contains($content, 'case-no-show-with-pass')
-                && str_contains($content, 'Не прийшов/прийшла')
-                && str_contains($content, 'Шлях у Ladna');
+            return collect($messages)->contains(
+                fn (array $message): bool => ($message['role'] ?? null) === 'tool'
+                    && ($message['tool_name'] ?? null) === 'get_owner_help_page'
+                    && str_contains($message['content'] ?? '', 'Не прийшов/прийшла')
+                    && str_contains($message['content'] ?? '', 'Шлях у Ladna'),
+            );
         });
-        Http::assertSentCount(1);
+        Http::assertSentCount(3);
     }
 
     public function test_out_of_scope_prompt_is_rejected_before_answer_request(): void
@@ -1073,5 +1082,52 @@ class StudioAiInferenceTest extends TestCase
         ]);
 
         return $account;
+    }
+
+    private function fakeHelpToolLoop(string $query, string $slug, string $answer): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '',
+                        'tool_calls' => [[
+                            'function' => [
+                                'name' => 'search_owner_help',
+                                'arguments' => [
+                                    'query' => $query,
+                                    'limit' => 5,
+                                ],
+                            ],
+                        ]],
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '',
+                        'tool_calls' => [[
+                            'function' => [
+                                'name' => 'get_owner_help_page',
+                                'arguments' => ['slug' => $slug],
+                            ],
+                        ]],
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => json_encode([
+                            'disposition' => 'answer',
+                            'answer' => $answer,
+                            'follow_up_actions' => [],
+                            'action' => null,
+                            'calendar_reference' => null,
+                            'reason' => 'Answer from the selected Ladna help page.',
+                        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    ],
+                ]),
+        ]);
     }
 }

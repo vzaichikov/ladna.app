@@ -280,12 +280,37 @@ class AccountAssistantTest extends TestCase
     public function test_dashboard_message_endpoint_stores_help_sources_without_full_help_text(): void
     {
         Http::fake([
-            'ollama.com/api/chat' => Http::response([
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => '{"disposition":"answer","answer":"Відкрийте Клієнти й натисніть Додати клієнта.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"Ladna help question"}',
-                ],
-            ]),
+            'ollama.com/api/chat' => Http::sequence()
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '',
+                        'tool_calls' => [[
+                            'function' => [
+                                'name' => 'search_owner_help',
+                                'arguments' => ['query' => 'додати клієнта'],
+                            ],
+                        ]],
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '',
+                        'tool_calls' => [[
+                            'function' => [
+                                'name' => 'get_owner_help_page',
+                                'arguments' => ['slug' => 'customers-bookings'],
+                            ],
+                        ]],
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"answer","answer":"Відкрийте Клієнти й натисніть Додати клієнта.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"Ladna help question"}',
+                    ],
+                ]),
         ]);
 
         $owner = User::factory()->create();

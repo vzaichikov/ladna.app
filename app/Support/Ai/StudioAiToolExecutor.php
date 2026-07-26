@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\CustomerBookingLedgerInvestigation;
 use App\Support\CustomerInvestigationSearch;
 use App\Support\LadnaBusinessLogicReference;
+use App\Support\OwnerHelpIndex;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,10 @@ use Throwable;
 
 class StudioAiToolExecutor
 {
+    private const SearchOwnerHelp = 'search_owner_help';
+
+    private const GetOwnerHelpPage = 'get_owner_help_page';
+
     private const SearchCustomers = 'search_customers';
 
     private const InvestigateCustomerBookingLedger = 'investigate_customer_booking_ledger';
@@ -32,12 +37,18 @@ class StudioAiToolExecutor
         private readonly CustomerBookingLedgerInvestigation $bookingLedgerInvestigation,
         private readonly LadnaBusinessLogicReference $businessLogicReference,
         private readonly StudioAiLedgerEvidencePresenter $ledgerEvidencePresenter,
+        private readonly OwnerHelpIndex $helpIndex,
     ) {}
 
-    public function availableFor(Account $account, ?User $actorUser): bool
+    public function helpAvailableFor(Account $account, ?User $actorUser): bool
     {
         return $actorUser !== null
-            && $account->userCan($actorUser, StudioPermission::InteractWithTelegramBot)
+            && $account->userCan($actorUser, StudioPermission::InteractWithTelegramBot);
+    }
+
+    public function investigationAvailableFor(Account $account, ?User $actorUser): bool
+    {
+        return $this->helpAvailableFor($account, $actorUser)
             && $account->userCan($actorUser, StudioPermission::ManageCustomerClassPasses);
     }
 
@@ -46,11 +57,61 @@ class StudioAiToolExecutor
      */
     public function definitions(Account $account, ?User $actorUser): array
     {
-        if (! $this->availableFor($account, $actorUser)) {
-            return [];
+        $definitions = [];
+
+        if ($this->helpAvailableFor($account, $actorUser)) {
+            $definitions = [
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => self::SearchOwnerHelp,
+                        'description' => 'Search curated Ladna owner help. Turn the owner’s noisy, misspelled, or conversational wording into a concise canonical search query before calling this tool. Use it before answering interface, workflow, settings, or business-process questions.',
+                        'parameters' => [
+                            'type' => 'object',
+                            'additionalProperties' => false,
+                            'properties' => [
+                                'query' => [
+                                    'type' => 'string',
+                                    'description' => 'Concise canonical help query without greetings, filler, or misspellings.',
+                                ],
+                                'limit' => [
+                                    'type' => 'integer',
+                                    'minimum' => 1,
+                                    'maximum' => 5,
+                                    'default' => 5,
+                                ],
+                            ],
+                            'required' => ['query'],
+                        ],
+                    ],
+                ],
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => self::GetOwnerHelpPage,
+                        'description' => 'Read the complete curated Ladna owner help page selected from search_owner_help results before answering the owner.',
+                        'parameters' => [
+                            'type' => 'object',
+                            'additionalProperties' => false,
+                            'properties' => [
+                                'slug' => [
+                                    'type' => 'string',
+                                    'description' => 'Exact page slug returned by search_owner_help.',
+                                ],
+                            ],
+                            'required' => ['slug'],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        if (! $this->investigationAvailableFor($account, $actorUser)) {
+            return $definitions;
         }
 
         return [
+            ...$definitions,
             [
                 'type' => 'function',
                 'function' => [
@@ -144,12 +205,18 @@ class StudioAiToolExecutor
         $validated = null;
 
         try {
-            if (! $this->availableFor($account, $actorUser)) {
+            if (! $this->isKnownTool($toolName)) {
+                throw new InvalidArgumentException('Unknown AI tool.');
+            }
+
+            if (! $this->availableForTool($account, $actorUser, $toolName)) {
                 throw new AuthorizationException(__('app.api_token_forbidden'));
             }
 
             $validated = $this->validatedArguments($toolName, $arguments);
             $payload = match ($toolName) {
+                self::SearchOwnerHelp => $this->searchOwnerHelp($validated, $progress),
+                self::GetOwnerHelpPage => $this->getOwnerHelpPage($validated, $progress),
                 self::SearchCustomers => $this->searchCustomers($account, $validated, $progress),
                 self::InvestigateCustomerBookingLedger => $this->investigateBookingLedger($account, $validated, $progress),
                 self::GetBusinessLogicReference => $this->businessLogic($validated, $progress),
@@ -220,6 +287,13 @@ class StudioAiToolExecutor
     private function validatedArguments(string $toolName, array $arguments): array
     {
         $rules = match ($toolName) {
+            self::SearchOwnerHelp => [
+                'query' => ['required', 'string', 'min:2', 'max:120'],
+                'limit' => ['nullable', 'integer', 'min:1', 'max:5'],
+            ],
+            self::GetOwnerHelpPage => [
+                'slug' => ['required', 'string', 'max:80'],
+            ],
             self::SearchCustomers => [
                 'query' => ['required', 'string', 'min:2', 'max:120'],
                 'limit' => ['nullable', 'integer', 'min:1', 'max:10'],
@@ -236,6 +310,53 @@ class StudioAiToolExecutor
         };
 
         return Validator::make($arguments, $rules)->validate();
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  callable(string): mixed|null  $progress
+     * @return array<string, mixed>
+     */
+    private function searchOwnerHelp(array $arguments, ?callable $progress): array
+    {
+        $this->progress($progress, 'assistant_status_searching_help');
+        $query = (string) $arguments['query'];
+        $results = $this->helpIndex->search($query, (int) ($arguments['limit'] ?? 5));
+
+        return [
+            'status' => $results === [] ? 'not_found' : 'found',
+            'query' => $query,
+            'results' => $results,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  callable(string): mixed|null  $progress
+     * @return array<string, mixed>
+     */
+    private function getOwnerHelpPage(array $arguments, ?callable $progress): array
+    {
+        $this->progress($progress, 'assistant_status_reading_help');
+        $slug = (string) $arguments['slug'];
+        $page = config("help.pages.{$slug}");
+
+        if (! is_array($page)) {
+            return [
+                'status' => 'not_found',
+                'slug' => $slug,
+            ];
+        }
+
+        return [
+            'status' => 'found',
+            'slug' => $slug,
+            'title' => $page['title'] ?? $slug,
+            'summary' => $page['summary'] ?? null,
+            'sections' => $page['sections'] ?? [],
+            'related' => $page['related'] ?? [],
+            'updated_at' => config('help.updated_at'),
+        ];
     }
 
     /**
@@ -294,11 +415,32 @@ class StudioAiToolExecutor
     private function requiredAbility(string $toolName): ?AccountApiTokenAbility
     {
         return match ($toolName) {
+            self::SearchOwnerHelp, self::GetOwnerHelpPage => AccountApiTokenAbility::McpRead,
             self::SearchCustomers => AccountApiTokenAbility::McpCustomersRead,
             self::InvestigateCustomerBookingLedger => AccountApiTokenAbility::McpClassPassesRead,
             self::GetBusinessLogicReference => AccountApiTokenAbility::McpLogicRead,
             default => null,
         };
+    }
+
+    private function availableForTool(Account $account, ?User $actorUser, string $toolName): bool
+    {
+        return match ($toolName) {
+            self::SearchOwnerHelp, self::GetOwnerHelpPage => $this->helpAvailableFor($account, $actorUser),
+            self::SearchCustomers, self::InvestigateCustomerBookingLedger, self::GetBusinessLogicReference => $this->investigationAvailableFor($account, $actorUser),
+            default => false,
+        };
+    }
+
+    private function isKnownTool(string $toolName): bool
+    {
+        return in_array($toolName, [
+            self::SearchOwnerHelp,
+            self::GetOwnerHelpPage,
+            self::SearchCustomers,
+            self::InvestigateCustomerBookingLedger,
+            self::GetBusinessLogicReference,
+        ], true);
     }
 
     /**
