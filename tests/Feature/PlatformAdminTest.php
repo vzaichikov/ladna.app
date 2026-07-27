@@ -59,9 +59,11 @@ class PlatformAdminTest extends TestCase
                 __('app.configuration'),
                 __('app.system_settings'),
                 __('app.integrations'),
+                __('app.email_scenarios'),
                 __('app.system_logs'),
                 __('app.telegram_support'),
                 __('app.customer_notifications_queue_short'),
+                __('app.email_deliveries'),
                 __('app.scheduled_tasks'),
             ]);
     }

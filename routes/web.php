@@ -52,6 +52,8 @@ use App\Http\Controllers\Platform\AccountBillingTariffController;
 use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
 use App\Http\Controllers\Platform\CustomerNotificationController as PlatformCustomerNotificationController;
+use App\Http\Controllers\Platform\EmailDeliveryController as PlatformEmailDeliveryController;
+use App\Http\Controllers\Platform\EmailScenarioController as PlatformEmailScenarioController;
 use App\Http\Controllers\Platform\IntegrationController as PlatformIntegrationController;
 use App\Http\Controllers\Platform\OwnerTelegramWebhookController as PlatformOwnerTelegramWebhookController;
 use App\Http\Controllers\Platform\PaymentController as PlatformPaymentController;
@@ -312,6 +314,12 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
         Route::post('telegram-support/authorizations/{telegramAuthorization}/reset', [PlatformTelegramSupportController::class, 'reset'])->name('telegram-support.authorizations.reset');
         Route::delete('telegram-support/authorizations/{telegramAuthorization}', [PlatformTelegramSupportController::class, 'revoke'])->name('telegram-support.authorizations.revoke');
         Route::get('customer-notifications', [PlatformCustomerNotificationController::class, 'index'])->name('customer-notifications.index');
+        Route::get('email-deliveries', [PlatformEmailDeliveryController::class, 'index'])->name('email-deliveries.index');
+        Route::get('email-deliveries/{emailDelivery}/preview', [PlatformEmailDeliveryController::class, 'preview'])->name('email-deliveries.preview');
+        Route::get('email-scenarios', [PlatformEmailScenarioController::class, 'index'])->name('email-scenarios.index');
+        Route::put('email-scenarios', [PlatformEmailScenarioController::class, 'update'])->name('email-scenarios.update');
+        Route::get('email-scenarios/{scenario}/{locale}/preview', [PlatformEmailScenarioController::class, 'preview'])
+            ->name('email-scenarios.preview');
         Route::get('integrations', [PlatformIntegrationController::class, 'index'])->name('integrations.index');
         Route::put('integrations/central-sms-provider', [PlatformIntegrationController::class, 'updateCentralSmsProvider'])
             ->name('integrations.central-sms-provider.update');

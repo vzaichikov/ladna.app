@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_subscription_id', 'notification_type', 'scheduled_for', 'sent_at', 'context'])]
+#[Fillable(['account_subscription_id', 'notification_type', 'scheduled_for', 'sent_at', 'suppressed_at', 'context'])]
 class AccountSubscriptionNotification extends Model
 {
     /**
@@ -17,6 +17,7 @@ class AccountSubscriptionNotification extends Model
         return [
             'scheduled_for' => 'datetime',
             'sent_at' => 'datetime',
+            'suppressed_at' => 'datetime',
             'context' => 'array',
         ];
     }

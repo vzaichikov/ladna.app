@@ -5,8 +5,11 @@ namespace Tests\Feature;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Mail\TransactionalMail;
+use App\Models\EmailDelivery;
 use App\Models\IntegrationSetting;
+use App\Support\Mail\MailDeliveryTransportResolver;
 use App\Support\Mail\SendPulseApiTransport;
+use App\Support\Mail\TrackedMailTransport;
 use App\Support\SendPulse\SendPulseApiClient;
 use Illuminate\Contracts\Mail\Factory as MailFactory;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -187,6 +190,60 @@ class SendPulseMailTransportTest extends TestCase
                 && $request->hasHeader('Authorization', 'Bearer queued-api-key-b')
                 && ! $request->hasHeader('Authorization', 'Bearer queued-api-key-a');
         });
+        Http::assertSentCount(1);
+    }
+
+    public function test_resolver_records_sendpulse_as_the_actual_transport(): void
+    {
+        Http::fake([
+            'https://api.sendpulse.com/smtp/emails' => Http::response([
+                'result' => true,
+                'id' => 'tracked-sendpulse-id',
+            ]),
+        ]);
+        IntegrationSetting::factory()->create([
+            'provider' => IntegrationProvider::MailDelivery->value,
+            'category' => IntegrationCategory::Email->value,
+            'is_enabled' => true,
+            'credentials' => $this->mailDeliveryCredentials('tracked-api-key'),
+        ]);
+        $delivery = EmailDelivery::factory()->create();
+        $email = $this->email();
+        $email->getHeaders()->addTextHeader(TrackedMailTransport::DeliveryIdHeader, (string) $delivery->id);
+
+        app(MailDeliveryTransportResolver::class)->resolve()->send($email);
+
+        $delivery->refresh();
+        $this->assertSame('sendpulse_api', $delivery->actual_engine);
+        $this->assertFalse($delivery->fallback_used);
+        $this->assertSame('tracked-sendpulse-id', $delivery->provider_message_id);
+        Http::assertSentCount(1);
+    }
+
+    public function test_resolver_records_log_fallback_after_sendpulse_rejection(): void
+    {
+        Http::fake([
+            'https://api.sendpulse.com/smtp/emails' => Http::response([
+                'message' => 'Sender rejected.',
+            ], 422),
+        ]);
+        IntegrationSetting::factory()->create([
+            'provider' => IntegrationProvider::MailDelivery->value,
+            'category' => IntegrationCategory::Email->value,
+            'is_enabled' => true,
+            'credentials' => $this->mailDeliveryCredentials('fallback-api-key'),
+        ]);
+        $delivery = EmailDelivery::factory()->create();
+        $email = $this->email();
+        $email->getHeaders()->addTextHeader(TrackedMailTransport::DeliveryIdHeader, (string) $delivery->id);
+
+        app(MailDeliveryTransportResolver::class)->resolve()->send($email);
+
+        $delivery->refresh();
+        $this->assertSame('log', $delivery->actual_engine);
+        $this->assertTrue($delivery->fallback_used);
+        $this->assertNotNull($delivery->provider_message_id);
+        $this->assertStringContainsString('Sender rejected.', $delivery->last_error);
         Http::assertSentCount(1);
     }
 

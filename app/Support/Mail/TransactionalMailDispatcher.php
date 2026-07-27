@@ -5,6 +5,7 @@ namespace App\Support\Mail;
 use App\Enums\AccountRole;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\CustomerPurchaseStatus;
+use App\Enums\EmailScenario;
 use App\Mail\TransactionalMail;
 use App\Models\Account;
 use App\Models\AccountSubscription;
@@ -27,6 +28,8 @@ class TransactionalMailDispatcher
 {
     public function __construct(
         private readonly MailDeliverySettingsResolver $settingsResolver,
+        private readonly EmailScenarioSettings $scenarioSettings,
+        private readonly EmailDeliveryRecorder $deliveryRecorder,
     ) {}
 
     public function customerClassPassIssued(CustomerClassPass $classPass): void
@@ -53,9 +56,10 @@ class TransactionalMailDispatcher
         $this->sendToCustomer(
             $classPass->customer,
             $classPass->account,
+            EmailScenario::CustomerClassPassIssued,
             new TransactionalMail(
-                subjectKey: 'app.mail_subject_customer_class_pass_issued',
-                contentView: 'mail.content.customer-class-pass-issued',
+                subjectKey: EmailScenario::CustomerClassPassIssued->subjectKey(),
+                contentView: EmailScenario::CustomerClassPassIssued->contentView(),
                 data: $data,
                 subjectParameters: ['pass' => $classPass->plan_name, 'studio' => $classPass->account->name],
             ),
@@ -83,9 +87,10 @@ class TransactionalMailDispatcher
         $this->sendToCustomer(
             $purchase->customer,
             $purchase->account,
+            EmailScenario::CustomerPurchaseFailed,
             new TransactionalMail(
-                subjectKey: 'app.mail_subject_customer_purchase_failed',
-                contentView: 'mail.content.customer-purchase-failed',
+                subjectKey: EmailScenario::CustomerPurchaseFailed->subjectKey(),
+                contentView: EmailScenario::CustomerPurchaseFailed->contentView(),
                 data: $data,
                 subjectParameters: ['pass' => $purchase->plan_name, 'studio' => $purchase->account->name],
             ),
@@ -117,9 +122,10 @@ class TransactionalMailDispatcher
         $this->sendToCustomer(
             $booking->customer,
             $booking->account,
+            EmailScenario::BookingCreated,
             new TransactionalMail(
-                subjectKey: 'app.mail_subject_booking_created',
-                contentView: 'mail.content.booking-created',
+                subjectKey: EmailScenario::BookingCreated->subjectKey(),
+                contentView: EmailScenario::BookingCreated->contentView(),
                 data: $data,
                 subjectParameters: ['class' => $booking->scheduledClass->title, 'studio' => $booking->account->name],
             ),
@@ -151,9 +157,10 @@ class TransactionalMailDispatcher
         $this->sendToCustomer(
             $booking->customer,
             $booking->account,
+            EmailScenario::BookingCancelled,
             new TransactionalMail(
-                subjectKey: 'app.mail_subject_booking_cancelled',
-                contentView: 'mail.content.booking-cancelled',
+                subjectKey: EmailScenario::BookingCancelled->subjectKey(),
+                contentView: EmailScenario::BookingCancelled->contentView(),
                 data: $data,
                 subjectParameters: ['class' => $booking->scheduledClass->title, 'studio' => $booking->account->name],
             ),
@@ -187,9 +194,10 @@ class TransactionalMailDispatcher
                 $this->sendToCustomer(
                     $customer,
                     $cancellation->account,
+                    EmailScenario::ScheduledClassCancelled,
                     new TransactionalMail(
-                        subjectKey: 'app.mail_subject_scheduled_class_cancelled',
-                        contentView: 'mail.content.scheduled-class-cancelled',
+                        subjectKey: EmailScenario::ScheduledClassCancelled->subjectKey(),
+                        contentView: EmailScenario::ScheduledClassCancelled->contentView(),
                         data: $data,
                         subjectParameters: ['class' => $cancellation->scheduledClass->title, 'studio' => $cancellation->account->name],
                     ),
@@ -224,9 +232,10 @@ class TransactionalMailDispatcher
                 $this->sendToCustomer(
                     $customer,
                     $cancellation->account,
+                    EmailScenario::ScheduledClassRestored,
                     new TransactionalMail(
-                        subjectKey: 'app.mail_subject_scheduled_class_restored',
-                        contentView: 'mail.content.scheduled-class-restored',
+                        subjectKey: EmailScenario::ScheduledClassRestored->subjectKey(),
+                        contentView: EmailScenario::ScheduledClassRestored->contentView(),
                         data: $data,
                         subjectParameters: ['class' => $cancellation->scheduledClass->title, 'studio' => $cancellation->account->name],
                     ),
@@ -273,9 +282,10 @@ class TransactionalMailDispatcher
         $this->sendToCustomer(
             $customer,
             $account,
+            EmailScenario::ClassPassAdjusted,
             new TransactionalMail(
-                subjectKey: 'app.mail_subject_class_pass_adjusted',
-                contentView: 'mail.content.class-pass-adjusted',
+                subjectKey: EmailScenario::ClassPassAdjusted->subjectKey(),
+                contentView: EmailScenario::ClassPassAdjusted->contentView(),
                 data: $data,
                 subjectParameters: ['pass' => $classPass->plan_name, 'studio' => $account->name],
             ),
@@ -290,12 +300,9 @@ class TransactionalMailDispatcher
             return;
         }
 
-        $subjectKey = $payment->status === AccountSubscriptionPaymentStatus::PaymentPaid
-            ? 'app.mail_subject_saas_payment_paid'
-            : 'app.mail_subject_saas_payment_failed';
-        $contentView = $payment->status === AccountSubscriptionPaymentStatus::PaymentPaid
-            ? 'mail.content.saas-payment-paid'
-            : 'mail.content.saas-payment-failed';
+        $scenario = $payment->status === AccountSubscriptionPaymentStatus::PaymentPaid
+            ? EmailScenario::SaasPaymentPaid
+            : EmailScenario::SaasPaymentFailed;
 
         $baseData = [
             ...$this->accountData($payment->account),
@@ -308,10 +315,10 @@ class TransactionalMailDispatcher
             'action_url' => route('dashboard.accounts.tariff-payments.show', $payment->account),
         ];
 
-        $this->sendToAccountOwners($payment->account, function (User $user) use ($baseData, $subjectKey, $contentView, $payment): TransactionalMail {
+        $this->sendToAccountOwners($payment->account, $scenario, function (User $user) use ($baseData, $scenario, $payment): TransactionalMail {
             return new TransactionalMail(
-                subjectKey: $subjectKey,
-                contentView: $contentView,
+                subjectKey: $scenario->subjectKey(),
+                contentView: $scenario->contentView(),
                 data: [
                     ...$baseData,
                     'recipient_name' => $this->recipientName($user->name),
@@ -331,15 +338,17 @@ class TransactionalMailDispatcher
 
         $baseData = [
             ...$this->accountData($subscription->account),
-            'plan_name' => $parameters['plan'] ?? $subscription->plan?->name,
+            'plan_name' => $subscription->plan?->name,
             'period_ends_at' => $this->formatDate($subscription->ends_at, $subscription->account),
             'action_url' => route('dashboard.accounts.tariff-payments.show', $subscription->account),
         ];
 
-        $this->sendToAccountOwners($subscription->account, function (User $user) use ($baseData, $subscription): TransactionalMail {
+        $scenario = EmailScenario::SaasSubscriptionExpired;
+
+        $this->sendToAccountOwners($subscription->account, $scenario, function (User $user) use ($baseData, $scenario, $subscription): TransactionalMail {
             return new TransactionalMail(
-                subjectKey: 'app.mail_subject_saas_subscription_expired',
-                contentView: 'mail.content.saas-subscription-expired',
+                subjectKey: $scenario->subjectKey(),
+                contentView: $scenario->contentView(),
                 data: [
                     ...$baseData,
                     'recipient_name' => $this->recipientName($user->name),
@@ -360,6 +369,7 @@ class TransactionalMailDispatcher
             return;
         }
 
+        $scenario = EmailScenario::fromLifecycleType($type);
         $baseData = [
             ...$this->accountData($subscription->account),
             'notice_type' => $type,
@@ -368,10 +378,10 @@ class TransactionalMailDispatcher
             'action_url' => route('dashboard.accounts.tariff-payments.show', $subscription->account),
         ];
 
-        $this->sendToAccountOwners($subscription->account, function (User $user) use ($baseData, $subscription, $type): TransactionalMail {
+        $this->sendToAccountOwners($subscription->account, $scenario, function (User $user) use ($baseData, $scenario, $subscription): TransactionalMail {
             return new TransactionalMail(
-                subjectKey: 'app.mail_subject_saas_'.$type,
-                contentView: 'mail.content.saas-lifecycle-notice',
+                subjectKey: $scenario->subjectKey(),
+                contentView: $scenario->contentView(),
                 data: [
                     ...$baseData,
                     'recipient_name' => $this->recipientName($user->name),
@@ -381,41 +391,57 @@ class TransactionalMailDispatcher
         });
     }
 
-    private function sendToCustomer(Customer $customer, Account $account, TransactionalMail $mail): void
-    {
+    private function sendToCustomer(
+        Customer $customer,
+        Account $account,
+        EmailScenario $scenario,
+        TransactionalMail $mail,
+    ): void {
         $this->sendToAddress(
             email: $customer->email,
             name: $customer->name,
             account: $account,
+            scenario: $scenario,
             mail: $mail,
             locale: $customer->default_language ?: $account->default_language,
+            customer: $customer,
         );
     }
 
     /**
      * @param  callable(User): TransactionalMail  $mailFactory
      */
-    private function sendToAccountOwners(Account $account, callable $mailFactory): void
+    private function sendToAccountOwners(Account $account, EmailScenario $scenario, callable $mailFactory): void
     {
         $account->users()
             ->wherePivot('role', AccountRole::Owner->value)
             ->get()
             ->filter(fn (User $user): bool => filled($user->email))
             ->unique(fn (User $user): string => mb_strtolower($user->email))
-            ->each(function (User $user) use ($account, $mailFactory): void {
+            ->each(function (User $user) use ($account, $scenario, $mailFactory): void {
                 $this->sendToAddress(
                     email: $user->email,
                     name: $user->name,
                     account: $account,
+                    scenario: $scenario,
                     mail: $mailFactory($user),
                     locale: $account->default_language,
+                    user: $user,
                 );
             });
     }
 
-    private function sendToAddress(?string $email, ?string $name, Account $account, TransactionalMail $mail, ?string $locale = null): void
-    {
-        if ($account->isReadOnlyDemo()) {
+    private function sendToAddress(
+        ?string $email,
+        ?string $name,
+        Account $account,
+        EmailScenario $scenario,
+        TransactionalMail $mail,
+        ?string $locale = null,
+        ?Customer $customer = null,
+        ?User $user = null,
+    ): void {
+        if ($account->isReadOnlyDemo() || ! $this->scenarioSettings->isEnabled($scenario)) {
             return;
         }
 
@@ -426,10 +452,23 @@ class TransactionalMailDispatcher
         }
 
         $settings = $this->settingsResolver->resolve();
+        $locale = $this->locale($locale ?: $account->default_language);
+        $delivery = $this->deliveryRecorder->createPending(
+            account: $account,
+            customer: $customer,
+            user: $user,
+            scenario: $scenario,
+            email: $email,
+            name: $name,
+            locale: $locale,
+            mail: $mail,
+            settings: $settings,
+        );
 
         $mail
             ->from($settings->fromEmail, $settings->fromName)
-            ->locale($this->locale($locale ?: $account->default_language));
+            ->locale($locale)
+            ->forEmailDelivery($delivery->id);
 
         Mail::mailer($settings->mailer)->to($email, $name ?: $email)->send($mail);
     }

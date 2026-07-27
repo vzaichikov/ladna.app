@@ -322,6 +322,12 @@
             'href' => route('platform.integrations.index'),
             'active' => request()->routeIs('platform.integrations.*'),
         ],
+        [
+            'label' => __('app.email_scenarios'),
+            'icon' => 'mail',
+            'href' => route('platform.email-scenarios.index'),
+            'active' => request()->routeIs('platform.email-scenarios.*'),
+        ],
     ] : [];
 
     $platformLogsNav = $isPlatformAdmin ? [
@@ -336,6 +342,12 @@
             'icon' => 'bell',
             'href' => route('platform.customer-notifications.index'),
             'active' => request()->routeIs('platform.customer-notifications.*'),
+        ],
+        [
+            'label' => __('app.email_deliveries'),
+            'icon' => 'mail-check',
+            'href' => route('platform.email-deliveries.index'),
+            'active' => request()->routeIs('platform.email-deliveries.*'),
         ],
         [
             'label' => __('app.scheduled_tasks'),
@@ -550,7 +562,7 @@
                 </div>
             </aside>
 
-            <div class="min-h-screen flex-1 lg:pl-72">
+            <div class="min-h-screen min-w-0 flex-1 lg:pl-72">
                 <x-ui.pwa-install-button />
 
                 <header class="sticky top-0 z-20 border-b border-stone-200/80 bg-white/90 backdrop-blur">

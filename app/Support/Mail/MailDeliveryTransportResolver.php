@@ -18,6 +18,7 @@ class MailDeliveryTransportResolver
     public function __construct(
         private readonly MailManager $mailManager,
         private readonly LoggerInterface $logger,
+        private readonly EmailDeliveryRecorder $recorder,
     ) {}
 
     public function resolve(): TransportInterface
@@ -31,7 +32,7 @@ class MailDeliveryTransportResolver
             ! $setting?->is_enabled
             || ! IntegrationCatalog::hasRequiredCredentials(IntegrationProvider::MailDelivery->value, $credentials)
         ) {
-            return $this->localTransport(MailEngine::Log->value);
+            return $this->trackedLocalTransport(MailEngine::Log);
         }
 
         $engine = MailEngine::tryFrom((string) ($credentials['engine'] ?? null)) ?? MailEngine::Log;
@@ -39,6 +40,7 @@ class MailDeliveryTransportResolver
         if ($engine === MailEngine::SendpulseApi) {
             return $this->withFallback(
                 new SendPulseApiTransport(new SendPulseApiClient((string) $credentials['sendpulse_api_key'])),
+                MailEngine::SendpulseApi,
                 $credentials,
             );
         }
@@ -46,22 +48,29 @@ class MailDeliveryTransportResolver
         if (in_array($engine, [MailEngine::SendpulseSmtp, MailEngine::Smtp], true)) {
             return $this->withFallback(
                 $this->mailManager->createSymfonyTransport($this->smtpConfig($credentials)),
+                $engine,
                 $credentials,
             );
         }
 
-        return $this->localTransport($engine->value);
+        return $this->trackedLocalTransport($engine);
     }
 
     /**
      * @param  array<string, mixed>  $credentials
      */
-    private function withFallback(TransportInterface $primary, array $credentials): TransportInterface
+    private function withFallback(TransportInterface $primary, MailEngine $engine, array $credentials): TransportInterface
     {
+        $fallbackEngine = MailEngine::tryFrom((string) ($credentials['fallback_engine'] ?? null));
+
+        if (! $fallbackEngine || ! in_array($fallbackEngine->value, MailEngine::localFallbackValues(), true)) {
+            $fallbackEngine = MailEngine::Log;
+        }
+
         return new FailoverTransport(
             [
-                $primary,
-                $this->localTransport((string) ($credentials['fallback_engine'] ?? MailEngine::Log->value)),
+                new TrackedMailTransport($primary, $this->recorder, $engine->value, false),
+                $this->trackedLocalTransport($fallbackEngine, true),
             ],
             60,
             $this->logger,
@@ -89,13 +98,18 @@ class MailDeliveryTransportResolver
         ];
     }
 
-    private function localTransport(string $engine): TransportInterface
+    private function trackedLocalTransport(MailEngine $engine, bool $fallback = false): TransportInterface
     {
         $config = match ($engine) {
-            MailEngine::Sendmail->value => Arr::except(config('mail.mailers.sendmail', ['transport' => 'sendmail']), ['url']),
+            MailEngine::Sendmail => Arr::except(config('mail.mailers.sendmail', ['transport' => 'sendmail']), ['url']),
             default => Arr::except(config('mail.mailers.log', ['transport' => 'log']), ['url']),
         };
 
-        return $this->mailManager->createSymfonyTransport($config);
+        return new TrackedMailTransport(
+            $this->mailManager->createSymfonyTransport($config),
+            $this->recorder,
+            $engine->value,
+            $fallback,
+        );
     }
 }

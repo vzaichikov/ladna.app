@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\EmailScenario;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\SubscriptionBillingMode;
@@ -10,6 +11,7 @@ use App\Enums\SubscriptionStatus;
 use App\Mail\TransactionalMail;
 use App\Models\Account;
 use App\Models\AccountSubscription;
+use App\Models\EmailScenarioSetting;
 use App\Models\IntegrationSetting;
 use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionPriceVersion;
@@ -86,6 +88,62 @@ class BillingLifecycleNotificationTest extends TestCase
         ]);
         Mail::assertQueued(TransactionalMail::class, fn (TransactionalMail $mail): bool => $mail->subjectKey === 'app.mail_subject_saas_price_change'
             && $mail->hasTo('price-owner@example.com'));
+    }
+
+    public function test_disabled_billing_notice_is_terminally_suppressed_for_its_idempotency_record(): void
+    {
+        Mail::fake();
+        $this->enableMailDelivery();
+        EmailScenarioSetting::factory()->create([
+            'scenario' => EmailScenario::SaasTrialEnding7,
+            'is_enabled' => false,
+        ]);
+        $account = Account::factory()->create(['default_language' => 'en']);
+        $owner = User::factory()->create(['email' => 'suppressed-owner@example.com']);
+        $account->addOwner($owner);
+        $plan = SubscriptionPlan::factory()->create(['name' => 'Ladna']);
+        $scheduledFor = now()->startOfMinute()->addDays(7);
+        $subscription = AccountSubscription::factory()->for($account)->for($plan, 'plan')->create([
+            'billing_mode' => SubscriptionBillingMode::LocationV2,
+            'status' => SubscriptionStatus::Trialing,
+            'trial_ends_at' => $scheduledFor,
+            'ends_at' => $scheduledFor,
+        ]);
+        $notifications = app(SendBillingLifecycleNotification::class);
+
+        $notification = $notifications->execute(
+            $subscription,
+            'trial_ending_7',
+            $scheduledFor,
+            ['date' => $scheduledFor->format('d.m.Y')],
+        );
+
+        $this->assertNotNull($notification->suppressed_at);
+        $this->assertNull($notification->sent_at);
+        Mail::assertNothingQueued();
+        $this->assertDatabaseCount('email_deliveries', 0);
+
+        EmailScenarioSetting::query()
+            ->where('scenario', EmailScenario::SaasTrialEnding7->value)
+            ->update(['is_enabled' => true]);
+
+        $notifications->execute(
+            $subscription,
+            'trial_ending_7',
+            $scheduledFor,
+            ['date' => $scheduledFor->format('d.m.Y')],
+        );
+        Mail::assertNothingQueued();
+
+        $notifications->execute(
+            $subscription,
+            'trial_ending_7',
+            $scheduledFor->copy()->addMinute(),
+            ['date' => $scheduledFor->format('d.m.Y')],
+        );
+
+        Mail::assertQueuedCount(1);
+        $this->assertDatabaseCount('account_subscription_notifications', 2);
     }
 
     private function enableMailDelivery(): void

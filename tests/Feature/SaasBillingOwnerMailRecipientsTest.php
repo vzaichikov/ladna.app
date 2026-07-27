@@ -82,6 +82,7 @@ class SaasBillingOwnerMailRecipientsTest extends TestCase
 
         Mail::assertQueuedCount(1);
         Mail::assertQueued(TransactionalMail::class, fn (TransactionalMail $mail): bool => $mail->subjectKey === 'app.mail_subject_saas_subscription_expired'
+            && ($mail->data['plan_name'] ?? null) === 'Ladna Studio'
             && $mail->hasTo('owner@example.com')
             && ! $mail->hasTo('admin@example.com')
             && ! $mail->hasTo('trainer@example.com'));

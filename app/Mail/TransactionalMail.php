@@ -2,17 +2,23 @@
 
 namespace App\Mail;
 
+use App\Support\Mail\EmailDeliveryRecorder;
+use App\Support\Mail\TrackedMailTransport;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 class TransactionalMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
+
+    public ?int $emailDeliveryId = null;
 
     /**
      * @param  array<string, mixed>  $data
@@ -53,6 +59,35 @@ class TransactionalMail extends Mailable implements ShouldQueue
                 'supportUrl' => $this->data['support_url'] ?? null,
             ],
         );
+    }
+
+    public function headers(): Headers
+    {
+        return new Headers(
+            text: $this->emailDeliveryId
+                ? [TrackedMailTransport::DeliveryIdHeader => (string) $this->emailDeliveryId]
+                : [],
+        );
+    }
+
+    public function forEmailDelivery(int $deliveryId): static
+    {
+        $this->emailDeliveryId = $deliveryId;
+
+        return $this;
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        if (! $this->emailDeliveryId) {
+            return;
+        }
+
+        try {
+            app(EmailDeliveryRecorder::class)->markFailed($this->emailDeliveryId, $exception);
+        } catch (Throwable $auditException) {
+            report($auditException);
+        }
     }
 
     /**

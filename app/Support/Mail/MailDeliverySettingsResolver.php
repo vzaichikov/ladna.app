@@ -45,7 +45,7 @@ class MailDeliverySettingsResolver
         $mailer = (string) config('mail.default', MailEngine::Log->value);
 
         return new MailDeliverySettings(
-            mailer: $mailer,
+            mailer: self::MailerName,
             fromEmail: (string) config('mail.from.address', 'hello@example.com'),
             fromName: (string) config('mail.from.name', config('app.name', 'Ladna')),
             engine: MailEngine::tryFrom($mailer) ?? MailEngine::Log,
