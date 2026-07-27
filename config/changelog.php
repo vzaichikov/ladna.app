@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.101.1',
+                'date' => '2026-07-27',
+                'title' => 'Safer and more reliable frontend updates',
+                'items' => ['Ladna browser assets are now delivered in smaller, separately cached bundles so updated screens load reliably while repeat visits can reuse unchanged interface resources.', 'Frontend build dependencies received the latest security fixes.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.101.0',
                 'date' => '2026-07-27',
                 'title' => 'Optional booking without leaving the schedule',
@@ -912,6 +919,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.101.1',
+                'date' => '2026-07-27',
+                'title' => 'Безпечніші та надійніші оновлення інтерфейсу',
+                'items' => ['Браузерні ресурси Ladna тепер завантажуються меншими окремими пакетами з кешуванням, тому оновлені екрани відкриваються надійно, а незмінені ресурси інтерфейсу повторно використовуються під час наступних відвідувань.', 'Залежності для складання інтерфейсу отримали актуальні виправлення безпеки.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.101.0',
                 'date' => '2026-07-27',
