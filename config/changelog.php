@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.100.0',
+                'date' => '2026-07-27',
+                'title' => 'Clearer customer booking history',
+                'items' => ['The customer cabinet now opens with upcoming classes ordered nearest first. Cancelled, attended, no-show, past, and studio-cancelled records have moved to a separate Class history tab.', 'Class history is ordered newest first and paginated by ten records, with Ukrainian and English navigation. Each row independently shows the truthful booking state and class-pass operation, including returned reservations and their pass codes.', 'Payment warnings now appear only for real unpaid room-rental or add-on charges, while uncovered group bookings keep their separate pass warning. Admin class cards also distinguish reserved, used, and returned pass operations by color.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.99.0',
                 'date' => '2026-07-26',
                 'title' => 'Cancellation alerts for trainers and customers',
@@ -898,6 +905,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.100.0',
+                'date' => '2026-07-27',
+                'title' => 'Зрозуміліша історія записів клієнта',
+                'items' => ['Кабінет клієнта тепер одразу показує майбутні заняття від найближчого. Скасовані, відвідані, пропущені, минулі та скасовані студією записи перенесено в окрему вкладку Історія занять.', 'Історія впорядкована від найновіших записів і розбита на сторінки по десять занять з українською та англійською навігацією. Кожен рядок незалежно показує правдивий статус запису й операцію з абонементом, зокрема повернення заняття та код абонемента.', 'Попередження про оплату тепер зʼявляється лише для справді неоплаченої оренди залу або доплати, а груповий запис без абонемента зберігає окреме пояснення. В адмінці кольори також розрізняють резерв, списання та повернення заняття.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.99.0',
                 'date' => '2026-07-26',

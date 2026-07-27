@@ -14,10 +14,8 @@
         $activePasses = $passes
             ->filter(fn ($pass) => $pass->is_active && $pass->status === \App\Enums\CustomerClassPassStatus::Active)
             ->values();
-        $bookings = $customer->classBookings
-            ->sortByDesc(fn ($booking) => $booking->scheduledClass?->starts_at?->timestamp ?? $booking->created_at?->timestamp ?? 0);
-        $dashboardTab = request()->query('tab') === 'passes' ? 'passes' : 'bookings';
         $bookingsTabUrl = route('customer.dashboard', ['accountSlug' => $account->slug]);
+        $historyTabUrl = route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'history']);
         $passesTabUrl = route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'passes']);
         $cancellationWindow = app(\App\Support\ClassBookingCancellationWindow::class);
         $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
@@ -36,6 +34,21 @@
 
             return \App\Support\DateTimePresenter::formatInTimezone($date, $timezone) ?? __('app.not_set');
         };
+        $bookingPanel = $dashboardTab === 'history'
+            ? [
+                'id' => 'history',
+                'title' => __('app.customer_dashboard_booking_history'),
+                'empty' => __('app.customer_dashboard_no_booking_history'),
+                'bookings' => $bookingHistory,
+                'count' => $bookingHistoryCount,
+            ]
+            : [
+                'id' => 'upcoming',
+                'title' => __('app.customer_dashboard_upcoming_classes'),
+                'empty' => __('app.customer_dashboard_no_upcoming_classes'),
+                'bookings' => $upcomingBookings,
+                'count' => $upcomingBookings->count(),
+            ];
     @endphp
 
     <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8">
@@ -89,7 +102,7 @@
             @endif
 
             <section class="mt-6 grid gap-3 md:grid-cols-3">
-                <x-ui.metric :label="__('app.bookings')" :value="$bookings->count()" icon="schedule" accent="brand" :mobile-inline="true" />
+                <x-ui.metric :label="__('app.bookings')" :value="$bookingsCount" icon="schedule" accent="brand" :mobile-inline="true" />
                 <x-ui.metric :label="__('app.customer_remaining_sessions')" :value="$activePasses->sum(fn ($pass) => max(0, $pass->remainingSessionsCount()))" icon="check-circle" accent="emerald" :mobile-inline="true" />
                 <x-ui.metric :label="__('app.active_class_passes_short')" :value="$activePasses->count()" icon="class-pass-plans" :mobile-inline="true" />
             </section>
@@ -107,7 +120,19 @@
                             tabindex="{{ $dashboardTab === 'bookings' ? '0' : '-1' }}"
                         >
                             {{ __('app.customer_dashboard_tab_bookings') }}
-                            <span class="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-xs text-slate-600">{{ $bookings->count() }}</span>
+                            <span class="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-xs text-slate-600">{{ $upcomingBookings->count() }}</span>
+                        </a>
+                        <a
+                            href="{{ $historyTabUrl }}"
+                            id="customer-dashboard-tab-history"
+                            class="crm-tab justify-start sm:justify-center"
+                            role="tab"
+                            aria-controls="customer-dashboard-panel-history"
+                            aria-selected="{{ $dashboardTab === 'history' ? 'true' : 'false' }}"
+                            tabindex="{{ $dashboardTab === 'history' ? '0' : '-1' }}"
+                        >
+                            {{ __('app.customer_dashboard_booking_history') }}
+                            <span class="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-xs text-slate-600">{{ $bookingHistoryCount }}</span>
                         </a>
                         <a
                             href="{{ $passesTabUrl }}"
@@ -124,70 +149,115 @@
                     </div>
                 </div>
 
-                @if ($dashboardTab === 'bookings')
-                    <div id="customer-dashboard-panel-bookings" role="tabpanel" aria-labelledby="customer-dashboard-tab-bookings">
-                        <div class="border-b border-stone-100 px-5 py-4">
-                            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_dashboard_tab_bookings') }}</h2>
-                        </div>
-                        <div class="divide-y divide-stone-100">
-                            @forelse ($bookings as $booking)
-                                @php
-                                    $bookingCancellationLocked = $cancellationWindow->isLockedForBooking($booking);
-                                    $hasActivePassReservation = $booking->classPassReservation?->customerClassPass
-                                        && in_array($booking->classPassReservation->status->value, ['reserved', 'used'], true);
-                                    $anyTimeAddonAmountCents = $hasActivePassReservation && $booking->scheduledClass
-                                        ? $booking->classPassReservation->customerClassPass->anyTimeAddonAmountCentsFor($booking->scheduledClass)
-                                        : null;
-                                    $hasAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
-                                    $bookingNeedsClassPassAlert = ! $booking->skip_class_pass_reservation
-                                        && ! $hasActivePassReservation
-                                        && in_array($booking->status->value, ['booked', 'attended', 'no_show'], true)
-                                        && $booking->scheduledClass?->status !== \App\Enums\ScheduledClassStatus::Cancelled;
-                                    $canCancelBooking = $booking->status === \App\Enums\ClassBookingStatus::Booked
-                                        && $booking->scheduledClass?->starts_at?->greaterThan(now())
-                                        && ! $bookingCancellationLocked;
-                                @endphp
-                                <article class="p-5 text-sm">
-                                    <div class="font-semibold text-slate-950">{{ $booking->scheduledClass?->title ?? $booking->scheduledClass?->classType?->name ?? __('app.class_type') }}</div>
-                                    <div class="mt-1 text-slate-500">{{ $formatBookingDate($booking) }}</div>
-                                    <div class="mt-2 flex flex-wrap gap-2">
-                                        <span class="crm-status-muted">{{ __('app.'.$booking->status->value) }}</span>
-                                        @if ($hasActivePassReservation)
-                                            <span class="crm-status-muted">{{ $booking->classPassReservation->customerClassPass->code }}</span>
-                                        @endif
-                                        @if ($booking->status === \App\Enums\ClassBookingStatus::Booked && $bookingCancellationLocked)
-                                            <span class="crm-status-warning">{{ __('app.booking_cancellation_cutoff_marker') }}</span>
-                                        @endif
-                                    </div>
-                                    @if ($bookingNeedsClassPassAlert)
-                                        <div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                                            <x-ui.icon name="triangle-alert" class="mt-0.5 h-4 w-4 shrink-0" />
-                                            <span>{{ __('app.customer_booking_without_class_pass_alert') }}</span>
+                @if ($dashboardTab !== 'passes')
+                    <div
+                        id="customer-dashboard-panel-{{ $bookingPanel['id'] === 'upcoming' ? 'bookings' : 'history' }}"
+                        role="tabpanel"
+                        aria-labelledby="customer-dashboard-tab-{{ $bookingPanel['id'] === 'upcoming' ? 'bookings' : 'history' }}"
+                    >
+                        <section
+                            aria-labelledby="customer-dashboard-{{ $bookingPanel['id'] }}-title"
+                            data-booking-section="{{ $bookingPanel['id'] }}"
+                        >
+                            <div class="flex items-center justify-between gap-3 border-b border-stone-100 px-5 py-4">
+                                <h2 id="customer-dashboard-{{ $bookingPanel['id'] }}-title" class="text-lg font-semibold text-slate-950">
+                                    {{ $bookingPanel['title'] }}
+                                </h2>
+                                <span class="rounded-md bg-stone-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                                    {{ $bookingPanel['count'] }}
+                                </span>
+                            </div>
+                            <div class="divide-y divide-stone-100">
+                                @forelse ($bookingPanel['bookings'] as $booking)
+                                    @php
+                                        $bookingCancellationLocked = $cancellationWindow->isLockedForBooking($booking);
+                                        $bookingIsFuture = $booking->scheduledClass?->starts_at?->greaterThan(now()) ?? false;
+                                        $passReservation = $booking->classPassReservation;
+                                        $customerClassPass = $passReservation?->customerClassPass;
+                                        $hasActivePassReservation = $customerClassPass
+                                            && in_array($passReservation->status->value, ['reserved', 'used'], true);
+                                        $anyTimeAddonAmountCents = $hasActivePassReservation && $booking->scheduledClass
+                                            ? $customerClassPass->anyTimeAddonAmountCentsFor($booking->scheduledClass)
+                                            : null;
+                                        $hasAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
+                                        $manualPaymentDueKind = $booking->manualCashPaymentDueKind($booking->scheduledClass);
+                                        $bookingNeedsClassPassAlert = ! $booking->skip_class_pass_reservation
+                                            && ! $hasActivePassReservation
+                                            && $booking->scheduledClass?->classType?->schedule_kind === \App\Enums\ScheduleKind::GroupClass
+                                            && in_array($booking->status->value, ['booked', 'attended', 'no_show'], true)
+                                            && $booking->scheduledClass?->status !== \App\Enums\ScheduledClassStatus::Cancelled;
+                                        $canCancelBooking = $booking->status === \App\Enums\ClassBookingStatus::Booked
+                                            && $bookingIsFuture
+                                            && ! $bookingCancellationLocked;
+                                        $showCancellationLocked = $booking->status === \App\Enums\ClassBookingStatus::Booked
+                                            && $bookingIsFuture
+                                            && $bookingCancellationLocked;
+                                        $bookingStatusClass = match ($booking->status) {
+                                            \App\Enums\ClassBookingStatus::Attended => 'crm-status-active',
+                                            \App\Enums\ClassBookingStatus::Cancelled => 'crm-status-muted',
+                                            \App\Enums\ClassBookingStatus::NoShow => 'crm-status-danger',
+                                            default => 'crm-status-scheduled',
+                                        };
+                                        $passReservationStatusClass = match ($passReservation?->status) {
+                                            \App\Enums\CustomerClassPassReservationStatus::Used => 'crm-status-active',
+                                            \App\Enums\CustomerClassPassReservationStatus::Released => 'crm-status-muted',
+                                            default => 'crm-status-scheduled',
+                                        };
+                                    @endphp
+                                    <article class="p-5 text-sm" data-customer-booking="{{ $booking->id }}">
+                                        <div class="font-semibold text-slate-950">{{ $booking->scheduledClass?->title ?? $booking->scheduledClass?->classType?->name ?? __('app.class_type') }}</div>
+                                        <div class="mt-1 text-slate-500">{{ $formatBookingDate($booking) }}</div>
+                                        <div class="mt-2 flex flex-wrap gap-2">
+                                            <span class="{{ $bookingStatusClass }}">{{ __('app.'.$booking->status->value) }}</span>
+                                            @if ($customerClassPass)
+                                                <span class="crm-status-muted">{{ $customerClassPass->code }}</span>
+                                                <span class="{{ $passReservationStatusClass }}">{{ __('app.'.$passReservation->status->value) }}</span>
+                                            @endif
+                                            @if ($showCancellationLocked)
+                                                <span class="crm-status-warning">{{ __('app.booking_cancellation_cutoff_marker') }}</span>
+                                            @endif
                                         </div>
-                                    @elseif ($hasAnyTimeAddonPayment)
-                                        <div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                                            <x-ui.icon name="triangle-alert" class="mt-0.5 h-4 w-4 shrink-0" />
-                                            <span>
-                                                @if ($booking->manualCashPayment)
-                                                    {{ __('app.customer_booking_any_time_addon_paid', ['amount' => \App\Support\MoneyFormatter::format($booking->manualCashPayment->amount_cents, $booking->manualCashPayment->currency)]) }}
-                                                @else
-                                                    {{ __('app.customer_booking_any_time_addon_due', ['amount' => \App\Support\MoneyFormatter::format($anyTimeAddonAmountCents, $booking->classPassReservation->customerClassPass->currency)]) }}
-                                                @endif
-                                            </span>
-                                        </div>
-                                    @endif
-                                    @if ($canCancelBooking)
-                                        <form method="POST" action="{{ route('customer.bookings.cancel', [$account->slug, $booking]) }}" class="mt-3">
-                                            @csrf
-                                            @method('PATCH')
-                                            <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.cancel_booking') }}</x-ui.button>
-                                        </form>
-                                    @endif
-                                </article>
-                            @empty
-                                <x-ui.empty-state :title="__('app.no_bookings')" icon="schedule" class="m-5" />
-                            @endforelse
-                        </div>
+                                        @if ($manualPaymentDueKind)
+                                            <div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                                <x-ui.icon name="triangle-alert" class="mt-0.5 h-4 w-4 shrink-0" />
+                                                <span class="grid gap-0.5">
+                                                    <span>{{ __('app.unpaid_class_booking_payment_alert') }}</span>
+                                                    @if ($manualPaymentDueKind === \App\Models\ClassBooking::ManualPaymentDueAnyTimeAddon)
+                                                        <span class="font-medium">{{ __('app.customer_booking_any_time_addon_due', ['amount' => \App\Support\MoneyFormatter::format($anyTimeAddonAmountCents, $customerClassPass?->currency)]) }}</span>
+                                                    @elseif ($manualPaymentDueKind === \App\Models\ClassBooking::ManualPaymentDueRoomRental)
+                                                        <span class="font-medium">{{ __('app.unpaid_class_booking_payment_reason_room_rental') }}</span>
+                                                    @endif
+                                                </span>
+                                            </div>
+                                        @elseif ($bookingNeedsClassPassAlert)
+                                            <div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                                <x-ui.icon name="triangle-alert" class="mt-0.5 h-4 w-4 shrink-0" />
+                                                <span>{{ __('app.customer_booking_without_class_pass_alert') }}</span>
+                                            </div>
+                                        @elseif ($hasAnyTimeAddonPayment && $booking->manualCashPayment)
+                                            <div class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                                <x-ui.icon name="triangle-alert" class="mt-0.5 h-4 w-4 shrink-0" />
+                                                <span>{{ __('app.customer_booking_any_time_addon_paid', ['amount' => \App\Support\MoneyFormatter::format($booking->manualCashPayment->amount_cents, $booking->manualCashPayment->currency)]) }}</span>
+                                            </div>
+                                        @endif
+                                        @if ($canCancelBooking)
+                                            <form method="POST" action="{{ route('customer.bookings.cancel', [$account->slug, $booking]) }}" class="mt-3">
+                                                @csrf
+                                                @method('PATCH')
+                                                <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.cancel_booking') }}</x-ui.button>
+                                            </form>
+                                        @endif
+                                    </article>
+                                @empty
+                                    <x-ui.empty-state :title="$bookingPanel['empty']" icon="schedule" class="m-5" />
+                                @endforelse
+                            </div>
+                            @if ($dashboardTab === 'history' && $bookingHistory->hasPages())
+                                <div class="border-t border-stone-100 px-5 py-4">
+                                    {{ $bookingHistory->onEachSide(1)->links() }}
+                                </div>
+                            @endif
+                        </section>
                     </div>
                 @else
                     <div id="customer-dashboard-panel-passes" role="tabpanel" aria-labelledby="customer-dashboard-tab-passes">

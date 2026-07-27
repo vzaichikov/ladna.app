@@ -924,7 +924,7 @@ class CustomerBookingTest extends TestCase
             ->assertDontSee('2026-06-20 02:30');
 
         $this->actingAs($customer, 'customer')
-            ->get(route('customer.dashboard', $account->slug))
+            ->get(route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'history']))
             ->assertOk()
             ->assertSee('Timezone Visit Class')
             ->assertSee('2026-06-19 22:30')

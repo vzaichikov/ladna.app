@@ -378,6 +378,11 @@
                         default => 'crm-status-scheduled',
                     };
                     $reservedPass = $booking->classPassReservation?->customerClassPass;
+                    $passReservationStatusClass = match ($booking->classPassReservation?->status) {
+                        \App\Enums\CustomerClassPassReservationStatus::Used => 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                        \App\Enums\CustomerClassPassReservationStatus::Released => 'border-stone-200 bg-stone-50 text-slate-600',
+                        default => 'border-violet-crm-100 bg-violet-crm-50 text-brand-700',
+                    };
                     $hasActivePassReservation = $reservedPass
                         && in_array($booking->classPassReservation->status->value, ['reserved', 'used'], true);
                     $anyTimeAddonAmountCents = $hasActivePassReservation
@@ -410,8 +415,8 @@
                                 @endif
                             </div>
                             <div class="mt-1 text-slate-500">{{ $booking->customer->phone ?? $booking->customer->email ?? __('app.no_contact') }}</div>
-                            @if ($reservedPass && ($booking->classPassReservation->status->value !== 'released' || $isCancelledClass))
-                                <div class="mt-2 inline-flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+                            @if ($reservedPass)
+                                <div class="mt-2 inline-flex flex-wrap items-center gap-2 rounded-md border px-2 py-1 text-xs font-semibold {{ $passReservationStatusClass }}">
                                     <span>{{ $reservedPass->code }}</span>
                                     <span>{{ $reservedPass->remainingSessionsCount() }} {{ __('app.remaining_sessions_short') }}</span>
                                     <span>{{ __('app.'.$booking->classPassReservation->status->value) }}</span>

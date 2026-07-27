@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ClassBookingStatus;
+use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
+use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
@@ -16,6 +19,7 @@ use App\Models\ScheduledClass;
 use App\Support\MoneyFormatter;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class CustomerDashboardTest extends TestCase
@@ -230,6 +234,289 @@ class CustomerDashboardTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_dashboard_separates_upcoming_and_history_with_truthful_booking_and_pass_states(): void
+    {
+        app()->setLocale('uk');
+        Carbon::setTestNow(Carbon::parse('2026-07-10 12:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'slug' => 'customer-dashboard-booking-sections',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass,
+            'cancellation_cutoff_minutes' => 1440,
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+        $reservedPass = $this->classPass($account, $customer, ['code' => 'RESERVED-UX']);
+        $releasedPass = $this->classPass($account, $customer, ['code' => 'RELEASED-UX']);
+        $usedPass = $this->classPass($account, $customer, ['code' => 'USED-UX']);
+
+        $nearClass = $this->scheduledClass($account, $location, $room, $classType, 'Nearest upcoming', '2026-07-10 13:00:00');
+        $nearBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($nearClass, 'scheduledClass')
+            ->for($customer)
+            ->create();
+        CustomerClassPassReservation::factory()->create([
+            'account_id' => $account->id,
+            'customer_class_pass_id' => $reservedPass->id,
+            'class_booking_id' => $nearBooking->id,
+            'scheduled_class_id' => $nearClass->id,
+            'status' => CustomerClassPassReservationStatus::Reserved,
+        ]);
+
+        $farClass = $this->scheduledClass($account, $location, $room, $classType, 'Later upcoming', '2026-07-13 10:00:00');
+        $farBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($farClass, 'scheduledClass')
+            ->for($customer)
+            ->create();
+
+        $cancelledClass = $this->scheduledClass($account, $location, $room, $classType, 'Future cancellation', '2026-07-12 10:00:00');
+        $cancelledBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($cancelledClass, 'scheduledClass')
+            ->for($customer)
+            ->create(['status' => ClassBookingStatus::Cancelled]);
+        CustomerClassPassReservation::factory()->create([
+            'account_id' => $account->id,
+            'customer_class_pass_id' => $releasedPass->id,
+            'class_booking_id' => $cancelledBooking->id,
+            'scheduled_class_id' => $cancelledClass->id,
+            'status' => CustomerClassPassReservationStatus::Released,
+            'released_at' => Carbon::parse('2026-07-10 09:00:00', 'UTC'),
+        ]);
+
+        $pastClass = $this->scheduledClass($account, $location, $room, $classType, 'Past unmarked booking', '2026-07-09 10:00:00');
+        $pastBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($pastClass, 'scheduledClass')
+            ->for($customer)
+            ->create(['status' => ClassBookingStatus::Booked]);
+        CustomerClassPassReservation::factory()->create([
+            'account_id' => $account->id,
+            'customer_class_pass_id' => $usedPass->id,
+            'class_booking_id' => $pastBooking->id,
+            'scheduled_class_id' => $pastClass->id,
+            'status' => CustomerClassPassReservationStatus::Used,
+            'used_at' => $pastClass->starts_at,
+        ]);
+
+        $attendedClass = $this->scheduledClass($account, $location, $room, $classType, 'Attended booking', '2026-07-08 10:00:00');
+        $attendedBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($attendedClass, 'scheduledClass')
+            ->for($customer)
+            ->create(['status' => ClassBookingStatus::Attended]);
+
+        $noShowClass = $this->scheduledClass($account, $location, $room, $classType, 'No-show booking', '2026-07-07 10:00:00');
+        $noShowBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($noShowClass, 'scheduledClass')
+            ->for($customer)
+            ->create(['status' => ClassBookingStatus::NoShow]);
+
+        $response = $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', $account->slug));
+
+        $response
+            ->assertOk()
+            ->assertViewHas('upcomingBookings', fn ($bookings): bool => $bookings->pluck('id')->all() === [
+                $nearBooking->id,
+                $farBooking->id,
+            ])
+            ->assertViewHas('bookingHistory', null)
+            ->assertViewHas('bookingHistoryCount', 4)
+            ->assertSeeInOrder([
+                __('app.customer_dashboard_upcoming_classes'),
+                'Nearest upcoming',
+                'Later upcoming',
+            ], false)
+            ->assertDontSee('Future cancellation', false)
+            ->assertDontSee('Past unmarked booking', false)
+            ->assertSee('data-booking-section="upcoming"', false)
+            ->assertDontSee('data-booking-section="history"', false);
+
+        $nearCard = $this->bookingCardHtml($response, $nearBooking);
+        $this->assertStringContainsString('crm-status-scheduled">'.__('app.booked'), $nearCard);
+        $this->assertStringContainsString('RESERVED-UX', $nearCard);
+        $this->assertStringContainsString('crm-status-scheduled">'.__('app.reserved'), $nearCard);
+        $this->assertStringContainsString(__('app.booking_cancellation_cutoff_marker'), $nearCard);
+
+        $historyResponse = $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'history']));
+
+        $historyResponse
+            ->assertOk()
+            ->assertViewHas('dashboardTab', 'history')
+            ->assertViewHas('bookingHistory', fn ($bookings): bool => $bookings->total() === 4
+                && $bookings->getCollection()->pluck('id')->all() === [
+                    $cancelledBooking->id,
+                    $pastBooking->id,
+                    $attendedBooking->id,
+                    $noShowBooking->id,
+                ])
+            ->assertSeeInOrder([
+                __('app.customer_dashboard_booking_history'),
+                'Future cancellation',
+                'Past unmarked booking',
+                'Attended booking',
+                'No-show booking',
+            ], false)
+            ->assertDontSee('Nearest upcoming', false)
+            ->assertDontSee('Later upcoming', false)
+            ->assertSee('data-booking-section="history"', false)
+            ->assertDontSee('data-booking-section="upcoming"', false);
+
+        $cancelledCard = $this->bookingCardHtml($historyResponse, $cancelledBooking);
+        $this->assertStringContainsString('crm-status-muted">'.__('app.cancelled'), $cancelledCard);
+        $this->assertStringContainsString('RELEASED-UX', $cancelledCard);
+        $this->assertStringContainsString('crm-status-muted">'.__('app.released'), $cancelledCard);
+        $this->assertStringNotContainsString(__('app.booking_cancellation_cutoff_marker'), $cancelledCard);
+
+        $pastCard = $this->bookingCardHtml($historyResponse, $pastBooking);
+        $this->assertStringContainsString('crm-status-scheduled">'.__('app.booked'), $pastCard);
+        $this->assertStringContainsString('USED-UX', $pastCard);
+        $this->assertStringContainsString('crm-status-active">'.__('app.used'), $pastCard);
+        $this->assertStringNotContainsString(__('app.booking_cancellation_cutoff_marker'), $pastCard);
+
+        $this->assertStringContainsString('crm-status-active">'.__('app.attended'), $this->bookingCardHtml($historyResponse, $attendedBooking));
+        $this->assertStringContainsString('crm-status-danger">'.__('app.no_show'), $this->bookingCardHtml($historyResponse, $noShowBooking));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_booking_history_tab_is_paginated_and_preserves_its_tab_query(): void
+    {
+        app()->setLocale('uk');
+        Carbon::setTestNow(Carbon::parse('2026-07-20 12:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'slug' => 'customer-dashboard-history-pagination',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass,
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+
+        foreach (range(1, 11) as $daysAgo) {
+            $scheduledClass = $this->scheduledClass(
+                $account,
+                $location,
+                $room,
+                $classType,
+                sprintf('History %02d', $daysAgo),
+                now()->subDays($daysAgo)->format('Y-m-d H:i:s'),
+            );
+            ClassBooking::factory()
+                ->for($account)
+                ->for($scheduledClass, 'scheduledClass')
+                ->for($customer)
+                ->create(['status' => ClassBookingStatus::Attended]);
+        }
+
+        $firstPage = $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'history']));
+
+        $firstPage
+            ->assertOk()
+            ->assertViewHas('bookingHistoryCount', 11)
+            ->assertViewHas('bookingHistory', fn ($bookings): bool => $bookings->total() === 11
+                && $bookings->perPage() === 10
+                && $bookings->currentPage() === 1
+                && $bookings->count() === 10)
+            ->assertSeeInOrder(['History 01', 'History 02', 'History 10'], false)
+            ->assertDontSee('History 11', false)
+            ->assertSee('booking_history_page=2', false)
+            ->assertSee('tab=history', false)
+            ->assertSee('Показано', false)
+            ->assertSee('результатів', false)
+            ->assertSee('Далі', false)
+            ->assertDontSee('Showing', false);
+        $this->assertSame(10, substr_count($firstPage->getContent(), 'data-customer-booking="'));
+
+        $secondPage = $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', [
+                'accountSlug' => $account->slug,
+                'booking_history_page' => 2,
+            ]));
+
+        $secondPage
+            ->assertOk()
+            ->assertViewHas('dashboardTab', 'history')
+            ->assertViewHas('bookingHistory', fn ($bookings): bool => $bookings->currentPage() === 2
+                && $bookings->count() === 1)
+            ->assertSee('History 11', false)
+            ->assertDontSee('History 01', false)
+            ->assertSee('Назад', false);
+        $this->assertSame(1, substr_count($secondPage->getContent(), 'data-customer-booking="'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_dashboard_distinguishes_manual_payment_debt_from_an_uncovered_group_booking(): void
+    {
+        app()->setLocale('uk');
+        Carbon::setTestNow(Carbon::parse('2026-07-10 12:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'slug' => 'customer-dashboard-payment-kinds',
+            'timezone' => 'UTC',
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $groupClassType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass,
+        ]);
+        $roomRentalClassType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::RoomRental,
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+
+        $groupClass = $this->scheduledClass($account, $location, $room, $groupClassType, 'Uncovered group class', '2026-07-13 10:00:00');
+        $groupBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($groupClass, 'scheduledClass')
+            ->for($customer)
+            ->create();
+
+        $roomRental = $this->scheduledClass($account, $location, $room, $roomRentalClassType, 'Room rental payment', '2026-07-13 12:00:00');
+        $roomRentalBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($roomRental, 'scheduledClass')
+            ->for($customer)
+            ->create(['skip_class_pass_reservation' => true]);
+
+        $response = $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk();
+
+        $groupCard = $this->bookingCardHtml($response, $groupBooking);
+        $this->assertStringContainsString(__('app.customer_booking_without_class_pass_alert'), $groupCard);
+        $this->assertStringNotContainsString(__('app.unpaid_class_booking_payment_alert'), $groupCard);
+
+        $roomRentalCard = $this->bookingCardHtml($response, $roomRentalBooking);
+        $this->assertStringContainsString(__('app.unpaid_class_booking_payment_alert'), $roomRentalCard);
+        $this->assertStringContainsString(__('app.unpaid_class_booking_payment_reason_room_rental'), $roomRentalCard);
+        $this->assertStringNotContainsString(__('app.customer_booking_without_class_pass_alert'), $roomRentalCard);
+
+        Carbon::setTestNow();
+    }
+
     public function test_used_up_pass_still_covers_the_booking_that_consumed_it(): void
     {
         app()->setLocale('uk');
@@ -285,7 +572,7 @@ class CustomerDashboardTest extends TestCase
 
         $this->actingAs($customer, 'customer')
             ->withSession(['locale' => 'uk'])
-            ->get(route('customer.dashboard', $account->slug))
+            ->get(route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'history']))
             ->assertOk()
             ->assertSeeInOrder(['Залишок занять', '0', 'активних абонементів', '0'], false)
             ->assertSee('Covered Used Exot', false)
@@ -353,6 +640,7 @@ class CustomerDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Evening Exot', false)
             ->assertSee('MORN-001', false)
+            ->assertSee(__('app.unpaid_class_booking_payment_alert'), false)
             ->assertSee(__('app.customer_booking_any_time_addon_due', ['amount' => MoneyFormatter::format(4500, 'UAH')]), false)
             ->assertDontSee('На це заняття немає активного абонемента.', false);
 
@@ -417,5 +705,40 @@ class CustomerDashboardTest extends TestCase
                 'expires_at' => null,
                 'usable_until_at' => Carbon::parse('2026-12-01 10:00:00', 'UTC'),
             ], $attributes));
+    }
+
+    private function scheduledClass(
+        Account $account,
+        Location $location,
+        Room $room,
+        ClassType $classType,
+        string $title,
+        string $startsAt,
+    ): ScheduledClass {
+        $startsAtDate = Carbon::parse($startsAt, 'UTC');
+
+        return ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => $title,
+                'starts_at' => $startsAtDate,
+                'ends_at' => $startsAtDate->copy()->addHour(),
+            ]);
+    }
+
+    private function bookingCardHtml(TestResponse $response, ClassBooking $booking): string
+    {
+        preg_match(
+            '/<article[^>]*data-customer-booking="'.preg_quote((string) $booking->id, '/').'"[^>]*>.*?<\\/article>/s',
+            $response->getContent(),
+            $matches,
+        );
+
+        $this->assertArrayHasKey(0, $matches, "Booking card {$booking->id} was not rendered.");
+
+        return $matches[0];
     }
 }

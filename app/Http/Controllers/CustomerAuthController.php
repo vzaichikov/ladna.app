@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Actions\MergeCustomerIdentityByVerifiedPhone;
+use App\Enums\ClassBookingStatus;
+use App\Enums\ScheduledClassStatus;
 use App\Http\Requests\CustomerEmailLoginRequest;
 use App\Http\Requests\CustomerGooglePhoneOtpSendRequest;
 use App\Http\Requests\CustomerOtpSendRequest;
@@ -10,7 +12,9 @@ use App\Http\Requests\CustomerOtpVerifyRequest;
 use App\Http\Requests\CustomerProfilePhoneOtpSendRequest;
 use App\Http\Requests\UpdateCustomerProfileRequest;
 use App\Models\Account;
+use App\Models\ClassBooking;
 use App\Models\Customer;
+use App\Models\ScheduledClass;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\CustomerAuth\CustomerOtpService;
 use App\Support\CustomerAuth\CustomerRememberTokenService;
@@ -20,8 +24,11 @@ use App\Support\CustomerAuth\GoogleUserData;
 use App\Support\CustomerAuth\TurnstileVerifier;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
@@ -449,10 +456,16 @@ class CustomerAuthController extends Controller
         return $this->loginCustomer($customer, $account);
     }
 
-    public function studioDashboard(string $accountSlug): View
+    public function studioDashboard(Request $request, string $accountSlug): View
     {
         $account = $this->account($accountSlug);
         $customer = $this->customerForAccount($account);
+        $now = now();
+        $dashboardTab = match (true) {
+            $request->query('tab') === 'passes' => 'passes',
+            $request->query('tab') === 'history', $request->has('booking_history_page') => 'history',
+            default => 'bookings',
+        };
         $publicLocations = $account->locations()
             ->active()
             ->orderBy('name')
@@ -467,20 +480,38 @@ class CustomerAuthController extends Controller
             'customerClassPasses.classPassPlan.classTypes',
             'customerClassPasses.classPassPlan.trainerTypes',
             'customerClassPasses.classPassPlan.rooms',
-            'classBookings' => fn ($query) => $query
-                ->notCorrectedRemoved()
-                ->with([
-                    'scheduledClass.classType',
-                    'scheduledClass.location',
-                    'scheduledClass.trainer',
-                    'classPassReservation.customerClassPass',
-                    'manualCashPayment',
-                ]),
         ]);
+        $bookingQuery = $this->customerDashboardBookingQuery($customer);
+        $bookingsCount = (clone $bookingQuery)->count();
+        $upcomingBookings = (clone $bookingQuery)
+            ->where('status', ClassBookingStatus::Booked->value)
+            ->whereIn('scheduled_class_id', $this->upcomingScheduledClassIds($customer, $now))
+            ->orderBy($this->scheduledClassStartsAt())
+            ->orderBy('id')
+            ->get();
+        $bookingHistory = $dashboardTab === 'history'
+            ? (clone $bookingQuery)
+                ->where(function (Builder $query) use ($customer, $now): void {
+                    $query
+                        ->where('status', '!=', ClassBookingStatus::Booked->value)
+                        ->orWhereNotIn('scheduled_class_id', $this->upcomingScheduledClassIds($customer, $now));
+                })
+                ->orderByDesc($this->scheduledClassStartsAt())
+                ->orderByDesc('id')
+                ->paginate(10, ['*'], 'booking_history_page')
+                ->withQueryString()
+                ->appends(['tab' => 'history'])
+            : null;
+        $bookingHistoryCount = $bookingHistory?->total() ?? $bookingsCount - $upcomingBookings->count();
 
         return view('customer-auth.dashboard', [
             'account' => $account,
             'customer' => $customer,
+            'dashboardTab' => $dashboardTab,
+            'bookingsCount' => $bookingsCount,
+            'upcomingBookings' => $upcomingBookings,
+            'bookingHistory' => $bookingHistory,
+            'bookingHistoryCount' => $bookingHistoryCount,
             'publicLocations' => $publicLocations,
             'purchaseHistory' => $purchaseHistory,
         ]);
@@ -667,6 +698,48 @@ class CustomerAuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('customer.studio.login', $account->slug);
+    }
+
+    /**
+     * @return HasMany<ClassBooking, Customer>
+     */
+    private function customerDashboardBookingQuery(Customer $customer): HasMany
+    {
+        return $customer->classBookings()
+            ->notCorrectedRemoved()
+            ->with([
+                'scheduledClass.classType',
+                'scheduledClass.location',
+                'scheduledClass.trainer',
+                'classPassReservation.customerClassPass',
+                'manualCashPayment',
+            ]);
+    }
+
+    /**
+     * @return Builder<ScheduledClass>
+     */
+    private function upcomingScheduledClassIds(Customer $customer, Carbon $now): Builder
+    {
+        return ScheduledClass::query()
+            ->select('id')
+            ->where('account_id', $customer->account_id)
+            ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->where('starts_at', '>', $now);
+    }
+
+    /**
+     * @return Builder<ScheduledClass>
+     */
+    private function scheduledClassStartsAt(): Builder
+    {
+        return ScheduledClass::query()
+            ->select('starts_at')
+            ->whereColumn(
+                (new ScheduledClass)->qualifyColumn('id'),
+                (new ClassBooking)->qualifyColumn('scheduled_class_id'),
+            )
+            ->limit(1);
     }
 
     private function loginView(

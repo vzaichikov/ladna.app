@@ -111,6 +111,12 @@ class ScheduledClassCancellationTest extends TestCase
             ->assertJsonPath('message', __('app.scheduled_class_cancelled'))
             ->assertJsonPath('scheduled_class_id', $scheduledClass->id);
         $this->assertStringContainsString(__('app.scheduled_class_cancelled_by_studio'), $cancelResponse->json('card_html'));
+        $this->assertReservationSummaryHasStyle(
+            $cancelResponse->json('card_html'),
+            $customerClassPass,
+            'bg-stone-50',
+            __('app.released'),
+        );
 
         $scheduledClass->refresh();
         $booking->refresh();
@@ -139,6 +145,12 @@ class ScheduledClassCancellationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', __('app.scheduled_class_restored'));
         $this->assertStringNotContainsString(__('app.scheduled_class_cancelled_by_studio'), $restoreResponse->json('card_html'));
+        $this->assertReservationSummaryHasStyle(
+            $restoreResponse->json('card_html'),
+            $customerClassPass,
+            'bg-violet-crm-50',
+            __('app.reserved'),
+        );
 
         $scheduledClass->refresh();
         $booking->refresh();
@@ -175,9 +187,16 @@ class ScheduledClassCancellationTest extends TestCase
         $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
         $booking = $this->bookCustomer($context, $scheduledClass);
 
-        $this->actingAs($context['owner'])
-            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $scheduledClass]))
-            ->assertOk();
+        $cancelResponse = $this->actingAs($context['owner'])
+            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $scheduledClass]));
+
+        $cancelResponse->assertOk();
+        $this->assertReservationSummaryHasStyle(
+            $cancelResponse->json('card_html'),
+            $customerClassPass,
+            'bg-stone-50',
+            __('app.released'),
+        );
 
         $reservation = $booking->classPassReservation()->firstOrFail();
         $customerClassPass->refresh();
@@ -207,9 +226,16 @@ class ScheduledClassCancellationTest extends TestCase
         $scheduledClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
         $booking = $this->bookCustomer($context, $scheduledClass);
 
-        $this->actingAs($context['owner'])
-            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $scheduledClass]))
-            ->assertOk();
+        $cancelResponse = $this->actingAs($context['owner'])
+            ->patchJson(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $scheduledClass]));
+
+        $cancelResponse->assertOk();
+        $this->assertReservationSummaryHasStyle(
+            $cancelResponse->json('card_html'),
+            $customerClassPass,
+            'bg-emerald-50',
+            __('app.used'),
+        );
 
         $reservation = $booking->classPassReservation()->firstOrFail();
         $customerClassPass->refresh();
@@ -634,6 +660,20 @@ class ScheduledClassCancellationTest extends TestCase
             ->assertCreated();
 
         return $scheduledClass->classBookings()->whereBelongsTo($customer)->firstOrFail();
+    }
+
+    private function assertReservationSummaryHasStyle(
+        string $cardHtml,
+        CustomerClassPass $customerClassPass,
+        string $styleClass,
+        string $statusLabel,
+    ): void {
+        $pattern = '/<div class="[^"]*'.preg_quote($styleClass, '/').'[^"]*">'
+            .'.*?<span>'.preg_quote($customerClassPass->code, '/').'<\\/span>'
+            .'.*?<span>'.preg_quote($statusLabel, '/').'<\\/span>'
+            .'.*?<\\/div>/s';
+
+        $this->assertMatchesRegularExpression($pattern, $cardHtml);
     }
 
     /**
