@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.101.0',
+                'date' => '2026-07-27',
+                'title' => 'Optional booking without leaving the schedule',
+                'items' => ['Studios can now explicitly enable popup confirmation independently for the Classic, Compact, and Calendar public schedule views under General settings → Schedule view. The option starts disabled, so the existing separate confirmation page remains unchanged until the owner opts in.', 'Signed-in customers and permitted guests can confirm a group class in a centered responsive dialog while keeping the schedule behind it. After a successful booking, they can open the customer cabinet or continue choosing classes.', 'Owner help now explains where to enable the new scenario and how its per-view settings work.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.100.0',
                 'date' => '2026-07-27',
                 'title' => 'Clearer customer booking history',
@@ -905,6 +912,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.101.0',
+                'date' => '2026-07-27',
+                'title' => 'Запис без переходу з розкладу',
+                'items' => ['Студія може явно ввімкнути підтвердження у вікні окремо для класичного, компактного та календарного вигляду публічного розкладу в Загальні налаштування → Вигляд розкладу. Початково опція вимкнена, тому попередня окрема сторінка підтвердження працює без змін, доки власниця не ввімкне новий сценарій.', 'Клієнт після входу або дозволений студією гість підтверджує групове заняття у центрованому адаптивному вікні, не залишаючи розклад. Після успішного запису можна перейти до кабінету клієнта або продовжити вибір занять.', 'Довідка для власниці тепер пояснює, де ввімкнути новий сценарій і як працюють окремі налаштування для кожного вигляду.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.100.0',
                 'date' => '2026-07-27',

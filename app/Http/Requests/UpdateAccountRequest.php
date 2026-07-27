@@ -72,6 +72,9 @@ class UpdateAccountRequest extends FormRequest
             'class_pass_cancellation_rules.extend_days_enabled' => ['nullable', 'boolean'],
             'class_pass_cancellation_rules.extend_days_count' => ['nullable', 'integer', 'min:1', 'max:3650'],
             'public_schedule_view' => ['nullable', Rule::in(PublicScheduleView::values())],
+            'public_group_booking_modal_views_present' => ['nullable', 'boolean'],
+            'public_group_booking_modal_views' => ['required_if:public_group_booking_modal_views_present,1', 'array'],
+            'public_group_booking_modal_views.*' => [Rule::in(PublicScheduleView::values())],
             'allow_guest_public_booking' => ['nullable', 'boolean'],
             'schedule_generation_weeks' => ['nullable', 'integer', 'min:'.Account::MIN_SCHEDULE_GENERATION_WEEKS, 'max:'.Account::MAX_SCHEDULE_GENERATION_WEEKS],
             'trainer_private_timeframes_enabled' => ['nullable', 'boolean'],
@@ -164,6 +167,16 @@ class UpdateAccountRequest extends FormRequest
         if (! $this->has('class_pass_cancellation_rules_present') && ! $this->has('class_pass_cancellation_rules')) {
             $this->merge([
                 'class_pass_cancellation_rules' => $account?->classPassCancellationRules() ?? Account::defaultClassPassCancellationRules(),
+            ]);
+        }
+
+        if ($this->has('public_group_booking_modal_views_present')) {
+            $this->merge([
+                'public_group_booking_modal_views' => array_values((array) $this->input('public_group_booking_modal_views', [])),
+            ]);
+        } elseif (! $this->has('public_group_booking_modal_views')) {
+            $this->merge([
+                'public_group_booking_modal_views' => $account?->publicGroupBookingModalViewValues() ?? [],
             ]);
         }
 

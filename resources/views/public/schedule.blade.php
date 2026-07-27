@@ -71,6 +71,12 @@
                 </div>
             </header>
 
+            @if (session('status'))
+                <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                    {{ session('status') }}
+                </div>
+            @endif
+
             @if ($customer)
                 <section class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-xs">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -121,6 +127,12 @@
 
             @fragment('schedule-results')
                 <div data-public-schedule-fragment data-public-schedule-loading="{{ __('app.loading') }}">
+                    @if ($bookingModalError)
+                        <div class="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                            {{ $bookingModalError }}
+                        </div>
+                    @endif
+
                     <nav class="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="{{ __('app.schedule_periods') }}">
                         @foreach ($periodOptions as $periodOption)
                             <a
@@ -180,6 +192,20 @@
                             </nav>
                         @endif
                     </section>
+
+                    <div data-public-booking-modal-root>
+                        @if ($bookingModalSelection)
+                            @include('public._booking-modal', [
+                                'account' => $account,
+                                'location' => $location,
+                                'customer' => $customer,
+                                'selection' => $bookingModalSelection,
+                                'allowsGuestBooking' => $account->allowsGuestPublicBooking(),
+                                'returnUrl' => $bookingModalReturnUrl,
+                                'autoOpen' => true,
+                            ])
+                        @endif
+                    </div>
                 </div>
             @endfragment
 

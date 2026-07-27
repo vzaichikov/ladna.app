@@ -122,6 +122,7 @@ class PublicScheduleTest extends TestCase
         $location = Location::factory()->for($account)->create(['slug' => 'main', 'timezone' => 'UTC']);
 
         $this->assertSame(PublicScheduleView::CompactBooking, $account->publicScheduleView());
+        $this->assertSame([], $account->publicGroupBookingModalViewValues());
 
         $this->get('/test-default-compact-studio/main/schedule')
             ->assertOk()

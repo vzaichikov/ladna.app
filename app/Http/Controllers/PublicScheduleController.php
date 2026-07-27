@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\ResolvePublicGroupBookingSelection;
 use App\Enums\ClassBookingStatus;
 use App\Enums\PublicScheduleView;
 use App\Enums\ScheduleKind;
@@ -25,6 +26,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PublicScheduleController extends Controller
@@ -38,6 +40,7 @@ class PublicScheduleController extends Controller
 
     public function __construct(
         private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
+        private readonly ResolvePublicGroupBookingSelection $resolvePublicGroupBookingSelection,
     ) {}
 
     public function show(Request $request, string $accountSlug, string $locationSlug): View|string
@@ -67,6 +70,27 @@ class PublicScheduleController extends Controller
         $classDays = $this->groupByDisplayDate($classes);
         $customer = $this->currentCustomerFor($account);
         $scheduleView = $account->publicScheduleView();
+        $usesPublicGroupBookingModal = ! $isEmbed && $account->usesPublicGroupBookingModal($scheduleView);
+        $bookingModalSelection = null;
+        $bookingModalError = null;
+        $bookingModalReturnUrl = route($isEmbed ? 'public.schedule.embed' : 'public.schedule', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            ...collect($request->query())->except('booking')->all(),
+        ]);
+
+        if ($usesPublicGroupBookingModal && $request->integer('booking') > 0) {
+            try {
+                $bookingModalSelection = $this->resolvePublicGroupBookingSelection->resolve(
+                    $account,
+                    $location,
+                    $customer,
+                    $request->integer('booking'),
+                );
+            } catch (ValidationException $exception) {
+                $bookingModalError = collect($exception->errors())->flatten()->first();
+            }
+        }
 
         $data = [
             'account' => $account,
@@ -84,6 +108,10 @@ class PublicScheduleController extends Controller
             'customer' => $customer,
             'customerPasses' => $customer ? $this->activeCustomerPasses($customer) : collect(),
             'isEmbed' => $isEmbed,
+            'usesPublicGroupBookingModal' => $usesPublicGroupBookingModal,
+            'bookingModalSelection' => $bookingModalSelection,
+            'bookingModalError' => $bookingModalError,
+            'bookingModalReturnUrl' => $bookingModalReturnUrl,
         ];
 
         if ($scheduleView->usesCompactBookingFlow()) {

@@ -44,7 +44,10 @@ class StorePublicBookingRequest extends FormRequest
         $scheduleKind = ScheduleKind::tryFrom((string) $this->input('schedule_kind'));
         $isGroup = $scheduleKind === ScheduleKind::GroupClass;
         $isManual = $scheduleKind && in_array($scheduleKind, ScheduleKindRegistry::manualKinds(), true);
-        $requiresGuestDetails = ! $this->currentCustomerFor($account) && ($account?->allowsGuestPublicBooking() ?? false);
+        $expectsAuthenticatedModalCustomer = $this->expectsAuthenticatedModalCustomer($account, $scheduleKind);
+        $requiresGuestDetails = ! $this->currentCustomerFor($account)
+            && ($account?->allowsGuestPublicBooking() ?? false)
+            && ! $expectsAuthenticatedModalCustomer;
 
         return [
             'schedule_kind' => ['required', Rule::enum(ScheduleKind::class)],
@@ -64,6 +67,8 @@ class StorePublicBookingRequest extends FormRequest
             'customer_name' => [Rule::requiredIf($requiresGuestDetails), 'nullable', 'string', 'max:255'],
             'customer_phone' => [Rule::requiredIf($requiresGuestDetails), 'nullable', 'string', 'max:64'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'return_to' => ['nullable', 'string', 'max:2048'],
+            'customer_session_expected' => ['nullable', 'boolean'],
         ];
     }
 
@@ -88,7 +93,11 @@ class StorePublicBookingRequest extends FormRequest
                     return;
                 }
 
-                if (! $this->currentCustomerFor($account) && $account->allowsGuestPublicBooking()) {
+                if (
+                    ! $this->currentCustomerFor($account)
+                    && $account->allowsGuestPublicBooking()
+                    && ! $this->expectsAuthenticatedModalCustomer($account, $scheduleKind)
+                ) {
                     $phoneNumberNormalizer = app(PhoneNumberNormalizer::class);
 
                     if (! $phoneNumberNormalizer->isValid($this->input('customer_phone'), $account->country_code)) {
@@ -186,6 +195,36 @@ class StorePublicBookingRequest extends FormRequest
         if ($capacity <= 0 || $activeBookingsCount >= $capacity) {
             $validator->errors()->add('scheduled_class_id', __('app.no_available_group_slots'));
         }
+    }
+
+    private function expectsAuthenticatedModalCustomer(?Account $account, ?ScheduleKind $scheduleKind): bool
+    {
+        if (
+            ! $account
+            || $scheduleKind !== ScheduleKind::GroupClass
+            || $this->query('presentation') !== 'modal'
+            || ! $this->boolean('customer_session_expected')
+            || ! $account->usesPublicGroupBookingModal()
+        ) {
+            return false;
+        }
+
+        $location = $this->publicLocation();
+        $returnTo = $this->input('return_to');
+
+        if (! $location || ! is_string($returnTo) || $returnTo === '') {
+            return false;
+        }
+
+        $candidateParts = parse_url($returnTo);
+        $expectedParts = parse_url(route('public.schedule', [$account->slug, $location->slug]));
+
+        if (! is_array($candidateParts) || ! is_array($expectedParts)) {
+            return false;
+        }
+
+        return ($candidateParts['path'] ?? null) === ($expectedParts['path'] ?? null)
+            && ($candidateParts['host'] ?? $this->getHost()) === $this->getHost();
     }
 
     private function validateManualSelection(

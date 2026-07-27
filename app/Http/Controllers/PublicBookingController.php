@@ -3,8 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreatePublicBooking;
-use App\Enums\ClassBookingStatus;
-use App\Enums\ScheduledClassStatus;
+use App\Actions\ResolvePublicGroupBookingSelection;
 use App\Enums\ScheduleKind;
 use App\Http\Requests\StorePublicBookingRequest;
 use App\Models\Account;
@@ -16,6 +15,7 @@ use App\Support\ManualQuickBookingAvailability;
 use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleKindRegistry;
 use App\Support\TrainerActivityDirectionEligibility;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -29,35 +29,70 @@ use function Illuminate\Support\defer;
 
 class PublicBookingController extends Controller
 {
+    /**
+     * @var array<int, string>
+     */
+    private const SCHEDULE_RETURN_QUERY_KEYS = [
+        'period',
+        'room',
+        'kind',
+        'date',
+        'month',
+        'activity_direction',
+        'class_type',
+        'trainer',
+        'display',
+    ];
+
     public function __construct(
         private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
+        private readonly ResolvePublicGroupBookingSelection $resolvePublicGroupBookingSelection,
     ) {}
 
-    public function show(Request $request, string $accountSlug, string $locationSlug): View|RedirectResponse
+    public function show(Request $request, string $accountSlug, string $locationSlug): View|RedirectResponse|JsonResponse
     {
         [$account, $location] = $this->publicContext($accountSlug, $locationSlug);
         $customer = $this->currentCustomerFor($account);
+        $usesModalPresentation = $this->usesModalPresentation($request, $account, $location);
+        $intendedUrl = $usesModalPresentation
+            ? $this->modalReturnUrl($request, $account, $location)
+            : $request->fullUrl();
 
-        if ($redirect = $this->redirectForRequiredCustomer($request, $account, $customer, $request->fullUrl())) {
-            return $redirect;
+        if ($redirect = $this->redirectForRequiredCustomer($request, $account, $customer, $intendedUrl)) {
+            return $usesModalPresentation && $request->ajax()
+                ? response()->json(['redirect_url' => $redirect->getTargetUrl()], 409)
+                : $redirect;
         }
 
         try {
             $selection = $this->selectionFromRequest($request, $account, $location, $customer);
         } catch (ValidationException $exception) {
+            if ($usesModalPresentation && $request->ajax()) {
+                return response()->json([
+                    'message' => collect($exception->errors())->flatten()->first(),
+                    'redirect_url' => $this->modalReturnUrl($request, $account, $location),
+                ], 422);
+            }
+
             return redirect()
                 ->route('public.schedule', [$account->slug, $location->slug])
                 ->withErrors($exception->errors());
         }
 
-        return view('public.booking-confirm', [
+        $viewData = [
             'account' => $account,
             'location' => $location,
             'customer' => $customer,
             'selection' => $selection,
             'allowsGuestBooking' => $account->allowsGuestPublicBooking(),
             'isEmbed' => false,
-        ]);
+            'isModal' => $usesModalPresentation,
+            'returnUrl' => $this->scheduleReturnUrl($request, $account, $location),
+        ];
+
+        return view($usesModalPresentation && $request->ajax()
+            ? 'public._booking-modal'
+            : 'public.booking-confirm', $viewData);
     }
 
     public function store(
@@ -65,18 +100,55 @@ class PublicBookingController extends Controller
         string $accountSlug,
         string $locationSlug,
         CreatePublicBooking $createPublicBooking,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         [$account, $location] = $this->publicContext($accountSlug, $locationSlug);
         $customer = $this->currentCustomerFor($account);
         $validated = $request->validated();
+        $usesModalPresentation = $this->usesModalPresentation($request, $account, $location);
         $confirmationUrl = $this->confirmationUrl($account, $location, $validated);
+        $intendedUrl = $usesModalPresentation
+            ? $this->modalReturnUrl($request, $account, $location)
+            : $confirmationUrl;
 
-        if ($redirect = $this->redirectForRequiredCustomer($request, $account, $customer, $confirmationUrl)) {
-            return $redirect;
+        if ($usesModalPresentation && ! $customer && $request->boolean('customer_session_expected')) {
+            session()->put('url.intended', $intendedUrl);
+            $loginUrl = route('customer.studio.login', $account->slug);
+
+            return $request->expectsJson()
+                ? response()->json(['redirect_url' => $loginUrl], 409)
+                : redirect()->to($loginUrl);
         }
 
+        if ($redirect = $this->redirectForRequiredCustomer($request, $account, $customer, $intendedUrl)) {
+            return $usesModalPresentation && $request->expectsJson()
+                ? response()->json(['redirect_url' => $redirect->getTargetUrl()], 409)
+                : $redirect;
+        }
+
+        $selection = $usesModalPresentation
+            ? $this->selectionFromValidated($validated, $account, $location, $customer)
+            : null;
         $booking = $createPublicBooking->execute($account, $location, $customer, $validated);
         $this->recordFirstOnboardingBooking($account);
+
+        if ($usesModalPresentation && $request->expectsJson() && $selection) {
+            $cabinetUrl = $customer
+                ? route('customer.dashboard', $account->slug)
+                : route('customer.studio.login', $account->slug);
+            $continueUrl = $this->scheduleReturnUrl($request, $account, $location);
+
+            return response()->json([
+                'message' => __('app.booking_created'),
+                'modal_title' => __('app.booking_confirmed_title'),
+                'booking_id' => $booking->id,
+                'success_html' => view('public._booking-success', [
+                    'selection' => $selection,
+                    'cabinetUrl' => $cabinetUrl,
+                    'continueUrl' => $continueUrl,
+                ])->render(),
+                'continue_url' => $continueUrl,
+            ]);
+        }
 
         if ($customer) {
             return redirect()
@@ -161,63 +233,26 @@ class PublicBookingController extends Controller
         }
 
         return $scheduleKind === ScheduleKind::GroupClass
-            ? $this->groupSelection($request, $account, $location, $customer)
+            ? $this->resolvePublicGroupBookingSelection->resolve(
+                $account,
+                $location,
+                $customer,
+                (int) $request->query('scheduled_class_id'),
+            )
             : $this->manualSelection($request, $account, $location, $scheduleKind);
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function groupSelection(Request $request, Account $account, Location $location, ?Customer $customer): array
+    private function selectionFromValidated(array $validated, Account $account, Location $location, ?Customer $customer): array
     {
-        $scheduledClass = $account->scheduledClasses()
-            ->with(['classType', 'room', 'trainer'])
-            ->whereKey((int) $request->query('scheduled_class_id'))
-            ->where('location_id', $location->id)
-            ->first();
-
-        if (
-            ! $scheduledClass
-            || ! $scheduledClass->is_public
-            || $scheduledClass->status !== ScheduledClassStatus::Scheduled
-            || $scheduledClass->starts_at->lessThan(now())
-            || $scheduledClass->classType?->schedule_kind !== ScheduleKind::GroupClass
-        ) {
-            throw ValidationException::withMessages([
-                'scheduled_class_id' => __('app.quick_booking_group_class_invalid'),
-            ]);
-        }
-
-        if (! $scheduledClass->isBookingOpen()) {
-            throw ValidationException::withMessages([
-                'scheduled_class_id' => __('app.booking_cutoff_closed'),
-            ]);
-        }
-
-        $this->ensureCapacityForSelection($scheduledClass, $customer);
-        $timezone = $scheduledClass->displayTimezone();
-        $startsAt = $scheduledClass->starts_at->copy()->timezone($timezone);
-        $endsAt = $scheduledClass->ends_at->copy()->timezone($timezone);
-
-        return [
-            'scheduleKind' => ScheduleKind::GroupClass,
-            'title' => $scheduledClass->title,
-            'dateLabel' => $startsAt->translatedFormat('l, j F'),
-            'timeLabel' => $startsAt->format('H:i').' - '.$endsAt->format('H:i'),
-            'durationLabel' => $scheduledClass->durationMinutes().' '.__('app.minutes'),
-            'trainerLabel' => $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned'),
-            'roomLabel' => $scheduledClass->room?->name ?? $location->name,
-            'hiddenFields' => [
-                'schedule_kind' => ScheduleKind::GroupClass->value,
-                'scheduled_class_id' => $scheduledClass->id,
-            ],
-            'backUrl' => route('public.schedule', [
-                'accountSlug' => $account->slug,
-                'locationSlug' => $location->slug,
-                'kind' => ScheduleKind::GroupClass->value,
-                'date' => $startsAt->toDateString(),
-            ]),
-        ];
+        return $this->resolvePublicGroupBookingSelection->resolve(
+            $account,
+            $location,
+            $customer,
+            (int) ($validated['scheduled_class_id'] ?? 0),
+        );
     }
 
     /**
@@ -341,34 +376,6 @@ class PublicBookingController extends Controller
         ];
     }
 
-    private function ensureCapacityForSelection(ScheduledClass $scheduledClass, ?Customer $customer): void
-    {
-        $activeStatuses = [
-            ClassBookingStatus::Booked->value,
-            ClassBookingStatus::Attended->value,
-        ];
-
-        if ($customer && $scheduledClass->classBookings()
-            ->notCorrectedRemoved()
-            ->where('customer_id', $customer->id)
-            ->whereIn('status', $activeStatuses)
-            ->exists()) {
-            return;
-        }
-
-        $capacity = (int) ($scheduledClass->capacity ?? 0);
-        $activeBookingsCount = $scheduledClass->classBookings()
-            ->notCorrectedRemoved()
-            ->whereIn('status', $activeStatuses)
-            ->count();
-
-        if ($capacity <= 0 || $activeBookingsCount >= $capacity) {
-            throw ValidationException::withMessages([
-                'scheduled_class_id' => __('app.no_available_group_slots'),
-            ]);
-        }
-    }
-
     /**
      * @param  array<string, mixed>  $validated
      */
@@ -384,6 +391,79 @@ class PublicBookingController extends Controller
             'locationSlug' => $location->slug,
             ...$query,
         ]);
+    }
+
+    private function usesModalPresentation(Request $request, Account $account, Location $location): bool
+    {
+        return $request->query('presentation') === 'modal'
+            && $request->input('schedule_kind') === ScheduleKind::GroupClass->value
+            && $account->usesPublicGroupBookingModal()
+            && $this->hasValidScheduleReturnUrl($request, $account, $location);
+    }
+
+    private function modalReturnUrl(Request $request, Account $account, Location $location): string
+    {
+        return $this->scheduleReturnUrl(
+            $request,
+            $account,
+            $location,
+            (int) $request->input('scheduled_class_id'),
+        );
+    }
+
+    private function scheduleReturnUrl(Request $request, Account $account, Location $location, ?int $bookingId = null): string
+    {
+        $returnTo = $request->input('return_to');
+        $query = [];
+
+        if (is_string($returnTo) && $returnTo !== '') {
+            $candidateParts = parse_url($returnTo);
+            $expectedParts = parse_url(route('public.schedule', [$account->slug, $location->slug]));
+
+            if (is_array($candidateParts) && is_array($expectedParts)) {
+                $candidateHost = $candidateParts['host'] ?? request()->getHost();
+
+                if (
+                    ($candidateParts['path'] ?? null) === ($expectedParts['path'] ?? null)
+                    && $candidateHost === request()->getHost()
+                ) {
+                    parse_str((string) ($candidateParts['query'] ?? ''), $candidateQuery);
+                    $query = collect($candidateQuery)
+                        ->only(self::SCHEDULE_RETURN_QUERY_KEYS)
+                        ->filter(fn (mixed $value): bool => is_scalar($value) && $value !== '')
+                        ->all();
+                }
+            }
+        }
+
+        if ($bookingId && $bookingId > 0) {
+            $query['booking'] = $bookingId;
+        }
+
+        return route('public.schedule', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            ...$query,
+        ]);
+    }
+
+    private function hasValidScheduleReturnUrl(Request $request, Account $account, Location $location): bool
+    {
+        $returnTo = $request->input('return_to');
+
+        if (! is_string($returnTo) || $returnTo === '') {
+            return false;
+        }
+
+        $candidateParts = parse_url($returnTo);
+        $expectedParts = parse_url(route('public.schedule', [$account->slug, $location->slug]));
+
+        if (! is_array($candidateParts) || ! is_array($expectedParts)) {
+            return false;
+        }
+
+        return ($candidateParts['path'] ?? null) === ($expectedParts['path'] ?? null)
+            && ($candidateParts['host'] ?? request()->getHost()) === request()->getHost();
     }
 
     /**

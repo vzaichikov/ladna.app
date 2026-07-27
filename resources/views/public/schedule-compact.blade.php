@@ -44,6 +44,12 @@
 
             @fragment('schedule-results')
                 <div data-public-schedule-fragment data-public-schedule-loading="{{ __('app.loading') }}">
+                    @if ($bookingModalError)
+                        <div class="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                            {{ $bookingModalError }}
+                        </div>
+                    @endif
+
                     @if ($compact['manualActionOptions'] !== [])
                         <nav class="mt-3 grid gap-2 sm:grid-cols-2" aria-label="{{ __('app.public_booking_services') }}">
                             @foreach ($compact['manualActionOptions'] as $manualAction)
@@ -655,6 +661,10 @@
                                     'locationSlug' => $location->slug,
                                     'schedule_kind' => \App\Enums\ScheduleKind::GroupClass->value,
                                     'scheduled_class_id' => $scheduledClass->id,
+                                    ...($usesPublicGroupBookingModal ? [
+                                        'presentation' => 'modal',
+                                        'return_to' => request()->fullUrl(),
+                                    ] : []),
                                 ]);
                             @endphp
                             <article class="rounded-xl border border-stone-200 bg-white p-3 shadow-xs">
@@ -684,9 +694,15 @@
                                                     {{ $capacity > 0 ? __('app.available_slots_short', ['count' => $availableSpots]) : __('app.capacity_not_set') }}
                                                 </span>
                                                 @if ($canBook)
-                                                    <x-ui.button :href="$bookingUrl" variant="primary" size="sm" class="w-full">
-                                                        {{ __('app.book_this_class') }}
-                                                    </x-ui.button>
+                                                    @if ($usesPublicGroupBookingModal)
+                                                        <x-ui.button :href="$bookingUrl" variant="primary" size="sm" class="w-full" data-public-booking-open>
+                                                            {{ __('app.book_this_class') }}
+                                                        </x-ui.button>
+                                                    @else
+                                                        <x-ui.button :href="$bookingUrl" variant="primary" size="sm" class="w-full">
+                                                            {{ __('app.book_this_class') }}
+                                                        </x-ui.button>
+                                                    @endif
                                                 @else
                                                     <x-ui.button type="button" variant="secondary" size="sm" class="w-full" disabled>
                                                         {{ $isFull ? __('app.booking_full') : __('app.booking_closed') }}
@@ -703,6 +719,20 @@
                             </x-ui.empty-state>
                         @endforelse
                     </section>
+
+                    <div data-public-booking-modal-root>
+                        @if ($bookingModalSelection)
+                            @include('public._booking-modal', [
+                                'account' => $account,
+                                'location' => $location,
+                                'customer' => $customer,
+                                'selection' => $bookingModalSelection,
+                                'allowsGuestBooking' => $account->allowsGuestPublicBooking(),
+                                'returnUrl' => $bookingModalReturnUrl,
+                                'autoOpen' => true,
+                            ])
+                        @endif
+                    </div>
                 </div>
             @endfragment
 

@@ -49,6 +49,308 @@ class PublicBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_modal_booking_redirects_guest_login_back_to_the_same_schedule_and_selected_class(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-modal-login-required-studio',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+            'public_group_booking_modal_views' => [PublicScheduleView::CompactBooking->value()],
+            'allow_guest_public_booking' => false,
+        ]);
+        $returnUrl = route('public.schedule', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'date' => '2026-06-18',
+            'trainer' => 12,
+        ]);
+        $bookingUrl = route('public.booking.show', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'scheduled_class_id' => $scheduledClass->id,
+            'presentation' => 'modal',
+            'return_to' => $returnUrl,
+        ]);
+        $expectedIntendedUrl = route('public.schedule', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'date' => '2026-06-18',
+            'trainer' => 12,
+            'booking' => $scheduledClass->id,
+        ]);
+
+        $this->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get($bookingUrl)
+            ->assertStatus(409)
+            ->assertJson([
+                'redirect_url' => route('customer.studio.login', $account->slug),
+            ]);
+
+        $this->assertSame($expectedIntendedUrl, session('url.intended'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_authenticated_customer_can_load_and_restore_group_booking_modal_without_studio_header(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'name' => 'Modal Header Must Stay Outside',
+            'slug' => 'public-modal-confirmation-studio',
+            'public_schedule_view' => PublicScheduleView::CalendarBooking->value(),
+            'public_group_booking_modal_views' => [PublicScheduleView::CalendarBooking->value()],
+        ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Modal Customer']);
+        $returnUrl = route('public.schedule', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'display' => 'list',
+            'date' => '2026-06-18',
+        ]);
+        $bookingUrl = route('public.booking.show', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'scheduled_class_id' => $scheduledClass->id,
+            'presentation' => 'modal',
+            'return_to' => $returnUrl,
+        ]);
+
+        $this->actingAs($customer, 'customer')
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get($bookingUrl)
+            ->assertOk()
+            ->assertSee('data-public-booking-modal', false)
+            ->assertSee('data-public-booking-form', false)
+            ->assertSee('name="customer_session_expected" value="1"', false)
+            ->assertSee('Public Pole')
+            ->assertSee('Modal Customer')
+            ->assertDontSee($account->name);
+
+        $this->actingAs($customer, 'customer')
+            ->get($returnUrl.'&booking='.$scheduledClass->id)
+            ->assertOk()
+            ->assertSee('data-auto-open="true"', false)
+            ->assertSee('data-public-booking-modal', false);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_authenticated_modal_booking_returns_server_rendered_success_with_required_actions(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-modal-success-studio',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+            'public_group_booking_modal_views' => [PublicScheduleView::CompactBooking->value()],
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+        $returnUrl = route('public.schedule', [$account->slug, $location->slug, 'date' => '2026-06-18']);
+
+        $response = $this->actingAs($customer, 'customer')
+            ->postJson(route('public.booking.store', [
+                'accountSlug' => $account->slug,
+                'locationSlug' => $location->slug,
+                'presentation' => 'modal',
+            ]), [
+                'schedule_kind' => ScheduleKind::GroupClass->value,
+                'scheduled_class_id' => $scheduledClass->id,
+                'return_to' => $returnUrl,
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', __('app.booking_created'))
+            ->assertJsonPath('continue_url', $returnUrl)
+            ->assertJsonStructure(['booking_id', 'success_html']);
+
+        $successHtml = (string) $response->json('success_html');
+
+        $this->assertStringContainsString(__('app.go_to_customer_cabinet'), $successHtml);
+        $this->assertStringContainsString(__('app.continue_booking'), $successHtml);
+        $this->assertStringContainsString(route('customer.dashboard', $account->slug), $successHtml);
+        $this->assertSame(1, ClassBooking::whereBelongsTo($scheduledClass)->whereBelongsTo($customer)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_guest_modal_booking_success_links_to_studio_login(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-guest-modal-success-studio',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+            'public_group_booking_modal_views' => [PublicScheduleView::CompactBooking->value()],
+            'allow_guest_public_booking' => true,
+        ]);
+        $returnUrl = route('public.schedule', [$account->slug, $location->slug, 'date' => '2026-06-18']);
+
+        $response = $this->postJson(route('public.booking.store', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'presentation' => 'modal',
+        ]), [
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'scheduled_class_id' => $scheduledClass->id,
+            'customer_name' => 'Guest Modal Customer',
+            'customer_phone' => '+380501112277',
+            'return_to' => $returnUrl,
+        ])->assertOk();
+
+        $this->assertStringContainsString(
+            route('customer.studio.login', $account->slug),
+            (string) $response->json('success_html'),
+        );
+        $this->assertSame(1, ClassBooking::whereBelongsTo($scheduledClass)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_guest_modal_booking_returns_json_validation_errors_without_creating_a_booking(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-guest-modal-validation-studio',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+            'public_group_booking_modal_views' => [PublicScheduleView::CompactBooking->value()],
+            'allow_guest_public_booking' => true,
+        ]);
+        $returnUrl = route('public.schedule', [$account->slug, $location->slug, 'date' => '2026-06-18']);
+
+        $this->postJson(route('public.booking.store', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'presentation' => 'modal',
+        ]), [
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'scheduled_class_id' => $scheduledClass->id,
+            'return_to' => $returnUrl,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['customer_name', 'customer_phone']);
+
+        $this->assertSame(0, ClassBooking::whereBelongsTo($scheduledClass)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_modal_load_returns_recovery_url_when_the_class_becomes_unavailable(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-modal-unavailable-studio',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+            'public_group_booking_modal_views' => [PublicScheduleView::CompactBooking->value()],
+            'allow_guest_public_booking' => true,
+        ], [
+            'capacity' => 0,
+        ]);
+        $returnUrl = route('public.schedule', [$account->slug, $location->slug, 'date' => '2026-06-18']);
+        $bookingUrl = route('public.booking.show', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'scheduled_class_id' => $scheduledClass->id,
+            'presentation' => 'modal',
+            'return_to' => $returnUrl,
+        ]);
+        $expectedRecoveryUrl = route('public.schedule', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'date' => '2026-06-18',
+            'booking' => $scheduledClass->id,
+        ]);
+
+        $this->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get($bookingUrl)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', __('app.no_available_group_slots'))
+            ->assertJsonPath('redirect_url', $expectedRecoveryUrl);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_expired_customer_session_redirects_modal_submission_to_login_even_when_guest_booking_is_enabled(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-modal-expired-session-studio',
+            'public_schedule_view' => PublicScheduleView::CompactBooking->value(),
+            'public_group_booking_modal_views' => [PublicScheduleView::CompactBooking->value()],
+            'allow_guest_public_booking' => true,
+        ]);
+        $returnUrl = route('public.schedule', [$account->slug, $location->slug, 'date' => '2026-06-18']);
+        $expectedIntendedUrl = route('public.schedule', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'date' => '2026-06-18',
+            'booking' => $scheduledClass->id,
+        ]);
+
+        $this->postJson(route('public.booking.store', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'presentation' => 'modal',
+        ]), [
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'scheduled_class_id' => $scheduledClass->id,
+            'customer_session_expected' => true,
+            'return_to' => $returnUrl,
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('redirect_url', route('customer.studio.login', $account->slug));
+
+        $this->assertSame($expectedIntendedUrl, session('url.intended'));
+        $this->assertSame(0, ClassBooking::whereBelongsTo($scheduledClass)->count());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_group_booking_modal_is_opt_in_for_each_schedule_view_and_disabled_in_embeds(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-modal-view-options-studio',
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+
+        foreach (PublicScheduleView::cases() as $scheduleView) {
+            $account->update([
+                'public_schedule_view' => $scheduleView->value(),
+                'public_group_booking_modal_views' => [$scheduleView->value()],
+            ]);
+            $query = match ($scheduleView) {
+                PublicScheduleView::Classic => ['period' => 'week'],
+                PublicScheduleView::CompactBooking => ['date' => '2026-06-18'],
+                PublicScheduleView::CalendarBooking => ['display' => 'list', 'date' => '2026-06-18'],
+            };
+
+            $this->actingAs($customer, 'customer')
+                ->get(route('public.schedule', [$account->slug, $location->slug, ...$query]))
+                ->assertOk()
+                ->assertSee('data-public-booking-open', false)
+                ->assertSee('presentation=modal', false);
+
+            $this->actingAs($customer, 'customer')
+                ->get(route('public.schedule.embed', [$account->slug, $location->slug, ...$query]))
+                ->assertOk()
+                ->assertDontSee('data-public-booking-open', false)
+                ->assertDontSee('presentation=modal', false)
+                ->assertSee('scheduled_class_id='.$scheduledClass->id, false);
+        }
+
+        Carbon::setTestNow();
+    }
+
     public function test_booking_confirmation_uses_customer_locale_switcher_in_footer(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
@@ -161,6 +463,66 @@ class PublicBookingTest extends TestCase
         $this->assertNull($booking->booked_by_user_id);
         $this->assertSame('public_guest', $booking->booked_by_actor_role);
         $this->assertNull($booking->classPassReservation);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_classic_guest_booking_redirect_displays_success_notification(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-classic-guest-booking-studio',
+            'public_schedule_view' => PublicScheduleView::Classic->value(),
+            'allow_guest_public_booking' => true,
+            'country_code' => 'UA',
+        ]);
+
+        $this->followingRedirects()
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), [
+                'schedule_kind' => ScheduleKind::GroupClass->value,
+                'scheduled_class_id' => $scheduledClass->id,
+                'customer_name' => 'Classic Guest',
+                'customer_phone' => '050 111 22 45',
+            ])
+            ->assertOk()
+            ->assertSee(__('app.booking_created'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_legacy_guest_booking_uses_server_validated_phone_without_blur_layout_shift(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $scheduledClass] = $this->publicGroupClass([
+            'slug' => 'public-legacy-phone-validation-studio',
+            'allow_guest_public_booking' => true,
+        ]);
+        $bookingUrl = route('public.booking.show', [
+            'accountSlug' => $account->slug,
+            'locationSlug' => $location->slug,
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'scheduled_class_id' => $scheduledClass->id,
+        ]);
+
+        $this->get($bookingUrl)
+            ->assertOk()
+            ->assertSee('data-phone-mask-validate="false"', false);
+
+        $this->from($bookingUrl)
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), [
+                'schedule_kind' => ScheduleKind::GroupClass->value,
+                'scheduled_class_id' => $scheduledClass->id,
+                'customer_name' => 'Invalid Phone Guest',
+                'customer_phone' => '123',
+            ])
+            ->assertRedirect($bookingUrl)
+            ->assertSessionHasErrors('customer_phone');
+
+        $this->assertSame(0, Customer::whereBelongsTo($account)->count());
+        $this->assertSame(0, ClassBooking::whereBelongsTo($account)->count());
 
         Carbon::setTestNow();
     }
@@ -522,9 +884,7 @@ class PublicBookingTest extends TestCase
                     ->assertOk()
                     ->assertSee('Public Pole');
 
-                if ($scheduleView !== PublicScheduleView::Classic) {
-                    $response->assertSee('schedule/book?schedule_kind=group_class&amp;scheduled_class_id='.$scheduledClass->id, false);
-                }
+                $response->assertSee('schedule/book?schedule_kind=group_class&amp;scheduled_class_id='.$scheduledClass->id, false);
             }
         }
 

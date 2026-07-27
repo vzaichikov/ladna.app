@@ -7,6 +7,7 @@ let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
 let publicScheduleAbortController = null;
 let publicCalendarSwipeStart = null;
+let publicBookingModalOpener = null;
 let trainerPrivateLessonsAbortController = null;
 
 const confirmationButtonVariants = {
@@ -3512,8 +3513,230 @@ function replacePublicScheduleFragment(html) {
 
     current.replaceWith(replacement);
     createIcons({ icons });
+    initPhoneMasks(replacement);
+    initPublicBookingModal(replacement);
 
     return replacement;
+}
+
+function publicBookingFocusableElements(modal) {
+    return [...modal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => element instanceof HTMLElement && element.offsetParent !== null);
+}
+
+function syncPublicBookingUrl(bookingId = null) {
+    const url = new URL(window.location.href);
+
+    if (bookingId) {
+        url.searchParams.set('booking', bookingId);
+    } else {
+        url.searchParams.delete('booking');
+    }
+
+    window.history.replaceState({ publicSchedule: true }, '', url);
+    syncPublicLegalReturnUrls();
+}
+
+function openPublicBookingModal(modal, opener = null) {
+    if (!modal) {
+        return;
+    }
+
+    publicBookingModalOpener = opener instanceof HTMLElement ? opener : publicBookingModalOpener;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.classList.add('overflow-hidden');
+
+    if (modal.dataset.bookingId) {
+        syncPublicBookingUrl(modal.dataset.bookingId);
+    }
+
+    window.requestAnimationFrame(() => {
+        modal.querySelector('[data-public-booking-close]')?.focus();
+    });
+}
+
+function closePublicBookingModal(modal, restoreFocus = true) {
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.classList.remove('overflow-hidden');
+    syncPublicBookingUrl();
+
+    const root = modal.closest('[data-public-booking-modal-root]');
+
+    if (root) {
+        root.innerHTML = '';
+    }
+
+    if (restoreFocus && publicBookingModalOpener?.isConnected) {
+        publicBookingModalOpener.focus();
+    }
+
+    publicBookingModalOpener = null;
+}
+
+function initPublicBookingModal(root = document) {
+    const modal = root.matches?.('[data-public-booking-modal]')
+        ? root
+        : root.querySelector?.('[data-public-booking-modal]');
+
+    if (!modal) {
+        return;
+    }
+
+    if (modal.dataset.publicBookingModalReady !== 'true') {
+        modal.dataset.publicBookingModalReady = 'true';
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal || event.target.closest('[data-public-booking-close]')) {
+                closePublicBookingModal(modal);
+            }
+        });
+
+        modal.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closePublicBookingModal(modal);
+                return;
+            }
+
+            if (event.key !== 'Tab') {
+                return;
+            }
+
+            const focusableElements = publicBookingFocusableElements(modal);
+
+            if (focusableElements.length === 0) {
+                event.preventDefault();
+                return;
+            }
+
+            const firstElement = focusableElements[0];
+            const lastElement = focusableElements.at(-1);
+
+            if (event.shiftKey && document.activeElement === firstElement) {
+                event.preventDefault();
+                lastElement.focus();
+            } else if (!event.shiftKey && document.activeElement === lastElement) {
+                event.preventDefault();
+                firstElement.focus();
+            }
+        });
+    }
+
+    if (modal.dataset.autoOpen === 'true') {
+        delete modal.dataset.autoOpen;
+        openPublicBookingModal(modal);
+    }
+}
+
+async function fetchPublicBookingModal(link) {
+    const root = document.querySelector('[data-public-booking-modal-root]');
+
+    if (!root) {
+        window.location.href = link.href;
+        return;
+    }
+
+    link.setAttribute('aria-busy', 'true');
+
+    try {
+        const response = await fetch(link.href, {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/html',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (response.status === 409 || response.status === 422) {
+            const payload = await response.json();
+
+            if (payload.redirect_url) {
+                window.location.href = payload.redirect_url;
+                return;
+            }
+        }
+
+        if (!response.ok) {
+            throw new Error('Public booking modal request failed.');
+        }
+
+        const template = document.createElement('template');
+        template.innerHTML = await response.text();
+
+        if (!template.content.querySelector('[data-public-booking-modal]')) {
+            throw new Error('Public booking modal response was invalid.');
+        }
+
+        root.replaceChildren(template.content);
+        createIcons({ icons });
+        initPhoneMasks(root);
+        initPublicBookingModal(root);
+        openPublicBookingModal(root.querySelector('[data-public-booking-modal]'), link);
+    } catch {
+        window.location.href = link.href;
+    } finally {
+        link.removeAttribute('aria-busy');
+    }
+}
+
+async function submitPublicBookingForm(form) {
+    const modal = form.closest('[data-public-booking-modal]');
+    const modalBody = modal?.querySelector('[data-public-booking-modal-body]');
+    const formData = new FormData(form);
+
+    clearAsyncFormErrors(form);
+    setFormDisabled(form, true);
+
+    try {
+        const response = await fetch(form.action, {
+            method: form.method.toUpperCase(),
+            body: formData,
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (response.status === 409 && payload.redirect_url) {
+            window.location.href = payload.redirect_url;
+            return;
+        }
+
+        if (response.ok && payload.success_html && modalBody) {
+            const modalTitle = modal?.querySelector('#public-booking-modal-title');
+
+            if (modalTitle && payload.modal_title) {
+                modalTitle.textContent = payload.modal_title;
+            }
+
+            modalBody.innerHTML = payload.success_html;
+            syncPublicBookingUrl();
+            createIcons({ icons });
+            modalBody.querySelector('[data-public-booking-success]')?.focus();
+            return;
+        }
+
+        if (response.status === 422 && payload.errors) {
+            renderAsyncFormErrors(form, payload.errors);
+            return;
+        }
+
+        setAsyncStatus(payload.message ?? fallbackAsyncMessage('error', form), 'error', form);
+    } catch {
+        setAsyncStatus(fallbackAsyncMessage('error', form), 'error', form);
+    } finally {
+        if (document.body.contains(form)) {
+            setFormDisabled(form, false);
+        }
+    }
 }
 
 function syncPublicLegalReturnUrls() {
@@ -3635,6 +3858,11 @@ function initPublicCalendarSwipe() {
 }
 
 async function submitAsyncForm(form) {
+    if (form.matches('[data-public-booking-form]')) {
+        await submitPublicBookingForm(form);
+        return;
+    }
+
     const fallbackCard = form.closest('[data-scheduled-class-card]');
     const formData = new FormData(form);
 
@@ -5218,6 +5446,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPeopleCounterScreenshotViewer();
     initPublicPricingCalculators();
     initPublicCalendarSwipe();
+    initPublicBookingModal();
     initSalaryModelForms();
     initIntegrationForms();
     syncPublicLegalReturnUrls();
@@ -5260,6 +5489,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('form').forEach((form) => {
         updateClassPassScheduleKind(form);
+    });
+
+    document.addEventListener('click', (event) => {
+        const bookingLink = event.target.closest('a[data-public-booking-open]');
+
+        if (!bookingLink || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || bookingLink.target) {
+            return;
+        }
+
+        event.preventDefault();
+        fetchPublicBookingModal(bookingLink);
+    });
+
+    document.addEventListener('click', (event) => {
+        const continueButton = event.target.closest('[data-public-booking-continue]');
+
+        if (!continueButton) {
+            return;
+        }
+
+        const continueUrl = continueButton.dataset.continueUrl;
+        const modal = continueButton.closest('[data-public-booking-modal]');
+
+        closePublicBookingModal(modal, false);
+
+        if (continueUrl) {
+            loadPublicScheduleUrl(continueUrl);
+        }
+    });
+
+    document.addEventListener('submit', (event) => {
+        const publicBookingForm = event.target.closest('form[data-public-booking-form]');
+
+        if (!publicBookingForm) {
+            return;
+        }
+
+        event.preventDefault();
+        submitPublicBookingForm(publicBookingForm);
     });
 
     document.addEventListener('click', (event) => {
@@ -5403,6 +5671,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.addEventListener('submit', (event) => {
+        if (event.defaultPrevented) {
+            return;
+        }
+
         const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
         const asyncForm = event.target.closest('form[data-async-form]');
         const isUnconfirmedAsyncConfirmation = formNeedsConfirmation(asyncForm);

@@ -413,6 +413,19 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('tenant', false);
     }
 
+    public function test_public_pages_help_explains_opt_in_group_booking_popup(): void
+    {
+        $this->get(route('help.show', 'public-pages', false))
+            ->assertOk()
+            ->assertSee('Як увімкнути запис у вікні розкладу', false)
+            ->assertSee('Загальні налаштування → Вигляд розкладу', false)
+            ->assertSee('Відкривати запис на групові заняття у вікні', false)
+            ->assertSee('налаштування зберігається окремо для кожного вигляду', false)
+            ->assertSee('Новий сценарій не вмикається автоматично', false)
+            ->assertSee('підтвердження відкриється на окремій сторінці', false)
+            ->assertSee('assets/help/screenshots/public-schedule-booking-popup-settings.png', false);
+    }
+
     public function test_notification_settings_help_explains_independent_customer_and_trainer_channels(): void
     {
         $this->get(route('help.show', 'notifications', false))

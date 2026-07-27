@@ -285,6 +285,7 @@ class StudioConfigurationTest extends TestCase
             ->assertSee(__('app.public_schedule_view_classic'))
             ->assertSee(__('app.public_schedule_view_compact_booking'))
             ->assertSee(__('app.public_schedule_view_calendar_booking'))
+            ->assertSee(__('app.public_group_booking_modal'))
             ->assertSee('value="'.PublicScheduleView::CalendarBooking->value().'"', false);
 
         $this->actingAs($owner)
@@ -298,13 +299,38 @@ class StudioConfigurationTest extends TestCase
                 'brand_color' => '#3B223F',
                 'timezone' => 'Europe/Kyiv',
                 'public_schedule_view' => PublicScheduleView::CalendarBooking->value(),
+                'public_group_booking_modal_views_present' => 1,
+                'public_group_booking_modal_views' => [
+                    PublicScheduleView::Classic->value(),
+                    PublicScheduleView::CalendarBooking->value(),
+                ],
             ])
             ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'schedule_view']));
 
         $account->refresh();
 
         $this->assertSame(PublicScheduleView::CalendarBooking, $account->publicScheduleView());
+        $this->assertSame([
+            PublicScheduleView::Classic->value(),
+            PublicScheduleView::CalendarBooking->value(),
+        ], $account->publicGroupBookingModalViewValues());
         $this->assertFalse($account->allowsGuestPublicBooking());
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'schedule_view',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+                'public_schedule_view' => PublicScheduleView::CalendarBooking->value(),
+                'public_group_booking_modal_views_present' => 1,
+                'public_group_booking_modal_views' => ['not-a-schedule-view'],
+            ])
+            ->assertSessionHasErrors('public_group_booking_modal_views.0');
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']))
@@ -347,6 +373,10 @@ class StudioConfigurationTest extends TestCase
         $this->assertNull($account->trainer_private_timeframe_weeks);
         $this->assertSame(6, $account->trainerPrivateTimeframeWeeks());
         $this->assertSame(PublicScheduleView::CalendarBooking, $account->publicScheduleView());
+        $this->assertSame([
+            PublicScheduleView::Classic->value(),
+            PublicScheduleView::CalendarBooking->value(),
+        ], $account->publicGroupBookingModalViewValues());
     }
 
     public function test_brand_settings_persist_opening_hours(): void

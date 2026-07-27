@@ -127,6 +127,19 @@
                 $directionColor = $scheduledClass->classType?->activityDirection?->colorAccent('#3B223F') ?? '#3B223F';
                 $formatColor = $account->scheduleKindColor($scheduleKind);
                 $formatTextColor = $account->scheduleKindTextColor($scheduleKind);
+                $bookingParams = [
+                    'accountSlug' => $account->slug,
+                    'locationSlug' => $location->slug,
+                    'schedule_kind' => \App\Enums\ScheduleKind::GroupClass->value,
+                    'scheduled_class_id' => $scheduledClass->id,
+                ];
+
+                if ($usesPublicGroupBookingModal) {
+                    $bookingParams['presentation'] = 'modal';
+                    $bookingParams['return_to'] = request()->fullUrl();
+                }
+
+                $bookingUrl = route('public.booking.show', $bookingParams);
             @endphp
 
             <article id="scheduled-class-{{ $scheduledClass->id }}" class="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-5 shadow-crm" style="border-top-color: {{ $directionColor }}; border-top-width: 4px; border-right-color: {{ $formatColor }}; border-right-width: 4px;">
@@ -181,9 +194,15 @@
                 <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     @if ($canBook)
                         <p class="text-sm text-slate-500">{{ __('app.book_stub') }}</p>
-                        <x-ui.button :href="$customer ? route('customer.dashboard', $account->slug) : route('customer.studio.login', $account->slug)" variant="brand">
-                            {{ __('app.book') }}
-                        </x-ui.button>
+                        @if ($usesPublicGroupBookingModal)
+                            <x-ui.button :href="$bookingUrl" variant="brand" data-public-booking-open>
+                                {{ __('app.book') }}
+                            </x-ui.button>
+                        @else
+                            <x-ui.button :href="$bookingUrl" variant="brand">
+                                {{ __('app.book') }}
+                            </x-ui.button>
+                        @endif
                     @elseif ($isFull)
                         <p class="text-sm font-semibold text-rose-700">{{ __('app.no_available_group_slots') }}</p>
                         <x-ui.button type="button" variant="secondary" disabled>

@@ -126,7 +126,7 @@ class AccountController extends Controller
         $validated = $request->validated();
         $validated['slug'] = $this->uniqueSlug(($validated['slug'] ?? null) ?: $validated['name'], $account);
 
-        $account->update(collect($validated)->except(['brand_tab', 'logo', 'enabled_schedule_kinds_present', 'schedule_kind_colors_present', 'opening_hours_present', 'class_pass_cancellation_rules_present'])->all());
+        $account->update(collect($validated)->except(['brand_tab', 'logo', 'enabled_schedule_kinds_present', 'schedule_kind_colors_present', 'opening_hours_present', 'class_pass_cancellation_rules_present', 'public_group_booking_modal_views_present'])->all());
         $this->storeLogo($request, $account);
 
         if ($previousSlug !== $account->slug) {
