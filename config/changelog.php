@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.103.4',
+                'date' => '2026-07-28',
+                'title' => 'Compatible screenshot reading',
+                'items' => ['Ladna now asks the multimodal model for a concise, prioritized screen reading without generation controls that the cloud vision route does not accept. Important class-pass and customer details remain the focus before the regular assistant handles the request.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.103.3',
                 'date' => '2026-07-28',
                 'title' => 'Faster picture reading',
@@ -954,6 +961,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.103.4',
+                'date' => '2026-07-28',
+                'title' => 'Сумісне читання скріншотів',
+                'items' => ['Ladna тепер просить мультимодальну модель стисло й пріоритетно прочитати екран без параметрів генерації, яких не приймає хмарний маршрут зображень. Важливі дані абонемента й клієнта залишаються у фокусі перед опрацюванням запиту звичайним асистентом.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.103.3',
                 'date' => '2026-07-28',
