@@ -8,6 +8,7 @@ use App\Mail\TransactionalMail;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\EmailDelivery;
+use App\Models\EventOrder;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,11 +27,13 @@ class EmailDeliveryRecorder
         string $locale,
         TransactionalMail $mail,
         MailDeliverySettings $settings,
+        ?EventOrder $eventOrder = null,
     ): EmailDelivery {
         return EmailDelivery::query()->create([
             'account_id' => $account->getKey(),
             'customer_id' => $customer?->getKey(),
             'user_id' => $user?->getKey(),
+            'event_order_id' => $eventOrder?->getKey(),
             'scenario' => $scenario,
             'status' => EmailDeliveryStatus::Pending,
             'recipient_kind' => $scenario->recipientKind(),
@@ -41,7 +44,7 @@ class EmailDeliveryRecorder
             'subject_key' => $mail->subjectKey,
             'subject_parameters' => $mail->subjectParameters,
             'content_view' => $mail->contentView,
-            'payload' => $mail->data,
+            'payload' => $this->auditPayload($mail->data),
             'configured_engine' => $settings->engine->value,
             'queued_at' => now(),
         ]);
@@ -154,5 +157,22 @@ class EmailDeliveryRecorder
         ) ?? $message;
 
         return Str::limit($message !== '' ? $message : $exception::class, 2000);
+    }
+
+    /**
+     * @param  array<string|int, mixed>  $payload
+     * @return array<string|int, mixed>
+     */
+    private function auditPayload(array $payload): array
+    {
+        unset($payload['qr_data']);
+
+        foreach ($payload as $key => $value) {
+            if (is_array($value)) {
+                $payload[$key] = $this->auditPayload($value);
+            }
+        }
+
+        return $payload;
     }
 }

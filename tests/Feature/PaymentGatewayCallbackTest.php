@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\CreateEventOrder;
 use App\Actions\Payments\CreateCustomerPurchase;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
@@ -14,6 +15,8 @@ use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassReservation;
 use App\Models\CustomerPurchase;
+use App\Models\Event;
+use App\Models\EventTicketType;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
 use App\Models\Room;
@@ -307,6 +310,61 @@ class PaymentGatewayCallbackTest extends TestCase
 
         $this->assertSame('payment_started', $purchase->fresh()->status->value);
         $this->assertSame(0, CustomerClassPass::whereBelongsTo($purchase->customer)->count());
+    }
+
+    public function test_liqpay_event_callback_issues_tickets_idempotently_and_logs_callback(): void
+    {
+        $account = Account::factory()->create([
+            'slug' => 'event-callback-'.fake()->unique()->numberBetween(1000, 9999),
+        ]);
+        IntegrationSetting::create([
+            'scope_type' => IntegrationScope::Account->value,
+            'scope_id' => $account->id,
+            'account_id' => $account->id,
+            'provider' => IntegrationProvider::Liqpay->value,
+            'category' => IntegrationCategory::Payment->value,
+            'is_enabled' => true,
+            'credentials' => [
+                'public_key' => 'event-public-key',
+                'private_key' => 'event-private-key',
+            ],
+        ]);
+        $event = Event::factory()->published()->for($account)->create();
+        $ticketType = EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 75000,
+            'inventory' => 10,
+        ]);
+        $order = app(CreateEventOrder::class)->execute($event, [
+            'buyer_name' => 'Event Buyer',
+            'buyer_email' => 'event-buyer@example.com',
+            'provider' => IntegrationProvider::Liqpay->value,
+            'items' => [['ticket_type_id' => $ticketType->id, 'quantity' => 2]],
+            'accept_terms' => true,
+        ], 'en');
+        $data = base64_encode((string) json_encode([
+            'order_id' => $order->order_id,
+            'status' => 'success',
+            'amount' => '1500.00',
+            'currency' => 'UAH',
+            'payment_id' => 98765,
+        ]));
+        $signature = app(LiqPayGateway::class)->signature($data, 'event-private-key');
+        $callback = fn () => $this->post(route('api.v1.event-payments.callbacks', IntegrationProvider::Liqpay->value), [
+            'data' => $data,
+            'signature' => $signature,
+        ])->assertOk();
+
+        $callback();
+        $callback();
+
+        $this->assertSame('paid', $order->fresh()->status->value);
+        $this->assertSame(2, $order->tickets()->count());
+        $files = Storage::disk('local')->allFiles("payment-callbacks/accounts/{$account->id}/liqpay/{$order->order_id}");
+        $this->assertNotEmpty($files);
+        $this->assertStringContainsString(
+            '"event_order_id": '.$order->id,
+            Storage::disk('local')->get(collect($files)->last()),
+        );
     }
 
     /**

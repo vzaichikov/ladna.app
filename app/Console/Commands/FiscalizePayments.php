@@ -4,10 +4,12 @@ namespace App\Console\Commands;
 
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\CustomerPurchaseStatus;
+use App\Enums\EventOrderStatus;
 use App\Enums\FiscalReceiptStatus;
 use App\Models\Account;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\CustomerPurchase;
+use App\Models\EventOrder;
 use App\Support\Fiscalization\FiscalReceiptService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -83,6 +85,24 @@ class FiscalizePayments extends Command
                 };
             });
 
+        EventOrder::query()
+            ->whereIn('status', [EventOrderStatus::Paid->value, EventOrderStatus::RefundRequired->value])
+            ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
+            ->when($accountId === null, fn ($query) => $query->whereHas('account', fn ($query) => $query->operational()))
+            ->with(['account', 'event', 'fiscalReceipt'])
+            ->lazyById()
+            ->each(function (EventOrder $order) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {
+                [$result, $message] = $this->processPayment('event', $order, $fiscalReceipts);
+                $this->line($message);
+                $processed++;
+
+                match ($result) {
+                    'fiscalized' => $fiscalized++,
+                    'failed' => $failed++,
+                    default => $skipped++,
+                };
+            });
+
         $this->components->info("Processed: {$processed}");
         $this->components->info("Fiscalized: {$fiscalized}");
         $this->components->warn("Failed: {$failed}");
@@ -107,7 +127,7 @@ class FiscalizePayments extends Command
      */
     private function processPayment(
         string $kind,
-        AccountSubscriptionPayment|CustomerPurchase $payment,
+        AccountSubscriptionPayment|CustomerPurchase|EventOrder $payment,
         FiscalReceiptService $fiscalReceipts,
     ): array {
         if ($payment->fiscalReceipt?->isFiscalized()) {
@@ -120,9 +140,11 @@ class FiscalizePayments extends Command
             return ['skipped', "[{$kind}] #{$payment->id} {$payment->order_id}: skipped, {$skipReason}."];
         }
 
-        $receipt = $payment instanceof CustomerPurchase
-            ? $fiscalReceipts->fiscalizeCustomerPurchase($payment)
-            : $fiscalReceipts->fiscalizeAccountSubscriptionPayment($payment);
+        $receipt = match (true) {
+            $payment instanceof CustomerPurchase => $fiscalReceipts->fiscalizeCustomerPurchase($payment),
+            $payment instanceof EventOrder => $fiscalReceipts->fiscalizeEventOrder($payment),
+            default => $fiscalReceipts->fiscalizeAccountSubscriptionPayment($payment),
+        };
 
         if (! $receipt) {
             return ['skipped', "[{$kind}] #{$payment->id} {$payment->order_id}: skipped, no fiscal receipt was created."];

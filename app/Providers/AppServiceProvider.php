@@ -63,6 +63,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('markAttendance', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::MarkAttendance));
         Gate::define('manageTrainers', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageTrainers));
         Gate::define('manageStudioSettings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageStudioSettings));
+        Gate::define('manageEvents', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageEvents));
+        Gate::define('checkInEventTickets', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::CheckInEventTickets));
 
         Password::defaults(fn (): Password => Password::min(6));
 
@@ -118,6 +120,14 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('public-booking', function (Request $request): Limit {
             return Limit::perMinute(6)->by($request->string('customer_phone').$request->user('customer')?->getAuthIdentifier().'|'.$request->ip());
+        });
+
+        RateLimiter::for('event-checkout', function (Request $request): Limit {
+            return Limit::perMinute(8)->by($request->string('buyer_email')->lower().'|'.$request->ip());
+        });
+
+        RateLimiter::for('event-scanner', function (Request $request): Limit {
+            return Limit::perMinute(120)->by((string) $request->user()?->id.'|'.$request->ip());
         });
 
         RateLimiter::for('mobile-auth', function (Request $request): Limit {

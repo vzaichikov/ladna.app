@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\EventStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
@@ -63,6 +64,12 @@ class ScheduleOccupancy
                 'starts_at' => __('app.manual_slot_unavailable'),
             ]);
         }
+
+        if ($roomId !== null && $this->hasEventRoomConflict($account, $roomId, $startsAt, $endsAt)) {
+            throw ValidationException::withMessages([
+                'starts_at' => __('app.manual_slot_unavailable'),
+            ]);
+        }
     }
 
     /**
@@ -76,9 +83,28 @@ class ScheduleOccupancy
         CarbonInterface $endsAt,
         ?int $exceptScheduledClassId = null,
     ): bool {
-        return $this->conflictsQuery($account, $roomId, $trainerIds, $startsAt, $endsAt, $exceptScheduledClassId)
+        $hasInternalClassConflict = $this->conflictsQuery($account, $roomId, $trainerIds, $startsAt, $endsAt, $exceptScheduledClassId)
             ->whereHas('classType', fn (Builder $query) => $query
                 ->where('schedule_kind', ScheduleKind::InternalClass->value))
+            ->exists();
+
+        return $hasInternalClassConflict
+            || ($roomId !== null && $this->hasEventRoomConflict($account, $roomId, $startsAt, $endsAt));
+    }
+
+    public function hasEventRoomConflict(
+        Account $account,
+        int $roomId,
+        CarbonInterface $startsAt,
+        CarbonInterface $endsAt,
+        ?int $exceptEventId = null,
+    ): bool {
+        return $account->events()
+            ->where('status', EventStatus::Published->value)
+            ->where('starts_at', '<', $endsAt)
+            ->where('ends_at', '>', $startsAt)
+            ->when($exceptEventId !== null, fn (Builder $query) => $query->whereKeyNot($exceptEventId))
+            ->whereHas('rooms', fn (Builder $query) => $query->whereKey($roomId))
             ->exists();
     }
 

@@ -8,6 +8,7 @@ enum EmailScenarioGroup: string
     case CustomerPasses = 'customer_passes';
     case SubscriptionPayments = 'subscription_payments';
     case SubscriptionLifecycle = 'subscription_lifecycle';
+    case EventTickets = 'event_tickets';
 
     public function labelKey(): string
     {

@@ -23,12 +23,14 @@ class TransactionalMail extends Mailable implements ShouldQueue
     /**
      * @param  array<string, mixed>  $data
      * @param  array<string, mixed>  $subjectParameters
+     * @param  array<int, array{name: string, mime: string, data: string}>  $attachmentData
      */
     public function __construct(
         public readonly string $subjectKey,
         public readonly string $contentView,
         public readonly array $data,
         public readonly array $subjectParameters = [],
+        public readonly array $attachmentData = [],
     ) {
         $this->afterCommit();
     }
@@ -97,6 +99,11 @@ class TransactionalMail extends Mailable implements ShouldQueue
      */
     public function attachments(): array
     {
-        return [];
+        return collect($this->attachmentData)
+            ->map(fn (array $attachment): Attachment => Attachment::fromData(
+                fn (): string => base64_decode($attachment['data'], true) ?: '',
+                $attachment['name'],
+            )->withMime($attachment['mime']))
+            ->all();
     }
 }

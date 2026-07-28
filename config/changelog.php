@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.102.0',
+                'date' => '2026-07-28',
+                'title' => 'Paid events with QR admission',
+                'items' => ['Studios can now publish one-time events with a polished public page, studio-room or external venues, event-only ticket types, early-bird pricing, capacity controls, and paid or free guest checkout without creating customer records.', 'Every admission receives a secure QR ticket by email and on a private guest order page. Managers can review sales and refunds, while authorized door staff use an online mobile scanner and searchable door list with duplicate detection and an immutable check-in/check-out history.', 'Published studio events reserve only their selected rooms across class generation, manual scheduling, booking, rental, and restoration flows. Event payments reuse the configured Monopay, LiqPay, or WayForPay integration and are included in payment totals and fiscalization.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.101.1',
                 'date' => '2026-07-27',
                 'title' => 'Safer and more reliable frontend updates',
@@ -919,6 +926,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.102.0',
+                'date' => '2026-07-28',
+                'title' => 'Платні події з QR-контролем входу',
+                'items' => ['Студії можуть публікувати разові події з охайною публічною сторінкою, залами студії або зовнішнім місцем, окремими типами квитків, early-bird цінами, контролем місткості та платним або безкоштовним гостьовим оформленням без створення клієнта.', 'Кожен вхід отримує захищений QR-квиток електронною поштою та на приватній сторінці замовлення. Менеджери бачать продажі й повернення, а працівники входу користуються мобільним онлайн-сканером і списком гостей з перевіркою повторного входу та незмінною історією входів і виходів.', 'Опубліковані події в студії резервують лише вибрані зали для генерації занять, ручного розкладу, бронювання, оренди та відновлення. Оплати подій використовують налаштовані Monopay, LiqPay або WayForPay і включаються в платіжні підсумки та фіскалізацію.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.101.1',
                 'date' => '2026-07-27',

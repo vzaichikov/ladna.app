@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Actions\CompleteEventOrder;
+use App\Actions\CreateEventOrder;
 use App\Actions\Payments\CompleteCustomerPurchase;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\CustomerPurchaseStatus;
@@ -14,6 +16,8 @@ use App\Models\AccountSubscriptionPayment;
 use App\Models\ClassPassPlan;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
+use App\Models\Event;
+use App\Models\EventTicketType;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\SubscriptionPlan;
@@ -118,6 +122,42 @@ class FiscalizationTest extends TestCase
         $this->assertSame(0, $receipt->scope_id);
         $this->assertSame($account->id, $receipt->account_id);
         $this->assertSame('FN-SAAS-1', $receipt->fiscal_number);
+    }
+
+    public function test_paid_event_order_is_fiscalized_with_event_and_buyer_snapshots(): void
+    {
+        $account = Account::factory()->create();
+        $this->enableAccountFiscalization($account);
+        $event = Event::factory()->published()->for($account)->create(['title' => 'Summer Workshop']);
+        $ticketType = EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 65000,
+            'inventory' => 10,
+        ]);
+        $order = app(CreateEventOrder::class)->execute($event, [
+            'buyer_name' => 'Ticket Buyer',
+            'buyer_email' => 'ticket-buyer@example.com',
+            'buyer_phone' => '+380501112233',
+            'provider' => IntegrationProvider::Liqpay->value,
+            'items' => [['ticket_type_id' => $ticketType->id, 'quantity' => 1]],
+            'accept_terms' => true,
+        ], 'en');
+        $this->fakeCheckboxSuccess('FN-EVENT-1');
+
+        $completed = app(CompleteEventOrder::class)->execute(
+            $order,
+            $this->paidCallback($order->order_id, $order->amount_cents, $order->currency),
+        );
+        $receipt = $completed->fiscalReceipt()->first();
+
+        $this->assertNotNull($receipt);
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt->status);
+        $this->assertSame(IntegrationScope::Account, $receipt->scope_type);
+        $this->assertSame($account->id, $receipt->scope_id);
+        $this->assertSame('FN-EVENT-1', $receipt->fiscal_number);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'goods.0.good.name') === 'Summer Workshop'
+            && data_get($request->data(), 'delivery.email') === 'ticket-buyer@example.com'
+            && data_get($request->data(), 'delivery.phone') === '+380501112233');
     }
 
     public function test_command_fiscalizes_eligible_paid_payments_for_account(): void

@@ -6,6 +6,7 @@ use App\Enums\AccountRole;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\CustomerPurchaseStatus;
 use App\Enums\EmailScenario;
+use App\Enums\EventTicketStatus;
 use App\Mail\TransactionalMail;
 use App\Models\Account;
 use App\Models\AccountSubscription;
@@ -15,10 +16,12 @@ use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassAdjustment;
 use App\Models\CustomerPurchase;
+use App\Models\EventOrder;
 use App\Models\ScheduledClass;
 use App\Models\ScheduledClassCancellation;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Support\Events\EventQrCode;
 use App\Support\MoneyFormatter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -31,6 +34,115 @@ class TransactionalMailDispatcher
         private readonly EmailScenarioSettings $scenarioSettings,
         private readonly EmailDeliveryRecorder $deliveryRecorder,
     ) {}
+
+    public function eventTicketsIssued(EventOrder $order): void
+    {
+        $order->loadMissing(['account', 'event.location', 'event.rooms', 'tickets.ticketType']);
+
+        $validTickets = $order->tickets->where('status', EventTicketStatus::Valid);
+
+        if (! $order->account || ! $order->event || $validTickets->isEmpty()) {
+            return;
+        }
+
+        $qr = app(EventQrCode::class);
+        $tickets = $validTickets->map(function ($ticket) use ($order, $qr): array {
+            $png = $qr->png($ticket);
+
+            return [
+                'type' => $ticket->ticketType?->name,
+                'code' => $ticket->code,
+                'qr_data' => base64_encode($png),
+                'qr_url' => route('public.event-tickets.qr', [
+                    $order->account->slug,
+                    $order->access_token_encrypted,
+                    $ticket->code,
+                ]),
+            ];
+        });
+        $data = [
+            ...$this->accountData($order->account),
+            'recipient_name' => $this->recipientName($order->buyer_name),
+            'event_title' => $order->event->title,
+            'event_time' => $this->eventTime($order),
+            'event_venue' => $this->eventVenue($order),
+            'tickets' => $tickets->all(),
+            'action_url' => route('public.event-orders.show', [$order->account->slug, $order->access_token_encrypted]),
+        ];
+        $attachments = $tickets->map(fn (array $ticket): array => [
+            'name' => $ticket['code'].'.png',
+            'mime' => 'image/png',
+            'data' => $ticket['qr_data'],
+        ])->all();
+
+        $this->sendToAddress(
+            email: $order->buyer_email,
+            name: $order->buyer_name,
+            account: $order->account,
+            scenario: EmailScenario::EventTicketsIssued,
+            mail: new TransactionalMail(
+                subjectKey: EmailScenario::EventTicketsIssued->subjectKey(),
+                contentView: EmailScenario::EventTicketsIssued->contentView(),
+                data: $data,
+                subjectParameters: ['event' => $order->event->title, 'studio' => $order->account->name],
+                attachmentData: $attachments,
+            ),
+            locale: $order->locale,
+            eventOrder: $order,
+        );
+    }
+
+    public function eventBuyerNotice(EventOrder $order, EmailScenario $scenario): void
+    {
+        abort_unless(in_array($scenario, [
+            EmailScenario::EventUpdated,
+            EmailScenario::EventCancelled,
+            EmailScenario::EventPaymentAttention,
+        ], true), 500);
+        $order->loadMissing(['account', 'event.location', 'event.rooms']);
+
+        if (! $order->account || ! $order->event) {
+            return;
+        }
+
+        $data = [
+            ...$this->accountData($order->account),
+            'recipient_name' => $this->recipientName($order->buyer_name),
+            'event_title' => $order->event->title,
+            'event_time' => $this->eventTime($order),
+            'event_venue' => $this->eventVenue($order),
+            'amount' => $order->amount_cents > 0 ? MoneyFormatter::format($order->amount_cents, $order->currency) : null,
+            'action_url' => route('public.event-orders.show', [$order->account->slug, $order->access_token_encrypted]),
+        ];
+
+        $this->sendToAddress(
+            email: $order->buyer_email,
+            name: $order->buyer_name,
+            account: $order->account,
+            scenario: $scenario,
+            mail: new TransactionalMail(
+                subjectKey: $scenario->subjectKey(),
+                contentView: $scenario->contentView(),
+                data: $data,
+                subjectParameters: ['event' => $order->event->title, 'studio' => $order->account->name],
+            ),
+            locale: $order->locale,
+            eventOrder: $order,
+        );
+    }
+
+    private function eventTime(EventOrder $order): string
+    {
+        return $order->event->starts_at->copy()->timezone($order->event->timezone)->format('Y-m-d H:i')
+            .' - '.$order->event->ends_at->copy()->timezone($order->event->timezone)->format('H:i');
+    }
+
+    private function eventVenue(EventOrder $order): string
+    {
+        return $order->event->venue_kind->value === 'studio'
+            ? collect([$order->event->location?->name, $order->event->rooms->pluck('name')->join(', ')])->filter()->join(' · ')
+            : collect([$order->event->external_venue_name, $order->event->external_address])->filter()->join(' · ');
+    }
 
     public function customerClassPassIssued(CustomerClassPass $classPass): void
     {
@@ -440,6 +552,7 @@ class TransactionalMailDispatcher
         ?string $locale = null,
         ?Customer $customer = null,
         ?User $user = null,
+        ?EventOrder $eventOrder = null,
     ): void {
         if ($account->isReadOnlyDemo() || ! $this->scenarioSettings->isEnabled($scenario)) {
             return;
@@ -463,6 +576,7 @@ class TransactionalMailDispatcher
             locale: $locale,
             mail: $mail,
             settings: $settings,
+            eventOrder: $eventOrder,
         );
 
         $mail

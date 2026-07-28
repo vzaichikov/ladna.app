@@ -3,7 +3,6 @@
 namespace App\Support\Payments;
 
 use App\Enums\IntegrationProvider;
-use App\Models\CustomerPurchase;
 use App\Models\IntegrationSetting;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,21 +16,21 @@ class LiqPayGateway implements PaymentGateway
         return IntegrationProvider::Liqpay;
     }
 
-    public function start(CustomerPurchase $purchase, IntegrationSetting $setting): PaymentCheckout
+    public function start(PaymentCheckoutRequest $checkout, IntegrationSetting $setting): PaymentCheckout
     {
         $credentials = $setting->readableCredentials();
         $data = [
             'public_key' => (string) $credentials['public_key'],
             'version' => (int) ($credentials['api_version'] ?? 7),
             'action' => 'pay',
-            'amount' => PaymentAmounts::centsToDecimalString($purchase->amount_cents),
-            'currency' => $purchase->currency,
-            'description' => $purchase->plan_name,
-            'order_id' => $purchase->order_id,
-            'result_url' => route('customer.purchases.return', [$purchase->account->slug, $purchase]),
-            'server_url' => route('api.v1.payments.callbacks', $this->provider()->value),
-            'customer' => (string) $purchase->customer_id,
-            'language' => app()->getLocale() === 'en' ? 'en' : 'uk',
+            'amount' => PaymentAmounts::centsToDecimalString($checkout->amountCents),
+            'currency' => $checkout->currency,
+            'description' => $checkout->description,
+            'order_id' => $checkout->reference,
+            'result_url' => $checkout->returnUrl,
+            'server_url' => $checkout->callbackUrl,
+            'customer' => $checkout->buyerEmail ?? $checkout->reference,
+            'language' => $checkout->locale === 'en' ? 'en' : 'uk',
         ];
 
         $encodedData = base64_encode((string) json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
@@ -81,7 +80,7 @@ class LiqPayGateway implements PaymentGateway
         );
     }
 
-    public function callbackResponse(CustomerPurchase $purchase, IntegrationSetting $setting): Response
+    public function callbackResponse(string $reference, IntegrationSetting $setting): Response
     {
         return response('OK');
     }

@@ -82,6 +82,6 @@ class CustomerPurchaseCallbackController extends Controller
             'status' => $purchase->status->value,
         ]);
 
-        return $gateway->callbackResponse($purchase, $setting);
+        return $gateway->callbackResponse($purchase->order_id, $setting);
     }
 }

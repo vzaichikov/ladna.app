@@ -8,6 +8,7 @@ use App\Enums\IntegrationScope;
 use App\Models\Account;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\CustomerPurchase;
+use App\Models\EventOrder;
 use App\Models\IntegrationSetting;
 use App\Support\IntegrationCatalog;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,9 +43,9 @@ class FiscalizationAvailability
         return $this->configuredMethod(IntegrationSetting::platform());
     }
 
-    public function methodForPayment(CustomerPurchase|AccountSubscriptionPayment $payment): ?IntegrationSetting
+    public function methodForPayment(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment): ?IntegrationSetting
     {
-        if ($payment instanceof CustomerPurchase) {
+        if ($payment instanceof CustomerPurchase || $payment instanceof EventOrder) {
             $account = $payment->relationLoaded('account')
                 ? $payment->account
                 : $payment->account()->first();

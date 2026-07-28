@@ -17,6 +17,8 @@ enum StudioPermission: string
     case MarkAttendance = 'mark_attendance';
     case ManageTrainers = 'manage_trainers';
     case ManageStudioSettings = 'manage_studio_settings';
+    case ManageEvents = 'manage_events';
+    case CheckInEventTickets = 'check_in_event_tickets';
 
     public function labelKey(): string
     {
@@ -32,7 +34,7 @@ enum StudioPermission: string
     {
         return match ($this) {
             self::CorrectClosedClasses, self::ManageStudioCashflow => 'critical',
-            self::ManageStudioSettings, self::ManageTrainers, self::ManageCustomerClassPasses, self::IssueCustomerClassPasses => 'high',
+            self::ManageStudioSettings, self::ManageTrainers, self::ManageCustomerClassPasses, self::IssueCustomerClassPasses, self::ManageEvents => 'high',
             default => 'standard',
         };
     }

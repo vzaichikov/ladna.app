@@ -96,7 +96,7 @@ class PlatformEmailScenarioTest extends TestCase
             ->assertRedirect(route('platform.email-scenarios.index'));
 
         $this->assertTrue(app(EmailScenarioSettings::class)->isEnabled(EmailScenario::BookingCreated));
-        $this->assertSame(19, EmailScenarioSetting::query()->count());
+        $this->assertSame(count(EmailScenario::cases()), EmailScenarioSetting::query()->count());
     }
 
     public function test_preview_is_sandboxed_bilingual_and_platform_only(): void

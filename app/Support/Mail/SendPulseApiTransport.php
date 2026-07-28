@@ -27,6 +27,8 @@ class SendPulseApiTransport extends AbstractTransport
             $response = $this->client->post('/smtp/emails', [
                 'email' => $this->payload($message),
             ]);
+        } catch (TransportException $exception) {
+            throw $exception;
         } catch (Throwable $exception) {
             throw new TransportException('Request to SendPulse API failed.', 0, $exception);
         }
@@ -48,6 +50,7 @@ class SendPulseApiTransport extends AbstractTransport
     private function payload(SentMessage $message): array
     {
         $email = MessageConverter::toEmail($message->getOriginalMessage());
+        $this->ensureNoInlineAttachments($email);
         $html = (string) ($email->getHtmlBody() ?? '');
         $text = (string) ($email->getTextBody() ?? trim(strip_tags($html)));
         $from = $email->getFrom()[0] ?? $message->getEnvelope()->getSender();
@@ -82,6 +85,17 @@ class SendPulseApiTransport extends AbstractTransport
         }
 
         return $payload;
+    }
+
+    private function ensureNoInlineAttachments(Email $email): void
+    {
+        foreach ($email->getAttachments() as $attachment) {
+            if ($attachment->getDisposition() === 'inline') {
+                throw new TransportException(
+                    'SendPulse API does not support inline MIME attachments. Use an HTTPS image URL or the SMTP transport.',
+                );
+            }
+        }
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\PublicScheduleController;
 use App\Http\Controllers\Api\V1\TelegramWebhookController;
 use App\Http\Controllers\Api\V1\WebsiteLeadController;
 use App\Http\Controllers\Payments\CustomerPurchaseCallbackController;
+use App\Http\Controllers\Payments\EventOrderCallbackController;
 use App\Http\Controllers\Payments\SaasPaymentCallbackController;
 use App\Http\Middleware\AuthenticateAccountApiToken;
 use App\Http\Middleware\AuthenticateMobileSession;
@@ -70,6 +71,8 @@ Route::post('v1/telegram/webhooks/{webhookKey}', TelegramWebhookController::clas
 
 Route::post('v1/payments/{provider}/callbacks', [CustomerPurchaseCallbackController::class, 'store'])
     ->name('api.v1.payments.callbacks');
+Route::post('v1/event-payments/{provider}/callbacks', [EventOrderCallbackController::class, 'store'])
+    ->name('api.v1.event-payments.callbacks');
 
 Route::post('v1/saas/payments/{provider}/callbacks', [SaasPaymentCallbackController::class, 'store'])
     ->name('api.v1.saas.payments.callbacks');

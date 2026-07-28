@@ -693,6 +693,24 @@
             </div>
         @endif
 
+        @if ($eventPayments->isNotEmpty())
+            <x-ui.panel class="mt-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div><h3 class="text-base font-semibold text-slate-950">{{ __('app.event_payments') }}</h3><p class="mt-1 text-sm text-slate-500">{{ __('app.event_payments_help') }}</p></div>
+                </div>
+                <div class="mt-4 divide-y divide-stone-100">
+                    @foreach ($eventPayments as $eventPayment)
+                        <div class="grid gap-3 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                            <div><strong class="text-slate-950">{{ $eventPayment->event?->title }}</strong><p class="mt-1 text-xs text-slate-500">{{ $eventPayment->buyer_name }} · {{ $eventPayment->order_id }}</p></div>
+                            <span class="text-sm font-semibold">{{ $formatMoney($eventPayment->amount_cents, $eventPayment->currency) }}</span>
+                            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{{ __('app.event_order_status_'.$eventPayment->status->value) }}</span>
+                        </div>
+                    @endforeach
+                </div>
+                @if ($eventPayments->hasPages())<div class="mt-4">{{ $eventPayments->links() }}</div>@endif
+            </x-ui.panel>
+        @endif
+
         <x-ui.panel class="mt-4">
             <details @if ($errors->has('name')) open @endif>
                 <summary class="crm-focus min-h-11 cursor-pointer text-base font-semibold text-slate-950">{{ __('app.manage_expense_categories') }}</summary>

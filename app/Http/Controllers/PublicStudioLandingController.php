@@ -23,11 +23,23 @@ class PublicStudioLandingController extends Controller
             ->active()
             ->orderBy('name')
             ->get(['id', 'account_id', 'name', 'slug', 'address', 'google_maps_embed_url']);
+        $events = $account->events()
+            ->published()
+            ->upcoming()
+            ->select(['id', 'account_id', 'slug', 'title', 'summary', 'starts_at', 'ends_at', 'timezone'])
+            ->with(['media' => fn ($query) => $query
+                ->select(['id', 'event_id', 'image_path', 'alt_text', 'sort_order', 'is_cover'])
+                ->where('is_cover', true)])
+            ->orderBy('starts_at')
+            ->orderBy('id')
+            ->limit(6)
+            ->get();
 
         return view('public.studio', [
             'account' => $account,
             'customer' => $this->currentCustomerFor($account),
             'locations' => $locations,
+            'events' => $events,
         ]);
     }
 

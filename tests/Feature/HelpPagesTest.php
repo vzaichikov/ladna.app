@@ -60,6 +60,58 @@ class HelpPagesTest extends TestCase
         }
     }
 
+    public function test_events_help_explains_the_complete_owner_flow(): void
+    {
+        $this->get(route('help.show', 'events', false))
+            ->assertOk()
+            ->assertSee('Події та квитки', false)
+            ->assertSee('Подія не є заняттям із розкладу', false)
+            ->assertSee('картку клієнта', false)
+            ->assertSee('обрані зали стають недоступними для занять і оренди', false)
+            ->assertSee('Наявні записи не скасовуються автоматично', false)
+            ->assertSee('Копіювати посилання', false)
+            ->assertSee('Early bird', false)
+            ->assertSee('30 хвилин', false)
+            ->assertSee('один QR-код на кожне місце', false)
+            ->assertSee('Надіслати повторно', false)
+            ->assertSee('не повертає гроші через платіжний сервіс автоматично', false)
+            ->assertSee('Сканер працює тільки онлайн', false)
+            ->assertSee('двом телефонам одночасно прийняти той самий квиток', false)
+            ->assertSee('assets/help/screenshots/events-list.png', false)
+            ->assertSee('assets/help/screenshots/event-editor.png', false)
+            ->assertSee('assets/help/screenshots/event-tickets.png', false)
+            ->assertSee('assets/help/screenshots/public-event-page.png', false)
+            ->assertSee('assets/help/screenshots/event-ticket-scanner.png', false)
+            ->assertDontSee('tenant', false)
+            ->assertDontSee('callback', false)
+            ->assertDontSee('lockForUpdate', false)
+            ->assertDontSee('DTO', false)
+            ->assertDontSee('hash', false)
+            ->assertDontSee('CRM', false);
+    }
+
+    public function test_events_help_screenshots_exist(): void
+    {
+        foreach (config('help.pages.events.screenshots') as $screenshot) {
+            $this->assertFileExists(public_path($screenshot['path']));
+        }
+    }
+
+    public function test_owner_help_search_finds_events_workflows(): void
+    {
+        foreach ([
+            'як створити подію і продати квитки',
+            'як налаштувати Early bird',
+            'як сканувати QR-квиток на вході',
+            'як повернути гроші за скасовану подію',
+            'how to create an event and sell tickets',
+        ] as $question) {
+            $result = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame('events', $result[0]['slug'] ?? null, $question);
+        }
+    }
+
     public function test_passes_prices_help_explains_class_pass_segments(): void
     {
         $this->get(route('help.show', 'passes-prices', false))

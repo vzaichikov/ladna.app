@@ -68,6 +68,14 @@ class ScheduledTaskRegistry
                 'overlap_minutes' => 10,
             ],
             [
+                'key' => 'event_orders_expire',
+                'command' => 'event-orders:expire',
+                'expression' => '* * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_minute',
+                'description_key' => 'scheduled_task_event_orders_expire_description',
+                'overlap_minutes' => 5,
+            ],
+            [
                 'key' => 'account_activity_logs_prune',
                 'command' => 'account-activity-logs:prune',
                 'expression' => '0 0 * * *',

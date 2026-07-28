@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\ClassBookingStatus;
+use App\Enums\EventStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
@@ -219,7 +220,7 @@ class ManualQuickBookingAvailability
             ClassBookingStatus::Attended->value,
         ];
 
-        return $account->scheduledClasses()
+        $scheduledClasses = $account->scheduledClasses()
             ->where('status', ScheduledClassStatus::Scheduled->value)
             ->where(function ($query) use ($roomId, $trainerId, $customerId, $activeBookingStatuses): void {
                 $query->where('room_id', $roomId);
@@ -242,6 +243,15 @@ class ManualQuickBookingAvailability
             ->where('starts_at', '<', $closesAt->timezone(config('app.timezone')))
             ->where('ends_at', '>', $opensAt->timezone(config('app.timezone')))
             ->get(['id', 'starts_at', 'ends_at', 'room_id', 'trainer_id']);
+
+        $events = $account->events()
+            ->where('status', EventStatus::Published->value)
+            ->whereHas('rooms', fn ($query) => $query->whereKey($roomId))
+            ->where('starts_at', '<', $closesAt->timezone(config('app.timezone')))
+            ->where('ends_at', '>', $opensAt->timezone(config('app.timezone')))
+            ->get(['id', 'starts_at', 'ends_at']);
+
+        return $scheduledClasses->concat($events);
     }
 
     private function customerIdFor(Account $account, mixed $customerId): ?int

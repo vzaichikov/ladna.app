@@ -56,6 +56,17 @@ class EmailScenarioPreviewFactory
                 'locations' => 2,
                 'plan' => 'Growth',
             ],
+            'event_title' => 'Summer yoga morning',
+            'event_time' => '2026-08-14 09:00 - 11:00',
+            'event_venue' => 'Podil · Purple room',
+            'tickets' => [
+                [
+                    'type' => 'General admission',
+                    'code' => 'EVT-DEMO-0001',
+                    'qr_data' => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+                    'qr_url' => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+                ],
+            ],
         ];
 
         return [
@@ -64,6 +75,7 @@ class EmailScenarioPreviewFactory
                 'studio' => $data['account_name'],
                 'class' => $data['class_title'],
                 'pass' => $data['pass_name'],
+                'event' => $data['event_title'],
             ],
         ];
     }

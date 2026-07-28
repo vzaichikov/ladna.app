@@ -28,6 +28,8 @@ enum AccountRole: string
                 StudioPermission::ManageWebsiteLeads,
                 StudioPermission::MarkAttendance,
                 StudioPermission::ManageTrainers,
+                StudioPermission::ManageEvents,
+                StudioPermission::CheckInEventTickets,
             ],
             self::Trainer => [
                 StudioPermission::ManageSchedule,
@@ -39,6 +41,7 @@ enum AccountRole: string
                 StudioPermission::ManageBookings,
                 StudioPermission::ManageWebsiteLeads,
                 StudioPermission::MarkAttendance,
+                StudioPermission::CheckInEventTickets,
             ],
         };
     }

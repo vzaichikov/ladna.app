@@ -40,6 +40,14 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Do not create verification scripts or tinker when tests cover that functionality and prove they work. Unit and feature tests are more important.
 
+## Database Safety
+
+- The default local database contains persistent development data. It is not a disposable test database. The production database exists only on the production host.
+- Never run `migrate:fresh`, `migrate:reset`, `db:wipe`, schema-drop commands, or any equivalent database rebuild against Ladna in any environment.
+- Do not treat `--env=testing` as proof of database isolation. Before running tests that may write to a database, resolve the actual configured database name and confirm that it is an explicitly configured, dedicated test database. If this cannot be proven, stop.
+- Use forward-only `php artisan migrate --no-interaction` for local development schema changes. Production migrations are performed only through the guarded production deployment workflow.
+- Tests must use the existing transaction/rollback conventions and a dedicated test database; they must never rebuild the development or production database.
+
 ## Playwright QA
 
 - Playwright is installed only under `.codex`; do not add Playwright to the root `package.json` unless the user explicitly asks.

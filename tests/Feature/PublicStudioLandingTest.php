@@ -77,6 +77,7 @@ class PublicStudioLandingTest extends TestCase
             ->assertSee('brand/charmpole-icon.svg', false)
             ->assertSee('brand/ladna-mark.svg', false)
             ->assertSee(__('app.powered_by_ladna'))
+            ->assertSee('data-public-studio-footer-identity', false)
             ->assertSee('data-customer-footer-legal-links', false)
             ->assertSee('data-public-rules-footer-link', false)
             ->assertSee('data-public-offer-footer-link', false)

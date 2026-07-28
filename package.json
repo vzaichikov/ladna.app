@@ -15,6 +15,7 @@
     },
     "dependencies": {
         "@panzoom/panzoom": "^4.6.2",
+        "@zxing/browser": "^0.1.5",
         "jquery": "^3.7.1",
         "lucide": "^1.21.0",
         "simple-phone-mask": "^1.0.5",

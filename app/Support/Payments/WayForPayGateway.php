@@ -3,7 +3,6 @@
 namespace App\Support\Payments;
 
 use App\Enums\IntegrationProvider;
-use App\Models\CustomerPurchase;
 use App\Models\IntegrationSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -18,12 +17,12 @@ class WayForPayGateway implements PaymentGateway
         return IntegrationProvider::Wayforpay;
     }
 
-    public function start(CustomerPurchase $purchase, IntegrationSetting $setting): PaymentCheckout
+    public function start(PaymentCheckoutRequest $checkout, IntegrationSetting $setting): PaymentCheckout
     {
         $credentials = $setting->readableCredentials();
-        $amount = PaymentAmounts::centsToDecimalString($purchase->amount_cents);
+        $amount = PaymentAmounts::centsToDecimalString($checkout->amountCents);
         $orderDate = now()->timestamp;
-        $productName = [$purchase->plan_name];
+        $productName = [$checkout->description];
         $productCount = [1];
         $productPrice = [$amount];
         $merchantAccount = (string) $credentials['merchant_account'];
@@ -33,26 +32,26 @@ class WayForPayGateway implements PaymentGateway
             'merchantAccount' => $merchantAccount,
             'merchantAuthType' => (string) ($credentials['merchant_auth_type'] ?? 'SimpleSignature'),
             'merchantDomainName' => $merchantDomainName,
-            'orderReference' => $purchase->order_id,
+            'orderReference' => $checkout->reference,
             'orderDate' => $orderDate,
             'amount' => $amount,
-            'currency' => $purchase->currency,
+            'currency' => $checkout->currency,
             'productName[]' => $productName,
             'productPrice[]' => $productPrice,
             'productCount[]' => $productCount,
-            'clientEmail' => $purchase->customer->email,
-            'clientPhone' => $purchase->customer->phone,
-            'serviceUrl' => route('api.v1.payments.callbacks', $this->provider()->value),
-            'returnUrl' => route('customer.purchases.return', [$purchase->account->slug, $purchase]),
-            'language' => app()->getLocale() === 'en' ? 'EN' : 'UA',
+            'clientEmail' => $checkout->buyerEmail,
+            'clientPhone' => $checkout->buyerPhone,
+            'serviceUrl' => $checkout->callbackUrl,
+            'returnUrl' => $checkout->returnUrl,
+            'language' => $checkout->locale === 'en' ? 'EN' : 'UA',
         ];
         $fields['merchantSignature'] = $this->checkoutSignature(
             $merchantAccount,
             $merchantDomainName,
-            $purchase->order_id,
+            $checkout->reference,
             $orderDate,
             $amount,
-            $purchase->currency,
+            $checkout->currency,
             $productName,
             $productCount,
             $productPrice,
@@ -101,13 +100,13 @@ class WayForPayGateway implements PaymentGateway
         );
     }
 
-    public function callbackResponse(CustomerPurchase $purchase, IntegrationSetting $setting): Response
+    public function callbackResponse(string $reference, IntegrationSetting $setting): Response
     {
         $time = now()->timestamp;
         $credentials = $setting->readableCredentials();
 
         return response()->json($this->acceptResponsePayload(
-            $purchase->order_id,
+            $reference,
             $time,
             (string) $credentials['merchant_secret_key'],
         ));

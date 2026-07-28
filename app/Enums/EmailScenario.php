@@ -25,6 +25,10 @@ enum EmailScenario: string
     case SaasCancellation = 'saas_cancellation';
     case SaasReactivation = 'saas_reactivation';
     case SaasTariffChange = 'saas_tariff_change';
+    case EventTicketsIssued = 'event_tickets_issued';
+    case EventUpdated = 'event_updated';
+    case EventCancelled = 'event_cancelled';
+    case EventPaymentAttention = 'event_payment_attention';
 
     public function group(): EmailScenarioGroup
     {
@@ -51,6 +55,11 @@ enum EmailScenario: string
             self::SaasCancellation,
             self::SaasReactivation,
             self::SaasTariffChange => EmailScenarioGroup::SubscriptionLifecycle,
+
+            self::EventTicketsIssued,
+            self::EventUpdated,
+            self::EventCancelled,
+            self::EventPaymentAttention => EmailScenarioGroup::EventTickets,
         };
     }
 
@@ -61,6 +70,7 @@ enum EmailScenario: string
             EmailScenarioGroup::CustomerPasses => EmailRecipientKind::Customer,
             EmailScenarioGroup::SubscriptionPayments,
             EmailScenarioGroup::SubscriptionLifecycle => EmailRecipientKind::StudioOwner,
+            EmailScenarioGroup::EventTickets => EmailRecipientKind::EventBuyer,
         };
     }
 
@@ -91,6 +101,10 @@ enum EmailScenario: string
             self::SaasCancellation,
             self::SaasReactivation,
             self::SaasTariffChange => 'mail.content.saas-lifecycle-notice',
+            self::EventTicketsIssued => 'mail.content.event-tickets-issued',
+            self::EventUpdated => 'mail.content.event-updated',
+            self::EventCancelled => 'mail.content.event-cancelled',
+            self::EventPaymentAttention => 'mail.content.event-payment-attention',
         };
     }
 
@@ -126,6 +140,10 @@ enum EmailScenario: string
             self::SaasCancellation,
             self::SaasReactivation,
             self::SaasTariffChange => true,
+            self::EventTicketsIssued,
+            self::EventUpdated,
+            self::EventCancelled,
+            self::EventPaymentAttention => true,
             default => false,
         };
     }

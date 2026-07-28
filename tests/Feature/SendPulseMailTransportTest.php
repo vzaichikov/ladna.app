@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Http;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use Symfony\Component\Mime\Part\DataPart;
 use Tests\TestCase;
 
 class SendPulseMailTransportTest extends TestCase
@@ -88,6 +89,26 @@ class SendPulseMailTransportTest extends TestCase
         }
 
         Http::assertSentCount(1);
+    }
+
+    public function test_transport_rejects_inline_mime_attachments_that_sendpulse_cannot_represent(): void
+    {
+        Http::fake();
+        $inlineQr = (new DataPart('qr image', 'ticket.png', 'image/png'))
+            ->asInline()
+            ->setContentId('ticket@ladna.test');
+        $email = $this->email()
+            ->html('<p><img src="cid:ticket@ladna.test" alt="QR"></p>')
+            ->addPart($inlineQr);
+
+        try {
+            $this->transport()->send($email);
+            $this->fail('Expected the unsupported inline attachment to be rejected.');
+        } catch (TransportException $exception) {
+            $this->assertStringContainsString('does not support inline MIME attachments', $exception->getMessage());
+        }
+
+        Http::assertNothingSent();
     }
 
     public function test_transport_does_not_retry_client_errors(): void

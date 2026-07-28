@@ -32,6 +32,10 @@ class EmailScenarioRegistryTest extends TestCase
             'saas_cancellation',
             'saas_reactivation',
             'saas_tariff_change',
+            'event_tickets_issued',
+            'event_updated',
+            'event_cancelled',
+            'event_payment_attention',
         ], array_column(EmailScenario::cases(), 'value'));
 
         foreach (EmailScenario::cases() as $scenario) {

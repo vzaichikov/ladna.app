@@ -3,7 +3,6 @@
 namespace App\Support\Payments;
 
 use App\Enums\IntegrationProvider;
-use App\Models\CustomerPurchase;
 use App\Models\IntegrationSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -19,29 +18,29 @@ class MonopayGateway implements PaymentGateway
         return IntegrationProvider::Monopay;
     }
 
-    public function start(CustomerPurchase $purchase, IntegrationSetting $setting): PaymentCheckout
+    public function start(PaymentCheckoutRequest $checkout, IntegrationSetting $setting): PaymentCheckout
     {
         $credentials = $setting->readableCredentials();
         $payload = [
-            'amount' => $purchase->amount_cents,
-            'ccy' => PaymentAmounts::iso4217NumericCode($purchase->currency),
+            'amount' => $checkout->amountCents,
+            'ccy' => PaymentAmounts::iso4217NumericCode($checkout->currency),
             'merchantPaymInfo' => [
-                'reference' => $purchase->order_id,
-                'destination' => $purchase->plan_name,
-                'comment' => $purchase->plan_name,
-                'customerEmails' => array_values(array_filter([$purchase->customer->email])),
+                'reference' => $checkout->reference,
+                'destination' => $checkout->description,
+                'comment' => $checkout->description,
+                'customerEmails' => array_values(array_filter([$checkout->buyerEmail])),
                 'basketOrder' => [[
-                    'name' => $purchase->plan_name,
+                    'name' => $checkout->description,
                     'qty' => 1,
-                    'sum' => $purchase->amount_cents,
-                    'total' => $purchase->amount_cents,
+                    'sum' => $checkout->amountCents,
+                    'total' => $checkout->amountCents,
                     'unit' => 'pcs',
-                    'code' => $purchase->order_id,
+                    'code' => $checkout->reference,
                 ]],
             ],
-            'redirectUrl' => route('customer.purchases.return', [$purchase->account->slug, $purchase]),
-            'webHookUrl' => route('api.v1.payments.callbacks', $this->provider()->value),
-            'validity' => (int) ($credentials['invoice_validity_seconds'] ?? 3600),
+            'redirectUrl' => $checkout->returnUrl,
+            'webHookUrl' => $checkout->callbackUrl,
+            'validity' => (int) max(60, now()->diffInSeconds($checkout->expiresAt, false)),
             'paymentType' => 'debit',
         ];
 
@@ -104,7 +103,7 @@ class MonopayGateway implements PaymentGateway
         );
     }
 
-    public function callbackResponse(CustomerPurchase $purchase, IntegrationSetting $setting): Response
+    public function callbackResponse(string $reference, IntegrationSetting $setting): Response
     {
         return response('OK');
     }

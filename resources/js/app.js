@@ -2,6 +2,7 @@ import { createIcons, icons } from 'lucide';
 import Panzoom from '@panzoom/panzoom';
 import SimplePhoneMask from 'simple-phone-mask';
 import 'summernote/dist/summernote-lite.css';
+import { initEventScanner } from './event-scanner';
 
 let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
@@ -401,9 +402,10 @@ function initStudioRulesEditors() {
             }
 
             editor.dataset.studioRulesEditorReady = 'true';
+            const configuredHeight = Number.parseInt(editor.dataset.editorHeight || '420', 10);
 
             $(editor).summernote({
-                height: 420,
+                height: Number.isNaN(configuredHeight) ? 420 : configuredHeight,
                 placeholder: editor.dataset.placeholder || '',
                 toolbar: [
                     ['style', ['style']],
@@ -5409,7 +5411,99 @@ function initIntegrationForms(root = document) {
     });
 }
 
+function setEventVenueGroupEnabled(group, enabled) {
+    if (!group) {
+        return;
+    }
+
+    group.classList.toggle('hidden', !enabled);
+    group.setAttribute('aria-hidden', String(!enabled));
+    group.querySelectorAll('input, select, textarea').forEach((field) => {
+        field.disabled = !enabled;
+    });
+}
+
+function updateEventVenueForm(form) {
+    const venueKind = form.querySelector('input[name="venue_kind"]:checked')?.value || 'studio';
+    const studioFields = form.querySelector('[data-event-venue-fields="studio"]');
+    const externalFields = form.querySelector('[data-event-venue-fields="external"]');
+    const location = form.querySelector('[data-event-location]');
+    const externalVenueName = form.querySelector('input[name="external_venue_name"]');
+    const externalAddress = form.querySelector('input[name="external_address"]');
+    const studioSelected = venueKind === 'studio';
+
+    setEventVenueGroupEnabled(studioFields, studioSelected);
+    setEventVenueGroupEnabled(externalFields, !studioSelected);
+
+    if (location) {
+        location.required = studioSelected;
+    }
+
+    if (externalVenueName) {
+        externalVenueName.required = !studioSelected;
+    }
+
+    if (externalAddress) {
+        externalAddress.required = !studioSelected;
+    }
+
+    if (!studioSelected || !studioFields) {
+        return;
+    }
+
+    const selectedLocationId = location?.value || '';
+    let visibleRoomCount = 0;
+
+    studioFields.querySelectorAll('[data-event-room-card]').forEach((card) => {
+        const visible = selectedLocationId !== '' && card.dataset.locationId === selectedLocationId;
+        const checkbox = card.querySelector('input[type="checkbox"]');
+
+        card.classList.toggle('hidden', !visible);
+        card.classList.toggle('flex', visible);
+
+        if (checkbox) {
+            if (!visible && selectedLocationId !== '') {
+                checkbox.checked = false;
+            }
+
+            checkbox.disabled = !visible;
+        }
+
+        if (visible) {
+            visibleRoomCount += 1;
+        }
+    });
+
+    const empty = studioFields.querySelector('[data-event-room-empty]');
+
+    if (empty) {
+        empty.classList.toggle('hidden', visibleRoomCount > 0);
+        empty.textContent = selectedLocationId === ''
+            ? empty.dataset.chooseLocation
+            : empty.dataset.noRooms;
+    }
+}
+
+function initEventForms(root = document) {
+    root.querySelectorAll('[data-event-form]').forEach((form) => {
+        if (form.dataset.eventFormReady === 'true') {
+            return;
+        }
+
+        form.addEventListener('change', (event) => {
+            if (event.target.matches('input[name="venue_kind"], [data-event-location]')) {
+                updateEventVenueForm(form);
+            }
+        });
+
+        form.dataset.eventFormReady = 'true';
+        updateEventVenueForm(form);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    initEventScanner();
+    initEventForms();
     createIcons({ icons });
     initSlugAutofill();
     initColorPickers();

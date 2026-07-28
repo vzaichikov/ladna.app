@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'customer_id', 'user_id', 'scenario', 'status', 'recipient_kind', 'recipient_name', 'recipient_email', 'locale', 'account_timezone', 'subject', 'subject_key', 'subject_parameters', 'content_view', 'payload', 'html_body', 'text_body', 'configured_engine', 'actual_engine', 'fallback_used', 'provider_message_id', 'attempts', 'queued_at', 'processing_at', 'sent_at', 'failed_at', 'skipped_at', 'status_reason', 'last_error'])]
+#[Fillable(['account_id', 'customer_id', 'user_id', 'event_order_id', 'scenario', 'status', 'recipient_kind', 'recipient_name', 'recipient_email', 'locale', 'account_timezone', 'subject', 'subject_key', 'subject_parameters', 'content_view', 'payload', 'html_body', 'text_body', 'configured_engine', 'actual_engine', 'fallback_used', 'provider_message_id', 'attempts', 'queued_at', 'processing_at', 'sent_at', 'failed_at', 'skipped_at', 'status_reason', 'last_error'])]
 class EmailDelivery extends Model
 {
     /** @use HasFactory<EmailDeliveryFactory> */
@@ -57,5 +57,10 @@ class EmailDelivery extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function eventOrder(): BelongsTo
+    {
+        return $this->belongsTo(EventOrder::class);
     }
 }

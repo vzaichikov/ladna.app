@@ -87,6 +87,10 @@
         @apply h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500;
     }
 
+    .crm-radio {
+        @apply h-4 w-4 border-stone-300 text-brand-600 focus:ring-brand-500;
+    }
+
     .crm-page-kicker {
         @apply text-sm font-semibold text-slate-500;
     }

@@ -623,6 +623,16 @@ class Account extends Model
         return $this->hasMany(CustomerPurchase::class);
     }
 
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
+    }
+
+    public function eventOrders(): HasMany
+    {
+        return $this->hasMany(EventOrder::class);
+    }
+
     public function customerPurchaseCorrections(): HasMany
     {
         return $this->hasMany(CustomerPurchaseCorrection::class);

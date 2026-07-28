@@ -62,6 +62,8 @@
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
     $canManageStudioCashflow = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioCashflow);
     $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
+    $canManageEvents = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageEvents);
+    $canCheckInEventTickets = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::CheckInEventTickets);
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
@@ -170,6 +172,12 @@
             'icon' => 'video',
             'href' => route('dashboard.accounts.cameras.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.cameras.*'),
+        ]] : []),
+        ...($canManageEvents || $canCheckInEventTickets ? [[
+            'label' => __('app.events'),
+            'icon' => 'calendar-days',
+            'href' => route('dashboard.accounts.events.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.events.*'),
         ]] : []),
     ] : [];
 

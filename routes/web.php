@@ -36,6 +36,10 @@ use App\Http\Controllers\CustomerPurchaseCorrectionController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EventController;
+use App\Http\Controllers\EventOrderController;
+use App\Http\Controllers\EventScannerController;
+use App\Http\Controllers\EventTicketTypeController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
@@ -68,6 +72,8 @@ use App\Http\Controllers\Platform\TelegramSupportController as PlatformTelegramS
 use App\Http\Controllers\PublicBookingController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicDemoSignupController;
+use App\Http\Controllers\PublicEventCheckoutController;
+use App\Http\Controllers\PublicEventController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\PublicStudioLandingController;
@@ -387,6 +393,25 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.tariff-payments.locations.approve');
         Route::get('accounts/{account}/payments', [AccountPaymentController::class, 'index'])
             ->name('accounts.payments.index');
+        Route::get('accounts/{account}/events', [EventController::class, 'index'])->name('accounts.events.index');
+        Route::get('accounts/{account}/events/create', [EventController::class, 'create'])->name('accounts.events.create');
+        Route::post('accounts/{account}/events', [EventController::class, 'store'])->name('accounts.events.store');
+        Route::get('accounts/{account}/events/{event:slug}/edit', [EventController::class, 'edit'])->scopeBindings()->name('accounts.events.edit');
+        Route::put('accounts/{account}/events/{event:slug}', [EventController::class, 'update'])->scopeBindings()->name('accounts.events.update');
+        Route::delete('accounts/{account}/events/{event:slug}', [EventController::class, 'destroy'])->scopeBindings()->name('accounts.events.destroy');
+        Route::post('accounts/{account}/events/{event:slug}/publish', [EventController::class, 'publish'])->scopeBindings()->name('accounts.events.publish');
+        Route::post('accounts/{account}/events/{event:slug}/cancel', [EventController::class, 'cancel'])->scopeBindings()->name('accounts.events.cancel');
+        Route::post('accounts/{account}/events/{event:slug}/archive', [EventController::class, 'archive'])->scopeBindings()->name('accounts.events.archive');
+        Route::post('accounts/{account}/events/{event:slug}/ticket-types', [EventTicketTypeController::class, 'store'])->scopeBindings()->name('accounts.events.ticket-types.store');
+        Route::put('accounts/{account}/events/{event:slug}/ticket-types/{eventTicketType}', [EventTicketTypeController::class, 'update'])->scopeBindings()->name('accounts.events.ticket-types.update');
+        Route::delete('accounts/{account}/events/{event:slug}/ticket-types/{eventTicketType}', [EventTicketTypeController::class, 'destroy'])->scopeBindings()->name('accounts.events.ticket-types.destroy');
+        Route::get('accounts/{account}/events/{event:slug}/orders', [EventOrderController::class, 'index'])->scopeBindings()->name('accounts.events.orders.index');
+        Route::post('accounts/{account}/events/{event:slug}/orders/{eventOrder}/resend', [EventOrderController::class, 'resend'])->scopeBindings()->name('accounts.events.orders.resend');
+        Route::post('accounts/{account}/events/{event:slug}/orders/{eventOrder}/refund', [EventOrderController::class, 'refund'])->scopeBindings()->name('accounts.events.orders.refund');
+        Route::post('accounts/{account}/events/{event:slug}/orders/{eventOrder}/tickets/{eventTicket}/void', [EventOrderController::class, 'voidTicket'])->scopeBindings()->name('accounts.events.orders.tickets.void');
+        Route::get('accounts/{account}/events/{event:slug}/scanner', [EventScannerController::class, 'show'])->scopeBindings()->name('accounts.events.scanner');
+        Route::post('accounts/{account}/events/{event:slug}/scanner/scan', [EventScannerController::class, 'scan'])->middleware('throttle:event-scanner')->scopeBindings()->name('accounts.events.scanner.scan');
+        Route::post('accounts/{account}/events/{event:slug}/scanner/tickets/{eventTicket}/check-out', [EventScannerController::class, 'checkOut'])->middleware('throttle:event-scanner')->scopeBindings()->name('accounts.events.scanner.check-out');
         Route::post('accounts/{account}/cash-entries', [StudioCashEntryController::class, 'store'])
             ->name('accounts.cash-entries.store');
         Route::post('accounts/{account}/expense-categories', [ExpenseCategoryController::class, 'store'])
@@ -662,6 +687,21 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
 Route::get('/{accountSlug}', PublicStudioLandingController::class)
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.studio');
+Route::get('/{accountSlug}/events', [PublicEventController::class, 'index'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->name('public.events.index');
+Route::get('/{accountSlug}/events/{eventSlug}', [PublicEventController::class, 'show'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->name('public.events.show');
+Route::post('/{accountSlug}/events/{eventSlug}/checkout', [PublicEventCheckoutController::class, 'store'])
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:event-checkout'])
+    ->name('public.events.checkout');
+Route::get('/{accountSlug}/event-orders/{accessToken}', [PublicEventCheckoutController::class, 'order'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->name('public.event-orders.show');
+Route::get('/{accountSlug}/event-orders/{accessToken}/tickets/{ticketCode}/qr', [PublicEventCheckoutController::class, 'ticketQr'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
+    ->name('public.event-tickets.qr');
 Route::get('/{accountSlug}/rules', PublicStudioRulesController::class)
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.studio-rules');
