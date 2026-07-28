@@ -147,10 +147,16 @@ class AccountAssistantTest extends TestCase
         $this->assertArrayNotHasKey('tools', $chatRequests[0][0]->data());
         $this->assertArrayNotHasKey('think', $chatRequests[0][0]->data());
         $this->assertSame(['temperature' => 0.0], $chatRequests[0][0]->data()['options']);
+        $this->assertCount(1, $chatRequests[0][0]->data()['messages']);
+        $this->assertStringContainsString(
+            'class-pass names or codes',
+            $chatRequests[0][0]->data()['messages'][0]['content'],
+        );
         $this->assertNotEmpty($chatRequests[1][0]->data()['tools'] ?? []);
         $this->assertArrayNotHasKey('tools', $chatRequests[2][0]->data());
         $this->assertArrayNotHasKey('think', $chatRequests[2][0]->data());
         $this->assertSame(['temperature' => 0.0], $chatRequests[2][0]->data()['options']);
+        $this->assertCount(1, $chatRequests[2][0]->data()['messages']);
         $this->assertNotEmpty($chatRequests[3][0]->data()['tools'] ?? []);
         $this->assertNotEmpty($chatRequests[4][0]->data()['tools'] ?? []);
         $this->assertStringContainsString(
@@ -244,7 +250,9 @@ class AccountAssistantTest extends TestCase
             ->assertJsonPath('messages.1.content', 'I can inspect this image.');
 
         Http::assertSent(fn (Request $request): bool => $request->url() === 'https://ollama.com/api/chat'
-            && count(data_get($request->data(), 'messages.1.images', [])) === 1);
+            && collect($request['messages'] ?? [])
+                ->contains(fn (mixed $message): bool => is_array($message)
+                    && count($message['images'] ?? []) === 1));
     }
 
     public function test_dashboard_message_requires_text_or_one_valid_image(): void

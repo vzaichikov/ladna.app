@@ -549,7 +549,8 @@ class TelegramWebhookTest extends TestCase
                 })
             && ! isset($request['tools'])
             && ! isset($request['think'])
-            && $request['options'] === ['temperature' => 0.0]);
+            && $request['options'] === ['temperature' => 0.0]
+            && count($request['messages'] ?? []) === 1);
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat')
             && ! collect($request['messages'] ?? [])
                 ->contains(fn (mixed $providerMessage): bool => is_array($providerMessage)

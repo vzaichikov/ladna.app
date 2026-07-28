@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.103.5',
+                'date' => '2026-07-28',
+                'title' => 'Stable visual extraction for Gemma',
+                'items' => ['Ladna now uses the compact single-message image request expected by Gemma to extract the important visible customer and class-pass details before normal assistant reasoning.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.103.4',
                 'date' => '2026-07-28',
                 'title' => 'Compatible screenshot reading',
@@ -961,6 +968,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.103.5',
+                'date' => '2026-07-28',
+                'title' => 'Стабільне розпізнавання зображень у Gemma',
+                'items' => ['Ladna тепер використовує компактний запит із одним повідомленням, якого очікує Gemma, щоб отримати важливі видимі дані клієнта й абонемента перед звичайним опрацюванням асистентом.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.103.4',
                 'date' => '2026-07-28',
