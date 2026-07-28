@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.104.0',
+                'date' => '2026-07-28',
+                'title' => 'Ladna AI understands images',
+                'items' => ['Studio owners can now send a screenshot or photo to Ladna AI in the admin chat or Telegram. Ladna reads the visible interface, names, class-pass codes, dates, statuses, and other supported details, then answers questions about the image.', 'The conversation can continue after the image: Ladna remembers its details, can compare them with available studio data, and clearly separates what is visible in the image from what was verified in Ladna.', 'Answers now stay in the language of the current request even after topic and language changes, while misspelled help questions and detailed customer or class-pass investigations continue to use the available Ladna evidence.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.102.0',
                 'date' => '2026-07-28',
                 'title' => 'Paid events with QR admission',
@@ -926,6 +933,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.104.0',
+                'date' => '2026-07-28',
+                'title' => 'Ladna AI розуміє зображення',
+                'items' => ['Власниця студії може надіслати скріншот або фото в чат Ladna AI в адмінці чи Telegram. Ladna читає видимий інтерфейс, імена, коди абонементів, дати, статуси та інші підтверджені деталі й відповідає на запитання про зображення.', 'Після зображення розмову можна продовжити: Ladna памʼятає його деталі, може порівняти їх із доступними даними студії та чітко відокремлює побачене на зображенні від перевіреного в Ladna.', 'Відповіді тепер залишаються мовою поточного запиту навіть після зміни теми й мови, а запитання з помилками та детальні перевірки клієнтів чи абонементів надалі спираються на доступні дані Ladna.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.102.0',
                 'date' => '2026-07-28',
