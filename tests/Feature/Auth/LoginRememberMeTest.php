@@ -12,6 +12,21 @@ class LoginRememberMeTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_platform_admin_is_redirected_to_the_platform_dashboard_after_login(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create([
+            'password' => 'correct-password',
+        ]);
+
+        $response = $this->post(route('login', absolute: false), [
+            'email' => $platformAdmin->email,
+            'password' => 'correct-password',
+        ]);
+
+        $response->assertRedirect(route('platform.index', absolute: false));
+        $this->assertAuthenticatedAs($platformAdmin, 'web');
+    }
+
     public function test_internal_login_remembers_users_by_default(): void
     {
         $user = User::factory()->create([

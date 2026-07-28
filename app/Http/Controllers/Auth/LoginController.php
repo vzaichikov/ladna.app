@@ -82,7 +82,11 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard.index', absolute: false));
+        $dashboardRoute = $request->user()->isPlatformAdmin()
+            ? 'platform.index'
+            : 'dashboard.index';
+
+        return redirect()->intended(route($dashboardRoute, absolute: false));
     }
 
     public function destroy(Request $request): RedirectResponse
