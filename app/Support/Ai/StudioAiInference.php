@@ -758,6 +758,8 @@ class StudioAiInference
             ],
             temperature: 0.0,
             tools: [],
+            think: false,
+            maxOutputTokens: 800,
         );
         $visualContext = mb_substr(
             trim($response['content']),

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.103.3',
+                'date' => '2026-07-28',
+                'title' => 'Faster picture reading',
+                'items' => ['Ladna now keeps the picture-reading step concise so text-heavy screenshots reach the normal assistant response more quickly while preserving the important visible names, class-pass details, dates, amounts, and statuses.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.103.2',
                 'date' => '2026-07-28',
                 'title' => 'Picture understanding with full assistant abilities',
@@ -947,6 +954,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.103.3',
+                'date' => '2026-07-28',
+                'title' => 'Швидше читання зображень',
+                'items' => ['Ladna тепер стисло виконує етап читання зображення, щоб насичені текстом скріншоти швидше переходили до звичайної відповіді асистента зі збереженням важливих видимих імен, деталей абонемента, дат, сум і статусів.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.103.2',
                 'date' => '2026-07-28',

@@ -145,8 +145,12 @@ class AccountAssistantTest extends TestCase
         $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[0][0], true));
         $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[2][0], true));
         $this->assertArrayNotHasKey('tools', $chatRequests[0][0]->data());
+        $this->assertFalse($chatRequests[0][0]->data()['think']);
+        $this->assertSame(800, data_get($chatRequests[0][0]->data(), 'options.num_predict'));
         $this->assertNotEmpty($chatRequests[1][0]->data()['tools'] ?? []);
         $this->assertArrayNotHasKey('tools', $chatRequests[2][0]->data());
+        $this->assertFalse($chatRequests[2][0]->data()['think']);
+        $this->assertSame(800, data_get($chatRequests[2][0]->data(), 'options.num_predict'));
         $this->assertNotEmpty($chatRequests[3][0]->data()['tools'] ?? []);
         $this->assertNotEmpty($chatRequests[4][0]->data()['tools'] ?? []);
         $this->assertStringContainsString(
