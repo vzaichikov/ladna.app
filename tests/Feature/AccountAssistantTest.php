@@ -145,7 +145,7 @@ class AccountAssistantTest extends TestCase
         $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[0][0], true));
         $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[2][0], true));
         $this->assertArrayNotHasKey('tools', $chatRequests[0][0]->data());
-        $this->assertArrayNotHasKey('think', $chatRequests[0][0]->data());
+        $this->assertFalse($chatRequests[0][0]->data()['think']);
         $this->assertSame(['temperature' => 0.0], $chatRequests[0][0]->data()['options']);
         $this->assertCount(1, $chatRequests[0][0]->data()['messages']);
         $this->assertStringContainsString(
@@ -154,7 +154,7 @@ class AccountAssistantTest extends TestCase
         );
         $this->assertNotEmpty($chatRequests[1][0]->data()['tools'] ?? []);
         $this->assertArrayNotHasKey('tools', $chatRequests[2][0]->data());
-        $this->assertArrayNotHasKey('think', $chatRequests[2][0]->data());
+        $this->assertFalse($chatRequests[2][0]->data()['think']);
         $this->assertSame(['temperature' => 0.0], $chatRequests[2][0]->data()['options']);
         $this->assertCount(1, $chatRequests[2][0]->data()['messages']);
         $this->assertNotEmpty($chatRequests[3][0]->data()['tools'] ?? []);

@@ -95,6 +95,7 @@ class OllamaCloudClient
         float $temperature = 0.2,
         ?string $format = null,
         array $tools = [],
+        bool|string|null $think = null,
     ): array {
         $payload = [
             'model' => $model,
@@ -111,6 +112,10 @@ class OllamaCloudClient
 
         if ($tools !== []) {
             $payload['tools'] = $tools;
+        }
+
+        if ($think !== null) {
+            $payload['think'] = $think;
         }
 
         $response = Http::baseUrl((string) config('services.ollama_cloud.base_url', 'https://ollama.com'))

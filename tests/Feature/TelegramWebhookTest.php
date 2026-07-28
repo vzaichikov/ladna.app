@@ -548,7 +548,7 @@ class TelegramWebhookTest extends TestCase
                         && str_starts_with((string) base64_decode($image, true), "\xFF\xD8\xFF");
                 })
             && ! isset($request['tools'])
-            && ! isset($request['think'])
+            && $request['think'] === false
             && $request['options'] === ['temperature' => 0.0]
             && count($request['messages'] ?? []) === 1);
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat')
