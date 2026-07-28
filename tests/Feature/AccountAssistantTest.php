@@ -82,7 +82,7 @@ class AccountAssistantTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_dashboard_openai_answer_uses_responses_api_and_openai_schema_v1(): void
+    public function test_dashboard_openai_answer_uses_responses_api_with_schema_v1_and_prompt_v2(): void
     {
         Http::fake([
             'api.openai.com/v1/responses' => Http::response($this->openAiTextResponse([
@@ -110,12 +110,19 @@ class AccountAssistantTest extends TestCase
             ->assertJsonPath('messages.1.metadata.model', 'gpt-5.5');
 
         Http::assertSent(function (Request $request): bool {
+            $systemPrompt = (string) data_get($request->data(), 'input.0.content', '');
+
             return $request->url() === 'https://api.openai.com/v1/responses'
                 && $request['model'] === 'gpt-5.5'
                 && $request['store'] === false
                 && data_get($request->data(), 'reasoning.effort') === 'low'
                 && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v1'
                 && data_get($request->data(), 'text.format.strict') === true
+                && str_contains($systemPrompt, 'OpenAI Responses prompt version: openai_v2.')
+                && str_contains($systemPrompt, 'Language is a hard output constraint')
+                && str_contains($systemPrompt, 'detect it from the current text under Owner request')
+                && str_contains($systemPrompt, 'Tool arguments may use the language that retrieves the best evidence')
+                && str_contains($systemPrompt, 'If the current request is image-only, use Ukrainian only.')
                 && collect($request['tools'] ?? [])->every(
                     fn (mixed $tool): bool => is_array($tool)
                         && ($tool['type'] ?? null) === 'function'
@@ -150,7 +157,7 @@ class AccountAssistantTest extends TestCase
                 ])
                 ->push($this->openAiTextResponse([
                     'disposition' => 'answer',
-                    'answer' => 'Відкрийте Клієнти й натисніть Додати клієнта.',
+                    'answer' => 'Open Customers and select Add customer.',
                     'follow_up_actions' => [],
                     'action' => null,
                     'calendar_reference' => null,
@@ -165,10 +172,10 @@ class AccountAssistantTest extends TestCase
 
         $this->actingAs($owner)
             ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
-                'message' => 'Як додати клієнта?',
+                'message' => 'How do I add a customer?',
             ])
             ->assertOk()
-            ->assertJsonPath('messages.1.content', 'Відкрийте Клієнти й натисніть Додати клієнта.')
+            ->assertJsonPath('messages.1.content', 'Open Customers and select Add customer.')
             ->assertJsonPath('messages.1.metadata.help_sources.0.slug', 'customers-bookings');
 
         $requests = Http::recorded()
@@ -177,6 +184,12 @@ class AccountAssistantTest extends TestCase
 
         $this->assertCount(2, $requests);
         $secondInput = collect($requests[1][0]['input']);
+        $secondSystemPrompt = (string) data_get($requests[1][0]->data(), 'input.0.content', '');
+        $this->assertStringContainsString('OpenAI Responses prompt version: openai_v2.', $secondSystemPrompt);
+        $this->assertStringContainsString(
+            'final owner-facing result must return to the current request language',
+            $secondSystemPrompt,
+        );
         $this->assertTrue($secondInput->contains(
             fn (mixed $item): bool => is_array($item)
                 && ($item['type'] ?? null) === 'reasoning'
@@ -216,7 +229,6 @@ class AccountAssistantTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.assistant.messages.store', $account), [
-                'message' => 'Що за абонемент на скріншоті?',
                 'image' => UploadedFile::fake()->image('class-pass.png', 800, 600),
             ], ['Accept' => 'application/json'])
             ->assertOk()
@@ -226,17 +238,23 @@ class AccountAssistantTest extends TestCase
         Http::assertSentCount(1);
         Http::assertSent(function (Request $request): bool {
             $input = collect($request['input'] ?? []);
-            $image = $input
+            $userContent = $input
                 ->filter(fn (mixed $item): bool => is_array($item) && ($item['role'] ?? null) === 'user')
                 ->flatMap(fn (array $item): array => is_array($item['content'] ?? null)
                     ? $item['content']
-                    : [])
-                ->firstWhere('type', 'input_image');
+                    : []);
+            $image = $userContent->firstWhere('type', 'input_image');
+            $inputText = $userContent->firstWhere('type', 'input_text');
 
             return $request->url() === 'https://api.openai.com/v1/responses'
                 && is_array($image)
+                && is_array($inputText)
                 && str_starts_with((string) ($image['image_url'] ?? ''), 'data:image/jpeg;base64,')
                 && ($image['detail'] ?? null) === 'original'
+                && str_contains(
+                    (string) ($inputText['text'] ?? ''),
+                    'The current owner message has no text. This image-only request must be answered in Ukrainian only.',
+                )
                 && count($request['tools'] ?? []) > 0
                 && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v1';
         });
@@ -349,8 +367,12 @@ class AccountAssistantTest extends TestCase
         ]);
 
         Http::assertSent(function (Request $request): bool {
+            $systemPrompt = (string) data_get($request->data(), 'messages.0.content', '');
+
             return $request->url() === 'https://ollama.com/api/chat'
-                && $request->data()['model'] === 'gemma3:27b-cloud';
+                && $request->data()['model'] === 'gemma3:27b-cloud'
+                && ! str_contains($systemPrompt, 'OpenAI Responses prompt version:')
+                && ! str_contains($systemPrompt, 'Language is a hard output constraint');
         });
     }
 

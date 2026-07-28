@@ -549,7 +549,7 @@ class TelegramWebhookTest extends TestCase
         ]);
         $assistantEnvelope = [
             'disposition' => 'answer',
-            'answer' => 'The screenshot shows a customer class pass.',
+            'answer' => 'На скріншоті видно абонемент клієнта.',
             'follow_up_actions' => [],
             'action' => null,
             'calendar_reference' => null,
@@ -609,7 +609,6 @@ class TelegramWebhookTest extends TestCase
                 'message_id' => 214,
                 'chat' => ['id' => 591, 'type' => 'private'],
                 'from' => ['id' => 811, 'username' => 'owner'],
-                'caption' => 'What class pass is shown here?',
                 'photo' => [[
                     'file_id' => 'openai-photo',
                     'file_unique_id' => 'openai-photo-unique',
@@ -626,7 +625,7 @@ class TelegramWebhookTest extends TestCase
             'account_id' => $account->id,
             'telegram_chat_id' => '591',
             'direction' => 'outbound',
-            'text' => 'The screenshot shows a customer class pass.',
+            'text' => 'На скріншоті видно абонемент клієнта.',
         ]);
         $this->assertTrue(AiConversationMessageAttachment::query()
             ->where('account_id', $account->id)
@@ -644,14 +643,20 @@ class TelegramWebhookTest extends TestCase
         $this->assertFalse($request['store']);
         $this->assertNotEmpty($request['tools']);
         $this->assertSame('ladna_studio_assistant_v1', data_get($request->data(), 'text.format.name'));
-        $imageInput = collect($request['input'] ?? [])
+        $userContent = collect($request['input'] ?? [])
             ->flatMap(fn (array $message): array => is_array($message['content'] ?? null)
                 ? $message['content']
-                : [])
-            ->firstWhere('type', 'input_image');
+                : []);
+        $imageInput = $userContent->firstWhere('type', 'input_image');
+        $textInput = $userContent->firstWhere('type', 'input_text');
         $this->assertIsArray($imageInput);
+        $this->assertIsArray($textInput);
         $this->assertStringStartsWith('data:image/jpeg;base64,', $imageInput['image_url']);
         $this->assertSame('original', $imageInput['detail']);
+        $this->assertStringContainsString(
+            'The current owner message has no text. This image-only request must be answered in Ukrainian only.',
+            $textInput['text'],
+        );
     }
 
     public function test_authorized_owner_image_document_is_rejected_before_download_for_ollama(): void

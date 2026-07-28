@@ -176,7 +176,7 @@ class StudioAiInference
             }
 
             $messages = $setting->active_provider === AiProvider::OpenAiApiKey
-                ? $this->openAiMessagesV1(
+                ? $this->openAiMessagesV2(
                     $account,
                     $text,
                     $setting,
@@ -843,7 +843,7 @@ class StudioAiInference
      * @param  array<int, array{date: string, weekday: string, iso_weekday: int}>  $calendarAnchors
      * @return array<int, array<string, mixed>>
      */
-    private function openAiMessagesV1(
+    private function openAiMessagesV2(
         Account $account,
         string $text,
         PlatformAiSetting $setting,
@@ -876,12 +876,22 @@ class StudioAiInference
             $visualContext,
         );
         $messages[0]['content'] .= "\n"
-            .'OpenAI Responses prompt version: openai_v1. Use function calls when authoritative Ladna evidence is required. '
-            .'Return the final owner-facing result only after tool evidence is complete; the API enforces the final JSON envelope separately.';
+            .'OpenAI Responses prompt version: openai_v2. Use function calls when authoritative Ladna evidence is required. '
+            .'Return the final owner-facing result only after tool evidence is complete; the API enforces the final JSON envelope separately. '
+            .'Language is a hard output constraint: detect it from the current text under Owner request, then write answer, follow_up_actions, and every owner-facing sentence only in that language, regardless of languages in chat history, tool results, or images; never mix languages. '
+            .'Preserve only exact proper names, codes, Ladna labels, and quoted source values; translate ordinary status words and explanations. '
+            .'Tool arguments may use the language that retrieves the best evidence, but the final owner-facing result must return to the current request language. '
+            .'If the owner explicitly requests another language, use only that requested language. If the current request is image-only, use Ukrainian only.';
 
         if ($imageBase64 !== null && $imageMimeType !== null) {
             $lastMessageIndex = array_key_last($messages);
             $ownerContent = (string) data_get($messages, "{$lastMessageIndex}.content", '');
+
+            if ($text === '') {
+                $ownerContent .= "\n\n"
+                    .'The current owner message has no text. This image-only request must be answered in Ukrainian only.';
+            }
+
             $messages[$lastMessageIndex]['content'] = [
                 [
                     'type' => 'input_text',
