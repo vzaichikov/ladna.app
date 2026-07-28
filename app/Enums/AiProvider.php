@@ -16,9 +16,8 @@ enum AiProvider: string
     public function supportsImageInference(): bool
     {
         return match ($this) {
-            self::OpenAiApiKey,
-            self::OpenAiDeviceCode,
-            self::OllamaCloud => false,
+            self::OpenAiApiKey => true,
+            self::OpenAiDeviceCode, self::OllamaCloud => false,
         };
     }
 }

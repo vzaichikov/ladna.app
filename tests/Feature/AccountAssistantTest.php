@@ -82,6 +82,166 @@ class AccountAssistantTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_dashboard_openai_answer_uses_responses_api_and_openai_schema_v1(): void
+    {
+        Http::fake([
+            'api.openai.com/v1/responses' => Http::response($this->openAiTextResponse([
+                'disposition' => 'answer',
+                'answer' => 'OpenAI dashboard answer.',
+                'follow_up_actions' => [],
+                'action' => null,
+                'calendar_reference' => null,
+                'reason' => 'studio question',
+            ])),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOpenAi();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'How is the studio doing?',
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', 'OpenAI dashboard answer.')
+            ->assertJsonPath('messages.1.metadata.provider', AiProvider::OpenAiApiKey->value)
+            ->assertJsonPath('messages.1.metadata.model', 'gpt-5.5');
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->url() === 'https://api.openai.com/v1/responses'
+                && $request['model'] === 'gpt-5.5'
+                && $request['store'] === false
+                && data_get($request->data(), 'reasoning.effort') === 'low'
+                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v1'
+                && data_get($request->data(), 'text.format.strict') === true
+                && collect($request['tools'] ?? [])->every(
+                    fn (mixed $tool): bool => is_array($tool)
+                        && ($tool['type'] ?? null) === 'function'
+                        && is_string($tool['name'] ?? null)
+                        && ! isset($tool['function']),
+                );
+        });
+    }
+
+    public function test_dashboard_openai_tool_loop_replays_reasoning_and_call_id(): void
+    {
+        Http::fake([
+            'api.openai.com/v1/responses' => Http::sequence()
+                ->push([
+                    'status' => 'completed',
+                    'output' => [
+                        [
+                            'id' => 'rs_help',
+                            'type' => 'reasoning',
+                            'content' => [],
+                            'summary' => [],
+                        ],
+                        [
+                            'id' => 'fc_help',
+                            'type' => 'function_call',
+                            'status' => 'completed',
+                            'call_id' => 'call_help_1',
+                            'name' => 'search_owner_help',
+                            'arguments' => '{"query":"додати клієнта","limit":5}',
+                        ],
+                    ],
+                ])
+                ->push($this->openAiTextResponse([
+                    'disposition' => 'answer',
+                    'answer' => 'Відкрийте Клієнти й натисніть Додати клієнта.',
+                    'follow_up_actions' => [],
+                    'action' => null,
+                    'calendar_reference' => null,
+                    'reason' => 'Ladna help evidence',
+                ])),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOpenAi();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Як додати клієнта?',
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', 'Відкрийте Клієнти й натисніть Додати клієнта.')
+            ->assertJsonPath('messages.1.metadata.help_sources.0.slug', 'customers-bookings');
+
+        $requests = Http::recorded()
+            ->filter(fn (array $record): bool => $record[0]->url() === 'https://api.openai.com/v1/responses')
+            ->values();
+
+        $this->assertCount(2, $requests);
+        $secondInput = collect($requests[1][0]['input']);
+        $this->assertTrue($secondInput->contains(
+            fn (mixed $item): bool => is_array($item)
+                && ($item['type'] ?? null) === 'reasoning'
+                && ($item['id'] ?? null) === 'rs_help',
+        ));
+        $this->assertTrue($secondInput->contains(
+            fn (mixed $item): bool => is_array($item)
+                && ($item['type'] ?? null) === 'function_call'
+                && ($item['call_id'] ?? null) === 'call_help_1',
+        ));
+        $this->assertTrue($secondInput->contains(
+            fn (mixed $item): bool => is_array($item)
+                && ($item['type'] ?? null) === 'function_call_output'
+                && ($item['call_id'] ?? null) === 'call_help_1'
+                && str_contains((string) ($item['output'] ?? ''), 'customers-bookings'),
+        ));
+    }
+
+    public function test_dashboard_openai_image_uses_one_multimodal_request_with_tools(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'api.openai.com/v1/responses' => Http::response($this->openAiTextResponse([
+                'disposition' => 'answer',
+                'answer' => 'На зображенні видно абонемент Марії на 8 занять.',
+                'follow_up_actions' => [],
+                'action' => null,
+                'calendar_reference' => null,
+                'reason' => 'direct image inspection',
+            ])),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOpenAi();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Що за абонемент на скріншоті?',
+                'image' => UploadedFile::fake()->image('class-pass.png', 800, 600),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('messages.0.attachments.0.original_name', 'class-pass.png')
+            ->assertJsonPath('messages.1.content', 'На зображенні видно абонемент Марії на 8 занять.');
+
+        Http::assertSentCount(1);
+        Http::assertSent(function (Request $request): bool {
+            $input = collect($request['input'] ?? []);
+            $image = $input
+                ->filter(fn (mixed $item): bool => is_array($item) && ($item['role'] ?? null) === 'user')
+                ->flatMap(fn (array $item): array => is_array($item['content'] ?? null)
+                    ? $item['content']
+                    : [])
+                ->firstWhere('type', 'input_image');
+
+            return $request->url() === 'https://api.openai.com/v1/responses'
+                && is_array($image)
+                && str_starts_with((string) ($image['image_url'] ?? ''), 'data:image/jpeg;base64,')
+                && ($image['detail'] ?? null) === 'original'
+                && count($request['tools'] ?? []) > 0
+                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v1';
+        });
+    }
+
     public function test_dashboard_message_requires_text_or_one_valid_image(): void
     {
         $owner = User::factory()->create();
@@ -808,6 +968,47 @@ class AccountAssistantTest extends TestCase
             'model' => 'gemma3:27b-cloud',
             'credentials' => ['api_key' => 'test-ollama-key'],
         ]);
+    }
+
+    private function configureGlobalOpenAi(): void
+    {
+        PlatformAiSetting::query()->delete();
+        PlatformAiProviderCredential::query()->delete();
+        PlatformAiSetting::factory()->create([
+            'owner_ai_assistant_enabled' => true,
+            'active_provider' => AiProvider::OpenAiApiKey->value,
+            'active_model' => 'gpt-5.5',
+        ]);
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OpenAiApiKey->value,
+            'model' => 'gpt-5.5',
+            'credentials' => ['api_key' => 'test-openai-key'],
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $envelope
+     * @return array<string, mixed>
+     */
+    private function openAiTextResponse(array $envelope): array
+    {
+        return [
+            'id' => 'resp_test',
+            'status' => 'completed',
+            'output' => [[
+                'id' => 'msg_test',
+                'type' => 'message',
+                'status' => 'completed',
+                'role' => 'assistant',
+                'content' => [[
+                    'type' => 'output_text',
+                    'text' => json_encode(
+                        $envelope,
+                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                    ),
+                ]],
+            ]],
+        ];
     }
 
     private function webpImageContents(): string

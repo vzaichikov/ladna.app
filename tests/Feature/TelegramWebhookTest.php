@@ -531,6 +531,129 @@ class TelegramWebhookTest extends TestCase
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/'));
     }
 
+    public function test_authorized_owner_photo_uses_one_openai_multimodal_request(): void
+    {
+        Storage::fake('local');
+        $imageContents = $this->pngImageContents();
+        [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('591', '811');
+        PlatformAiSetting::current()->forceFill([
+            'active_provider' => AiProvider::OpenAiApiKey->value,
+            'active_model' => 'gpt-5.5',
+        ])->save();
+        PlatformAiProviderCredential::query()->delete();
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OpenAiApiKey->value,
+            'model' => 'gpt-5.5',
+            'credentials' => ['api_key' => 'test-openai-key'],
+            'is_configured' => true,
+        ]);
+        $assistantEnvelope = [
+            'disposition' => 'answer',
+            'answer' => 'The screenshot shows a customer class pass.',
+            'follow_up_actions' => [],
+            'action' => null,
+            'calendar_reference' => null,
+            'reason' => 'visual question',
+        ];
+
+        Http::fake(function (Request $request) use ($imageContents, $assistantEnvelope) {
+            if (str_contains($request->url(), '/getFile')) {
+                return Http::response([
+                    'ok' => true,
+                    'result' => [
+                        'file_path' => 'photos/openai-test-image.png',
+                        'file_size' => strlen($imageContents),
+                    ],
+                ]);
+            }
+
+            if (str_contains($request->url(), '/file/bot')) {
+                return Http::response($imageContents, 200, [
+                    'Content-Type' => 'image/png',
+                    'Content-Length' => (string) strlen($imageContents),
+                ]);
+            }
+
+            if (str_ends_with($request->url(), '/v1/responses')) {
+                return Http::response([
+                    'id' => 'resp_telegram_image',
+                    'status' => 'completed',
+                    'model' => 'gpt-5.5-2026-04-23',
+                    'output' => [[
+                        'id' => 'msg_telegram_image',
+                        'type' => 'message',
+                        'role' => 'assistant',
+                        'status' => 'completed',
+                        'content' => [[
+                            'type' => 'output_text',
+                            'text' => json_encode($assistantEnvelope),
+                            'annotations' => [],
+                        ]],
+                    ]],
+                ]);
+            }
+
+            if (str_contains($request->url(), 'api.telegram.org/')) {
+                return Http::response([
+                    'ok' => true,
+                    'result' => ['message_id' => 901],
+                ]);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1114,
+            'message' => [
+                'message_id' => 214,
+                'chat' => ['id' => 591, 'type' => 'private'],
+                'from' => ['id' => 811, 'username' => 'owner'],
+                'caption' => 'What class pass is shown here?',
+                'photo' => [[
+                    'file_id' => 'openai-photo',
+                    'file_unique_id' => 'openai-photo-unique',
+                    'width' => 1280,
+                    'height' => 960,
+                    'file_size' => strlen($imageContents),
+                ]],
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        $this->assertDatabaseHas('telegram_messages', [
+            'account_id' => $account->id,
+            'telegram_chat_id' => '591',
+            'direction' => 'outbound',
+            'text' => 'The screenshot shows a customer class pass.',
+        ]);
+        $this->assertTrue(AiConversationMessageAttachment::query()
+            ->where('account_id', $account->id)
+            ->where('mime_type', 'image/jpeg')
+            ->exists());
+
+        $openAiRequests = collect(Http::recorded())
+            ->pluck(0)
+            ->filter(fn (Request $request): bool => str_ends_with($request->url(), '/v1/responses'))
+            ->values();
+
+        $this->assertCount(1, $openAiRequests);
+        $request = $openAiRequests->sole();
+        $this->assertSame('gpt-5.5', $request['model']);
+        $this->assertFalse($request['store']);
+        $this->assertNotEmpty($request['tools']);
+        $this->assertSame('ladna_studio_assistant_v1', data_get($request->data(), 'text.format.name'));
+        $imageInput = collect($request['input'] ?? [])
+            ->flatMap(fn (array $message): array => is_array($message['content'] ?? null)
+                ? $message['content']
+                : [])
+            ->firstWhere('type', 'input_image');
+        $this->assertIsArray($imageInput);
+        $this->assertStringStartsWith('data:image/jpeg;base64,', $imageInput['image_url']);
+        $this->assertSame('original', $imageInput['detail']);
+    }
+
     public function test_authorized_owner_image_document_is_rejected_before_download_for_ollama(): void
     {
         Storage::fake('local');

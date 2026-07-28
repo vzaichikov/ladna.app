@@ -34,6 +34,8 @@ class StudioAiInference
     public function __construct(
         private readonly StudioAiContextBuilder $contextBuilder,
         private readonly OllamaCloudClient $ollamaCloudClient,
+        private readonly OpenAiResponsesClient $openAiResponsesClient,
+        private readonly OpenAiStudioResponseSchema $openAiResponseSchema,
         private readonly LadnaAssistantCapabilities $capabilities,
         private readonly StudioAiToolExecutor $toolExecutor,
     ) {}
@@ -71,29 +73,37 @@ class StudioAiInference
             return StudioAiResult::fallback('ai_not_configured');
         }
 
-        if ($setting->active_provider !== AiProvider::OllamaCloud) {
+        if (! in_array($setting->active_provider, [
+            AiProvider::OllamaCloud,
+            AiProvider::OpenAiApiKey,
+        ], true)) {
             return StudioAiResult::fallback('provider_not_implemented');
         }
 
         $credential = PlatformAiProviderCredential::query()
-            ->where('provider', AiProvider::OllamaCloud->value)
+            ->where('provider', $setting->active_provider->value)
             ->first();
         $apiKey = $credential?->apiKey();
 
         if (! $apiKey) {
-            return StudioAiResult::fallback('missing_ollama_api_key');
+            return StudioAiResult::fallback(match ($setting->active_provider) {
+                AiProvider::OpenAiApiKey => 'missing_openai_api_key',
+                default => 'missing_ollama_api_key',
+            });
         }
 
         $visualAttachment = $setting->active_provider->supportsImageInference()
             ? $this->visualAttachment($account, $conversation, $currentMessage)
             : null;
-        $visualContext = $visualAttachment
+        $visualContext = $setting->active_provider === AiProvider::OllamaCloud && $visualAttachment
             ? $this->cachedVisualContext($visualAttachment)
             : null;
         $imageBase64 = null;
+        $imageMimeType = null;
 
         if ($visualAttachment && $visualContext === null) {
-            if ($this->modelSupportsVision($apiKey, $setting->active_model) === false) {
+            if ($setting->active_provider === AiProvider::OllamaCloud
+                && $this->modelSupportsVision($apiKey, $setting->active_model) === false) {
                 return StudioAiResult::fallback(
                     'model_no_vision',
                     text: __('app.assistant_image_model_unsupported'),
@@ -111,6 +121,7 @@ class StudioAiInference
                 }
 
                 $imageBase64 = base64_encode($disk->get($visualAttachment->path));
+                $imageMimeType = $visualAttachment->mime_type;
             } catch (Throwable) {
                 return StudioAiResult::fallback(
                     'image_unavailable',
@@ -138,7 +149,10 @@ class StudioAiInference
         $toolEvidence = [];
 
         try {
-            if ($visualAttachment && $visualContext === null && $imageBase64 !== null) {
+            if ($setting->active_provider === AiProvider::OllamaCloud
+                && $visualAttachment
+                && $visualContext === null
+                && $imageBase64 !== null) {
                 if ($beforeProviderRequest) {
                     $beforeProviderRequest('assistant_status_looking_at_image');
                 }
@@ -152,25 +166,48 @@ class StudioAiInference
             }
 
             if ($beforeProviderRequest) {
+                if ($setting->active_provider === AiProvider::OpenAiApiKey
+                    && $imageBase64 !== null) {
+                    $beforeProviderRequest('assistant_status_looking_at_image');
+                }
+
                 $beforeProviderRequest('assistant_status_checking_request');
                 $beforeProviderRequest('assistant_status_thinking');
             }
 
-            $messages = $this->messages(
-                $account,
-                $text,
-                $setting,
-                $history,
-                $actorContext,
-                $activeBookingDialog,
-                $studioContext,
-                $requestClock,
-                $calendarAnchors,
-                $channel,
-                $helpToolsAvailable,
-                $investigationToolsAvailable,
-                $visualContext,
-            );
+            $messages = $setting->active_provider === AiProvider::OpenAiApiKey
+                ? $this->openAiMessagesV1(
+                    $account,
+                    $text,
+                    $setting,
+                    $history,
+                    $actorContext,
+                    $activeBookingDialog,
+                    $studioContext,
+                    $requestClock,
+                    $calendarAnchors,
+                    $channel,
+                    $helpToolsAvailable,
+                    $investigationToolsAvailable,
+                    $visualContext,
+                    $imageBase64,
+                    $imageMimeType,
+                )
+                : $this->messages(
+                    $account,
+                    $text,
+                    $setting,
+                    $history,
+                    $actorContext,
+                    $activeBookingDialog,
+                    $studioContext,
+                    $requestClock,
+                    $calendarAnchors,
+                    $channel,
+                    $helpToolsAvailable,
+                    $investigationToolsAvailable,
+                    $visualContext,
+                );
             $toolCallCount = 0;
 
             for ($round = 0; $round < self::MaxProviderRounds; $round++) {
@@ -179,13 +216,13 @@ class StudioAiInference
                         && ! $this->hasVerifiedInvestigationLedger($toolEvidence))
                             ? null
                             : 'json';
-                $response = $this->ollamaCloudClient->chat(
+                $response = $this->providerResponse(
+                    $setting->active_provider,
                     $apiKey,
                     $setting->active_model,
                     $messages,
-                    temperature: 0.0,
-                    format: $format,
-                    tools: $tools,
+                    $tools,
+                    $format,
                 );
 
                 if ($response['tool_calls'] === []) {
@@ -197,7 +234,7 @@ class StudioAiInference
                     if ($evidenceOutcome['blocking_message'] !== null) {
                         return StudioAiResult::answer(
                             $evidenceOutcome['blocking_message'],
-                            AiProvider::OllamaCloud->value,
+                            $setting->active_provider->value,
                             $setting->active_model,
                         );
                     }
@@ -210,6 +247,7 @@ class StudioAiInference
                         $activeBookingDialog,
                         $studioContext,
                         $calendarAnchors,
+                        $setting->active_provider,
                     );
 
                     if ($result->fallbackReason === 'invalid_ai_response'
@@ -217,7 +255,7 @@ class StudioAiInference
                         $initialValidationError = $result->fallbackDetail;
                         $repairMessages = [
                             ...$messages,
-                            $response['message'],
+                            ...$this->continuationItems($response),
                             [
                                 'role' => 'user',
                                 'content' => $this->invalidEnvelopeRepairInstruction(
@@ -227,13 +265,13 @@ class StudioAiInference
                                 ),
                             ],
                         ];
-                        $repairResponse = $this->ollamaCloudClient->chat(
+                        $repairResponse = $this->providerResponse(
+                            $setting->active_provider,
                             $apiKey,
                             $setting->active_model,
                             $repairMessages,
-                            temperature: 0.0,
-                            format: 'json',
-                            tools: [],
+                            [],
+                            'json',
                         );
                         $result = $repairResponse['tool_calls'] === []
                             ? $this->parseResult(
@@ -244,6 +282,7 @@ class StudioAiInference
                                 $activeBookingDialog,
                                 $studioContext,
                                 $calendarAnchors,
+                                $setting->active_provider,
                             )
                             : StudioAiResult::fallback(
                                 'invalid_ai_response',
@@ -270,7 +309,7 @@ class StudioAiInference
                         && $result->text !== '') {
                         return StudioAiResult::answer(
                             __('app.assistant_investigation_partial')."\n\n".$result->text,
-                            $result->provider ?? AiProvider::OllamaCloud->value,
+                            $result->provider ?? $setting->active_provider->value,
                             $result->model ?? $setting->active_model,
                             $result->followUpActions,
                             $result->helpSources,
@@ -285,7 +324,10 @@ class StudioAiInference
                     return StudioAiResult::fallback('ai_tool_loop_limit');
                 }
 
-                $messages[] = $response['message'];
+                $messages = [
+                    ...$messages,
+                    ...$this->continuationItems($response),
+                ];
 
                 foreach ($response['tool_calls'] as $toolCall) {
                     $toolCallCount++;
@@ -309,14 +351,12 @@ class StudioAiInference
                         'name' => $toolName,
                         'result' => $toolResult,
                     ];
-                    $messages[] = [
-                        'role' => 'tool',
-                        'tool_name' => $toolName,
-                        'content' => json_encode(
-                            $toolResult,
-                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                        ),
-                    ];
+                    $messages[] = $this->toolOutputMessage(
+                        $setting->active_provider,
+                        $toolName,
+                        (string) ($toolCall['id'] ?? ''),
+                        $toolResult,
+                    );
                 }
 
                 if ($beforeProviderRequest) {
@@ -331,13 +371,98 @@ class StudioAiInference
             if ($this->hasInvestigationEvidence($toolEvidence)) {
                 return StudioAiResult::answer(
                     __('app.assistant_investigation_unable_to_verify'),
-                    AiProvider::OllamaCloud->value,
+                    $setting->active_provider->value,
                     $setting->active_model,
                 );
             }
 
             return StudioAiResult::fallback('provider_request_failed');
         }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $messages
+     * @param  array<int, array<string, mixed>>  $tools
+     * @return array<string, mixed>
+     */
+    private function providerResponse(
+        AiProvider $provider,
+        string $apiKey,
+        string $model,
+        array $messages,
+        array $tools,
+        ?string $format,
+    ): array {
+        if ($provider === AiProvider::OpenAiApiKey) {
+            return $this->openAiResponsesClient->respond(
+                $apiKey,
+                $model,
+                $messages,
+                $tools,
+                $this->openAiResponseSchema->format(),
+            );
+        }
+
+        return $this->ollamaCloudClient->chat(
+            $apiKey,
+            $model,
+            $messages,
+            temperature: 0.0,
+            format: $format,
+            tools: $tools,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     * @return array<int, array<string, mixed>>
+     */
+    private function continuationItems(array $response): array
+    {
+        $items = $response['continuation_items'] ?? null;
+
+        if (is_array($items)) {
+            return array_values(array_filter($items, fn (mixed $item): bool => is_array($item)));
+        }
+
+        return is_array($response['message'] ?? null)
+            ? [$response['message']]
+            : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $toolResult
+     * @return array<string, mixed>
+     */
+    private function toolOutputMessage(
+        AiProvider $provider,
+        string $toolName,
+        string $toolCallId,
+        array $toolResult,
+    ): array {
+        $content = json_encode(
+            $toolResult,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+        $content = is_string($content) ? $content : '{}';
+
+        if ($provider === AiProvider::OpenAiApiKey) {
+            if ($toolCallId === '') {
+                throw new RuntimeException('OpenAI tool call did not include a call ID.');
+            }
+
+            return [
+                'type' => 'function_call_output',
+                'call_id' => $toolCallId,
+                'output' => $content,
+            ];
+        }
+
+        return [
+            'role' => 'tool',
+            'tool_name' => $toolName,
+            'content' => $content,
+        ];
     }
 
     private function invalidEnvelopeRepairInstruction(
@@ -710,6 +835,69 @@ class StudioAiInference
         ];
     }
 
+    /**
+     * @param  array<int, array{role: string, content: string}>  $history
+     * @param  array<string, mixed>|null  $actorContext
+     * @param  array<string, mixed>|null  $activeBookingDialog
+     * @param  array<string, mixed>  $studioContext
+     * @param  array<int, array{date: string, weekday: string, iso_weekday: int}>  $calendarAnchors
+     * @return array<int, array<string, mixed>>
+     */
+    private function openAiMessagesV1(
+        Account $account,
+        string $text,
+        PlatformAiSetting $setting,
+        array $history,
+        ?array $actorContext,
+        ?array $activeBookingDialog,
+        array $studioContext,
+        Carbon $requestClock,
+        array $calendarAnchors,
+        string $channel,
+        bool $helpToolsAvailable,
+        bool $investigationToolsAvailable,
+        ?string $visualContext,
+        ?string $imageBase64,
+        ?string $imageMimeType,
+    ): array {
+        $messages = $this->messages(
+            $account,
+            $text,
+            $setting,
+            $history,
+            $actorContext,
+            $activeBookingDialog,
+            $studioContext,
+            $requestClock,
+            $calendarAnchors,
+            $channel,
+            $helpToolsAvailable,
+            $investigationToolsAvailable,
+            $visualContext,
+        );
+        $messages[0]['content'] .= "\n"
+            .'OpenAI Responses prompt version: openai_v1. Use function calls when authoritative Ladna evidence is required. '
+            .'Return the final owner-facing result only after tool evidence is complete; the API enforces the final JSON envelope separately.';
+
+        if ($imageBase64 !== null && $imageMimeType !== null) {
+            $lastMessageIndex = array_key_last($messages);
+            $ownerContent = (string) data_get($messages, "{$lastMessageIndex}.content", '');
+            $messages[$lastMessageIndex]['content'] = [
+                [
+                    'type' => 'input_text',
+                    'text' => $ownerContent,
+                ],
+                [
+                    'type' => 'input_image',
+                    'image_url' => "data:{$imageMimeType};base64,{$imageBase64}",
+                    'detail' => 'original',
+                ],
+            ];
+        }
+
+        return $messages;
+    }
+
     private function cachedVisualContext(AiConversationMessageAttachment $attachment): ?string
     {
         $message = $attachment->message()
@@ -842,6 +1030,7 @@ class StudioAiInference
         ?array $activeBookingDialog,
         array $studioContext,
         array $calendarAnchors,
+        AiProvider $provider,
     ): StudioAiResult {
         $decoded = $this->decodeJsonObject($content);
         $envelopeError = $this->structuredEnvelopeError($decoded);
@@ -890,7 +1079,7 @@ class StudioAiInference
 
             return StudioAiResult::answer(
                 trim($answer),
-                AiProvider::OllamaCloud->value,
+                $provider->value,
                 $setting->active_model,
                 $this->normalizeFollowUpActions($decoded['follow_up_actions'] ?? []),
                 $this->helpSourcesFromEvidence($toolEvidence),
@@ -929,7 +1118,7 @@ class StudioAiInference
         return StudioAiResult::action(
             $disposition,
             $actionInput,
-            AiProvider::OllamaCloud->value,
+            $provider->value,
             $setting->active_model,
             $calendarReference,
         );
@@ -1023,7 +1212,7 @@ class StudioAiInference
             'account_id' => $account->id,
             'conversation_id' => $conversation?->id,
             'conversation_message_id' => $currentMessage?->id,
-            'provider' => AiProvider::OllamaCloud->value,
+            'provider' => $setting->active_provider?->value,
             'model' => $setting->active_model,
             'provider_round' => $providerRound,
             'response_length' => mb_strlen($content),
