@@ -527,7 +527,7 @@ class TelegramWebhookTest extends TestCase
 
         $this->assertSame('telegram', $attachment->source);
         $this->assertSame('telegram-photo.jpg', $attachment->original_name);
-        $this->assertSame('image/webp', $attachment->mime_type);
+        $this->assertSame('image/jpeg', $attachment->mime_type);
         Storage::disk('local')->assertExists($attachment->path);
         $this->assertDatabaseHas('telegram_messages', [
             'telegram_chat_id' => '581',
@@ -539,9 +539,14 @@ class TelegramWebhookTest extends TestCase
             && $request['file_id'] === 'large-photo');
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat')
             && collect($request['messages'] ?? [])
-                ->contains(fn (mixed $providerMessage): bool => is_array($providerMessage)
-                    && is_array($providerMessage['images'] ?? null)
-                    && ($providerMessage['images'] ?? []) !== []));
+                ->contains(function (mixed $providerMessage): bool {
+                    $image = is_array($providerMessage)
+                        ? data_get($providerMessage, 'images.0')
+                        : null;
+
+                    return is_string($image)
+                        && str_starts_with((string) base64_decode($image, true), "\xFF\xD8\xFF");
+                }));
     }
 
     public function test_authorized_owner_image_document_is_downloaded_and_attached(): void

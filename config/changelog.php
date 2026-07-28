@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.103.1',
+                'date' => '2026-07-28',
+                'title' => 'Reliable picture analysis in Ladna AI',
+                'items' => ['Ladna now converts accepted JPEG, PNG, and WebP uploads into the JPEG format expected by the multimodal provider before analysis. Orientation correction, private storage, metadata removal, and the 2 MB input limit remain unchanged.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.103.0',
                 'date' => '2026-07-28',
                 'title' => 'Picture conversations with Ladna AI',
@@ -933,6 +940,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.103.1',
+                'date' => '2026-07-28',
+                'title' => 'Надійний аналіз зображень у Ladna AI',
+                'items' => ['Ladna тепер перетворює прийняті зображення JPEG, PNG і WebP у формат JPEG, якого очікує мультимодальний провайдер перед аналізом. Виправлення орієнтації, приватне зберігання, видалення метаданих та обмеження вхідного файла 2 МБ залишилися без змін.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.103.0',
                 'date' => '2026-07-28',

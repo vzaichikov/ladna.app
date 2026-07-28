@@ -80,7 +80,7 @@ class AccountAssistantTest extends TestCase
             ], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('messages.0.attachments.0.original_name', 'timetable.png')
-            ->assertJsonPath('messages.0.attachments.0.mime_type', 'image/webp')
+            ->assertJsonPath('messages.0.attachments.0.mime_type', 'image/jpeg')
             ->assertJsonPath('messages.1.content', 'The image shows a studio timetable.');
 
         $firstAttachment = AiConversationMessageAttachment::query()->sole();
@@ -89,7 +89,7 @@ class AccountAssistantTest extends TestCase
         $previewUrl = $response->json('messages.0.attachments.0.preview_url');
         $this->get($previewUrl)
             ->assertOk()
-            ->assertHeader('Content-Type', 'image/webp');
+            ->assertHeader('Content-Type', 'image/jpeg');
 
         $this->actingAs($otherOwner)
             ->get($previewUrl)
@@ -98,7 +98,10 @@ class AccountAssistantTest extends TestCase
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.assistant.messages.store', $account), [
                 'message' => 'Use this updated version instead.',
-                'image' => UploadedFile::fake()->image('updated-timetable.png', 480, 640),
+                'image' => UploadedFile::fake()->createWithContent(
+                    'updated-timetable.webp',
+                    $this->webpImageContents(),
+                ),
             ], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('messages.3.content', 'The newer image shows an updated timetable.');
@@ -126,6 +129,8 @@ class AccountAssistantTest extends TestCase
         $this->assertCount(1, $images[2]);
         $this->assertNotSame($images[0][0], $images[1][0]);
         $this->assertSame($images[1][0], $images[2][0]);
+        $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[0][0], true));
+        $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[1][0], true));
 
         $attachments = AiConversationMessageAttachment::query()->orderBy('id')->get();
         $this->assertCount(2, $attachments);
@@ -920,6 +925,20 @@ class AccountAssistantTest extends TestCase
             'model' => 'gemma3:27b-cloud',
             'credentials' => ['api_key' => 'test-ollama-key'],
         ]);
+    }
+
+    private function webpImageContents(): string
+    {
+        $image = imagecreatetruecolor(4, 4);
+        imagefill($image, 0, 0, imagecolorallocate($image, 120, 80, 220));
+        ob_start();
+        imagewebp($image);
+        $contents = ob_get_clean();
+        imagedestroy($image);
+
+        $this->assertIsString($contents);
+
+        return $contents;
     }
 
     private function bookingFor(Account $account, User $owner): ClassBooking

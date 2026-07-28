@@ -59,7 +59,7 @@ class AiConversationImageStore
         string $source,
         ?string $originalName,
     ): AiConversationMessageAttachment {
-        if (! function_exists('imagecreatefromstring') || ! function_exists('imagewebp')) {
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg')) {
             throw new InvalidAiConversationImage('processor_unavailable');
         }
 
@@ -86,7 +86,7 @@ class AiConversationImageStore
         }
 
         $normalized = $this->normalize($contents, $mimeType);
-        $path = 'ai-conversation-images/'.$message->account_id.'/'.$message->ai_conversation_id.'/'.Str::uuid().'.webp';
+        $path = 'ai-conversation-images/'.$message->account_id.'/'.$message->ai_conversation_id.'/'.Str::uuid().'.jpg';
         $disk = Storage::disk('local');
         $attachment = $message->attachments()->create([
             'account_id' => $message->account_id,
@@ -94,7 +94,7 @@ class AiConversationImageStore
             'disk' => 'local',
             'path' => $path,
             'original_name' => $this->safeOriginalName($originalName),
-            'mime_type' => 'image/webp',
+            'mime_type' => 'image/jpeg',
             'byte_size' => strlen($normalized['contents']),
             'width' => $normalized['width'],
             'height' => $normalized['height'],
@@ -145,10 +145,10 @@ class AiConversationImageStore
                 throw new InvalidAiConversationImage('invalid');
             }
 
-            imagealphablending($target, false);
-            imagesavealpha($target, true);
-            $transparent = imagecolorallocatealpha($target, 0, 0, 0, 127);
-            imagefilledrectangle($target, 0, 0, $width, $height, $transparent);
+            imagealphablending($target, true);
+            imagesavealpha($target, false);
+            $background = imagecolorallocate($target, 255, 255, 255);
+            imagefilledrectangle($target, 0, 0, $width, $height, $background);
             imagecopyresampled(
                 $target,
                 $source,
@@ -163,7 +163,7 @@ class AiConversationImageStore
             );
 
             try {
-                $normalized = $this->encodeWebp($target);
+                $normalized = $this->encodeJpeg($target);
             } finally {
                 imagedestroy($target);
             }
@@ -227,11 +227,13 @@ class AiConversationImageStore
         }
     }
 
-    private function encodeWebp(GdImage $image): string
+    private function encodeJpeg(GdImage $image): string
     {
-        foreach ([90, 82, 74] as $quality) {
+        imageinterlace($image, true);
+
+        foreach ([90, 82, 74, 66, 58, 50, 42, 34] as $quality) {
             ob_start();
-            $encoded = imagewebp($image, null, $quality);
+            $encoded = imagejpeg($image, null, $quality);
             $contents = ob_get_clean();
 
             if ($encoded && is_string($contents) && $contents !== '' && strlen($contents) <= self::MaxInputBytes) {
