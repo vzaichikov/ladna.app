@@ -3,6 +3,7 @@
 namespace App\Support\Ai;
 
 use App\Models\Account;
+use App\Models\AiConversationMessage;
 use App\Models\AiConversationMessageAttachment;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Storage;
@@ -62,6 +63,11 @@ class AiConversationImageCleaner
             ->orderBy('id')
             ->chunkById(100, function ($attachments): void {
                 $deletedAttachmentIds = [];
+                $messageIds = $attachments
+                    ->pluck('ai_conversation_message_id')
+                    ->map(fn (int|string $id): int => (int) $id)
+                    ->unique()
+                    ->values();
 
                 foreach ($attachments as $attachment) {
                     $disk = Storage::disk($attachment->disk);
@@ -83,6 +89,17 @@ class AiConversationImageCleaner
                     AiConversationMessageAttachment::query()
                         ->whereKey($deletedAttachmentIds)
                         ->delete();
+
+                    AiConversationMessage::query()
+                        ->whereKey($messageIds)
+                        ->get()
+                        ->each(function (AiConversationMessage $message): void {
+                            $metadata = is_array($message->metadata) ? $message->metadata : [];
+                            unset($metadata['visual_context']);
+                            $message->forceFill([
+                                'metadata' => $metadata !== [] ? $metadata : null,
+                            ])->save();
+                        });
                 }
             });
     }

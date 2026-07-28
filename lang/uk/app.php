@@ -1849,6 +1849,7 @@ return [
     'assistant_clear_chat_body' => 'Поточну переписку буде приховано для вас. Незавершені дії в цьому чаті буде скасовано.',
     'assistant_clear_chat_confirm' => 'Очистити',
     'assistant_thinking' => 'Ladna думає...',
+    'assistant_status_looking_at_image' => 'Ladna уважно дивиться на зображення...',
     'assistant_status_thinking' => 'Ladna думає...',
     'assistant_status_checking_request' => 'Ladna перевіряє запит...',
     'assistant_status_checking_database' => 'Ladna перевіряє базу...',

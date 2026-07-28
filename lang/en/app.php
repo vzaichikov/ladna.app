@@ -1849,6 +1849,7 @@ return [
     'assistant_clear_chat_body' => 'The current conversation will be hidden for you. Pending actions in this chat will be cancelled.',
     'assistant_clear_chat_confirm' => 'Clear',
     'assistant_thinking' => 'Ladna is thinking...',
+    'assistant_status_looking_at_image' => 'Ladna is carefully examining the image...',
     'assistant_status_thinking' => 'Ladna is thinking...',
     'assistant_status_checking_request' => 'Ladna is checking the request...',
     'assistant_status_checking_database' => 'Ladna is checking the database...',

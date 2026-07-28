@@ -546,7 +546,23 @@ class TelegramWebhookTest extends TestCase
 
                     return is_string($image)
                         && str_starts_with((string) base64_decode($image, true), "\xFF\xD8\xFF");
-                }));
+                })
+            && ! isset($request['tools']));
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat')
+            && ! collect($request['messages'] ?? [])
+                ->contains(fn (mixed $providerMessage): bool => is_array($providerMessage)
+                    && ($providerMessage['images'] ?? []) !== [])
+            && str_contains(
+                (string) data_get($request->data(), 'messages.'.(count($request['messages'] ?? []) - 1).'.content'),
+                'Exact OCR: class pass details.',
+            )
+            && is_array($request['tools'] ?? null));
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/editMessageText')
+            && $request['text'] === __('app.assistant_status_looking_at_image'));
+        $this->assertSame(
+            'Exact OCR: class pass details.',
+            data_get($message->fresh()->metadata, 'visual_context.text'),
+        );
     }
 
     public function test_authorized_owner_image_document_is_downloaded_and_attached(): void
@@ -2415,10 +2431,16 @@ class TelegramWebhookTest extends TestCase
             }
 
             if (str_ends_with($request->url(), '/api/chat')) {
+                $hasImage = collect($request['messages'] ?? [])
+                    ->contains(fn (mixed $message): bool => is_array($message)
+                        && ($message['images'] ?? []) !== []);
+
                 return Http::response([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => json_encode($assistantEnvelope),
+                        'content' => $hasImage
+                            ? 'Exact OCR: class pass details.'
+                            : json_encode($assistantEnvelope),
                     ],
                 ]);
             }

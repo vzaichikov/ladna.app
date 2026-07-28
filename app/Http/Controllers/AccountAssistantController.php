@@ -495,7 +495,9 @@ class AccountAssistantController extends Controller
                 'id' => $message->id,
                 'role' => $message->role->value,
                 'content' => $message->content,
-                'metadata' => $message->metadata ?? [],
+                'metadata' => collect($message->metadata ?? [])
+                    ->except('visual_context')
+                    ->all(),
                 'occurred_at' => $message->occurred_at?->toIso8601String(),
                 'attachments' => $message->attachments
                     ->map(fn (AiConversationMessageAttachment $attachment): array => [

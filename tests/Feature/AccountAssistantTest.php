@@ -49,7 +49,19 @@ class AccountAssistantTest extends TestCase
                 ->push([
                     'message' => [
                         'role' => 'assistant',
+                        'content' => 'Visible interface: studio timetable. Exact OCR: Monday 18:00.',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
                         'content' => '{"disposition":"answer","answer":"The image shows a studio timetable.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"image inspection"}',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => 'Visible interface: updated studio timetable. Exact OCR: Highlighted 19:00.',
                     ],
                 ])
                 ->push([
@@ -123,17 +135,43 @@ class AccountAssistantTest extends TestCase
                 return $messages[array_key_last($messages)]['images'] ?? [];
             });
 
-        $this->assertCount(3, $chatRequests);
+        $this->assertCount(5, $chatRequests);
         $this->assertCount(1, $images[0]);
-        $this->assertCount(1, $images[1]);
+        $this->assertCount(0, $images[1]);
         $this->assertCount(1, $images[2]);
-        $this->assertNotSame($images[0][0], $images[1][0]);
-        $this->assertSame($images[1][0], $images[2][0]);
+        $this->assertCount(0, $images[3]);
+        $this->assertCount(0, $images[4]);
+        $this->assertNotSame($images[0][0], $images[2][0]);
         $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[0][0], true));
-        $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[1][0], true));
+        $this->assertStringStartsWith("\xFF\xD8\xFF", base64_decode($images[2][0], true));
+        $this->assertArrayNotHasKey('tools', $chatRequests[0][0]->data());
+        $this->assertNotEmpty($chatRequests[1][0]->data()['tools'] ?? []);
+        $this->assertArrayNotHasKey('tools', $chatRequests[2][0]->data());
+        $this->assertNotEmpty($chatRequests[3][0]->data()['tools'] ?? []);
+        $this->assertNotEmpty($chatRequests[4][0]->data()['tools'] ?? []);
+        $this->assertStringContainsString(
+            'Exact OCR: Monday 18:00.',
+            data_get($chatRequests[1][0]->data(), 'messages.'.(count($chatRequests[1][0]->data()['messages']) - 1).'.content'),
+        );
+        $this->assertStringContainsString(
+            'Exact OCR: Highlighted 19:00.',
+            data_get($chatRequests[4][0]->data(), 'messages.'.(count($chatRequests[4][0]->data()['messages']) - 1).'.content'),
+        );
 
         $attachments = AiConversationMessageAttachment::query()->orderBy('id')->get();
         $this->assertCount(2, $attachments);
+        $imageMessages = AiConversationMessage::query()
+            ->whereHas('attachments')
+            ->orderBy('id')
+            ->get();
+        $this->assertSame(
+            'Visible interface: studio timetable. Exact OCR: Monday 18:00.',
+            data_get($imageMessages[0]->metadata, 'visual_context.text'),
+        );
+        $this->assertSame(
+            'Visible interface: updated studio timetable. Exact OCR: Highlighted 19:00.',
+            data_get($imageMessages[1]->metadata, 'visual_context.text'),
+        );
 
         $this->deleteJson(route('dashboard.accounts.assistant.destroy', $account))
             ->assertOk()
@@ -142,6 +180,10 @@ class AccountAssistantTest extends TestCase
         foreach ($attachments as $attachment) {
             Storage::disk('local')->assertMissing($attachment->path);
             $this->assertDatabaseMissing('ai_conversation_message_attachments', ['id' => $attachment->id]);
+        }
+
+        foreach ($imageMessages as $imageMessage) {
+            $this->assertNull(data_get($imageMessage->fresh()?->metadata, 'visual_context'));
         }
     }
 

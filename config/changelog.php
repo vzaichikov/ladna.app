@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.103.2',
+                'date' => '2026-07-28',
+                'title' => 'Picture understanding with full assistant abilities',
+                'items' => ['Ladna now carefully reads visible text and interface details from a picture before handling the owner’s request. The extracted visual context remains available for follow-up questions while the regular assistant keeps access to its permitted help and studio-data tools.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.103.1',
                 'date' => '2026-07-28',
                 'title' => 'Reliable picture analysis in Ladna AI',
@@ -940,6 +947,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.103.2',
+                'date' => '2026-07-28',
+                'title' => 'Розуміння зображень із повними можливостями асистента',
+                'items' => ['Ladna тепер спочатку уважно читає видимий текст і деталі інтерфейсу на зображенні, а потім опрацьовує запит власника. Отриманий візуальний контекст залишається доступним для уточнень, а звичайний асистент зберігає доступ до дозволених інструментів довідки та даних студії.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.103.1',
                 'date' => '2026-07-28',
