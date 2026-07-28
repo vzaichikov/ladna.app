@@ -148,8 +148,8 @@ class AccountAssistantTest extends TestCase
         $this->assertFalse($chatRequests[0][0]->data()['think']);
         $this->assertSame(['temperature' => 0.0], $chatRequests[0][0]->data()['options']);
         $this->assertCount(1, $chatRequests[0][0]->data()['messages']);
-        $this->assertStringContainsString(
-            'class-pass names or codes',
+        $this->assertSame(
+            'Briefly identify the screen and class pass visible in this image.',
             $chatRequests[0][0]->data()['messages'][0]['content'],
         );
         $this->assertNotEmpty($chatRequests[1][0]->data()['tools'] ?? []);
