@@ -82,7 +82,7 @@ class AccountAssistantTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_dashboard_openai_answer_uses_responses_api_with_schema_v1_and_prompt_v2(): void
+    public function test_dashboard_openai_answer_uses_responses_api_with_schema_and_prompt_v2(): void
     {
         Http::fake([
             'api.openai.com/v1/responses' => Http::response($this->openAiTextResponse([
@@ -116,13 +116,15 @@ class AccountAssistantTest extends TestCase
                 && $request['model'] === 'gpt-5.5'
                 && $request['store'] === false
                 && data_get($request->data(), 'reasoning.effort') === 'low'
-                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v1'
+                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v2'
                 && data_get($request->data(), 'text.format.strict') === true
                 && str_contains($systemPrompt, 'OpenAI Responses prompt version: openai_v2.')
                 && str_contains($systemPrompt, 'Language is a hard output constraint')
                 && str_contains($systemPrompt, 'detect it from the current text under Owner request')
                 && str_contains($systemPrompt, 'Tool arguments may use the language that retrieves the best evidence')
                 && str_contains($systemPrompt, 'If the current request is image-only, use Ukrainian only.')
+                && str_contains($systemPrompt, 'answer must be a short owner-facing rejection in the required output language')
+                && ! str_contains($systemPrompt, 'For disposition=out_of_scope, answer and action must be null.')
                 && collect($request['tools'] ?? [])->every(
                     fn (mixed $tool): bool => is_array($tool)
                         && ($tool['type'] ?? null) === 'function'
@@ -256,8 +258,39 @@ class AccountAssistantTest extends TestCase
                     'The current owner message has no text. This image-only request must be answered in Ukrainian only.',
                 )
                 && count($request['tools'] ?? []) > 0
-                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v1';
+                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v2';
         });
+    }
+
+    public function test_dashboard_openai_out_of_scope_rejection_uses_model_language(): void
+    {
+        Http::fake([
+            'api.openai.com/v1/responses' => Http::response($this->openAiTextResponse([
+                'disposition' => 'out_of_scope',
+                'answer' => 'I can only help with Ladna studio operations.',
+                'follow_up_actions' => [],
+                'action' => null,
+                'calendar_reference' => null,
+                'reason' => 'weather request',
+            ])),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOpenAi();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'What is the weather tomorrow?',
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', 'I can only help with Ladna studio operations.')
+            ->assertJsonPath('messages.1.role', AiConversationMessageRole::RejectedIntent->value)
+            ->assertJsonPath('messages.1.metadata.used_ai', true)
+            ->assertJsonPath('messages.1.metadata.provider', AiProvider::OpenAiApiKey->value)
+            ->assertJsonPath('messages.1.metadata.model', 'gpt-5.5')
+            ->assertJsonPath('messages.1.metadata.disposition', 'out_of_scope');
     }
 
     public function test_dashboard_message_requires_text_or_one_valid_image(): void

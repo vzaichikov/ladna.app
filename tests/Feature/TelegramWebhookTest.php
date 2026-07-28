@@ -642,7 +642,7 @@ class TelegramWebhookTest extends TestCase
         $this->assertSame('gpt-5.5', $request['model']);
         $this->assertFalse($request['store']);
         $this->assertNotEmpty($request['tools']);
-        $this->assertSame('ladna_studio_assistant_v1', data_get($request->data(), 'text.format.name'));
+        $this->assertSame('ladna_studio_assistant_v2', data_get($request->data(), 'text.format.name'));
         $userContent = collect($request['input'] ?? [])
             ->flatMap(fn (array $message): array => is_array($message['content'] ?? null)
                 ? $message['content']

@@ -82,6 +82,18 @@ class StudioAiResult
         );
     }
 
+    public static function aiRejected(string $text, string $provider, string $model): self
+    {
+        return new self(
+            text: $text,
+            usedAi: true,
+            disposition: StudioAiDisposition::OutOfScope,
+            rejected: true,
+            provider: $provider,
+            model: $model,
+        );
+    }
+
     public function isAction(): bool
     {
         return $this->disposition->isAction() && $this->actionInput !== null;

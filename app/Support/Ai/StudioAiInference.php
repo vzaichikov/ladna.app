@@ -35,7 +35,7 @@ class StudioAiInference
         private readonly StudioAiContextBuilder $contextBuilder,
         private readonly OllamaCloudClient $ollamaCloudClient,
         private readonly OpenAiResponsesClient $openAiResponsesClient,
-        private readonly OpenAiStudioResponseSchema $openAiResponseSchema,
+        private readonly OpenAiStudioResponseSchemaV2 $openAiResponseSchema,
         private readonly LadnaAssistantCapabilities $capabilities,
         private readonly StudioAiToolExecutor $toolExecutor,
     ) {}
@@ -734,6 +734,7 @@ class StudioAiInference
         bool $helpToolsAvailable,
         bool $investigationToolsAvailable,
         ?string $visualContext,
+        ?string $outOfScopeEnvelopeInstruction = null,
     ): array {
         $displayName = $setting->bot_display_name ?: 'Ladna assistant';
         $platformInstructions = trim((string) $setting->internal_instructions);
@@ -744,7 +745,8 @@ class StudioAiInference
             'Return exactly one JSON object with keys: "disposition", "answer", "follow_up_actions", "action", "calendar_reference", and "reason".',
             'Allowed disposition values are: answer, out_of_scope, start_booking, continue_booking, cancel_booking, cancel_dialog.',
             'For disposition=answer, answer must be a non-empty string and action must be null.',
-            'For disposition=out_of_scope, answer and action must be null.',
+            $outOfScopeEnvelopeInstruction
+                ?? 'For disposition=out_of_scope, answer and action must be null.',
             'For an action disposition, answer must be null and action must be an object using only these keys: customer_id, scheduled_class_id, customer_query, trainer_query, date, booking_id, option_number, option_label, use_actor_trainer.',
             'calendar_reference must always be present. Use null unless an answer depends on a calendar date or a booking action includes a date. Otherwise use exactly {"date":"YYYY-MM-DD","uses_schedule_details":boolean}. Copy its date from the authoritative calendar’s calendar_anchors and use the same date in the answer evidence or action.date.',
             'authoritative_calendar overrides internal calendar knowledge. Never calculate or recall weekday/date relationships yourself. Resolve weekdays, relative dates, and date confirmations only by looking them up there. An unqualified weekday means its first listed occurrence; wording such as "next" means the following listed occurrence. The answer may name weekdays in the owner’s language.',
@@ -874,6 +876,7 @@ class StudioAiInference
             $helpToolsAvailable,
             $investigationToolsAvailable,
             $visualContext,
+            'For disposition=out_of_scope, answer must be a short owner-facing rejection in the required output language, while action and calendar_reference must be null.',
         );
         $messages[0]['content'] .= "\n"
             .'OpenAI Responses prompt version: openai_v2. Use function calls when authoritative Ladna evidence is required. '
@@ -1098,9 +1101,24 @@ class StudioAiInference
         }
 
         if ($disposition === StudioAiDisposition::OutOfScope) {
-            if ($decoded['answer'] !== null
-                || $decoded['action'] !== null
+            if ($decoded['action'] !== null
                 || $calendarReference !== null) {
+                return $this->invalidStructuredResponse('invalid_out_of_scope_fields');
+            }
+
+            if ($provider === AiProvider::OpenAiApiKey) {
+                if (! is_string($decoded['answer']) || trim($decoded['answer']) === '') {
+                    return $this->invalidStructuredResponse('invalid_out_of_scope_fields');
+                }
+
+                return StudioAiResult::aiRejected(
+                    trim($decoded['answer']),
+                    $provider->value,
+                    $setting->active_model,
+                );
+            }
+
+            if ($decoded['answer'] !== null) {
                 return $this->invalidStructuredResponse('invalid_out_of_scope_fields');
             }
 
