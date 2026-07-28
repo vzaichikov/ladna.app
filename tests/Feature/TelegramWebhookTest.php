@@ -478,12 +478,12 @@ class TelegramWebhookTest extends TestCase
         ]);
     }
 
-    public function test_authorized_owner_photo_caption_is_downloaded_and_attached_to_ai_message(): void
+    public function test_authorized_owner_photo_is_rejected_before_download_or_ai_inference_for_ollama(): void
     {
         Storage::fake('local');
         $imageContents = $this->pngImageContents();
         [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('581', '801');
-        $this->fakeTelegramImageAndAi($imageContents);
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
 
         $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
             'update_id' => 1102,
@@ -519,61 +519,24 @@ class TelegramWebhookTest extends TestCase
             $processedUpdate->status,
             $processedUpdate->error_message ?? 'Telegram image update failed.',
         );
-        $message = AiConversationMessage::query()
-            ->where('account_id', $account->id)
-            ->where('content', 'What is shown in this image?')
-            ->firstOrFail();
-        $attachment = $message->attachments()->firstOrFail();
-
-        $this->assertSame('telegram', $attachment->source);
-        $this->assertSame('telegram-photo.jpg', $attachment->original_name);
-        $this->assertSame('image/jpeg', $attachment->mime_type);
-        Storage::disk('local')->assertExists($attachment->path);
         $this->assertDatabaseHas('telegram_messages', [
+            'account_id' => $account->id,
             'telegram_chat_id' => '581',
-            'direction' => 'inbound',
-            'message_type' => 'photo',
-            'text' => 'What is shown in this image?',
+            'direction' => 'outbound',
+            'text' => __('app.assistant_image_provider_unsupported'),
         ]);
-        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/getFile')
-            && $request['file_id'] === 'large-photo');
-        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat')
-            && collect($request['messages'] ?? [])
-                ->contains(function (mixed $providerMessage): bool {
-                    $image = is_array($providerMessage)
-                        ? data_get($providerMessage, 'images.0')
-                        : null;
-
-                    return is_string($image)
-                        && str_starts_with((string) base64_decode($image, true), "\xFF\xD8\xFF");
-                })
-            && ! isset($request['tools'])
-            && $request['think'] === false
-            && $request['options'] === ['temperature' => 0.0]
-            && count($request['messages'] ?? []) === 1);
-        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat')
-            && ! collect($request['messages'] ?? [])
-                ->contains(fn (mixed $providerMessage): bool => is_array($providerMessage)
-                    && ($providerMessage['images'] ?? []) !== [])
-            && str_contains(
-                (string) data_get($request->data(), 'messages.'.(count($request['messages'] ?? []) - 1).'.content'),
-                'Exact OCR: class pass details.',
-            )
-            && is_array($request['tools'] ?? null));
-        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/editMessageText')
-            && $request['text'] === __('app.assistant_status_looking_at_image'));
-        $this->assertSame(
-            'Exact OCR: class pass details.',
-            data_get($message->fresh()->metadata, 'visual_context.text'),
-        );
+        $this->assertFalse(AiConversationMessage::query()->where('account_id', $account->id)->exists());
+        $this->assertFalse(AiConversationMessageAttachment::query()->where('account_id', $account->id)->exists());
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/'));
     }
 
-    public function test_authorized_owner_image_document_is_downloaded_and_attached(): void
+    public function test_authorized_owner_image_document_is_rejected_before_download_for_ollama(): void
     {
         Storage::fake('local');
         $imageContents = $this->pngImageContents();
         [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('585', '805');
-        $this->fakeTelegramImageAndAi($imageContents);
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
 
         $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
             'update_id' => 1108,
@@ -594,25 +557,18 @@ class TelegramWebhookTest extends TestCase
             'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
         ])->assertNoContent();
 
-        $attachment = AiConversationMessageAttachment::query()
-            ->where('account_id', $account->id)
-            ->firstOrFail();
-
-        $this->assertSame('telegram', $attachment->source);
-        $this->assertSame('evidence.png', $attachment->original_name);
-        Storage::disk('local')->assertExists($attachment->path);
         $this->assertDatabaseHas('telegram_messages', [
             'account_id' => $account->id,
             'telegram_chat_id' => '585',
-            'direction' => 'inbound',
-            'message_type' => 'image_document',
-            'text' => 'Read this image document.',
+            'direction' => 'outbound',
+            'text' => __('app.assistant_image_provider_unsupported'),
         ]);
-        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/getFile')
-            && $request['file_id'] === 'image-document');
+        $this->assertFalse(AiConversationMessageAttachment::query()->where('account_id', $account->id)->exists());
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/'));
     }
 
-    public function test_owner_image_get_file_failure_returns_localized_error_without_ai_request(): void
+    public function test_owner_image_provider_policy_precedes_get_file_failure(): void
     {
         [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('586', '806');
         Http::fake(['api.telegram.org/*' => Http::response([], 500)]);
@@ -639,9 +595,10 @@ class TelegramWebhookTest extends TestCase
             'account_id' => $account->id,
             'telegram_chat_id' => '586',
             'direction' => 'outbound',
-            'text' => __('app.telegram_image_download_failed'),
+            'text' => __('app.assistant_image_provider_unsupported'),
         ]);
         $this->assertFalse(AiConversationMessageAttachment::query()->where('account_id', $account->id)->exists());
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/'));
     }
 
@@ -678,11 +635,11 @@ class TelegramWebhookTest extends TestCase
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/'));
     }
 
-    public function test_owner_corrupt_image_is_rejected_without_polluting_ai_history(): void
+    public function test_owner_image_provider_policy_precedes_image_validation(): void
     {
         Storage::fake('local');
         [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('588', '808');
-        $this->fakeTelegramImageAndAi('not-an-image');
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
 
         $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
             'update_id' => 1111,
@@ -707,7 +664,7 @@ class TelegramWebhookTest extends TestCase
             'account_id' => $account->id,
             'telegram_chat_id' => '588',
             'direction' => 'outbound',
-            'text' => __('app.telegram_image_invalid'),
+            'text' => __('app.assistant_image_provider_unsupported'),
         ]);
         $this->assertFalse(AiConversationMessage::query()
             ->where('account_id', $account->id)
@@ -717,19 +674,12 @@ class TelegramWebhookTest extends TestCase
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/'));
     }
 
-    public function test_image_only_ai_action_is_rejected_before_planning_a_mutation(): void
+    public function test_disabled_ollama_image_input_does_not_plan_a_mutation(): void
     {
         Storage::fake('local');
         $imageContents = $this->pngImageContents();
         [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('589', '809');
-        $this->fakeTelegramImageAndAi($imageContents, [
-            'disposition' => 'start_booking',
-            'answer' => null,
-            'follow_up_actions' => [],
-            'action' => ['customer_query' => 'Visible name from image'],
-            'calendar_reference' => null,
-            'reason' => 'instruction visible in image',
-        ]);
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
 
         $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
             'update_id' => 1112,
@@ -749,16 +699,16 @@ class TelegramWebhookTest extends TestCase
             'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
         ])->assertNoContent();
 
-        $assistantMessage = AiConversationMessage::query()
-            ->where('account_id', $account->id)
-            ->where('role', AiConversationMessageRole::Assistant->value)
-            ->latest('id')
-            ->firstOrFail();
-
-        $this->assertSame('image_only_action_not_allowed', data_get($assistantMessage->metadata, 'fallback_reason'));
-        $this->assertSame(__('app.assistant_ai_unavailable'), $assistantMessage->content);
+        $this->assertDatabaseHas('telegram_messages', [
+            'account_id' => $account->id,
+            'telegram_chat_id' => '589',
+            'direction' => 'outbound',
+            'text' => __('app.assistant_image_provider_unsupported'),
+        ]);
         $this->assertFalse(AiPendingAction::query()->where('account_id', $account->id)->exists());
-        $this->assertNull(data_get($assistantMessage->metadata, 'booking_dialog'));
+        $this->assertFalse(AiConversationMessage::query()->where('account_id', $account->id)->exists());
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/'));
     }
 
     public function test_owner_photo_album_gets_one_reply_and_is_not_downloaded(): void
@@ -791,7 +741,7 @@ class TelegramWebhookTest extends TestCase
             ->where('account_id', $account->id)
             ->where('telegram_chat_id', '582')
             ->where('direction', 'outbound')
-            ->where('text', __('app.telegram_image_album_unsupported'))
+            ->where('text', __('app.assistant_image_provider_unsupported'))
             ->count());
         $this->assertFalse(AiConversationMessageAttachment::query()->where('account_id', $account->id)->exists());
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
@@ -824,7 +774,7 @@ class TelegramWebhookTest extends TestCase
             'account_id' => $account->id,
             'telegram_chat_id' => '583',
             'direction' => 'outbound',
-            'text' => __('app.telegram_image_too_large'),
+            'text' => __('app.assistant_image_provider_unsupported'),
         ]);
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
     }
@@ -833,30 +783,25 @@ class TelegramWebhookTest extends TestCase
     {
         Storage::fake('local');
         $imageContents = $this->pngImageContents();
-        [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('584', '804');
-        $this->fakeTelegramImageAndAi($imageContents);
+        [$account, $installation, $webhookKey, $authorization] = $this->authorizedOwnerImageChat('584', '804');
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
 
-        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
-            'update_id' => 1106,
-            'message' => [
-                'message_id' => 206,
-                'chat' => ['id' => 584, 'type' => 'private'],
-                'from' => ['id' => 804, 'username' => 'owner'],
-                'photo' => [[
-                    'file_id' => 'restart-photo',
-                    'file_unique_id' => 'restart-photo-unique',
-                    'width' => 800,
-                    'height' => 600,
-                    'file_size' => strlen($imageContents),
-                ]],
-            ],
-        ], [
-            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
-        ])->assertNoContent();
-
-        $attachment = AiConversationMessageAttachment::query()
-            ->where('account_id', $account->id)
-            ->firstOrFail();
+        $conversation = AiConversation::factory()->for($account)->create([
+            'telegram_chat_authorization_id' => $authorization->id,
+            'user_id' => $authorization->user_id,
+            'channel' => 'telegram_owner',
+            'profile' => TelegramBotProfile::Owner->value,
+            'status' => AiConversation::StatusActive,
+        ]);
+        $message = AiConversationMessage::factory()
+            ->for($account)
+            ->for($conversation, 'conversation')
+            ->create();
+        $attachment = AiConversationMessageAttachment::factory()
+            ->for($account)
+            ->for($message, 'message')
+            ->create();
+        Storage::disk('local')->put($attachment->path, $imageContents);
         Storage::disk('local')->assertExists($attachment->path);
 
         $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
@@ -892,7 +837,7 @@ class TelegramWebhookTest extends TestCase
             'direction' => 'outbound',
             'text' => __('app.telegram_image_command_ignored'),
         ]);
-        $this->assertCount(1, Http::recorded(
+        $this->assertCount(0, Http::recorded(
             fn (Request $request): bool => str_contains($request->url(), '/getFile'),
         ));
     }

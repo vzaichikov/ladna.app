@@ -299,8 +299,8 @@ class PlatformAdminTest extends TestCase
         $this->assertTrue($installation->is_enabled);
         $this->assertStringContainsString('/api/v1/telegram/webhooks/', (string) $installation->webhook_url);
         $this->assertSame('owner-secret', substr((string) $installation->tokenValue(), -12));
-        $this->assertSame('webhook_synced', $installation->status);
-        $this->assertNotNull($installation->last_webhook_synced_at);
+        $this->assertSame('configured', $installation->status);
+        $this->assertNull($installation->last_webhook_synced_at);
 
         $foundersTarget = TelegramBroadcastTarget::query()->firstOrFail();
         $this->assertSame($installation->id, $foundersTarget->telegram_bot_installation_id);
@@ -310,23 +310,8 @@ class PlatformAdminTest extends TestCase
         $this->assertTrue($foundersTarget->is_enabled);
         $this->assertNotNull($foundersTarget->verified_at);
 
-        Http::assertSent(function (Request $request) use ($installation): bool {
-            return str_ends_with($request->url(), '/setWebhook')
-                && $request['url'] === $installation->webhook_url
-                && $request['secret_token'] === $installation->webhookSecret()
-                && $request['allowed_updates'] === ['message', 'callback_query'];
-        });
-        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/setMyCommands')
-            && $request['commands'] === [[
-                'command' => 'book',
-                'description' => __('app.telegram_command_book_description'),
-            ], [
-                'command' => 'cancel_booking',
-                'description' => __('app.telegram_command_cancel_booking_description'),
-            ], [
-                'command' => 'restart',
-                'description' => __('app.telegram_command_restart_description'),
-            ]]);
+        Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/setWebhook'));
+        Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/setMyCommands'));
     }
 
     public function test_platform_owner_telegram_webhook_status_is_platform_only_and_redacted(): void

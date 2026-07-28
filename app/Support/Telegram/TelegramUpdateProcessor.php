@@ -291,6 +291,14 @@ class TelegramUpdateProcessor
             return $processed;
         }
 
+        if ($this->hasImage($message) && ! PlatformAiSetting::imageInferenceEnabled()) {
+            if ($this->shouldReplyForMediaGroup($inboundMessage)) {
+                $this->sendAndStore($telegramUpdate, $chatId, __('app.assistant_image_provider_unsupported'), [], $authorization->account_id, $authorization);
+            }
+
+            return true;
+        }
+
         if ($this->hasMediaGroup($message)) {
             if ($this->shouldReplyForMediaGroup($inboundMessage)) {
                 $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_image_album_unsupported'), [], $authorization->account_id, $authorization);

@@ -66,6 +66,7 @@
     $canCheckInEventTickets = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::CheckInEventTickets);
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
+    $assistantImageInferenceEnabled = $showAssistantWidget && \App\Models\PlatformAiSetting::imageInferenceEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
     $canViewPayments = $showAccountNav && $authUser && ($activeAccount->isOwnedBy($authUser) || $canManageStudioCashflow);
     $canViewTariffPayments = ! $isReadOnlyDemo && $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
@@ -686,6 +687,7 @@
                 data-image-remove-label="{{ __('app.assistant_image_remove') }}"
                 data-image-invalid-type-message="{{ __('app.assistant_image_invalid_type') }}"
                 data-image-too-large-message="{{ __('app.assistant_image_too_large') }}"
+                data-image-input-enabled="{{ $assistantImageInferenceEnabled ? 'true' : 'false' }}"
                 class="fixed bottom-5 right-5 z-40"
             >
                 <button
@@ -754,36 +756,40 @@
 
                     <form data-assistant-form class="border-t border-stone-100 bg-white p-3">
                         <div data-assistant-drop-zone class="rounded-lg transition">
-                            <div data-assistant-image-preview class="hidden pb-2">
-                                <div class="relative inline-flex max-w-full overflow-hidden rounded-lg border border-stone-200 bg-slate-50 p-1 shadow-xs">
-                                    <img data-assistant-image-preview-source alt="{{ __('app.assistant_image') }}" class="h-20 max-w-40 rounded-md object-cover">
-                                    <button
-                                        type="button"
-                                        data-assistant-image-remove
-                                        class="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/70 text-white shadow-sm transition hover:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
-                                        aria-label="{{ __('app.assistant_image_remove') }}"
-                                    >
-                                        <x-ui.icon name="close" class="h-4 w-4" />
-                                    </button>
+                            @if ($assistantImageInferenceEnabled)
+                                <div data-assistant-image-preview class="hidden pb-2">
+                                    <div class="relative inline-flex max-w-full overflow-hidden rounded-lg border border-stone-200 bg-slate-50 p-1 shadow-xs">
+                                        <img data-assistant-image-preview-source alt="{{ __('app.assistant_image') }}" class="h-20 max-w-40 rounded-md object-cover">
+                                        <button
+                                            type="button"
+                                            data-assistant-image-remove
+                                            class="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/70 text-white shadow-sm transition hover:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                                            aria-label="{{ __('app.assistant_image_remove') }}"
+                                        >
+                                            <x-ui.icon name="close" class="h-4 w-4" />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                            @endif
 
                             <div class="flex gap-2">
-                                <input
-                                    data-assistant-image-input
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp"
-                                    class="hidden"
-                                >
-                                <button
-                                    type="button"
-                                    data-assistant-image-picker
-                                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-500 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                    aria-label="{{ __('app.assistant_image_add') }}"
-                                    title="{{ __('app.assistant_image_add') }}"
-                                >
-                                    <x-ui.icon name="image" class="h-4 w-4" />
-                                </button>
+                                @if ($assistantImageInferenceEnabled)
+                                    <input
+                                        data-assistant-image-input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        class="hidden"
+                                    >
+                                    <button
+                                        type="button"
+                                        data-assistant-image-picker
+                                        class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-500 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                        aria-label="{{ __('app.assistant_image_add') }}"
+                                        title="{{ __('app.assistant_image_add') }}"
+                                    >
+                                        <x-ui.icon name="image" class="h-4 w-4" />
+                                    </button>
+                                @endif
                                 <input
                                     data-assistant-input
                                     class="min-w-0 flex-1 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
@@ -795,9 +801,11 @@
                                     <x-ui.icon name="send" class="h-4 w-4" />
                                 </button>
                             </div>
-                            <p class="pt-1.5 text-center text-[11px] leading-4 text-slate-400">
-                                {{ __('app.assistant_image_hint') }}
-                            </p>
+                            @if ($assistantImageInferenceEnabled)
+                                <p class="pt-1.5 text-center text-[11px] leading-4 text-slate-400">
+                                    {{ __('app.assistant_image_hint') }}
+                                </p>
+                            @endif
                         </div>
                     </form>
                 </section>

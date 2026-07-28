@@ -84,7 +84,9 @@ class StudioAiInference
             return StudioAiResult::fallback('missing_ollama_api_key');
         }
 
-        $visualAttachment = $this->visualAttachment($account, $conversation, $currentMessage);
+        $visualAttachment = $setting->active_provider->supportsImageInference()
+            ? $this->visualAttachment($account, $conversation, $currentMessage)
+            : null;
         $visualContext = $visualAttachment
             ? $this->cachedVisualContext($visualAttachment)
             : null;

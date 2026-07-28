@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\PlatformAiSetting;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\File;
@@ -39,6 +40,11 @@ class StoreAccountAssistantMessageRequest extends FormRequest
             function (Validator $validator): void {
                 if ($this->messageText() === '' && ! $this->hasFile('image')) {
                     $validator->errors()->add('message', __('app.assistant_message_or_image_required'));
+                }
+            },
+            function (Validator $validator): void {
+                if ($this->hasFile('image') && ! PlatformAiSetting::imageInferenceEnabled()) {
+                    $validator->errors()->add('image', __('app.assistant_image_provider_unsupported'));
                 }
             },
         ];

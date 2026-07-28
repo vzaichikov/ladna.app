@@ -1843,6 +1843,7 @@ return [
     'assistant_image_invalid' => 'Could not read that image. Choose a valid JPEG, PNG or WebP file.',
     'assistant_image_unavailable' => 'The image could not be processed right now. Please try again.',
     'assistant_image_model_unsupported' => 'The configured AI model does not support image input. Choose a vision-capable model or send a text request.',
+    'assistant_image_provider_unsupported' => 'Image input is disabled for the selected AI provider. Send a text request or choose another provider.',
     'assistant_message_or_image_required' => 'Enter a message or add an image.',
     'assistant_clear_chat' => 'Clear chat',
     'assistant_clear_chat_title' => 'Clear this chat?',

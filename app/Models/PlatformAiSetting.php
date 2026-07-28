@@ -39,4 +39,12 @@ class PlatformAiSetting extends Model
 
         return (bool) $setting?->owner_ai_assistant_enabled;
     }
+
+    public static function imageInferenceEnabled(): bool
+    {
+        $setting = self::query()->first();
+
+        return (bool) $setting?->owner_ai_assistant_enabled
+            && $setting?->active_provider?->supportsImageInference() === true;
+    }
 }

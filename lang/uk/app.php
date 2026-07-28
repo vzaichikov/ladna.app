@@ -1843,6 +1843,7 @@ return [
     'assistant_image_invalid' => 'Не вдалося прочитати зображення. Оберіть коректний файл JPEG, PNG або WebP.',
     'assistant_image_unavailable' => 'Не вдалося обробити зображення. Спробуйте ще раз.',
     'assistant_image_model_unsupported' => 'Налаштована модель ШІ не підтримує зображення. Оберіть модель із підтримкою зображень або надішліть текстовий запит.',
+    'assistant_image_provider_unsupported' => 'Для вибраного провайдера ШІ роботу із зображеннями вимкнено. Надішліть текстовий запит або оберіть іншого провайдера.',
     'assistant_message_or_image_required' => 'Введіть повідомлення або додайте зображення.',
     'assistant_clear_chat' => 'Очистити чат',
     'assistant_clear_chat_title' => 'Очистити цей чат?',

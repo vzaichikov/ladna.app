@@ -14,7 +14,6 @@ use App\Models\TelegramBroadcastTarget;
 use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
 use App\Support\Telegram\Announcements\TelegramBroadcastTargetVerifier;
-use App\Support\Telegram\TelegramWebhookManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -55,7 +54,6 @@ class SystemSettingsController extends Controller
 
     public function update(
         UpdateSystemSettingsRequest $request,
-        TelegramWebhookManager $telegramWebhooks,
         TelegramBroadcastTargetVerifier $targetVerifier,
     ): RedirectResponse {
         $validated = $request->validated();
@@ -83,21 +81,12 @@ class SystemSettingsController extends Controller
             $ownerTelegramBotInstallation,
             $targetVerifier,
         );
-        $telegramWebhookResult = null;
-
-        if ($ownerTelegramBotInstallation->is_enabled && $ownerTelegramBotInstallation->tokenValue()) {
-            $telegramWebhookResult = $telegramWebhooks->register($ownerTelegramBotInstallation);
-        }
-
         $redirect = redirect()
             ->route('platform.settings.edit', $activeTab ? ['tab' => $activeTab] : [])
             ->with('status', __('app.system_settings_updated'));
 
         $warnings = array_values(array_filter([
             $foundersWarning,
-            $telegramWebhookResult && ! $telegramWebhookResult['ok']
-                ? $telegramWebhookResult['message']
-                : null,
         ]));
 
         if ($warnings !== []) {
@@ -173,6 +162,16 @@ class SystemSettingsController extends Controller
         }
 
         $token = $validated['owner_telegram_bot_token'] ?? null;
+        $existingToken = $installation->tokenValue();
+        $botUsername = ($validated['owner_telegram_bot_username'] ?? null) ?: $installation->bot_username;
+        $isEnabled = (bool) ($validated['owner_telegram_bot_enabled'] ?? false);
+        $tokenChanged = filled($token)
+            && (! is_string($existingToken)
+                || ! hash_equals($existingToken, (string) $token));
+        $botSettingsChanged = ! $installation->exists
+            || $tokenChanged
+            || $installation->bot_username !== $botUsername
+            || (bool) $installation->is_enabled !== $isEnabled;
 
         if (filled($token)) {
             $installation->encrypted_token = $token;
@@ -186,10 +185,15 @@ class SystemSettingsController extends Controller
             'scope_type' => 'platform',
             'scope_id' => 0,
             'profile' => TelegramBotProfile::Owner->value,
-            'bot_username' => ($validated['owner_telegram_bot_username'] ?? null) ?: $installation->bot_username,
-            'is_enabled' => (bool) ($validated['owner_telegram_bot_enabled'] ?? false),
-            'status' => $installation->tokenValue() || filled($token) ? 'configured' : 'pending',
+            'bot_username' => $botUsername,
+            'is_enabled' => $isEnabled,
+            'status' => $botSettingsChanged
+                ? ($installation->tokenValue() || filled($token) ? 'configured' : 'pending')
+                : $installation->status,
             'webhook_url' => $webhookKey ? route('api.v1.telegram.webhooks.handle', $webhookKey) : null,
+            'last_webhook_synced_at' => $botSettingsChanged
+                ? null
+                : $installation->last_webhook_synced_at,
         ])->save();
 
         return $installation;

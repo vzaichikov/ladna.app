@@ -4510,6 +4510,7 @@ function initAssistantChat() {
         const imagePreviewSource = widget.querySelector('[data-assistant-image-preview-source]');
         const imageRemove = widget.querySelector('[data-assistant-image-remove]');
         const dropZone = widget.querySelector('[data-assistant-drop-zone]');
+        const imageInputEnabled = widget.dataset.imageInputEnabled === 'true';
 
         if (
             !toggle
@@ -4519,12 +4520,11 @@ function initAssistantChat() {
             || !followUps
             || !form
             || !input
-            || !imageInput
-            || !imagePicker
-            || !imagePreview
-            || !imagePreviewSource
-            || !imageRemove
             || !dropZone
+            || (
+                imageInputEnabled
+                && (!imageInput || !imagePicker || !imagePreview || !imagePreviewSource || !imageRemove)
+            )
         ) {
             return;
         }
@@ -4575,17 +4575,25 @@ function initAssistantChat() {
 
             selectedImage = null;
             selectedImageUrl = '';
-            imageInput.value = '';
-            imagePreviewSource.removeAttribute('src');
-            imagePreview.classList.add('hidden');
+            if (imageInput) {
+                imageInput.value = '';
+            }
+            imagePreviewSource?.removeAttribute('src');
+            imagePreview?.classList.add('hidden');
         };
 
         const setLoading = (value) => {
             loading = value;
             input.disabled = value;
-            imageInput.disabled = value;
-            imagePicker.disabled = value;
-            imageRemove.disabled = value;
+            if (imageInput) {
+                imageInput.disabled = value;
+            }
+            if (imagePicker) {
+                imagePicker.disabled = value;
+            }
+            if (imageRemove) {
+                imageRemove.disabled = value;
+            }
             form.querySelector('button[type="submit"]').disabled = value;
             clear?.toggleAttribute('disabled', value);
             clearConfirm?.toggleAttribute('disabled', value);
@@ -4955,7 +4963,7 @@ function initAssistantChat() {
         };
 
         const selectImage = (file) => {
-            if (!file || loading) {
+            if (!imageInputEnabled || !file || loading) {
                 return;
             }
 
@@ -5048,65 +5056,67 @@ function initAssistantChat() {
             }
         });
         clearConfirm?.addEventListener('click', clearChat);
-        imagePicker.addEventListener('click', () => {
-            imageInput.value = '';
-            imageInput.click();
-        });
-        imageRemove.addEventListener('click', () => {
-            resetSelectedImage();
-            focusInputSoon();
-        });
-        imageInput.addEventListener('change', () => {
-            selectImage(imageInput.files?.[0]);
-        });
-        form.addEventListener('paste', (event) => {
-            const pastedImage = Array.from(event.clipboardData?.files || [])
-                .find((file) => file.type.startsWith('image/'));
+        if (imageInputEnabled) {
+            imagePicker?.addEventListener('click', () => {
+                imageInput.value = '';
+                imageInput.click();
+            });
+            imageRemove?.addEventListener('click', () => {
+                resetSelectedImage();
+                focusInputSoon();
+            });
+            imageInput?.addEventListener('change', () => {
+                selectImage(imageInput.files?.[0]);
+            });
+            form.addEventListener('paste', (event) => {
+                const pastedImage = Array.from(event.clipboardData?.files || [])
+                    .find((file) => file.type.startsWith('image/'));
 
-            if (!pastedImage) {
-                return;
-            }
+                if (!pastedImage) {
+                    return;
+                }
 
-            event.preventDefault();
-            selectImage(pastedImage);
-        });
-        dropZone.addEventListener('dragenter', (event) => {
-            if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
-                return;
-            }
+                event.preventDefault();
+                selectImage(pastedImage);
+            });
+            dropZone.addEventListener('dragenter', (event) => {
+                if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
+                    return;
+                }
 
-            event.preventDefault();
-            dragDepth += 1;
-            setDropActive(true);
-        });
-        dropZone.addEventListener('dragover', (event) => {
-            if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
-                return;
-            }
+                event.preventDefault();
+                dragDepth += 1;
+                setDropActive(true);
+            });
+            dropZone.addEventListener('dragover', (event) => {
+                if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
+                    return;
+                }
 
-            event.preventDefault();
+                event.preventDefault();
 
-            if (event.dataTransfer) {
-                event.dataTransfer.dropEffect = 'copy';
-            }
-        });
-        dropZone.addEventListener('dragleave', () => {
-            dragDepth = Math.max(0, dragDepth - 1);
+                if (event.dataTransfer) {
+                    event.dataTransfer.dropEffect = 'copy';
+                }
+            });
+            dropZone.addEventListener('dragleave', () => {
+                dragDepth = Math.max(0, dragDepth - 1);
 
-            if (dragDepth === 0) {
+                if (dragDepth === 0) {
+                    setDropActive(false);
+                }
+            });
+            dropZone.addEventListener('drop', (event) => {
+                event.preventDefault();
+                dragDepth = 0;
                 setDropActive(false);
-            }
-        });
-        dropZone.addEventListener('drop', (event) => {
-            event.preventDefault();
-            dragDepth = 0;
-            setDropActive(false);
 
-            const droppedFiles = Array.from(event.dataTransfer?.files || []);
-            const droppedImage = droppedFiles.find((file) => file.type.startsWith('image/')) || droppedFiles[0];
+                const droppedFiles = Array.from(event.dataTransfer?.files || []);
+                const droppedImage = droppedFiles.find((file) => file.type.startsWith('image/')) || droppedFiles[0];
 
-            selectImage(droppedImage);
-        });
+                selectImage(droppedImage);
+            });
+        }
 
         form.addEventListener('submit', (event) => {
             event.preventDefault();

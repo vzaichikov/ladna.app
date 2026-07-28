@@ -12,4 +12,13 @@ enum AiProvider: string
     {
         return 'app.ai_provider_'.$this->value;
     }
+
+    public function supportsImageInference(): bool
+    {
+        return match ($this) {
+            self::OpenAiApiKey,
+            self::OpenAiDeviceCode,
+            self::OllamaCloud => false,
+        };
+    }
 }
