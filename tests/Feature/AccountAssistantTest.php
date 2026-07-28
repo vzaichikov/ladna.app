@@ -7,9 +7,11 @@ use App\Enums\AiProvider;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduleKind;
+use App\Http\Controllers\AccountController;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
+use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
@@ -23,15 +25,229 @@ use App\Models\PlatformAiSetting;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\User;
+use App\Support\Ai\AiConversationImageCleaner;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AccountAssistantTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_dashboard_image_is_private_sticky_and_deleted_when_chat_is_cleared(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'ollama.com/api/show' => Http::response([
+                'capabilities' => ['completion', 'vision'],
+            ]),
+            'ollama.com/api/chat' => Http::sequence()
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"answer","answer":"The image shows a studio timetable.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"image inspection"}',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"answer","answer":"The newer image shows an updated timetable.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"replacement image inspection"}',
+                    ],
+                ])
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"answer","answer":"The highlighted slot is still visible.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"image follow-up"}',
+                    ],
+                ]),
+        ]);
+
+        $owner = User::factory()->create();
+        $otherOwner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $account->addOwner($otherOwner);
+        $this->configureGlobalOllama();
+
+        $response = $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'What is shown here?',
+                'image' => UploadedFile::fake()->image('timetable.png', 640, 480),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('messages.0.attachments.0.original_name', 'timetable.png')
+            ->assertJsonPath('messages.0.attachments.0.mime_type', 'image/webp')
+            ->assertJsonPath('messages.1.content', 'The image shows a studio timetable.');
+
+        $firstAttachment = AiConversationMessageAttachment::query()->sole();
+        Storage::disk('local')->assertExists($firstAttachment->path);
+
+        $previewUrl = $response->json('messages.0.attachments.0.preview_url');
+        $this->get($previewUrl)
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/webp');
+
+        $this->actingAs($otherOwner)
+            ->get($previewUrl)
+            ->assertNotFound();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Use this updated version instead.',
+                'image' => UploadedFile::fake()->image('updated-timetable.png', 480, 640),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('messages.3.content', 'The newer image shows an updated timetable.');
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'What about the highlighted slot?',
+            ])
+            ->assertOk()
+            ->assertJsonPath('messages.5.content', 'The highlighted slot is still visible.');
+
+        $chatRequests = Http::recorded()
+            ->filter(fn (array $record): bool => $record[0]->url() === 'https://ollama.com/api/chat')
+            ->values();
+        $images = $chatRequests
+            ->map(function (array $record): array {
+                $messages = $record[0]->data()['messages'];
+
+                return $messages[array_key_last($messages)]['images'] ?? [];
+            });
+
+        $this->assertCount(3, $chatRequests);
+        $this->assertCount(1, $images[0]);
+        $this->assertCount(1, $images[1]);
+        $this->assertCount(1, $images[2]);
+        $this->assertNotSame($images[0][0], $images[1][0]);
+        $this->assertSame($images[1][0], $images[2][0]);
+
+        $attachments = AiConversationMessageAttachment::query()->orderBy('id')->get();
+        $this->assertCount(2, $attachments);
+
+        $this->deleteJson(route('dashboard.accounts.assistant.destroy', $account))
+            ->assertOk()
+            ->assertJsonPath('messages', []);
+
+        foreach ($attachments as $attachment) {
+            Storage::disk('local')->assertMissing($attachment->path);
+            $this->assertDatabaseMissing('ai_conversation_message_attachments', ['id' => $attachment->id]);
+        }
+    }
+
+    public function test_dashboard_image_returns_a_specific_message_for_a_text_only_model(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'ollama.com/api/show' => Http::response([
+                'capabilities' => ['completion'],
+            ]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Inspect this.',
+                'image' => UploadedFile::fake()->image('studio.png', 320, 240),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', __('app.assistant_image_model_unsupported'))
+            ->assertJsonPath('messages.1.metadata.fallback_reason', 'model_no_vision');
+
+        Http::assertSentCount(1);
+        Http::assertNotSent(fn (Request $request): bool => $request->url() === 'https://ollama.com/api/chat');
+    }
+
+    public function test_dashboard_image_still_attempts_inference_when_model_capabilities_are_unknown(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'ollama.com/api/show' => Http::response(['details' => ['family' => 'gemma3']]),
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"I can inspect this image.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"image inspection"}',
+                ],
+            ]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'image' => UploadedFile::fake()->image('room.png', 320, 240),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', 'I can inspect this image.');
+
+        Http::assertSent(fn (Request $request): bool => $request->url() === 'https://ollama.com/api/chat'
+            && count(data_get($request->data(), 'messages.1.images', [])) === 1);
+    }
+
+    public function test_dashboard_message_requires_text_or_one_valid_image(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllama();
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.assistant.messages.store', $account), [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('message');
+
+        $this->post(route('dashboard.accounts.assistant.messages.store', $account), [
+            'image' => UploadedFile::fake()->create('notes.txt', 20, 'text/plain'),
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('image');
+    }
+
+    public function test_deleting_an_account_deletes_private_assistant_images(): void
+    {
+        Storage::fake('local');
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $conversation = AiConversation::factory()
+            ->for($account)
+            ->for($owner, 'user')
+            ->create(['channel' => 'dashboard_chat']);
+        $message = AiConversationMessage::factory()
+            ->for($account)
+            ->for($conversation, 'conversation')
+            ->create();
+        $attachment = AiConversationMessageAttachment::factory()
+            ->for($account)
+            ->for($message, 'message')
+            ->create(['path' => 'ai-conversation-images/account-deletion.webp']);
+        Storage::disk('local')->put($attachment->path, 'private-image');
+
+        $this->actingAs($owner);
+        $response = app(AccountController::class)->destroy(
+            $account,
+            app(AiConversationImageCleaner::class),
+        );
+
+        $this->assertSame(route('dashboard.accounts.index'), $response->getTargetUrl());
+
+        Storage::disk('local')->assertMissing($attachment->path);
+        $this->assertModelMissing($attachment);
+        $this->assertModelMissing($account);
+    }
 
     public function test_dashboard_chat_widget_is_gated_by_global_flag(): void
     {

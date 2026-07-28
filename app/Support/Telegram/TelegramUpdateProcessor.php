@@ -16,6 +16,8 @@ use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
 use App\Models\Trainer;
+use App\Support\Ai\AiConversationImageStore;
+use App\Support\Ai\InvalidAiConversationImage;
 use App\Support\Ai\StudioAiActionInput;
 use App\Support\Ai\StudioAiResult;
 use App\Support\Ai\StudioAssistantActionExecutor;
@@ -23,12 +25,24 @@ use App\Support\Ai\StudioAssistantActionPlan;
 use App\Support\Ai\StudioAssistantActionPlanner;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class TelegramUpdateProcessor
 {
+    private const MaxImageBytes = AiConversationImageStore::MaxInputBytes;
+
+    /**
+     * @var array<int, string>
+     */
+    private const SupportedImageMimeTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+    ];
+
     public function __construct(
         private readonly TelegramClient $telegramClient,
         private readonly TelegramContactAuthorizer $contactAuthorizer,
@@ -37,6 +51,7 @@ class TelegramUpdateProcessor
         private readonly StudioAssistantActionExecutor $actionExecutor,
         private readonly TelegramConversationResetter $conversationResetter,
         private readonly TelegramAssistantTextFormatter $assistantTextFormatter,
+        private readonly AiConversationImageStore $conversationImageStore,
     ) {}
 
     public function process(int $telegramUpdateId): void
@@ -166,7 +181,7 @@ class TelegramUpdateProcessor
 
         $installation = $telegramUpdate->installation;
         $chatId = (string) data_get($message, 'chat.id');
-        $text = trim((string) data_get($message, 'text', ''));
+        $text = trim((string) (data_get($message, 'text') ?? data_get($message, 'caption', '')));
 
         $inboundMessage = TelegramMessage::create([
             'account_id' => $telegramUpdate->account_id,
@@ -177,7 +192,7 @@ class TelegramUpdateProcessor
             'telegram_message_id' => (string) data_get($message, 'message_id'),
             'telegram_user_id' => (string) data_get($message, 'from.id'),
             'direction' => 'inbound',
-            'message_type' => data_get($message, 'contact') ? 'contact' : 'text',
+            'message_type' => $this->messageType($message),
             'text' => $text ?: null,
             'payload' => $message,
             'sent_at' => now(),
@@ -231,15 +246,17 @@ class TelegramUpdateProcessor
             ->first();
 
         if (! $authorization) {
-            $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_share_contact_to_authorize'), [
-                'reply_markup' => [
-                    'keyboard' => [[
-                        ['text' => __('app.telegram_share_phone_button'), 'request_contact' => true],
-                    ]],
-                    'resize_keyboard' => true,
-                    'one_time_keyboard' => true,
-                ],
-            ]);
+            if ($this->shouldReplyForMediaGroup($inboundMessage)) {
+                $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_share_contact_to_authorize'), [
+                    'reply_markup' => [
+                        'keyboard' => [[
+                            ['text' => __('app.telegram_share_phone_button'), 'request_contact' => true],
+                        ]],
+                        'resize_keyboard' => true,
+                        'one_time_keyboard' => true,
+                    ],
+                ]);
+            }
 
             return true;
         }
@@ -264,10 +281,54 @@ class TelegramUpdateProcessor
             return true;
         }
 
-        return $this->processAuthorizedOwnerText($telegramUpdate, $authorization, $inboundMessage, $chatId, $text);
+        if ($this->hasImage($message) && $this->isSupportedTelegramCommand($text)) {
+            $processed = $this->processAuthorizedOwnerText($telegramUpdate, $authorization, $inboundMessage, $chatId, $text);
+
+            if ($this->shouldReplyForMediaGroup($inboundMessage)) {
+                $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_image_command_ignored'), [], $authorization->account_id, $authorization);
+            }
+
+            return $processed;
+        }
+
+        if ($this->hasMediaGroup($message)) {
+            if ($this->shouldReplyForMediaGroup($inboundMessage)) {
+                $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_image_album_unsupported'), [], $authorization->account_id, $authorization);
+            }
+
+            return true;
+        }
+
+        if (! $this->hasImage($message) && data_get($message, 'document')) {
+            $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_image_unsupported'), [], $authorization->account_id, $authorization);
+
+            return true;
+        }
+
+        if (! $this->hasImage($message)) {
+            return $this->processAuthorizedOwnerText($telegramUpdate, $authorization, $inboundMessage, $chatId, $text);
+        }
+
+        $image = $this->downloadImage($telegramUpdate, $message);
+
+        if (is_string($image)) {
+            $this->sendAndStore($telegramUpdate, $chatId, __('app.'.$image), [], $authorization->account_id, $authorization);
+
+            return true;
+        }
+
+        return $this->processAuthorizedOwnerText(
+            $telegramUpdate,
+            $authorization,
+            $inboundMessage,
+            $chatId,
+            $text,
+            imageContents: $image['contents'],
+            imageOriginalName: $image['original_name'],
+        );
     }
 
-    private function processAuthorizedOwnerText(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, TelegramMessage $inboundMessage, string $chatId, string $text, ?TelegramTypingIndicator $typing = null, ?TelegramStatusMessage $statusMessage = null): bool
+    private function processAuthorizedOwnerText(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, TelegramMessage $inboundMessage, string $chatId, string $text, ?TelegramTypingIndicator $typing = null, ?TelegramStatusMessage $statusMessage = null, ?string $imageContents = null, ?string $imageOriginalName = null): bool
     {
         $account = $authorization->account;
         $statusMessage ??= $this->startStatusMessage($telegramUpdate, $chatId);
@@ -291,6 +352,30 @@ class TelegramUpdateProcessor
                 'occurred_at' => now(),
             ]);
 
+            if ($imageContents !== null) {
+                try {
+                    $this->conversationImageStore->storeTelegramImage(
+                        $currentMessage,
+                        $imageContents,
+                        $imageOriginalName,
+                    );
+                } catch (InvalidAiConversationImage $exception) {
+                    $currentMessage->delete();
+                    $this->refreshTyping($typing, force: true);
+                    $this->sendAndStore(
+                        $telegramUpdate,
+                        $chatId,
+                        __('app.'.$this->invalidImageTranslationKey($exception)),
+                        [],
+                        $authorization->account_id,
+                        $authorization,
+                        statusMessage: $statusMessage,
+                    );
+
+                    return true;
+                }
+            }
+
             $this->updateStatus($statusMessage, 'assistant_status_checking_database');
             $this->refreshTyping($typing, force: true);
 
@@ -312,7 +397,9 @@ class TelegramUpdateProcessor
                     },
                 );
 
-                if ($aiResult->isAction() && $authorization->user) {
+                if ($imageContents !== null && $text === '' && $aiResult->isAction()) {
+                    $aiResult = StudioAiResult::fallback('image_only_action_not_allowed');
+                } elseif ($aiResult->isAction() && $authorization->user) {
                     $plan = $this->actionPlanner->plan(
                         $account,
                         $authorization->user,
@@ -393,6 +480,221 @@ class TelegramUpdateProcessor
         } finally {
             $this->stopTyping($typing);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     * @return array{contents: string, original_name: string}|string
+     */
+    private function downloadImage(TelegramUpdate $telegramUpdate, array $message): array|string
+    {
+        $candidate = $this->imageCandidate($message);
+
+        if (is_string($candidate)) {
+            return $candidate;
+        }
+
+        $fileResponse = $this->telegramClient->getFile(
+            $telegramUpdate->installation,
+            $candidate['file_id'],
+        );
+
+        if (! $fileResponse?->successful()) {
+            return 'telegram_image_download_failed';
+        }
+
+        $filePath = (string) data_get($fileResponse->json(), 'result.file_path', '');
+        $fileSize = (int) data_get($fileResponse->json(), 'result.file_size', 0);
+
+        if ($fileSize > self::MaxImageBytes) {
+            return 'telegram_image_too_large';
+        }
+
+        $download = $this->telegramClient->downloadFile(
+            $telegramUpdate->installation,
+            $filePath,
+            self::MaxImageBytes,
+        );
+
+        if ($download['too_large']) {
+            return 'telegram_image_too_large';
+        }
+
+        $downloadResponse = $download['response'];
+
+        if (! $downloadResponse?->successful()) {
+            return 'telegram_image_download_failed';
+        }
+
+        $contentLength = (int) $downloadResponse->header('Content-Length');
+        $contents = $downloadResponse->body();
+
+        if ($contentLength > self::MaxImageBytes || strlen($contents) > self::MaxImageBytes) {
+            return 'telegram_image_too_large';
+        }
+
+        if ($contents === '') {
+            return 'telegram_image_invalid';
+        }
+
+        return [
+            'contents' => $contents,
+            'original_name' => $candidate['original_name'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     * @return array{file_id: string, original_name: string}|string
+     */
+    private function imageCandidate(array $message): array|string
+    {
+        $photos = data_get($message, 'photo');
+
+        if (is_array($photos) && $photos !== []) {
+            $eligiblePhotos = collect($photos)
+                ->filter(fn (mixed $photo): bool => is_array($photo)
+                    && filled(data_get($photo, 'file_id'))
+                    && ((int) data_get($photo, 'file_size', 0) === 0
+                        || (int) data_get($photo, 'file_size') <= self::MaxImageBytes))
+                ->sortByDesc(fn (array $photo): int => (int) data_get($photo, 'width', 0) * (int) data_get($photo, 'height', 0));
+
+            $photo = $eligiblePhotos->first();
+
+            if (! is_array($photo)) {
+                return 'telegram_image_too_large';
+            }
+
+            return [
+                'file_id' => (string) data_get($photo, 'file_id'),
+                'original_name' => 'telegram-photo.jpg',
+            ];
+        }
+
+        $document = data_get($message, 'document');
+
+        if (! is_array($document) || ! $this->isSupportedImageDocument($document)) {
+            return 'telegram_image_unsupported';
+        }
+
+        if ((int) data_get($document, 'file_size', 0) > self::MaxImageBytes) {
+            return 'telegram_image_too_large';
+        }
+
+        $fileId = (string) data_get($document, 'file_id', '');
+
+        if ($fileId === '') {
+            return 'telegram_image_invalid';
+        }
+
+        $originalName = basename(str_replace(
+            '\\',
+            '/',
+            (string) data_get($document, 'file_name', 'telegram-image'),
+        ));
+
+        return [
+            'file_id' => $fileId,
+            'original_name' => $originalName !== '' ? $originalName : 'telegram-image',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     */
+    private function messageType(array $message): string
+    {
+        if (data_get($message, 'contact')) {
+            return 'contact';
+        }
+
+        if (data_get($message, 'photo')) {
+            return 'photo';
+        }
+
+        if (data_get($message, 'document')) {
+            return $this->hasImage($message) ? 'image_document' : 'document';
+        }
+
+        return 'text';
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     */
+    private function hasImage(array $message): bool
+    {
+        if (is_array(data_get($message, 'photo')) && data_get($message, 'photo') !== []) {
+            return true;
+        }
+
+        $document = data_get($message, 'document');
+
+        return is_array($document) && $this->isSupportedImageDocument($document);
+    }
+
+    /**
+     * @param  array<string, mixed>  $document
+     */
+    private function isSupportedImageDocument(array $document): bool
+    {
+        $mimeType = Str::lower((string) data_get($document, 'mime_type', ''));
+
+        if (in_array($mimeType, self::SupportedImageMimeTypes, true)) {
+            return true;
+        }
+
+        $extension = Str::lower(pathinfo((string) data_get($document, 'file_name', ''), PATHINFO_EXTENSION));
+
+        return in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true);
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     */
+    private function hasMediaGroup(array $message): bool
+    {
+        return filled(data_get($message, 'media_group_id'));
+    }
+
+    private function shouldReplyForMediaGroup(TelegramMessage $message): bool
+    {
+        $mediaGroupId = (string) data_get($message->payload, 'media_group_id', '');
+
+        if ($mediaGroupId === '') {
+            return true;
+        }
+
+        $key = 'telegram:media-group-reply:'.hash('sha256', implode(':', [
+            $message->telegram_bot_installation_id,
+            $message->telegram_chat_id,
+            $mediaGroupId,
+        ]));
+
+        return Cache::add($key, true, now()->addMinutes(10));
+    }
+
+    private function isSupportedTelegramCommand(string $text): bool
+    {
+        return preg_match(
+            '/^\/(?:start|restart|help|book|cancel_booking|cancel)(?:@\w+)?$/iu',
+            trim($text),
+        ) === 1;
+    }
+
+    private function invalidImageTranslationKey(InvalidAiConversationImage $exception): string
+    {
+        $reason = Str::lower($exception->reason());
+
+        if (Str::contains($reason, ['large', 'size', 'pixel', 'dimension'])) {
+            return 'telegram_image_too_large';
+        }
+
+        if (Str::contains($reason, ['mime', 'type', 'format', 'unsupported'])) {
+            return 'telegram_image_unsupported';
+        }
+
+        return 'telegram_image_invalid';
     }
 
     private function typingIndicator(TelegramUpdate $telegramUpdate, string $chatId): TelegramTypingIndicator

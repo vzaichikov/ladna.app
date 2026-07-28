@@ -6,6 +6,7 @@ use App\Enums\AccountApiTokenAbility;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
+use App\Support\Ai\AiConversationImageCleaner;
 use App\Support\PublicScheduleViewRegistry;
 use App\Support\Pwa\StudioPwaIconGenerator;
 use App\Support\ReservedPublicSlugs;
@@ -148,10 +149,13 @@ class AccountController extends Controller
             ->with('status', __('app.account_updated'));
     }
 
-    public function destroy(Account $account): RedirectResponse
-    {
+    public function destroy(
+        Account $account,
+        AiConversationImageCleaner $imageCleaner,
+    ): RedirectResponse {
         $this->authorize('delete', $account);
 
+        $imageCleaner->deleteForAccount($account);
         $account->delete();
 
         return redirect()->route('dashboard.accounts.index')

@@ -4,9 +4,48 @@ namespace App\Support\Ai;
 
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 class OllamaCloudClient
 {
+    /**
+     * @return array<int, string>|null
+     */
+    public function capabilities(string $apiKey, string $model): ?array
+    {
+        try {
+            $response = Http::baseUrl((string) config('services.ollama_cloud.base_url', 'https://ollama.com'))
+                ->withToken($apiKey)
+                ->acceptJson()
+                ->asJson()
+                ->timeout(15)
+                ->connectTimeout(5)
+                ->retry([300, 800], throw: false)
+                ->post('/api/show', ['model' => $model]);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        $capabilities = is_array($payload) ? ($payload['capabilities'] ?? null) : null;
+
+        if (! is_array($capabilities)) {
+            return null;
+        }
+
+        return collect($capabilities)
+            ->filter(fn (mixed $capability): bool => is_string($capability))
+            ->map(fn (string $capability): string => strtolower(trim($capability)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     /**
      * @return array<int, string>
      */

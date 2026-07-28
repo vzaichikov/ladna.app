@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.103.0',
+                'date' => '2026-07-28',
+                'title' => 'Picture conversations with Ladna AI',
+                'items' => ['Studio owners can now send one JPEG, PNG, or WebP picture up to 2 MB to the Ladna assistant. Dashboard chat supports the file picker, paste, and drag-and-drop, while the owner Telegram bot accepts photos and image documents with an optional caption.', 'The newest picture remains in the active conversation for short text follow-ups until the owner clears the dashboard chat or uses /restart in Telegram. Sending another picture replaces the visual context, while existing assistant commands keep their explicit behavior.', 'Conversation pictures are normalized and kept private to the authorized studio owner. Clear, Telegram restart or authorization revoke, retention pruning, and account deletion also remove the private files.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.102.0',
                 'date' => '2026-07-28',
                 'title' => 'Paid events with QR admission',
@@ -926,6 +933,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.103.0',
+                'date' => '2026-07-28',
+                'title' => 'Діалоги із зображеннями в Ladna AI',
+                'items' => ['Власники студій тепер можуть надсилати Ladna асистенту одне зображення JPEG, PNG або WebP розміром до 2 МБ. У чаті кабінету працюють вибір файла, вставлення та перетягування, а Telegram бот власника приймає фотографії й файли-зображення з необов’язковим підписом.', 'Найновіше зображення залишається в контексті активного діалогу для коротких текстових уточнень, доки власник не очистить чат у кабінеті або не скористається /restart у Telegram. Нове зображення замінює візуальний контекст, а наявні команди асистента зберігають свою однозначну поведінку.', 'Зображення діалогів нормалізуються та доступні лише авторизованому власнику студії. Очищення чату, перезапуск або відкликання авторизації Telegram, очищення за строком зберігання та видалення акаунта також видаляють приватні файли.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.102.0',
                 'date' => '2026-07-28',

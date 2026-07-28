@@ -6,13 +6,20 @@ use App\Enums\AccountRole;
 use App\Enums\SystemRole;
 use App\Models\Account;
 use App\Models\User;
+use App\Support\Ai\AiConversationImageCleaner;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DeleteAccountWithOwnedUsers
 {
+    public function __construct(
+        private readonly AiConversationImageCleaner $imageCleaner,
+    ) {}
+
     public function execute(Account $account): void
     {
+        $this->imageCleaner->deleteForAccount($account);
+
         DB::transaction(function () use ($account): void {
             $ownedUsers = $this->ownedUsers($account);
 

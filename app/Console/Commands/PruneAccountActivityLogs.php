@@ -12,6 +12,7 @@ use App\Models\TelegramAuthorizationSelection;
 use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
 use App\Support\AccountActivityLogSettings;
+use App\Support\Ai\AiConversationImageCleaner;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -25,7 +26,7 @@ class PruneAccountActivityLogs extends Command
     /**
      * Execute the console command.
      */
-    public function handle(): int
+    public function handle(AiConversationImageCleaner $imageCleaner): int
     {
         $retentionDays = AccountActivityLogSettings::retentionDays();
         $cutoff = now()->subDays($retentionDays);
@@ -36,7 +37,7 @@ class PruneAccountActivityLogs extends Command
 
         $deletedMcpToolInvocations = $this->deleteOldTelegramMcpToolInvocations($cutoff);
         $deletedAiPendingActions = $this->deleteOldTelegramAiPendingActions($cutoff);
-        $deletedAiMessages = $this->deleteOldTelegramAiMessages($cutoff);
+        $deletedAiMessages = $this->deleteOldTelegramAiMessages($cutoff, $imageCleaner);
         $deletedAiConversations = $this->deleteOldTelegramAiConversations($cutoff);
         $deletedTelegramAlerts = $this->deleteOldTelegramAlerts($cutoff);
         $deletedTelegramMessages = $this->deleteOldTelegramMessages($cutoff);
@@ -80,13 +81,17 @@ class PruneAccountActivityLogs extends Command
             ->delete();
     }
 
-    private function deleteOldTelegramAiMessages(Carbon $cutoff): int
-    {
-        return AiConversationMessage::query()
+    private function deleteOldTelegramAiMessages(
+        Carbon $cutoff,
+        AiConversationImageCleaner $imageCleaner,
+    ): int {
+        $query = AiConversationMessage::query()
             ->whereHas('account', fn (Builder $query): Builder => $query->operational())
             ->where(fn (Builder $query): Builder => $this->whereOlderThan($query, 'occurred_at', $cutoff))
-            ->whereHas('conversation', fn (Builder $query): Builder => $this->whereTelegramOwnerConversation($query))
-            ->delete();
+            ->whereHas('conversation', fn (Builder $query): Builder => $this->whereTelegramOwnerConversation($query));
+        $imageCleaner->deleteForMessageIds((clone $query)->pluck('id'));
+
+        return $query->delete();
     }
 
     private function deleteOldTelegramAiConversations(Carbon $cutoff): int

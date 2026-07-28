@@ -7,6 +7,8 @@ use App\Enums\PublicScheduleView;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\AiConversation;
+use App\Models\AiConversationMessage;
+use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
@@ -827,6 +829,7 @@ class PlatformAdminTest extends TestCase
 
     public function test_platform_admin_deletes_studio_and_only_dedicated_owner_user(): void
     {
+        Storage::fake('local');
         $platformAdmin = User::factory()->platformAdmin()->create();
         $dedicatedOwner = User::factory()->create(['email' => 'dedicated-owner@example.com']);
         $sharedOwner = User::factory()->create(['email' => 'shared-owner@example.com']);
@@ -835,6 +838,16 @@ class PlatformAdminTest extends TestCase
         $account->addOwner($dedicatedOwner);
         $account->addOwner($sharedOwner);
         $otherAccount->addOwner($sharedOwner);
+        $conversation = AiConversation::factory()->for($account)->create();
+        $message = AiConversationMessage::factory()
+            ->for($account)
+            ->for($conversation, 'conversation')
+            ->create();
+        $attachment = AiConversationMessageAttachment::factory()
+            ->for($account)
+            ->for($message, 'message')
+            ->create(['path' => 'ai-conversation-images/platform-account-deletion.webp']);
+        Storage::disk('local')->put($attachment->path, 'private-image');
 
         $this->actingAs($platformAdmin)
             ->delete(route('platform.accounts.destroy', $account))
@@ -845,5 +858,7 @@ class PlatformAdminTest extends TestCase
         $this->assertModelMissing($dedicatedOwner);
         $this->assertModelExists($sharedOwner);
         $this->assertTrue($otherAccount->fresh()->isAccessibleBy($sharedOwner));
+        Storage::disk('local')->assertMissing($attachment->path);
+        $this->assertModelMissing($attachment);
     }
 }

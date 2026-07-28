@@ -5,6 +5,9 @@ namespace App\Support\Telegram;
 use App\Models\TelegramBotInstallation;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Psr\Http\Message\ResponseInterface;
+use RuntimeException;
+use Throwable;
 
 class TelegramClient
 {
@@ -167,6 +170,68 @@ class TelegramClient
             ]);
     }
 
+    public function getFile(TelegramBotInstallation $installation, string $fileId): ?Response
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token || $fileId === '') {
+            return null;
+        }
+
+        try {
+            return Http::timeout(8)
+                ->connectTimeout(3)
+                ->retry([100, 300], throw: false)
+                ->get($this->methodUrl($token, 'getFile'), [
+                    'file_id' => $fileId,
+                ]);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array{response: Response|null, too_large: bool}
+     */
+    public function downloadFile(TelegramBotInstallation $installation, string $filePath, int $maxBytes): array
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token || $maxBytes < 1 || ! $this->isSafeFilePath($filePath)) {
+            return ['response' => null, 'too_large' => false];
+        }
+
+        $tooLarge = false;
+
+        try {
+            $response = Http::timeout(15)
+                ->connectTimeout(3)
+                ->withOptions([
+                    'on_headers' => function (ResponseInterface $response) use ($maxBytes, &$tooLarge): void {
+                        $contentLength = (int) $response->getHeaderLine('Content-Length');
+
+                        if ($contentLength > $maxBytes) {
+                            $tooLarge = true;
+
+                            throw new RuntimeException('Telegram image exceeds the download limit.');
+                        }
+                    },
+                    'progress' => function (int $downloadTotal, int $downloadedBytes) use ($maxBytes, &$tooLarge): void {
+                        if ($downloadTotal > $maxBytes || $downloadedBytes > $maxBytes) {
+                            $tooLarge = true;
+
+                            throw new RuntimeException('Telegram image exceeds the download limit.');
+                        }
+                    },
+                ])
+                ->get($this->fileUrl($token, $filePath));
+
+            return ['response' => $response, 'too_large' => false];
+        } catch (Throwable) {
+            return ['response' => null, 'too_large' => $tooLarge];
+        }
+    }
+
     public function answerCallbackQuery(TelegramBotInstallation $installation, string $callbackQueryId): ?Response
     {
         $token = $installation->tokenValue();
@@ -200,5 +265,19 @@ class TelegramClient
     private function methodUrl(string $token, string $method): string
     {
         return "https://api.telegram.org/bot{$token}/{$method}";
+    }
+
+    private function fileUrl(string $token, string $filePath): string
+    {
+        return "https://api.telegram.org/file/bot{$token}/{$filePath}";
+    }
+
+    private function isSafeFilePath(string $filePath): bool
+    {
+        return $filePath !== ''
+            && ! str_starts_with($filePath, '/')
+            && ! str_contains($filePath, '..')
+            && ! str_contains($filePath, '\\')
+            && preg_match('~\A[A-Za-z0-9_./-]+\z~', $filePath) === 1;
     }
 }

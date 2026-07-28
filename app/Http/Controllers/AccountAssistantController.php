@@ -6,12 +6,17 @@ use App\Enums\AiConversationMessageRole;
 use App\Enums\StudioAiDisposition;
 use App\Enums\StudioPermission;
 use App\Enums\TelegramBotProfile;
+use App\Http\Requests\StoreAccountAssistantMessageRequest;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
+use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
 use App\Models\PlatformAiSetting;
 use App\Models\Trainer;
+use App\Support\Ai\AiConversationImageCleaner;
+use App\Support\Ai\AiConversationImageStore;
+use App\Support\Ai\InvalidAiConversationImage;
 use App\Support\Ai\StudioAiActionInput;
 use App\Support\Ai\StudioAiInference;
 use App\Support\Ai\StudioAiResult;
@@ -42,18 +47,17 @@ class AccountAssistantController extends Controller
     }
 
     public function store(
-        Request $request,
+        StoreAccountAssistantMessageRequest $request,
         Account $account,
         StudioAiInference $inference,
         StudioAssistantActionPlanner $planner,
+        AiConversationImageStore $imageStore,
+        AiConversationImageCleaner $imageCleaner,
     ): JsonResponse|StreamedResponse {
         $this->authorizeAssistant($request, $account);
 
-        $validated = $request->validate([
-            'message' => ['required', 'string', 'max:2000'],
-        ]);
         $conversation = $this->conversationFor($account, $request);
-        $text = trim((string) $validated['message']);
+        $text = $request->messageText();
         $trainer = $this->trainerFor($account, $request);
 
         $currentMessage = $conversation->messages()->create([
@@ -62,6 +66,24 @@ class AccountAssistantController extends Controller
             'content' => $text,
             'occurred_at' => now(),
         ]);
+
+        try {
+            if ($request->hasFile('image')) {
+                $imageStore->storeUploadedImage($currentMessage, $request->file('image'));
+            }
+        } catch (InvalidAiConversationImage $exception) {
+            $imageCleaner->deleteForMessageIds([$currentMessage->id]);
+            $currentMessage->delete();
+
+            throw ValidationException::withMessages([
+                'image' => $this->imageValidationMessage($exception),
+            ]);
+        } catch (Throwable $throwable) {
+            $imageCleaner->deleteForMessageIds([$currentMessage->id]);
+            $currentMessage->delete();
+
+            throw $throwable;
+        }
 
         if (Str::contains((string) $request->header('Accept'), 'application/x-ndjson')) {
             return response()->stream(function () use (
@@ -203,13 +225,18 @@ class AccountAssistantController extends Controller
         ];
     }
 
-    public function destroy(Request $request, Account $account): JsonResponse
-    {
+    public function destroy(
+        Request $request,
+        Account $account,
+        AiConversationImageCleaner $imageCleaner,
+    ): JsonResponse {
         $this->authorizeAssistant($request, $account);
 
         $conversation = $this->activeConversationQuery($account, $request)->first();
 
         if ($conversation) {
+            $imageCleaner->deleteForConversationIds([$conversation->id]);
+
             DB::transaction(function () use ($conversation): void {
                 $conversation->pendingActions()
                     ->where('status', AiPendingAction::StatusPending)
@@ -459,18 +486,43 @@ class AccountAssistantController extends Controller
     private function messagePayload(AiConversation $conversation): array
     {
         return $conversation->messages()
+            ->with('attachments')
             ->orderBy('occurred_at')
             ->orderBy('id')
             ->limit(80)
             ->get()
-            ->map(fn ($message): array => [
+            ->map(fn (AiConversationMessage $message): array => [
                 'id' => $message->id,
                 'role' => $message->role->value,
                 'content' => $message->content,
                 'metadata' => $message->metadata ?? [],
                 'occurred_at' => $message->occurred_at?->toIso8601String(),
+                'attachments' => $message->attachments
+                    ->map(fn (AiConversationMessageAttachment $attachment): array => [
+                        'id' => $attachment->id,
+                        'preview_url' => route('dashboard.accounts.assistant.attachments.show', [
+                            $conversation->account_id,
+                            $attachment,
+                        ]),
+                        'original_name' => $attachment->original_name,
+                        'mime_type' => $attachment->mime_type,
+                        'width' => $attachment->width,
+                        'height' => $attachment->height,
+                        'byte_size' => $attachment->byte_size,
+                    ])
+                    ->all(),
             ])
             ->all();
+    }
+
+    private function imageValidationMessage(InvalidAiConversationImage $exception): string
+    {
+        return match ($exception->reason()) {
+            'too_large' => __('app.assistant_image_too_large'),
+            'unsupported' => __('app.assistant_image_invalid_type'),
+            'processor_unavailable', 'storage_failed' => __('app.assistant_image_unavailable'),
+            default => __('app.assistant_image_invalid'),
+        };
     }
 
     /**

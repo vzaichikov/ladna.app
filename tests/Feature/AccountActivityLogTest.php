@@ -9,6 +9,7 @@ use App\Models\AccountActivityLog;
 use App\Models\AccountMembership;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
+use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
 use App\Models\McpToolInvocation;
 use App\Models\TelegramAlert;
@@ -22,6 +23,7 @@ use App\Models\User;
 use App\Support\AccountActivityLogSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AccountActivityLogTest extends TestCase
@@ -207,6 +209,7 @@ class AccountActivityLogTest extends TestCase
 
     public function test_activity_log_prune_command_deletes_entries_older_than_configured_retention(): void
     {
+        Storage::fake('local');
         AccountActivityLogSettings::setRetentionDays(45);
         Carbon::setTestNow(Carbon::parse('2026-06-27 10:00:00'));
         $account = Account::factory()->create();
@@ -275,6 +278,16 @@ class AccountActivityLogTest extends TestCase
             'occurred_at' => now()->subDays(44),
             'created_at' => now()->subDays(44),
         ]);
+        $oldAiAttachment = AiConversationMessageAttachment::factory()
+            ->for($account)
+            ->for($oldAiMessage, 'message')
+            ->create(['path' => 'ai-conversation-images/pruned.webp']);
+        $recentAiAttachment = AiConversationMessageAttachment::factory()
+            ->for($account)
+            ->for($recentAiMessage, 'message')
+            ->create(['path' => 'ai-conversation-images/retained.webp']);
+        Storage::disk('local')->put($oldAiAttachment->path, 'old-private-image');
+        Storage::disk('local')->put($recentAiAttachment->path, 'recent-private-image');
         $dashboardAiMessage = AiConversationMessage::factory()->for($account)->for($dashboardConversation, 'conversation')->create([
             'occurred_at' => now()->subDays(46),
             'created_at' => now()->subDays(46),
@@ -355,6 +368,10 @@ class AccountActivityLogTest extends TestCase
         $this->assertModelExists($recentMessage);
         $this->assertModelMissing($oldAiMessage);
         $this->assertModelExists($recentAiMessage);
+        $this->assertModelMissing($oldAiAttachment);
+        $this->assertModelExists($recentAiAttachment);
+        Storage::disk('local')->assertMissing($oldAiAttachment->path);
+        Storage::disk('local')->assertExists($recentAiAttachment->path);
         $this->assertModelMissing($staleTelegramConversation);
         $this->assertModelExists($telegramConversation);
         $this->assertModelExists($dashboardConversation);

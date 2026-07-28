@@ -62,10 +62,10 @@ class StudioAiResult
         );
     }
 
-    public static function fallback(string $reason, ?string $detail = null): self
+    public static function fallback(string $reason, ?string $detail = null, string $text = ''): self
     {
         return new self(
-            text: '',
+            text: $text,
             usedAi: false,
             fallbackReason: $reason,
             fallbackDetail: $detail,

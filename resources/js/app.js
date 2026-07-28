@@ -4504,8 +4504,28 @@ function initAssistantChat() {
         const followUps = widget.querySelector('[data-assistant-follow-ups]');
         const form = widget.querySelector('[data-assistant-form]');
         const input = widget.querySelector('[data-assistant-input]');
+        const imageInput = widget.querySelector('[data-assistant-image-input]');
+        const imagePicker = widget.querySelector('[data-assistant-image-picker]');
+        const imagePreview = widget.querySelector('[data-assistant-image-preview]');
+        const imagePreviewSource = widget.querySelector('[data-assistant-image-preview-source]');
+        const imageRemove = widget.querySelector('[data-assistant-image-remove]');
+        const dropZone = widget.querySelector('[data-assistant-drop-zone]');
 
-        if (!toggle || !panel || !messages || !actions || !followUps || !form || !input) {
+        if (
+            !toggle
+            || !panel
+            || !messages
+            || !actions
+            || !followUps
+            || !form
+            || !input
+            || !imageInput
+            || !imagePicker
+            || !imagePreview
+            || !imagePreviewSource
+            || !imageRemove
+            || !dropZone
+        ) {
             return;
         }
 
@@ -4514,6 +4534,12 @@ function initAssistantChat() {
         let loaded = false;
         let loading = false;
         let currentMessages = [];
+        let selectedImage = null;
+        let selectedImageUrl = '';
+        let dragDepth = 0;
+        const localImageUrls = new Set();
+        const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const maximumImageSize = 2 * 1024 * 1024;
 
         const csrfToken = widget.dataset.csrfToken || '';
         const focusInputSoon = () => {
@@ -4541,9 +4567,25 @@ function initAssistantChat() {
             return payload;
         });
 
+        const resetSelectedImage = ({ revokeUrl = true } = {}) => {
+            if (selectedImageUrl && revokeUrl) {
+                URL.revokeObjectURL(selectedImageUrl);
+                localImageUrls.delete(selectedImageUrl);
+            }
+
+            selectedImage = null;
+            selectedImageUrl = '';
+            imageInput.value = '';
+            imagePreviewSource.removeAttribute('src');
+            imagePreview.classList.add('hidden');
+        };
+
         const setLoading = (value) => {
             loading = value;
             input.disabled = value;
+            imageInput.disabled = value;
+            imagePicker.disabled = value;
+            imageRemove.disabled = value;
             form.querySelector('button[type="submit"]').disabled = value;
             clear?.toggleAttribute('disabled', value);
             clearConfirm?.toggleAttribute('disabled', value);
@@ -4589,8 +4631,61 @@ function initAssistantChat() {
             return 'mr-auto border border-stone-200 bg-white text-slate-800';
         };
 
+        const attachmentPreviewUrl = (attachment) => {
+            if (!attachment || typeof attachment !== 'object') {
+                return '';
+            }
+
+            return attachment.preview_url || '';
+        };
+
+        const renderMessageAttachments = (bubble, attachments = []) => {
+            attachments.forEach((attachment) => {
+                const previewUrl = attachmentPreviewUrl(attachment);
+
+                if (!previewUrl) {
+                    return;
+                }
+
+                const link = document.createElement('a');
+                link.href = previewUrl;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                link.className = 'block overflow-hidden rounded-lg';
+
+                const image = document.createElement('img');
+                image.src = previewUrl;
+                image.alt = attachment.original_name || widget.dataset.imageLabel || '';
+                image.loading = 'lazy';
+                image.className = 'max-h-56 w-full rounded-lg object-cover';
+
+                link.append(image);
+                bubble.append(link);
+            });
+        };
+
+        const releaseUnusedLocalImageUrls = (items) => {
+            const activeUrls = new Set(selectedImageUrl ? [selectedImageUrl] : []);
+
+            items.forEach((message) => {
+                (message.attachments || []).forEach((attachment) => {
+                    if (attachment.local && attachment.preview_url) {
+                        activeUrls.add(attachment.preview_url);
+                    }
+                });
+            });
+
+            localImageUrls.forEach((url) => {
+                if (!activeUrls.has(url)) {
+                    URL.revokeObjectURL(url);
+                    localImageUrls.delete(url);
+                }
+            });
+        };
+
         const renderMessages = (items = []) => {
             messages.innerHTML = '';
+            releaseUnusedLocalImageUrls(items);
 
             if (items.length === 0) {
                 const empty = document.createElement('div');
@@ -4603,12 +4698,23 @@ function initAssistantChat() {
             items.forEach((message) => {
                 const bubble = document.createElement('div');
                 bubble.className = `max-w-[86%] break-words rounded-lg px-3 py-2 text-sm leading-6 shadow-xs ${bubbleClass(message.role)}`;
+                const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+
+                if (attachments.length) {
+                    bubble.classList.add('space-y-2');
+                    renderMessageAttachments(bubble, attachments);
+                }
 
                 if (['assistant', 'tool', 'rejected_intent'].includes(message.role)) {
-                    bubble.classList.add('space-y-2');
+                    if (message.content) {
+                        bubble.classList.add('space-y-2');
+                    }
+
                     appendAssistantText(bubble, message.content || '');
-                } else {
-                    bubble.textContent = message.content || '';
+                } else if (message.content) {
+                    const content = document.createElement('p');
+                    content.textContent = message.content;
+                    bubble.append(content);
                 }
 
                 messages.append(bubble);
@@ -4705,13 +4811,24 @@ function initAssistantChat() {
             renderFollowUps(currentMessages, pendingActions);
         };
 
-        const renderWithLocalMessage = (message) => {
+        const renderWithLocalMessage = (message, image = null, imageUrl = '') => {
+            const attachments = image && imageUrl
+                ? [{
+                    preview_url: imageUrl,
+                    original_name: image.name,
+                    mime_type: image.type,
+                    byte_size: image.size,
+                    local: true,
+                }]
+                : [];
+
             currentMessages = [
                 ...currentMessages,
                 {
                     id: `local-${Date.now()}`,
                     role: 'user',
                     content: message,
+                    attachments,
                 },
                 {
                     id: `thinking-${Date.now()}`,
@@ -4736,15 +4853,24 @@ function initAssistantChat() {
             }
         };
 
-        const requestAssistantStream = async (message) => {
+        const requestAssistantStream = async (message, image = null) => {
+            const body = new FormData();
+
+            if (message) {
+                body.append('message', message);
+            }
+
+            if (image) {
+                body.append('image', image);
+            }
+
             const response = await fetch(widget.dataset.sendUrl, {
                 method: 'POST',
                 headers: {
                     Accept: 'application/x-ndjson',
-                    'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
                 },
-                body: JSON.stringify({ message }),
+                body,
             });
 
             if (!response.ok) {
@@ -4828,6 +4954,38 @@ function initAssistantChat() {
             messages.scrollTop = messages.scrollHeight;
         };
 
+        const selectImage = (file) => {
+            if (!file || loading) {
+                return;
+            }
+
+            if (!acceptedImageTypes.includes(file.type)) {
+                imageInput.value = '';
+                showError(widget.dataset.imageInvalidTypeMessage);
+                return;
+            }
+
+            if (file.size > maximumImageSize) {
+                imageInput.value = '';
+                showError(widget.dataset.imageTooLargeMessage);
+                return;
+            }
+
+            resetSelectedImage();
+            selectedImage = file;
+            selectedImageUrl = URL.createObjectURL(file);
+            localImageUrls.add(selectedImageUrl);
+            imagePreviewSource.src = selectedImageUrl;
+            imagePreviewSource.alt = file.name || widget.dataset.imageLabel || '';
+            imagePreview.classList.remove('hidden');
+        };
+
+        const setDropActive = (active) => {
+            dropZone.classList.toggle('bg-brand-50/40', active);
+            dropZone.classList.toggle('ring-2', active);
+            dropZone.classList.toggle('ring-brand-200', active);
+        };
+
         const load = () => {
             if (loaded || loading) {
                 return;
@@ -4865,6 +5023,7 @@ function initAssistantChat() {
             requestJson(widget.dataset.clearUrl, { method: 'DELETE', body: '{}' })
                 .then((payload) => {
                     loaded = true;
+                    resetSelectedImage();
                     render(payload);
                 })
                 .catch((error) => showError(error.message))
@@ -4889,20 +5048,82 @@ function initAssistantChat() {
             }
         });
         clearConfirm?.addEventListener('click', clearChat);
+        imagePicker.addEventListener('click', () => {
+            imageInput.value = '';
+            imageInput.click();
+        });
+        imageRemove.addEventListener('click', () => {
+            resetSelectedImage();
+            focusInputSoon();
+        });
+        imageInput.addEventListener('change', () => {
+            selectImage(imageInput.files?.[0]);
+        });
+        form.addEventListener('paste', (event) => {
+            const pastedImage = Array.from(event.clipboardData?.files || [])
+                .find((file) => file.type.startsWith('image/'));
+
+            if (!pastedImage) {
+                return;
+            }
+
+            event.preventDefault();
+            selectImage(pastedImage);
+        });
+        dropZone.addEventListener('dragenter', (event) => {
+            if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
+                return;
+            }
+
+            event.preventDefault();
+            dragDepth += 1;
+            setDropActive(true);
+        });
+        dropZone.addEventListener('dragover', (event) => {
+            if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
+                return;
+            }
+
+            event.preventDefault();
+
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'copy';
+            }
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dragDepth = Math.max(0, dragDepth - 1);
+
+            if (dragDepth === 0) {
+                setDropActive(false);
+            }
+        });
+        dropZone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dragDepth = 0;
+            setDropActive(false);
+
+            const droppedFiles = Array.from(event.dataTransfer?.files || []);
+            const droppedImage = droppedFiles.find((file) => file.type.startsWith('image/')) || droppedFiles[0];
+
+            selectImage(droppedImage);
+        });
 
         form.addEventListener('submit', (event) => {
             event.preventDefault();
 
             const message = input.value.trim();
+            const image = selectedImage;
+            const imageUrl = selectedImageUrl;
 
-            if (!message || loading) {
+            if ((!message && !image) || loading) {
                 return;
             }
 
             input.value = '';
-            renderWithLocalMessage(message);
+            resetSelectedImage({ revokeUrl: false });
+            renderWithLocalMessage(message, image, imageUrl);
             setLoading(true);
-            requestAssistantStream(message)
+            requestAssistantStream(message, image)
                 .catch((error) => showError(error.message))
                 .finally(() => setLoading(false));
         });

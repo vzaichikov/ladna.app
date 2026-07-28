@@ -15,6 +15,7 @@ use App\Http\Controllers\AccountSubscriptionController;
 use App\Http\Controllers\AccountTariffPaymentController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\AdminCustomerLoginController;
+use App\Http\Controllers\AiConversationMessageAttachmentController;
 use App\Http\Controllers\ApiDocumentationController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -483,6 +484,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.trainer-notification-settings.update');
         Route::get('accounts/{account}/assistant', [AccountAssistantController::class, 'show'])
             ->name('accounts.assistant.show');
+        Route::get('accounts/{account}/assistant/attachments/{attachment}', AiConversationMessageAttachmentController::class)
+            ->name('accounts.assistant.attachments.show');
         Route::post('accounts/{account}/assistant/messages', [AccountAssistantController::class, 'store'])
             ->name('accounts.assistant.messages.store');
         Route::delete('accounts/{account}/assistant', [AccountAssistantController::class, 'destroy'])

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['account_id', 'ai_conversation_id', 'telegram_message_id', 'role', 'content', 'metadata', 'token_count', 'occurred_at'])]
 class AiConversationMessage extends Model
@@ -38,5 +39,10 @@ class AiConversationMessage extends Model
     public function telegramMessage(): BelongsTo
     {
         return $this->belongsTo(TelegramMessage::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(AiConversationMessageAttachment::class);
     }
 }
