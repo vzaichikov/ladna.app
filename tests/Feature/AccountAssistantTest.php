@@ -126,6 +126,9 @@ class AccountAssistantTest extends TestCase
                 && str_contains($systemPrompt, 'Never invent, estimate, infer, or convert a missing studio fact')
                 && str_contains($systemPrompt, 'A booking or class-pass reservation status is not proof that a person attended')
                 && str_contains($systemPrompt, 'Never bring old visual evidence into an unrelated topic.')
+                && str_contains($systemPrompt, 'A screenshot or stored visual memory may identify a Ladna entity')
+                && str_contains($systemPrompt, 'Do not stop at "not visible in the screenshot" when an available tool can answer')
+                && str_contains($systemPrompt, 'Never silently switch to another date, time, or class')
                 && str_contains($systemPrompt, 'answer must be a short owner-facing rejection in the required output language')
                 && ! str_contains($systemPrompt, 'For disposition=out_of_scope, answer and action must be null.')
                 && collect($request['tools'] ?? [])->every(
