@@ -6,11 +6,15 @@ use App\Mcp\Tools\DescribeLadnaSkillsTool;
 use App\Mcp\Tools\GetBusinessLogicReferenceTool;
 use App\Mcp\Tools\GetClassBookingsForDayTool;
 use App\Mcp\Tools\GetClassCountsForDayTool;
+use App\Mcp\Tools\GetEventsOverviewTool;
+use App\Mcp\Tools\GetEventSummaryTool;
 use App\Mcp\Tools\GetOwnerHelpPageTool;
+use App\Mcp\Tools\GetPaymentOverviewTool;
 use App\Mcp\Tools\GetStudioProfileTool;
 use App\Mcp\Tools\InvestigateCustomerBookingLedgerTool;
 use App\Mcp\Tools\SearchCustomersTool;
 use App\Mcp\Tools\SearchOwnerHelpTool;
+use App\Mcp\Tools\SearchPaymentsTool;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Instructions;
 use Laravel\Mcp\Server\Attributes\Name;
@@ -25,12 +29,16 @@ class LadnaStudioServer extends Server
         DescribeLadnaSkillsTool::class,
         GetClassBookingsForDayTool::class,
         GetClassCountsForDayTool::class,
+        GetEventsOverviewTool::class,
+        GetEventSummaryTool::class,
         GetBusinessLogicReferenceTool::class,
         GetOwnerHelpPageTool::class,
+        GetPaymentOverviewTool::class,
         GetStudioProfileTool::class,
         SearchCustomersTool::class,
         InvestigateCustomerBookingLedgerTool::class,
         SearchOwnerHelpTool::class,
+        SearchPaymentsTool::class,
     ];
 
     protected array $resources = [];

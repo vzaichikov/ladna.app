@@ -87,6 +87,11 @@ class Event extends Model
         return $this->hasMany(EventOrder::class);
     }
 
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(EventOrderItem::class);
+    }
+
     public function eventOrders(): HasMany
     {
         return $this->orders();

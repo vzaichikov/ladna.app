@@ -157,10 +157,16 @@ class StudioAiInference
         $timezone = $account->timezone ?: config('app.timezone');
         $requestClock = now($timezone);
         $calendarAnchors = $this->calendarAnchors($requestClock);
-        $studioContext = $this->contextBuilder->studioContext($account, requestClock: $requestClock);
+        $studioContext = $this->contextBuilder->studioContext(
+            $account,
+            requestClock: $requestClock,
+            actorUser: $actorUser,
+        );
         $tools = $this->toolExecutor->definitions($account, $actorUser);
         $helpToolsAvailable = $this->toolExecutor->helpAvailableFor($account, $actorUser);
         $investigationToolsAvailable = $this->toolExecutor->investigationAvailableFor($account, $actorUser);
+        $paymentToolsAvailable = $this->toolExecutor->paymentsAvailableFor($account, $actorUser);
+        $eventToolsAvailable = $this->toolExecutor->eventsAvailableFor($account, $actorUser);
         $requiresInvestigationEvidence = $investigationToolsAvailable && $this->requiresInvestigationEvidence($text);
         $toolEvidence = [];
 
@@ -205,6 +211,8 @@ class StudioAiInference
                     $channel,
                     $helpToolsAvailable,
                     $investigationToolsAvailable,
+                    $paymentToolsAvailable,
+                    $eventToolsAvailable,
                     $visualContext,
                     $imageBase64,
                     $imageMimeType,
@@ -222,6 +230,8 @@ class StudioAiInference
                     $channel,
                     $helpToolsAvailable,
                     $investigationToolsAvailable,
+                    $paymentToolsAvailable,
+                    $eventToolsAvailable,
                     $visualContext,
                 );
             $toolCallCount = 0;
@@ -775,6 +785,8 @@ class StudioAiInference
         string $channel,
         bool $helpToolsAvailable,
         bool $investigationToolsAvailable,
+        bool $paymentToolsAvailable,
+        bool $eventToolsAvailable,
         ?string $visualContext,
         ?string $outOfScopeEnvelopeInstruction = null,
     ): array {
@@ -830,6 +842,12 @@ class StudioAiInference
             $investigationToolsAvailable
                 ? 'Investigation monetary values use major currency units. Copy monetary_summary totals exactly as calculated by Ladna; never add, convert, infer, or relabel monetary totals yourself. If the requested total is absent or its evidence_complete value is false, say that the complete total is unavailable.'
                 : null,
+            $paymentToolsAvailable
+                ? 'For current studio income, expenses, withdrawals, cash balances, payment states, refund exposure, or transaction history, call get_payment_overview or search_payments before making factual claims. Copy each currency and precomputed amount exactly; never combine currencies or calculate financial totals yourself.'
+                : 'Payment tools are unavailable for this actor. Do not reveal or guess studio payment data; explain that cashflow permission is required.',
+            $eventToolsAvailable
+                ? 'For current event inventory, ticket, check-in, revenue, or refund-obligation facts, call get_events_overview and then get_event_summary when ticket-type detail is needed. Never infer buyer details or missing event totals.'
+                : 'Event tools are unavailable for this actor. Do not reveal or guess private event operations; explain that event-management permission is required.',
             'Never reveal raw model thinking or hidden chain-of-thought. Explain only the concise evidence and applicable Ladna rule.',
             'When actor_context.trainer is present, interpret "me", "my", "мене", "мені", "мій", "моя", and similar wording as that trainer. Set use_actor_trainer=true for booking actions that target the actor trainer.',
             $account->isReadOnlyDemo()
@@ -902,6 +920,8 @@ class StudioAiInference
         string $channel,
         bool $helpToolsAvailable,
         bool $investigationToolsAvailable,
+        bool $paymentToolsAvailable,
+        bool $eventToolsAvailable,
         ?string $visualContext,
         ?string $imageBase64,
         ?string $imageMimeType,
@@ -919,6 +939,8 @@ class StudioAiInference
             $channel,
             $helpToolsAvailable,
             $investigationToolsAvailable,
+            $paymentToolsAvailable,
+            $eventToolsAvailable,
             $visualContext,
             'For disposition=out_of_scope, answer must be a short owner-facing rejection in the required output language, while action and calendar_reference must be null.',
         );

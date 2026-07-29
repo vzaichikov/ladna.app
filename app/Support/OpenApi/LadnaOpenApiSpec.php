@@ -69,7 +69,7 @@ class LadnaOpenApiSpec
                         'type' => 'http',
                         'scheme' => 'bearer',
                         'bearerFormat' => 'Ladna account API token',
-                        'description' => 'Bearer token issued in studio settings. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token.',
+                        'description' => 'Bearer token issued in studio settings. The issuing user must have the studio permission mapped to each selected ability. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token. Tokens remain account service credentials until revoked.',
                     ],
                     'MobileBearerToken' => [
                         'type' => 'http',
@@ -154,6 +154,43 @@ class LadnaOpenApiSpec
                 'path' => '/mcp/ladna-studio',
                 'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('describe-ladna-skills', [
                     'channel' => 'dashboard_chat',
+                ])),
+            ],
+            'mcp_payment_overview' => [
+                'title' => __('app.api_docs_example_mcp_payment_overview'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-payment-overview', [
+                    'date_from' => '2026-07-01',
+                    'date_to' => '2026-07-31',
+                ])),
+            ],
+            'mcp_payment_search' => [
+                'title' => __('app.api_docs_example_mcp_payment_search'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('search-payments', [
+                    'date_from' => '2026-07-01',
+                    'date_to' => '2026-07-31',
+                    'query' => 'Коваль',
+                    'limit' => 20,
+                ])),
+            ],
+            'mcp_events_overview' => [
+                'title' => __('app.api_docs_example_mcp_events_overview'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-events-overview', [
+                    'status_bucket' => 'upcoming',
+                    'limit' => 20,
+                ])),
+            ],
+            'mcp_event_summary' => [
+                'title' => __('app.api_docs_example_mcp_event_summary'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-event-summary', [
+                    'event_id' => 42,
                 ])),
             ],
         ];
@@ -795,7 +832,7 @@ class LadnaOpenApiSpec
             'post' => [
                 'tags' => ['MCP'],
                 'summary' => 'Calls Ladna studio MCP tools through JSON-RPC in the bearer token account scope.',
-                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, such as mcp:read, mcp:customers:read, mcp:class-passes:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Customer booking-ledger investigation requires both mcp:customers:read and mcp:class-passes:read. Tool calls never accept account_id or tenant_id arguments for scoping. Read tools remain available for a read-only demo; mutation abilities return HTTP 423.',
+                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, including mcp:read, mcp:customers:read, mcp:class-passes:read, mcp:payments:read, mcp:events:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Payment abilities may be granted only by users with manage_studio_cashflow; event abilities require manage_events. Customer booking-ledger investigation requires both mcp:customers:read and mcp:class-passes:read. Tool calls never accept account_id or tenant_id arguments for scoping. Read tools remain available for a read-only demo; mutation abilities return HTTP 423.',
                 'security' => [
                     ['AccountBearerToken' => []],
                 ],
@@ -832,6 +869,31 @@ class LadnaOpenApiSpec
                                 'describe_ladna_skills' => [
                                     'value' => $this->mcpToolCallBody('describe-ladna-skills', [
                                         'channel' => 'dashboard_chat',
+                                    ]),
+                                ],
+                                'payment_overview' => [
+                                    'value' => $this->mcpToolCallBody('get-payment-overview', [
+                                        'date_from' => '2026-07-01',
+                                        'date_to' => '2026-07-31',
+                                    ]),
+                                ],
+                                'payment_search' => [
+                                    'value' => $this->mcpToolCallBody('search-payments', [
+                                        'date_from' => '2026-07-01',
+                                        'date_to' => '2026-07-31',
+                                        'query' => 'Коваль',
+                                        'limit' => 20,
+                                    ]),
+                                ],
+                                'events_overview' => [
+                                    'value' => $this->mcpToolCallBody('get-events-overview', [
+                                        'status_bucket' => 'upcoming',
+                                        'limit' => 20,
+                                    ]),
+                                ],
+                                'event_summary' => [
+                                    'value' => $this->mcpToolCallBody('get-event-summary', [
+                                        'event_id' => 42,
                                     ]),
                                 ],
                             ],
@@ -1555,6 +1617,10 @@ class LadnaOpenApiSpec
                                     'search-owner-help',
                                     'get-owner-help-page',
                                     'get-business-logic-reference',
+                                    'get-payment-overview',
+                                    'search-payments',
+                                    'get-events-overview',
+                                    'get-event-summary',
                                 ],
                             ],
                             'arguments' => [

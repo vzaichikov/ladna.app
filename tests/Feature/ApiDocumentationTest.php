@@ -26,6 +26,10 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('search-customers')
             ->assertSee('investigate-customer-booking-ledger')
             ->assertSee('search-owner-help')
+            ->assertSee('get-payment-overview')
+            ->assertSee('search-payments')
+            ->assertSee('get-events-overview')
+            ->assertSee('get-event-summary')
             ->assertSee('PHP')
             ->assertSee('Python')
             ->assertSee('JS')
@@ -77,6 +81,14 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.customer_booking_investigation.value.params.arguments.customer_id', 63)
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.describe_ladna_skills.value.params.name', 'describe-ladna-skills')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.describe_ladna_skills.value.params.arguments.channel', 'dashboard_chat')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.payment_overview.value.params.name', 'get-payment-overview')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.payment_overview.value.params.arguments.date_from', '2026-07-01')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.payment_search.value.params.name', 'search-payments')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.payment_search.value.params.arguments.query', 'Коваль')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.events_overview.value.params.name', 'get-events-overview')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.events_overview.value.params.arguments.status_bucket', 'upcoming')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.event_summary.value.params.name', 'get-event-summary')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.event_summary.value.params.arguments.event_id', 42)
             ->assertJsonPath('paths./mcp/ladna-studio.post.responses.401.$ref', '#/components/responses/Unauthorized')
             ->assertJsonPath('paths./mcp/ladna-studio.post.responses.423.$ref', '#/components/responses/DemoReadOnly')
             ->assertJsonPath('components.schemas.McpOwnerHelpSearchResult.properties.score.type', 'integer')
@@ -107,7 +119,7 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.schemas.MobileScheduledClass.properties.additional_trainers.type', 'array')
             ->assertJsonPath('components.schemas.MobileScheduledClass.properties.additional_trainers.items.$ref', '#/components/schemas/Trainer')
             ->assertJsonPath('components.schemas.MobileDeviceTokenRequest.properties.provider.enum.0', 'fcm')
-            ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token.');
+            ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. The issuing user must have the studio permission mapped to each selected ability. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token. Tokens remain account service credentials until revoked.');
 
         $toolNames = $response->json('components.schemas.McpToolCallRequest.properties.params.properties.name.enum');
 
@@ -115,5 +127,9 @@ class ApiDocumentationTest extends TestCase
         $this->assertContains('get-class-bookings-for-day', $toolNames);
         $this->assertContains('search-customers', $toolNames);
         $this->assertContains('investigate-customer-booking-ledger', $toolNames);
+        $this->assertContains('get-payment-overview', $toolNames);
+        $this->assertContains('search-payments', $toolNames);
+        $this->assertContains('get-events-overview', $toolNames);
+        $this->assertContains('get-event-summary', $toolNames);
     }
 }

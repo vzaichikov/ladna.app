@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.105.0',
+                'date' => '2026-07-29',
+                'title' => 'Payment and event insights for Ladna AI',
+                'items' => ['Studio owners and delegated staff can now ask Ladna AI for read-only payment overviews and bounded payment searches. Results group income, expenses, owner withdrawals, cash balances, and payment states by currency while masking customer contacts.', 'Ladna AI and external MCP automations can now summarize event lifecycle, capacity, ticket inventory, check-ins, revenue, and refund requirements without exposing buyer contacts.', 'MCP token abilities now follow the studio permission model when tokens are created or their secrets are managed. Sensitive abilities require the matching delegated permission, while authorized settings managers can still revoke a token.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.104.0',
                 'date' => '2026-07-28',
                 'title' => 'Ladna AI understands images',
@@ -933,6 +940,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.105.0',
+                'date' => '2026-07-29',
+                'title' => 'Платіжні та подієві підсумки в Ladna AI',
+                'items' => ['Власниця студії та працівники з делегованим дозволом тепер можуть запитувати Ladna AI про платіжні підсумки й виконувати обмежений пошук оплат лише для читання. Результати групують доходи, витрати, вилучення власниці, касові залишки та стани оплат за валютами й маскують контакти клієнтів.', 'Ladna AI та зовнішні MCP-автоматизації тепер підсумовують життєвий цикл події, місткість, квитки, check-in, дохід і потребу в поверненнях без контактів покупців.', 'Можливості MCP-токенів тепер відповідають дозволам студії під час створення токена й керування його секретом. Для чутливих можливостей потрібен відповідний делегований дозвіл, а уповноважений менеджер налаштувань надалі може відкликати токен.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.104.0',
                 'date' => '2026-07-28',

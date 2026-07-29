@@ -34,6 +34,8 @@ class StudioAiInvestigationTest extends TestCase
     public function test_ai_context_counts_outstanding_debt_across_pass_lifecycle_and_keeps_tenant_scope(): void
     {
         $account = Account::factory()->create();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
         $customer = Customer::factory()->for($account)->create();
         $classPassPlan = ClassPassPlan::factory()->for($account)->create([
             'price_cents' => 100000,
@@ -108,6 +110,7 @@ class StudioAiInvestigationTest extends TestCase
         $context = app(StudioAiContextBuilder::class)->studioContext(
             $account,
             includeClassBookingDetails: false,
+            actorUser: $owner,
         );
 
         $this->assertSame(1, $context['metrics']['active_class_passes']);
@@ -245,6 +248,10 @@ class StudioAiInvestigationTest extends TestCase
             [
                 'search_owner_help',
                 'get_owner_help_page',
+                'get_payment_overview',
+                'search_payments',
+                'get_events_overview',
+                'get_event_summary',
                 'search_customers',
                 'investigate_customer_booking_ledger',
                 'get_business_logic_reference',
@@ -740,7 +747,7 @@ class StudioAiInvestigationTest extends TestCase
         $this->assertSame(__('app.assistant_investigation_unable_to_verify'), $result->text);
         $this->assertSame(1, McpToolInvocation::query()
             ->whereBelongsTo($account)
-            ->where('status', McpToolInvocationStatus::Failed->value)
+            ->where('status', McpToolInvocationStatus::Invalid->value)
             ->count());
     }
 
@@ -783,7 +790,7 @@ class StudioAiInvestigationTest extends TestCase
         $this->assertDatabaseHas('mcp_tool_invocations', [
             'account_id' => $account->id,
             'tool_name' => 'search_customers',
-            'status' => McpToolInvocationStatus::Failed->value,
+            'status' => McpToolInvocationStatus::Invalid->value,
         ]);
     }
 

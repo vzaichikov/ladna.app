@@ -26,7 +26,7 @@
                         </span>
                     </div>
 
-                    @if ($apiToken->is_active)
+                    @if ($apiToken->is_active && ($apiTokenSecretAccess[$apiToken->id] ?? false))
                         <label class="mt-4 block">
                             <span class="crm-label">{{ __('app.api_token_value') }}</span>
                             <input value="{{ $apiToken->tokenValue() }}" readonly class="crm-field font-mono text-xs" data-copy-source>
@@ -43,15 +43,17 @@
                                     {{ __('app.regenerate') }}
                                 </x-ui.button>
                             </form>
-                            <form method="POST" action="{{ route('dashboard.accounts.api-tokens.destroy', [$account, $apiToken]) }}" data-confirm-delete>
-                                @csrf
-                                @method('DELETE')
-                                <x-ui.button type="submit" variant="danger" size="sm">
-                                    <x-ui.icon name="trash" class="h-4 w-4" />
-                                    {{ __('app.revoke') }}
-                                </x-ui.button>
-                            </form>
                         </div>
+                    @endif
+                    @if ($apiToken->is_active)
+                        <form method="POST" action="{{ route('dashboard.accounts.api-tokens.destroy', [$account, $apiToken]) }}" class="mt-4" data-confirm-delete>
+                            @csrf
+                            @method('DELETE')
+                            <x-ui.button type="submit" variant="danger" size="sm">
+                                <x-ui.icon name="trash" class="h-4 w-4" />
+                                {{ __('app.revoke') }}
+                            </x-ui.button>
+                        </form>
                     @endif
                 </article>
             @empty

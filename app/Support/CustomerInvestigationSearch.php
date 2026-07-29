@@ -8,6 +8,8 @@ use Illuminate\Support\Str;
 
 class CustomerInvestigationSearch
 {
+    public function __construct(private readonly MaskedContactPresenter $maskedContact) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -40,8 +42,8 @@ class CustomerInvestigationSearch
             ->map(fn (Customer $customer): array => [
                 'customer_id' => $customer->id,
                 'name' => $customer->name,
-                'phone_masked' => $this->maskedPhone($customer->phone),
-                'email_masked' => $this->maskedEmail($customer->email),
+                'phone_masked' => $this->maskedContact->phone($customer->phone),
+                'email_masked' => $this->maskedContact->email($customer->email),
             ])
             ->values()
             ->all();
@@ -56,31 +58,5 @@ class CustomerInvestigationSearch
             'matches' => $matches,
             'truncated' => $truncated,
         ];
-    }
-
-    private function maskedPhone(?string $phone): ?string
-    {
-        $phone = filled($phone) ? trim((string) $phone) : null;
-
-        if (! $phone) {
-            return null;
-        }
-
-        $hiddenLength = max(0, Str::length($phone) - 4);
-
-        return $hiddenLength > 0 ? Str::mask($phone, '•', 0, $hiddenLength) : $phone;
-    }
-
-    private function maskedEmail(?string $email): ?string
-    {
-        $email = filled($email) ? trim((string) $email) : null;
-
-        if (! $email || ! Str::contains($email, '@')) {
-            return null;
-        }
-
-        [$local, $domain] = explode('@', $email, 2);
-
-        return Str::substr($local, 0, 1).'***@'.$domain;
     }
 }

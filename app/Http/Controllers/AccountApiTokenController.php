@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreAccountApiTokenRequest;
 use App\Models\Account;
 use App\Models\AccountApiToken;
+use App\Support\AccountApiTokenAbilityAuthorizer;
 use App\Support\AccountApiTokenIssuer;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class AccountApiTokenController extends Controller
 {
@@ -18,10 +20,16 @@ class AccountApiTokenController extends Controller
             ->with('status', __('app.api_token_created'));
     }
 
-    public function regenerate(Account $account, AccountApiToken $accountApiToken, AccountApiTokenIssuer $accountApiTokenIssuer): RedirectResponse
-    {
+    public function regenerate(
+        Request $request,
+        Account $account,
+        AccountApiToken $accountApiToken,
+        AccountApiTokenIssuer $accountApiTokenIssuer,
+        AccountApiTokenAbilityAuthorizer $abilityAuthorizer,
+    ): RedirectResponse {
         $this->authorize('manageStudioSettings', $account);
         $this->ensureBelongsToAccount($account, $accountApiToken);
+        abort_unless($abilityAuthorizer->canManageSecrets($account, $request->user(), $accountApiToken), 403);
         $accountApiTokenIssuer->regenerate($accountApiToken);
 
         return redirect()->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api'])

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountApiTokenAbility;
 use App\Enums\AccountRole;
+use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AccountApiToken;
 use App\Models\AccountMembership;
@@ -83,5 +85,76 @@ class AccountApiTokenTest extends TestCase
             ->assertForbidden();
 
         $this->assertFalse(AccountApiToken::whereBelongsTo($account)->exists());
+    }
+
+    public function test_settings_manager_without_cashflow_permission_cannot_reveal_or_regenerate_payment_token_but_can_revoke_it(): void
+    {
+        $manager = User::factory()->create();
+        $account = Account::factory()->create();
+        AccountMembership::factory()
+            ->for($account)
+            ->for($manager)
+            ->create([
+                'role' => AccountRole::Admin->value,
+                'permissions' => [StudioPermission::ManageStudioSettings->value],
+            ]);
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Payment automation', [
+            AccountApiTokenAbility::McpPaymentsRead,
+        ]);
+        $tokenValue = $apiToken->tokenValue();
+        $regenerateUrl = route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]);
+
+        $this->actingAs($manager)
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
+            ->assertOk()
+            ->assertSee('Payment automation')
+            ->assertDontSee($tokenValue)
+            ->assertDontSee($regenerateUrl);
+
+        $this->actingAs($manager)
+            ->post($regenerateUrl)
+            ->assertForbidden();
+
+        $this->assertSame($tokenValue, $apiToken->refresh()->tokenValue());
+
+        $this->actingAs($manager)
+            ->delete(route('dashboard.accounts.api-tokens.destroy', [$account, $apiToken]))
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
+            ->assertSessionHas('status', __('app.api_token_revoked'));
+
+        $this->assertFalse($apiToken->refresh()->is_active);
+    }
+
+    public function test_settings_manager_with_cashflow_permission_can_reveal_and_regenerate_payment_token(): void
+    {
+        $manager = User::factory()->create();
+        $account = Account::factory()->create();
+        AccountMembership::factory()
+            ->for($account)
+            ->for($manager)
+            ->create([
+                'role' => AccountRole::Admin->value,
+                'permissions' => [
+                    StudioPermission::ManageStudioSettings->value,
+                    StudioPermission::ManageStudioCashflow->value,
+                ],
+            ]);
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Payment automation', [
+            AccountApiTokenAbility::McpPaymentsRead,
+        ]);
+        $tokenValue = $apiToken->tokenValue();
+
+        $this->actingAs($manager)
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
+            ->assertOk()
+            ->assertSee($tokenValue)
+            ->assertSee(route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]));
+
+        $this->actingAs($manager)
+            ->post(route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]))
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
+            ->assertSessionHas('status', __('app.api_token_regenerated'));
+
+        $this->assertNotSame($tokenValue, $apiToken->refresh()->tokenValue());
     }
 }

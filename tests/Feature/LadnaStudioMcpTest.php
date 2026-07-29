@@ -103,6 +103,16 @@ class LadnaStudioMcpTest extends TestCase
             fn (array $capability): bool => in_array('get-class-bookings-for-day', $capability['tools'] ?? [], true)
                 && $capability['required_ability'] === AccountApiTokenAbility::McpCustomersRead->value
         ));
+        $this->assertTrue(collect($capabilities)->contains(
+            fn (array $capability): bool => ($capability['key'] ?? null) === 'payment_tracking'
+                && ($capability['required_ability'] ?? null) === AccountApiTokenAbility::McpPaymentsRead->value
+                && ($capability['required_user_permission'] ?? null) === 'manage_studio_cashflow'
+        ));
+        $this->assertTrue(collect($capabilities)->contains(
+            fn (array $capability): bool => ($capability['key'] ?? null) === 'event_operations'
+                && ($capability['required_ability'] ?? null) === AccountApiTokenAbility::McpEventsRead->value
+                && ($capability['required_user_permission'] ?? null) === 'manage_events'
+        ));
 
         $this->assertDatabaseHas('mcp_tool_invocations', [
             'account_id' => $account->id,

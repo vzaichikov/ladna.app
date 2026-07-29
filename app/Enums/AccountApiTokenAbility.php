@@ -11,6 +11,8 @@ enum AccountApiTokenAbility: string
     case McpBookingsCancel = 'mcp:bookings:cancel';
     case McpCustomersRead = 'mcp:customers:read';
     case McpClassPassesRead = 'mcp:class-passes:read';
+    case McpPaymentsRead = 'mcp:payments:read';
+    case McpEventsRead = 'mcp:events:read';
 
     public function labelKey(): string
     {

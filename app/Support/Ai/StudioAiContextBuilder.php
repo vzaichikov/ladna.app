@@ -6,6 +6,7 @@ use App\Enums\AiConversationMessageRole;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\StudioPermission;
 use App\Enums\WebsiteLeadStatus;
 use App\Models\Account;
 use App\Models\AiConversation;
@@ -42,6 +43,7 @@ class StudioAiContextBuilder
         Account $account,
         bool $includeClassBookingDetails = true,
         ?Carbon $requestClock = null,
+        ?User $actorUser = null,
     ): array {
         $timezone = $account->timezone ?: config('app.timezone');
         $today = ($requestClock ?? now($timezone))->copy()->timezone($timezone)->startOfDay();
@@ -61,16 +63,6 @@ class StudioAiContextBuilder
                     ->whereBelongsTo($account)
                     ->where('status', CustomerClassPassStatus::Active->value)
                     ->where('is_active', true)
-                    ->count(),
-                'unpaid_class_passes' => CustomerClassPass::query()
-                    ->whereBelongsTo($account)
-                    ->outstandingBalance()
-                    ->unpaid()
-                    ->count(),
-                'partial_class_passes' => CustomerClassPass::query()
-                    ->whereBelongsTo($account)
-                    ->outstandingBalance()
-                    ->partiallyPaid()
                     ->count(),
                 'open_website_leads' => WebsiteLead::query()
                     ->whereBelongsTo($account)
@@ -109,6 +101,19 @@ class StudioAiContextBuilder
                 ],
             ],
         ];
+
+        if ($actorUser && $account->userCan($actorUser, StudioPermission::ManageStudioCashflow)) {
+            $context['metrics']['unpaid_class_passes'] = CustomerClassPass::query()
+                ->whereBelongsTo($account)
+                ->outstandingBalance()
+                ->unpaid()
+                ->count();
+            $context['metrics']['partial_class_passes'] = CustomerClassPass::query()
+                ->whereBelongsTo($account)
+                ->outstandingBalance()
+                ->partiallyPaid()
+                ->count();
+        }
 
         if ($includeClassBookingDetails) {
             $context['class_booking_details'] = [

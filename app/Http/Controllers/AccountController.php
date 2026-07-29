@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\AccountApiTokenAbility;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
+use App\Support\AccountApiTokenAbilityAuthorizer;
 use App\Support\Ai\AiConversationImageCleaner;
 use App\Support\PublicScheduleViewRegistry;
 use App\Support\Pwa\StudioPwaIconGenerator;
@@ -93,8 +93,11 @@ class AccountController extends Controller
         return redirect()->route('dashboard.accounts.owner-profile.edit', $account);
     }
 
-    public function editBrand(Request $request, Account $account): View|RedirectResponse
-    {
+    public function editBrand(
+        Request $request,
+        Account $account,
+        AccountApiTokenAbilityAuthorizer $abilityAuthorizer,
+    ): View|RedirectResponse {
         $this->authorize('update', $account);
 
         $legacyRoute = match ($request->query('tab')) {
@@ -110,14 +113,19 @@ class AccountController extends Controller
         $allowedTabs = ['formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view', 'api'];
         $activeTab = in_array($request->query('tab'), $allowedTabs, true) ? $request->query('tab') : 'business';
 
+        $apiTokens = $activeTab === 'api'
+            ? $account->apiTokens()->latest()->get()
+            : collect();
+
         return view('accounts.brand-edit', [
             'account' => $account,
             'activeTab' => $activeTab,
             'publicScheduleViewOptions' => PublicScheduleViewRegistry::options(),
-            'apiTokens' => $activeTab === 'api'
-                ? $account->apiTokens()->latest()->get()
-                : collect(),
-            'apiTokenAbilities' => AccountApiTokenAbility::cases(),
+            'apiTokens' => $apiTokens,
+            'apiTokenAbilities' => $abilityAuthorizer->grantableAbilities($account, $request->user()),
+            'apiTokenSecretAccess' => $apiTokens->mapWithKeys(fn ($token): array => [
+                $token->id => $abilityAuthorizer->canManageSecrets($account, $request->user(), $token),
+            ]),
         ]);
     }
 
