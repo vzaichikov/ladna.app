@@ -554,6 +554,7 @@ class TelegramWebhookTest extends TestCase
             'action' => null,
             'calendar_reference' => null,
             'reason' => 'visual question',
+            'visual_context' => 'A customer class-pass screen is visible.',
         ];
 
         Http::fake(function (Request $request) use ($imageContents, $assistantEnvelope) {
@@ -642,7 +643,7 @@ class TelegramWebhookTest extends TestCase
         $this->assertSame('gpt-5.5', $request['model']);
         $this->assertFalse($request['store']);
         $this->assertNotEmpty($request['tools']);
-        $this->assertSame('ladna_studio_assistant_v2', data_get($request->data(), 'text.format.name'));
+        $this->assertSame('ladna_studio_assistant_v3', data_get($request->data(), 'text.format.name'));
         $userContent = collect($request['input'] ?? [])
             ->flatMap(fn (array $message): array => is_array($message['content'] ?? null)
                 ? $message['content']
@@ -656,6 +657,185 @@ class TelegramWebhookTest extends TestCase
         $this->assertStringContainsString(
             'The current owner message has no text. This image-only request must be answered in Ukrainian only.',
             $textInput['text'],
+        );
+    }
+
+    public function test_telegram_openai_replaces_raw_image_with_visual_memory_after_two_follow_ups(): void
+    {
+        Storage::fake('local');
+        $imageContents = $this->pngImageContents();
+        [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('592', '812');
+        PlatformAiSetting::current()->forceFill([
+            'active_provider' => AiProvider::OpenAiApiKey->value,
+            'active_model' => 'gpt-5.5',
+        ])->save();
+        PlatformAiProviderCredential::query()->delete();
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OpenAiApiKey->value,
+            'model' => 'gpt-5.5',
+            'credentials' => ['api_key' => 'test-openai-key'],
+            'is_configured' => true,
+        ]);
+        $assistantEnvelopes = [
+            [
+                'disposition' => 'answer',
+                'answer' => 'На скріншоті абонемент Марії.',
+                'follow_up_actions' => [],
+                'action' => null,
+                'calendar_reference' => null,
+                'reason' => 'direct image inspection',
+                'visual_context' => 'Class-pass screen: Maria, valid through 15 August.',
+            ],
+            [
+                'disposition' => 'answer',
+                'answer' => 'До 15 серпня.',
+                'follow_up_actions' => [],
+                'action' => null,
+                'calendar_reference' => null,
+                'reason' => 'visual follow-up',
+                'visual_context' => 'Class-pass screen: Maria, valid through 15 August.',
+            ],
+            [
+                'disposition' => 'answer',
+                'answer' => 'На скріншоті вказана Марія.',
+                'follow_up_actions' => [],
+                'action' => null,
+                'calendar_reference' => null,
+                'reason' => 'visual follow-up',
+                'visual_context' => 'Class-pass screen: Maria, valid through 15 August.',
+            ],
+            [
+                'disposition' => 'answer',
+                'answer' => 'Завтра працюють двоє тренерів.',
+                'follow_up_actions' => [],
+                'action' => null,
+                'calendar_reference' => null,
+                'reason' => 'studio context',
+                'visual_context' => null,
+            ],
+        ];
+        $openAiResponseIndex = 0;
+
+        Http::fake(function (Request $request) use (
+            $imageContents,
+            $assistantEnvelopes,
+            &$openAiResponseIndex,
+        ) {
+            if (str_contains($request->url(), '/getFile')) {
+                return Http::response([
+                    'ok' => true,
+                    'result' => [
+                        'file_path' => 'photos/openai-memory-test.png',
+                        'file_size' => strlen($imageContents),
+                    ],
+                ]);
+            }
+
+            if (str_contains($request->url(), '/file/bot')) {
+                return Http::response($imageContents, 200, [
+                    'Content-Type' => 'image/png',
+                    'Content-Length' => (string) strlen($imageContents),
+                ]);
+            }
+
+            if (str_ends_with($request->url(), '/v1/responses')) {
+                $envelope = $assistantEnvelopes[$openAiResponseIndex++];
+
+                return Http::response([
+                    'id' => 'resp_telegram_memory_'.$openAiResponseIndex,
+                    'status' => 'completed',
+                    'output' => [[
+                        'id' => 'msg_telegram_memory_'.$openAiResponseIndex,
+                        'type' => 'message',
+                        'role' => 'assistant',
+                        'status' => 'completed',
+                        'content' => [[
+                            'type' => 'output_text',
+                            'text' => json_encode($envelope),
+                        ]],
+                    ]],
+                ]);
+            }
+
+            if (str_contains($request->url(), 'api.telegram.org/')) {
+                return Http::response([
+                    'ok' => true,
+                    'result' => ['message_id' => 902 + $openAiResponseIndex],
+                ]);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $headers = [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ];
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1115,
+            'message' => [
+                'message_id' => 215,
+                'chat' => ['id' => 592, 'type' => 'private'],
+                'from' => ['id' => 812, 'username' => 'owner'],
+                'photo' => [[
+                    'file_id' => 'openai-memory-photo',
+                    'file_unique_id' => 'openai-memory-photo-unique',
+                    'width' => 1280,
+                    'height' => 960,
+                    'file_size' => strlen($imageContents),
+                ]],
+            ],
+        ], $headers)->assertNoContent();
+
+        foreach ([
+            216 => 'А до якого числа він діє?',
+            217 => 'І чиє імʼя там вказане?',
+        ] as $messageId => $messageText) {
+            $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+                'update_id' => 900 + $messageId,
+                'message' => [
+                    'message_id' => $messageId,
+                    'chat' => ['id' => 592, 'type' => 'private'],
+                    'from' => ['id' => 812, 'username' => 'owner'],
+                    'text' => $messageText,
+                ],
+            ], $headers)->assertNoContent();
+        }
+
+        $attachment = AiConversationMessageAttachment::query()
+            ->where('account_id', $account->id)
+            ->firstOrFail();
+        Storage::disk($attachment->disk)->delete($attachment->path);
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1118,
+            'message' => [
+                'message_id' => 218,
+                'chat' => ['id' => 592, 'type' => 'private'],
+                'from' => ['id' => 812, 'username' => 'owner'],
+                'text' => 'Хто з тренерів працює завтра?',
+            ],
+        ], $headers)->assertNoContent();
+
+        $openAiRequests = collect(Http::recorded())
+            ->pluck(0)
+            ->filter(fn (Request $request): bool => str_ends_with($request->url(), '/v1/responses'))
+            ->values();
+
+        $this->assertCount(4, $openAiRequests);
+
+        foreach ([0, 1, 2] as $requestIndex) {
+            $this->assertTrue($this->requestIncludesInputImage($openAiRequests[$requestIndex]));
+        }
+
+        $this->assertFalse($this->requestIncludesInputImage($openAiRequests[3]));
+        $finalInputText = collect($openAiRequests[3]['input'] ?? [])
+            ->where('role', 'user')
+            ->pluck('content')
+            ->filter(fn (mixed $content): bool => is_string($content))
+            ->implode("\n");
+        $this->assertStringContainsString(
+            'Class-pass screen: Maria, valid through 15 August.',
+            $finalInputText,
         );
     }
 
@@ -2530,6 +2710,17 @@ class TelegramWebhookTest extends TestCase
 
             return Http::response([], 404);
         });
+    }
+
+    private function requestIncludesInputImage(Request $request): bool
+    {
+        return collect($request['input'] ?? [])
+            ->where('role', 'user')
+            ->flatMap(fn (array $message): array => is_array($message['content'] ?? null)
+                ? $message['content']
+                : [])
+            ->contains(fn (mixed $content): bool => is_array($content)
+                && ($content['type'] ?? null) === 'input_image');
     }
 
     private function pngImageContents(): string

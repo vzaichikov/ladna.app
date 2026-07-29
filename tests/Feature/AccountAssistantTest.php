@@ -82,7 +82,7 @@ class AccountAssistantTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_dashboard_openai_answer_uses_responses_api_with_schema_and_prompt_v2(): void
+    public function test_dashboard_openai_answer_uses_responses_api_with_schema_and_prompt_v3(): void
     {
         Http::fake([
             'api.openai.com/v1/responses' => Http::response($this->openAiTextResponse([
@@ -116,13 +116,16 @@ class AccountAssistantTest extends TestCase
                 && $request['model'] === 'gpt-5.5'
                 && $request['store'] === false
                 && data_get($request->data(), 'reasoning.effort') === 'low'
-                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v2'
+                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v3'
                 && data_get($request->data(), 'text.format.strict') === true
-                && str_contains($systemPrompt, 'OpenAI Responses prompt version: openai_v2.')
+                && str_contains($systemPrompt, 'OpenAI Responses prompt version: openai_v3.')
                 && str_contains($systemPrompt, 'Language is a hard output constraint')
                 && str_contains($systemPrompt, 'detect it from the current text under Owner request')
                 && str_contains($systemPrompt, 'Tool arguments may use the language that retrieves the best evidence')
                 && str_contains($systemPrompt, 'If the current request is image-only, use Ukrainian only.')
+                && str_contains($systemPrompt, 'Never invent, estimate, infer, or convert a missing studio fact')
+                && str_contains($systemPrompt, 'A booking or class-pass reservation status is not proof that a person attended')
+                && str_contains($systemPrompt, 'Never bring old visual evidence into an unrelated topic.')
                 && str_contains($systemPrompt, 'answer must be a short owner-facing rejection in the required output language')
                 && ! str_contains($systemPrompt, 'For disposition=out_of_scope, answer and action must be null.')
                 && collect($request['tools'] ?? [])->every(
@@ -187,7 +190,7 @@ class AccountAssistantTest extends TestCase
         $this->assertCount(2, $requests);
         $secondInput = collect($requests[1][0]['input']);
         $secondSystemPrompt = (string) data_get($requests[1][0]->data(), 'input.0.content', '');
-        $this->assertStringContainsString('OpenAI Responses prompt version: openai_v2.', $secondSystemPrompt);
+        $this->assertStringContainsString('OpenAI Responses prompt version: openai_v3.', $secondSystemPrompt);
         $this->assertStringContainsString(
             'final owner-facing result must return to the current request language',
             $secondSystemPrompt,
@@ -221,6 +224,7 @@ class AccountAssistantTest extends TestCase
                 'action' => null,
                 'calendar_reference' => null,
                 'reason' => 'direct image inspection',
+                'visual_context' => 'Customer Maria has an 8-class pass visible on the class-pass screen.',
             ])),
         ]);
 
@@ -258,8 +262,180 @@ class AccountAssistantTest extends TestCase
                     'The current owner message has no text. This image-only request must be answered in Ukrainian only.',
                 )
                 && count($request['tools'] ?? []) > 0
-                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v2';
+                && data_get($request->data(), 'text.format.name') === 'ladna_studio_assistant_v3';
         });
+
+        $imageMessage = AiConversationMessage::query()
+            ->where('account_id', $account->id)
+            ->where('role', AiConversationMessageRole::User->value)
+            ->firstOrFail();
+        $this->assertSame(
+            'Customer Maria has an 8-class pass visible on the class-pass screen.',
+            data_get($imageMessage->metadata, 'visual_context.text'),
+        );
+        $this->assertSame(
+            'openai_multimodal_response',
+            data_get($imageMessage->metadata, 'visual_context.source'),
+        );
+    }
+
+    public function test_dashboard_openai_replaces_raw_image_with_visual_memory_after_two_follow_ups(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'api.openai.com/v1/responses' => Http::sequence()
+                ->push($this->openAiTextResponse([
+                    'disposition' => 'answer',
+                    'answer' => 'На скріншоті абонемент Марії на 8 занять, чинний до 15 серпня.',
+                    'follow_up_actions' => [],
+                    'action' => null,
+                    'calendar_reference' => null,
+                    'reason' => 'direct image inspection',
+                    'visual_context' => 'Class-pass screen: Maria, 8 classes, valid through 15 August.',
+                ]))
+                ->push($this->openAiTextResponse([
+                    'disposition' => 'answer',
+                    'answer' => 'До 15 серпня.',
+                    'follow_up_actions' => [],
+                    'action' => null,
+                    'calendar_reference' => null,
+                    'reason' => 'visual follow-up',
+                    'visual_context' => 'Class-pass screen: Maria, 8 classes, valid through 15 August.',
+                ]))
+                ->push($this->openAiTextResponse([
+                    'disposition' => 'answer',
+                    'answer' => 'На абонементі вказано 8 занять.',
+                    'follow_up_actions' => [],
+                    'action' => null,
+                    'calendar_reference' => null,
+                    'reason' => 'visual follow-up',
+                    'visual_context' => 'Class-pass screen: Maria, 8 classes, valid through 15 August.',
+                ]))
+                ->push($this->openAiTextResponse([
+                    'disposition' => 'answer',
+                    'answer' => 'Завтра працюють двоє тренерів.',
+                    'follow_up_actions' => [],
+                    'action' => null,
+                    'calendar_reference' => null,
+                    'reason' => 'studio context',
+                    'visual_context' => null,
+                ])),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOpenAi();
+        $this->actingAs($owner);
+
+        $this->post(route('dashboard.accounts.assistant.messages.store', $account), [
+            'image' => UploadedFile::fake()->image('class-pass.png', 800, 600),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+            'message' => 'А до якого числа він діє?',
+        ])->assertOk();
+        $this->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+            'message' => 'І скільки там занять?',
+        ])->assertOk();
+        $attachment = AiConversationMessageAttachment::query()
+            ->where('account_id', $account->id)
+            ->firstOrFail();
+        Storage::disk($attachment->disk)->delete($attachment->path);
+        $this->postJson(route('dashboard.accounts.assistant.messages.store', $account), [
+            'message' => 'Хто з тренерів працює завтра?',
+        ])->assertOk();
+
+        $requests = collect(Http::recorded())
+            ->pluck(0)
+            ->filter(fn (Request $request): bool => $request->url() === 'https://api.openai.com/v1/responses')
+            ->values();
+
+        $this->assertCount(4, $requests);
+
+        foreach ([0, 1, 2] as $requestIndex) {
+            $this->assertTrue($this->requestIncludesImage($requests[$requestIndex]));
+        }
+
+        $this->assertFalse($this->requestIncludesImage($requests[3]));
+        $finalInputText = collect($requests[3]['input'] ?? [])
+            ->where('role', 'user')
+            ->pluck('content')
+            ->filter(fn (mixed $content): bool => is_string($content))
+            ->implode("\n");
+        $systemPrompt = (string) data_get($requests[3]->data(), 'input.0.content', '');
+
+        $this->assertStringContainsString(
+            'Private visual evidence from the newest conversation picture',
+            $finalInputText,
+        );
+        $this->assertStringContainsString(
+            'Class-pass screen: Maria, 8 classes, valid through 15 August.',
+            $finalInputText,
+        );
+        $this->assertStringContainsString(
+            'Never bring old visual evidence into an unrelated topic.',
+            $systemPrompt,
+        );
+    }
+
+    public function test_dashboard_openai_repairs_an_image_response_without_visual_memory(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'api.openai.com/v1/responses' => Http::sequence()
+                ->push($this->openAiTextResponse([
+                    'disposition' => 'answer',
+                    'answer' => 'На скріншоті видно абонемент.',
+                    'follow_up_actions' => [],
+                    'action' => null,
+                    'calendar_reference' => null,
+                    'reason' => 'direct image inspection',
+                    'visual_context' => null,
+                ]))
+                ->push($this->openAiTextResponse([
+                    'disposition' => 'answer',
+                    'answer' => 'На скріншоті видно абонемент Марії.',
+                    'follow_up_actions' => [],
+                    'action' => null,
+                    'calendar_reference' => null,
+                    'reason' => 'repaired visual response',
+                    'visual_context' => 'Class-pass screen for Maria.',
+                ])),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOpenAi();
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'image' => UploadedFile::fake()->image('class-pass.png', 800, 600),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('messages.1.content', 'На скріншоті видно абонемент Марії.');
+
+        $requests = collect(Http::recorded())
+            ->pluck(0)
+            ->filter(fn (Request $request): bool => $request->url() === 'https://api.openai.com/v1/responses')
+            ->values();
+
+        $this->assertCount(2, $requests);
+        $this->assertTrue($this->requestIncludesImage($requests[0]));
+        $this->assertTrue($this->requestIncludesImage($requests[1]));
+        $this->assertStringContainsString(
+            'visual_context',
+            (string) data_get($requests[1]->data(), 'input.'.(count($requests[1]['input']) - 1).'.content', ''),
+        );
+
+        $imageMessage = AiConversationMessage::query()
+            ->where('account_id', $account->id)
+            ->where('role', AiConversationMessageRole::User->value)
+            ->firstOrFail();
+        $this->assertSame(
+            'Class-pass screen for Maria.',
+            data_get($imageMessage->metadata, 'visual_context.text'),
+        );
     }
 
     public function test_dashboard_openai_out_of_scope_rejection_uses_model_language(): void
@@ -1047,6 +1223,8 @@ class AccountAssistantTest extends TestCase
      */
     private function openAiTextResponse(array $envelope): array
     {
+        $envelope['visual_context'] ??= null;
+
         return [
             'id' => 'resp_test',
             'status' => 'completed',
@@ -1064,6 +1242,17 @@ class AccountAssistantTest extends TestCase
                 ]],
             ]],
         ];
+    }
+
+    private function requestIncludesImage(Request $request): bool
+    {
+        return collect($request['input'] ?? [])
+            ->where('role', 'user')
+            ->flatMap(fn (array $message): array => is_array($message['content'] ?? null)
+                ? $message['content']
+                : [])
+            ->contains(fn (mixed $content): bool => is_array($content)
+                && ($content['type'] ?? null) === 'input_image');
     }
 
     private function webpImageContents(): string
