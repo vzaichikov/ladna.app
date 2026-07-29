@@ -15,8 +15,10 @@ use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassAdjustment;
 use App\Models\CustomerClassPassReservation;
+use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Models\ScheduledClass;
+use App\Models\User;
 use App\Support\CustomerBookingLedgerInvestigation;
 use App\Support\CustomerInvestigationSearch;
 use App\Support\TrialClassPassEligibility;
@@ -180,6 +182,7 @@ class CustomerBookingLedgerInvestigationTest extends TestCase
                     'new_sessions_count' => 2,
                     'actor_name' => 'Studio owner',
                     'actor_role' => 'owner',
+                    'reason' => 'Corrected imported session balance.',
                     'created_at' => Carbon::parse('2026-07-02 08:30:00', 'Europe/Kyiv')->utc(),
                 ]);
             $julySecondBooking = $this->booking($account, $customer, $julySecond, '2026-07-01 18:00:00', 'customer');
@@ -235,6 +238,7 @@ class CustomerBookingLedgerInvestigationTest extends TestCase
                 fn (array $finding): bool => $finding['code'] === 'no_detected_ledger_inconsistencies',
             ));
             $this->assertSame(-4, $result['adjustments'][0]['sessions_delta']);
+            $this->assertSame('Corrected imported session balance.', $result['adjustments'][0]['reason']);
         } finally {
             Carbon::setTestNow();
         }
@@ -540,6 +544,8 @@ class CustomerBookingLedgerInvestigationTest extends TestCase
 
         try {
             $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+            $owner = User::factory()->create();
+            $account->addOwner($owner);
             $customer = Customer::factory()->for($account)->create(['name' => 'Anna Example']);
             ClassPassPlan::factory()->for($account)->create([
                 'name' => 'First time',
@@ -641,6 +647,7 @@ class CustomerBookingLedgerInvestigationTest extends TestCase
                 '2026-07-31',
                 '2026-07-28T20:05:00+03:00',
                 TrialClassPassEligibility::SourceManual,
+                $owner,
             );
 
             $this->assertSame(5, $result['customer_history_summary']['counted_bookings_count']);
@@ -651,11 +658,88 @@ class CustomerBookingLedgerInvestigationTest extends TestCase
             $this->assertSame('ineligible', $result['trial_eligibility']['status']);
             $this->assertSame(['multiple_existing_bookings'], $result['trial_eligibility']['reason_codes']);
             $this->assertSame(25000, $result['trial_eligibility']['trial_plans']['items'][0]['price_cents']);
+            $this->assertSame('available', $result['manual_override']['status']);
+            $this->assertTrue($result['manual_override']['available']);
+            $this->assertTrue($result['manual_override']['customer_qualifies']);
+            $this->assertSame(0, $result['manual_override']['class_pass_history_count']);
+            $this->assertSame(0, $result['manual_override']['successful_payments_count']);
+            $this->assertSame(['manual_override_available'], $result['manual_override']['reason_codes']);
+            $this->assertTrue($result['manual_override']['human_exception']);
             $this->assertSame(1, $result['summary']['outstanding_partial_passes_count']);
             $partialPass = collect($result['passes'])->firstWhere('code', 'MANUAL-450');
             $this->assertSame(20000, $partialPass['remaining_payment_cents']);
             $futureBooking = $this->bookingResult($result, $bookings[2]->id);
             $this->assertNull($futureBooking['reservation']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_manual_override_history_checks_respect_as_of_and_block_current_regular_customer_history(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-29 12:00:00', 'Europe/Kyiv'));
+
+        try {
+            $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+            $owner = User::factory()->create();
+            $account->addOwner($owner);
+            $customer = Customer::factory()->for($account)->create();
+            ClassPassPlan::factory()->for($account)->create(['is_trial' => true]);
+            $regularPlan = ClassPassPlan::factory()->for($account)->create(['is_trial' => false]);
+
+            foreach (['2026-07-23 19:00:00', '2026-07-28 19:00:00'] as $startsAt) {
+                $scheduledClass = ScheduledClass::factory()->for($account)->create([
+                    'starts_at' => Carbon::parse($startsAt, 'Europe/Kyiv')->utc(),
+                    'ends_at' => Carbon::parse($startsAt, 'Europe/Kyiv')->addHour()->utc(),
+                ]);
+                ClassBooking::factory()
+                    ->for($account)
+                    ->for($customer)
+                    ->for($scheduledClass)
+                    ->create([
+                        'created_at' => Carbon::parse('2026-07-20 10:00:00', 'Europe/Kyiv')->utc(),
+                    ]);
+            }
+
+            $pass = CustomerClassPass::factory()
+                ->for($account)
+                ->for($customer)
+                ->for($regularPlan)
+                ->create([
+                    'created_at' => Carbon::parse('2026-07-29 09:00:00', 'Europe/Kyiv')->utc(),
+                ]);
+            CustomerPurchase::factory()
+                ->for($account)
+                ->for($customer)
+                ->for($regularPlan, 'classPassPlan')
+                ->for($pass, 'customerClassPass')
+                ->create([
+                    'status' => 'payment_paid',
+                    'paid_at' => Carbon::parse('2026-07-29 09:05:00', 'Europe/Kyiv')->utc(),
+                    'created_at' => Carbon::parse('2026-07-29 09:00:00', 'Europe/Kyiv')->utc(),
+                ]);
+
+            $historical = app(CustomerBookingLedgerInvestigation::class)->investigate(
+                $account,
+                $customer->id,
+                asOf: '2026-07-28T20:05:00+03:00',
+                actor: $owner,
+            );
+            $current = app(CustomerBookingLedgerInvestigation::class)->investigate(
+                $account,
+                $customer->id,
+                actor: $owner,
+            );
+
+            $this->assertSame('ineligible', $historical['trial_eligibility']['status']);
+            $this->assertTrue($historical['manual_override']['available']);
+            $this->assertSame(0, $historical['manual_override']['class_pass_history_count']);
+            $this->assertSame(0, $historical['manual_override']['successful_payments_count']);
+            $this->assertFalse($current['manual_override']['available']);
+            $this->assertSame(1, $current['manual_override']['class_pass_history_count']);
+            $this->assertSame(1, $current['manual_override']['successful_payments_count']);
+            $this->assertContains('existing_class_pass_history', $current['manual_override']['reason_codes']);
+            $this->assertContains('successful_payment_history', $current['manual_override']['reason_codes']);
         } finally {
             Carbon::setTestNow();
         }

@@ -108,6 +108,9 @@ class CustomerClassPassController extends Controller
             issuedLocation: $issuedLocation,
             isPaid: $request->boolean('is_paid'),
             paidAmountCents: $request->paidAmountCents(),
+            trialEligibilityOverrideReason: $request->boolean('override_trial_eligibility')
+                ? (string) $request->validated('trial_eligibility_override_reason')
+                : null,
         );
 
         return redirect()->route('dashboard.accounts.customers.edit', [$account, $customer])

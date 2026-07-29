@@ -335,6 +335,18 @@ class LadnaStudioMcpTest extends TestCase
             ->for($scheduledClass)
             ->for($customer, 'customer')
             ->create();
+        $overrideCustomer = Customer::factory()->for($account)->create(['name' => 'Override Candidate']);
+        foreach (['2026-07-12 10:00:00', '2026-07-13 10:00:00'] as $startsAt) {
+            $overrideScheduledClass = ScheduledClass::factory()->for($account)->create([
+                'starts_at' => Carbon::parse($startsAt, 'Europe/Kyiv')->utc(),
+                'ends_at' => Carbon::parse($startsAt, 'Europe/Kyiv')->addHour()->utc(),
+            ]);
+            ClassBooking::factory()
+                ->for($account)
+                ->for($overrideScheduledClass)
+                ->for($overrideCustomer, 'customer')
+                ->create();
+        }
         $trialPlan = ClassPassPlan::factory()->for($account)->create([
             'name' => 'Trial 250',
             'is_trial' => true,
@@ -399,7 +411,29 @@ class LadnaStudioMcpTest extends TestCase
             ->assertJsonPath('result.structuredContent.trial_eligibility.supporting_bookings.total', 1)
             ->assertJsonPath('result.structuredContent.trial_eligibility.trial_plans.items.0.class_pass_plan_id', $trialPlan->id)
             ->assertJsonPath('result.structuredContent.trial_eligibility.trial_plans.items.0.price_cents', 25000)
+            ->assertJsonPath('result.structuredContent.manual_override.status', 'unavailable')
+            ->assertJsonPath('result.structuredContent.manual_override.available', false)
+            ->assertJsonPath('result.structuredContent.manual_override.customer_qualifies', false)
+            ->assertJsonPath('result.structuredContent.manual_override.class_pass_history_count', 1)
+            ->assertJsonPath('result.structuredContent.manual_override.actor_permissions_evaluated', false)
+            ->assertJsonPath('result.structuredContent.manual_override.actor_has_required_permissions', null)
+            ->assertJsonPath('result.structuredContent.manual_override.human_exception', true)
             ->assertJsonPath('result.structuredContent.summary.has_detected_anomalies', false);
+
+        $this->withToken($investigationToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('investigate-customer-booking-ledger', [
+                'customer_id' => $overrideCustomer->id,
+                'from_date' => '2026-07-01',
+                'to_date' => '2026-07-31',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.trial_eligibility.status', 'ineligible')
+            ->assertJsonPath('result.structuredContent.manual_override.status', 'actor_permissions_not_evaluated')
+            ->assertJsonPath('result.structuredContent.manual_override.available', false)
+            ->assertJsonPath('result.structuredContent.manual_override.customer_qualifies', true)
+            ->assertJsonPath('result.structuredContent.manual_override.class_pass_history_count', 0)
+            ->assertJsonPath('result.structuredContent.manual_override.successful_payments_count', 0)
+            ->assertJsonPath('result.structuredContent.manual_override.reason_codes.0', 'actor_permissions_not_evaluated');
 
         $this->withToken($investigationToken->tokenValue())
             ->postJson('/mcp/ladna-studio', $this->toolPayload('investigate-customer-booking-ledger', [
@@ -522,6 +556,14 @@ class LadnaStudioMcpTest extends TestCase
         $this->assertSame(
             'integer',
             data_get($tool, 'outputSchema.properties.trial_eligibility.properties.trial_plans.properties.items.items.properties.price_cents.type'),
+        );
+        $this->assertSame(
+            ['available', 'unavailable', 'actor_permissions_not_evaluated'],
+            data_get($tool, 'outputSchema.properties.manual_override.properties.status.enum'),
+        );
+        $this->assertSame(
+            'boolean',
+            data_get($tool, 'outputSchema.properties.manual_override.properties.customer_qualifies.type'),
         );
         $this->assertArrayNotHasKey('account_id', $tool['inputSchema']['properties']);
         $this->assertArrayNotHasKey('tenant_id', $tool['inputSchema']['properties']);

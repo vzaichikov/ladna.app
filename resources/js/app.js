@@ -5732,6 +5732,45 @@ function initEventForms(root = document) {
     });
 }
 
+function updateTrialClassPassOverrideForm(form) {
+    const planSelect = form.querySelector('[data-trial-plan-select]');
+    const overrideFields = form.querySelector('[data-trial-override-fields]');
+    const overrideToggle = form.querySelector('[data-trial-override-toggle]');
+    const comment = form.querySelector('[data-trial-override-comment]');
+    const reason = form.querySelector('[data-trial-override-reason]');
+
+    if (!planSelect || !overrideFields || !overrideToggle || !comment || !reason) {
+        return;
+    }
+
+    const selectedPlanIsTrial = planSelect.selectedOptions[0]?.dataset.isTrial === 'true';
+
+    overrideFields.classList.toggle('hidden', !selectedPlanIsTrial);
+    overrideToggle.disabled = !selectedPlanIsTrial;
+
+    if (!selectedPlanIsTrial) {
+        overrideToggle.checked = false;
+    }
+
+    const overrideEnabled = selectedPlanIsTrial && overrideToggle.checked;
+
+    comment.classList.toggle('hidden', !overrideEnabled);
+    reason.disabled = !overrideEnabled;
+    reason.required = overrideEnabled;
+}
+
+function initTrialClassPassOverrideForms(root = document) {
+    root.querySelectorAll('[data-trial-override-form]').forEach((form) => {
+        form.addEventListener('change', (event) => {
+            if (event.target.matches('[data-trial-plan-select], [data-trial-override-toggle]')) {
+                updateTrialClassPassOverrideForm(form);
+            }
+        });
+
+        updateTrialClassPassOverrideForm(form);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initEventScanner();
     initEventForms();
@@ -5774,6 +5813,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPublicBookingModal();
     initSalaryModelForms();
     initIntegrationForms();
+    initTrialClassPassOverrideForms();
     syncPublicLegalReturnUrls();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {

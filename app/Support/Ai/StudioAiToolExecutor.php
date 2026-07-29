@@ -345,7 +345,7 @@ class StudioAiToolExecutor
                 'type' => 'function',
                 'function' => [
                     'name' => self::InvestigateCustomerBookingLedger,
-                    'description' => 'Read a selected customer booking and class-pass timeline, all-time history summary, and deterministic trial eligibility. Never changes data.',
+                    'description' => 'Read a selected customer booking and class-pass timeline, all-time history summary, deterministic ordinary trial eligibility, and audited manual-override availability. Never changes data.',
                     'parameters' => [
                         'type' => 'object',
                         'additionalProperties' => false,
@@ -368,7 +368,7 @@ class StudioAiToolExecutor
                             'as_of' => [
                                 'type' => 'string',
                                 'format' => 'date-time',
-                                'description' => 'Optional RFC3339 timestamp at or before now for all-time trial eligibility. Defaults to now.',
+                                'description' => 'Optional RFC3339 timestamp at or before now for all-time trial eligibility and manual-override history checks. Defaults to now.',
                             ],
                             'source' => [
                                 'type' => 'string',
@@ -434,7 +434,7 @@ class StudioAiToolExecutor
                 self::SearchOwnerHelp => $this->searchOwnerHelp($validated, $progress),
                 self::GetOwnerHelpPage => $this->getOwnerHelpPage($validated, $progress),
                 self::SearchCustomers => $this->searchCustomers($account, $validated, $progress),
-                self::InvestigateCustomerBookingLedger => $this->investigateBookingLedger($account, $validated, $progress),
+                self::InvestigateCustomerBookingLedger => $this->investigateBookingLedger($account, $actorUser, $validated, $progress),
                 self::GetBusinessLogicReference => $this->businessLogic($validated, $progress),
                 self::GetPaymentOverview => $this->paymentOverview($account, $validated, $progress),
                 self::SearchPayments => $this->searchPayments($account, $validated, $progress),
@@ -634,8 +634,12 @@ class StudioAiToolExecutor
      * @param  callable(string): mixed|null  $progress
      * @return array<string, mixed>
      */
-    private function investigateBookingLedger(Account $account, array $arguments, ?callable $progress): array
-    {
+    private function investigateBookingLedger(
+        Account $account,
+        ?User $actorUser,
+        array $arguments,
+        ?callable $progress,
+    ): array {
         $this->progress($progress, 'assistant_status_checking_bookings');
         $payload = $this->bookingLedgerInvestigation->investigate(
             $account,
@@ -644,6 +648,7 @@ class StudioAiToolExecutor
             isset($arguments['to_date']) ? (string) $arguments['to_date'] : null,
             isset($arguments['as_of']) ? (string) $arguments['as_of'] : null,
             (string) ($arguments['source'] ?? TrialClassPassEligibility::SourceManual),
+            $actorUser,
         );
         $this->progress($progress, 'assistant_status_checking_class_passes');
 

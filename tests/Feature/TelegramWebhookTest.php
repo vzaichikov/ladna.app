@@ -828,6 +828,14 @@ class TelegramWebhookTest extends TestCase
                 '"reason_codes":["no_existing_bookings"]',
                 (string) ($ledgerOutput['output'] ?? ''),
             );
+            $this->assertStringContainsString(
+                '"manual_override":{"status":"unavailable","available":false',
+                (string) ($ledgerOutput['output'] ?? ''),
+            );
+            $this->assertStringContainsString(
+                '"actor_has_required_permissions":true',
+                (string) ($ledgerOutput['output'] ?? ''),
+            );
             $this->assertStringNotContainsString(
                 '_cents',
                 (string) ($ledgerOutput['output'] ?? ''),

@@ -282,6 +282,10 @@ class StudioAiInvestigationTest extends TestCase
                 )
                 && str_contains(
                     $message['content'] ?? '',
+                    'audited human exception',
+                )
+                && str_contains(
+                    $message['content'] ?? '',
                     'call search_payments as well as the ledger tool',
                 )
                 && str_contains(
@@ -307,6 +311,11 @@ class StudioAiInvestigationTest extends TestCase
         $this->assertSame('2200.00', data_get($ledgerToolPayload, 'monetary_summary.outstanding_by_currency.0.amount'));
         $this->assertSame('UAH', data_get($ledgerToolPayload, 'monetary_summary.outstanding_by_currency.0.currency'));
         $this->assertSame('250.00', data_get($ledgerToolPayload, 'trial_eligibility.trial_plans.items.0.price.amount'));
+        $this->assertSame('unavailable', data_get($ledgerToolPayload, 'manual_override.status'));
+        $this->assertFalse(data_get($ledgerToolPayload, 'manual_override.available'));
+        $this->assertSame(2, data_get($ledgerToolPayload, 'manual_override.class_pass_history_count'));
+        $this->assertTrue(data_get($ledgerToolPayload, 'manual_override.actor_permissions_evaluated'));
+        $this->assertTrue(data_get($ledgerToolPayload, 'manual_override.actor_has_required_permissions'));
         $this->assertStringNotContainsString('_cents', (string) ($ledgerToolMessage['content'] ?? ''));
         $investigationTool = collect($requests[0]->data()['tools'])->first(
             fn (array $tool): bool => data_get($tool, 'function.name') === 'investigate_customer_booking_ledger',

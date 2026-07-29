@@ -10,6 +10,7 @@ use App\Enums\IntegrationProvider;
 use App\Mail\TransactionalMail;
 use App\Models\Account;
 use App\Models\AccountSubscriptionPayment;
+use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
@@ -47,6 +48,46 @@ class TransactionalMailTest extends TestCase
             && $mail->hasTo('customer@example.com')
             && ($mail->from[0]['address'] ?? null) === 'studio@example.com'
             && ($mail->from[0]['name'] ?? null) === 'Ladna Mail');
+    }
+
+    public function test_manual_trial_override_queues_only_the_normal_issued_email(): void
+    {
+        Mail::fake();
+        $this->enableMailDelivery();
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['default_language' => 'en']);
+        $account->addOwner($owner);
+        $customer = Customer::factory()->for($account)->create([
+            'email' => 'trial-override@example.com',
+            'default_language' => 'en',
+        ]);
+        $plan = ClassPassPlan::factory()->for($account)->create([
+            'name' => 'Trial',
+            'is_trial' => true,
+            'sessions_count' => 1,
+        ]);
+
+        ScheduledClass::factory()
+            ->count(2)
+            ->for($account)
+            ->create()
+            ->each(fn (ScheduledClass $scheduledClass) => ClassBooking::factory()
+                ->for($account)
+                ->for($customer)
+                ->for($scheduledClass)
+                ->create());
+
+        app(IssueCustomerClassPass::class)->execute(
+            $account,
+            $customer,
+            $plan,
+            issuedBy: $owner,
+            trialEligibilityOverrideReason: 'Approved audited exception.',
+        );
+
+        Mail::assertQueuedCount(1);
+        Mail::assertQueued(TransactionalMail::class, fn (TransactionalMail $mail): bool => $mail->subjectKey === 'app.mail_subject_customer_class_pass_issued'
+            && $mail->hasTo('trial-override@example.com'));
     }
 
     public function test_paid_customer_purchase_queues_issued_pass_email_once(): void

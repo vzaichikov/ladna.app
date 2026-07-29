@@ -22,7 +22,7 @@ use Laravel\Mcp\Server\Tool;
 use Throwable;
 
 #[Name('investigate-customer-booking-ledger')]
-#[Description('Reconstructs a customer booking, class-pass, and outstanding-payment ledger in the bearer token account scope, including all-time trial-pass eligibility as of a supplied timestamp. This tool is strictly read-only.')]
+#[Description('Reconstructs a customer booking, class-pass, and outstanding-payment ledger in the bearer token account scope, including all-time ordinary trial-pass eligibility and audited manual-override qualification as of a supplied timestamp. This tool is strictly read-only.')]
 class InvestigateCustomerBookingLedgerTool extends Tool
 {
     public function handle(
@@ -149,6 +149,23 @@ class InvestigateCustomerBookingLedgerTool extends Tool
                         ]))
                         ->required(),
                 ])->required(),
+            ]),
+            'manual_override' => $schema->object([
+                'status' => $schema->string()->enum(['available', 'unavailable', 'actor_permissions_not_evaluated'])->required(),
+                'available' => $schema->boolean()->required(),
+                'customer_qualifies' => $schema->boolean()->required(),
+                'reason_codes' => $schema->array()->items($schema->string())->required(),
+                'evaluated_as_of' => $schema->string()->format('date-time')->required(),
+                'source' => $schema->string()->enum(TrialClassPassEligibility::sources())->required(),
+                'timezone' => $schema->string()->required(),
+                'normal_eligibility_status' => $schema->string()->enum(['eligible', 'ineligible'])->required(),
+                'class_pass_history_count' => $schema->integer()->min(0)->required(),
+                'successful_payments_count' => $schema->integer()->min(0)->required(),
+                'actor_permissions_evaluated' => $schema->boolean()->required(),
+                'actor_has_required_permissions' => $schema->boolean()->nullable()->required(),
+                'required_permissions' => $schema->array()->items($schema->string())->required(),
+                'requires_comment' => $schema->boolean()->enum([true])->required(),
+                'human_exception' => $schema->boolean()->enum([true])->required(),
             ]),
         ];
     }

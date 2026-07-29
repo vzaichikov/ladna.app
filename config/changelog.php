@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.107.0',
+                'date' => '2026-07-29',
+                'title' => 'Audited trial-pass exceptions',
+                'items' => ['Authorized studio staff can now issue an otherwise ineligible trial class pass as an explicit exception when the customer has never had a class pass and has no successful payment history. A reason is required and permanently recorded with the issuer in the pass history.', 'The ordinary trial rule remains unchanged: online trial purchases cannot use the exception, regular class passes are unaffected, and any previous class pass or successful customer payment blocks the exception.', 'Ladna AI investigations now show ordinary trial eligibility and manual-exception availability separately, so an exception is always described as a human decision rather than normal eligibility.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.106.0',
                 'date' => '2026-07-29',
                 'title' => 'Deterministic trial-pass investigations in Ladna AI',
@@ -947,6 +954,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.107.0',
+                'date' => '2026-07-29',
+                'title' => 'Аудитовані винятки для пробних абонементів',
+                'items' => ['Уповноважені працівники студії тепер можуть видати пробний абонемент як явний виняток, якщо клієнт не відповідає звичайному правилу, але ще ніколи не мав абонемента й не має успішних оплат. Причина обовʼязкова та назавжди зберігається в історії абонемента разом із даними працівника.', 'Звичайне правило пробного абонемента не змінилося: онлайн-купівля не підтримує виняток, звичайні абонементи працюють як раніше, а будь-який попередній абонемент або успішна оплата блокують виняток.', 'Розслідування Ladna AI тепер окремо показують звичайну доступність пробного абонемента й можливість ручного винятку, тому виняток завжди описується як рішення людини, а не як звичайна відповідність правилу.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.106.0',
                 'date' => '2026-07-29',

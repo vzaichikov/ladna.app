@@ -13,6 +13,7 @@ use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassAdjustment;
 use App\Models\CustomerClassPassReservation;
 use App\Models\ScheduledClass;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -48,6 +49,7 @@ class CustomerBookingLedgerInvestigation
         ?string $toDate = null,
         ?string $asOf = null,
         string $source = TrialClassPassEligibility::SourceManual,
+        ?User $actor = null,
     ): array {
         $timezone = $account->timezone ?: config('app.timezone');
         [$from, $to] = $this->dateRange($timezone, $fromDate, $toDate);
@@ -236,6 +238,16 @@ class CustomerBookingLedgerInvestigation
             $isHistoricalReconstruction,
         );
         $trialEligibility['supporting_bookings'] = $customerHistorySummary['supporting_bookings'];
+        $manualOverride = $this->manualOverride(
+            $account,
+            $customer,
+            $eligibilityAsOf,
+            $source,
+            $timezone,
+            $isHistoricalReconstruction,
+            $actor,
+            $trialEligibility['status'] === 'not_configured',
+        );
 
         return [
             'status' => 'found',
@@ -246,6 +258,7 @@ class CustomerBookingLedgerInvestigation
             'period' => $this->periodPayload($from, $to, $timezone),
             'customer_history_summary' => $customerHistorySummary,
             'trial_eligibility' => $trialEligibility,
+            'manual_override' => $manualOverride,
             'summary' => [
                 'bookings_count' => $bookingCount,
                 'passes_count' => $passCount,
@@ -293,6 +306,42 @@ class CustomerBookingLedgerInvestigation
                 'one_reservation_per_booking' => 'database_unique_constraint',
                 'pass_counters_are_compared_with_reservation_ledger' => true,
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function manualOverride(
+        Account $account,
+        Customer $customer,
+        Carbon $asOf,
+        string $source,
+        string $timezone,
+        bool $isHistoricalReconstruction,
+        ?User $actor,
+        bool $trialPlanNotConfigured,
+    ): array {
+        $manualOverride = $this->trialClassPassEligibility->evaluateManualOverride(
+            $account,
+            $customer,
+            $source,
+            $isHistoricalReconstruction ? $asOf : null,
+            $actor,
+            $actor !== null,
+        );
+
+        if ($trialPlanNotConfigured) {
+            $manualOverride['status'] = 'unavailable';
+            $manualOverride['available'] = false;
+            $manualOverride['reason_codes'] = ['no_trial_plan_configured'];
+        }
+
+        return [
+            ...$manualOverride,
+            'evaluated_as_of' => $this->datetime($asOf, $timezone),
+            'timezone' => $timezone,
+            'human_exception' => true,
         ];
     }
 
@@ -899,6 +948,7 @@ class CustomerBookingLedgerInvestigation
             'freeze_started_at' => $this->datetime($adjustment->freeze_started_at, $timezone),
             'freeze_finished_at' => $this->datetime($adjustment->freeze_finished_at, $timezone),
             'freeze_days_count' => $adjustment->freeze_days_count,
+            'reason' => $adjustment->reason,
             'actor' => $this->actor($adjustment->actor_name, $adjustment->actor_role),
             'created_at' => $this->datetime($adjustment->created_at, $timezone),
         ];

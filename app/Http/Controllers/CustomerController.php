@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrialClassPassEligibility;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -68,8 +69,13 @@ class CustomerController extends Controller
         abort(404);
     }
 
-    public function edit(Request $request, Account $account, Customer $customer, ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings): View
-    {
+    public function edit(
+        Request $request,
+        Account $account,
+        Customer $customer,
+        ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings,
+        TrialClassPassEligibility $trialClassPassEligibility,
+    ): View {
         $this->ensureBelongsToAccount($account, $customer);
         $this->authorize('manageClients', $account);
         $classPassBackfillPreview = null;
@@ -118,6 +124,16 @@ class CustomerController extends Controller
             ->paginate(5, ['*'], 'class_pass_history_page')
             ->withQueryString()
             ->appends(['class_pass_tab' => 'history']);
+        $classPassPlans = $account->classPassPlans()
+            ->active()
+            ->whereIn('schedule_kind', array_intersect(
+                $account->enabledScheduleKindValues(),
+                ScheduleKindRegistry::classPassEligibleValues(),
+            ))
+            ->with(['classTypes', 'trainerTypes', 'rooms'])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
 
         return view('customers.edit', [
             'account' => $account,
@@ -134,18 +150,14 @@ class CustomerController extends Controller
             'customerClassPasses' => $customerClassPasses,
             'customerClassPassHistory' => $customerClassPassHistory,
             'classPassTab' => $classPassTab,
-            'classPassPlans' => $account->classPassPlans()
-                ->active()
-                ->whereIn('schedule_kind', array_intersect(
-                    $account->enabledScheduleKindValues(),
-                    ScheduleKindRegistry::classPassEligibleValues(),
-                ))
-                ->with(['classTypes', 'trainerTypes', 'rooms'])
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(),
+            'classPassPlans' => $classPassPlans,
             'locations' => $account->locations()->active()->orderBy('name')->get(),
             'classPassBackfillPreview' => $classPassBackfillPreview,
+            'manualTrialOverride' => $trialClassPassEligibility->evaluateManualOverride(
+                $account,
+                $customer,
+                actor: $request->user(),
+            ),
         ]);
     }
 

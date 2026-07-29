@@ -38,7 +38,12 @@
         $canLoginAsCustomer = $account->isOwnedBy(auth()->user());
         $classPassBackfillPreview ??= null;
         $locations ??= collect();
+        $manualTrialOverride ??= ['available' => false];
         $selectedIssueLocationId = old('issued_location_id');
+        $selectedClassPassPlanId = old('class_pass_plan_id', $classPassPlans->first()?->id);
+        $selectedClassPassPlan = $classPassPlans->firstWhere('id', (int) $selectedClassPassPlanId);
+        $selectedClassPassPlanIsTrial = (bool) $selectedClassPassPlan?->is_trial;
+        $trialEligibilityOverrideChecked = old('override_trial_eligibility') === '1';
         $classPassTab = ($classPassTab ?? 'active') === 'history' ? 'history' : 'active';
         $classPassTabQuery = request()->except('class_pass_tab', 'class_passes_page', 'class_pass_history_page', 'class_pass_backfill_preview');
         $activeClassPassTabUrl = route('dashboard.accounts.customers.edit', [$account, $customer, ...$classPassTabQuery, 'class_pass_tab' => 'active']);
@@ -79,6 +84,7 @@
                         method="POST"
                         action="{{ route('dashboard.accounts.customers.class-passes.store', [$account, $customer]) }}"
                         class="mt-4 space-y-4"
+                        data-trial-override-form
                         data-confirm-action
                         data-confirm-title="{{ __('app.confirm_issue_class_pass_title') }}"
                         data-confirm-body="{{ __('app.confirm_issue_class_pass_body') }}"
@@ -89,13 +95,56 @@
                         @csrf
                         <label class="block">
                             <span class="crm-label">{{ __('app.class_pass_plan') }}</span>
-                            <select name="class_pass_plan_id" class="crm-field" required>
+                            <select name="class_pass_plan_id" class="crm-field" data-trial-plan-select required>
                                 @foreach ($classPassPlans as $classPassPlan)
-                                    <option value="{{ $classPassPlan->id }}">{{ $classPassPlan->name }} · {{ $formatMoney($classPassPlan->price_cents, $classPassPlan->currency) }}</option>
+                                    <option
+                                        value="{{ $classPassPlan->id }}"
+                                        data-is-trial="{{ $classPassPlan->is_trial ? 'true' : 'false' }}"
+                                        @selected((string) $selectedClassPassPlanId === (string) $classPassPlan->id)
+                                    >{{ $classPassPlan->name }} · {{ $formatMoney($classPassPlan->price_cents, $classPassPlan->currency) }}</option>
                                 @endforeach
                             </select>
                             @error('class_pass_plan_id') <span class="crm-help">{{ $message }}</span> @enderror
                         </label>
+                        @if (($manualTrialOverride['available'] ?? false) && $classPassPlans->contains('is_trial', true))
+                            <div
+                                class="rounded-lg border border-amber-200 bg-amber-50 p-4 {{ $selectedClassPassPlanIsTrial ? '' : 'hidden' }}"
+                                data-trial-override-fields
+                            >
+                                <div class="text-sm font-semibold text-amber-950">{{ __('app.trial_class_pass_override_title') }}</div>
+                                <p class="mt-1 text-sm text-amber-800">{{ __('app.trial_class_pass_override_warning') }}</p>
+                                <label class="mt-3 flex items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        name="override_trial_eligibility"
+                                        value="1"
+                                        class="crm-checkbox mt-0.5"
+                                        data-trial-override-toggle
+                                        @checked($trialEligibilityOverrideChecked)
+                                    >
+                                    <span class="text-sm font-medium text-amber-950">{{ __('app.trial_class_pass_override_checkbox') }}</span>
+                                </label>
+                                @error('override_trial_eligibility') <span class="crm-help">{{ $message }}</span> @enderror
+                                <label
+                                    class="mt-3 block {{ $trialEligibilityOverrideChecked ? '' : 'hidden' }}"
+                                    data-trial-override-comment
+                                >
+                                    <span class="crm-label">{{ __('app.trial_class_pass_override_comment') }}</span>
+                                    <textarea
+                                        name="trial_eligibility_override_reason"
+                                        rows="3"
+                                        minlength="3"
+                                        maxlength="2000"
+                                        class="crm-field"
+                                        data-trial-override-reason
+                                        @required($trialEligibilityOverrideChecked)
+                                        @disabled(! $trialEligibilityOverrideChecked)
+                                    >{{ old('trial_eligibility_override_reason') }}</textarea>
+                                    <span class="crm-help">{{ __('app.trial_class_pass_override_comment_help') }}</span>
+                                    @error('trial_eligibility_override_reason') <span class="crm-help">{{ $message }}</span> @enderror
+                                </label>
+                            </div>
+                        @endif
                         @if ($locations->count() === 1)
                             @php
                                 $onlyLocation = $locations->first();

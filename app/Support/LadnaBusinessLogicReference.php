@@ -48,7 +48,7 @@ class LadnaBusinessLogicReference
             'path' => 'app/Support/TrialClassPassEligibility.php',
             'symbol' => 'App\\Support\\TrialClassPassEligibility::evaluate',
             'summary' => 'Evaluates trial class-pass eligibility from all non-corrected bookings for the customer in the studio account.',
-            'excerpt' => 'Online issuance requires zero bookings. Manual issuance permits zero bookings or exactly one booking without an active reserved or used pass; cancelled, attended, future, and every other non-removed booking count.',
+            'excerpt' => 'Online issuance requires zero bookings. Manual issuance permits zero bookings or exactly one booking without an active reserved or used pass; cancelled, attended, future, and every other non-removed booking count. An ineligible manual customer may receive an audited human exception only with a comment, both issuance and pass-management permissions, no previous class pass of any status, and no successful payment history.',
         ],
         'class_pass_normalization' => [
             'path' => 'app/Actions/NormalizeCustomerClassPasses.php',

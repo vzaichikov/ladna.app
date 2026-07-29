@@ -247,6 +247,7 @@
                                     \App\Enums\CustomerClassPassAdjustmentType::ValidityDays => 'crm-status-scheduled',
                                     \App\Enums\CustomerClassPassAdjustmentType::Freeze => 'crm-status-warning',
                                     \App\Enums\CustomerClassPassAdjustmentType::Unfreeze => 'crm-status-active',
+                                    \App\Enums\CustomerClassPassAdjustmentType::TrialEligibilityOverride => 'crm-status-warning',
                                 };
                                 $sessionsDelta = $adjustment->sessions_delta;
                                 $daysDelta = $adjustment->days_delta;
@@ -257,6 +258,7 @@
                                     \App\Enums\CustomerClassPassAdjustmentType::ValidityDays,
                                     \App\Enums\CustomerClassPassAdjustmentType::Unfreeze => $daysDeltaLabel,
                                     \App\Enums\CustomerClassPassAdjustmentType::Freeze => __('app.freeze_class_pass'),
+                                    \App\Enums\CustomerClassPassAdjustmentType::TrialEligibilityOverride => __('app.trial_class_pass_override_history_label'),
                                 };
                             @endphp
                             <div class="mt-3 flex flex-wrap items-center gap-2">

@@ -3,10 +3,15 @@
 namespace App\Support;
 
 use App\Enums\CustomerClassPassReservationStatus;
+use App\Enums\CustomerPurchaseStatus;
+use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\Customer;
+use App\Models\CustomerClassPass;
+use App\Models\CustomerPurchase;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -108,6 +113,94 @@ class TrialClassPassEligibility
     }
 
     /**
+     * @return array{
+     *     status: 'available'|'unavailable'|'actor_permissions_not_evaluated',
+     *     available: bool,
+     *     customer_qualifies: bool,
+     *     reason_codes: array<int, string>,
+     *     source: string,
+     *     normal_eligibility_status: 'eligible'|'ineligible',
+     *     class_pass_history_count: int,
+     *     successful_payments_count: int,
+     *     actor_permissions_evaluated: bool,
+     *     actor_has_required_permissions: bool|null,
+     *     required_permissions: array<int, string>,
+     *     requires_comment: true
+     * }
+     */
+    public function evaluateManualOverride(
+        Account $account,
+        Customer $customer,
+        string $source = self::SourceManual,
+        ?Carbon $asOf = null,
+        ?User $actor = null,
+        bool $evaluateActorPermissions = true,
+    ): array {
+        $normalEligibility = $this->evaluate($account, $customer, $source, $asOf);
+        $classPassHistoryCount = $this->classPassHistoryCount($account, $customer, $asOf);
+        $successfulPaymentsCount = $this->successfulPaymentsCount($account, $customer, $asOf);
+        $requiredPermissions = [
+            StudioPermission::IssueCustomerClassPasses->value,
+            StudioPermission::ManageCustomerClassPasses->value,
+        ];
+        $actorHasRequiredPermissions = $evaluateActorPermissions
+            ? $actor !== null
+                && $account->userCan($actor, StudioPermission::IssueCustomerClassPasses)
+                && $account->userCan($actor, StudioPermission::ManageCustomerClassPasses)
+            : null;
+        $reasonCodes = [];
+
+        if ($source !== self::SourceManual) {
+            $reasonCodes[] = 'manual_source_required';
+        }
+
+        if ($normalEligibility['status'] !== 'ineligible') {
+            $reasonCodes[] = 'normal_trial_eligibility_available';
+        }
+
+        if ($classPassHistoryCount > 0) {
+            $reasonCodes[] = 'existing_class_pass_history';
+        }
+
+        if ($successfulPaymentsCount > 0) {
+            $reasonCodes[] = 'successful_payment_history';
+        }
+
+        $customerQualifies = $reasonCodes === [];
+
+        if (! $evaluateActorPermissions) {
+            $reasonCodes[] = 'actor_permissions_not_evaluated';
+        } elseif (! $actorHasRequiredPermissions) {
+            $reasonCodes[] = 'missing_required_permissions';
+        }
+
+        $available = $customerQualifies && $actorHasRequiredPermissions === true;
+
+        if ($available) {
+            $reasonCodes = ['manual_override_available'];
+        }
+
+        return [
+            'status' => $available
+                ? 'available'
+                : ($customerQualifies && ! $evaluateActorPermissions
+                    ? 'actor_permissions_not_evaluated'
+                    : 'unavailable'),
+            'available' => $available,
+            'customer_qualifies' => $customerQualifies,
+            'reason_codes' => $reasonCodes,
+            'source' => $source,
+            'normal_eligibility_status' => $normalEligibility['status'],
+            'class_pass_history_count' => $classPassHistoryCount,
+            'successful_payments_count' => $successfulPaymentsCount,
+            'actor_permissions_evaluated' => $evaluateActorPermissions,
+            'actor_has_required_permissions' => $actorHasRequiredPermissions,
+            'required_permissions' => $requiredPermissions,
+            'requires_comment' => true,
+        ];
+    }
+
+    /**
      * @return Builder<ClassBooking>
      */
     public function countedBookings(
@@ -176,6 +269,41 @@ class TrialClassPassEligibility
         if (! in_array($source, self::sources(), true)) {
             throw new InvalidArgumentException('The trial class-pass source is invalid.');
         }
+    }
+
+    private function classPassHistoryCount(
+        Account $account,
+        Customer $customer,
+        ?Carbon $asOf,
+    ): int {
+        return CustomerClassPass::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($customer)
+            ->when($asOf, fn (Builder $query, Carbon $asOf) => $query->where('created_at', '<=', $asOf->copy()->utc()))
+            ->count();
+    }
+
+    private function successfulPaymentsCount(
+        Account $account,
+        Customer $customer,
+        ?Carbon $asOf,
+    ): int {
+        return CustomerPurchase::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($customer)
+            ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
+            ->when($asOf, function (Builder $query, Carbon $asOf): void {
+                $asOfUtc = $asOf->copy()->utc();
+
+                $query->where(function (Builder $query) use ($asOfUtc): void {
+                    $query->where('paid_at', '<=', $asOfUtc)
+                        ->orWhere(function (Builder $query) use ($asOfUtc): void {
+                            $query->whereNull('paid_at')
+                                ->where('created_at', '<=', $asOfUtc);
+                        });
+                });
+            })
+            ->count();
     }
 
     /**

@@ -73,7 +73,7 @@ class LadnaAssistantCapabilities
                 [
                     'key' => 'customer_booking_investigation',
                     'title' => 'Розслідування записів і абонементів',
-                    'description' => 'Може знайти клієнта, відновити хронологію записів, резервів, абонементів і коригувань та пояснити виявлені невідповідності або штатний backfill після видачі абонемента.',
+                    'description' => 'Може знайти клієнта, відновити хронологію записів, резервів, абонементів і коригувань, перевірити звичайне правило пробного абонемента та окремо показати доступність аудитованого ручного винятку.',
                     'tools' => ['search-customers', 'investigate-customer-booking-ledger'],
                     'required_ability' => 'mcp:class-passes:read',
                     'required_abilities' => ['mcp:customers:read', 'mcp:class-passes:read'],

@@ -8,4 +8,5 @@ enum CustomerClassPassAdjustmentType: string
     case ValidityDays = 'validity_days';
     case Freeze = 'freeze';
     case Unfreeze = 'unfreeze';
+    case TrialEligibilityOverride = 'trial_eligibility_override';
 }

@@ -4,9 +4,11 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Models\ClassPassPlan;
+use App\Models\Customer;
 use App\Models\Location;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrialClassPassEligibility;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -46,6 +48,15 @@ class StoreCustomerClassPassRequest extends FormRequest
             ],
             'is_paid' => ['nullable', 'boolean'],
             'paid_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
+            'override_trial_eligibility' => ['nullable', 'boolean'],
+            'trial_eligibility_override_reason' => [
+                Rule::requiredIf(fn (): bool => $this->boolean('override_trial_eligibility')),
+                Rule::prohibitedIf(fn (): bool => ! $this->boolean('override_trial_eligibility')),
+                'nullable',
+                'string',
+                'min:3',
+                'max:2000',
+            ],
         ];
     }
 
@@ -56,10 +67,6 @@ class StoreCustomerClassPassRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                if (! $this->filled('paid_amount')) {
-                    return;
-                }
-
                 $account = $this->route('account');
 
                 if (! $account instanceof Account) {
@@ -74,8 +81,30 @@ class StoreCustomerClassPassRequest extends FormRequest
                     return;
                 }
 
-                if ($this->paidAmountCents() > (int) $classPassPlan->price_cents) {
+                if ($this->filled('paid_amount') && $this->paidAmountCents() > (int) $classPassPlan->price_cents) {
                     $validator->errors()->add('paid_amount', __('app.class_pass_payment_amount_too_high'));
+                }
+
+                if (! $this->boolean('override_trial_eligibility')) {
+                    return;
+                }
+
+                $customer = $this->route('customer');
+
+                if (! $customer instanceof Customer || ! $classPassPlan->is_trial) {
+                    $validator->errors()->add('override_trial_eligibility', __('app.trial_class_pass_override_unavailable'));
+
+                    return;
+                }
+
+                $manualOverride = app(TrialClassPassEligibility::class)->evaluateManualOverride(
+                    $account,
+                    $customer,
+                    actor: $this->user(),
+                );
+
+                if (! $manualOverride['available']) {
+                    $validator->errors()->add('override_trial_eligibility', __('app.trial_class_pass_override_unavailable'));
                 }
             },
         ];
