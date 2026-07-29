@@ -584,7 +584,9 @@ class AccountAssistantTest extends TestCase
             return $request->url() === 'https://ollama.com/api/chat'
                 && $request->data()['model'] === 'gemma3:27b-cloud'
                 && ! str_contains($systemPrompt, 'OpenAI Responses prompt version:')
-                && ! str_contains($systemPrompt, 'Language is a hard output constraint');
+                && ! str_contains($systemPrompt, 'Language is a hard output constraint')
+                && ! str_contains($systemPrompt, 'A screenshot or stored visual memory may identify a Ladna entity')
+                && ! str_contains($systemPrompt, 'Never silently switch to another date, time, or class');
         });
     }
 

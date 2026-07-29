@@ -116,7 +116,7 @@ class StudioAiToolExecutor
                 'type' => 'function',
                 'function' => [
                     'name' => self::SearchCustomers,
-                    'description' => 'Find a studio customer by name or phone fragment, including a name identified from a screenshot, before investigating account-specific bookings or class passes.',
+                    'description' => 'Find a studio customer by name or phone fragment before investigating account-specific bookings or class passes.',
                     'parameters' => [
                         'type' => 'object',
                         'additionalProperties' => false,
@@ -140,7 +140,7 @@ class StudioAiToolExecutor
                 'type' => 'function',
                 'function' => [
                     'name' => self::InvestigateCustomerBookingLedger,
-                    'description' => 'Read a selected customer booking and class-pass timeline, live counters, payment state, corrections, and deterministic inconsistency findings. Use this for current account facts about a customer or class pass identified from text or a screenshot. Never changes data.',
+                    'description' => 'Read a selected customer booking and class-pass timeline, corrections, counters, and deterministic inconsistency findings. Never changes data.',
                     'parameters' => [
                         'type' => 'object',
                         'additionalProperties' => false,
