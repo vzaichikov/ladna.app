@@ -19,6 +19,10 @@ use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassReservation;
 use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseCorrection;
+use App\Models\EventOrder;
+use App\Models\EventOrderItem;
+use App\Models\EventTicket;
+use App\Models\EventTicketCheckIn;
 use App\Models\ExpenseCategory;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
@@ -41,6 +45,7 @@ class ProvisionDemoReadonlyStudio
 {
     public function __construct(
         private readonly GenerateAccountSchedule $generateAccountSchedule,
+        private readonly SyncDemoStudioShowcase $syncDemoStudioShowcase,
     ) {}
 
     /** @return array{operation: string, account_slug: string, owner_email: string, customers: int, trainers: int, schedule_series: int, people_counter_samples: int} */
@@ -66,6 +71,7 @@ class ProvisionDemoReadonlyStudio
             $owner = $state['owner'];
 
             if ($state['account']) {
+                $this->deleteDemoEventsForRefresh($state['account']);
                 $state['account']->studioCashEntries()->delete();
                 $state['account']->delete();
             }
@@ -81,6 +87,15 @@ class ProvisionDemoReadonlyStudio
 
             return $account->fresh();
         }, 3);
+    }
+
+    private function deleteDemoEventsForRefresh(Account $account): void
+    {
+        EventTicketCheckIn::query()->where('account_id', $account->id)->delete();
+        EventTicket::query()->where('account_id', $account->id)->delete();
+        EventOrderItem::query()->where('account_id', $account->id)->delete();
+        EventOrder::query()->whereBelongsTo($account)->delete();
+        $account->events()->delete();
     }
 
     /**
@@ -207,6 +222,7 @@ class ProvisionDemoReadonlyStudio
         $this->peopleCounter($account, $owner, $location, $rooms, $customers);
         $this->leads($account);
         $this->cashflow($account, $owner, $location, $plans, $customers);
+        $this->syncDemoStudioShowcase->synchronizeValidatedTarget($account, $owner);
     }
 
     /** @return array<string, Room> */

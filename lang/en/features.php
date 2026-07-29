@@ -13,8 +13,13 @@ return [
     'landing_overview' => [
         'eyebrow' => 'Your whole studio in one place',
         'title' => 'What Ladna takes care of',
-        'copy' => 'Six everyday parts of studio work — from the first look at the day to checking payments and reports.',
+        'copy' => 'Everyday studio work, ticketed events, and an assistant that can investigate what is actually in Ladna.',
         'link' => 'Learn more',
+    ],
+    'landing_ai_teaser' => [
+        'title' => 'An AI assistant that genuinely helps you run your studio',
+        'copy' => 'It investigates schedules, customers, passes, payments, and events, explains its findings, and asks for confirmation before any change.',
+        'link' => 'See genuine conversations',
     ],
     'hero' => [
         'eyebrow' => 'Ladna features',
@@ -44,10 +49,25 @@ return [
             'items' => [
                 'The weekly schedule creates future group classes automatically.',
                 'Private lessons, rentals, and one-off events stay in the same calendar.',
+                'Team-only training, methodology meetings, and content shoots stay visible to staff and out of the public schedule.',
                 'Every class carries its trainer, room, capacity, bookings, and booking cutoff.',
                 'Cancellations, restorations, trainer replacements, and closed-class corrections keep a readable history.',
             ],
             'image_alt' => 'Ladna weekly studio schedule with recurring classes, trainers, and rooms',
+        ],
+        'events' => [
+            'short_title' => 'Events and tickets',
+            'card_copy' => 'From publishing and ticket sales to the guest list, door scanning, and refund follow-up.',
+            'title' => 'Events, tickets, and door check-in',
+            'copy' => 'Ladna treats an event as one complete workflow: its guest page, ticket choices, orders, issued tickets, admission, and payments that need refund attention.',
+            'items' => [
+                'Draft, published, past, and cancelled events in dedicated working tabs.',
+                'Free and paid tickets, limited inventory, early-bird pricing, and multiple admission tiers.',
+                'A public event page with rules, venue, timing, and a clear checkout flow.',
+                'Order and ticket histories covering valid, used, voided, and refunded states.',
+                'A scanner and door list record check-ins, while cancellation surfaces payments requiring a refund.',
+            ],
+            'image_alt' => 'Ladna events list with statuses, ticket sales, and access to door check-in',
         ],
         'clients' => [
             'short_title' => 'Customers and bookings',
@@ -105,6 +125,25 @@ return [
             ],
             'image_alt' => 'Ladna payments screen with income, expenses, cash balance, and period totals',
         ],
+        'assistant' => [
+            'short_title' => 'AI assistant',
+            'card_copy' => 'Investigates studio data, verifies facts in Ladna, and explains what needs attention.',
+            'title' => 'An AI assistant that genuinely helps you run your studio',
+            'copy' => 'The assistant goes beyond generic advice: it works with the studio data it is allowed to access, investigates events, customers, passes, and payments, and can verify an entity recognized from a screenshot. An enabled AI provider is required, and every mutation needs your explicit confirmation.',
+            'items' => [
+                'Analyze event sales, door check-ins, ticket inventory, and refunds that need attention.',
+                'Investigate a customer’s history, active passes, reservations, and trial-offer eligibility.',
+                'Recognize a screenshot, then verify the identified entity against current Ladna data.',
+                'State the facts and limitations instead of inventing missing information.',
+                'Prepare data-changing actions separately and never run them without user confirmation.',
+            ],
+            'image_alt' => 'Genuine Ladna AI assistant conversations using synthetic demo studio data',
+            'dialogs' => [
+                ['image' => 'assistant-events-en.png', 'width' => 780, 'height' => 1083, 'alt' => 'English Ladna AI assistant conversation about event sales, check-in, and refunds', 'caption' => 'Events, admission, and refunds'],
+                ['image' => 'assistant-customer-en.png', 'width' => 780, 'height' => 1128, 'alt' => 'English Ladna AI assistant conversation about a customer, pass, and trial eligibility', 'caption' => 'Customer, pass, and trial eligibility'],
+                ['image' => 'assistant-screenshot-en.png', 'width' => 780, 'height' => 1125, 'alt' => 'English Ladna AI assistant conversation recognizing a screenshot and verifying the event in studio data', 'caption' => 'Screenshot recognition verified in Ladna'],
+            ],
+        ],
     ],
     'optional' => [
         'eyebrow' => 'When your studio needs more',
@@ -113,7 +152,6 @@ return [
         'items' => [
             ['title' => 'Online payments', 'copy' => 'Sell passes through a connected payment provider and use fiscal receipts through a configured service.'],
             ['title' => 'Login and reminders', 'copy' => 'Google login, SMS, and customer notifications after the relevant services are connected.'],
-            ['title' => 'Ladna assistant', 'copy' => 'Answers about studio data in the app or Telegram; changes happen only after confirmation.'],
             ['title' => 'Website and integrations', 'copy' => 'Website form leads, embedded schedules and prices, plus API or MCP access for external tools.'],
             ['title' => 'Cameras', 'copy' => 'RTSP monitoring and People Counter for studios with compatible cameras configured.'],
             ['title' => 'Use it on your phone', 'copy' => 'Ladna works in the browser and can be added to the home screen as a web app.'],

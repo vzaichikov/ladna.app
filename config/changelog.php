@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.108.0',
+                'date' => '2026-07-29',
+                'title' => 'A richer demo and real Ladna AI examples',
+                'items' => ['The read-only demo studio now includes team-only closed classes plus five synthetic events that demonstrate paid and free registration, cancellation and refund attention, drafts, 2027 ticket sales, QR admission, and check-in history.', 'The Abilities page now explains the complete events workflow and the Ladna AI assistant in dedicated sections. Six genuine Ukrainian and English demo conversations show event analysis, customer and class-pass investigation, and screenshot recognition verified against Ladna data.', 'The main landing page now introduces the AI assistant directly. The wording remains explicit that an AI provider must be enabled and that any action which changes studio data requires the user’s confirmation.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.107.0',
                 'date' => '2026-07-29',
                 'title' => 'Audited trial-pass exceptions',
@@ -954,6 +961,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.108.0',
+                'date' => '2026-07-29',
+                'title' => 'Змістовніше демо та реальні приклади Ladna AI',
+                'items' => ['Демо-студія в режимі лише для перегляду тепер містить закриті заняття для команди та п’ять синтетичних подій: платні й безкоштовні реєстрації, скасування та повернення, чернетку, продаж квитків на 2027 рік, QR-вхід та історію check-in.', 'На сторінці можливостей з’явилися окремі розділи про повний цикл подій і AI-асистента Ladna. Шість справжніх українських та англійських діалогів на демоданих показують аналіз подій, перевірку клієнта й абонементів та розпізнавання скриншота з подальшою звіркою в Ladna.', 'Головна сторінка тепер окремо представляє AI-асистента. Текст чесно пояснює, що для нього потрібен увімкнений AI-провайдер, а кожна дія зі зміною даних студії потребує підтвердження користувача.'],
+                'meta' => 'Коміт релізу.',
+            ],
             [
                 'version' => '0.107.0',
                 'date' => '2026-07-29',

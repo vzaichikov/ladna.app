@@ -9,6 +9,8 @@ use App\Models\AccountSubscription;
 use App\Models\ClassBooking;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
+use App\Models\Event;
+use App\Models\EventTicket;
 use App\Models\PeopleCounterSample;
 use App\Models\ScheduledClass;
 use App\Models\ScheduledClassPeopleCount;
@@ -88,6 +90,8 @@ class DemoStudioProvisioningTest extends TestCase
         $this->assertGreaterThan(12, ScheduledClass::query()->whereBelongsTo($account)->count());
         $this->assertGreaterThan(10, ClassBooking::query()->whereBelongsTo($account)->count());
         $this->assertSame(4, CustomerPurchase::query()->whereBelongsTo($account)->count());
+        $this->assertSame(5, Event::query()->whereBelongsTo($account)->count());
+        $this->assertSame(10, EventTicket::query()->where('account_id', $account->id)->count());
         $this->assertTrue($account->allowsRtspCameras());
         $this->assertTrue($account->peopleCounterEnabled());
         $this->assertSame(2, $account->rooms()->where('rtsp_enabled', true)->count());

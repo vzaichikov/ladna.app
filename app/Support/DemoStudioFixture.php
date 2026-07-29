@@ -11,7 +11,16 @@ class DemoStudioFixture
 {
     public const AccountSlug = 'ladna-demo';
 
+    public const ShowcaseEventProvider = 'demo_showcase';
+
+    public const ShowcaseMetadataKey = 'demo_showcase_key';
+
     public const PeopleCounterSampleCount = 14;
+
+    public static function showcaseMetadataKeyPath(): string
+    {
+        return 'metadata->'.self::ShowcaseMetadataKey;
+    }
 
     /** @return array<string, mixed> */
     public static function account(): array
@@ -28,11 +37,12 @@ class DemoStudioFixture
             'brand_color' => '#6F4B7A',
             'studio_slogan' => 'Демонстраційний простір для розкладу, записів і абонементів.',
             'timezone' => 'Europe/Kyiv',
-            'enabled_schedule_kinds' => ScheduleKindRegistry::defaultEnabledValues(),
+            'enabled_schedule_kinds' => ScheduleKindRegistry::allValues(),
             'schedule_kind_colors' => [
                 ScheduleKind::GroupClass->value => '#8B6A9B',
                 ScheduleKind::PrivateLesson->value => '#C7B4D3',
                 ScheduleKind::RoomRental->value => '#D9B8C4',
+                ScheduleKind::InternalClass->value => '#D7A94A',
             ],
             'opening_hours' => collect(range(1, 7))->mapWithKeys(fn (int $weekday): array => [
                 $weekday => [
@@ -246,6 +256,255 @@ class DemoStudioFixture
             ClassBookingStatus::NoShow,
             ClassBookingStatus::Cancelled,
             ClassBookingStatus::Booked,
+        ];
+    }
+
+    /** @return array<string, array{name: string, description: string, duration: int, color: string}> */
+    public static function internalClassTypes(): array
+    {
+        return [
+            'demo-internal-team-training' => [
+                'name' => 'Командне тренування',
+                'description' => 'Закрите тренування команди на синтетичних демонстраційних даних.',
+                'duration' => 90,
+                'color' => '#D7A94A',
+            ],
+            'demo-internal-methodical-meeting' => [
+                'name' => 'Методична зустріч тренерів',
+                'description' => 'Закрита методична зустріч тренерів без клієнтських записів.',
+                'duration' => 75,
+                'color' => '#B892C4',
+            ],
+            'demo-internal-content-shoot' => [
+                'name' => 'Зйомка контенту',
+                'description' => 'Внутрішня зйомка матеріалів студії, прихована з публічного розкладу.',
+                'duration' => 120,
+                'color' => '#C98CA5',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, array{class_type: string, room: string, trainer: string, additional_trainers: array<int, string>, starts_at: string, description: string}>
+     */
+    public static function internalClassOccurrences(): array
+    {
+        return [
+            'demo-internal-team-training-past' => [
+                'class_type' => 'demo-internal-team-training',
+                'room' => 'lavender-hall',
+                'trainer' => 'mariia',
+                'additional_trainers' => ['sofiia', 'olena'],
+                'starts_at' => '2026-06-08 15:00:00',
+                'description' => 'Минуле закрите командне тренування.',
+            ],
+            'demo-internal-team-training-future' => [
+                'class_type' => 'demo-internal-team-training',
+                'room' => 'lavender-hall',
+                'trainer' => 'iryna',
+                'additional_trainers' => ['victoriia', 'nataliia'],
+                'starts_at' => '2026-10-04 15:00:00',
+                'description' => 'Майбутнє закрите командне тренування.',
+            ],
+            'demo-internal-methodical-meeting-past' => [
+                'class_type' => 'demo-internal-methodical-meeting',
+                'room' => 'plum-studio',
+                'trainer' => 'mariia',
+                'additional_trainers' => ['iryna'],
+                'starts_at' => '2026-07-06 13:00:00',
+                'description' => 'Минуле обговорення методики та програм занять.',
+            ],
+            'demo-internal-methodical-meeting-future' => [
+                'class_type' => 'demo-internal-methodical-meeting',
+                'room' => 'plum-studio',
+                'trainer' => 'sofiia',
+                'additional_trainers' => ['olena'],
+                'starts_at' => '2026-11-09 13:00:00',
+                'description' => 'Майбутня методична зустріч тренерської команди.',
+            ],
+            'demo-internal-content-shoot-past' => [
+                'class_type' => 'demo-internal-content-shoot',
+                'room' => 'lavender-hall',
+                'trainer' => 'victoriia',
+                'additional_trainers' => ['nataliia'],
+                'starts_at' => '2026-05-17 14:00:00',
+                'description' => 'Минула внутрішня зйомка контенту.',
+            ],
+            'demo-internal-content-shoot-future' => [
+                'class_type' => 'demo-internal-content-shoot',
+                'room' => 'lavender-hall',
+                'trainer' => 'olena',
+                'additional_trainers' => ['mariia', 'sofiia'],
+                'starts_at' => '2027-02-07 14:00:00',
+                'description' => 'Запланована внутрішня зйомка контенту.',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    public static function showcaseEvents(): array
+    {
+        return [
+            'demo-showcase-paid-workshop-2026' => [
+                'status' => 'published',
+                'title' => 'Майстер-клас «Сильний центр»',
+                'summary' => 'Синтетичний платний майстер-клас із продажами, квитками та відмітками на вході.',
+                'description_html' => '<p>Демонстраційний майстер-клас із пілатесу для прикладу продажів і контролю входу.</p>',
+                'starts_at' => '2026-06-20 10:00:00',
+                'ends_at' => '2026-06-20 13:00:00',
+                'capacity' => 72,
+                'published_at' => '2026-05-20 09:00:00',
+                'cancelled_at' => null,
+                'ticket_types' => [
+                    'standard' => ['name' => 'Стандарт', 'description' => 'Участь у майстер-класі.', 'inventory' => 60, 'price_cents' => 75000, 'sort_order' => 10],
+                    'vip' => ['name' => 'VIP', 'description' => 'Участь і коротка персональна консультація.', 'inventory' => 12, 'price_cents' => 125000, 'sort_order' => 20],
+                ],
+                'orders' => [
+                    'paid-workshop-001' => [
+                        'ticket_type' => 'standard',
+                        'quantity' => 2,
+                        'status' => 'paid',
+                        'buyer_name' => 'Демо Покупець Один',
+                        'buyer_email' => 'event-buyer-001@ladna-demo.example.test',
+                        'amount_cents' => 150000,
+                        'paid_at' => '2026-06-02 12:00:00',
+                        'tickets' => [
+                            ['status' => 'valid', 'checked_in_at' => '2026-06-20 09:42:00'],
+                            ['status' => 'valid', 'checked_in_at' => '2026-06-20 09:47:00'],
+                        ],
+                    ],
+                    'paid-workshop-002' => [
+                        'ticket_type' => 'vip',
+                        'quantity' => 1,
+                        'status' => 'refunded',
+                        'buyer_name' => 'Демо Покупець Два',
+                        'buyer_email' => 'event-buyer-002@ladna-demo.example.test',
+                        'amount_cents' => 125000,
+                        'paid_at' => '2026-06-05 15:30:00',
+                        'refunded_at' => '2026-06-12 10:15:00',
+                        'tickets' => [
+                            ['status' => 'refunded', 'checked_in_at' => null],
+                        ],
+                    ],
+                ],
+            ],
+            'demo-showcase-free-open-day-2026' => [
+                'status' => 'published',
+                'title' => 'День відкритих дверей',
+                'summary' => 'Синтетична безкоштовна подія з реєстраціями та контролем входу.',
+                'description_html' => '<p>Знайомство з напрямами студії, тренерами та форматом занять.</p>',
+                'starts_at' => '2026-07-12 11:00:00',
+                'ends_at' => '2026-07-12 15:00:00',
+                'capacity' => 80,
+                'published_at' => '2026-06-15 09:00:00',
+                'cancelled_at' => null,
+                'ticket_types' => [
+                    'free' => ['name' => 'Безкоштовна реєстрація', 'description' => 'Вхід за попередньою реєстрацією.', 'inventory' => 80, 'price_cents' => 0, 'sort_order' => 10],
+                ],
+                'orders' => [
+                    'free-open-day-001' => [
+                        'ticket_type' => 'free',
+                        'quantity' => 3,
+                        'status' => 'paid',
+                        'buyer_name' => 'Демо Відвідувач',
+                        'buyer_email' => 'open-day-001@ladna-demo.example.test',
+                        'amount_cents' => 0,
+                        'paid_at' => '2026-07-01 14:00:00',
+                        'tickets' => [
+                            ['status' => 'valid', 'checked_in_at' => '2026-07-12 10:51:00'],
+                            ['status' => 'valid', 'checked_in_at' => '2026-07-12 10:56:00'],
+                            ['status' => 'valid', 'checked_in_at' => null],
+                        ],
+                    ],
+                ],
+            ],
+            'demo-showcase-cancelled-intensive-2026' => [
+                'status' => 'cancelled',
+                'title' => 'Інтенсив із мобільності',
+                'summary' => 'Синтетична скасована подія з оплатою, яка потребує уваги до повернення.',
+                'description_html' => '<p>Скасований демонстраційний інтенсив для показу процесу повернення коштів.</p>',
+                'starts_at' => '2026-09-05 10:00:00',
+                'ends_at' => '2026-09-05 14:00:00',
+                'capacity' => 30,
+                'published_at' => '2026-06-30 09:00:00',
+                'cancelled_at' => '2026-07-20 16:00:00',
+                'ticket_types' => [
+                    'general' => ['name' => 'Загальний', 'description' => 'Участь в інтенсиві.', 'inventory' => 30, 'price_cents' => 90000, 'sort_order' => 10],
+                ],
+                'orders' => [
+                    'cancelled-intensive-001' => [
+                        'ticket_type' => 'general',
+                        'quantity' => 2,
+                        'status' => 'refund_required',
+                        'buyer_name' => 'Демо Покупець Повернення',
+                        'buyer_email' => 'refund-attention@ladna-demo.example.test',
+                        'amount_cents' => 180000,
+                        'paid_at' => '2026-07-10 12:30:00',
+                        'tickets' => [
+                            ['status' => 'voided', 'checked_in_at' => null],
+                            ['status' => 'voided', 'checked_in_at' => null],
+                        ],
+                    ],
+                ],
+            ],
+            'demo-showcase-draft-retreat-2026' => [
+                'status' => 'draft',
+                'title' => 'Чернетка: осінній ретрит',
+                'summary' => 'Синтетична чернетка майбутньої події.',
+                'description_html' => '<p>Подія ще готується і не опублікована для клієнтів.</p>',
+                'starts_at' => '2026-11-15 09:00:00',
+                'ends_at' => '2026-11-15 18:00:00',
+                'capacity' => 24,
+                'published_at' => null,
+                'cancelled_at' => null,
+                'ticket_types' => [
+                    'participant' => ['name' => 'Учасник', 'description' => 'Попередній тариф чернетки.', 'inventory' => 24, 'price_cents' => 160000, 'sort_order' => 10],
+                ],
+                'orders' => [],
+            ],
+            'demo-showcase-spring-festival-2027' => [
+                'status' => 'published',
+                'title' => 'Весняний фестиваль руху 2027',
+                'summary' => 'Синтетична подія в березні 2027 року з ранньою ціною, стандартним і VIP-квитком.',
+                'description_html' => '<p>День майстер-класів, відкритих тренувань і знайомства зі спільнотою студії.</p>',
+                'starts_at' => '2027-03-20 10:00:00',
+                'ends_at' => '2027-03-20 19:00:00',
+                'capacity' => 120,
+                'published_at' => '2026-07-25 09:00:00',
+                'cancelled_at' => null,
+                'ticket_types' => [
+                    'early-bird' => [
+                        'name' => 'Early bird',
+                        'description' => 'Рання ціна для перших учасників.',
+                        'inventory' => 40,
+                        'price_cents' => 110000,
+                        'early_bird_price_cents' => 75000,
+                        'early_bird_ends_at' => '2026-12-31 23:59:59',
+                        'early_bird_quota' => 20,
+                        'sort_order' => 10,
+                    ],
+                    'standard' => ['name' => 'Стандарт', 'description' => 'Повний день фестивалю.', 'inventory' => 60, 'price_cents' => 110000, 'sort_order' => 20],
+                    'vip' => ['name' => 'VIP', 'description' => 'Фестиваль і закрита зустріч із тренерами.', 'inventory' => 20, 'price_cents' => 175000, 'sort_order' => 30],
+                ],
+                'orders' => [
+                    'spring-festival-001' => [
+                        'ticket_type' => 'early-bird',
+                        'price_tier' => 'early_bird',
+                        'quantity' => 2,
+                        'status' => 'paid',
+                        'buyer_name' => 'Демо Рання Реєстрація',
+                        'buyer_email' => 'spring-early-001@ladna-demo.example.test',
+                        'amount_cents' => 150000,
+                        'paid_at' => '2026-07-27 11:20:00',
+                        'tickets' => [
+                            ['status' => 'valid', 'checked_in_at' => null],
+                            ['status' => 'valid', 'checked_in_at' => null],
+                        ],
+                    ],
+                ],
+            ],
         ];
     }
 }

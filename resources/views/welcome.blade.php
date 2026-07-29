@@ -29,10 +29,12 @@
         $landingFeatureIcons = [
             'today' => 'layout-dashboard',
             'schedule' => 'calendar-days',
+            'events' => 'tickets',
             'clients' => 'heart-handshake',
             'passes' => 'ticket-check',
             'team' => 'users-round',
             'money' => 'chart-no-axes-combined',
+            'assistant' => 'bot',
         ];
     @endphp
 
@@ -237,6 +239,7 @@
 
                 <div class="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     @foreach ($features['sections'] as $sectionId => $section)
+                        @continue($sectionId === 'assistant')
                         <a href="{{ $featuresHref }}#{{ $sectionId }}" class="group flex min-h-56 flex-col rounded-lg border border-[#E7DDC9]/80 bg-white/78 p-5 shadow-[0_16px_38px_rgba(59,34,63,0.06)] transition hover:-translate-y-0.5 hover:border-[#A78AB9]/55 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2">
                             <span class="flex h-11 w-11 items-center justify-center rounded-lg bg-[#3B223F] text-white shadow-[0_12px_26px_rgba(59,34,63,0.18)]">
                                 <x-ui.icon :name="$landingFeatureIcons[$sectionId]" class="h-5 w-5" />
@@ -250,6 +253,20 @@
                         </a>
                     @endforeach
                 </div>
+
+                <a href="{{ $featuresHref }}#assistant" class="group mt-4 grid gap-6 overflow-hidden rounded-xl border border-[#A78AB9]/35 bg-[#2B1731] p-6 text-white shadow-[0_22px_54px_rgba(59,34,63,0.16)] transition hover:-translate-y-0.5 hover:border-[#C7B4D3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A78AB9] focus-visible:ring-offset-2 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center">
+                    <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-[#DCCFF0] text-[#3B223F]">
+                        <x-ui.icon name="bot" class="h-6 w-6" />
+                    </span>
+                    <span>
+                        <span class="block text-2xl font-semibold leading-tight sm:text-3xl">{{ $features['landing_ai_teaser']['title'] }}</span>
+                        <span class="mt-3 block max-w-4xl text-sm leading-6 text-white/72 sm:text-base sm:leading-7">{{ $features['landing_ai_teaser']['copy'] }}</span>
+                    </span>
+                    <span class="inline-flex items-center gap-2 text-sm font-semibold text-[#E7DDC9]">
+                        {{ $features['landing_ai_teaser']['link'] }}
+                        <x-ui.icon name="arrow-right" class="h-4 w-4 transition group-hover:translate-x-0.5" />
+                    </span>
+                </a>
             </div>
         </section>
 

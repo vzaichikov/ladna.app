@@ -40,12 +40,14 @@
         $sectionVisuals = [
             'today' => ['icon' => 'layout-dashboard', 'image' => 'studio-dashboard.png'],
             'schedule' => ['icon' => 'calendar-days', 'image' => 'weekly-schedule.png'],
+            'events' => ['icon' => 'tickets', 'image' => 'events-list.png'],
             'clients' => ['icon' => 'heart-handshake', 'image' => 'public-schedule.png'],
             'passes' => ['icon' => 'ticket-check', 'image' => 'active-passes.png'],
             'team' => ['icon' => 'users-round', 'image' => 'trainer-permissions.png'],
             'money' => ['icon' => 'chart-no-axes-combined', 'image' => 'payments-period.png'],
+            'assistant' => ['icon' => 'bot', 'image' => null],
         ];
-        $optionalIcons = ['credit-card', 'message-circle', 'bot', 'plug', 'video', 'smartphone'];
+        $optionalIcons = ['credit-card', 'message-circle', 'plug', 'video', 'smartphone'];
     @endphp
 
     <main class="overflow-hidden bg-[#FAF8F5] text-[#2B2B2F]">
@@ -108,8 +110,15 @@
         <div class="border-y border-[#E7DDC9]/80 bg-white/55">
             @foreach ($features['sections'] as $sectionId => $section)
                 <section id="{{ $sectionId }}" class="scroll-mt-6 border-b border-[#E7DDC9]/70 px-5 py-18 last:border-b-0 sm:px-8 lg:px-10 lg:py-24">
-                    <div class="mx-auto grid max-w-7xl gap-10 lg:grid-cols-2 lg:items-center lg:gap-16">
-                        <div @class(['lg:order-2' => $loop->even])>
+                    <div @class([
+                        'mx-auto max-w-7xl gap-10',
+                        'grid lg:grid-cols-2 lg:items-center lg:gap-16' => $sectionId !== 'assistant',
+                        'flex flex-col lg:gap-12' => $sectionId === 'assistant',
+                    ])>
+                        <div @class([
+                            'lg:order-2' => $sectionId !== 'assistant' && $loop->even,
+                            'max-w-4xl' => $sectionId === 'assistant',
+                        ])>
                             <span class="flex h-12 w-12 items-center justify-center rounded-lg bg-[#3B223F] text-white shadow-[0_16px_30px_rgba(59,34,63,0.18)]">
                                 <x-ui.icon :name="$sectionVisuals[$sectionId]['icon']" class="h-5 w-5" />
                             </span>
@@ -131,18 +140,38 @@
                             </ul>
                         </div>
 
-                        <figure @class(['lg:order-1' => $loop->even])>
-                            <div class="overflow-hidden rounded-xl border border-[#E7DDC9] bg-white p-2 shadow-[0_24px_70px_rgba(59,34,63,0.12)] sm:p-3">
-                                <img
-                                    src="{{ asset('assets/help/screenshots/'.$sectionVisuals[$sectionId]['image']) }}"
-                                    alt="{{ $section['image_alt'] }}"
-                                    width="1440"
-                                    height="1000"
-                                    loading="{{ $loop->first ? 'eager' : 'lazy' }}"
-                                    class="h-auto w-full rounded-lg object-contain"
-                                >
+                        @if ($sectionId === 'assistant')
+                            <div class="grid grid-cols-1 gap-4 lg:grid-cols-3" aria-label="{{ $section['image_alt'] }}">
+                                @foreach ($section['dialogs'] as $dialog)
+                                    <figure class="overflow-hidden rounded-xl border border-[#E7DDC9] bg-white p-2 shadow-[0_24px_70px_rgba(59,34,63,0.1)] sm:p-3">
+                                        <img
+                                            src="{{ asset('assets/marketing/assistant/'.$dialog['image']) }}"
+                                            alt="{{ $dialog['alt'] }}"
+                                            width="{{ $dialog['width'] }}"
+                                            height="{{ $dialog['height'] }}"
+                                            loading="lazy"
+                                            class="h-auto w-full rounded-lg object-contain"
+                                        >
+                                        <figcaption class="px-2 pb-2 pt-4 text-sm font-semibold leading-6 text-[#4D3152]/80">
+                                            {{ $dialog['caption'] }}
+                                        </figcaption>
+                                    </figure>
+                                @endforeach
                             </div>
-                        </figure>
+                        @else
+                            <figure @class(['lg:order-1' => $loop->even])>
+                                <div class="overflow-hidden rounded-xl border border-[#E7DDC9] bg-white p-2 shadow-[0_24px_70px_rgba(59,34,63,0.12)] sm:p-3">
+                                    <img
+                                        src="{{ asset('assets/help/screenshots/'.$sectionVisuals[$sectionId]['image']) }}"
+                                        alt="{{ $section['image_alt'] }}"
+                                        width="1440"
+                                        height="1000"
+                                        loading="{{ $loop->first ? 'eager' : 'lazy' }}"
+                                        class="h-auto w-full rounded-lg object-contain"
+                                    >
+                                </div>
+                            </figure>
+                        @endif
                     </div>
                 </section>
             @endforeach
