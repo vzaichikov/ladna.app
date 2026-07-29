@@ -19,6 +19,7 @@ use App\Support\Events\StudioEventToolData;
 use App\Support\LadnaBusinessLogicReference;
 use App\Support\OwnerHelpIndex;
 use App\Support\Payments\StudioPaymentToolData;
+use App\Support\TrialClassPassEligibility;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -344,7 +345,7 @@ class StudioAiToolExecutor
                 'type' => 'function',
                 'function' => [
                     'name' => self::InvestigateCustomerBookingLedger,
-                    'description' => 'Read a selected customer booking and class-pass timeline, corrections, counters, and deterministic inconsistency findings. Never changes data.',
+                    'description' => 'Read a selected customer booking and class-pass timeline, all-time history summary, and deterministic trial eligibility. Never changes data.',
                     'parameters' => [
                         'type' => 'object',
                         'additionalProperties' => false,
@@ -357,12 +358,23 @@ class StudioAiToolExecutor
                             'from_date' => [
                                 'type' => 'string',
                                 'format' => 'date',
-                                'description' => 'Optional first date in YYYY-MM-DD in the studio timezone.',
+                                'description' => 'Optional first detailed-timeline date in YYYY-MM-DD in the studio timezone.',
                             ],
                             'to_date' => [
                                 'type' => 'string',
                                 'format' => 'date',
-                                'description' => 'Optional last date in YYYY-MM-DD in the studio timezone.',
+                                'description' => 'Optional last detailed-timeline date in YYYY-MM-DD in the studio timezone.',
+                            ],
+                            'as_of' => [
+                                'type' => 'string',
+                                'format' => 'date-time',
+                                'description' => 'Optional RFC3339 timestamp at or before now for all-time trial eligibility. Defaults to now.',
+                            ],
+                            'source' => [
+                                'type' => 'string',
+                                'enum' => TrialClassPassEligibility::sources(),
+                                'default' => TrialClassPassEligibility::SourceManual,
+                                'description' => 'Trial issuance path to evaluate.',
                             ],
                         ],
                         'required' => ['customer_id'],
@@ -513,6 +525,8 @@ class StudioAiToolExecutor
                 'customer_id' => ['required', 'integer', 'min:1'],
                 'from_date' => ['nullable', 'date_format:Y-m-d'],
                 'to_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from_date'],
+                'as_of' => ['nullable', 'date_format:Y-m-d\TH:i:sP', 'before_or_equal:now'],
+                'source' => ['nullable', Rule::in(TrialClassPassEligibility::sources())],
             ],
             self::GetBusinessLogicReference => [
                 'key' => ['required', 'string', 'in:'.implode(',', $this->businessLogicReference->keys())],
@@ -628,6 +642,8 @@ class StudioAiToolExecutor
             (int) $arguments['customer_id'],
             isset($arguments['from_date']) ? (string) $arguments['from_date'] : null,
             isset($arguments['to_date']) ? (string) $arguments['to_date'] : null,
+            isset($arguments['as_of']) ? (string) $arguments['as_of'] : null,
+            (string) ($arguments['source'] ?? TrialClassPassEligibility::SourceManual),
         );
         $this->progress($progress, 'assistant_status_checking_class_passes');
 

@@ -23,6 +23,7 @@ use App\Models\TrainerType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class CustomerClassPassTest extends TestCase
@@ -298,6 +299,25 @@ class CustomerClassPassTest extends TestCase
         $customerClassPass = $customer->customerClassPasses()->firstOrFail();
 
         $this->assertSame($customerClassPass->id, $booking->classPassReservation()->firstOrFail()->customer_class_pass_id);
+    }
+
+    public function test_online_trial_class_pass_remains_blocked_after_any_booking(): void
+    {
+        [, $account, $customer, $plan, $scheduledClass] = $this->passContext(isTrial: true);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create();
+
+        $this->expectException(ValidationException::class);
+
+        app(IssueCustomerClassPass::class)->execute(
+            $account,
+            $customer,
+            $plan,
+            source: 'online_payment',
+        );
     }
 
     public function test_customer_list_searches_by_class_pass_code(): void

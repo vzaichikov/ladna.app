@@ -7,6 +7,7 @@ use App\Enums\CustomerClassPassStatus;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ClassBookingCorrection;
+use App\Models\ClassPassPlan;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassAdjustment;
@@ -29,6 +30,14 @@ class CustomerBookingLedgerInvestigation
 
     private const TimelineLimit = 500;
 
+    private const EligibilityBookingEvidenceLimit = 20;
+
+    private const TrialPlanLimit = 20;
+
+    public function __construct(
+        private readonly TrialClassPassEligibility $trialClassPassEligibility,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -37,9 +46,13 @@ class CustomerBookingLedgerInvestigation
         int $customerId,
         ?string $fromDate = null,
         ?string $toDate = null,
+        ?string $asOf = null,
+        string $source = TrialClassPassEligibility::SourceManual,
     ): array {
         $timezone = $account->timezone ?: config('app.timezone');
         [$from, $to] = $this->dateRange($timezone, $fromDate, $toDate);
+        $eligibilityAsOf = $this->eligibilityAsOf($timezone, $asOf);
+        $isHistoricalReconstruction = $asOf !== null;
         $customer = Customer::query()
             ->whereBelongsTo($account)
             ->whereKey($customerId)
@@ -207,6 +220,22 @@ class CustomerBookingLedgerInvestigation
         $complete = collect($truncation)->every(fn (array $value): bool => ! $value['truncated']);
         $findings = $this->findings($bookings, $reservations, $passes, $ledgerCounters, $complete);
         $timeline = $this->timeline($passes, $bookings, $reservations, $adjustments, $corrections, $timezone);
+        $customerHistorySummary = $this->customerHistorySummary(
+            $account,
+            $customer,
+            $eligibilityAsOf,
+            $timezone,
+            $isHistoricalReconstruction,
+        );
+        $trialEligibility = $this->trialEligibility(
+            $account,
+            $customer,
+            $eligibilityAsOf,
+            $source,
+            $timezone,
+            $isHistoricalReconstruction,
+        );
+        $trialEligibility['supporting_bookings'] = $customerHistorySummary['supporting_bookings'];
 
         return [
             'status' => 'found',
@@ -215,6 +244,8 @@ class CustomerBookingLedgerInvestigation
                 'name' => $customer->name,
             ],
             'period' => $this->periodPayload($from, $to, $timezone),
+            'customer_history_summary' => $customerHistorySummary,
+            'trial_eligibility' => $trialEligibility,
             'summary' => [
                 'bookings_count' => $bookingCount,
                 'passes_count' => $passCount,
@@ -263,6 +294,179 @@ class CustomerBookingLedgerInvestigation
                 'pass_counters_are_compared_with_reservation_ledger' => true,
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function customerHistorySummary(
+        Account $account,
+        Customer $customer,
+        Carbon $asOf,
+        string $timezone,
+        bool $isHistoricalReconstruction,
+    ): array {
+        $bookingsQuery = $this->trialClassPassEligibility
+            ->countedBookings($account, $customer, $isHistoricalReconstruction ? $asOf : null);
+        $bookingCount = (clone $bookingsQuery)->count();
+        $attendedBookingsQuery = (clone $bookingsQuery)
+            ->whereNotNull('attended_at')
+            ->where('attended_at', '<=', $asOf->copy()->utc());
+        $attendedBookingCount = (clone $attendedBookingsQuery)->count();
+        $earliestAttendedBooking = $this->withEligibilityBookingEvidenceRelations(
+            clone $attendedBookingsQuery,
+        )
+            ->orderBy('attended_at')
+            ->orderBy('id')
+            ->first();
+        $supportingBookings = $this->withEligibilityBookingEvidenceRelations(
+            clone $bookingsQuery,
+        )
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit(self::EligibilityBookingEvidenceLimit)
+            ->get();
+
+        return [
+            'evaluated_as_of' => $this->datetime($asOf, $timezone),
+            'timezone' => $timezone,
+            'counted_bookings_count' => $bookingCount,
+            'prior_attended_bookings_count' => $attendedBookingCount,
+            'attendance_evidence_basis' => $isHistoricalReconstruction
+                ? 'retained_attended_at_timestamps'
+                : 'current_booking_rows',
+            'attendance_evidence_complete' => ! $isHistoricalReconstruction,
+            'booking_status_evidence_basis' => 'current_booking_rows',
+            'booking_status_at_as_of_complete' => ! $isHistoricalReconstruction,
+            'earliest_prior_attended_booking' => $earliestAttendedBooking
+                ? $this->eligibilityBookingPayload($earliestAttendedBooking, $timezone)
+                : null,
+            'supporting_bookings' => [
+                ...$this->truncation($bookingCount, self::EligibilityBookingEvidenceLimit),
+                'items' => $supportingBookings
+                    ->map(fn (ClassBooking $booking): array => $this->eligibilityBookingPayload(
+                        $booking,
+                        $timezone,
+                    ))
+                    ->all(),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function trialEligibility(
+        Account $account,
+        Customer $customer,
+        Carbon $asOf,
+        string $source,
+        string $timezone,
+        bool $isHistoricalReconstruction,
+    ): array {
+        $eligibility = $this->trialClassPassEligibility->evaluate(
+            $account,
+            $customer,
+            $source,
+            $isHistoricalReconstruction ? $asOf : null,
+        );
+        $trialPlansQuery = $account->classPassPlans()
+            ->where('is_trial', true)
+            ->select([
+                'id',
+                'account_id',
+                'name',
+                'is_active',
+                'price_cents',
+                'currency',
+                'sessions_count',
+                'sort_order',
+            ]);
+        $trialPlanCount = (clone $trialPlansQuery)->count();
+        $trialPlans = $trialPlansQuery
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->limit(self::TrialPlanLimit)
+            ->get();
+
+        return [
+            'status' => $trialPlanCount === 0 ? 'not_configured' : $eligibility['status'],
+            'evaluated_as_of' => $this->datetime($asOf, $timezone),
+            'source' => $source,
+            'timezone' => $timezone,
+            'reason_codes' => $trialPlanCount === 0
+                ? ['no_trial_plan_configured']
+                : $eligibility['reason_codes'],
+            'counted_bookings_count' => $eligibility['counted_bookings_count'],
+            'active_reservations_count' => $eligibility['active_reservations_count'],
+            'rule_reference_key' => 'trial_class_pass_eligibility',
+            'evidence_complete' => $trialPlanCount === 0
+                || ! $isHistoricalReconstruction
+                || $source === TrialClassPassEligibility::SourceOnlinePayment
+                || $eligibility['counted_bookings_count'] !== 1,
+            'historical_reconstruction' => [
+                'requested' => $isHistoricalReconstruction,
+                'booking_existence_basis' => 'created_at_and_corrected_removed_at',
+                'reservation_activity_basis' => $isHistoricalReconstruction
+                    ? 'retained_reservation_lifecycle_timestamps'
+                    : 'current_reservation_status',
+                'reservation_history_complete' => ! $isHistoricalReconstruction,
+                'booking_status_used_by_trial_rule' => false,
+                'limitation_code' => $isHistoricalReconstruction
+                    ? 'reservation_lifecycle_rows_may_be_reused'
+                    : null,
+            ],
+            'trial_plans' => [
+                ...$this->truncation($trialPlanCount, self::TrialPlanLimit),
+                'items' => $trialPlans
+                    ->map(fn (ClassPassPlan $trialPlan): array => [
+                        'class_pass_plan_id' => $trialPlan->id,
+                        'name' => $trialPlan->name,
+                        'is_active' => $trialPlan->is_active,
+                        'price_cents' => (int) $trialPlan->price_cents,
+                        'currency' => $trialPlan->currency,
+                        'sessions_count' => (int) $trialPlan->sessions_count,
+                        'current_configuration' => true,
+                    ])
+                    ->all(),
+            ],
+        ];
+    }
+
+    /**
+     * @param  Builder<ClassBooking>  $query
+     * @return Builder<ClassBooking>
+     */
+    private function withEligibilityBookingEvidenceRelations(Builder $query): Builder
+    {
+        return $query->with([
+            'scheduledClass:id,account_id,location_id,room_id,class_type_id,trainer_id,title,starts_at,ends_at,status',
+            'scheduledClass.location:id,name',
+            'scheduledClass.room:id,name',
+            'scheduledClass.classType:id,name',
+            'scheduledClass.trainer:id,name',
+        ]);
+    }
+
+    private function eligibilityAsOf(string $timezone, ?string $asOf): Carbon
+    {
+        if ($asOf === null) {
+            return now($timezone);
+        }
+
+        try {
+            $evaluatedAt = Carbon::createFromFormat(\DateTimeInterface::RFC3339, $asOf)
+                ->timezone($timezone);
+        } catch (\Throwable) {
+            throw new InvalidArgumentException('The eligibility timestamp must be a valid RFC3339 timestamp.');
+        }
+
+        if ($evaluatedAt->greaterThan(now($timezone))) {
+            throw new InvalidArgumentException('The eligibility timestamp must be at or before now.');
+        }
+
+        return $evaluatedAt;
     }
 
     /**
@@ -648,6 +852,30 @@ class CustomerBookingLedgerInvestigation
                 'released_at' => $this->datetime($reservation->released_at, $timezone),
                 'created_at' => $this->datetime($reservation->created_at, $timezone),
             ] : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function eligibilityBookingPayload(ClassBooking $booking, string $timezone): array
+    {
+        return [
+            'booking_id' => $booking->id,
+            'status' => $booking->status->value,
+            'created_at' => $this->datetime($booking->created_at, $timezone),
+            'attended_at' => $this->datetime($booking->attended_at, $timezone),
+            'corrected_removed_at' => $this->datetime($booking->corrected_removed_at, $timezone),
+            'scheduled_class' => [
+                'scheduled_class_id' => $booking->scheduled_class_id,
+                'title' => $booking->scheduledClass?->title,
+                'class_type' => $booking->scheduledClass?->classType?->name,
+                'starts_at' => $this->datetime($booking->scheduledClass?->starts_at, $timezone),
+                'status' => $booking->scheduledClass?->status?->value,
+                'trainer' => $booking->scheduledClass?->trainer?->name,
+                'location' => $booking->scheduledClass?->location?->name,
+                'room' => $booking->scheduledClass?->room?->name,
+            ],
         ];
     }
 

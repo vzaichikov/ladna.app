@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.106.0',
+                'date' => '2026-07-29',
+                'title' => 'Deterministic trial-pass investigations in Ladna AI',
+                'items' => ['Studio owners can now ask Ladna AI in the dashboard or Telegram whether a named customer qualified for a trial or first-visit class pass at a specific moment. Ladna checks the customer’s complete booking history instead of relying on the visible timeline window.', 'The answer uses the same rule as real pass issuance: online purchase requires zero existing bookings, while manual issuance also permits one uncovered booking. Cancelled, attended, and future bookings all count, and the evidence includes prior attendance, current trial-plan price, pass payment state, and available payment chronology for staff with cashflow access.', 'External MCP investigations now accept an as-of timestamp and manual or online source, return structured eligibility and bounded evidence, and explicitly distinguish a provable rejection reason from unaudited failed clicks or actors.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.105.0',
                 'date' => '2026-07-29',
                 'title' => 'Payment and event insights for Ladna AI',
@@ -940,6 +947,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.106.0',
+                'date' => '2026-07-29',
+                'title' => 'Детермінована перевірка пробних абонементів у Ladna AI',
+                'items' => ['Власниця студії тепер може запитати Ladna AI в адмінці або Telegram, чи мала конкретна клієнтка право на пробний абонемент або перше відвідування в певний момент. Ladna перевіряє повну історію записів клієнтки, а не лише видимий часовий проміжок.', 'Відповідь використовує те саме правило, що й реальна видача: для онлайн-купівлі потрібна повна відсутність записів, а вручну також дозволений один запис без прив’язаного абонемента. Скасовані, відвідані та майбутні записи враховуються; у доказах видно попередні відвідування, поточну ціну пробного плану, стан оплати абонементів і, за наявності дозволу на касу, хронологію оплат.', 'Зовнішня MCP-перевірка тепер приймає момент часу та ручне або онлайн-джерело, повертає структуровану відповідь і обмежені докази та чітко відокремлює доведену причину відмови від неаудованого натискання чи його виконавця.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.105.0',
                 'date' => '2026-07-29',

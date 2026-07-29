@@ -128,6 +128,12 @@ class StudioAiInvestigationTest extends TestCase
         $account->addOwner($owner);
         $customer = Customer::factory()->for($account)->create(['name' => 'Test Customer']);
         $classPassPlan = ClassPassPlan::factory()->for($account)->create(['price_cents' => 110000]);
+        ClassPassPlan::factory()->for($account)->create([
+            'name' => 'Trial 250',
+            'is_trial' => true,
+            'price_cents' => 25000,
+            'currency' => 'UAH',
+        ]);
         CustomerClassPass::factory()
             ->count(2)
             ->for($account)
@@ -173,6 +179,8 @@ class StudioAiInvestigationTest extends TestCase
                                     'customer_id' => $customer->id,
                                     'from_date' => now('Europe/Kyiv')->subDays(30)->toDateString(),
                                     'to_date' => now('Europe/Kyiv')->addDays(30)->toDateString(),
+                                    'as_of' => now('Europe/Kyiv')->toIso8601String(),
+                                    'source' => 'manual',
                                 ],
                             ],
                         ]],
@@ -270,6 +278,14 @@ class StudioAiInvestigationTest extends TestCase
                 )
                 && str_contains(
                     $message['content'] ?? '',
+                    'failed validation clicks are not audited',
+                )
+                && str_contains(
+                    $message['content'] ?? '',
+                    'call search_payments as well as the ledger tool',
+                )
+                && str_contains(
+                    $message['content'] ?? '',
                     'Do not use Markdown headings, tables, LaTeX',
                 ),
         ));
@@ -290,7 +306,19 @@ class StudioAiInvestigationTest extends TestCase
         $this->assertIsArray($ledgerToolPayload);
         $this->assertSame('2200.00', data_get($ledgerToolPayload, 'monetary_summary.outstanding_by_currency.0.amount'));
         $this->assertSame('UAH', data_get($ledgerToolPayload, 'monetary_summary.outstanding_by_currency.0.currency'));
+        $this->assertSame('250.00', data_get($ledgerToolPayload, 'trial_eligibility.trial_plans.items.0.price.amount'));
         $this->assertStringNotContainsString('_cents', (string) ($ledgerToolMessage['content'] ?? ''));
+        $investigationTool = collect($requests[0]->data()['tools'])->first(
+            fn (array $tool): bool => data_get($tool, 'function.name') === 'investigate_customer_booking_ledger',
+        );
+        $this->assertSame(
+            ['manual', 'online_payment'],
+            data_get($investigationTool, 'function.parameters.properties.source.enum'),
+        );
+        $this->assertSame(
+            'date-time',
+            data_get($investigationTool, 'function.parameters.properties.as_of.format'),
+        );
         $this->assertTrue(collect($requests[3]->data()['messages'])->contains(
             fn (array $message): bool => ($message['role'] ?? null) === 'tool'
                 && ($message['tool_name'] ?? null) === 'get_business_logic_reference',
@@ -657,6 +685,40 @@ class StudioAiInvestigationTest extends TestCase
         $this->assertTrue($result->usedAi);
         $this->assertSame(__('app.assistant_investigation_unable_to_verify'), $result->text);
         $this->assertSame(0, McpToolInvocation::query()->whereBelongsTo($account)->count());
+    }
+
+    public function test_trial_and_first_visit_wording_in_supported_languages_requires_ledger_evidence(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => $this->answerEnvelope('Пробний абонемент точно недоступний.'),
+                ],
+            ]),
+        ]);
+        $this->configureOllama();
+
+        foreach ([
+            'Перевір, чому Анні не дозволяє пробний абонемент на перше відвідування.',
+            'Проверь, почему Анне не дает пробный абонемент на первое посещение.',
+            'Check why Anna is rejected for the first-time trial class pass.',
+        ] as $requestText) {
+            $account = Account::factory()->create();
+            $owner = User::factory()->create();
+            $account->addOwner($owner);
+
+            $result = app(StudioAiInference::class)->respond(
+                $account,
+                $requestText,
+                actorUser: $owner,
+            );
+
+            $this->assertTrue($result->usedAi);
+            $this->assertSame(__('app.assistant_investigation_unable_to_verify'), $result->text);
+            $this->assertSame(0, McpToolInvocation::query()->whereBelongsTo($account)->count());
+        }
     }
 
     public function test_ambiguous_customer_evidence_forces_a_masked_clarification(): void

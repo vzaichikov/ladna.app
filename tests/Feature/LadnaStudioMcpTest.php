@@ -7,6 +7,7 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassBooking;
+use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
@@ -334,6 +335,12 @@ class LadnaStudioMcpTest extends TestCase
             ->for($scheduledClass)
             ->for($customer, 'customer')
             ->create();
+        $trialPlan = ClassPassPlan::factory()->for($account)->create([
+            'name' => 'Trial 250',
+            'is_trial' => true,
+            'price_cents' => 25000,
+            'currency' => 'UAH',
+        ]);
         $classPass = CustomerClassPass::factory()
             ->for($account)
             ->for($customer, 'customer')
@@ -385,6 +392,13 @@ class LadnaStudioMcpTest extends TestCase
             ->assertJsonPath('result.structuredContent.passes.0.paid_amount_cents', 0)
             ->assertJsonPath('result.structuredContent.passes.0.remaining_payment_cents', 100000)
             ->assertJsonPath('result.structuredContent.passes.0.has_outstanding_balance', true)
+            ->assertJsonPath('result.structuredContent.customer_history_summary.counted_bookings_count', 1)
+            ->assertJsonPath('result.structuredContent.trial_eligibility.status', 'ineligible')
+            ->assertJsonPath('result.structuredContent.trial_eligibility.source', 'manual')
+            ->assertJsonPath('result.structuredContent.trial_eligibility.reason_codes.0', 'active_reservation_exists')
+            ->assertJsonPath('result.structuredContent.trial_eligibility.supporting_bookings.total', 1)
+            ->assertJsonPath('result.structuredContent.trial_eligibility.trial_plans.items.0.class_pass_plan_id', $trialPlan->id)
+            ->assertJsonPath('result.structuredContent.trial_eligibility.trial_plans.items.0.price_cents', 25000)
             ->assertJsonPath('result.structuredContent.summary.has_detected_anomalies', false);
 
         $this->withToken($investigationToken->tokenValue())
@@ -411,7 +425,7 @@ class LadnaStudioMcpTest extends TestCase
         ]);
     }
 
-    public function test_mcp_booking_ledger_rejects_periods_longer_than_366_days_and_audits_the_failure(): void
+    public function test_mcp_booking_ledger_rejects_periods_longer_than_366_days_and_audits_invalid_input(): void
     {
         $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
         $customer = Customer::factory()->for($account)->create();
@@ -434,24 +448,83 @@ class LadnaStudioMcpTest extends TestCase
             'account_api_token_id' => $apiToken->id,
             'tool_name' => 'investigate-customer-booking-ledger',
             'required_ability' => AccountApiTokenAbility::McpClassPassesRead->value,
-            'status' => 'failed',
+            'status' => 'invalid',
         ]);
     }
 
-    public function test_mcp_booking_ledger_rejects_malformed_customer_ids(): void
+    public function test_mcp_booking_ledger_rejects_and_audits_invalid_customer_timestamp_and_source_arguments(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-29 12:00:00', 'Europe/Kyiv'));
+
+        try {
+            $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+            $customer = Customer::factory()->for($account)->create();
+            $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Investigation', [
+                AccountApiTokenAbility::McpCustomersRead,
+                AccountApiTokenAbility::McpClassPassesRead,
+            ]);
+
+            foreach ([
+                ['customer_id' => 'not-an-id'],
+                ['customer_id' => $customer->id, 'as_of' => '2026-07-30T12:00:00+03:00'],
+                ['customer_id' => $customer->id, 'source' => 'website'],
+            ] as $arguments) {
+                $this->withToken($apiToken->tokenValue())
+                    ->postJson('/mcp/ladna-studio', $this->toolPayload(
+                        'investigate-customer-booking-ledger',
+                        $arguments,
+                    ))
+                    ->assertOk()
+                    ->assertJsonPath('result.isError', true);
+            }
+
+            $this->assertSame(3, McpToolInvocation::query()
+                ->whereBelongsTo($account)
+                ->where('account_api_token_id', $apiToken->id)
+                ->where('tool_name', 'investigate-customer-booking-ledger')
+                ->where('status', 'invalid')
+                ->count());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_mcp_booking_ledger_schema_advertises_as_of_and_source_without_tenant_arguments(): void
     {
         $account = Account::factory()->create();
-        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Investigation', [
-            AccountApiTokenAbility::McpCustomersRead,
-            AccountApiTokenAbility::McpClassPassesRead,
+        $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Schema MCP', [
+            AccountApiTokenAbility::McpRead,
         ]);
 
-        $this->withToken($apiToken->tokenValue())
-            ->postJson('/mcp/ladna-studio', $this->toolPayload('investigate-customer-booking-ledger', [
-                'customer_id' => 'not-an-id',
-            ]))
-            ->assertOk()
-            ->assertJsonPath('result.isError', true);
+        $response = $this->withToken($apiToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', [
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'method' => 'tools/list',
+                'params' => [],
+            ])
+            ->assertOk();
+
+        $tool = collect($response->json('result.tools'))
+            ->firstWhere('name', 'investigate-customer-booking-ledger');
+
+        $this->assertIsArray($tool);
+        $this->assertSame('date-time', data_get($tool, 'inputSchema.properties.as_of.format'));
+        $this->assertSame(
+            ['manual', 'online_payment'],
+            data_get($tool, 'inputSchema.properties.source.enum'),
+        );
+        $this->assertSame('manual', data_get($tool, 'inputSchema.properties.source.default'));
+        $this->assertSame(
+            ['eligible', 'ineligible', 'not_configured'],
+            data_get($tool, 'outputSchema.properties.trial_eligibility.properties.status.enum'),
+        );
+        $this->assertSame(
+            'integer',
+            data_get($tool, 'outputSchema.properties.trial_eligibility.properties.trial_plans.properties.items.items.properties.price_cents.type'),
+        );
+        $this->assertArrayNotHasKey('account_id', $tool['inputSchema']['properties']);
+        $this->assertArrayNotHasKey('tenant_id', $tool['inputSchema']['properties']);
     }
 
     public function test_mcp_endpoint_requires_mcp_read_ability(): void
@@ -549,6 +622,13 @@ class LadnaStudioMcpTest extends TestCase
             ]))
             ->assertOk()
             ->assertJsonPath('result.structuredContent.reference.symbol', 'App\\Actions\\ReconcileUnreservedCustomerBookingsForIssuedClassPass::execute');
+
+        $this->withToken($logicToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('get-business-logic-reference', [
+                'key' => 'trial_class_pass_eligibility',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.reference.symbol', 'App\\Support\\TrialClassPassEligibility::evaluate');
 
         $this->withToken($logicToken->tokenValue())
             ->postJson('/mcp/ladna-studio', $this->toolPayload('get-business-logic-reference', [

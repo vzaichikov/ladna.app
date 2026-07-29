@@ -44,6 +44,12 @@ class LadnaBusinessLogicReference
             'summary' => 'Eligible active passes are considered by purchased_at and then id, so the oldest suitable pass is consumed first.',
             'excerpt' => 'One booking has at most one reservation. Pass suitability includes account, class type, room, trainer type, time window, validity, and remaining sessions.',
         ],
+        'trial_class_pass_eligibility' => [
+            'path' => 'app/Support/TrialClassPassEligibility.php',
+            'symbol' => 'App\\Support\\TrialClassPassEligibility::evaluate',
+            'summary' => 'Evaluates trial class-pass eligibility from all non-corrected bookings for the customer in the studio account.',
+            'excerpt' => 'Online issuance requires zero bookings. Manual issuance permits zero bookings or exactly one booking without an active reserved or used pass; cancelled, attended, future, and every other non-removed booking count.',
+        ],
         'class_pass_normalization' => [
             'path' => 'app/Actions/NormalizeCustomerClassPasses.php',
             'symbol' => 'App\\Actions\\NormalizeCustomerClassPasses::forPass',

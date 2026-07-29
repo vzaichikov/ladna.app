@@ -19,6 +19,7 @@ use App\Models\Location;
 use App\Models\ScheduledClass;
 use App\Support\CustomerBookingLedgerInvestigation;
 use App\Support\CustomerInvestigationSearch;
+use App\Support\TrialClassPassEligibility;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -326,6 +327,376 @@ class CustomerBookingLedgerInvestigationTest extends TestCase
 
         $this->assertSame('not_found', $result['status']);
         $this->assertArrayNotHasKey('customer', $result);
+    }
+
+    public function test_shared_trial_eligibility_preserves_manual_and_online_issuance_rules(): void
+    {
+        $account = Account::factory()->create();
+        $eligibility = app(TrialClassPassEligibility::class);
+        $scheduledClass = ScheduledClass::factory()->for($account)->create();
+
+        $customerWithoutBookings = Customer::factory()->for($account)->create();
+        $this->assertSame(
+            [
+                'status' => 'eligible',
+                'reason_codes' => ['no_existing_bookings'],
+                'counted_bookings_count' => 0,
+                'active_reservations_count' => 0,
+            ],
+            $eligibility->evaluate($account, $customerWithoutBookings),
+        );
+
+        $customerWithOneBooking = Customer::factory()->for($account)->create();
+        $singleBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($customerWithOneBooking, 'customer')
+            ->for($scheduledClass)
+            ->create();
+
+        $this->assertSame(
+            'single_unreserved_booking_manual_exception',
+            $eligibility->evaluate($account, $customerWithOneBooking)['reason_codes'][0],
+        );
+        $this->assertSame(
+            'existing_booking_non_manual',
+            $eligibility->evaluate(
+                $account,
+                $customerWithOneBooking,
+                TrialClassPassEligibility::SourceOnlinePayment,
+            )['reason_codes'][0],
+        );
+
+        $classPass = CustomerClassPass::factory()
+            ->for($account)
+            ->for($customerWithOneBooking, 'customer')
+            ->create();
+        CustomerClassPassReservation::factory()
+            ->for($account)
+            ->for($classPass)
+            ->for($singleBooking)
+            ->for($scheduledClass)
+            ->create([
+                'status' => CustomerClassPassReservationStatus::Used->value,
+            ]);
+
+        $reservedResult = $eligibility->evaluate($account, $customerWithOneBooking);
+        $this->assertSame('ineligible', $reservedResult['status']);
+        $this->assertSame(['active_reservation_exists'], $reservedResult['reason_codes']);
+        $this->assertSame(1, $reservedResult['active_reservations_count']);
+
+        $customerWithMixedBookings = Customer::factory()->for($account)->create();
+        ClassBooking::factory()
+            ->for($account)
+            ->for($customerWithMixedBookings, 'customer')
+            ->for(ScheduledClass::factory()->for($account))
+            ->create(['status' => ClassBookingStatus::Cancelled->value]);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($customerWithMixedBookings, 'customer')
+            ->for(ScheduledClass::factory()->for($account))
+            ->create([
+                'status' => ClassBookingStatus::Attended->value,
+                'attended_at' => now()->subDay(),
+            ]);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($customerWithMixedBookings, 'customer')
+            ->for(ScheduledClass::factory()->for($account)->state([
+                'starts_at' => now()->addWeek(),
+                'ends_at' => now()->addWeek()->addHour(),
+            ]))
+            ->create();
+
+        $mixedResult = $eligibility->evaluate($account, $customerWithMixedBookings);
+        $this->assertSame('ineligible', $mixedResult['status']);
+        $this->assertSame(['multiple_existing_bookings'], $mixedResult['reason_codes']);
+        $this->assertSame(3, $mixedResult['counted_bookings_count']);
+    }
+
+    public function test_trial_eligibility_uses_all_time_history_outside_the_detailed_timeline(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-29 12:00:00', 'Europe/Kyiv'));
+
+        try {
+            $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+            $customer = Customer::factory()->for($account)->create(['name' => 'Anna Example']);
+            ClassPassPlan::factory()->for($account)->create([
+                'name' => 'Пробне заняття',
+                'is_trial' => true,
+                'price_cents' => 25000,
+                'currency' => 'UAH',
+            ]);
+            $oldScheduledClass = ScheduledClass::factory()->for($account)->create([
+                'starts_at' => Carbon::parse('2026-01-10 19:00:00', 'Europe/Kyiv')->utc(),
+                'ends_at' => Carbon::parse('2026-01-10 20:00:00', 'Europe/Kyiv')->utc(),
+            ]);
+            $oldBooking = ClassBooking::factory()
+                ->for($account)
+                ->for($customer, 'customer')
+                ->for($oldScheduledClass)
+                ->create([
+                    'status' => ClassBookingStatus::Attended->value,
+                    'attended_at' => Carbon::parse('2026-01-10 20:02:00', 'Europe/Kyiv')->utc(),
+                    'created_at' => Carbon::parse('2026-01-09 10:00:00', 'Europe/Kyiv')->utc(),
+                ]);
+            $currentScheduledClass = ScheduledClass::factory()->for($account)->create([
+                'starts_at' => Carbon::parse('2026-07-28 19:00:00', 'Europe/Kyiv')->utc(),
+                'ends_at' => Carbon::parse('2026-07-28 20:00:00', 'Europe/Kyiv')->utc(),
+            ]);
+            ClassBooking::factory()
+                ->for($account)
+                ->for($customer, 'customer')
+                ->for($currentScheduledClass)
+                ->create([
+                    'status' => ClassBookingStatus::Cancelled->value,
+                    'created_at' => Carbon::parse('2026-07-27 10:00:00', 'Europe/Kyiv')->utc(),
+                ]);
+
+            $result = app(CustomerBookingLedgerInvestigation::class)->investigate(
+                $account,
+                $customer->id,
+                '2026-07-20',
+                '2026-07-31',
+            );
+
+            $this->assertSame(1, $result['summary']['bookings_count']);
+            $this->assertSame(2, $result['customer_history_summary']['counted_bookings_count']);
+            $this->assertSame(1, $result['customer_history_summary']['prior_attended_bookings_count']);
+            $this->assertSame(
+                $oldBooking->id,
+                $result['customer_history_summary']['earliest_prior_attended_booking']['booking_id'],
+            );
+            $this->assertSame('ineligible', $result['trial_eligibility']['status']);
+            $this->assertSame(['multiple_existing_bookings'], $result['trial_eligibility']['reason_codes']);
+            $this->assertSame(2, $result['trial_eligibility']['supporting_bookings']['total']);
+            $this->assertSame(25000, $result['trial_eligibility']['trial_plans']['items'][0]['price_cents']);
+            $this->assertFalse($result['trial_eligibility']['trial_plans']['truncated']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_as_of_excludes_later_bookings_and_applies_corrections_at_their_recorded_time(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-29 12:00:00', 'Europe/Kyiv'));
+
+        try {
+            $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+            $customer = Customer::factory()->for($account)->create();
+            ClassPassPlan::factory()->for($account)->create(['is_trial' => true]);
+            $firstBooking = ClassBooking::factory()
+                ->for($account)
+                ->for($customer, 'customer')
+                ->for(ScheduledClass::factory()->for($account))
+                ->create([
+                    'created_at' => Carbon::parse('2026-07-01 10:00:00', 'Europe/Kyiv')->utc(),
+                    'corrected_removed_at' => Carbon::parse('2026-07-20 10:00:00', 'Europe/Kyiv')->utc(),
+                ]);
+            ClassBooking::factory()
+                ->for($account)
+                ->for($customer, 'customer')
+                ->for(ScheduledClass::factory()->for($account))
+                ->create([
+                    'created_at' => Carbon::parse('2026-07-15 10:00:00', 'Europe/Kyiv')->utc(),
+                ]);
+
+            $beforeLaterBooking = app(CustomerBookingLedgerInvestigation::class)->investigate(
+                $account,
+                $customer->id,
+                asOf: '2026-07-10T12:00:00+03:00',
+            );
+            $beforeCorrection = app(CustomerBookingLedgerInvestigation::class)->investigate(
+                $account,
+                $customer->id,
+                asOf: '2026-07-18T12:00:00+03:00',
+            );
+            $afterCorrection = app(CustomerBookingLedgerInvestigation::class)->investigate(
+                $account,
+                $customer->id,
+                asOf: '2026-07-25T12:00:00+03:00',
+            );
+
+            $this->assertSame(1, $beforeLaterBooking['customer_history_summary']['counted_bookings_count']);
+            $this->assertSame(
+                $firstBooking->id,
+                $beforeLaterBooking['customer_history_summary']['supporting_bookings']['items'][0]['booking_id'],
+            );
+            $this->assertSame(2, $beforeCorrection['customer_history_summary']['counted_bookings_count']);
+            $this->assertSame(['multiple_existing_bookings'], $beforeCorrection['trial_eligibility']['reason_codes']);
+            $this->assertSame(1, $afterCorrection['customer_history_summary']['counted_bookings_count']);
+            $this->assertSame(
+                ['single_unreserved_booking_manual_exception'],
+                $afterCorrection['trial_eligibility']['reason_codes'],
+            );
+            $this->assertFalse($afterCorrection['trial_eligibility']['historical_reconstruction']['reservation_history_complete']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_charmpole_like_trial_investigation_returns_deterministic_history_and_outstanding_balance(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-29 12:00:00', 'Europe/Kyiv'));
+
+        try {
+            $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+            $customer = Customer::factory()->for($account)->create(['name' => 'Anna Example']);
+            ClassPassPlan::factory()->for($account)->create([
+                'name' => 'First time',
+                'is_trial' => true,
+                'price_cents' => 25000,
+                'currency' => 'UAH',
+            ]);
+            $regularPlan = ClassPassPlan::factory()->for($account)->create([
+                'name' => 'Single visit',
+                'is_trial' => false,
+                'price_cents' => 45000,
+                'currency' => 'UAH',
+                'sessions_count' => 1,
+            ]);
+            $bookingDefinitions = [
+                ['2026-07-23 18:00:00', ClassBookingStatus::Cancelled, null],
+                ['2026-07-23 19:00:00', ClassBookingStatus::Attended, '2026-07-23 20:02:00'],
+                ['2026-07-30 19:00:00', ClassBookingStatus::Booked, null],
+                ['2026-07-27 20:00:00', ClassBookingStatus::Cancelled, null],
+                ['2026-07-28 19:00:00', ClassBookingStatus::Attended, '2026-07-28 20:03:00'],
+            ];
+            $bookings = collect($bookingDefinitions)
+                ->map(function (array $definition, int $index) use ($account, $customer): ClassBooking {
+                    [$startsAt, $status, $attendedAt] = $definition;
+                    $scheduledClass = ScheduledClass::factory()->for($account)->create([
+                        'title' => 'Pole Dance',
+                        'starts_at' => Carbon::parse($startsAt, 'Europe/Kyiv')->utc(),
+                        'ends_at' => Carbon::parse($startsAt, 'Europe/Kyiv')->addHour()->utc(),
+                    ]);
+
+                    return ClassBooking::factory()
+                        ->for($account)
+                        ->for($customer, 'customer')
+                        ->for($scheduledClass)
+                        ->create([
+                            'status' => $status->value,
+                            'attended_at' => $attendedAt
+                                ? Carbon::parse($attendedAt, 'Europe/Kyiv')->utc()
+                                : null,
+                            'created_at' => Carbon::parse(
+                                sprintf('2026-07-%02d 10:00:00', 20 + $index),
+                                'Europe/Kyiv',
+                            )->utc(),
+                        ]);
+                });
+            $onlinePass = CustomerClassPass::factory()
+                ->for($account)
+                ->for($customer, 'customer')
+                ->for($regularPlan)
+                ->create([
+                    'code' => 'ONLINE-450',
+                    'price_cents' => 45000,
+                    'paid_amount_cents' => 45000,
+                    'is_paid' => true,
+                    'sessions_count' => 1,
+                    'used_sessions_count' => 1,
+                    'source' => 'online_payment',
+                    'purchased_at' => Carbon::parse('2026-07-28 20:07:00', 'Europe/Kyiv')->utc(),
+                ]);
+            $manualPass = CustomerClassPass::factory()
+                ->for($account)
+                ->for($customer, 'customer')
+                ->for($regularPlan)
+                ->create([
+                    'code' => 'MANUAL-450',
+                    'price_cents' => 45000,
+                    'paid_amount_cents' => 25000,
+                    'is_paid' => false,
+                    'sessions_count' => 1,
+                    'used_sessions_count' => 1,
+                    'source' => 'manual',
+                    'purchased_at' => Carbon::parse('2026-07-29 00:20:00', 'Europe/Kyiv')->utc(),
+                ]);
+            CustomerClassPassReservation::factory()
+                ->for($account)
+                ->for($onlinePass)
+                ->for($bookings[1])
+                ->for($bookings[1]->scheduledClass)
+                ->create([
+                    'status' => CustomerClassPassReservationStatus::Used->value,
+                    'reserved_at' => Carbon::parse('2026-07-28 20:07:00', 'Europe/Kyiv')->utc(),
+                    'used_at' => Carbon::parse('2026-07-23 20:02:00', 'Europe/Kyiv')->utc(),
+                ]);
+            CustomerClassPassReservation::factory()
+                ->for($account)
+                ->for($manualPass)
+                ->for($bookings[4])
+                ->for($bookings[4]->scheduledClass)
+                ->create([
+                    'status' => CustomerClassPassReservationStatus::Used->value,
+                    'reserved_at' => Carbon::parse('2026-07-29 00:20:00', 'Europe/Kyiv')->utc(),
+                    'used_at' => Carbon::parse('2026-07-28 20:03:00', 'Europe/Kyiv')->utc(),
+                ]);
+
+            $result = app(CustomerBookingLedgerInvestigation::class)->investigate(
+                $account,
+                $customer->id,
+                '2026-07-20',
+                '2026-07-31',
+                '2026-07-28T20:05:00+03:00',
+                TrialClassPassEligibility::SourceManual,
+            );
+
+            $this->assertSame(5, $result['customer_history_summary']['counted_bookings_count']);
+            $this->assertSame(
+                $bookings[1]->id,
+                $result['customer_history_summary']['earliest_prior_attended_booking']['booking_id'],
+            );
+            $this->assertSame('ineligible', $result['trial_eligibility']['status']);
+            $this->assertSame(['multiple_existing_bookings'], $result['trial_eligibility']['reason_codes']);
+            $this->assertSame(25000, $result['trial_eligibility']['trial_plans']['items'][0]['price_cents']);
+            $this->assertSame(1, $result['summary']['outstanding_partial_passes_count']);
+            $partialPass = collect($result['passes'])->firstWhere('code', 'MANUAL-450');
+            $this->assertSame(20000, $partialPass['remaining_payment_cents']);
+            $futureBooking = $this->bookingResult($result, $bookings[2]->id);
+            $this->assertNull($futureBooking['reservation']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_trial_plan_candidates_are_tenant_scoped_bounded_and_report_missing_configuration(): void
+    {
+        $account = Account::factory()->create();
+        $customer = Customer::factory()->for($account)->create();
+        ClassPassPlan::factory()
+            ->count(21)
+            ->for($account)
+            ->create(['is_trial' => true]);
+        ClassPassPlan::factory()
+            ->for(Account::factory())
+            ->create([
+                'name' => 'Other tenant trial',
+                'is_trial' => true,
+            ]);
+
+        $result = app(CustomerBookingLedgerInvestigation::class)->investigate($account, $customer->id);
+
+        $this->assertSame('eligible', $result['trial_eligibility']['status']);
+        $this->assertSame(20, $result['trial_eligibility']['trial_plans']['returned']);
+        $this->assertSame(21, $result['trial_eligibility']['trial_plans']['total']);
+        $this->assertTrue($result['trial_eligibility']['trial_plans']['truncated']);
+        $this->assertNotContains(
+            'Other tenant trial',
+            array_column($result['trial_eligibility']['trial_plans']['items'], 'name'),
+        );
+
+        $accountWithoutTrial = Account::factory()->create();
+        $customerWithoutTrial = Customer::factory()->for($accountWithoutTrial)->create();
+        $notConfigured = app(CustomerBookingLedgerInvestigation::class)->investigate(
+            $accountWithoutTrial,
+            $customerWithoutTrial->id,
+        );
+
+        $this->assertSame('not_configured', $notConfigured['trial_eligibility']['status']);
+        $this->assertSame(['no_trial_plan_configured'], $notConfigured['trial_eligibility']['reason_codes']);
+        $this->assertSame(0, $notConfigured['trial_eligibility']['trial_plans']['total']);
     }
 
     public function test_customer_search_is_tenant_scoped_and_masks_disambiguation_contacts(): void

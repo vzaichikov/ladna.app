@@ -14,9 +14,11 @@ use App\Models\AiConversationMessage;
 use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
 use App\Models\ClassBooking;
+use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\Location;
+use App\Models\McpToolInvocation;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\Room;
@@ -658,6 +660,181 @@ class TelegramWebhookTest extends TestCase
             'The current owner message has no text. This image-only request must be answered in Ukrainian only.',
             $textInput['text'],
         );
+    }
+
+    public function test_telegram_screenshot_can_drive_authoritative_trial_eligibility_investigation(): void
+    {
+        Storage::fake('local');
+        Carbon::setTestNow(Carbon::parse('2026-07-29 12:00:00', 'Europe/Kyiv'));
+
+        try {
+            $imageContents = $this->pngImageContents();
+            [$account, $installation, $webhookKey] = $this->authorizedOwnerImageChat('592', '812');
+            $customer = Customer::factory()->for($account)->create(['name' => 'Anna Trial']);
+            ClassPassPlan::factory()->for($account)->create([
+                'name' => 'Trial 250',
+                'is_trial' => true,
+                'price_cents' => 25000,
+                'currency' => 'UAH',
+            ]);
+            PlatformAiSetting::current()->forceFill([
+                'active_provider' => AiProvider::OpenAiApiKey->value,
+                'active_model' => 'gpt-5.5',
+            ])->save();
+            PlatformAiProviderCredential::query()->delete();
+            PlatformAiProviderCredential::factory()->create([
+                'provider' => AiProvider::OpenAiApiKey->value,
+                'model' => 'gpt-5.5',
+                'credentials' => ['api_key' => 'test-openai-key'],
+                'is_configured' => true,
+            ]);
+            $openAiCall = 0;
+
+            Http::fake(function (Request $request) use ($imageContents, $customer, &$openAiCall) {
+                if (str_contains($request->url(), '/getFile')) {
+                    return Http::response([
+                        'ok' => true,
+                        'result' => [
+                            'file_path' => 'photos/trial-investigation.png',
+                            'file_size' => strlen($imageContents),
+                        ],
+                    ]);
+                }
+
+                if (str_contains($request->url(), '/file/bot')) {
+                    return Http::response($imageContents, 200, [
+                        'Content-Type' => 'image/png',
+                        'Content-Length' => (string) strlen($imageContents),
+                    ]);
+                }
+
+                if (str_ends_with($request->url(), '/v1/responses')) {
+                    $openAiCall++;
+
+                    if ($openAiCall === 1) {
+                        return Http::response([
+                            'status' => 'completed',
+                            'output' => [[
+                                'id' => 'fc_customer_search',
+                                'type' => 'function_call',
+                                'status' => 'completed',
+                                'call_id' => 'call_customer_search',
+                                'name' => 'search_customers',
+                                'arguments' => '{"query":"Anna Trial"}',
+                            ]],
+                        ]);
+                    }
+
+                    if ($openAiCall === 2) {
+                        return Http::response([
+                            'status' => 'completed',
+                            'output' => [[
+                                'id' => 'fc_trial_ledger',
+                                'type' => 'function_call',
+                                'status' => 'completed',
+                                'call_id' => 'call_trial_ledger',
+                                'name' => 'investigate_customer_booking_ledger',
+                                'arguments' => json_encode([
+                                    'customer_id' => $customer->id,
+                                    'as_of' => '2026-07-29T12:00:00+03:00',
+                                    'source' => 'manual',
+                                ]),
+                            ]],
+                        ]);
+                    }
+
+                    return Http::response([
+                        'status' => 'completed',
+                        'output' => [[
+                            'id' => 'msg_trial_answer',
+                            'type' => 'message',
+                            'role' => 'assistant',
+                            'status' => 'completed',
+                            'content' => [[
+                                'type' => 'output_text',
+                                'text' => json_encode([
+                                    'disposition' => 'answer',
+                                    'answer' => 'Перевірено: пробний абонемент доступний, бо в клієнтки немає записів.',
+                                    'follow_up_actions' => [],
+                                    'action' => null,
+                                    'calendar_reference' => null,
+                                    'reason' => 'Deterministic trial eligibility evidence.',
+                                    'visual_context' => 'The screenshot identifies Anna Trial and a trial-pass question.',
+                                ], JSON_UNESCAPED_UNICODE),
+                                'annotations' => [],
+                            ]],
+                        ]],
+                    ]);
+                }
+
+                if (str_contains($request->url(), 'api.telegram.org/')) {
+                    return Http::response([
+                        'ok' => true,
+                        'result' => ['message_id' => 902],
+                    ]);
+                }
+
+                return Http::response([], 404);
+            });
+
+            $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+                'update_id' => 1115,
+                'message' => [
+                    'message_id' => 215,
+                    'chat' => ['id' => 592, 'type' => 'private'],
+                    'from' => ['id' => 812, 'username' => 'owner'],
+                    'caption' => 'Перевір, чому Anna Trial не дає пробний абонемент на перше відвідування.',
+                    'photo' => [[
+                        'file_id' => 'trial-investigation-photo',
+                        'file_unique_id' => 'trial-investigation-photo-unique',
+                        'width' => 1280,
+                        'height' => 960,
+                        'file_size' => strlen($imageContents),
+                    ]],
+                ],
+            ], [
+                'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+            ])->assertNoContent();
+
+            $this->assertDatabaseHas('telegram_messages', [
+                'account_id' => $account->id,
+                'telegram_chat_id' => '592',
+                'direction' => 'outbound',
+                'text' => 'Перевірено: пробний абонемент доступний, бо в клієнтки немає записів.',
+            ]);
+            $this->assertSame(2, McpToolInvocation::query()
+                ->whereBelongsTo($account)
+                ->whereNull('account_api_token_id')
+                ->where('status', 'succeeded')
+                ->count());
+
+            $openAiRequests = collect(Http::recorded())
+                ->pluck(0)
+                ->filter(fn (Request $request): bool => str_ends_with($request->url(), '/v1/responses'))
+                ->values();
+            $this->assertCount(3, $openAiRequests);
+            $this->assertTrue($this->requestIncludesInputImage($openAiRequests[0]));
+            $ledgerOutput = collect($openAiRequests[2]['input'] ?? [])->first(
+                fn (mixed $item): bool => is_array($item)
+                    && ($item['type'] ?? null) === 'function_call_output'
+                    && ($item['call_id'] ?? null) === 'call_trial_ledger',
+            );
+            $this->assertIsArray($ledgerOutput);
+            $this->assertStringContainsString(
+                '"status":"eligible"',
+                (string) ($ledgerOutput['output'] ?? ''),
+            );
+            $this->assertStringContainsString(
+                '"reason_codes":["no_existing_bookings"]',
+                (string) ($ledgerOutput['output'] ?? ''),
+            );
+            $this->assertStringNotContainsString(
+                '_cents',
+                (string) ($ledgerOutput['output'] ?? ''),
+            );
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_telegram_openai_replaces_raw_image_with_visual_memory_after_two_follow_ups(): void

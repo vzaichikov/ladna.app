@@ -19,6 +19,15 @@ class StudioAiLedgerEvidencePresenterTest extends TestCase
             'truncation' => [
                 'passes' => ['truncated' => false],
             ],
+            'trial_eligibility' => [
+                'trial_plans' => [
+                    'items' => [[
+                        'name' => 'Trial',
+                        'price_cents' => 25000,
+                        'currency' => 'UAH',
+                    ]],
+                ],
+            ],
         ];
 
         $presented = app(StudioAiLedgerEvidencePresenter::class)->present($payload);
@@ -33,6 +42,8 @@ class StudioAiLedgerEvidencePresenterTest extends TestCase
         $this->assertSame('2200.00', data_get($presented, 'monetary_summary.outstanding_by_currency.0.amount'));
         $this->assertSame('2 200 ₴', data_get($presented, 'monetary_summary.outstanding_by_currency.0.formatted'));
         $this->assertSame(2, data_get($presented, 'monetary_summary.outstanding_by_currency.0.pass_count'));
+        $this->assertSame('250.00', data_get($presented, 'trial_eligibility.trial_plans.items.0.price.amount'));
+        $this->assertArrayNotHasKey('price_cents', $presented['trial_eligibility']['trial_plans']['items'][0]);
     }
 
     /**

@@ -53,6 +53,29 @@ class StudioAiLedgerEvidencePresenter
             })
             ->all();
 
+        $trialPlans = data_get($payload, 'trial_eligibility.trial_plans.items');
+
+        if (is_array($trialPlans)) {
+            data_set(
+                $payload,
+                'trial_eligibility.trial_plans.items',
+                collect($trialPlans)
+                    ->map(function (mixed $trialPlan): mixed {
+                        if (! is_array($trialPlan)) {
+                            return $trialPlan;
+                        }
+
+                        $currency = strtoupper((string) ($trialPlan['currency'] ?? 'UAH'));
+                        $priceCents = (int) ($trialPlan['price_cents'] ?? 0);
+                        unset($trialPlan['price_cents']);
+                        $trialPlan['price'] = $this->money($priceCents, $currency);
+
+                        return $trialPlan;
+                    })
+                    ->all(),
+            );
+        }
+
         $payload['monetary_summary'] = [
             'unit' => 'major_currency_units',
             'totals_calculated_by_ladna' => true,
