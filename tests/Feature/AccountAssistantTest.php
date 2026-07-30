@@ -928,7 +928,7 @@ class AccountAssistantTest extends TestCase
         $this->assertSame(ClassBookingStatus::Booked, $otherBooking->fresh()->status);
     }
 
-    public function test_incomplete_model_action_returns_unavailable_without_pending_action(): void
+    public function test_incomplete_model_action_asks_for_clarification_without_pending_action(): void
     {
         Http::fake([
             'ollama.com/api/chat' => Http::response([
@@ -949,7 +949,7 @@ class AccountAssistantTest extends TestCase
                 'message' => 'Скасуй його.',
             ])
             ->assertOk()
-            ->assertJsonPath('messages.1.content', __('app.assistant_ai_unavailable'))
+            ->assertJsonPath('messages.1.content', __('app.assistant_ai_clarify_request'))
             ->assertJsonPath('messages.1.metadata.fallback_reason', 'invalid_ai_response')
             ->assertJsonPath('pending_actions', []);
 

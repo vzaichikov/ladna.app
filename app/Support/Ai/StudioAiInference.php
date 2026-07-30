@@ -23,11 +23,11 @@ use Throwable;
 
 class StudioAiInference
 {
-    private const MaxProviderRounds = 4;
+    private const MaxToolCalls = 6;
+
+    private const MaxToolProviderRounds = 4;
 
     private const MaxInvalidEnvelopeRetries = 1;
-
-    private const MaxToolCalls = 6;
 
     private const MaxVisualContextCharacters = 8000;
 
@@ -236,18 +236,31 @@ class StudioAiInference
                 );
             $toolCallCount = 0;
 
-            for ($round = 0; $round < self::MaxProviderRounds; $round++) {
-                $format = ($tools !== [] && $toolEvidence === [])
+            for ($round = 0; $round <= self::MaxToolProviderRounds; $round++) {
+                $isFinalSynthesisRound = $round === self::MaxToolProviderRounds;
+                $roundTools = $isFinalSynthesisRound ? [] : $tools;
+                $roundMessages = $isFinalSynthesisRound
+                    ? [
+                        ...$messages,
+                        [
+                            'role' => 'user',
+                            'content' => $this->finalSynthesisInstruction(),
+                        ],
+                    ]
+                    : $messages;
+                $format = $isFinalSynthesisRound
+                    ? 'json'
+                    : (($tools !== [] && $toolEvidence === [])
                     || ($requiresInvestigationEvidence
                         && ! $this->hasVerifiedInvestigationLedger($toolEvidence))
                             ? null
-                            : 'json';
+                            : 'json');
                 $response = $this->providerResponse(
                     $setting->active_provider,
                     $apiKey,
                     $setting->active_model,
-                    $messages,
-                    $tools,
+                    $roundMessages,
+                    $roundTools,
                     $format,
                 );
 
@@ -365,7 +378,18 @@ class StudioAiInference
                     return $result;
                 }
 
-                if ($tools === [] || $round === self::MaxProviderRounds - 1) {
+                if ($roundTools === []) {
+                    $this->logToolLoopLimit(
+                        $account,
+                        $setting,
+                        $conversation,
+                        $currentMessage,
+                        $round + 1,
+                        $toolCallCount,
+                        $toolEvidence,
+                        (string) data_get($response, 'tool_calls.0.function.name', ''),
+                    );
+
                     return StudioAiResult::fallback('ai_tool_loop_limit');
                 }
 
@@ -378,6 +402,17 @@ class StudioAiInference
                     $toolCallCount++;
 
                     if ($toolCallCount > self::MaxToolCalls) {
+                        $this->logToolLoopLimit(
+                            $account,
+                            $setting,
+                            $conversation,
+                            $currentMessage,
+                            $round + 1,
+                            $toolCallCount,
+                            $toolEvidence,
+                            (string) data_get($toolCall, 'function.name', ''),
+                        );
+
                         return StudioAiResult::fallback('ai_tool_loop_limit');
                     }
 
@@ -402,6 +437,18 @@ class StudioAiInference
                         (string) ($toolCall['id'] ?? ''),
                         $toolResult,
                     );
+                    $terminalEvidenceOutcome = $this->investigationEvidenceOutcome(
+                        $toolEvidence,
+                        false,
+                    );
+
+                    if ($terminalEvidenceOutcome['blocking_message'] !== null) {
+                        return StudioAiResult::answer(
+                            $terminalEvidenceOutcome['blocking_message'],
+                            $setting->active_provider->value,
+                            $setting->active_model,
+                        );
+                    }
                 }
 
                 if ($beforeProviderRequest) {
@@ -530,6 +577,11 @@ class StudioAiInference
         }
 
         return 'Your previous response did not match the required final JSON envelope.'.$calendarCorrection.' Re-evaluate the current owner request and return exactly one JSON object with only these keys: '.$keys.'. Follow every field rule from the system message, keep follow_up_actions to at most three strings, and do not add commentary outside the JSON object.'.$visualCorrection;
+    }
+
+    private function finalSynthesisInstruction(): string
+    {
+        return 'Tool use is complete. Return the final JSON response now using only the gathered context and tool evidence. Do not call another tool. If the request, intended customer, or intended action remains ambiguous, ask one concrete clarification question. If evidence is missing or inconclusive, explain exactly what could not be verified and what detail would unblock the answer. Do not invent facts or claim that a change was made.';
     }
 
     private function requiresInvestigationEvidence(string $text): bool
@@ -1451,6 +1503,38 @@ class StudioAiInference
             'provider_round' => $providerRound,
             'response_length' => mb_strlen($content),
             'response_sha256' => hash('sha256', $content),
+        ]);
+    }
+
+    /**
+     * @param  array<int, array{name: string, result: array<string, mixed>}>  $toolEvidence
+     */
+    private function logToolLoopLimit(
+        Account $account,
+        PlatformAiSetting $setting,
+        ?AiConversation $conversation,
+        ?AiConversationMessage $currentMessage,
+        int $providerRound,
+        int $toolCallCount,
+        array $toolEvidence,
+        string $attemptedToolName,
+    ): void {
+        Log::warning('Studio AI reached the bounded tool loop limit.', [
+            'account_id' => $account->id,
+            'conversation_id' => $conversation?->id,
+            'conversation_message_id' => $currentMessage?->id,
+            'provider' => $setting->active_provider?->value,
+            'model' => $setting->active_model,
+            'provider_round' => $providerRound,
+            'tool_call_count' => $toolCallCount,
+            'attempted_tool_name' => $attemptedToolName !== '' ? $attemptedToolName : null,
+            'tool_evidence' => collect($toolEvidence)
+                ->map(fn (array $evidence): array => [
+                    'tool_name' => $evidence['name'],
+                    'status' => data_get($evidence, 'result.status'),
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 

@@ -21,6 +21,7 @@ use App\Models\TelegramChatAuthorization;
 use App\Models\Trainer;
 use App\Models\User;
 use App\Support\Ai\StudioAiInference;
+use App\Support\Ai\StudioAiResult;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
@@ -32,6 +33,27 @@ use Tests\TestCase;
 class StudioAiInferenceTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_known_interpretation_fallbacks_explain_how_to_clarify(): void
+    {
+        $this->assertSame(
+            __('app.assistant_ai_clarify_request'),
+            StudioAiResult::fallback('invalid_ai_response')->text,
+        );
+        $this->assertSame(
+            __('app.assistant_ai_clarify_request'),
+            StudioAiResult::fallback('invalid_ai_action')->text,
+        );
+        $this->assertSame(
+            __('app.assistant_ai_checks_incomplete'),
+            StudioAiResult::fallback('ai_tool_loop_limit')->text,
+        );
+        $this->assertSame(
+            __('app.assistant_image_action_needs_text'),
+            StudioAiResult::fallback('image_only_action_not_allowed')->text,
+        );
+        $this->assertSame('', StudioAiResult::fallback('provider_request_failed')->text);
+    }
 
     public function test_ollama_cloud_inference_uses_configured_provider_model_and_context(): void
     {
@@ -741,7 +763,7 @@ class StudioAiInferenceTest extends TestCase
 
         $this->assertFalse($result->usedAi);
         $this->assertFalse($result->rejected);
-        $this->assertSame('', $result->text);
+        $this->assertSame(__('app.assistant_ai_clarify_request'), $result->text);
         $this->assertSame('invalid_ai_response', $result->fallbackReason);
 
         Http::assertSentCount(2);
@@ -812,8 +834,10 @@ class StudioAiInferenceTest extends TestCase
         $invalid = app(StudioAiInference::class)->respond($account, 'Book her tomorrow.');
 
         $this->assertSame('invalid_ai_response', $incomplete->fallbackReason);
+        $this->assertSame(__('app.assistant_ai_clarify_request'), $incomplete->text);
         $this->assertFalse($incomplete->isAction());
         $this->assertSame('invalid_ai_response', $invalid->fallbackReason);
+        $this->assertSame(__('app.assistant_ai_clarify_request'), $invalid->text);
         $this->assertFalse($invalid->isAction());
     }
 
@@ -828,6 +852,7 @@ class StudioAiInferenceTest extends TestCase
         $serverError = app(StudioAiInference::class)->respond($account, 'How many classes today?');
 
         $this->assertSame('provider_request_failed', $serverError->fallbackReason);
+        $this->assertSame('', $serverError->text);
         $this->assertFalse($serverError->isAction());
         Http::assertSentCount(3);
 
@@ -838,6 +863,7 @@ class StudioAiInferenceTest extends TestCase
         $connectionError = app(StudioAiInference::class)->respond($account, 'What about tomorrow?');
 
         $this->assertSame('provider_request_failed', $connectionError->fallbackReason);
+        $this->assertSame('', $connectionError->text);
         $this->assertFalse($connectionError->isAction());
     }
 

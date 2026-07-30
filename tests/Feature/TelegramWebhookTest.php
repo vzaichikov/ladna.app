@@ -2021,6 +2021,79 @@ class TelegramWebhookTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_authorized_owner_gets_a_clarification_when_ai_cannot_safely_interpret_the_request(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-28 09:00:00', 'UTC'));
+        Http::preventStrayRequests();
+        $invalidActionResponse = [
+            'message' => [
+                'role' => 'assistant',
+                'content' => '{"disposition":"cancel_booking","answer":null,"follow_up_actions":[],"action":{},"calendar_reference":null,"reason":"missing booking id"}',
+            ],
+        ];
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push($invalidActionResponse)
+                ->push($invalidActionResponse),
+            'api.telegram.org/*' => Http::response(['ok' => true]),
+        ]);
+
+        $owner = User::factory()->create(['phone' => '+380671112234']);
+        $account = Account::factory()->create(['country_code' => 'UA']);
+        $account->addOwner($owner);
+        PlatformAiSetting::query()->delete();
+        PlatformAiProviderCredential::query()->delete();
+        PlatformAiSetting::factory()->create([
+            'owner_ai_assistant_enabled' => true,
+            'active_provider' => AiProvider::OllamaCloud->value,
+            'active_model' => 'gemma3:27b-cloud',
+        ]);
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OllamaCloud->value,
+            'model' => 'gemma3:27b-cloud',
+            'credentials' => ['api_key' => 'test-ollama-key'],
+            'is_configured' => true,
+        ]);
+        [$installation, $webhookKey] = $this->ownerInstallation();
+
+        TelegramChatAuthorization::factory()->for($account)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'user_id' => $owner->id,
+            'profile' => TelegramBotProfile::Owner->value,
+            'telegram_chat_id' => '559',
+            'telegram_user_id' => '779',
+        ]);
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1005,
+            'message' => [
+                'message_id' => 14,
+                'chat' => ['id' => 559],
+                'from' => ['id' => 779, 'username' => 'owner'],
+                'text' => 'Скасуй його.',
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        $this->assertDatabaseHas('telegram_messages', [
+            'telegram_chat_id' => '559',
+            'direction' => 'outbound',
+            'text' => __('app.assistant_ai_clarify_request'),
+        ]);
+        $this->assertTrue(AiConversationMessage::query()
+            ->where('content', __('app.assistant_ai_clarify_request'))
+            ->where('metadata->fallback_reason', 'invalid_ai_response')
+            ->exists());
+        $this->assertFalse(TelegramMessage::query()
+            ->where('telegram_chat_id', '559')
+            ->where('direction', 'outbound')
+            ->where('text', __('app.assistant_ai_unavailable'))
+            ->exists());
+
+        Carbon::setTestNow();
+    }
+
     public function test_distracted_owner_weekday_conversation_uses_calendar_anchors_and_keeps_context(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-23 21:40:00', 'Europe/Kyiv'));

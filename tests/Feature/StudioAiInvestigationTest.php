@@ -730,18 +730,18 @@ class StudioAiInvestigationTest extends TestCase
         }
     }
 
-    public function test_ambiguous_customer_evidence_forces_a_masked_clarification(): void
+    public function test_ambiguous_customer_stops_before_later_payment_calls_and_asks_for_clarification(): void
     {
         Http::preventStrayRequests();
         $account = Account::factory()->create();
         $owner = User::factory()->create();
         $account->addOwner($owner);
         Customer::factory()->for($account)->create([
-            'name' => 'Anna Test',
+            'name' => 'Крамаренко Юлія',
             'phone' => '+380671112233',
         ]);
         Customer::factory()->for($account)->create([
-            'name' => 'Anna Other',
+            'name' => 'Юлія Крамаренко',
             'phone' => '+380679998877',
         ]);
         $this->configureOllama();
@@ -754,7 +754,7 @@ class StudioAiInvestigationTest extends TestCase
                         'tool_calls' => [[
                             'function' => [
                                 'name' => 'search_customers',
-                                'arguments' => ['query' => 'Anna'],
+                                'arguments' => ['query' => 'Крамаренко'],
                             ],
                         ]],
                     ],
@@ -762,22 +762,33 @@ class StudioAiInvestigationTest extends TestCase
                 ->push([
                     'message' => [
                         'role' => 'assistant',
-                        'content' => $this->answerEnvelope('Я вибрала першу клієнтку.'),
+                        'content' => '',
+                        'tool_calls' => [[
+                            'function' => [
+                                'name' => 'search_payments',
+                                'arguments' => ['query' => 'Крамаренко'],
+                            ],
+                        ]],
                     ],
                 ]),
         ]);
 
         $result = app(StudioAiInference::class)->respond(
             $account,
-            'Перевір незрозуміле списання абонемента Anna.',
+            'Крамаренко видали не той абон, я поставила статус неактивний і пише що він скасований, оплата за нього теж не буде рахуватися в підсумку? чи буде?',
             actorUser: $owner,
         );
 
         $this->assertTrue($result->usedAi);
         $this->assertStringContainsString(__('app.assistant_investigation_customer_ambiguous'), $result->text);
-        $this->assertStringContainsString('Anna Test', $result->text);
+        $this->assertStringContainsString('Крамаренко Юлія', $result->text);
         $this->assertStringContainsString('2233', $result->text);
         $this->assertStringNotContainsString('+380671112233', $result->text);
+        Http::assertSentCount(1);
+        $this->assertSame(0, McpToolInvocation::query()
+            ->whereBelongsTo($account)
+            ->where('tool_name', 'search_payments')
+            ->count());
     }
 
     public function test_unknown_tool_calls_are_audited_and_cannot_become_claims(): void
@@ -896,13 +907,14 @@ class StudioAiInvestigationTest extends TestCase
 
         $this->assertFalse($result->usedAi);
         $this->assertSame('ai_tool_loop_limit', $result->fallbackReason);
+        $this->assertSame(__('app.assistant_ai_checks_incomplete'), $result->text);
         $this->assertSame(6, McpToolInvocation::query()
             ->whereBelongsTo($account)
             ->where('tool_name', 'search_customers')
             ->count());
     }
 
-    public function test_the_investigation_agent_stops_after_four_provider_rounds(): void
+    public function test_the_investigation_agent_executes_a_fourth_tool_then_forces_a_final_answer(): void
     {
         Http::preventStrayRequests();
         $toolCallResponse = [
@@ -922,6 +934,68 @@ class StudioAiInvestigationTest extends TestCase
                 ->push($toolCallResponse)
                 ->push($toolCallResponse)
                 ->push($toolCallResponse)
+                ->push($toolCallResponse)
+                ->push([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => $this->answerEnvelope('Перевірку завершено.'),
+                    ],
+                ]),
+        ]);
+        $account = Account::factory()->create();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        Customer::factory()->for($account)->create(['name' => 'Loop Customer']);
+        $this->configureOllama();
+
+        $result = app(StudioAiInference::class)->respond(
+            $account,
+            'Перевір Loop Customer',
+            actorUser: $owner,
+        );
+
+        $this->assertTrue($result->usedAi);
+        $this->assertSame('Перевірку завершено.', $result->text);
+        Http::assertSentCount(5);
+        $this->assertSame(4, McpToolInvocation::query()
+            ->whereBelongsTo($account)
+            ->where('tool_name', 'search_customers')
+            ->count());
+        $requests = collect(Http::recorded())
+            ->map(fn (array $record): Request => $record[0])
+            ->values();
+        $finalRequest = $requests->last();
+        $this->assertInstanceOf(Request::class, $finalRequest);
+        $this->assertArrayNotHasKey('tools', $finalRequest->data());
+        $this->assertSame('json', data_get($finalRequest->data(), 'format'));
+        $finalMessage = collect(data_get($finalRequest->data(), 'messages', []))->last();
+        $this->assertStringContainsString(
+            'Tool use is complete.',
+            (string) data_get($finalMessage, 'content'),
+        );
+    }
+
+    public function test_the_investigation_agent_stops_when_forced_synthesis_requests_another_tool(): void
+    {
+        Http::preventStrayRequests();
+        $toolCallResponse = [
+            'message' => [
+                'role' => 'assistant',
+                'content' => '',
+                'tool_calls' => [[
+                    'function' => [
+                        'name' => 'search_customers',
+                        'arguments' => ['query' => 'Loop Customer'],
+                    ],
+                ]],
+            ],
+        ];
+        Http::fake([
+            'ollama.com/api/chat' => Http::sequence()
+                ->push($toolCallResponse)
+                ->push($toolCallResponse)
+                ->push($toolCallResponse)
+                ->push($toolCallResponse)
                 ->push($toolCallResponse),
         ]);
         $account = Account::factory()->create();
@@ -938,8 +1012,9 @@ class StudioAiInvestigationTest extends TestCase
 
         $this->assertFalse($result->usedAi);
         $this->assertSame('ai_tool_loop_limit', $result->fallbackReason);
-        Http::assertSentCount(4);
-        $this->assertSame(3, McpToolInvocation::query()
+        $this->assertSame(__('app.assistant_ai_checks_incomplete'), $result->text);
+        Http::assertSentCount(5);
+        $this->assertSame(4, McpToolInvocation::query()
             ->whereBelongsTo($account)
             ->where('tool_name', 'search_customers')
             ->count());

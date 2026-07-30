@@ -65,11 +65,21 @@ class StudioAiResult
     public static function fallback(string $reason, ?string $detail = null, string $text = ''): self
     {
         return new self(
-            text: $text,
+            text: $text !== '' ? $text : self::fallbackText($reason),
             usedAi: false,
             fallbackReason: $reason,
             fallbackDetail: $detail,
         );
+    }
+
+    private static function fallbackText(string $reason): string
+    {
+        return match ($reason) {
+            'ai_tool_loop_limit' => __('app.assistant_ai_checks_incomplete'),
+            'invalid_ai_action', 'invalid_ai_response' => __('app.assistant_ai_clarify_request'),
+            'image_only_action_not_allowed' => __('app.assistant_image_action_needs_text'),
+            default => '',
+        };
     }
 
     public static function rejected(string $text): self
