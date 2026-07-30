@@ -97,6 +97,35 @@ class HelpPagesTest extends TestCase
         }
     }
 
+    public function test_help_screenshot_catalog_has_no_missing_or_duplicate_files(): void
+    {
+        $configuredPaths = $this->configuredScreenshotPaths();
+        $pathsByHash = [];
+
+        foreach ($configuredPaths as $path) {
+            $absolutePath = public_path($path);
+
+            $this->assertFileExists($absolutePath);
+
+            $hash = hash_file('sha256', $absolutePath);
+            $this->assertArrayNotHasKey(
+                $hash,
+                $pathsByHash,
+                sprintf('%s duplicates %s.', $path, $pathsByHash[$hash] ?? ''),
+            );
+
+            $pathsByHash[$hash] = $path;
+        }
+
+        $diskPaths = array_map(
+            fn (string $absolutePath): string => 'assets/help/screenshots/'.basename($absolutePath),
+            glob(public_path('assets/help/screenshots/*.png')) ?: [],
+        );
+        sort($diskPaths);
+
+        $this->assertSame($configuredPaths, $diskPaths);
+    }
+
     public function test_owner_help_search_finds_events_workflows(): void
     {
         foreach ([
@@ -135,6 +164,23 @@ class HelpPagesTest extends TestCase
             ->assertSee('Статус самого запису не змінюється', false)
             ->assertSee('списано, зарезервовано або повернуто', false)
             ->assertSee('assets/help/screenshots/customer-pass-normalization.png', false);
+    }
+
+    public function test_passes_prices_help_explains_audited_trial_pass_override(): void
+    {
+        $this->get(route('help.show', 'passes-prices', false))
+            ->assertOk()
+            ->assertSee('Як видати пробний абонемент як аудитований виняток', false)
+            ->assertSee('Видавати куплені абонементи', false)
+            ->assertSee('Редагувати куплені абонементи', false)
+            ->assertSee('Коментар до винятку', false)
+            ->assertSee('працює лише для ручної видачі', false)
+            ->assertSee('автора, час і обовʼязковий коментар', false)
+            ->assertSee('assets/help/screenshots/trial-pass-override.png', false);
+
+        $result = app(OwnerHelpIndex::class)->search('як вручну видати пробний абонемент як виняток', 1);
+
+        $this->assertSame('passes-prices', $result[0]['slug'] ?? null);
     }
 
     public function test_passes_prices_help_explains_manual_pass_payment_tracking(): void
@@ -237,6 +283,19 @@ class HelpPagesTest extends TestCase
             ->assertSee('це обходить тільки таймфрейми, а не сумісність тренера з напрямом', false)
             ->assertDontSee('trainer_activity_direction', false)
             ->assertDontSee('endpoint', false);
+    }
+
+    public function test_trainers_help_uses_screenshots_for_each_documented_workflow(): void
+    {
+        $this->get(route('help.show', 'trainers', false))
+            ->assertOk()
+            ->assertSee('assets/help/screenshots/trainer-types.png', false)
+            ->assertSee('assets/help/screenshots/trainer-editor.png', false)
+            ->assertSee('assets/help/screenshots/trainer-private-timeframes.png', false)
+            ->assertSee('assets/help/screenshots/trainer-unreserved-bookings.png', false)
+            ->assertSee('assets/help/screenshots/trainer-permissions.png', false)
+            ->assertSee('assets/help/screenshots/trainer-substitution.png', false)
+            ->assertSee('assets/help/screenshots/activity-logs.png', false);
     }
 
     public function test_customers_help_explains_customer_import_and_export(): void
@@ -383,8 +442,16 @@ class HelpPagesTest extends TestCase
             ->assertSee('assets/help/screenshots/public-legal-documents.png', false)
             ->assertSee('Як користуватися Ladna асистентом', false)
             ->assertSee('Асистент працює тільки в межах конкретної студії', false)
+            ->assertSee('JPEG, PNG або WebP до 2 МБ', false)
+            ->assertSee('вставте скріншот із буфера або перетягніть файл', false)
+            ->assertSee('вибрана модель асистента не підтримує аналіз зображень', false)
             ->assertSee('Не передавайте в чат секрети, токени, паролі або платіжні дані', false)
+            ->assertSee('assets/help/screenshots/assistant-image.png', false)
             ->assertSee('assets/help/screenshots/studio-dashboard.png', false);
+
+        $result = app(OwnerHelpIndex::class)->search('як надіслати скріншот асистенту', 1);
+
+        $this->assertSame('start', $result[0]['slug'] ?? null);
     }
 
     public function test_start_help_explains_room_activity_direction_restrictions(): void
@@ -533,7 +600,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('Як читати звіт People Counter', false)
             ->assertSee('Різниця рахується між Записано та Виявлено', false)
             ->assertSee('віднімається один тренер', false)
-            ->assertSee('assets/help/screenshots/rooms.png', false)
+            ->assertSee('assets/help/screenshots/room-camera-settings.png', false)
             ->assertSee('assets/help/screenshots/studio-dashboard.png', false)
             ->assertDontSee('endpoint', false)
             ->assertDontSee('payload', false)
@@ -670,5 +737,25 @@ class HelpPagesTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('href="'.route('help.index').'"', false);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function configuredScreenshotPaths(): array
+    {
+        $paths = [];
+        $pages = config('help.pages');
+
+        array_walk_recursive($pages, function (mixed $value) use (&$paths): void {
+            if (is_string($value) && str_starts_with($value, 'assets/help/screenshots/')) {
+                $paths[] = $value;
+            }
+        });
+
+        $paths = array_values(array_unique($paths));
+        sort($paths);
+
+        return $paths;
     }
 }
