@@ -289,6 +289,7 @@ class HelpPagesTest extends TestCase
     {
         $this->get(route('help.show', 'trainers', false))
             ->assertOk()
+            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-07-30', false)
             ->assertSee('assets/help/screenshots/trainer-types.png', false)
             ->assertSee('assets/help/screenshots/trainer-editor.png', false)
             ->assertSee('assets/help/screenshots/trainer-private-timeframes.png', false)

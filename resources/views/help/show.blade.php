@@ -117,7 +117,7 @@
 
                         @forelse ($page['screenshots'] ?? [] as $screenshot)
                             <figure class="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-crm">
-                                <img src="{{ asset($screenshot['path']) }}" alt="{{ $screenshot['alt'] }}" class="w-full bg-white object-contain">
+                                <img src="{{ asset($screenshot['path']) }}?v={{ config('help.updated_at') }}" alt="{{ $screenshot['alt'] }}" class="w-full bg-white object-contain">
                                 <figcaption class="border-t border-stone-100 px-5 py-4 text-sm leading-6 text-slate-600">{{ $screenshot['caption'] }}</figcaption>
                             </figure>
                         @empty
@@ -160,7 +160,7 @@
                                         @foreach ($section['screenshots'] as $screenshotPath)
                                             @php($sectionScreenshot = collect($page['screenshots'] ?? [])->firstWhere('path', $screenshotPath))
                                             <figure class="overflow-hidden rounded-lg border border-stone-200 bg-white">
-                                                <img src="{{ asset($screenshotPath) }}" alt="{{ $sectionScreenshot['alt'] ?? $section['title'] }}" class="w-full bg-white object-contain">
+                                                <img src="{{ asset($screenshotPath) }}?v={{ config('help.updated_at') }}" alt="{{ $sectionScreenshot['alt'] ?? $section['title'] }}" class="w-full bg-white object-contain">
                                                 <figcaption class="border-t border-stone-100 px-4 py-3 text-sm leading-6 text-slate-600">{{ $sectionScreenshot['caption'] ?? $section['title'] }}</figcaption>
                                             </figure>
                                         @endforeach
