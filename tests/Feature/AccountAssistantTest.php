@@ -13,6 +13,7 @@ use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
+use App\Models\AiProviderRequest;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
@@ -191,6 +192,13 @@ class AccountAssistantTest extends TestCase
             ->values();
 
         $this->assertCount(2, $requests);
+        $this->assertSame(
+            [
+                AiProviderRequest::TypeInference,
+                AiProviderRequest::TypeInference,
+            ],
+            AiProviderRequest::query()->oldest('id')->pluck('request_type')->all(),
+        );
         $secondInput = collect($requests[1][0]['input']);
         $secondSystemPrompt = (string) data_get($requests[1][0]->data(), 'input.0.content', '');
         $this->assertStringContainsString('OpenAI Responses prompt version: openai_v3.', $secondSystemPrompt);
@@ -245,6 +253,10 @@ class AccountAssistantTest extends TestCase
             ->assertJsonPath('messages.1.content', 'На зображенні видно абонемент Марії на 8 занять.');
 
         Http::assertSentCount(1);
+        $this->assertSame(
+            AiProviderRequest::TypeInference,
+            AiProviderRequest::query()->sole()->request_type,
+        );
         Http::assertSent(function (Request $request): bool {
             $input = collect($request['input'] ?? []);
             $userContent = $input
@@ -424,6 +436,13 @@ class AccountAssistantTest extends TestCase
             ->values();
 
         $this->assertCount(2, $requests);
+        $this->assertSame(
+            [
+                AiProviderRequest::TypeInference,
+                AiProviderRequest::TypeEnvelopeRepair,
+            ],
+            AiProviderRequest::query()->oldest('id')->pluck('request_type')->all(),
+        );
         $this->assertTrue($this->requestIncludesImage($requests[0]));
         $this->assertTrue($this->requestIncludesImage($requests[1]));
         $this->assertStringContainsString(

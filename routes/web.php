@@ -55,6 +55,7 @@ use App\Http\Controllers\PeopleCounterScreenshotController;
 use App\Http\Controllers\Platform\AccountBillingEnrollmentController;
 use App\Http\Controllers\Platform\AccountBillingTariffController;
 use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
+use App\Http\Controllers\Platform\AiUsageController as PlatformAiUsageController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
 use App\Http\Controllers\Platform\CustomerNotificationController as PlatformCustomerNotificationController;
 use App\Http\Controllers\Platform\EmailDeliveryController as PlatformEmailDeliveryController;
@@ -313,6 +314,10 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
         Route::put('account', [PlatformProfileController::class, 'update'])->name('account.update');
         Route::get('settings', [SystemSettingsController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [SystemSettingsController::class, 'update'])->name('settings.update');
+        Route::get('settings/ai-usage', [PlatformAiUsageController::class, 'index'])->name('ai-usage.index');
+        Route::put('settings/ai-usage', [PlatformAiUsageController::class, 'update'])->name('ai-usage.update');
+        Route::post('settings/ai-usage/users/{user}/reset', [PlatformAiUsageController::class, 'resetUser'])->name('ai-usage.users.reset');
+        Route::post('settings/ai-usage/accounts/{account}/reset', [PlatformAiUsageController::class, 'resetAccount'])->name('ai-usage.accounts.reset');
         Route::get('settings/ai-provider-models', PlatformAiProviderModelController::class)->name('settings.ai-provider-models');
         Route::get('settings/owner-telegram-bot/webhook-status', [PlatformOwnerTelegramWebhookController::class, 'show'])->name('settings.owner-telegram-bot.webhook-status');
         Route::post('settings/owner-telegram-bot/register-webhook', [PlatformOwnerTelegramWebhookController::class, 'store'])->name('settings.owner-telegram-bot.register-webhook');

@@ -11,6 +11,7 @@ use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
+use App\Models\AiProviderRequest;
 use App\Models\McpToolInvocation;
 use App\Models\TelegramAlert;
 use App\Models\TelegramAuthorizationSelection;
@@ -278,6 +279,26 @@ class AccountActivityLogTest extends TestCase
             'occurred_at' => now()->subDays(44),
             'created_at' => now()->subDays(44),
         ]);
+        $oldProviderRequest = AiProviderRequest::factory()
+            ->for($account)
+            ->for($user)
+            ->for($telegramConversation, 'conversation')
+            ->for($oldAiMessage, 'conversationMessage')
+            ->create([
+                'started_at' => now()->subDays(46),
+                'finished_at' => now()->subDays(46),
+                'created_at' => now()->subDays(46),
+            ]);
+        $recentProviderRequest = AiProviderRequest::factory()
+            ->for($account)
+            ->for($user)
+            ->for($telegramConversation, 'conversation')
+            ->for($recentAiMessage, 'conversationMessage')
+            ->create([
+                'started_at' => now()->subDays(44),
+                'finished_at' => now()->subDays(44),
+                'created_at' => now()->subDays(44),
+            ]);
         $oldAiAttachment = AiConversationMessageAttachment::factory()
             ->for($account)
             ->for($oldAiMessage, 'message')
@@ -346,6 +367,7 @@ class AccountActivityLogTest extends TestCase
 
         $this->artisan('account-activity-logs:prune')
             ->expectsOutput(__('app.account_activity_logs_pruned', ['count' => 1]))
+            ->expectsOutput(__('app.ai_provider_requests_pruned', ['count' => 1]))
             ->expectsOutput(__('app.telegram_logs_pruned', [
                 'messages' => 1,
                 'updates' => 1,
@@ -368,6 +390,8 @@ class AccountActivityLogTest extends TestCase
         $this->assertModelExists($recentMessage);
         $this->assertModelMissing($oldAiMessage);
         $this->assertModelExists($recentAiMessage);
+        $this->assertModelMissing($oldProviderRequest);
+        $this->assertModelExists($recentProviderRequest);
         $this->assertModelMissing($oldAiAttachment);
         $this->assertModelExists($recentAiAttachment);
         Storage::disk('local')->assertMissing($oldAiAttachment->path);

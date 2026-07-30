@@ -10,6 +10,7 @@ use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
+use App\Models\AiProviderRequest;
 use App\Models\ClassBooking;
 use App\Models\ClassType;
 use App\Models\Customer;
@@ -724,6 +725,13 @@ class StudioAiInferenceTest extends TestCase
         $this->assertTrue($result->usedAi);
         $this->assertSame('There are no scheduled classes today.', $result->text);
         Http::assertSentCount(2);
+        $this->assertSame(
+            [
+                AiProviderRequest::TypeInference,
+                AiProviderRequest::TypeEnvelopeRepair,
+            ],
+            AiProviderRequest::query()->oldest('id')->pluck('request_type')->all(),
+        );
         Http::assertSent(function (Request $request): bool {
             $payload = $request->data();
 

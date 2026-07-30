@@ -323,7 +323,7 @@
             'label' => __('app.system_settings'),
             'icon' => 'settings',
             'href' => route('platform.settings.edit'),
-            'active' => request()->routeIs('platform.settings.*'),
+            'active' => request()->routeIs('platform.settings.*', 'platform.ai-usage.*'),
         ],
         [
             'label' => __('app.integrations'),

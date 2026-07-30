@@ -3,6 +3,7 @@
 namespace App\Support\Ai;
 
 use App\Enums\StudioAiDisposition;
+use Illuminate\Support\Carbon;
 
 class StudioAiResult
 {
@@ -19,6 +20,9 @@ class StudioAiResult
         public readonly array $helpSources = [],
         public readonly ?StudioAiActionInput $actionInput = null,
         public readonly ?StudioAiCalendarReference $calendarReference = null,
+        public readonly ?string $limitScope = null,
+        public readonly ?int $retryAfterSeconds = null,
+        public readonly ?Carbon $blockedUntil = null,
     ) {}
 
     /**
@@ -72,6 +76,23 @@ class StudioAiResult
         );
     }
 
+    public static function restriction(
+        string $text,
+        string $reason,
+        ?string $limitScope,
+        ?int $retryAfterSeconds,
+        ?Carbon $blockedUntil,
+    ): self {
+        return new self(
+            text: $text,
+            usedAi: false,
+            fallbackReason: $reason,
+            limitScope: $limitScope,
+            retryAfterSeconds: $retryAfterSeconds,
+            blockedUntil: $blockedUntil,
+        );
+    }
+
     private static function fallbackText(string $reason): string
     {
         return match ($reason) {
@@ -107,5 +128,31 @@ class StudioAiResult
     public function isAction(): bool
     {
         return $this->disposition->isAction() && $this->actionInput !== null;
+    }
+
+    public function withRestriction(
+        string $text,
+        string $reason,
+        ?string $limitScope,
+        ?int $retryAfterSeconds,
+        ?Carbon $blockedUntil,
+    ): self {
+        return new self(
+            text: $text,
+            usedAi: $this->usedAi,
+            disposition: $this->disposition,
+            rejected: $this->rejected,
+            provider: $this->provider,
+            model: $this->model,
+            fallbackReason: $reason,
+            fallbackDetail: $this->fallbackDetail,
+            followUpActions: $this->followUpActions,
+            helpSources: $this->helpSources,
+            actionInput: $this->actionInput,
+            calendarReference: $this->calendarReference,
+            limitScope: $limitScope,
+            retryAfterSeconds: $retryAfterSeconds,
+            blockedUntil: $blockedUntil,
+        );
     }
 }

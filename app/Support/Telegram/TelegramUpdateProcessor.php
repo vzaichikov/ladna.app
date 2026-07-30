@@ -4,6 +4,7 @@ namespace App\Support\Telegram;
 
 use App\Enums\AiConversationMessageRole;
 use App\Enums\StudioAiDisposition;
+use App\Enums\StudioPermission;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Enums\TelegramUpdateStatus;
@@ -16,6 +17,7 @@ use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
 use App\Models\Trainer;
+use App\Models\User;
 use App\Support\Ai\AiConversationImageStore;
 use App\Support\Ai\InvalidAiConversationImage;
 use App\Support\Ai\StudioAiActionInput;
@@ -23,6 +25,7 @@ use App\Support\Ai\StudioAiResult;
 use App\Support\Ai\StudioAssistantActionExecutor;
 use App\Support\Ai\StudioAssistantActionPlan;
 use App\Support\Ai\StudioAssistantActionPlanner;
+use App\Support\SaasBilling\AccountSubscriptionAccess;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -52,6 +55,7 @@ class TelegramUpdateProcessor
         private readonly TelegramConversationResetter $conversationResetter,
         private readonly TelegramAssistantTextFormatter $assistantTextFormatter,
         private readonly AiConversationImageStore $conversationImageStore,
+        private readonly AccountSubscriptionAccess $subscriptionAccess,
     ) {}
 
     public function process(int $telegramUpdateId): void
@@ -108,7 +112,7 @@ class TelegramUpdateProcessor
         if (str_starts_with($data, 'tg_select:')) {
             $authorization = $this->contactAuthorizer->authorizeSelection($installation, $callbackQuery);
 
-            if (! $authorization) {
+            if (! $authorization || ! $this->authorizationIsCurrent($authorization)) {
                 $this->sendAndStore($telegramUpdate, $chatId, __('app.telegram_authorization_failed'));
 
                 return true;
@@ -129,6 +133,19 @@ class TelegramUpdateProcessor
         }
 
         $authorization = $this->resolveAuthorizedTrainer($authorization);
+
+        if (! $this->authorizationIsCurrent($authorization)) {
+            $this->sendAndStore(
+                $telegramUpdate,
+                $chatId,
+                __('app.telegram_ai_access_expired'),
+                [],
+                $authorization->account_id,
+                $authorization,
+            );
+
+            return true;
+        }
 
         $telegramUpdate->update(['account_id' => $authorization->account_id]);
 
@@ -262,6 +279,19 @@ class TelegramUpdateProcessor
         }
 
         $authorization = $this->resolveAuthorizedTrainer($authorization);
+
+        if (! $this->authorizationIsCurrent($authorization)) {
+            $this->sendAndStore(
+                $telegramUpdate,
+                $chatId,
+                __('app.telegram_ai_access_expired'),
+                [],
+                $authorization->account_id,
+                $authorization,
+            );
+
+            return true;
+        }
 
         $inboundMessage->update([
             'account_id' => $authorization->account_id,
@@ -448,6 +478,9 @@ class TelegramUpdateProcessor
                     'provider' => $aiResult->provider,
                     'model' => $aiResult->model,
                     'fallback_reason' => $aiResult->fallbackReason,
+                    'limit_scope' => $aiResult->limitScope,
+                    'retry_after_seconds' => $aiResult->retryAfterSeconds,
+                    'blocked_until' => $aiResult->blockedUntil?->toIso8601String(),
                     'follow_up_actions' => $aiResult->followUpActions,
                     'help_sources' => $aiResult->helpSources,
                     'disposition' => $aiResult->disposition->value,
@@ -1009,6 +1042,32 @@ class TelegramUpdateProcessor
         $authorization->setRelation('trainer', $trainer);
 
         return $authorization;
+    }
+
+    private function authorizationIsCurrent(TelegramChatAuthorization $authorization): bool
+    {
+        $account = Account::query()
+            ->active()
+            ->operational()
+            ->find($authorization->account_id);
+        $user = User::query()->find($authorization->user_id);
+
+        if (! $account || ! $user) {
+            return false;
+        }
+
+        if (! $user->isPlatformAdmin() && ! $this->subscriptionAccess->canEditStudio($account)) {
+            return false;
+        }
+
+        if (! $account->userCan($user, StudioPermission::InteractWithTelegramBot)) {
+            return false;
+        }
+
+        $authorization->setRelation('account', $account);
+        $authorization->setRelation('user', $user);
+
+        return true;
     }
 
     /**

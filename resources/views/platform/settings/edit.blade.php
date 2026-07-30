@@ -86,6 +86,12 @@
                             {{ $tab['label'] }}
                         </button>
                     @endforeach
+                    <a
+                        href="{{ route('platform.ai-usage.index') }}"
+                        class="crm-tab justify-start sm:justify-center"
+                    >
+                        {{ __('app.system_settings_tab_ai_usage') }}
+                    </a>
                 </div>
             </div>
 

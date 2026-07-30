@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiConversationMessageAttachment;
+use App\Models\AiProviderRequest;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\Trainer;
@@ -42,6 +43,8 @@ class StudioAiInference
         private readonly OpenAiStudioResponseSchemaV3 $openAiResponseSchema,
         private readonly LadnaAssistantCapabilities $capabilities,
         private readonly StudioAiToolExecutor $toolExecutor,
+        private readonly StudioAiUsageFirewall $usageFirewall,
+        private readonly AiProviderRequestRecorder $providerRequestRecorder,
     ) {}
 
     /**
@@ -71,6 +74,10 @@ class StudioAiInference
             return StudioAiResult::fallback('invalid_ai_context');
         }
 
+        if (! $actorUser && $conversation?->user_id) {
+            $actorUser = User::query()->find($conversation->user_id);
+        }
+
         $setting = PlatformAiSetting::current();
 
         if (! $setting->owner_ai_assistant_enabled || ! $setting->active_provider || ! $setting->active_model) {
@@ -96,312 +103,348 @@ class StudioAiInference
             });
         }
 
-        $visualAttachment = $setting->active_provider->supportsImageInference()
-            ? $this->visualAttachment($account, $conversation, $currentMessage)
-            : null;
-        $visualContext = $visualAttachment
-            ? $this->cachedVisualContext($visualAttachment)
-            : null;
-        $includeRawImage = $visualAttachment
-            && ($setting->active_provider === AiProvider::OllamaCloud
-                ? $visualContext === null
-                : $this->shouldIncludeRawImage(
-                    $visualAttachment,
-                    $conversation,
-                    $currentMessage,
-                ));
-        $imageBase64 = null;
-        $imageMimeType = null;
+        if (! $actorUser && $conversation) {
+            return StudioAiResult::fallback(
+                'ai_identity_unavailable',
+                text: __('app.ai_firewall_identity_unavailable'),
+            );
+        }
 
-        if ($visualAttachment && $includeRawImage) {
-            if ($setting->active_provider === AiProvider::OllamaCloud
-                && $this->modelSupportsVision($apiKey, $setting->active_model) === false) {
-                return StudioAiResult::fallback(
-                    'model_no_vision',
-                    text: __('app.assistant_image_model_unsupported'),
-                );
+        $channel = $this->channel($conversation);
+        $inferenceLock = $actorUser
+            ? $this->usageFirewall->acquireInferenceLock($actorUser)
+            : null;
+
+        if ($actorUser && ! $inferenceLock) {
+            return $this->usageFirewall->resultForDecision(
+                $this->usageFirewall->busyDecision(),
+                $account,
+            );
+        }
+
+        if ($actorUser) {
+            $admission = $this->usageFirewall->admitTurn($account, $actorUser, $channel, $setting);
+
+            if (! $admission->allowed) {
+                $inferenceLock?->release();
+
+                return $this->usageFirewall->resultForDecision($admission, $account);
             }
+        }
 
-            try {
-                $disk = Storage::disk($visualAttachment->disk);
+        try {
+            $visualAttachment = $setting->active_provider->supportsImageInference()
+                ? $this->visualAttachment($account, $conversation, $currentMessage)
+                : null;
+            $visualContext = $visualAttachment
+                ? $this->cachedVisualContext($visualAttachment)
+                : null;
+            $includeRawImage = $visualAttachment
+                && ($setting->active_provider === AiProvider::OllamaCloud
+                    ? $visualContext === null
+                    : $this->shouldIncludeRawImage(
+                        $visualAttachment,
+                        $conversation,
+                        $currentMessage,
+                    ));
+            $imageBase64 = null;
+            $imageMimeType = null;
 
-                if (! $disk->exists($visualAttachment->path)) {
+            if ($visualAttachment && $includeRawImage) {
+                if ($setting->active_provider === AiProvider::OllamaCloud
+                    && $this->modelSupportsVision($apiKey, $setting->active_model) === false) {
+                    return StudioAiResult::fallback(
+                        'model_no_vision',
+                        text: __('app.assistant_image_model_unsupported'),
+                    );
+                }
+
+                try {
+                    $disk = Storage::disk($visualAttachment->disk);
+
+                    if (! $disk->exists($visualAttachment->path)) {
+                        return StudioAiResult::fallback(
+                            'image_unavailable',
+                            text: __('app.assistant_image_unavailable'),
+                        );
+                    }
+
+                    $imageBase64 = base64_encode($disk->get($visualAttachment->path));
+                    $imageMimeType = $visualAttachment->mime_type;
+                } catch (Throwable) {
                     return StudioAiResult::fallback(
                         'image_unavailable',
                         text: __('app.assistant_image_unavailable'),
                     );
                 }
-
-                $imageBase64 = base64_encode($disk->get($visualAttachment->path));
-                $imageMimeType = $visualAttachment->mime_type;
-            } catch (Throwable) {
-                return StudioAiResult::fallback(
-                    'image_unavailable',
-                    text: __('app.assistant_image_unavailable'),
-                );
-            }
-        }
-
-        if ($setting->active_provider === AiProvider::OpenAiApiKey && $imageBase64 !== null) {
-            $visualContext = null;
-        }
-
-        $history = $conversation
-            ? $this->contextBuilder->recentConversationMessages($conversation, $currentMessage)
-            : [];
-        $activeBookingDialog = $conversation
-            ? $this->contextBuilder->activeBookingDialog($conversation)
-            : null;
-        $channel = $this->channel($conversation);
-        $actorContext = $this->contextBuilder->actorContext($actorUser, $actorTrainer, $channel);
-        $timezone = $account->timezone ?: config('app.timezone');
-        $requestClock = now($timezone);
-        $calendarAnchors = $this->calendarAnchors($requestClock);
-        $studioContext = $this->contextBuilder->studioContext(
-            $account,
-            requestClock: $requestClock,
-            actorUser: $actorUser,
-        );
-        $tools = $this->toolExecutor->definitions($account, $actorUser);
-        $helpToolsAvailable = $this->toolExecutor->helpAvailableFor($account, $actorUser);
-        $investigationToolsAvailable = $this->toolExecutor->investigationAvailableFor($account, $actorUser);
-        $paymentToolsAvailable = $this->toolExecutor->paymentsAvailableFor($account, $actorUser);
-        $eventToolsAvailable = $this->toolExecutor->eventsAvailableFor($account, $actorUser);
-        $requiresInvestigationEvidence = $investigationToolsAvailable && $this->requiresInvestigationEvidence($text);
-        $toolEvidence = [];
-
-        try {
-            if ($setting->active_provider === AiProvider::OllamaCloud
-                && $visualAttachment
-                && $visualContext === null
-                && $imageBase64 !== null) {
-                if ($beforeProviderRequest) {
-                    $beforeProviderRequest('assistant_status_looking_at_image');
-                }
-
-                $visualContext = $this->extractVisualContext(
-                    $visualAttachment,
-                    $imageBase64,
-                    $apiKey,
-                    $setting->active_model,
-                );
             }
 
-            if ($beforeProviderRequest) {
-                if ($setting->active_provider === AiProvider::OpenAiApiKey
+            if ($setting->active_provider === AiProvider::OpenAiApiKey && $imageBase64 !== null) {
+                $visualContext = null;
+            }
+
+            $history = $conversation
+                ? $this->contextBuilder->recentConversationMessages($conversation, $currentMessage)
+                : [];
+            $activeBookingDialog = $conversation
+                ? $this->contextBuilder->activeBookingDialog($conversation)
+                : null;
+            $actorContext = $this->contextBuilder->actorContext($actorUser, $actorTrainer, $channel);
+            $timezone = $account->timezone ?: config('app.timezone');
+            $requestClock = now($timezone);
+            $calendarAnchors = $this->calendarAnchors($requestClock);
+            $studioContext = $this->contextBuilder->studioContext(
+                $account,
+                requestClock: $requestClock,
+                actorUser: $actorUser,
+            );
+            $tools = $this->toolExecutor->definitions($account, $actorUser);
+            $helpToolsAvailable = $this->toolExecutor->helpAvailableFor($account, $actorUser);
+            $investigationToolsAvailable = $this->toolExecutor->investigationAvailableFor($account, $actorUser);
+            $paymentToolsAvailable = $this->toolExecutor->paymentsAvailableFor($account, $actorUser);
+            $eventToolsAvailable = $this->toolExecutor->eventsAvailableFor($account, $actorUser);
+            $requiresInvestigationEvidence = $investigationToolsAvailable && $this->requiresInvestigationEvidence($text);
+            $toolEvidence = [];
+
+            try {
+                if ($setting->active_provider === AiProvider::OllamaCloud
+                    && $visualAttachment
+                    && $visualContext === null
                     && $imageBase64 !== null) {
-                    $beforeProviderRequest('assistant_status_looking_at_image');
-                }
+                    if ($beforeProviderRequest) {
+                        $beforeProviderRequest('assistant_status_looking_at_image');
+                    }
 
-                $beforeProviderRequest('assistant_status_checking_request');
-                $beforeProviderRequest('assistant_status_thinking');
-            }
-
-            $messages = $setting->active_provider === AiProvider::OpenAiApiKey
-                ? $this->openAiMessagesV3(
-                    $account,
-                    $text,
-                    $setting,
-                    $history,
-                    $actorContext,
-                    $activeBookingDialog,
-                    $studioContext,
-                    $requestClock,
-                    $calendarAnchors,
-                    $channel,
-                    $helpToolsAvailable,
-                    $investigationToolsAvailable,
-                    $paymentToolsAvailable,
-                    $eventToolsAvailable,
-                    $visualContext,
-                    $imageBase64,
-                    $imageMimeType,
-                )
-                : $this->messages(
-                    $account,
-                    $text,
-                    $setting,
-                    $history,
-                    $actorContext,
-                    $activeBookingDialog,
-                    $studioContext,
-                    $requestClock,
-                    $calendarAnchors,
-                    $channel,
-                    $helpToolsAvailable,
-                    $investigationToolsAvailable,
-                    $paymentToolsAvailable,
-                    $eventToolsAvailable,
-                    $visualContext,
-                );
-            $toolCallCount = 0;
-
-            for ($round = 0; $round <= self::MaxToolProviderRounds; $round++) {
-                $isFinalSynthesisRound = $round === self::MaxToolProviderRounds;
-                $roundTools = $isFinalSynthesisRound ? [] : $tools;
-                $roundMessages = $isFinalSynthesisRound
-                    ? [
-                        ...$messages,
-                        [
-                            'role' => 'user',
-                            'content' => $this->finalSynthesisInstruction(),
-                        ],
-                    ]
-                    : $messages;
-                $format = $isFinalSynthesisRound
-                    ? 'json'
-                    : (($tools !== [] && $toolEvidence === [])
-                    || ($requiresInvestigationEvidence
-                        && ! $this->hasVerifiedInvestigationLedger($toolEvidence))
-                            ? null
-                            : 'json');
-                $response = $this->providerResponse(
-                    $setting->active_provider,
-                    $apiKey,
-                    $setting->active_model,
-                    $roundMessages,
-                    $roundTools,
-                    $format,
-                );
-
-                if ($response['tool_calls'] === []) {
-                    $resultContent = $response['content'];
-                    $requiresVisualContext = $setting->active_provider === AiProvider::OpenAiApiKey
-                        && $imageBase64 !== null;
-                    $evidenceOutcome = $this->investigationEvidenceOutcome(
-                        $toolEvidence,
-                        $requiresInvestigationEvidence,
-                    );
-
-                    $result = $this->parseResult(
-                        $response['content'],
+                    $visualContext = $this->extractVisualContext(
+                        $visualAttachment,
+                        $imageBase64,
+                        $apiKey,
+                        $setting->active_model,
                         $account,
-                        $setting,
-                        $toolEvidence,
-                        $activeBookingDialog,
-                        $studioContext,
-                        $calendarAnchors,
-                        $setting->active_provider,
-                        $requiresVisualContext,
-                    );
-
-                    if ($result->fallbackReason === 'invalid_ai_response'
-                        && self::MaxInvalidEnvelopeRetries > 0) {
-                        $initialValidationError = $result->fallbackDetail;
-                        $repairMessages = [
-                            ...$messages,
-                            ...$this->continuationItems($response),
-                            [
-                                'role' => 'user',
-                                'content' => $this->invalidEnvelopeRepairInstruction(
-                                    $requiresInvestigationEvidence
-                                        && $this->hasVerifiedInvestigationLedger($toolEvidence),
-                                    $initialValidationError,
-                                    $setting->active_provider,
-                                ),
-                            ],
-                        ];
-                        $repairResponse = $this->providerResponse(
-                            $setting->active_provider,
-                            $apiKey,
-                            $setting->active_model,
-                            $repairMessages,
-                            [],
-                            'json',
-                        );
-                        $resultContent = $repairResponse['content'];
-                        $result = $repairResponse['tool_calls'] === []
-                            ? $this->parseResult(
-                                $repairResponse['content'],
-                                $account,
-                                $setting,
-                                $toolEvidence,
-                                $activeBookingDialog,
-                                $studioContext,
-                                $calendarAnchors,
-                                $setting->active_provider,
-                                $requiresVisualContext,
-                            )
-                            : StudioAiResult::fallback(
-                                'invalid_ai_response',
-                                'unexpected_tool_call_during_repair',
-                            );
-
-                        if ($result->fallbackReason === 'invalid_ai_response') {
-                            $this->logInvalidStructuredResponse(
-                                $result->fallbackDetail ?? 'unknown_validation_error',
-                                $repairResponse['content'],
-                                $account,
-                                $setting,
-                                $conversation,
-                                $currentMessage,
-                                $round + 1,
-                                $initialValidationError,
-                            );
-                        }
-                    }
-
-                    if ($evidenceOutcome['partial']
-                        && $result->usedAi
-                        && ! $result->isAction()
-                        && $result->text !== '') {
-                        $result = StudioAiResult::answer(
-                            __('app.assistant_investigation_partial')."\n\n".$result->text,
-                            $result->provider ?? $setting->active_provider->value,
-                            $result->model ?? $setting->active_model,
-                            $result->followUpActions,
-                            $result->helpSources,
-                            $result->calendarReference,
-                        );
-                    }
-
-                    if ($setting->active_provider === AiProvider::OpenAiApiKey
-                        && $visualAttachment
-                        && $imageBase64 !== null) {
-                        $this->rememberOpenAiVisualContext(
-                            $visualAttachment,
-                            $resultContent,
-                            $result,
-                            $setting->active_model,
-                            $currentMessage,
-                        );
-                    }
-
-                    if ($evidenceOutcome['blocking_message'] !== null) {
-                        return StudioAiResult::answer(
-                            $evidenceOutcome['blocking_message'],
-                            $setting->active_provider->value,
-                            $setting->active_model,
-                        );
-                    }
-
-                    return $result;
-                }
-
-                if ($roundTools === []) {
-                    $this->logToolLoopLimit(
-                        $account,
-                        $setting,
+                        $actorUser,
                         $conversation,
                         $currentMessage,
-                        $round + 1,
-                        $toolCallCount,
-                        $toolEvidence,
-                        (string) data_get($response, 'tool_calls.0.function.name', ''),
+                        $channel,
+                        $setting,
                     );
-
-                    return StudioAiResult::fallback('ai_tool_loop_limit');
                 }
 
-                $messages = [
-                    ...$messages,
-                    ...$this->continuationItems($response),
-                ];
+                if ($beforeProviderRequest) {
+                    if ($setting->active_provider === AiProvider::OpenAiApiKey
+                        && $imageBase64 !== null) {
+                        $beforeProviderRequest('assistant_status_looking_at_image');
+                    }
 
-                foreach ($response['tool_calls'] as $toolCall) {
-                    $toolCallCount++;
+                    $beforeProviderRequest('assistant_status_checking_request');
+                    $beforeProviderRequest('assistant_status_thinking');
+                }
 
-                    if ($toolCallCount > self::MaxToolCalls) {
+                $messages = $setting->active_provider === AiProvider::OpenAiApiKey
+                    ? $this->openAiMessagesV3(
+                        $account,
+                        $text,
+                        $setting,
+                        $history,
+                        $actorContext,
+                        $activeBookingDialog,
+                        $studioContext,
+                        $requestClock,
+                        $calendarAnchors,
+                        $channel,
+                        $helpToolsAvailable,
+                        $investigationToolsAvailable,
+                        $paymentToolsAvailable,
+                        $eventToolsAvailable,
+                        $visualContext,
+                        $imageBase64,
+                        $imageMimeType,
+                    )
+                    : $this->messages(
+                        $account,
+                        $text,
+                        $setting,
+                        $history,
+                        $actorContext,
+                        $activeBookingDialog,
+                        $studioContext,
+                        $requestClock,
+                        $calendarAnchors,
+                        $channel,
+                        $helpToolsAvailable,
+                        $investigationToolsAvailable,
+                        $paymentToolsAvailable,
+                        $eventToolsAvailable,
+                        $visualContext,
+                    );
+                $toolCallCount = 0;
+
+                for ($round = 0; $round <= self::MaxToolProviderRounds; $round++) {
+                    $isFinalSynthesisRound = $round === self::MaxToolProviderRounds;
+                    $roundTools = $isFinalSynthesisRound ? [] : $tools;
+                    $roundMessages = $isFinalSynthesisRound
+                        ? [
+                            ...$messages,
+                            [
+                                'role' => 'user',
+                                'content' => $this->finalSynthesisInstruction(),
+                            ],
+                        ]
+                        : $messages;
+                    $format = $isFinalSynthesisRound
+                        ? 'json'
+                        : (($tools !== [] && $toolEvidence === [])
+                        || ($requiresInvestigationEvidence
+                            && ! $this->hasVerifiedInvestigationLedger($toolEvidence))
+                                ? null
+                                : 'json');
+                    $response = $this->providerResponse(
+                        $account,
+                        $actorUser,
+                        $conversation,
+                        $currentMessage,
+                        $channel,
+                        $setting,
+                        $setting->active_provider,
+                        $apiKey,
+                        $setting->active_model,
+                        $roundMessages,
+                        $roundTools,
+                        $format,
+                        $isFinalSynthesisRound
+                            ? AiProviderRequest::TypeFinalSynthesis
+                            : AiProviderRequest::TypeInference,
+                        $round + 1,
+                    );
+
+                    if ($response['tool_calls'] === []) {
+                        $resultContent = $response['content'];
+                        $requiresVisualContext = $setting->active_provider === AiProvider::OpenAiApiKey
+                            && $imageBase64 !== null;
+                        $evidenceOutcome = $this->investigationEvidenceOutcome(
+                            $toolEvidence,
+                            $requiresInvestigationEvidence,
+                        );
+
+                        $result = $this->parseResult(
+                            $response['content'],
+                            $account,
+                            $setting,
+                            $toolEvidence,
+                            $activeBookingDialog,
+                            $studioContext,
+                            $calendarAnchors,
+                            $setting->active_provider,
+                            $requiresVisualContext,
+                        );
+
+                        if ($result->fallbackReason === 'invalid_ai_response'
+                            && self::MaxInvalidEnvelopeRetries > 0) {
+                            $initialValidationError = $result->fallbackDetail;
+                            $repairMessages = [
+                                ...$messages,
+                                ...$this->continuationItems($response),
+                                [
+                                    'role' => 'user',
+                                    'content' => $this->invalidEnvelopeRepairInstruction(
+                                        $requiresInvestigationEvidence
+                                            && $this->hasVerifiedInvestigationLedger($toolEvidence),
+                                        $initialValidationError,
+                                        $setting->active_provider,
+                                    ),
+                                ],
+                            ];
+                            $repairResponse = $this->providerResponse(
+                                $account,
+                                $actorUser,
+                                $conversation,
+                                $currentMessage,
+                                $channel,
+                                $setting,
+                                $setting->active_provider,
+                                $apiKey,
+                                $setting->active_model,
+                                $repairMessages,
+                                [],
+                                'json',
+                                AiProviderRequest::TypeEnvelopeRepair,
+                                $round + 1,
+                            );
+                            $resultContent = $repairResponse['content'];
+                            $result = $repairResponse['tool_calls'] === []
+                                ? $this->parseResult(
+                                    $repairResponse['content'],
+                                    $account,
+                                    $setting,
+                                    $toolEvidence,
+                                    $activeBookingDialog,
+                                    $studioContext,
+                                    $calendarAnchors,
+                                    $setting->active_provider,
+                                    $requiresVisualContext,
+                                )
+                                : StudioAiResult::fallback(
+                                    'invalid_ai_response',
+                                    'unexpected_tool_call_during_repair',
+                                );
+
+                            if ($result->fallbackReason === 'invalid_ai_response') {
+                                $this->logInvalidStructuredResponse(
+                                    $result->fallbackDetail ?? 'unknown_validation_error',
+                                    $repairResponse['content'],
+                                    $account,
+                                    $setting,
+                                    $conversation,
+                                    $currentMessage,
+                                    $round + 1,
+                                    $initialValidationError,
+                                );
+                            }
+                        }
+
+                        if ($evidenceOutcome['partial']
+                            && $result->usedAi
+                            && ! $result->isAction()
+                            && $result->text !== '') {
+                            $result = StudioAiResult::answer(
+                                __('app.assistant_investigation_partial')."\n\n".$result->text,
+                                $result->provider ?? $setting->active_provider->value,
+                                $result->model ?? $setting->active_model,
+                                $result->followUpActions,
+                                $result->helpSources,
+                                $result->calendarReference,
+                            );
+                        }
+
+                        if ($setting->active_provider === AiProvider::OpenAiApiKey
+                            && $visualAttachment
+                            && $imageBase64 !== null) {
+                            $this->rememberOpenAiVisualContext(
+                                $visualAttachment,
+                                $resultContent,
+                                $result,
+                                $setting->active_model,
+                                $currentMessage,
+                            );
+                        }
+
+                        if ($evidenceOutcome['blocking_message'] !== null) {
+                            return $this->completeOutcome(
+                                $account,
+                                $actorUser,
+                                $channel,
+                                StudioAiResult::answer(
+                                    $evidenceOutcome['blocking_message'],
+                                    $setting->active_provider->value,
+                                    $setting->active_model,
+                                ),
+                                $setting,
+                            );
+                        }
+
+                        return $this->completeOutcome($account, $actorUser, $channel, $result, $setting);
+                    }
+
+                    if ($roundTools === []) {
                         $this->logToolLoopLimit(
                             $account,
                             $setting,
@@ -410,65 +453,99 @@ class StudioAiInference
                             $round + 1,
                             $toolCallCount,
                             $toolEvidence,
-                            (string) data_get($toolCall, 'function.name', ''),
+                            (string) data_get($response, 'tool_calls.0.function.name', ''),
                         );
 
                         return StudioAiResult::fallback('ai_tool_loop_limit');
                     }
 
-                    $toolName = (string) data_get($toolCall, 'function.name', '');
-                    $arguments = data_get($toolCall, 'function.arguments', []);
-                    $toolResult = $this->toolExecutor->execute(
-                        $account,
-                        $actorUser,
-                        $toolName,
-                        is_array($arguments) ? $arguments : [],
-                        $conversation,
-                        $currentMessage,
-                        $beforeProviderRequest,
-                    );
-                    $toolEvidence[] = [
-                        'name' => $toolName,
-                        'result' => $toolResult,
+                    $messages = [
+                        ...$messages,
+                        ...$this->continuationItems($response),
                     ];
-                    $messages[] = $this->toolOutputMessage(
-                        $setting->active_provider,
-                        $toolName,
-                        (string) ($toolCall['id'] ?? ''),
-                        $toolResult,
-                    );
-                    $terminalEvidenceOutcome = $this->investigationEvidenceOutcome(
-                        $toolEvidence,
-                        false,
-                    );
 
-                    if ($terminalEvidenceOutcome['blocking_message'] !== null) {
-                        return StudioAiResult::answer(
-                            $terminalEvidenceOutcome['blocking_message'],
-                            $setting->active_provider->value,
-                            $setting->active_model,
+                    foreach ($response['tool_calls'] as $toolCall) {
+                        $toolCallCount++;
+
+                        if ($toolCallCount > self::MaxToolCalls) {
+                            $this->logToolLoopLimit(
+                                $account,
+                                $setting,
+                                $conversation,
+                                $currentMessage,
+                                $round + 1,
+                                $toolCallCount,
+                                $toolEvidence,
+                                (string) data_get($toolCall, 'function.name', ''),
+                            );
+
+                            return StudioAiResult::fallback('ai_tool_loop_limit');
+                        }
+
+                        $toolName = (string) data_get($toolCall, 'function.name', '');
+                        $arguments = data_get($toolCall, 'function.arguments', []);
+                        $toolResult = $this->toolExecutor->execute(
+                            $account,
+                            $actorUser,
+                            $toolName,
+                            is_array($arguments) ? $arguments : [],
+                            $conversation,
+                            $currentMessage,
+                            $beforeProviderRequest,
                         );
+                        $toolEvidence[] = [
+                            'name' => $toolName,
+                            'result' => $toolResult,
+                        ];
+                        $messages[] = $this->toolOutputMessage(
+                            $setting->active_provider,
+                            $toolName,
+                            (string) ($toolCall['id'] ?? ''),
+                            $toolResult,
+                        );
+                        $terminalEvidenceOutcome = $this->investigationEvidenceOutcome(
+                            $toolEvidence,
+                            false,
+                        );
+
+                        if ($terminalEvidenceOutcome['blocking_message'] !== null) {
+                            return $this->completeOutcome(
+                                $account,
+                                $actorUser,
+                                $channel,
+                                StudioAiResult::answer(
+                                    $terminalEvidenceOutcome['blocking_message'],
+                                    $setting->active_provider->value,
+                                    $setting->active_model,
+                                ),
+                                $setting,
+                            );
+                        }
+                    }
+
+                    if ($beforeProviderRequest) {
+                        $beforeProviderRequest('assistant_status_preparing_answer');
                     }
                 }
 
-                if ($beforeProviderRequest) {
-                    $beforeProviderRequest('assistant_status_preparing_answer');
+                return StudioAiResult::fallback('ai_tool_loop_limit');
+            } catch (StudioAiUsageLimitExceeded $exception) {
+                return $this->usageFirewall->resultForDecision($exception->decision, $account);
+            } catch (Throwable $throwable) {
+                report($throwable);
+
+                if ($this->hasInvestigationEvidence($toolEvidence)) {
+                    return StudioAiResult::answer(
+                        __('app.assistant_investigation_unable_to_verify'),
+                        $setting->active_provider->value,
+                        $setting->active_model,
+                    );
                 }
+
+                return StudioAiResult::fallback('provider_request_failed');
             }
-
-            return StudioAiResult::fallback('ai_tool_loop_limit');
-        } catch (Throwable $throwable) {
-            report($throwable);
-
-            if ($this->hasInvestigationEvidence($toolEvidence)) {
-                return StudioAiResult::answer(
-                    __('app.assistant_investigation_unable_to_verify'),
-                    $setting->active_provider->value,
-                    $setting->active_model,
-                );
-            }
-
-            return StudioAiResult::fallback('provider_request_failed');
+        } finally {
+            $inferenceLock?->release();
         }
     }
 
@@ -478,30 +555,49 @@ class StudioAiInference
      * @return array<string, mixed>
      */
     private function providerResponse(
+        Account $account,
+        ?User $actorUser,
+        ?AiConversation $conversation,
+        ?AiConversationMessage $currentMessage,
+        string $channel,
+        PlatformAiSetting $setting,
         AiProvider $provider,
         string $apiKey,
         string $model,
         array $messages,
         array $tools,
         ?string $format,
+        string $requestType,
+        int $providerRound,
     ): array {
-        if ($provider === AiProvider::OpenAiApiKey) {
-            return $this->openAiResponsesClient->respond(
-                $apiKey,
-                $model,
-                $messages,
-                $tools,
-                $this->openAiResponseSchema->format(),
-            );
-        }
-
-        return $this->ollamaCloudClient->chat(
-            $apiKey,
+        return $this->providerRequestRecorder->record(
+            $account,
+            $actorUser,
+            $conversation,
+            $currentMessage,
+            $channel,
+            $provider,
             $model,
-            $messages,
-            temperature: 0.0,
-            format: $format,
-            tools: $tools,
+            $requestType,
+            $providerRound,
+            fn (): array => $provider === AiProvider::OpenAiApiKey
+                ? $this->openAiResponsesClient->respond(
+                    $apiKey,
+                    $model,
+                    $messages,
+                    $tools,
+                    $this->openAiResponseSchema->format(),
+                    $actorUser ? $this->usageFirewall->safetyIdentifier($actorUser) : null,
+                )
+                : $this->ollamaCloudClient->chat(
+                    $apiKey,
+                    $model,
+                    $messages,
+                    temperature: 0.0,
+                    format: $format,
+                    tools: $tools,
+                ),
+            $setting,
         );
     }
 
@@ -1086,20 +1182,38 @@ class StudioAiInference
         string $imageBase64,
         string $apiKey,
         string $model,
+        Account $account,
+        ?User $actorUser,
+        ?AiConversation $conversation,
+        ?AiConversationMessage $currentMessage,
+        string $channel,
+        PlatformAiSetting $setting,
     ): string {
-        $response = $this->ollamaCloudClient->chat(
-            $apiKey,
+        $response = $this->providerRequestRecorder->record(
+            $account,
+            $actorUser,
+            $conversation,
+            $currentMessage,
+            $channel,
+            AiProvider::OllamaCloud,
             $model,
-            [
+            AiProviderRequest::TypeVisualAnalysis,
+            null,
+            fn (): array => $this->ollamaCloudClient->chat(
+                $apiKey,
+                $model,
                 [
-                    'role' => 'user',
-                    'content' => 'Briefly identify the screen and class pass visible in this image.',
-                    'images' => [$imageBase64],
+                    [
+                        'role' => 'user',
+                        'content' => 'Briefly identify the screen and class pass visible in this image.',
+                        'images' => [$imageBase64],
+                    ],
                 ],
-            ],
-            temperature: 0.0,
-            tools: [],
-            think: false,
+                temperature: 0.0,
+                tools: [],
+                think: false,
+            ),
+            $setting,
         );
         $visualContext = mb_substr(
             trim($response['content']),
@@ -1541,6 +1655,26 @@ class StudioAiInference
     private function channel(?AiConversation $conversation): string
     {
         return filled($conversation?->channel) ? (string) $conversation->channel : 'dashboard_chat';
+    }
+
+    private function completeOutcome(
+        Account $account,
+        ?User $actorUser,
+        string $channel,
+        StudioAiResult $result,
+        PlatformAiSetting $setting,
+    ): StudioAiResult {
+        if (! $actorUser) {
+            return $result;
+        }
+
+        return $this->usageFirewall->recordOutcome(
+            $account,
+            $actorUser,
+            $channel,
+            $result,
+            $setting,
+        );
     }
 
     /**

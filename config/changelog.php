@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.109.0',
+                'date' => '2026-07-30',
+                'title' => 'Configurable safeguards and transparent usage for Ladna AI',
+                'items' => ['Ladna AI now shares configurable user and studio usage limits across the dashboard and Telegram, including separate platform-admin allowances, paid-provider budgets, and a clear busy state that never spends another provider request.', 'Repeated requests outside the Ladna studio domain now lead to progressive automatic pauses with a specific explanation and unblock time. Valid Ladna answers clear the pending sequence, while provider failures, clarification requests, and limits do not count against the user.', 'Platform administrators have a dedicated AI limits and usage page with safe request and token statistics, provider, model, channel, status, studio, user, and period filters, active restriction details, and audited reset controls without exposing prompts, responses, phone numbers, or Telegram payloads.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.108.0',
                 'date' => '2026-07-29',
                 'title' => 'A richer demo and real Ladna AI examples',
@@ -961,6 +968,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.109.0',
+                'date' => '2026-07-30',
+                'title' => 'Налаштовуваний захист і прозоре використання Ladna AI',
+                'items' => ['Ladna AI тепер застосовує спільні налаштовувані ліміти користувача й студії для адмінки та Telegram, окремі квоти платформного адміністратора, бюджети платних запитів до провайдера та зрозумілий стан зайнятості без додаткових витрат.', 'Послідовні запити поза темою роботи студії Ladna тепер спричиняють прогресивні автоматичні паузи з конкретним поясненням і часом розблокування. Коректна відповідь Ladna скидає накопичену послідовність, а помилки провайдера, уточнення й ліміти не впливають на неї.', 'Платформний адміністратор отримав окрему сторінку лімітів і використання AI з безпечною статистикою запитів і токенів, фільтрами за провайдером, моделлю, каналом, статусом, студією, користувачем і періодом, активними обмеженнями та аудитованим скиданням без показу запитів, відповідей, номерів телефонів чи Telegram payload.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.108.0',
                 'date' => '2026-07-29',

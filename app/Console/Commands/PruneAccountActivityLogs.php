@@ -6,6 +6,7 @@ use App\Models\AccountActivityLog;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiPendingAction;
+use App\Models\AiProviderRequest;
 use App\Models\McpToolInvocation;
 use App\Models\TelegramAlert;
 use App\Models\TelegramAuthorizationSelection;
@@ -36,6 +37,9 @@ class PruneAccountActivityLogs extends Command
             ->delete();
 
         $deletedMcpToolInvocations = $this->deleteOldTelegramMcpToolInvocations($cutoff);
+        $deletedAiProviderRequests = AiProviderRequest::query()
+            ->where('started_at', '<', $cutoff)
+            ->delete();
         $deletedAiPendingActions = $this->deleteOldTelegramAiPendingActions($cutoff);
         $deletedAiMessages = $this->deleteOldTelegramAiMessages($cutoff, $imageCleaner);
         $deletedAiConversations = $this->deleteOldTelegramAiConversations($cutoff);
@@ -45,6 +49,7 @@ class PruneAccountActivityLogs extends Command
         $deletedAuthorizationSelections = $this->deleteOldTelegramAuthorizationSelections($cutoff);
 
         $this->info(__('app.account_activity_logs_pruned', ['count' => $deletedActivityLogs]));
+        $this->info(__('app.ai_provider_requests_pruned', ['count' => $deletedAiProviderRequests]));
         $this->info(__('app.telegram_logs_pruned', [
             'messages' => $deletedTelegramMessages,
             'updates' => $deletedTelegramUpdates,

@@ -31,6 +31,7 @@ class OpenAiResponsesClient
         array $input,
         array $tools = [],
         ?array $textFormat = null,
+        ?string $safetyIdentifier = null,
     ): array {
         $payload = [
             'model' => $model,
@@ -48,6 +49,10 @@ class OpenAiResponsesClient
 
         if ($textFormat !== null) {
             $payload['text']['format'] = $textFormat;
+        }
+
+        if ($safetyIdentifier !== null) {
+            $payload['safety_identifier'] = $safetyIdentifier;
         }
 
         return $this->normalize($this->request($apiKey, $payload));
