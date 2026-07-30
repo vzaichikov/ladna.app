@@ -9,6 +9,7 @@ use App\Enums\FiscalReceiptStatus;
 use App\Enums\IntegrationScope;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
@@ -23,7 +24,7 @@ class FiscalReceiptService
         private readonly CheckboxFiscalizationClient $checkbox,
     ) {}
 
-    public function skipReasonFor(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment): ?string
+    public function skipReasonFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): ?string
     {
         $payment->loadMissing('account');
 
@@ -37,6 +38,14 @@ class FiscalReceiptService
 
         if ($payment->amount_cents <= 0) {
             return 'payment amount is zero';
+        }
+
+        if ($payment instanceof CustomerPurchaseRefund) {
+            $payment->loadMissing('customerPurchase.fiscalReceipt');
+
+            if (! $payment->customerPurchase?->fiscalReceipt?->isFiscalized()) {
+                return 'source payment is not fiscalized';
+            }
         }
 
         if ($payment instanceof CustomerPurchase && $payment->isManualCashStudioPayment()) {
@@ -55,6 +64,11 @@ class FiscalReceiptService
         return $this->fiscalizePayment($purchase);
     }
 
+    public function fiscalizeCustomerPurchaseRefund(CustomerPurchaseRefund $refund): ?FiscalReceipt
+    {
+        return $this->fiscalizePayment($refund);
+    }
+
     public function fiscalizeAccountSubscriptionPayment(AccountSubscriptionPayment $payment): ?FiscalReceipt
     {
         return $this->fiscalizePayment($payment);
@@ -65,21 +79,23 @@ class FiscalReceiptService
         return $this->fiscalizePayment($order);
     }
 
-    public function fiscalizePayment(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment): ?FiscalReceipt
+    public function fiscalizePayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): ?FiscalReceipt
     {
-        $setting = $this->availability->methodForPayment($payment);
-
-        if ($this->skipReasonFor($payment) !== null || ! $setting) {
-            return null;
-        }
-
-        $receipt = $this->receiptFor($payment, $setting);
-
-        if ($receipt->isFiscalized()) {
-            return $receipt;
-        }
+        $receipt = null;
 
         try {
+            $setting = $this->availability->methodForPayment($payment);
+
+            if ($this->skipReasonFor($payment) !== null || ! $setting) {
+                return null;
+            }
+
+            $receipt = $this->receiptFor($payment, $setting);
+
+            if ($receipt->isFiscalized()) {
+                return $receipt;
+            }
+
             if ($receipt->status === FiscalReceiptStatus::Processing && filled($receipt->provider_receipt_id)) {
                 $receipt = $this->applyResult(
                     $receipt,
@@ -97,20 +113,23 @@ class FiscalReceiptService
         } catch (Throwable $exception) {
             report($exception);
 
-            return $this->markFailed($receipt, $exception->getMessage());
+            return $receipt
+                ? $this->markFailed($receipt, $exception->getMessage())
+                : null;
         }
     }
 
-    private function paymentIsPaid(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment): bool
+    private function paymentIsPaid(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): bool
     {
         return match (true) {
             $payment instanceof CustomerPurchase => $payment->status === CustomerPurchaseStatus::PaymentPaid,
+            $payment instanceof CustomerPurchaseRefund => $payment->exists,
             $payment instanceof EventOrder => in_array($payment->status, [EventOrderStatus::Paid, EventOrderStatus::RefundRequired], true),
             $payment instanceof AccountSubscriptionPayment => $payment->status === AccountSubscriptionPaymentStatus::PaymentPaid,
         };
     }
 
-    private function receiptFor(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment, IntegrationSetting $setting): FiscalReceipt
+    private function receiptFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment, IntegrationSetting $setting): FiscalReceipt
     {
         return DB::transaction(function () use ($payment, $setting): FiscalReceipt {
             $receipt = FiscalReceipt::query()
@@ -141,7 +160,7 @@ class FiscalReceiptService
         });
     }
 
-    private function markSending(FiscalReceipt $receipt, CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment): FiscalReceipt
+    private function markSending(FiscalReceipt $receipt, CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): FiscalReceipt
     {
         $externalUuid = (string) Str::uuid();
 
@@ -193,24 +212,29 @@ class FiscalReceiptService
     /**
      * @return array<string, mixed>
      */
-    private function payloadFor(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment, string $externalUuid): array
+    private function payloadFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment, string $externalUuid): array
     {
         $name = $this->itemName($payment);
+        $isReturn = $payment instanceof CustomerPurchaseRefund;
         $payload = [
             'id' => $externalUuid,
             'goods' => [[
                 'good' => [
-                    'code' => $payment->order_id,
+                    'code' => $this->paymentReference($payment),
                     'name' => $name,
                     'price' => $payment->amount_cents,
                 ],
                 'quantity' => 1000,
-                'is_return' => false,
+                'is_return' => $isReturn,
             ]],
             'payments' => [[
-                'type' => 'CASHLESS',
+                'type' => $payment instanceof CustomerPurchaseRefund && $payment->isCash()
+                    ? 'CASH'
+                    : 'CASHLESS',
                 'value' => $payment->amount_cents,
-                'label' => $this->paymentProviderLabel($payment->provider),
+                'label' => $payment instanceof CustomerPurchaseRefund
+                    ? __('app.payment_refund_method_'.$payment->method)
+                    : $this->paymentProviderLabel($payment->provider),
             ]],
             'total_sum' => $payment->amount_cents,
         ];
@@ -224,8 +248,14 @@ class FiscalReceiptService
         return $payload;
     }
 
-    private function itemName(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment): string
+    private function itemName(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): string
     {
+        if ($payment instanceof CustomerPurchaseRefund) {
+            $payment->loadMissing('customerPurchase');
+
+            return Str::limit($payment->customerPurchase?->plan_name ?: __('app.payment_refund'), 128, '');
+        }
+
         if ($payment instanceof CustomerPurchase) {
             return Str::limit($payment->plan_name, 128, '');
         }
@@ -248,8 +278,17 @@ class FiscalReceiptService
     /**
      * @return array<string, string>
      */
-    private function deliveryFor(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment): array
+    private function deliveryFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): array
     {
+        if ($payment instanceof CustomerPurchaseRefund) {
+            $payment->loadMissing('customerPurchase.customer');
+            $payment = $payment->customerPurchase;
+
+            if (! $payment) {
+                return [];
+            }
+        }
+
         if ($payment instanceof EventOrder) {
             return array_filter([
                 'email' => $payment->buyer_email,
@@ -282,8 +321,19 @@ class FiscalReceiptService
         return is_string($label) ? $label : $provider;
     }
 
-    private function paymentAccountId(CustomerPurchase|EventOrder|AccountSubscriptionPayment $payment): ?int
+    private function paymentAccountId(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): ?int
     {
         return $payment->account_id ? (int) $payment->account_id : null;
+    }
+
+    private function paymentReference(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): string
+    {
+        if ($payment instanceof CustomerPurchaseRefund) {
+            $payment->loadMissing('customerPurchase');
+
+            return (string) ($payment->customerPurchase?->order_id ?? 'refund-'.$payment->id);
+        }
+
+        return $payment->order_id;
     }
 }

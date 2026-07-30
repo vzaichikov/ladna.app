@@ -6,6 +6,7 @@ use App\Enums\CustomerPurchaseStatus;
 use App\Http\Requests\AccountPaymentFilterRequest;
 use App\Models\Account;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\StudioExpense;
 use App\Support\Fiscalization\FiscalizationAvailability;
 use App\Support\Payments\AccountPaymentDashboardData;
@@ -31,7 +32,10 @@ class AccountPaymentController extends Controller
             'provider' => $filters['provider'],
             'locationId' => $filters['location_id'],
             'locations' => $account->locations()->orderBy('name')->get(),
-            'statuses' => CustomerPurchaseStatus::cases(),
+            'statuses' => [
+                ...array_column(CustomerPurchaseStatus::cases(), 'value'),
+                CustomerPurchaseRefund::StatusRecorded,
+            ],
             'paymentMethods' => CustomerPurchase::paymentMethods(),
             'expensePaymentMethods' => StudioExpense::paymentMethods(),
             'expenseStatuses' => StudioExpense::statuses(),

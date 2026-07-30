@@ -523,13 +523,15 @@ class PaymentHistoryTest extends TestCase
         $this->assertSame(1, $response->viewData('stats')['fiscal_failed']);
         $this->assertSame(['UAH' => 500], $response->viewData('stats')['cash_balance_by_currency']);
         $this->assertSame([
+            'gross_income_by_currency' => ['UAH' => 10000],
+            'refunds_by_currency' => [],
             'income_by_currency' => ['UAH' => 10000],
             'expense_by_currency' => ['UAH' => 2500],
             'remaining_by_currency' => ['UAH' => 7000],
             'cash_received_by_currency' => [],
             'collection_by_currency' => ['UAH' => 500],
         ], $response->viewData('periodOverview'));
-        $this->assertSame('Period failed purchase', $response->viewData('payments')->first()->plan_name);
+        $this->assertSame('Period failed purchase', $response->viewData('payments')->first()['record']->plan_name);
         $this->assertCount(2, $response->viewData('expenses'));
         $this->assertSame(2500, $response->viewData('expenseCategoryBreakdown')->sole()['amount_cents']);
 
@@ -548,7 +550,7 @@ class PaymentHistoryTest extends TestCase
         $this->assertSame(1, $filteredResponse->viewData('stats')['pending']);
         $this->assertSame(1, $filteredResponse->viewData('stats')['failed']);
         $this->assertSame(1, $filteredResponse->viewData('stats')['fiscal_failed']);
-        $this->assertSame($paidPurchase->id, $filteredResponse->viewData('payments')->sole()->id);
+        $this->assertSame($paidPurchase->id, $filteredResponse->viewData('payments')->sole()['record']->id);
         $this->assertSame(9000, $filteredResponse->viewData('expenses')->sole()->amount_cents);
         $this->assertTrue($filteredResponse->viewData('expenseCategoryBreakdown')->isEmpty());
         $this->assertModelExists($pendingPurchase);

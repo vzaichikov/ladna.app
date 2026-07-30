@@ -24,10 +24,13 @@ class StudioCashEntry extends Model
 
     public const PurposeExpenseReversal = 'expense_reversal';
 
+    public const PurposePaymentRefund = 'payment_refund';
+
     protected $fillable = [
         'account_id',
         'location_id',
         'studio_expense_id',
+        'customer_purchase_refund_id',
         'direction',
         'purpose',
         'amount_cents',
@@ -56,6 +59,7 @@ class StudioCashEntry extends Model
             self::PurposeOwnerWithdrawal,
             self::PurposeOperationalExpense,
             self::PurposeExpenseReversal,
+            self::PurposePaymentRefund,
         ];
     }
 
@@ -82,5 +86,10 @@ class StudioCashEntry extends Model
     public function expense(): BelongsTo
     {
         return $this->belongsTo(StudioExpense::class, 'studio_expense_id');
+    }
+
+    public function customerPurchaseRefund(): BelongsTo
+    {
+        return $this->belongsTo(CustomerPurchaseRefund::class);
     }
 }

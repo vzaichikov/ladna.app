@@ -36,6 +36,7 @@ use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerNotificationSettingsController;
 use App\Http\Controllers\CustomerPurchaseCorrectionController;
+use App\Http\Controllers\CustomerPurchaseRefundController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
@@ -437,6 +438,9 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.expenses.void');
         Route::post('accounts/{account}/payments/{customerPurchase}/corrections', [CustomerPurchaseCorrectionController::class, 'store'])
             ->name('accounts.payments.corrections.store');
+        Route::post('accounts/{account}/payments/{customerPurchase}/refunds', [CustomerPurchaseRefundController::class, 'store'])
+            ->scopeBindings()
+            ->name('accounts.payments.refunds.store');
         Route::get('accounts/{account}/reports', [ReportController::class, 'index'])
             ->name('accounts.reports.index');
         Route::get('accounts/{account}/reports/trainers', TrainerReportController::class)

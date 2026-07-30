@@ -400,6 +400,8 @@ class HelpPagesTest extends TestCase
             ->assertSee('Внесення готівки', false)
             ->assertSee('Вилучення власником', false)
             ->assertSee('Онлайн-оплати, платежі через платіжний сервіс і фіскалізовані платежі не редагуються вручну', false)
+            ->assertSee('Повернути оплату', false)
+            ->assertSee('Ladna не надсилає гроші через банк або платіжний сервіс', false)
             ->assertSee('assets/help/screenshots/payments-period.png', false);
 
         $this->get(route('help.show', 'trainers', false))
@@ -489,7 +491,7 @@ class HelpPagesTest extends TestCase
     {
         $this->get(route('help.show', 'integrations-payments', false))
             ->assertStatus(200)
-            ->assertSee('від першого дня поточного місяця до сьогодні', false)
+            ->assertSee('надходження до повернень, суму повернень і дохід після повернень', false)
             ->assertSee('Поточний Баланс каси за локаціями не обмежується вибраними датами', false)
             ->assertSee('Як записувати операційні витрати студії', false)
             ->assertSee('Для Готівки з каси локація обовʼязкова', false)

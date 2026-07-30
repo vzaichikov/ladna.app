@@ -9,6 +9,7 @@ use App\Enums\FiscalReceiptStatus;
 use App\Models\Account;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Support\Fiscalization\FiscalReceiptService;
 use Illuminate\Console\Attributes\Description;
@@ -85,6 +86,23 @@ class FiscalizePayments extends Command
                 };
             });
 
+        CustomerPurchaseRefund::query()
+            ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
+            ->when($accountId === null, fn ($query) => $query->whereHas('account', fn ($query) => $query->operational()))
+            ->with(['account', 'customerPurchase.customer', 'customerPurchase.fiscalReceipt', 'fiscalReceipt'])
+            ->lazyById()
+            ->each(function (CustomerPurchaseRefund $refund) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {
+                [$result, $message] = $this->processPayment('customer-refund', $refund, $fiscalReceipts);
+                $this->line($message);
+                $processed++;
+
+                match ($result) {
+                    'fiscalized' => $fiscalized++,
+                    'failed' => $failed++,
+                    default => $skipped++,
+                };
+            });
+
         EventOrder::query()
             ->whereIn('status', [EventOrderStatus::Paid->value, EventOrderStatus::RefundRequired->value])
             ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
@@ -127,37 +145,47 @@ class FiscalizePayments extends Command
      */
     private function processPayment(
         string $kind,
-        AccountSubscriptionPayment|CustomerPurchase|EventOrder $payment,
+        AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder $payment,
         FiscalReceiptService $fiscalReceipts,
     ): array {
         if ($payment->fiscalReceipt?->isFiscalized()) {
-            return ['skipped', "[{$kind}] #{$payment->id} {$payment->order_id}: skipped, already fiscalized ({$payment->fiscalReceipt->fiscal_number})."];
+            return ['skipped', "[{$kind}] #{$payment->id} {$this->paymentReference($payment)}: skipped, already fiscalized ({$payment->fiscalReceipt->fiscal_number})."];
         }
 
         $skipReason = $fiscalReceipts->skipReasonFor($payment);
 
         if ($skipReason !== null) {
-            return ['skipped', "[{$kind}] #{$payment->id} {$payment->order_id}: skipped, {$skipReason}."];
+            return ['skipped', "[{$kind}] #{$payment->id} {$this->paymentReference($payment)}: skipped, {$skipReason}."];
         }
 
         $receipt = match (true) {
             $payment instanceof CustomerPurchase => $fiscalReceipts->fiscalizeCustomerPurchase($payment),
+            $payment instanceof CustomerPurchaseRefund => $fiscalReceipts->fiscalizeCustomerPurchaseRefund($payment),
             $payment instanceof EventOrder => $fiscalReceipts->fiscalizeEventOrder($payment),
             default => $fiscalReceipts->fiscalizeAccountSubscriptionPayment($payment),
         };
 
         if (! $receipt) {
-            return ['skipped', "[{$kind}] #{$payment->id} {$payment->order_id}: skipped, no fiscal receipt was created."];
+            return ['skipped', "[{$kind}] #{$payment->id} {$this->paymentReference($payment)}: skipped, no fiscal receipt was created."];
         }
 
         if ($receipt->status === FiscalReceiptStatus::Fiscalized) {
-            return ['fiscalized', "[{$kind}] #{$payment->id} {$payment->order_id}: fiscalized ({$receipt->fiscal_number})."];
+            return ['fiscalized', "[{$kind}] #{$payment->id} {$this->paymentReference($payment)}: fiscalized ({$receipt->fiscal_number})."];
         }
 
         if ($receipt->status === FiscalReceiptStatus::Failed) {
-            return ['failed', "[{$kind}] #{$payment->id} {$payment->order_id}: failed, {$receipt->last_error}."];
+            return ['failed', "[{$kind}] #{$payment->id} {$this->paymentReference($payment)}: failed, {$receipt->last_error}."];
         }
 
-        return ['skipped', "[{$kind}] #{$payment->id} {$payment->order_id}: {$receipt->status->value}."];
+        return ['skipped', "[{$kind}] #{$payment->id} {$this->paymentReference($payment)}: {$receipt->status->value}."];
+    }
+
+    private function paymentReference(AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder $payment): string
+    {
+        if ($payment instanceof CustomerPurchaseRefund) {
+            return ($payment->customerPurchase?->order_id ?? 'payment').'/refund-'.$payment->id;
+        }
+
+        return $payment->order_id;
     }
 }

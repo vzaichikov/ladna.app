@@ -55,6 +55,7 @@
         $accountToday = \Carbon\CarbonImmutable::now(\App\Support\DateTimePresenter::accountTimezone($account))->toDateString();
         $isToday = $filters['date_from'] === $accountToday && $filters['date_to'] === $accountToday;
         $hasAdvancedPaymentFilters = filled($filters['provider']) || filled($filters['location_id']);
+        $refundValidationPaymentId = old('refund_payment_id');
     @endphp
 
     <div>
@@ -98,15 +99,33 @@
         </div>
 
         <x-ui.panel padding="none" class="overflow-hidden">
-            <div class="grid divide-y divide-stone-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div class="grid divide-y divide-stone-100 sm:grid-cols-2 sm:divide-x lg:grid-cols-5 lg:divide-y-0">
                 <div class="flex items-center justify-between gap-4 p-4">
                     <div class="flex min-w-0 items-center gap-3">
                         <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
                             <x-ui.icon name="payments" class="h-5 w-5" />
                         </span>
-                        <span class="text-sm font-medium text-slate-500">{{ __('app.period_paid_income') }}</span>
+                        <span class="text-sm font-medium text-slate-500">{{ __('app.period_gross_income') }}</span>
                     </div>
-                    <span class="shrink-0 text-xl font-semibold text-slate-950 sm:text-2xl">{{ $formatMoneyTotals($periodOverview['income_by_currency']) }}</span>
+                    <span class="shrink-0 text-xl font-semibold text-slate-950">{{ $formatMoneyTotals($periodOverview['gross_income_by_currency']) }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4 p-4">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700">
+                            <x-ui.icon name="undo-2" class="h-5 w-5" />
+                        </span>
+                        <span class="text-sm font-medium text-slate-500">{{ __('app.period_refunds') }}</span>
+                    </div>
+                    <span class="shrink-0 text-xl font-semibold text-rose-700">−{{ $formatMoneyTotals($periodOverview['refunds_by_currency']) }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4 p-4">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                            <x-ui.icon name="payments" class="h-5 w-5" />
+                        </span>
+                        <span class="text-sm font-medium text-slate-500">{{ __('app.period_net_income') }}</span>
+                    </div>
+                    <span class="shrink-0 text-xl font-semibold text-slate-950">{{ $formatMoneyTotals($periodOverview['income_by_currency']) }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-4 p-4">
                     <div class="flex min-w-0 items-center gap-3">
@@ -115,7 +134,7 @@
                         </span>
                         <span class="text-sm font-medium text-slate-500">{{ __('app.period_operational_expenses') }}</span>
                     </div>
-                    <span class="shrink-0 text-xl font-semibold text-slate-950 sm:text-2xl">{{ $formatMoneyTotals($periodOverview['expense_by_currency']) }}</span>
+                    <span class="shrink-0 text-xl font-semibold text-slate-950">{{ $formatMoneyTotals($periodOverview['expense_by_currency']) }}</span>
                 </div>
                 <div class="p-4">
                     <div class="flex items-center justify-between gap-4">
@@ -125,7 +144,7 @@
                             </span>
                             <span class="text-sm font-medium text-slate-500">{{ __('app.period_remaining_in_studio') }}</span>
                         </div>
-                        <span class="shrink-0 text-xl font-semibold text-slate-950 sm:text-2xl">{{ $formatMoneyTotals($periodOverview['remaining_by_currency']) }}</span>
+                        <span class="shrink-0 text-xl font-semibold text-slate-950">{{ $formatMoneyTotals($periodOverview['remaining_by_currency']) }}</span>
                     </div>
                     <details class="mt-2 text-xs text-slate-500">
                         <summary class="crm-focus inline-flex min-h-11 cursor-pointer items-center rounded-md px-1 font-semibold text-brand-700">{{ __('app.what_is_this') }}</summary>
@@ -171,7 +190,7 @@
                     <select name="status" class="crm-field min-h-11">
                         <option value="">{{ __('app.all_statuses') }}</option>
                         @foreach ($statuses as $statusOption)
-                            <option value="{{ $statusOption->value }}" @selected($filters['status'] === $statusOption->value)>{{ __('app.'.$statusOption->value) }}</option>
+                            <option value="{{ $statusOption }}" @selected($filters['status'] === $statusOption)>{{ __('app.'.$statusOption) }}</option>
                         @endforeach
                     </select>
                 </label>
@@ -236,7 +255,93 @@
         @endif
 
         <x-ui.panel padding="none" class="mt-4 overflow-hidden">
-            @forelse ($payments as $payment)
+            @forelse ($payments as $paymentEntry)
+                @php
+                    $isRefund = $paymentEntry['type'] === 'refund';
+                    $payment = $paymentEntry['record'];
+                @endphp
+
+                @if ($isRefund)
+                    @php
+                        $sourcePayment = $payment->customerPurchase;
+                        $receipt = $payment->fiscalReceipt;
+                        $sourceReceiptFiscalized = $sourcePayment?->fiscalReceipt?->isFiscalized() ?? false;
+                        $showFiscalStatus = $fiscalizationEnabled && $sourceReceiptFiscalized;
+                        $fiscalStatusClass = match ($receipt?->status?->value) {
+                            'fiscalized' => 'crm-status-active',
+                            'processing', 'pending' => 'crm-status-scheduled',
+                            'failed' => 'crm-status-danger',
+                            default => 'crm-status-muted',
+                        };
+                    @endphp
+
+                    <details class="group border-b border-rose-100 bg-rose-50/35 last:border-b-0" data-payment-refund-row="{{ $payment->id }}">
+                        <summary class="crm-focus min-h-11 cursor-pointer list-none p-4 transition hover:bg-rose-50 [&::-webkit-details-marker]:hidden">
+                            <div class="flex min-w-0 items-start justify-between gap-3 lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_140px_150px_24px] lg:items-center">
+                                <div class="min-w-0">
+                                    <div class="break-words font-semibold text-slate-950">{{ __('app.payment_refund') }} {{ $sourcePayment?->customer?->name ?? __('app.not_set') }}</div>
+                                    <div class="mt-1 break-words text-sm text-slate-500">{{ $sourcePayment?->plan_name ?? __('app.not_set') }}</div>
+                                </div>
+                                <div class="hidden min-w-0 text-sm text-slate-500 lg:block">
+                                    <div>{{ $formatDateTime($payment->refunded_at) }}</div>
+                                    <div class="mt-1">{{ __('app.payment_refund_method_'.$payment->method) }}</div>
+                                </div>
+                                <div class="shrink-0 text-right font-semibold text-rose-700 lg:text-left">−{{ $formatMoney($payment->amount_cents, $payment->currency) }}</div>
+                                <div class="hidden space-y-2 lg:block">
+                                    <span class="crm-status-danger">{{ __('app.refund_recorded') }}</span>
+                                    @if ($showFiscalStatus && $receipt?->status === \App\Enums\FiscalReceiptStatus::Failed)
+                                        <div><span class="crm-status-danger">{{ __('app.fiscal_status_failed') }}</span></div>
+                                    @endif
+                                </div>
+                                <x-ui.icon name="chevron-down" class="mt-1 hidden h-5 w-5 text-slate-400 transition group-open:rotate-180 lg:block" />
+                            </div>
+                            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 lg:hidden">
+                                <span>{{ $formatDateTime($payment->refunded_at) }}</span>
+                                <span aria-hidden="true">·</span>
+                                <span>{{ __('app.payment_refund_method_'.$payment->method) }}</span>
+                                <span class="crm-status-danger">{{ __('app.refund_recorded') }}</span>
+                                <x-ui.icon name="chevron-down" class="ml-auto h-5 w-5 text-slate-400 transition group-open:rotate-180" />
+                            </div>
+                        </summary>
+                        <div class="border-t border-rose-100 bg-white/80 p-4">
+                            <div class="grid gap-4 text-sm lg:grid-cols-3">
+                                <div>
+                                    <h3 class="font-semibold text-slate-950">{{ __('app.refund_source_payment') }}</h3>
+                                    <dl class="mt-2 space-y-2 text-slate-600">
+                                        <div><dt class="inline font-semibold text-slate-700">{{ __('app.original_payment') }}:</dt> <dd class="inline">{{ $formatMoney($sourcePayment?->amount_cents, $sourcePayment?->currency) }}</dd></div>
+                                        <div><dt class="inline font-semibold text-slate-700">ID:</dt> <dd class="inline">{{ $sourcePayment?->order_id ?? __('app.not_set') }}</dd></div>
+                                        <div><dt class="inline font-semibold text-slate-700">{{ __('app.payment_provider') }}:</dt> <dd class="inline">{{ $sourcePayment ? $providerLabelResolver($sourcePayment->provider) : __('app.not_set') }}</dd></div>
+                                        <div><dt class="inline font-semibold text-slate-700">{{ __('app.location') }}:</dt> <dd class="inline">{{ $payment->location?->name ?? __('app.not_set') }}</dd></div>
+                                    </dl>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-slate-950">{{ __('app.refund_reason') }}</h3>
+                                    <p class="mt-2 leading-6 text-slate-600">{{ $payment->reason }}</p>
+                                    <p class="mt-2 text-xs font-semibold text-slate-500">{{ __('app.refund_recorded_by') }}: {{ $payment->actor_name ?? __('app.system') }}</p>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-slate-950">{{ __('app.payment_status') }}</h3>
+                                    <div class="mt-2 space-y-2 text-slate-600">
+                                        <span class="crm-status-danger">{{ __('app.refund_recorded') }}</span>
+                                        @if ($showFiscalStatus)
+                                            <div>
+                                                <span class="{{ $fiscalStatusClass }}">{{ $receipt?->status ? __('app.fiscal_status_'.$receipt->status->value) : __('app.fiscal_status_pending') }}</span>
+                                                @if ($receipt?->fiscal_number)
+                                                    <div class="mt-2 font-semibold text-slate-700">{{ __('app.fiscal_receipt_number') }}: {{ $receipt->fiscal_number }}</div>
+                                                @endif
+                                                @if ($receipt?->last_error)
+                                                    <div class="mt-2 text-rose-700">{{ $receipt->last_error }}</div>
+                                                @endif
+                                            </div>
+                                        @else
+                                            <p class="leading-5">{{ $sourcePayment?->isManualCashStudioPayment() ? __('app.manual_cash_not_fiscalized') : __('app.refund_fiscal_receipt_not_required') }}</p>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                @else
                 @php
                     $paymentStatusClass = match ($payment->status->value) {
                         'payment_paid' => 'crm-status-active',
@@ -272,6 +377,9 @@
                                 <div class="font-semibold text-slate-950">{{ $formatMoney($payment->amount_cents, $payment->currency) }}</div>
                                 @if ($payment->corrections->isNotEmpty())
                                     <span class="mt-1 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">{{ __('app.corrected_payment') }}</span>
+                                @endif
+                                @if ($payment->refundedAmountCents() > 0)
+                                    <span class="mt-1 inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-800">−{{ $formatMoney($payment->refundedAmountCents(), $payment->currency) }}</span>
                                 @endif
                             </div>
                             <div class="hidden space-y-2 lg:block">
@@ -347,6 +455,29 @@
                             </div>
                         </div>
 
+                        @if ($canManageStudioCashflow && $payment->canBeRefunded())
+                            <button
+                                type="button"
+                                class="crm-focus mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                                data-payment-refund-open
+                                data-payment-id="{{ $payment->id }}"
+                                data-action="{{ route('dashboard.accounts.payments.refunds.store', [$account, $payment]) }}"
+                                data-customer="{{ $payment->customer?->name ?? __('app.not_set') }}"
+                                data-description="{{ $payment->plan_name }}"
+                                data-original-amount="{{ $formatMoney($payment->amount_cents, $payment->currency) }}"
+                                data-refunded-amount="{{ $formatMoney($payment->refundedAmountCents(), $payment->currency) }}"
+                                data-remaining-amount="{{ $formatMoney($payment->remainingRefundableAmountCents(), $payment->currency) }}"
+                                data-remaining-input="{{ $formatMoneyInput($payment->remainingRefundableAmountCents()) }}"
+                                data-currency="{{ $payment->currency }}"
+                                data-default-method="{{ $payment->isManualCashStudioPayment() ? \App\Models\CustomerPurchaseRefund::MethodCash : \App\Models\CustomerPurchaseRefund::MethodCashless }}"
+                                data-cash-location-id="{{ $payment->location_id ?? $locations->first()?->id }}"
+                                data-idempotency-key="{{ (string) \Illuminate\Support\Str::uuid() }}"
+                            >
+                                <x-ui.icon name="undo-2" class="h-4 w-4" />
+                                {{ __('app.refund_payment') }}
+                            </button>
+                        @endif
+
                         @if ($canManageStudioCashflow && $payment->canBeCorrectedAsStudioCash())
                             <details class="mt-4">
                                 <summary class="crm-focus inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 transition hover:border-brand-100 hover:bg-brand-50">
@@ -399,6 +530,7 @@
                         @endif
                     </div>
                 </details>
+                @endif
             @empty
                 <p class="p-4 text-sm text-slate-500">{{ __('app.no_payment_history') }}</p>
             @endforelse
@@ -407,6 +539,89 @@
         @if ($payments->hasPages())
             <div class="mt-4">{{ $payments->links() }}</div>
         @endif
+
+        <div
+            class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="payment-refund-modal-title"
+            data-payment-refund-modal
+            data-auto-open-payment-id="{{ $refundValidationPaymentId }}"
+            data-old-amount="{{ $refundValidationPaymentId ? old('amount') : '' }}"
+            data-old-method="{{ $refundValidationPaymentId ? old('method') : '' }}"
+            data-old-cash-location-id="{{ $refundValidationPaymentId ? old('cash_location_id') : '' }}"
+            data-old-reason="{{ $refundValidationPaymentId ? old('reason') : '' }}"
+            data-old-idempotency-key="{{ $refundValidationPaymentId ? old('idempotency_key') : '' }}"
+            data-confirm-body-template="{{ __('app.confirm_payment_refund_body', ['amount' => ':amount', 'method' => ':method']) }}"
+        >
+            <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 id="payment-refund-modal-title" class="text-xl font-semibold text-slate-950">{{ __('app.refund_payment_title') }}</h2>
+                        <p class="mt-1 text-sm text-slate-500"><span data-payment-refund-customer></span> · <span data-payment-refund-description></span></p>
+                    </div>
+                    <button type="button" class="crm-focus inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" aria-label="{{ __('app.close') }}" data-payment-refund-close>
+                        <x-ui.icon name="x" class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <dl class="mt-5 grid gap-3 rounded-xl border border-stone-200 bg-slate-50 p-4 text-sm sm:grid-cols-3">
+                    <div><dt class="font-medium text-slate-500">{{ __('app.original_payment') }}</dt><dd class="mt-1 font-semibold text-slate-950" data-payment-refund-original></dd></div>
+                    <div><dt class="font-medium text-slate-500">{{ __('app.already_refunded') }}</dt><dd class="mt-1 font-semibold text-rose-700" data-payment-refund-refunded></dd></div>
+                    <div><dt class="font-medium text-slate-500">{{ __('app.remaining_to_refund') }}</dt><dd class="mt-1 font-semibold text-slate-950" data-payment-refund-remaining></dd></div>
+                </dl>
+
+                <form
+                    method="POST"
+                    action="#"
+                    class="mt-5 grid gap-4 sm:grid-cols-2"
+                    data-payment-refund-form
+                    data-confirm-action
+                    data-confirm-title="{{ __('app.confirm_payment_refund_title') }}"
+                    data-confirm-accept="{{ __('app.confirm_payment_refund') }}"
+                    data-confirm-icon="undo-2"
+                    data-confirm-variant="danger"
+                >
+                    @csrf
+                    <input type="hidden" name="refund_payment_id" value="{{ old('refund_payment_id') }}" data-payment-refund-payment-id>
+                    <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key') }}" data-payment-refund-idempotency-key>
+
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.amount') }}</span>
+                        <input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{ $refundValidationPaymentId ? old('amount') : '' }}" class="crm-field min-h-11" required data-payment-refund-amount>
+                        @if ($refundValidationPaymentId) @error('amount') <span class="crm-help">{{ $message }}</span> @enderror @endif
+                    </label>
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.refund_method') }}</span>
+                        <select name="method" class="crm-field min-h-11" required data-payment-refund-method>
+                            <option value="{{ \App\Models\CustomerPurchaseRefund::MethodCash }}">{{ __('app.payment_refund_method_cash') }}</option>
+                            <option value="{{ \App\Models\CustomerPurchaseRefund::MethodCashless }}">{{ __('app.payment_refund_method_cashless') }}</option>
+                        </select>
+                        @if ($refundValidationPaymentId) @error('method') <span class="crm-help">{{ $message }}</span> @enderror @endif
+                    </label>
+                    <label class="block sm:col-span-2" data-payment-refund-cash-location>
+                        <span class="crm-label">{{ __('app.refund_cash_location') }}</span>
+                        <select name="cash_location_id" class="crm-field min-h-11" data-payment-refund-cash-location-select>
+                            @foreach ($locations as $location)
+                                <option value="{{ $location->id }}">{{ $location->name }}</option>
+                            @endforeach
+                        </select>
+                        @if ($refundValidationPaymentId) @error('cash_location_id') <span class="crm-help">{{ $message }}</span> @enderror @endif
+                    </label>
+                    <label class="block sm:col-span-2">
+                        <span class="crm-label">{{ __('app.refund_reason') }}</span>
+                        <textarea name="reason" rows="4" minlength="3" maxlength="2000" class="crm-field" required placeholder="{{ __('app.refund_reason_placeholder') }}" data-payment-refund-reason>{{ $refundValidationPaymentId ? old('reason') : '' }}</textarea>
+                        @if ($refundValidationPaymentId) @error('reason') <span class="crm-help">{{ $message }}</span> @enderror @endif
+                    </label>
+                    @if ($refundValidationPaymentId) @error('idempotency_key') <span class="crm-help sm:col-span-2">{{ $message }}</span> @enderror @endif
+
+                    <div class="flex flex-col-reverse gap-3 sm:col-span-2 sm:flex-row sm:justify-end">
+                        <x-ui.button type="button" variant="secondary" data-payment-refund-close>{{ __('app.cancel') }}</x-ui.button>
+                        <x-ui.button type="submit" variant="danger">{{ __('app.refund_payment') }}</x-ui.button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </section>
 
     <section class="mt-8" data-payments-section="cash">

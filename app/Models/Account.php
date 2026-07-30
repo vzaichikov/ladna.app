@@ -638,6 +638,11 @@ class Account extends Model
         return $this->hasMany(CustomerPurchaseCorrection::class);
     }
 
+    public function customerPurchaseRefunds(): HasMany
+    {
+        return $this->hasMany(CustomerPurchaseRefund::class);
+    }
+
     public function studioCashEntries(): HasMany
     {
         return $this->hasMany(StudioCashEntry::class);

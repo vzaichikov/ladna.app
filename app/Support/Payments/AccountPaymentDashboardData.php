@@ -7,6 +7,7 @@ use App\Enums\EventOrderStatus;
 use App\Enums\FiscalReceiptStatus;
 use App\Models\Account;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\ExpenseCategory;
 use App\Models\FiscalReceipt;
@@ -18,6 +19,8 @@ use Illuminate\Support\Collection;
 
 class AccountPaymentDashboardData
 {
+    public function __construct(private readonly AccountPaymentHistory $paymentHistory) {}
+
     /**
      * @param  array{date_from: string, date_to: string, search: string|null, payment_method: string|null, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
      * @return array<string, mixed>
@@ -31,28 +34,17 @@ class AccountPaymentDashboardData
     ): array {
         $periodPaymentQuery = $this->periodPaymentQuery($account, $startsAt, $endsAt);
         $paymentQuery = $this->paymentQuery(clone $periodPaymentQuery, $filters);
+        $periodRefundQuery = CustomerPurchaseRefund::query()
+            ->whereBelongsTo($account)
+            ->whereBetween('refunded_at', [$startsAt, $endsAt]);
+        $refundQuery = $this->paymentHistory->refundQuery($account, $filters, $startsAt, $endsAt);
         $periodEventPaymentQuery = $this->periodEventPaymentQuery($account, $startsAt, $endsAt);
         $eventPaymentQuery = $this->eventPaymentQuery(clone $periodEventPaymentQuery, $filters);
         $cashBalances = $this->cashBalances($account);
         $expenseQuery = $this->expenseQuery($account, $filters, $startsAt, $endsAt);
 
         return [
-            'payments' => (clone $paymentQuery)
-                ->with([
-                    'customer',
-                    'location',
-                    'classPassPlan',
-                    'customerClassPass',
-                    'classBooking.scheduledClass.location',
-                    'classBooking.scheduledClass.room',
-                    'fiscalReceipt',
-                    'fiscalReceipts',
-                    'corrections.previousLocation',
-                    'corrections.newLocation',
-                ])
-                ->effectiveNewestFirst()
-                ->paginate(20, ['*'], 'payments_page')
-                ->withQueryString(),
+            'payments' => $this->paymentHistory->paginate($account, $filters, $startsAt, $endsAt),
             'expenses' => (clone $expenseQuery)
                 ->with(['category', 'location', 'cashEntries'])
                 ->orderByDesc('occurred_at')
@@ -65,14 +57,14 @@ class AccountPaymentDashboardData
                 ->paginate(20, ['*'], 'event_payments_page')
                 ->withQueryString(),
             'cashEntries' => $account->studioCashEntries()
-                ->with(['location', 'expense.category'])
+                ->with(['location', 'expense.category', 'customerPurchaseRefund.customerPurchase.customer'])
                 ->whereBetween('occurred_at', [$startsAt, $endsAt])
                 ->orderByDesc('occurred_at')
                 ->orderByDesc('id')
                 ->take(20)
                 ->get(),
             'cashBalances' => $cashBalances,
-            'stats' => $this->paymentStats($paymentQuery, $periodPaymentQuery, $eventPaymentQuery, $periodEventPaymentQuery, $cashBalances, $fiscalizationEnabled),
+            'stats' => $this->paymentStats($paymentQuery, $periodPaymentQuery, $refundQuery, $periodRefundQuery, $eventPaymentQuery, $periodEventPaymentQuery, $cashBalances, $fiscalizationEnabled),
             'periodOverview' => $this->periodOverview($account, $startsAt, $endsAt),
             'expenseCategoryBreakdown' => $this->expenseCategoryBreakdown($account, $filters, $startsAt, $endsAt),
             'expenseCategories' => $account->expenseCategories()->ordered()->get(),
@@ -156,13 +148,17 @@ class AccountPaymentDashboardData
     /**
      * @param  Builder<CustomerPurchase>  $paymentQuery
      * @param  Builder<CustomerPurchase>  $periodPaymentQuery
+     * @param  Builder<CustomerPurchaseRefund>  $refundQuery
+     * @param  Builder<CustomerPurchaseRefund>  $periodRefundQuery
      * @param  Builder<EventOrder>  $eventPaymentQuery
      * @param  Builder<EventOrder>  $periodEventPaymentQuery
-     * @return array{total: int, paid_amounts_by_currency: array<string, int>, pending: int, failed: int, fiscal_failed: int, cash_balance_by_currency: array<string, int>}
+     * @return array{total: int, paid_amounts_by_currency: array<string, int>, refund_amounts_by_currency: array<string, int>, pending: int, failed: int, fiscal_failed: int, cash_balance_by_currency: array<string, int>}
      */
     private function paymentStats(
         Builder $paymentQuery,
         Builder $periodPaymentQuery,
+        Builder $refundQuery,
+        Builder $periodRefundQuery,
         Builder $eventPaymentQuery,
         Builder $periodEventPaymentQuery,
         Collection $cashBalances,
@@ -178,18 +174,27 @@ class AccountPaymentDashboardData
                 ->where('payment_type', (new EventOrder)->getMorphClass())
                 ->whereIn('payment_id', (clone $periodEventPaymentQuery)->select('id'))
                 ->count()
+                + FiscalReceipt::query()
+                    ->where('status', FiscalReceiptStatus::Failed->value)
+                    ->where('payment_type', (new CustomerPurchaseRefund)->getMorphClass())
+                    ->whereIn('payment_id', (clone $periodRefundQuery)->select('id'))
+                    ->count()
             : 0;
 
+        $grossPaidAmounts = $this->mergeCurrencyTotals(
+            $this->totalsByCurrency((clone $paymentQuery)->where('status', CustomerPurchaseStatus::PaymentPaid->value)),
+            $this->totalsByCurrency((clone $eventPaymentQuery)->whereIn('status', [
+                EventOrderStatus::Paid->value,
+                EventOrderStatus::RefundRequired->value,
+                EventOrderStatus::PaidRequiresRefund->value,
+            ])),
+        );
+        $refundAmounts = $this->totalsByCurrency(clone $refundQuery);
+
         return [
-            'total' => (clone $paymentQuery)->count() + (clone $eventPaymentQuery)->count(),
-            'paid_amounts_by_currency' => $this->mergeCurrencyTotals(
-                $this->totalsByCurrency((clone $paymentQuery)->where('status', CustomerPurchaseStatus::PaymentPaid->value)),
-                $this->totalsByCurrency((clone $eventPaymentQuery)->whereIn('status', [
-                    EventOrderStatus::Paid->value,
-                    EventOrderStatus::RefundRequired->value,
-                    EventOrderStatus::PaidRequiresRefund->value,
-                ])),
-            ),
+            'total' => (clone $paymentQuery)->count() + (clone $refundQuery)->count() + (clone $eventPaymentQuery)->count(),
+            'paid_amounts_by_currency' => $this->subtractCurrencyTotals($grossPaidAmounts, $refundAmounts),
+            'refund_amounts_by_currency' => $refundAmounts,
             'pending' => (clone $periodPaymentQuery)
                 ->whereIn('status', [
                     CustomerPurchaseStatus::PaymentStarted->value,
@@ -214,16 +219,16 @@ class AccountPaymentDashboardData
     }
 
     /**
-     * @return array{income_by_currency: array<string, int>, expense_by_currency: array<string, int>, remaining_by_currency: array<string, int>, cash_received_by_currency: array<string, int>, collection_by_currency: array<string, int>}
+     * @return array{gross_income_by_currency: array<string, int>, refunds_by_currency: array<string, int>, income_by_currency: array<string, int>, expense_by_currency: array<string, int>, remaining_by_currency: array<string, int>, cash_received_by_currency: array<string, int>, collection_by_currency: array<string, int>}
      */
     private function periodOverview(Account $account, CarbonInterface $startsAt, CarbonInterface $endsAt): array
     {
-        $incomeByCurrency = $this->totalsByCurrency(CustomerPurchase::query()
+        $grossIncomeByCurrency = $this->totalsByCurrency(CustomerPurchase::query()
             ->whereBelongsTo($account)
             ->withinEffectiveDateRange($startsAt, $endsAt)
             ->where('status', CustomerPurchaseStatus::PaymentPaid->value));
-        $incomeByCurrency = $this->mergeCurrencyTotals(
-            $incomeByCurrency,
+        $grossIncomeByCurrency = $this->mergeCurrencyTotals(
+            $grossIncomeByCurrency,
             $this->totalsByCurrency(EventOrder::query()
                 ->whereBelongsTo($account)
                 ->whereBetween('paid_at', [$startsAt, $endsAt])
@@ -233,6 +238,10 @@ class AccountPaymentDashboardData
                     EventOrderStatus::PaidRequiresRefund->value,
                 ])),
         );
+        $refundsByCurrency = $this->totalsByCurrency(CustomerPurchaseRefund::query()
+            ->whereBelongsTo($account)
+            ->whereBetween('refunded_at', [$startsAt, $endsAt]));
+        $incomeByCurrency = $this->subtractCurrencyTotals($grossIncomeByCurrency, $refundsByCurrency);
         $expenseByCurrency = $this->totalsByCurrency(StudioExpense::query()
             ->whereBelongsTo($account)
             ->active()
@@ -251,6 +260,8 @@ class AccountPaymentDashboardData
             ->whereBetween('occurred_at', [$startsAt, $endsAt]));
 
         return [
+            'gross_income_by_currency' => $grossIncomeByCurrency,
+            'refunds_by_currency' => $refundsByCurrency,
             'income_by_currency' => $incomeByCurrency,
             'expense_by_currency' => $expenseByCurrency,
             'remaining_by_currency' => $this->subtractCurrencyTotals(

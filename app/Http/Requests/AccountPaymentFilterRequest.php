@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\CustomerPurchaseStatus;
 use App\Models\Account;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\ExpenseCategory;
 use App\Models\Location;
 use App\Models\StudioExpense;
@@ -37,7 +38,10 @@ class AccountPaymentFilterRequest extends FormRequest
             'date_to' => ['required', 'date_format:Y-m-d', 'after_or_equal:date_from'],
             'search' => ['nullable', 'string', 'max:255'],
             'payment_method' => ['nullable', Rule::in(CustomerPurchase::paymentMethods())],
-            'status' => ['nullable', Rule::enum(CustomerPurchaseStatus::class)],
+            'status' => ['nullable', Rule::in([
+                ...array_column(CustomerPurchaseStatus::cases(), 'value'),
+                CustomerPurchaseRefund::StatusRecorded,
+            ])],
             'provider' => ['nullable', 'string', Rule::in($this->providerValues($account))],
             'location_id' => [
                 'nullable',

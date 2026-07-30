@@ -141,6 +141,11 @@ class CustomerPurchase extends Model
         return $this->hasMany(CustomerPurchaseCorrection::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(CustomerPurchaseRefund::class);
+    }
+
     public function isPaid(): bool
     {
         return $this->status === CustomerPurchaseStatus::PaymentPaid;
@@ -181,5 +186,33 @@ class CustomerPurchase extends Model
         return $this->isManualCashStudioPayment()
             && $this->isPaid()
             && ! $hasFiscalReceipts;
+    }
+
+    public function refundedAmountCents(): int
+    {
+        $amountCents = $this->relationLoaded('refunds')
+            ? $this->refunds->sum('amount_cents')
+            : $this->refunds()->sum('amount_cents');
+
+        return (int) $amountCents;
+    }
+
+    public function remainingRefundableAmountCents(): int
+    {
+        return max(0, (int) $this->amount_cents - $this->refundedAmountCents());
+    }
+
+    public function canBeRefunded(): bool
+    {
+        return $this->isPaid() && $this->remainingRefundableAmountCents() > 0;
+    }
+
+    public function fundsCustomerClassPass(): bool
+    {
+        return $this->customer_class_pass_id !== null
+            && in_array($this->payment_source, [
+                self::SourceManualCashClassPass,
+                self::SourceOnlineCheckout,
+            ], true);
     }
 }

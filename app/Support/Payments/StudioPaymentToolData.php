@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\FiscalReceipt;
 use App\Models\Location;
@@ -44,6 +45,7 @@ class StudioPaymentToolData
         $locationId = $location?->id;
 
         $customerPayments = $this->customerPayments($account, $startsAt, $endsAt, $locationId);
+        $customerRefunds = $this->customerRefunds($account, $startsAt, $endsAt, $locationId);
         $eventPayments = $this->eventPayments($account, $startsAt, $endsAt, $locationId);
         $expenses = $this->expenses($account, $startsAt, $endsAt, $locationId);
         $ownerWithdrawals = StudioCashEntry::query()
@@ -56,6 +58,8 @@ class StudioPaymentToolData
         $customerIncome = $this->totalsByCurrency(
             (clone $customerPayments)->where('status', CustomerPurchaseStatus::PaymentPaid->value),
         );
+        $customerRefundTotals = $this->totalsByCurrency(clone $customerRefunds);
+        $netCustomerIncome = $this->subtractCurrencyTotals($customerIncome, $customerRefundTotals);
         $eventIncome = $this->totalsByCurrency(
             (clone $eventPayments)->whereIn('status', [
                 EventOrderStatus::Paid->value,
@@ -63,7 +67,7 @@ class StudioPaymentToolData
                 EventOrderStatus::PaidRequiresRefund->value,
             ]),
         );
-        $income = $this->mergeCurrencyTotals($customerIncome, $eventIncome);
+        $income = $this->mergeCurrencyTotals($netCustomerIncome, $eventIncome);
         $expenseTotals = $this->totalsByCurrency((clone $expenses)->active());
         $withdrawalTotals = $this->totalsByCurrency(clone $ownerWithdrawals);
         $cashReceived = $this->totalsByCurrency(
@@ -96,6 +100,8 @@ class StudioPaymentToolData
             ] : null,
             'totals' => [
                 'customer_income' => $this->moneyTotals($customerIncome),
+                'customer_refunds' => $this->moneyTotals($customerRefundTotals),
+                'net_customer_income' => $this->moneyTotals($netCustomerIncome),
                 'event_income' => $this->moneyTotals($eventIncome),
                 'income' => $this->moneyTotals($income),
                 'operational_expenses' => $this->moneyTotals($expenseTotals),
@@ -111,6 +117,7 @@ class StudioPaymentToolData
             ],
             'counts' => [
                 'customer_payments_by_status' => $this->countsByStatus(clone $customerPayments),
+                'customer_refunds' => (clone $customerRefunds)->count(),
                 'event_payments_by_status' => $this->countsByStatus(clone $eventPayments),
                 'operational_expenses' => [
                     StudioExpense::StatusActive => (clone $expenses)->active()->count(),
@@ -122,7 +129,7 @@ class StudioPaymentToolData
                         EventOrderStatus::PaidRequiresRefund->value,
                     ])
                     ->count(),
-                'fiscal_failed' => $this->fiscalFailureCount($customerPayments, $eventPayments),
+                'fiscal_failed' => $this->fiscalFailureCount($customerPayments, $customerRefunds, $eventPayments),
                 'outstanding_class_passes' => [
                     'unpaid' => (clone $outstandingPasses)->unpaid()->count(),
                     'partial' => (clone $outstandingPasses)->partiallyPaid()->count(),
@@ -159,6 +166,18 @@ class StudioPaymentToolData
 
         if ($kind === null || $kind === 'customer_payment') {
             $rows = $rows->concat($this->customerPaymentRows(
+                $account,
+                $startsAt,
+                $endsAt,
+                $locationId,
+                $query,
+                $status,
+                $limit,
+            ));
+        }
+
+        if ($kind === null || $kind === 'customer_refund') {
+            $rows = $rows->concat($this->customerRefundRows(
                 $account,
                 $startsAt,
                 $endsAt,
@@ -344,6 +363,59 @@ class StudioPaymentToolData
     /**
      * @return Collection<int, array<string, mixed>>
      */
+    private function customerRefundRows(
+        Account $account,
+        CarbonInterface $startsAt,
+        CarbonInterface $endsAt,
+        ?int $locationId,
+        string $search,
+        ?string $status,
+        int $limit,
+    ): Collection {
+        return $this->customerRefunds($account, $startsAt, $endsAt, $locationId)
+            ->with([
+                'customerPurchase.customer:id,account_id,name,phone,email',
+                'customerPurchase:id,account_id,customer_id,order_id,provider,plan_name',
+                'location:id,account_id,name',
+            ])
+            ->when($search !== '', function (Builder $query) use ($search): void {
+                $escaped = addcslashes($search, '\\%_');
+                $query->whereHas('customerPurchase', fn (Builder $query): Builder => $query
+                    ->where('order_id', 'like', '%'.$escaped.'%')
+                    ->orWhere('plan_name', 'like', '%'.$escaped.'%')
+                    ->orWhereHas('customer', fn (Builder $query): Builder => $query
+                        ->where('name', 'like', '%'.$escaped.'%')
+                        ->orWhere('phone', 'like', '%'.$escaped.'%')
+                        ->orWhere('email', 'like', '%'.$escaped.'%')));
+            })
+            ->when($status !== null && $status !== CustomerPurchaseRefund::StatusRecorded, fn (Builder $query): Builder => $query->whereRaw('1 = 0'))
+            ->orderByDesc('refunded_at')
+            ->orderByDesc('id')
+            ->limit($limit + 1)
+            ->get()
+            ->map(fn (CustomerPurchaseRefund $refund): array => [
+                '_sort_at' => $refund->refunded_at?->getTimestamp() ?? 0,
+                'kind' => 'customer_refund',
+                'payment_id' => $refund->id,
+                'source_payment_id' => $refund->customer_purchase_id,
+                'reference' => $refund->customerPurchase?->order_id,
+                'status' => CustomerPurchaseRefund::StatusRecorded,
+                'occurred_at' => $this->occurredAt($account, $refund->refunded_at),
+                'amount' => $this->money((int) $refund->amount_cents, (string) $refund->currency),
+                'payment_method' => $refund->method,
+                'provider' => $refund->customerPurchase?->provider,
+                'description' => $refund->customerPurchase?->plan_name,
+                'location' => $refund->location ? [
+                    'location_id' => $refund->location->id,
+                    'name' => $refund->location->name,
+                ] : null,
+                'customer' => $this->customer($refund->customerPurchase?->customer),
+            ]);
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
     private function expenseRows(
         Account $account,
         CarbonInterface $startsAt,
@@ -406,6 +478,7 @@ class StudioPaymentToolData
             ->whereNotIn('purpose', [
                 StudioCashEntry::PurposeOperationalExpense,
                 StudioCashEntry::PurposeExpenseReversal,
+                StudioCashEntry::PurposePaymentRefund,
             ])
             ->when($locationId, fn (Builder $query, int $id): Builder => $query->where('location_id', $id))
             ->when($search !== '', function (Builder $query) use ($search): void {
@@ -461,6 +534,18 @@ class StudioPaymentToolData
                     ->whereBetween('created_at', [$startsAt, $endsAt])))
             ->when($locationId, fn (Builder $query, int $id): Builder => $query
                 ->whereHas('event', fn (Builder $query): Builder => $query->where('location_id', $id)));
+    }
+
+    private function customerRefunds(
+        Account $account,
+        CarbonInterface $startsAt,
+        CarbonInterface $endsAt,
+        ?int $locationId,
+    ): Builder {
+        return CustomerPurchaseRefund::query()
+            ->whereBelongsTo($account)
+            ->whereBetween('refunded_at', [$startsAt, $endsAt])
+            ->when($locationId, fn (Builder $query, int $id): Builder => $query->where('location_id', $id));
     }
 
     private function expenses(
@@ -572,13 +657,18 @@ class StudioPaymentToolData
         });
     }
 
-    private function fiscalFailureCount(Builder $customerPayments, Builder $eventPayments): int
+    private function fiscalFailureCount(Builder $customerPayments, Builder $customerRefunds, Builder $eventPayments): int
     {
         return FiscalReceipt::query()
             ->where('status', FiscalReceiptStatus::Failed->value)
             ->where('payment_type', (new CustomerPurchase)->getMorphClass())
             ->whereIn('payment_id', (clone $customerPayments)->select('id'))
             ->count()
+            + FiscalReceipt::query()
+                ->where('status', FiscalReceiptStatus::Failed->value)
+                ->where('payment_type', (new CustomerPurchaseRefund)->getMorphClass())
+                ->whereIn('payment_id', (clone $customerRefunds)->select('id'))
+                ->count()
             + FiscalReceipt::query()
                 ->where('status', FiscalReceiptStatus::Failed->value)
                 ->where('payment_type', (new EventOrder)->getMorphClass())

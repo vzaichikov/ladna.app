@@ -2,9 +2,7 @@
 
 namespace App\Actions;
 
-use App\Enums\CustomerPurchaseStatus;
 use App\Models\Account;
-use App\Models\CustomerClassPass;
 use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseCorrection;
 use App\Models\Location;
@@ -16,7 +14,10 @@ use Illuminate\Validation\ValidationException;
 
 class CorrectCustomerPurchase
 {
-    public function __construct(private readonly ActorSnapshot $actorSnapshot) {}
+    public function __construct(
+        private readonly ActorSnapshot $actorSnapshot,
+        private readonly RecalculateCustomerClassPassPayment $recalculateCustomerClassPassPayment,
+    ) {}
 
     public function execute(
         Account $account,
@@ -29,7 +30,7 @@ class CorrectCustomerPurchase
     ): CustomerPurchaseCorrection {
         return DB::transaction(function () use ($account, $customerPurchase, $location, $amountCents, $paidAt, $user, $reason): CustomerPurchaseCorrection {
             $purchase = CustomerPurchase::query()
-                ->with(['customerClassPass', 'fiscalReceipts'])
+                ->with(['customerClassPass', 'fiscalReceipts', 'refunds'])
                 ->whereBelongsTo($account)
                 ->whereKey($customerPurchase->id)
                 ->lockForUpdate()
@@ -48,6 +49,12 @@ class CorrectCustomerPurchase
             if ($amountCents <= 0) {
                 throw ValidationException::withMessages([
                     'amount' => __('app.class_pass_payment_amount_required'),
+                ]);
+            }
+
+            if ($amountCents < $purchase->refundedAmountCents()) {
+                throw ValidationException::withMessages([
+                    'amount' => __('app.payment_correction_below_refunded_amount'),
                 ]);
             }
 
@@ -72,26 +79,10 @@ class CorrectCustomerPurchase
             ])->save();
 
             if ($purchase->isManualCashClassPassPayment() && $purchase->customerClassPass) {
-                $this->recalculateClassPassPayment($purchase->customerClassPass);
+                $this->recalculateCustomerClassPassPayment->execute($purchase->customerClassPass);
             }
 
             return $correction;
         });
-    }
-
-    private function recalculateClassPassPayment(CustomerClassPass $customerClassPass): void
-    {
-        $paidAmountCents = CustomerPurchase::query()
-            ->whereBelongsTo($customerClassPass)
-            ->where('payment_source', CustomerPurchase::SourceManualCashClassPass)
-            ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
-            ->sum('amount_cents');
-
-        $normalizedPaidAmountCents = min((int) $customerClassPass->price_cents, (int) $paidAmountCents);
-
-        $customerClassPass->forceFill([
-            'paid_amount_cents' => $normalizedPaidAmountCents,
-            'is_paid' => $normalizedPaidAmountCents >= (int) $customerClassPass->price_cents,
-        ])->save();
     }
 }

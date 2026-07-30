@@ -1790,6 +1790,125 @@ function initTrainerPrivateLessonsModal() {
     });
 }
 
+function closePaymentRefundModal(modal) {
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function initPaymentRefundModal() {
+    const modal = document.querySelector('[data-payment-refund-modal]');
+
+    if (!modal || modal.dataset.paymentRefundReady === 'true') {
+        return;
+    }
+
+    modal.dataset.paymentRefundReady = 'true';
+    const form = modal.querySelector('[data-payment-refund-form]');
+    const amountInput = modal.querySelector('[data-payment-refund-amount]');
+    const methodSelect = modal.querySelector('[data-payment-refund-method]');
+    const cashLocationWrapper = modal.querySelector('[data-payment-refund-cash-location]');
+    const cashLocationSelect = modal.querySelector('[data-payment-refund-cash-location-select]');
+    const reasonInput = modal.querySelector('[data-payment-refund-reason]');
+    let currentCurrency = '';
+
+    const syncCashLocation = () => {
+        const isCash = methodSelect?.value === 'cash';
+
+        cashLocationWrapper?.classList.toggle('hidden', !isCash);
+
+        if (cashLocationSelect) {
+            cashLocationSelect.disabled = !isCash;
+            cashLocationSelect.required = isCash;
+        }
+    };
+
+    const fillModal = (button, restoreOldInput = false) => {
+        if (!form || !button) {
+            return;
+        }
+
+        form.action = button.dataset.action || '#';
+        modal.querySelector('[data-payment-refund-customer]').textContent = button.dataset.customer || '';
+        modal.querySelector('[data-payment-refund-description]').textContent = button.dataset.description || '';
+        modal.querySelector('[data-payment-refund-original]').textContent = button.dataset.originalAmount || '';
+        modal.querySelector('[data-payment-refund-refunded]').textContent = button.dataset.refundedAmount || '';
+        modal.querySelector('[data-payment-refund-remaining]').textContent = button.dataset.remainingAmount || '';
+        modal.querySelector('[data-payment-refund-payment-id]').value = button.dataset.paymentId || '';
+        currentCurrency = button.dataset.currency || '';
+
+        if (amountInput) {
+            amountInput.max = button.dataset.remainingInput || '';
+            amountInput.value = restoreOldInput && modal.dataset.oldAmount
+                ? modal.dataset.oldAmount
+                : button.dataset.remainingInput || '';
+        }
+
+        if (methodSelect) {
+            methodSelect.value = restoreOldInput && modal.dataset.oldMethod
+                ? modal.dataset.oldMethod
+                : button.dataset.defaultMethod || 'cashless';
+        }
+
+        if (cashLocationSelect) {
+            cashLocationSelect.value = restoreOldInput && modal.dataset.oldCashLocationId
+                ? modal.dataset.oldCashLocationId
+                : button.dataset.cashLocationId || '';
+        }
+
+        if (reasonInput) {
+            reasonInput.value = restoreOldInput ? modal.dataset.oldReason || '' : '';
+        }
+
+        modal.querySelector('[data-payment-refund-idempotency-key]').value = restoreOldInput && modal.dataset.oldIdempotencyKey
+            ? modal.dataset.oldIdempotencyKey
+            : button.dataset.idempotencyKey || '';
+        syncCashLocation();
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        amountInput?.focus();
+    };
+
+    document.querySelectorAll('[data-payment-refund-open]').forEach((button) => {
+        button.addEventListener('click', () => fillModal(button));
+    });
+
+    methodSelect?.addEventListener('change', syncCashLocation);
+    modal.querySelectorAll('[data-payment-refund-close]').forEach((button) => {
+        button.addEventListener('click', () => closePaymentRefundModal(modal));
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closePaymentRefundModal(modal);
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closePaymentRefundModal(modal);
+        }
+    });
+    form?.addEventListener('submit', () => {
+        const template = modal.dataset.confirmBodyTemplate || '';
+        const method = methodSelect?.selectedOptions[0]?.textContent?.trim() || '';
+        const amount = `${amountInput?.value || ''} ${currentCurrency}`.trim();
+
+        form.dataset.confirmBody = template
+            .replace(':amount', amount)
+            .replace(':method', method);
+    });
+
+    if (modal.dataset.autoOpenPaymentId) {
+        const button = document.querySelector(`[data-payment-refund-open][data-payment-id="${CSS.escape(modal.dataset.autoOpenPaymentId)}"]`);
+
+        if (button) {
+            fillModal(button, true);
+        }
+    }
+}
+
 function fillQuickBookingForm(modal, button) {
     const form = modal?.querySelector('form');
 
@@ -5796,6 +5915,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initScheduledClassTrainerModals();
     initTrainerIssueModals();
     initTrainerPrivateLessonsModal();
+    initPaymentRefundModal();
     initTrainerPrivateTimeframes();
     initQuickBookingModals();
     initCustomerTransferModals();

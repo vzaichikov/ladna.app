@@ -9,6 +9,7 @@ use App\Enums\McpToolInvocationStatus;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\Event;
 use App\Models\EventOrder;
 use App\Models\EventOrderItem;
@@ -36,7 +37,7 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
         $customer = Customer::factory()->for($account)->create();
         $event = Event::factory()->for($account)->published()->create();
 
-        CustomerPurchase::factory()
+        $refundedPurchase = CustomerPurchase::factory()
             ->for($account)
             ->for($customer)
             ->create([
@@ -44,6 +45,15 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
                 'amount_cents' => 10000,
                 'currency' => 'UAH',
                 'paid_at' => Carbon::parse('2026-07-15 10:00:00', 'Europe/Kyiv'),
+            ]);
+        CustomerPurchaseRefund::factory()
+            ->for($account)
+            ->for($refundedPurchase, 'customerPurchase')
+            ->create([
+                'method' => CustomerPurchaseRefund::MethodCashless,
+                'amount_cents' => 2000,
+                'currency' => 'UAH',
+                'refunded_at' => Carbon::parse('2026-07-20 10:00:00', 'Europe/Kyiv'),
             ]);
         CustomerPurchase::factory()
             ->for($account)
@@ -119,14 +129,16 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
             ->assertOk()
             ->assertJsonPath('result.structuredContent.status', 'ok')
             ->assertJsonPath('result.structuredContent.totals.customer_income.0.amount_cents', 10700)
+            ->assertJsonPath('result.structuredContent.totals.customer_refunds.0.amount_cents', 2000)
+            ->assertJsonPath('result.structuredContent.totals.net_customer_income.0.amount_cents', 8700)
             ->assertJsonPath('result.structuredContent.totals.customer_income.1.currency', 'USD')
             ->assertJsonPath('result.structuredContent.totals.customer_income.1.amount_cents', 3000)
             ->assertJsonPath('result.structuredContent.totals.event_income.0.amount_cents', 5000)
-            ->assertJsonPath('result.structuredContent.totals.income.0.amount_cents', 15700)
+            ->assertJsonPath('result.structuredContent.totals.income.0.amount_cents', 13700)
             ->assertJsonPath('result.structuredContent.totals.income.1.amount_cents', 3000)
             ->assertJsonPath('result.structuredContent.totals.operational_expenses.0.amount_cents', 2000)
             ->assertJsonPath('result.structuredContent.totals.owner_withdrawals.0.amount_cents', 1000)
-            ->assertJsonPath('result.structuredContent.totals.remaining.0.amount_cents', 12700)
+            ->assertJsonPath('result.structuredContent.totals.remaining.0.amount_cents', 10700)
             ->assertJsonPath('result.structuredContent.totals.remaining.0.currency', 'UAH')
             ->assertJsonPath('result.structuredContent.totals.remaining.1.amount_cents', 3000)
             ->assertJsonPath('result.structuredContent.counts.customer_payments_by_status.payment_pending', 1);
@@ -157,7 +169,7 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
             'phone' => '+380671112233',
             'email' => 'sensitive@example.com',
         ]);
-        CustomerPurchase::factory()->for($account)->for($customer)->create([
+        $refundedPayment = CustomerPurchase::factory()->for($account)->for($customer)->create([
             'status' => CustomerPurchaseStatus::PaymentPaid->value,
             'amount_cents' => 25000,
             'paid_at' => Carbon::parse('2026-07-20 14:00:00', 'Europe/Kyiv'),
@@ -187,6 +199,31 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
             ->assertJsonPath('result.structuredContent.items.0.customer.email_masked', 's***@example.com');
 
         $response->assertDontSee('+380671112233')->assertDontSee('sensitive@example.com');
+
+        CustomerPurchaseRefund::factory()
+            ->for($account)
+            ->for($refundedPayment, 'customerPurchase')
+            ->create([
+                'method' => CustomerPurchaseRefund::MethodCashless,
+                'amount_cents' => 5000,
+                'refunded_at' => Carbon::parse('2026-07-21 14:00:00', 'Europe/Kyiv'),
+            ]);
+
+        $refundResponse = $this->withToken($allowedToken->tokenValue())
+            ->postJson('/mcp/ladna-studio', $this->toolPayload('search-payments', [
+                'date_from' => '2026-07-01',
+                'date_to' => '2026-07-31',
+                'query' => 'Sensitive Customer',
+                'kind' => 'customer_refund',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('result.structuredContent.returned', 1)
+            ->assertJsonPath('result.structuredContent.items.0.kind', 'customer_refund')
+            ->assertJsonPath('result.structuredContent.items.0.status', CustomerPurchaseRefund::StatusRecorded)
+            ->assertJsonPath('result.structuredContent.items.0.amount.amount_cents', 5000)
+            ->assertJsonPath('result.structuredContent.items.0.customer.phone_masked', '•••••••••2233');
+
+        $refundResponse->assertDontSee('+380671112233')->assertDontSee('sensitive@example.com');
 
         $invocation = McpToolInvocation::query()
             ->where('account_api_token_id', $allowedToken->id)
@@ -370,6 +407,7 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
         }
 
         $this->assertSame(50, data_get($tools, 'search-payments.inputSchema.properties.limit.maximum'));
+        $this->assertContains('customer_refund', data_get($tools, 'search-payments.inputSchema.properties.kind.enum'));
         $this->assertContains('event_id', data_get($tools, 'get-event-summary.inputSchema.required'));
     }
 

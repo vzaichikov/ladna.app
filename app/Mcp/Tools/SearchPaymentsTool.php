@@ -6,6 +6,7 @@ use App\Enums\AccountApiTokenAbility;
 use App\Enums\CustomerPurchaseStatus;
 use App\Enums\EventOrderStatus;
 use App\Enums\McpToolInvocationStatus;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\StudioExpense;
 use App\Support\Mcp\McpAccountContext;
 use App\Support\Payments\StudioPaymentToolData;
@@ -98,7 +99,7 @@ class SearchPaymentsTool extends Tool
      */
     private function kinds(): array
     {
-        return ['customer_payment', 'event_payment', 'operational_expense', 'cash_movement'];
+        return ['customer_payment', 'customer_refund', 'event_payment', 'operational_expense', 'cash_movement'];
     }
 
     /**
@@ -110,6 +111,7 @@ class SearchPaymentsTool extends Tool
             ...array_column(CustomerPurchaseStatus::cases(), 'value'),
             ...array_column(EventOrderStatus::cases(), 'value'),
             ...StudioExpense::statuses(),
+            CustomerPurchaseRefund::StatusRecorded,
         ]));
     }
 

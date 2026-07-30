@@ -16,11 +16,13 @@ use App\Models\AccountSubscriptionPayment;
 use App\Models\ClassPassPlan;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\Event;
 use App\Models\EventTicketType;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\SubscriptionPlan;
+use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use App\Support\SaasBilling\CompleteAccountSubscriptionPayment;
@@ -182,6 +184,134 @@ class FiscalizationTest extends TestCase
         $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt->status);
     }
 
+    public function test_partial_customer_refund_uses_checkbox_return_payload_after_source_receipt(): void
+    {
+        $account = Account::factory()->create();
+        $this->enableAccountFiscalization($account);
+        $purchase = $this->customerPurchase($account, [
+            'status' => CustomerPurchaseStatus::PaymentPaid->value,
+            'paid_at' => now(),
+        ]);
+        FiscalReceipt::factory()
+            ->forAccountScope($account)
+            ->for($purchase, 'payment')
+            ->fiscalized('FN-SOURCE-1')
+            ->create();
+        $refund = CustomerPurchaseRefund::factory()
+            ->for($account)
+            ->for($purchase, 'customerPurchase')
+            ->create([
+                'method' => CustomerPurchaseRefund::MethodCashless,
+                'amount_cents' => 35000,
+                'currency' => 'UAH',
+            ]);
+        $this->fakeCheckboxSuccess('FN-REFUND-1');
+
+        $receipt = app(FiscalReceiptService::class)->fiscalizeCustomerPurchaseRefund($refund);
+
+        $this->assertNotNull($receipt);
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt->status);
+        $this->assertSame('FN-REFUND-1', $receipt->fiscal_number);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'goods.0.is_return') === true
+            && data_get($request->data(), 'goods.0.good.code') === $purchase->order_id
+            && data_get($request->data(), 'goods.0.good.price') === 35000
+            && data_get($request->data(), 'payments.0.type') === 'CASHLESS'
+            && data_get($request->data(), 'payments.0.value') === 35000
+            && data_get($request->data(), 'total_sum') === 35000);
+    }
+
+    public function test_failed_refund_receipt_is_retried_without_duplicate_receipt(): void
+    {
+        $account = Account::factory()->create();
+        $this->enableAccountFiscalization($account);
+        $purchase = $this->customerPurchase($account, [
+            'status' => CustomerPurchaseStatus::PaymentPaid->value,
+            'paid_at' => now(),
+        ]);
+        FiscalReceipt::factory()
+            ->forAccountScope($account)
+            ->for($purchase, 'payment')
+            ->fiscalized('FN-SOURCE-2')
+            ->create();
+        $refund = CustomerPurchaseRefund::factory()
+            ->for($account)
+            ->for($purchase, 'customerPurchase')
+            ->create([
+                'method' => CustomerPurchaseRefund::MethodCash,
+                'amount_cents' => 10000,
+                'currency' => 'UAH',
+            ]);
+        $this->fakeCheckboxFailureThenSuccess('Return receipt failed.', 'FN-REFUND-RETRY');
+
+        $failedReceipt = app(FiscalReceiptService::class)->fiscalizeCustomerPurchaseRefund($refund);
+
+        $this->assertNotNull($failedReceipt);
+        $this->assertSame(FiscalReceiptStatus::Failed, $failedReceipt->status);
+        $this->assertSame(1, $refund->fiscalReceipts()->count());
+        $this->assertSame(1, $failedReceipt->attempts);
+
+        $retriedReceipt = app(FiscalReceiptService::class)->fiscalizeCustomerPurchaseRefund($refund->fresh());
+
+        $this->assertNotNull($retriedReceipt);
+        $this->assertSame($failedReceipt->id, $retriedReceipt->id);
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $retriedReceipt->status);
+        $this->assertSame(2, $retriedReceipt->attempts);
+        $this->assertSame(1, $refund->fiscalReceipts()->count());
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'payments.0.type') === 'CASH');
+    }
+
+    public function test_refund_without_successful_source_receipt_is_not_fiscalized(): void
+    {
+        $account = Account::factory()->create();
+        $this->enableAccountFiscalization($account);
+        $purchase = $this->customerPurchase($account, [
+            'status' => CustomerPurchaseStatus::PaymentPaid->value,
+            'paid_at' => now(),
+        ]);
+        $refund = CustomerPurchaseRefund::factory()
+            ->for($account)
+            ->for($purchase, 'customerPurchase')
+            ->create();
+
+        $receipt = app(FiscalReceiptService::class)->fiscalizeCustomerPurchaseRefund($refund);
+
+        $this->assertNull($receipt);
+        $this->assertSame(0, $refund->fiscalReceipts()->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_fiscalization_command_processes_source_payment_before_its_refund(): void
+    {
+        $account = Account::factory()->create();
+        $this->enableAccountFiscalization($account);
+        $purchase = $this->customerPurchase($account, [
+            'status' => CustomerPurchaseStatus::PaymentPaid->value,
+            'paid_at' => now(),
+        ]);
+        $refund = CustomerPurchaseRefund::factory()
+            ->for($account)
+            ->for($purchase, 'customerPurchase')
+            ->create([
+                'method' => CustomerPurchaseRefund::MethodCashless,
+                'amount_cents' => 15000,
+                'currency' => 'UAH',
+            ]);
+        $this->fakeCheckboxSuccess('FN-COMMAND-RETURN');
+
+        $this->artisan('payments:fiscalize', ['account' => $account->id])
+            ->assertExitCode(0);
+
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $purchase->fiscalReceipt()->firstOrFail()->status);
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $refund->fiscalReceipt()->firstOrFail()->status);
+        $this->assertSame(2, FiscalReceipt::query()->whereBelongsTo($account)->count());
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'goods.0.is_return') === false);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'goods.0.is_return') === true);
+    }
+
     private function customerPurchase(Account $account, array $attributes = []): CustomerPurchase
     {
         $customer = Customer::factory()->for($account)->create([
@@ -316,6 +446,45 @@ class FiscalizationTest extends TestCase
                 'status' => 'ERROR',
                 'message' => $message,
             ], 422),
+        ]);
+    }
+
+    private function fakeCheckboxFailureThenSuccess(string $message, string $fiscalNumber): void
+    {
+        $shiftId = '11111111-1111-1111-1111-111111111111';
+        $receiptId = '22222222-2222-2222-2222-222222222222';
+
+        Http::fake([
+            'https://api.checkbox.ua/api/v1/cashier/signin' => Http::response(['access_token' => 'checkbox-token']),
+            'https://api.checkbox.ua/api/v1/cashier/shift' => Http::response([
+                'id' => $shiftId,
+                'status' => 'OPENED',
+            ]),
+            'https://api.checkbox.ua/api/v1/receipts/sell' => Http::sequence()
+                ->push([
+                    'id' => $receiptId,
+                    'status' => 'ERROR',
+                    'message' => $message,
+                ], 422)
+                ->push([
+                    'id' => $receiptId,
+                    'status' => 'ERROR',
+                    'message' => $message,
+                ], 422)
+                ->push([
+                    'id' => $receiptId,
+                    'status' => 'ERROR',
+                    'message' => $message,
+                ], 422)
+                ->push([
+                    'id' => $receiptId,
+                    'status' => 'CREATED',
+                ], 201),
+            'https://api.checkbox.ua/api/v1/receipts/'.$receiptId => Http::response([
+                'id' => $receiptId,
+                'status' => 'DONE',
+                'fiscal_code' => $fiscalNumber,
+            ]),
         ]);
     }
 }

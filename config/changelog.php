@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.111.0',
+                'date' => '2026-07-30',
+                'title' => 'Manual full and partial payment refunds',
+                'items' => ['Authorized studio staff can now record a full or partial refund from any completed customer payment. The refund can be marked as cash or cashless, requires a reason, and is confirmed with the exact amount and method without initiating a bank or payment-provider transfer.', 'Every refund remains a separate audited row linked to the original payment. Multiple partial refunds cannot exceed the paid amount, payment totals show gross income, refunds, and net income separately, and a cash refund withdraws the amount from the selected location cashbox.', 'Refunds for class-pass payments recalculate the paid amount without cancelling the pass or its bookings. If the source payment already has a successful Checkbox receipt, Ladna also requests a matching return receipt; a receipt error is visible and retryable without undoing the recorded refund.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.110.0',
                 'date' => '2026-07-30',
                 'title' => 'Studio notification delivery logs',
@@ -975,6 +982,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.111.0',
+                'date' => '2026-07-30',
+                'title' => 'Ручні повні та часткові повернення оплат',
+                'items' => ['Уповноважені працівники студії тепер можуть внести повне або часткове повернення для будь-якої завершеної оплати клієнта. Повернення позначається як готівкове або безготівкове, потребує причини й підтвердження точної суми та способу, але не ініціює переказ через банк або платіжний сервіс.', 'Кожне повернення залишається окремим аудитованим рядком, повʼязаним із початковою оплатою. Кілька часткових повернень не можуть перевищити сплачену суму, підсумки окремо показують надходження, повернення й дохід після повернень, а готівкове повернення вилучає суму з каси вибраної локації.', 'Для оплати абонемента повернення перераховує сплачену суму, але не скасовує сам абонемент чи його записи. Якщо початкова оплата вже має успішний чек Checkbox, Ladna також створює відповідний чек повернення; помилку чека видно й можна повторити без скасування внесеного повернення.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.110.0',
                 'date' => '2026-07-30',
