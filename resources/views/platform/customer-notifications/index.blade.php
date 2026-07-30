@@ -1,9 +1,15 @@
 @extends('layouts.app')
 
-@section('title', __('app.customer_notifications_queue').' - '.__('app.platform'))
+@section('title', isset($account) ? __('app.customer_sms_log').' - '.$account->name : __('app.customer_notifications_queue').' - '.__('app.platform'))
 
 @section('content')
     @php
+        $isAccountLog = isset($account) && $account instanceof \App\Models\Account;
+        $indexUrl = $isAccountLog
+            ? route('dashboard.accounts.customer-notification-logs.index', $account)
+            : route('platform.customer-notifications.index');
+        $pageTitle = $isAccountLog ? __('app.customer_sms_log') : __('app.customer_notifications_queue');
+        $pageCopy = $isAccountLog ? __('app.customer_sms_log_copy') : __('app.customer_notifications_queue_copy');
         $notificationTimezone = fn ($notification): string => \App\Support\DateTimePresenter::safeTimezone(
             $notification->scheduledClass?->location?->timezone ?: $notification->account?->timezone,
         );
@@ -20,12 +26,12 @@
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <h1 class="crm-page-title">{{ __('app.customer_notifications_queue') }}</h1>
-            <p class="crm-page-copy">{{ __('app.customer_notifications_queue_copy') }}</p>
+            <h1 class="crm-page-title">{{ $pageTitle }}</h1>
+            <p class="crm-page-copy">{{ $pageCopy }}</p>
         </div>
     </div>
 
-    <form method="GET" action="{{ route('platform.customer-notifications.index') }}" class="mt-6 grid gap-4 rounded-xl border border-stone-200 bg-white p-5 shadow-crm lg:grid-cols-[1fr_180px_180px_160px_auto] lg:items-end">
+    <form method="GET" action="{{ $indexUrl }}" class="mt-6 grid gap-4 rounded-xl border border-stone-200 bg-white p-5 shadow-crm lg:grid-cols-[1fr_180px_180px_160px_auto] lg:items-end">
         <label class="block">
             <span class="crm-label">{{ __('app.search') }}</span>
             <input name="search" value="{{ $search }}" class="crm-field" placeholder="{{ __('app.customer_notifications_search_placeholder') }}">
@@ -73,7 +79,7 @@
                 {{ __('app.apply_filters') }}
             </x-ui.button>
             @if ($hasFilters)
-                <x-ui.button :href="route('platform.customer-notifications.index')" variant="ghost">
+                <x-ui.button :href="$indexUrl" variant="ghost">
                     {{ __('app.reset_filters') }}
                 </x-ui.button>
             @endif
@@ -85,10 +91,12 @@
             <x-ui.empty-state :title="__('app.customer_notifications_queue_empty')" icon="bell" class="m-5" />
         @else
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[1180px] text-left text-sm">
+                <table @class(['w-full text-left text-sm', 'min-w-[1020px]' => $isAccountLog, 'min-w-[1180px]' => ! $isAccountLog])>
                     <thead class="bg-stone-50 text-xs font-semibold uppercase text-slate-500">
                         <tr>
-                            <th class="px-5 py-3">{{ __('app.account') }}</th>
+                            @unless ($isAccountLog)
+                                <th class="px-5 py-3">{{ __('app.account') }}</th>
+                            @endunless
                             <th class="px-5 py-3">{{ __('app.recipient') }}</th>
                             <th class="px-5 py-3">{{ __('app.customer_notification_type') }}</th>
                             <th class="px-5 py-3">{{ __('app.message') }}</th>
@@ -103,11 +111,13 @@
                                 $scheduledClass = $notification->scheduledClass;
                             @endphp
                             <tr class="align-top">
-                                <td class="px-5 py-4">
-                                    <div class="font-semibold text-slate-950">{{ $notification->account?->name ?? __('app.not_set') }}</div>
-                                    <div class="mt-1 text-sm text-slate-500">{{ $notification->account?->slug ?? __('app.not_set') }}</div>
-                                    <div class="mt-1 text-xs text-slate-500">#{{ $notification->account_id }}</div>
-                                </td>
+                                @unless ($isAccountLog)
+                                    <td class="px-5 py-4">
+                                        <div class="font-semibold text-slate-950">{{ $notification->account?->name ?? __('app.not_set') }}</div>
+                                        <div class="mt-1 text-sm text-slate-500">{{ $notification->account?->slug ?? __('app.not_set') }}</div>
+                                        <div class="mt-1 text-xs text-slate-500">#{{ $notification->account_id }}</div>
+                                    </td>
+                                @endunless
                                 <td class="px-5 py-4">
                                     <div class="font-semibold text-slate-950">{{ $notification->recipient_name ?: ($notification->customer?->name ?? __('app.not_set')) }}</div>
                                     <div class="mt-1 font-mono text-sm text-slate-700">{{ $notification->recipient_phone ?: ($notification->customer?->phone ?? __('app.not_set')) }}</div>

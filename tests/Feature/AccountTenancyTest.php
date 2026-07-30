@@ -236,7 +236,10 @@ class AccountTenancyTest extends TestCase
                 'Налаштування акаунта',
                 'Мій акаунт',
                 'Тариф та платежі',
+                'Журнали',
                 'Журнал дій',
+                'SMS клієнтам',
+                'Telegram-сповіщення тренерам',
             ])
             ->assertSee('працює на Ladna')
             ->assertSee(route('public.studio', $account->slug), false)
@@ -251,6 +254,8 @@ class AccountTenancyTest extends TestCase
             ->assertSee(route('dashboard.accounts.owner-profile.edit', $account), false)
             ->assertSee(route('dashboard.accounts.tariff-payments.show', $account), false)
             ->assertSee(route('dashboard.accounts.activity-logs.index', $account), false)
+            ->assertSee(route('dashboard.accounts.customer-notification-logs.index', $account), false)
+            ->assertSee(route('dashboard.accounts.trainer-telegram-alert-logs.index', $account), false)
             ->assertDontSee('tab=business', false)
             ->assertDontSee('tab=account', false);
 
@@ -357,6 +362,8 @@ class AccountTenancyTest extends TestCase
             ->assertDontSee('href="'.route('dashboard.accounts.customers.index', $account).'"', false)
             ->assertDontSee(route('dashboard.accounts.customer-class-passes.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.activity-logs.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.customer-notification-logs.index', $account), false)
+            ->assertDontSee(route('dashboard.accounts.trainer-telegram-alert-logs.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.locations.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.rooms.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.activity-directions.index', $account), false)

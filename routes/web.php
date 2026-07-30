@@ -6,6 +6,7 @@ use App\Http\Controllers\AccountAiTelegramSettingsController;
 use App\Http\Controllers\AccountApiTokenController;
 use App\Http\Controllers\AccountAssistantController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AccountCustomerNotificationController;
 use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountNotificationSettingsController;
 use App\Http\Controllers\AccountOwnerProfileController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\AccountPaymentController;
 use App\Http\Controllers\AccountQrLinksController;
 use App\Http\Controllers\AccountSubscriptionController;
 use App\Http\Controllers\AccountTariffPaymentController;
+use App\Http\Controllers\AccountTelegramAlertController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\AdminCustomerLoginController;
 use App\Http\Controllers\AiConversationMessageAttachmentController;
@@ -475,6 +477,10 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.cameras.index');
         Route::get('accounts/{account}/activity-logs', [AccountActivityLogController::class, 'index'])
             ->name('accounts.activity-logs.index');
+        Route::get('accounts/{account}/customer-notification-logs', [AccountCustomerNotificationController::class, 'index'])
+            ->name('accounts.customer-notification-logs.index');
+        Route::get('accounts/{account}/trainer-telegram-alert-logs', [AccountTelegramAlertController::class, 'index'])
+            ->name('accounts.trainer-telegram-alert-logs.index');
         Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])
             ->name('accounts.api-tokens.store');
         Route::post('accounts/{account}/api-tokens/{accountApiToken}/regenerate', [AccountApiTokenController::class, 'regenerate'])

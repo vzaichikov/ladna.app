@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.110.0',
+                'date' => '2026-07-30',
+                'title' => 'Studio notification delivery logs',
+                'items' => ['Studio owners and authorized staff now have a dedicated Logs section that keeps the existing Activity log together with paginated Customer SMS and Trainer Telegram delivery histories.', 'Each notification log is restricted to the current studio and supports search plus delivery-status and notification-type filters. Owners can review the message, recipient, scheduled or delivered time, provider details, retry count, and delivery error without entering platform administration.', 'Trainer Telegram history includes only trainer alerts for the studio; platform, founder, and studio-owner announcements remain outside this tenant view.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.109.0',
                 'date' => '2026-07-30',
                 'title' => 'Configurable safeguards and transparent usage for Ladna AI',
@@ -968,6 +975,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.110.0',
+                'date' => '2026-07-30',
+                'title' => 'Журнали доставки сповіщень студії',
+                'items' => ['Власники студії та уповноважені працівники отримали окремий розділ «Журнали», де чинний Журнал дій доповнено сторінками історії SMS клієнтам і Telegram-сповіщень тренерам із пагінацією.', 'Кожен журнал обмежений поточною студією та має пошук і фільтри за статусом доставки й типом сповіщення. Можна перевірити повідомлення, отримувача, запланований або фактичний час, провайдера, кількість спроб і помилку доставки без переходу до платформної адмінки.', 'Історія Telegram містить лише сповіщення тренерам цієї студії; платформні оголошення та повідомлення для засновників чи власників студій у цей журнал не потрапляють.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.109.0',
                 'date' => '2026-07-30',

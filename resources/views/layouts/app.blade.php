@@ -310,11 +310,24 @@
             'href' => route('dashboard.accounts.tariff-payments.show', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.tariff-payments.*'),
         ]] : []),
+    ] : [];
+
+    $studioLogsNav = $showAccountNav ? [
         ...($canViewActivityLog ? [[
             'label' => __('app.account_activity_log'),
             'icon' => 'activity-log',
             'href' => route('dashboard.accounts.activity-logs.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.activity-logs.*'),
+        ], [
+            'label' => __('app.customer_sms_log'),
+            'icon' => 'bell',
+            'href' => route('dashboard.accounts.customer-notification-logs.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.customer-notification-logs.*'),
+        ], [
+            'label' => __('app.trainer_telegram_alert_log'),
+            'icon' => 'telegram',
+            'href' => route('dashboard.accounts.trainer-telegram-alert-logs.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.trainer-telegram-alert-logs.*'),
         ]] : []),
     ] : [];
 
@@ -502,6 +515,20 @@
                             <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.account_settings') }}</div>
                             <div class="mt-3 space-y-1">
                                 @foreach ($accountSettingsNav as $item)
+                                    <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
+                                        <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
+                                        <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($studioLogsNav)
+                        <div>
+                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.logs') }}</div>
+                            <div class="mt-3 space-y-1">
+                                @foreach ($studioLogsNav as $item)
                                     <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
                                         <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
                                         <span>{{ $item['label'] }}</span>
