@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
+use App\Enums\SmsSendingMode;
 use App\Enums\SubscriptionPlanType;
 use App\Enums\SubscriptionStatus;
 use App\Models\Account;
@@ -662,15 +663,15 @@ class CustomerAuthFlowTest extends TestCase
         $this->actingAs($platformAdmin)
             ->put(route('platform.accounts.customer-auth.update', $account), [
                 'allow_otp' => '1',
-                'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
-                'otp_provider' => 'smsclub',
+                'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+                'sms_provider' => 'smsclub',
             ])
             ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
 
         $setting = $account->customerAuthSetting()->firstOrFail();
         $this->assertTrue($setting->allow_otp);
-        $this->assertSame(CustomerOtpSenderScope::Account, $setting->otp_sender_scope);
-        $this->assertSame('smsclub', $setting->otp_provider);
+        $this->assertSame(SmsSendingMode::OwnGateway, $setting->sms_sending_mode);
+        $this->assertSame('smsclub', $setting->sms_provider);
 
         $this->actingAs($platformAdmin)
             ->get(route('platform.accounts.customer-auth.edit', $account))
@@ -683,6 +684,10 @@ class CustomerAuthFlowTest extends TestCase
             ->assertDontSee(__('app.studio_capability_telegram_alerts_hint'), false)
             ->assertDontSee('name="enable_telegram_alerts"', false)
             ->assertSee(__('app.studio_capabilities_sms_title'), false)
+            ->assertSee('name="sms_sending_mode"', false)
+            ->assertSee('name="sms_provider"', false)
+            ->assertDontSee('name="otp_sender_scope"', false)
+            ->assertDontSee('name="customer_sms_sender_scope"', false)
             ->assertDontSee(__('app.cloudflare_turnstile'), false)
             ->assertDontSee('name="allow_google"', false)
             ->assertDontSee('name="allow_email_password"', false);
@@ -697,7 +702,7 @@ class CustomerAuthFlowTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_platform_sms_scope_requires_an_explicit_provider_assignment(): void
+    public function test_own_gateway_requires_an_explicit_provider_assignment(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();
         $account = Account::factory()->create();
@@ -705,21 +710,19 @@ class CustomerAuthFlowTest extends TestCase
         $this->actingAs($platformAdmin)
             ->put(route('platform.accounts.customer-auth.update', $account), [
                 'allow_otp' => '1',
-                'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
-                'otp_provider' => null,
-                'customer_sms_sender_scope' => CustomerOtpSenderScope::Account->value,
+                'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+                'sms_provider' => null,
             ])
-            ->assertSessionHasErrors('otp_provider');
+            ->assertSessionHasErrors('sms_provider');
 
         $this->actingAs($platformAdmin)
             ->put(route('platform.accounts.customer-auth.update', $account), [
                 'allow_otp' => '0',
                 'enable_customer_notifications' => '1',
-                'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
-                'customer_sms_sender_scope' => CustomerOtpSenderScope::Platform->value,
-                'customer_sms_provider' => null,
+                'sms_sending_mode' => SmsSendingMode::LadnaService->value,
+                'sms_provider' => null,
             ])
-            ->assertSessionHasErrors('customer_sms_provider');
+            ->assertSessionHasNoErrors();
     }
 
     public function test_legacy_platform_scope_without_provider_does_not_use_central_sms(): void
@@ -757,8 +760,8 @@ class CustomerAuthFlowTest extends TestCase
         CustomerAuthSetting::create([
             'account_id' => $account->id,
             'allow_otp' => true,
-            'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
-            'otp_provider' => 'turbosms',
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'turbosms',
         ]);
 
         $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
@@ -766,7 +769,7 @@ class CustomerAuthFlowTest extends TestCase
             'secret_key' => 'test-secret-key',
         ]);
 
-        $this->platformIntegration('turbosms', IntegrationCategory::Messaging->value, [
+        $this->accountIntegration($account, 'turbosms', IntegrationCategory::Messaging->value, [
             'api_token' => 'turbo-token',
             'sms_sender' => 'Ladna',
         ]);
@@ -809,8 +812,8 @@ class CustomerAuthFlowTest extends TestCase
         CustomerAuthSetting::create([
             'account_id' => $account->id,
             'allow_otp' => true,
-            'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
-            'otp_provider' => 'smsclub',
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'smsclub',
         ]);
 
         $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
@@ -840,8 +843,8 @@ class CustomerAuthFlowTest extends TestCase
         CustomerAuthSetting::create([
             'account_id' => $account->id,
             'allow_otp' => true,
-            'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
-            'otp_provider' => 'smsclub',
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'smsclub',
         ]);
 
         $this->platformIntegration('google_oauth', IntegrationCategory::Authentication->value, [
@@ -885,8 +888,8 @@ class CustomerAuthFlowTest extends TestCase
         CustomerAuthSetting::create([
             'account_id' => $account->id,
             'allow_otp' => true,
-            'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
-            'otp_provider' => 'smsclub',
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'smsclub',
         ]);
 
         $this->platformIntegration('cloudflare_turnstile', IntegrationCategory::Authentication->value, [
@@ -1251,8 +1254,8 @@ class CustomerAuthFlowTest extends TestCase
         CustomerAuthSetting::create([
             'account_id' => $account->id,
             'allow_otp' => true,
-            'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
-            'otp_provider' => 'turbosms',
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'turbosms',
         ]);
 
         $this->platformIntegration('google_oauth', IntegrationCategory::Authentication->value, [
@@ -1260,7 +1263,7 @@ class CustomerAuthFlowTest extends TestCase
             'client_secret' => 'google-secret',
         ]);
 
-        $this->platformIntegration('turbosms', IntegrationCategory::Messaging->value, [
+        $this->accountIntegration($account, 'turbosms', IntegrationCategory::Messaging->value, [
             'api_token' => 'turbo-token',
             'sms_sender' => 'Ladna',
         ]);

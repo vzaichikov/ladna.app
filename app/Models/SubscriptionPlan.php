@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'slug', 'description', 'price_cents', 'currency', 'billing_interval', 'plan_type', 'access_days', 'public_signup_enabled', 'requires_recurring_payment', 'renewal_lead_days', 'is_active', 'sort_order'])]
+#[Fillable(['name', 'slug', 'description', 'price_cents', 'sms_segment_price_cents', 'currency', 'billing_interval', 'plan_type', 'access_days', 'public_signup_enabled', 'requires_recurring_payment', 'renewal_lead_days', 'is_active', 'sort_order'])]
 class SubscriptionPlan extends Model
 {
     /** @use HasFactory<SubscriptionPlanFactory> */
@@ -36,6 +36,7 @@ class SubscriptionPlan extends Model
     {
         return [
             'plan_type' => SubscriptionPlanType::class,
+            'sms_segment_price_cents' => 'integer',
             'public_signup_enabled' => 'boolean',
             'requires_recurring_payment' => 'boolean',
             'is_active' => 'boolean',
@@ -90,6 +91,11 @@ class SubscriptionPlan extends Model
     public function priceVersions(): HasMany
     {
         return $this->hasMany(SubscriptionPriceVersion::class);
+    }
+
+    public function smsRateChanges(): HasMany
+    {
+        return $this->hasMany(SubscriptionPlanSmsRateChange::class);
     }
 
     public function currentPriceVersion(?CarbonInterface $at = null): ?SubscriptionPriceVersion

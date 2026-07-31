@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.115.0',
+                'date' => '2026-07-31',
+                'title' => 'Ladna SMS service and simpler messaging settings',
+                'items' => ['Studios now have one clear SMS mode for number confirmation and customer alerts: Disabled, SMS by Ladna, or their own SMS gateway. Existing gateway credentials stay saved when switching modes, and the studio Telegram bot now has its own notification-settings tab.', 'SMS by Ladna adds a separate prepaid SMS account with the current per-segment price, balance, manual top-ups, an optional threshold-based auto top-up, and understandable explanations for longer Cyrillic messages. Availability and funding controls appear only after the platform configures the service and tariff price.', 'The unified SMS delivery log now covers both number-confirmation codes and customer notifications, showing delivery state, provider, segment count, snapshotted rate, final charge, and provider message ID without exposing confirmation-code text.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.114.0',
                 'date' => '2026-07-31',
                 'title' => 'Sortable class-pass catalog',
@@ -1003,6 +1010,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.115.0',
+                'date' => '2026-07-31',
+                'title' => 'SMS-сервіс Ladna та простіші налаштування повідомлень',
+                'items' => ['Студії отримали один зрозумілий режим SMS для підтвердження номера та сповіщень клієнтів: Вимкнено, SMS від Ladna або власний SMS-шлюз. Збережені дані власних шлюзів не видаляються під час перемикання, а Telegram-бот студії тепер має окрему вкладку в налаштуваннях сповіщень.', 'SMS від Ladna додає окремий передплачений SMS-рахунок із поточною ціною сегмента, балансом, ручним поповненням, необов’язковим автопоповненням за порогом і простим поясненням довших повідомлень кирилицею. Доступність і поповнення з’являються лише після налаштування сервісу та ціни тарифу платформою.', 'Єдиний журнал SMS тепер охоплює коди підтвердження номера й повідомлення клієнтам та показує стан доставки, провайдера, кількість сегментів, зафіксований тариф, остаточну вартість і ID повідомлення провайдера без розкриття тексту коду підтвердження.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.114.0',
                 'date' => '2026-07-31',

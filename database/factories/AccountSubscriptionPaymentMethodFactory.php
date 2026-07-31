@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\AccountPaymentMethodVerificationPurpose;
 use App\Enums\SubscriptionPaymentMethodStatus;
 use App\Models\AccountSubscription;
 use App\Models\AccountSubscriptionPaymentMethod;
@@ -31,6 +32,8 @@ class AccountSubscriptionPaymentMethodFactory extends Factory
             'masked_pan' => null,
             'status' => SubscriptionPaymentMethodStatus::PendingVerification->value,
             'verification_reference' => 'SAAS-VERIFY-'.Str::upper(Str::random(20)),
+            'verification_purpose' => AccountPaymentMethodVerificationPurpose::Subscription->value,
+            'verification_amount_cents' => null,
         ];
     }
 }

@@ -470,6 +470,47 @@ class TransactionalMailDispatcher
         });
     }
 
+    public function smsAccountNotice(
+        Account $account,
+        EmailScenario $scenario,
+        ?string $reason = null,
+    ): void {
+        abort_unless(in_array($scenario, [
+            EmailScenario::SmsCreditLow,
+            EmailScenario::SmsAutoTopUpFailed,
+            EmailScenario::SmsOutstandingCredit,
+        ], true), 500);
+
+        $wallet = $account->smsWallet()->first();
+
+        if (! $wallet) {
+            return;
+        }
+
+        $baseData = [
+            ...$this->accountData($account),
+            'notice' => $scenario->value,
+            'balance' => MoneyFormatter::format($wallet->balance_cents, $wallet->currency),
+            'outstanding' => $wallet->outstanding_cents > 0
+                ? MoneyFormatter::format($wallet->outstanding_cents, $wallet->currency)
+                : null,
+            'reason' => $reason,
+            'action_url' => route('dashboard.accounts.sms-account.show', $account),
+        ];
+
+        $this->sendToAccountOwners($account, $scenario, function (User $user) use ($baseData, $scenario, $account): TransactionalMail {
+            return new TransactionalMail(
+                subjectKey: $scenario->subjectKey(),
+                contentView: $scenario->contentView(),
+                data: [
+                    ...$baseData,
+                    'recipient_name' => $this->recipientName($user->name),
+                ],
+                subjectParameters: ['studio' => $account->name],
+            );
+        });
+    }
+
     /**
      * @param  array<string, scalar|null>  $parameters
      */

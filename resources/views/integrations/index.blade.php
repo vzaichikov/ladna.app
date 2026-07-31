@@ -67,7 +67,125 @@
         </form>
     @endif
 
-    <section class="mt-6 grid gap-5 xl:grid-cols-2">
+    @if ($smsSettings ?? null)
+        @php
+            $selectedSmsSendingMode = old('sms_sending_mode', $smsSettings->sms_sending_mode?->value ?? \App\Enums\SmsSendingMode::Disabled->value);
+            $selectedSmsProvider = old('sms_provider', $smsSettings->sms_provider);
+            $smsSegmentPriceCents = $smsReadiness['sms_segment_price_cents'];
+            $smsSpendableBalanceCents = $smsReadiness['sms_spendable_balance_cents'];
+        @endphp
+
+        <form method="POST" action="{{ route($smsSendingModeUpdateRoute, $account) }}" data-sms-sending-settings class="mt-6 rounded-xl border border-violet-crm-200 bg-violet-crm-50 p-5 shadow-crm">
+            @csrf
+            @method('PUT')
+
+            <div>
+                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.sms_sending_mode_title') }}</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600">{{ __('app.sms_sending_mode_copy') }}</p>
+            </div>
+
+            <div class="mt-5 grid gap-3 lg:grid-cols-3">
+                @foreach ($smsSendingModes as $mode)
+                    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-white bg-white p-4 text-sm shadow-sm transition has-checked:border-violet-crm-500 has-checked:ring-1 has-checked:ring-violet-crm-500">
+                        <input
+                            type="radio"
+                            name="sms_sending_mode"
+                            value="{{ $mode->value }}"
+                            class="crm-radio mt-0.5"
+                            @checked($selectedSmsSendingMode === $mode->value)
+                        >
+                        <span class="grid gap-1">
+                            <span class="font-semibold text-slate-950">
+                                {{ __('app.sms_sending_mode_'.$mode->value) }}
+                                @if ($mode === \App\Enums\SmsSendingMode::LadnaService)
+                                    <span class="text-violet-crm-700">({{ __('app.recommended') }})</span>
+                                @endif
+                            </span>
+                            <span class="font-normal leading-6 text-slate-600">{{ __('app.sms_sending_mode_'.$mode->value.'_copy') }}</span>
+                        </span>
+                    </label>
+                @endforeach
+            </div>
+            @error('sms_sending_mode') <span class="crm-help">{{ $message }}</span> @enderror
+
+            <div
+                data-sms-mode-panel="{{ \App\Enums\SmsSendingMode::LadnaService->value }}"
+                class="{{ $selectedSmsSendingMode === \App\Enums\SmsSendingMode::LadnaService->value ? '' : 'hidden' }}"
+            >
+                <div class="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div class="rounded-lg border border-violet-200 bg-white px-4 py-3">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.sms_ladna_sender') }}</div>
+                        <div class="mt-1 font-semibold text-slate-950">Ladna</div>
+                    </div>
+                    <div class="rounded-lg border border-violet-200 bg-white px-4 py-3">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.sms_segment_price') }}</div>
+                        <div class="mt-1 font-semibold text-slate-950">
+                            @if ($smsSegmentPriceCents === null)
+                                {{ __('app.sms_service_unavailable_for_tariff') }}
+                            @elseif ($smsSegmentPriceCents === 0)
+                                {{ __('app.free') }}
+                            @else
+                                {{ \App\Support\MoneyFormatter::format($smsSegmentPriceCents, 'UAH') }}
+                            @endif
+                        </div>
+                    </div>
+                    <div class="rounded-lg border border-violet-200 bg-white px-4 py-3">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.sms_credit_balance') }}</div>
+                        <div class="mt-1 font-semibold text-slate-950">{{ \App\Support\MoneyFormatter::format($smsSpendableBalanceCents, 'UAH') }}</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-3 rounded-lg border border-violet-200 bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        @if ($smsReadiness['platform_sms'])
+                            <span class="crm-status-active">{{ __('app.sms_source_ready') }}</span>
+                        @else
+                            <span class="crm-status-warning">{{ __('app.sms_source_needs_setup') }}</span>
+                        @endif
+                        <p class="mt-2 text-slate-600">{{ __('app.sms_ladna_service_account_hint') }}</p>
+                    </div>
+                    <x-ui.button :href="route('dashboard.accounts.sms-account.show', $account)" variant="secondary">
+                        {{ __('app.open_sms_account') }}
+                    </x-ui.button>
+                </div>
+            </div>
+
+            <div
+                data-sms-mode-panel="{{ \App\Enums\SmsSendingMode::OwnGateway->value }}"
+                class="{{ $selectedSmsSendingMode === \App\Enums\SmsSendingMode::OwnGateway->value ? '' : 'hidden' }}"
+            >
+                <label class="mt-5 block max-w-xl">
+                    <span class="crm-label">{{ __('app.sms_active_provider') }}</span>
+                    <select
+                        name="sms_provider"
+                        class="crm-field"
+                        @required($selectedSmsSendingMode === \App\Enums\SmsSendingMode::OwnGateway->value)
+                        @disabled($selectedSmsSendingMode !== \App\Enums\SmsSendingMode::OwnGateway->value)
+                    >
+                        <option value="">{{ __('app.choose') }}</option>
+                        @foreach ($providers as $providerKey => $provider)
+                            <option value="{{ $providerKey }}" @selected($selectedSmsProvider === $providerKey)>
+                                {{ $provider['label'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <span class="mt-2 block text-sm leading-6 text-slate-600">{{ __('app.sms_active_provider_hint') }}</span>
+                    @error('sms_provider') <span class="crm-help">{{ $message }}</span> @enderror
+                </label>
+            </div>
+
+            <div class="mt-5 flex justify-end">
+                <x-ui.button type="submit">
+                    {{ __('app.save') }}
+                </x-ui.button>
+            </div>
+        </form>
+    @endif
+
+    <section
+        @if ($smsSettings ?? null) data-sms-own-gateway-settings @endif
+        class="mt-6 grid gap-5 xl:grid-cols-2 {{ ($smsSettings ?? null) && $selectedSmsSendingMode !== \App\Enums\SmsSendingMode::OwnGateway->value ? 'hidden' : '' }}"
+    >
         @foreach ($providers as $providerKey => $provider)
             @php
                 $setting = $settings->get($providerKey);

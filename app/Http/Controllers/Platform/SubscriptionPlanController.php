@@ -7,10 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSubscriptionPlanRequest;
 use App\Http\Requests\UpdateSubscriptionPlanRequest;
 use App\Models\SubscriptionPlan;
+use App\Models\SubscriptionPlanSmsRateChange;
 use App\Models\SubscriptionPriceVersion;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class SubscriptionPlanController extends Controller
@@ -59,7 +61,8 @@ class SubscriptionPlanController extends Controller
         $validated['public_signup_enabled'] = $request->boolean('public_signup_enabled');
         $validated['requires_recurring_payment'] = $request->boolean('requires_recurring_payment');
         $validated['price_cents'] = PaymentAmounts::decimalToCents($validated['price_uah']);
-        unset($validated['price_uah']);
+        $validated['sms_segment_price_cents'] = $this->smsSegmentPriceCents($validated);
+        unset($validated['price_uah'], $validated['sms_segment_price_uah']);
 
         SubscriptionPlan::create($validated);
 
@@ -87,9 +90,23 @@ class SubscriptionPlanController extends Controller
         $validated['public_signup_enabled'] = $request->boolean('public_signup_enabled');
         $validated['requires_recurring_payment'] = $request->boolean('requires_recurring_payment');
         $validated['price_cents'] = PaymentAmounts::decimalToCents($validated['price_uah']);
-        unset($validated['price_uah']);
+        $validated['sms_segment_price_cents'] = $this->smsSegmentPriceCents($validated);
+        unset($validated['price_uah'], $validated['sms_segment_price_uah']);
 
-        $subscriptionPlan->update($validated);
+        DB::transaction(function () use ($request, $subscriptionPlan, $validated): void {
+            $oldSmsSegmentPriceCents = $subscriptionPlan->sms_segment_price_cents;
+
+            $subscriptionPlan->update($validated);
+
+            if ($oldSmsSegmentPriceCents !== $subscriptionPlan->sms_segment_price_cents) {
+                SubscriptionPlanSmsRateChange::create([
+                    'subscription_plan_id' => $subscriptionPlan->id,
+                    'actor_user_id' => $request->user()?->getKey(),
+                    'old_sms_segment_price_cents' => $oldSmsSegmentPriceCents,
+                    'new_sms_segment_price_cents' => $subscriptionPlan->sms_segment_price_cents,
+                ]);
+            }
+        });
 
         return redirect()->route('platform.subscription-plans.index')
             ->with('status', __('app.subscription_plan_updated'));
@@ -101,6 +118,7 @@ class SubscriptionPlanController extends Controller
             $subscriptionPlan->subscriptions()->exists()
             || $subscriptionPlan->subscriptionPayments()->exists()
             || $subscriptionPlan->priceVersions()->exists()
+            || $subscriptionPlan->smsRateChanges()->exists()
         ) {
             return redirect()->route('platform.subscription-plans.index')
                 ->withErrors(['plan' => __('app.subscription_plan_in_use')]);
@@ -120,5 +138,15 @@ class SubscriptionPlanController extends Controller
         return SlugGenerator::unique($validated['slug'] ?: $validated['name'], 'subscription-plan', fn (string $candidate): bool => SubscriptionPlan::where('slug', $candidate)
             ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
             ->exists());
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function smsSegmentPriceCents(array $validated): ?int
+    {
+        $amount = $validated['sms_segment_price_uah'] ?? null;
+
+        return filled($amount) ? PaymentAmounts::decimalToCents($amount) : null;
     }
 }

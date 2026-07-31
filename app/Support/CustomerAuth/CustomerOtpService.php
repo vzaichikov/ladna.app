@@ -2,17 +2,19 @@
 
 namespace App\Support\CustomerAuth;
 
+use App\Enums\SmsDeliveryPurpose;
 use App\Models\Account;
 use App\Models\CustomerOtpChallenge;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\Sms\StudioSmsSender;
 use Illuminate\Support\Facades\Hash;
-use Throwable;
+use Illuminate\Support\Str;
 
 class CustomerOtpService
 {
     public function __construct(
         private CustomerAuthAvailability $availability,
-        private SmsGatewayResolver $gateways,
+        private StudioSmsSender $smsSender,
         private PhoneNumberNormalizer $phones,
     ) {}
 
@@ -57,21 +59,23 @@ class CustomerOtpService
             'studio' => $account->name,
         ]);
 
-        try {
-            $result = $this->gateways->resolve($smsSetting)->sendOtp($normalizedPhone, $message);
-        } catch (Throwable) {
-            return OtpChallengeResult::failed(__('app.customer_otp_send_failed'));
-        }
+        $sendResult = $this->smsSender->send(
+            account: $account,
+            phone: $normalizedPhone,
+            message: $message,
+            purpose: SmsDeliveryPurpose::CustomerOtp,
+            idempotencyKey: 'customer-otp:'.$account->id.':'.Str::uuid(),
+        );
 
-        if (! $result->sent) {
+        if (! $sendResult->accepted()) {
             return OtpChallengeResult::failed(__('app.customer_otp_send_failed'));
         }
 
         $challenge = $existing ?: new CustomerOtpChallenge([
             'account_id' => $account->id,
             'phone' => $normalizedPhone,
-            'provider_scope' => $settings->otp_sender_scope->value,
-            'provider' => $smsSetting->provider->value,
+            'provider_scope' => $settings->sms_sending_mode->value,
+            'provider' => $sendResult->delivery->provider,
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
         ]);
@@ -84,11 +88,13 @@ class CustomerOtpService
             'attempts' => 0,
             'send_count' => $existing ? $existing->send_count + 1 : 1,
             'last_sent_at' => $now,
-            'provider_scope' => $settings->otp_sender_scope->value,
-            'provider' => $smsSetting->provider->value,
+            'provider_scope' => $settings->sms_sending_mode->value,
+            'provider' => $sendResult->delivery->provider,
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
         ])->save();
+        $sendResult->delivery->source()->associate($challenge);
+        $sendResult->delivery->save();
 
         return OtpChallengeResult::ok(
             $challenge,

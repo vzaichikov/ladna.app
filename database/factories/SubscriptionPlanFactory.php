@@ -25,6 +25,7 @@ class SubscriptionPlanFactory extends Factory
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 9999),
             'description' => fake()->sentence(),
             'price_cents' => fake()->numberBetween(1900, 9900),
+            'sms_segment_price_cents' => null,
             'currency' => fake()->randomElement(['UAH', 'USD', 'EUR']),
             'billing_interval' => 'monthly',
             'plan_type' => 'standard',

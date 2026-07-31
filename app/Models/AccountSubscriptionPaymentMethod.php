@@ -2,14 +2,16 @@
 
 namespace App\Models;
 
+use App\Enums\AccountPaymentMethodVerificationPurpose;
 use App\Enums\SubscriptionPaymentMethodStatus;
 use Database\Factories\AccountSubscriptionPaymentMethodFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'account_subscription_id', 'provider', 'provider_wallet_id', 'provider_card_token', 'masked_pan', 'card_brand', 'status', 'verification_reference', 'verification_invoice_id', 'last_callback_payload', 'verified_at', 'revoked_at'])]
+#[Fillable(['account_id', 'account_subscription_id', 'provider', 'provider_wallet_id', 'provider_card_token', 'masked_pan', 'card_brand', 'status', 'verification_reference', 'verification_invoice_id', 'verification_purpose', 'verification_amount_cents', 'last_callback_payload', 'verified_at', 'revoked_at'])]
 class AccountSubscriptionPaymentMethod extends Model
 {
     /** @use HasFactory<AccountSubscriptionPaymentMethodFactory> */
@@ -18,6 +20,7 @@ class AccountSubscriptionPaymentMethod extends Model
     protected $attributes = [
         'provider' => 'monopay',
         'status' => 'pending_verification',
+        'verification_purpose' => 'subscription',
     ];
 
     protected $hidden = [
@@ -36,6 +39,8 @@ class AccountSubscriptionPaymentMethod extends Model
             'provider_card_token' => 'encrypted',
             'last_callback_payload' => 'encrypted:array',
             'status' => SubscriptionPaymentMethodStatus::class,
+            'verification_purpose' => AccountPaymentMethodVerificationPurpose::class,
+            'verification_amount_cents' => 'integer',
             'verified_at' => 'datetime',
             'revoked_at' => 'datetime',
         ];
@@ -49,6 +54,14 @@ class AccountSubscriptionPaymentMethod extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(AccountSubscription::class, 'account_subscription_id');
+    }
+
+    public function smsTopUpPayments(): HasMany
+    {
+        return $this->hasMany(
+            SmsTopUpPayment::class,
+            'account_subscription_payment_method_id',
+        );
     }
 
     public function isActive(): bool

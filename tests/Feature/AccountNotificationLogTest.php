@@ -3,16 +3,16 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
-use App\Enums\CustomerNotificationChannel;
-use App\Enums\CustomerNotificationStatus;
-use App\Enums\CustomerNotificationType;
+use App\Enums\SmsDeliveryPurpose;
+use App\Enums\SmsDeliveryStatus;
+use App\Enums\SmsSendingMode;
 use App\Enums\StudioPermission;
 use App\Enums\TelegramAlertRecipientKind;
 use App\Enums\TelegramAlertStatus;
 use App\Enums\TelegramAlertType;
 use App\Models\Account;
 use App\Models\AccountMembership;
-use App\Models\CustomerNotification;
+use App\Models\SmsDelivery;
 use App\Models\TelegramAlert;
 use App\Models\Trainer;
 use App\Models\User;
@@ -24,7 +24,7 @@ class AccountNotificationLogTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_studio_owner_can_view_only_their_paginated_customer_sms_log(): void
+    public function test_studio_owner_can_view_only_their_paginated_unified_sms_log(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create();
@@ -32,44 +32,41 @@ class AccountNotificationLogTest extends TestCase
         $otherAccount = Account::factory()->create();
 
         foreach (range(1, 26) as $index) {
-            CustomerNotification::factory()
+            SmsDelivery::factory()
                 ->for($account)
                 ->create([
-                    'customer_id' => null,
-                    'scheduled_class_id' => null,
-                    'class_booking_id' => null,
-                    'recipient_name' => sprintf('Scoped Customer %02d', $index),
-                    'text' => sprintf('Scoped SMS %02d', $index),
+                    'purpose' => SmsDeliveryPurpose::CustomerNotification->value,
+                    'source_mode' => SmsSendingMode::OwnGateway->value,
+                    'status' => SmsDeliveryStatus::Pending->value,
+                    'provider' => 'smsclub',
+                    'message_preview' => sprintf('Scoped SMS %02d', $index),
                     'created_at' => now()->subMinutes($index),
                 ]);
         }
 
-        CustomerNotification::factory()
+        SmsDelivery::factory()
             ->for($otherAccount)
             ->create([
-                'customer_id' => null,
-                'scheduled_class_id' => null,
-                'class_booking_id' => null,
-                'recipient_name' => 'Other Account Customer',
-                'text' => 'Other Account SMS',
+                'purpose' => SmsDeliveryPurpose::CustomerNotification->value,
+                'message_preview' => 'Other Account SMS',
             ]);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customer-notification-logs.index', $account))
             ->assertOk()
-            ->assertViewHas('notifications', fn ($notifications): bool => $notifications instanceof LengthAwarePaginator
-                && $notifications->perPage() === 25
-                && $notifications->hasPages())
-            ->assertSee(__('app.customer_sms_log'))
+            ->assertViewHas('deliveries', fn ($deliveries): bool => $deliveries instanceof LengthAwarePaginator
+                && $deliveries->perPage() === 25
+                && $deliveries->hasPages())
+            ->assertSee(__('app.sms_delivery_log'))
             ->assertSee('Scoped SMS 01')
-            ->assertSee('notifications_page=2', false)
+            ->assertSee('page=2', false)
             ->assertDontSee('Scoped SMS 26')
             ->assertDontSee('Other Account SMS');
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customer-notification-logs.index', [
                 'account' => $account,
-                'notifications_page' => 2,
+                'page' => 2,
             ]))
             ->assertOk()
             ->assertSee('Scoped SMS 26')
@@ -79,9 +76,10 @@ class AccountNotificationLogTest extends TestCase
             ->get(route('dashboard.accounts.customer-notification-logs.index', [
                 'account' => $account,
                 'search' => 'Scoped SMS 01',
-                'status' => CustomerNotificationStatus::Pending->value,
-                'type' => CustomerNotificationType::ClassReminder->value,
-                'channel' => CustomerNotificationChannel::Sms->value,
+                'purpose' => SmsDeliveryPurpose::CustomerNotification->value,
+                'status' => SmsDeliveryStatus::Pending->value,
+                'mode' => SmsSendingMode::OwnGateway->value,
+                'provider' => 'smsclub',
             ]))
             ->assertOk()
             ->assertSee('Scoped SMS 01')

@@ -2,19 +2,26 @@
 
 namespace App\Support\CustomerAuth;
 
-use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
+use App\Enums\SmsSendingMode;
 use App\Models\Account;
 use App\Models\CustomerAuthSetting;
 use App\Models\IntegrationSetting;
 use App\Models\SystemSetting;
 use App\Support\IntegrationCatalog;
+use App\Support\Sms\AccountSmsPricing;
+use App\Support\Sms\SmsServiceSettings;
 use Illuminate\Database\Eloquent\Builder;
 
 class CustomerAuthAvailability
 {
+    public function __construct(
+        private readonly SmsServiceSettings $smsServiceSettings,
+        private readonly AccountSmsPricing $smsPricing,
+    ) {}
+
     public function settingsFor(Account $account): CustomerAuthSetting
     {
         $settings = $account->relationLoaded('customerAuthSetting')
@@ -42,7 +49,10 @@ class CustomerAuthAvailability
 
         return new CustomerAuthMethodAvailability(
             emailPassword: true,
-            otp: $settings->allow_otp && $turnstile !== null && $this->smsSettingFor($account, $settings) !== null,
+            otp: $settings->allow_otp
+                && $turnstile !== null
+                && $this->smsSettingFor($account, $settings) !== null
+                && $this->hasOtpCredit($account, $settings),
             google: $this->googleSetting() !== null,
             turnstileSiteKey: $turnstile?->readableCredentials()['site_key'] ?? null,
         );
@@ -60,16 +70,19 @@ class CustomerAuthAvailability
 
     public function smsSettingFor(Account $account, CustomerAuthSetting $settings): ?IntegrationSetting
     {
-        return $settings->otp_sender_scope === CustomerOtpSenderScope::Account
-            ? $this->accountSmsSetting($account, $settings->otp_provider)
-            : $this->assignedPlatformSmsSetting($settings->otp_provider);
+        return match ($settings->sms_sending_mode) {
+            SmsSendingMode::LadnaService => $this->smsServiceSettings->enabled()
+                && $this->smsPricing->isAvailable($account)
+                    ? $this->platformSmsSetting()
+                    : null,
+            SmsSendingMode::OwnGateway => $this->accountSmsSetting($account, $settings->sms_provider),
+            SmsSendingMode::Disabled => null,
+        };
     }
 
     public function customerSmsSettingFor(Account $account, CustomerAuthSetting $settings): ?IntegrationSetting
     {
-        return $settings->customer_sms_sender_scope === CustomerOtpSenderScope::Account
-            ? $this->accountSmsSetting($account, $settings->customer_sms_provider)
-            : $this->assignedPlatformSmsSetting($settings->customer_sms_provider);
+        return $this->smsSettingFor($account, $settings);
     }
 
     public function platformSmsSetting(?string $provider = null): ?IntegrationSetting
@@ -89,22 +102,47 @@ class CustomerAuthAvailability
     }
 
     /**
-     * @return array{google: bool, turnstile: bool, platform_sms: bool, account_sms: bool, customer_platform_sms: bool, customer_account_sms: bool, otp: bool, otp_enabled: bool}
+     * @return array<string, bool|int|string|null>
      */
     public function readinessFor(Account $account): array
     {
         $settings = $this->settingsFor($account);
         $methods = $this->methodsFor($account);
+        $segmentPriceCents = $this->smsPricing->segmentPriceCents($account);
+        $wallet = $account->smsWallet()->first();
+        $spendableBalanceCents = $wallet?->spendableBalanceCents() ?? 0;
+        $ladnaReady = $this->smsServiceSettings->enabled()
+            && $segmentPriceCents !== null
+            && $this->platformSmsSetting() !== null
+            && (
+                $segmentPriceCents === 0
+                || (
+                    $wallet !== null
+                    && $wallet->outstanding_cents === 0
+                    && $spendableBalanceCents >= $segmentPriceCents
+                )
+            );
+        $ownGatewayReady = $this->accountSmsSetting($account, $settings->sms_provider) !== null;
 
         return [
             'google' => $this->googleSetting() !== null,
             'turnstile' => $this->turnstileSetting() !== null,
-            'platform_sms' => $this->assignedPlatformSmsSetting($settings->otp_provider) !== null,
-            'account_sms' => $this->accountSmsSetting($account, $settings->otp_provider) !== null,
-            'customer_platform_sms' => $this->assignedPlatformSmsSetting($settings->customer_sms_provider) !== null,
-            'customer_account_sms' => $this->accountSmsSetting($account, $settings->customer_sms_provider) !== null,
+            'platform_sms' => $ladnaReady,
+            'account_sms' => $ownGatewayReady,
+            'customer_platform_sms' => $ladnaReady,
+            'customer_account_sms' => $ownGatewayReady,
             'otp' => $methods->otp,
             'otp_enabled' => $settings->allow_otp,
+            'sms_mode' => $settings->sms_sending_mode->value,
+            'sms_service_enabled' => $this->smsServiceSettings->enabled(),
+            'sms_segment_price_cents' => $segmentPriceCents,
+            'sms_spendable_balance_cents' => $spendableBalanceCents,
+            'sms_outstanding_cents' => $wallet?->outstanding_cents ?? 0,
+            'sms_source_ready' => match ($settings->sms_sending_mode) {
+                SmsSendingMode::LadnaService => $ladnaReady,
+                SmsSendingMode::OwnGateway => $ownGatewayReady,
+                SmsSendingMode::Disabled => false,
+            },
         ];
     }
 
@@ -115,6 +153,29 @@ class CustomerAuthAvailability
         }
 
         return $this->configuredSmsSetting(IntegrationSetting::platform(), $provider);
+    }
+
+    private function hasOtpCredit(Account $account, CustomerAuthSetting $settings): bool
+    {
+        if ($settings->sms_sending_mode !== SmsSendingMode::LadnaService) {
+            return true;
+        }
+
+        $segmentPriceCents = $this->smsPricing->segmentPriceCents($account);
+
+        if ($segmentPriceCents === null) {
+            return false;
+        }
+
+        if ($segmentPriceCents === 0) {
+            return true;
+        }
+
+        $wallet = $account->smsWallet()->first();
+
+        return $wallet !== null
+            && $wallet->outstanding_cents === 0
+            && $wallet->spendableBalanceCents() >= $segmentPriceCents;
     }
 
     private function platformProvider(IntegrationProvider $provider): ?IntegrationSetting

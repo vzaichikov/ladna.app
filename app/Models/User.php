@@ -63,6 +63,16 @@ class User extends Authenticatable
         return $this->hasMany(UserPhoneOtpChallenge::class);
     }
 
+    public function smsWalletLedgerEntries(): HasMany
+    {
+        return $this->hasMany(SmsWalletLedgerEntry::class, 'actor_user_id');
+    }
+
+    public function subscriptionPlanSmsRateChanges(): HasMany
+    {
+        return $this->hasMany(SubscriptionPlanSmsRateChange::class, 'actor_user_id');
+    }
+
     public function accounts(): BelongsToMany
     {
         return $this->belongsToMany(Account::class, 'account_memberships')

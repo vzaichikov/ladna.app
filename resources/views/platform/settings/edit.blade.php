@@ -21,6 +21,10 @@
                 'label' => __('app.system_settings_tab_activity_log'),
                 'panel_id' => 'activity-log',
             ],
+            'sms-service' => [
+                'label' => __('app.system_settings_tab_sms_service'),
+                'panel_id' => 'sms-service',
+            ],
             'ai-owner' => [
                 'label' => __('app.system_settings_tab_ai_owner'),
                 'panel_id' => 'ai-owner',
@@ -176,6 +180,114 @@
                             <span class="crm-help">{{ $message }}</span>
                         @enderror
                     </label>
+                </div>
+            </section>
+
+            <section
+                id="sms-service"
+                data-platform-settings-panel="sms-service"
+                role="tabpanel"
+                aria-labelledby="platform-settings-tab-sms-service"
+                @class(['hidden' => $activeSettingsTab !== 'sms-service'])
+            >
+                <div class="max-w-4xl space-y-6">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-950">{{ __('app.platform_sms_service') }}</h2>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.platform_sms_service_copy') }}</p>
+                    </div>
+
+                    <label class="flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                        <input type="hidden" name="sms_service_enabled" value="0">
+                        <input name="sms_service_enabled" type="checkbox" value="1" class="crm-checkbox mt-1" @checked(old('sms_service_enabled', $smsServiceEnabled))>
+                        <span>
+                            <span class="block text-sm font-semibold text-slate-950">{{ __('app.sms_service_enabled') }}</span>
+                            <span class="mt-1 block text-sm leading-6 text-slate-600">{{ __('app.sms_service_enabled_hint') }}</span>
+                        </span>
+                    </label>
+
+                    <div class="grid gap-4 sm:grid-cols-3">
+                        <x-ui.metric
+                            :label="__('app.sms_central_provider_balance')"
+                            :value="$smsProviderBalance['amount_cents'] === null
+                                ? __('app.not_available')
+                                : \App\Support\MoneyFormatter::format($smsProviderBalance['amount_cents'], $smsProviderBalance['currency'] ?: 'UAH')"
+                            icon="payments"
+                            accent="emerald"
+                        />
+                        <x-ui.metric
+                            :label="__('app.sms_provider_last_checked')"
+                            :value="$smsProviderBalance['checked_at']
+                                ? \Illuminate\Support\Carbon::parse($smsProviderBalance['checked_at'])->timezone(config('app.timezone'))->format('d.m.Y H:i')
+                                : __('app.never')"
+                            icon="scheduled-tasks"
+                            accent="slate"
+                        />
+                        <x-ui.metric
+                            :label="__('app.sms_provider_monitoring')"
+                            :value="! $smsCentralProviderReady || ! $smsProviderBalanceChecked || $smsProviderBalance['error'] || $smsProviderBalanceLow ? __('app.requires_attention') : __('app.ready')"
+                            :meta="! $smsCentralProviderReady
+                                ? __('app.sms_central_provider_not_ready')
+                                : (! $smsProviderBalanceChecked
+                                    ? __('app.sms_provider_not_checked')
+                                    : ($smsProviderBalance['error']
+                                        ?: ($smsProviderBalanceLow ? __('app.sms_provider_balance_low') : __('app.sms_provider_monitoring_ok'))))"
+                            icon="bell"
+                            :accent="! $smsCentralProviderReady || ! $smsProviderBalanceChecked || $smsProviderBalance['error'] || $smsProviderBalanceLow ? 'amber' : 'emerald'"
+                        />
+                    </div>
+
+                    <div class="rounded-xl border border-stone-200 bg-white p-5">
+                        <h3 class="font-semibold text-slate-950">{{ __('app.sms_top_up_presets') }}</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.sms_top_up_presets_hint') }}</p>
+                        <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                            @foreach ([0, 1, 2] as $presetIndex)
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.amount_uah') }}</span>
+                                    <input
+                                        name="sms_top_up_presets_uah[]"
+                                        type="number"
+                                        min="1"
+                                        max="100000"
+                                        step="0.01"
+                                        value="{{ old('sms_top_up_presets_uah.'.$presetIndex, $smsTopUpPresets[$presetIndex] ?? '') }}"
+                                        class="crm-field"
+                                        required
+                                    >
+                                    @error('sms_top_up_presets_uah.'.$presetIndex)
+                                        <span class="crm-help">{{ $message }}</span>
+                                    @enderror
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <label class="block rounded-xl border border-stone-200 bg-white p-4">
+                            <span class="crm-label">{{ __('app.sms_otp_hourly_limit') }}</span>
+                            <input name="sms_otp_hourly_limit" type="number" min="1" max="10000" value="{{ old('sms_otp_hourly_limit', $smsOtpHourlyLimit) }}" class="crm-field" required>
+                            <span class="mt-2 block text-sm leading-6 text-slate-500">{{ __('app.sms_otp_hourly_limit_hint') }}</span>
+                            @error('sms_otp_hourly_limit') <span class="crm-help">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="block rounded-xl border border-stone-200 bg-white p-4">
+                            <span class="crm-label">{{ __('app.sms_otp_daily_limit') }}</span>
+                            <input name="sms_otp_daily_limit" type="number" min="1" max="100000" value="{{ old('sms_otp_daily_limit', $smsOtpDailyLimit) }}" class="crm-field" required>
+                            <span class="mt-2 block text-sm leading-6 text-slate-500">{{ __('app.sms_otp_daily_limit_hint') }}</span>
+                            @error('sms_otp_daily_limit') <span class="crm-help">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="block rounded-xl border border-stone-200 bg-white p-4">
+                            <span class="crm-label">{{ __('app.sms_provider_low_balance_threshold') }}</span>
+                            <input name="sms_provider_low_balance_uah" type="number" min="0" max="10000000" step="0.01" value="{{ old('sms_provider_low_balance_uah', $smsProviderLowBalanceThreshold) }}" class="crm-field" required>
+                            <span class="mt-2 block text-sm leading-6 text-slate-500">{{ __('app.sms_provider_low_balance_threshold_hint') }}</span>
+                            @error('sms_provider_low_balance_uah') <span class="crm-help">{{ $message }}</span> @enderror
+                        </label>
+                    </div>
+
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                        {{ __('app.sms_service_provider_setup_hint') }}
+                        <a href="{{ route('platform.integrations.index', ['tab' => 'messaging']) }}" class="font-semibold underline underline-offset-4">{{ __('app.open_integrations') }}</a>
+                    </div>
                 </div>
             </section>
 

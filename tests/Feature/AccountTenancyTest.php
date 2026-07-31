@@ -238,7 +238,7 @@ class AccountTenancyTest extends TestCase
                 'Тариф та платежі',
                 'Журнали',
                 'Журнал дій',
-                'SMS клієнтам',
+                'Журнал SMS',
                 'Telegram-сповіщення тренерам',
             ])
             ->assertSee('працює на Ladna')

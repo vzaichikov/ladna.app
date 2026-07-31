@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\CustomerOtpSenderScope;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,7 +19,6 @@ class CustomerOtpChallenge extends Model
             'consumed_at' => 'datetime',
             'resend_available_at' => 'datetime',
             'last_sent_at' => 'datetime',
-            'provider_scope' => CustomerOtpSenderScope::class,
         ];
     }
 

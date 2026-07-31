@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Payments;
 use App\Enums\IntegrationProvider;
 use App\Http\Controllers\Controller;
 use App\Support\Payments\InvalidPaymentCallbackException;
-use App\Support\SaasBilling\ChargeSubscriptionAfterVerification;
 use App\Support\SaasBilling\CompleteAccountSubscriptionPayment;
 use App\Support\SaasBilling\CompletePaymentMethodVerification;
 use App\Support\SaasBilling\MonopaySaasBilling;
 use App\Support\SaasBilling\ResolveAccountSubscriptionPayment;
 use App\Support\SaasBilling\SaasPaymentCallbackLogger;
+use App\Support\Sms\CompleteSmsTopUpPayment;
+use App\Support\Sms\ResolveSmsTopUpPayment;
+use App\Support\Sms\ResumeSmsPaymentAfterVerification;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -24,8 +26,10 @@ class SaasPaymentCallbackController extends Controller
         MonopaySaasBilling $billing,
         CompleteAccountSubscriptionPayment $completePayment,
         CompletePaymentMethodVerification $completeVerification,
-        ChargeSubscriptionAfterVerification $chargeAfterVerification,
+        ResumeSmsPaymentAfterVerification $resumeAfterVerification,
         ResolveAccountSubscriptionPayment $resolvePayment,
+        ResolveSmsTopUpPayment $resolveSmsTopUp,
+        CompleteSmsTopUpPayment $completeSmsTopUp,
         SaasPaymentCallbackLogger $logger,
     ): Response {
         if ($provider !== IntegrationProvider::Monopay->value) {
@@ -46,11 +50,23 @@ class SaasPaymentCallbackController extends Controller
             $callback = $billing->handleCallback($request, $setting);
 
             if ($completeVerification->execute($callback)) {
-                $chargeAfterVerification->execute(
+                $resumeAfterVerification->execute(
                     $callback,
                     $setting,
                 );
                 $logger->log(null, $provider, $orderId, $request, 'payment-method-verification-accepted');
+
+                return response('OK');
+            }
+
+            $smsTopUp = $resolveSmsTopUp->execute(IntegrationProvider::Monopay->value, $callback);
+
+            if ($smsTopUp) {
+                $logger->log($smsTopUp, $provider, $orderId, $request, 'received');
+                $smsTopUp = $completeSmsTopUp->execute($smsTopUp, $callback);
+                $logger->log($smsTopUp, $provider, $orderId, $request, 'accepted', [
+                    'status' => $smsTopUp->status->value,
+                ]);
 
                 return response('OK');
             }

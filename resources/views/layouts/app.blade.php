@@ -309,6 +309,11 @@
             'icon' => 'payments',
             'href' => route('dashboard.accounts.tariff-payments.show', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.tariff-payments.*'),
+        ], [
+            'label' => __('app.sms_account'),
+            'icon' => 'bell',
+            'href' => route('dashboard.accounts.sms-account.show', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.sms-account.*'),
         ]] : []),
     ] : [];
 
@@ -319,7 +324,7 @@
             'href' => route('dashboard.accounts.activity-logs.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.activity-logs.*'),
         ], [
-            'label' => __('app.customer_sms_log'),
+            'label' => __('app.sms_delivery_log'),
             'icon' => 'bell',
             'href' => route('dashboard.accounts.customer-notification-logs.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customer-notification-logs.*'),
@@ -364,6 +369,12 @@
             'icon' => 'bell',
             'href' => route('platform.customer-notifications.index'),
             'active' => request()->routeIs('platform.customer-notifications.*'),
+        ],
+        [
+            'label' => __('app.sms_delivery_log'),
+            'icon' => 'activity-log',
+            'href' => route('platform.sms-deliveries.index'),
+            'active' => request()->routeIs('platform.sms-deliveries.*'),
         ],
         [
             'label' => __('app.email_deliveries'),

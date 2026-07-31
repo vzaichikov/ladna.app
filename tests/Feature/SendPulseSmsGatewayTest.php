@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Support\CustomerAuth\SendPulseSmsGateway;
+use App\Support\CustomerAuth\SmsGatewayAcceptanceStatus;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -54,5 +55,32 @@ class SendPulseSmsGatewayTest extends TestCase
         $this->assertFalse($result->sent);
         $this->assertSame('SendPulse token is not configured.', $result->message);
         Http::assertNothingSent();
+    }
+
+    public function test_ambiguous_failures_are_unknown_and_are_never_retried(): void
+    {
+        Http::fake([
+            'https://api.sendpulse.com/sms/send' => Http::failedConnection(),
+        ]);
+
+        $connectionResult = (new SendPulseSmsGateway([
+            'api_key' => 'studio-sendpulse-key',
+            'sms_sender' => 'Studio',
+        ]))->sendSms('+380501112233', 'Message');
+
+        $this->assertSame(SmsGatewayAcceptanceStatus::Unknown, $connectionResult->acceptanceStatus);
+        Http::assertSentCount(1);
+
+        Http::fake([
+            'https://api.sendpulse.com/sms/send' => Http::response([], 503),
+        ]);
+
+        $serverResult = (new SendPulseSmsGateway([
+            'api_key' => 'studio-sendpulse-key',
+            'sms_sender' => 'Studio',
+        ]))->sendSms('+380501112233', 'Message');
+
+        $this->assertSame(SmsGatewayAcceptanceStatus::Unknown, $serverResult->acceptanceStatus);
+        Http::assertSentCount(1);
     }
 }

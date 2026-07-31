@@ -15,6 +15,7 @@ class CustomerNotificationCommandTest extends TestCase
             ->expectsOutput(__('app.customer_notifications_send_command_result', [
                 'processed' => 0,
                 'sent' => 0,
+                'waiting' => 0,
                 'retried' => 0,
                 'failed' => 0,
                 'cancelled' => 0,

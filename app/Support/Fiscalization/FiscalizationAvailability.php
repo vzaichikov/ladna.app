@@ -11,6 +11,7 @@ use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\IntegrationSetting;
+use App\Models\SmsTopUpPayment;
 use App\Support\IntegrationCatalog;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -44,7 +45,7 @@ class FiscalizationAvailability
         return $this->configuredMethod(IntegrationSetting::platform());
     }
 
-    public function methodForPayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): ?IntegrationSetting
+    public function methodForPayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): ?IntegrationSetting
     {
         if ($payment instanceof CustomerPurchase || $payment instanceof CustomerPurchaseRefund || $payment instanceof EventOrder) {
             $account = $payment->relationLoaded('account')

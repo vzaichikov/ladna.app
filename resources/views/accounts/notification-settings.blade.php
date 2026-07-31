@@ -8,10 +8,11 @@
         <p class="crm-page-copy">{{ __('app.notification_settings_copy') }}</p>
     </div>
 
-    <nav class="mt-6 grid grid-cols-2 border-b border-slate-200 sm:flex sm:flex-wrap sm:gap-2" aria-label="{{ __('app.notification_settings') }}">
+    <nav class="mt-6 grid grid-cols-3 border-b border-slate-200 sm:flex sm:flex-wrap sm:gap-2" aria-label="{{ __('app.notification_settings') }}">
         @foreach ([
             'customers' => __('app.notifications_customers'),
             'trainers' => __('app.notifications_trainers'),
+            'telegram' => __('app.notifications_telegram_bot'),
         ] as $tabKey => $tabLabel)
             <a
                 href="{{ route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => $tabKey]) }}"
@@ -24,23 +25,17 @@
 
     @if ($activeTab === 'trainers')
         @include('accounts.trainer-notification-settings')
-    @else
-        <div class="mt-6 max-w-4xl rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
-            {{ __('app.customer_notifications_sms_only_legend') }}
-        </div>
-
-        @if ($account->customerNotificationsEnabled())
-            @include('accounts.customer-notification-settings')
-        @else
-            <div class="mt-6 max-w-3xl rounded-xl border border-stone-200 bg-stone-50 px-5 py-4 text-sm leading-6 text-slate-600">
-                {{ __('app.customer_notifications_platform_disabled') }}
-            </div>
-        @endif
-
+    @elseif ($activeTab === 'telegram')
         <div class="mt-6 max-w-4xl rounded-xl border border-violet-200 bg-violet-50 px-5 py-4 text-sm leading-6 text-violet-950">
             {{ __('app.customer_telegram_bot_notification_legend') }}
         </div>
 
         @include('accounts.ai-telegram-settings')
+    @else
+        <div class="mt-6 max-w-4xl rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
+            {{ __('app.customer_notifications_sms_only_legend') }}
+        </div>
+
+        @include('accounts.customer-notification-settings')
     @endif
 @endsection

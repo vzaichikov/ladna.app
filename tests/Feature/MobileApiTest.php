@@ -5,10 +5,10 @@ namespace Tests\Feature;
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
-use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
 use App\Enums\ScheduleKind;
+use App\Enums\SmsSendingMode;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AccountMembership;
@@ -788,13 +788,21 @@ class MobileApiTest extends TestCase
         CustomerAuthSetting::create([
             'account_id' => $account->id,
             'allow_otp' => true,
-            'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
-            'otp_provider' => 'turbosms',
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'turbosms',
         ]);
 
-        $this->platformIntegration('turbosms', IntegrationCategory::Messaging->value, [
-            'api_token' => 'turbo-token',
-            'sms_sender' => 'Ladna',
+        IntegrationSetting::create([
+            'scope_type' => IntegrationScope::Account->value,
+            'scope_id' => $account->id,
+            'account_id' => $account->id,
+            'provider' => 'turbosms',
+            'category' => IntegrationCategory::Messaging->value,
+            'is_enabled' => true,
+            'credentials' => [
+                'api_token' => 'turbo-token',
+                'sms_sender' => 'Ladna',
+            ],
         ]);
 
         if ($withTurnstile) {

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\SubscriptionPriceStatus;
 use App\Enums\SystemRole;
 use App\Models\SubscriptionPlan;
+use App\Models\SubscriptionPlanSmsRateChange;
 use App\Models\SubscriptionPriceVersion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -120,5 +121,66 @@ class PlatformSubscriptionPricingTest extends TestCase
             ->assertSessionHasErrors('plan');
 
         $this->assertDatabaseHas('subscription_plans', ['id' => $plan->id]);
+    }
+
+    public function test_platform_admin_updates_sms_segment_price_and_appends_rate_history(): void
+    {
+        $admin = User::factory()->create(['system_role' => SystemRole::PlatformAdmin]);
+        $plan = SubscriptionPlan::factory()->create([
+            'name' => 'Founders',
+            'slug' => 'founders',
+            'sms_segment_price_cents' => null,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('platform.subscription-plans.edit', $plan))
+            ->assertOk()
+            ->assertSee('name="sms_segment_price_uah"', false)
+            ->assertSee(__('app.sms_segment_price_uah_hint'));
+
+        $payload = [
+            'name' => $plan->name,
+            'slug' => $plan->slug,
+            'description' => $plan->description,
+            'price_uah' => '0.00',
+            'sms_segment_price_uah' => '1.32',
+            'currency' => 'UAH',
+            'billing_interval' => 'monthly',
+            'plan_type' => 'standard',
+            'access_days' => 30,
+            'public_signup_enabled' => 0,
+            'requires_recurring_payment' => 1,
+            'renewal_lead_days' => 2,
+            'is_active' => 1,
+            'sort_order' => 0,
+        ];
+
+        $this->actingAs($admin)
+            ->put(route('platform.subscription-plans.update', $plan), $payload)
+            ->assertRedirect(route('platform.subscription-plans.index'));
+
+        $this->assertSame(132, $plan->refresh()->sms_segment_price_cents);
+        $change = SubscriptionPlanSmsRateChange::query()
+            ->whereBelongsTo($plan, 'plan')
+            ->sole();
+        $this->assertNull($change->old_sms_segment_price_cents);
+        $this->assertSame(132, $change->new_sms_segment_price_cents);
+        $this->assertSame($admin->id, $change->actor_user_id);
+
+        $this->actingAs($admin)
+            ->put(route('platform.subscription-plans.update', $plan), $payload)
+            ->assertRedirect(route('platform.subscription-plans.index'));
+
+        $this->assertSame(1, $plan->smsRateChanges()->count());
+
+        $this->actingAs($admin)
+            ->put(route('platform.subscription-plans.update', $plan), [
+                ...$payload,
+                'sms_segment_price_uah' => '0',
+            ])
+            ->assertRedirect(route('platform.subscription-plans.index'));
+
+        $this->assertSame(0, $plan->refresh()->sms_segment_price_cents);
+        $this->assertSame(2, $plan->smsRateChanges()->count());
     }
 }

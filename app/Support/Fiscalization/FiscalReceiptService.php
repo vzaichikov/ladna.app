@@ -7,12 +7,14 @@ use App\Enums\CustomerPurchaseStatus;
 use App\Enums\EventOrderStatus;
 use App\Enums\FiscalReceiptStatus;
 use App\Enums\IntegrationScope;
+use App\Enums\SmsTopUpPaymentStatus;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
+use App\Models\SmsTopUpPayment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
@@ -24,7 +26,7 @@ class FiscalReceiptService
         private readonly CheckboxFiscalizationClient $checkbox,
     ) {}
 
-    public function skipReasonFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): ?string
+    public function skipReasonFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): ?string
     {
         $payment->loadMissing('account');
 
@@ -74,12 +76,17 @@ class FiscalReceiptService
         return $this->fiscalizePayment($payment);
     }
 
+    public function fiscalizeSmsTopUpPayment(SmsTopUpPayment $payment): ?FiscalReceipt
+    {
+        return $this->fiscalizePayment($payment);
+    }
+
     public function fiscalizeEventOrder(EventOrder $order): ?FiscalReceipt
     {
         return $this->fiscalizePayment($order);
     }
 
-    public function fiscalizePayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): ?FiscalReceipt
+    public function fiscalizePayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): ?FiscalReceipt
     {
         $receipt = null;
 
@@ -119,17 +126,18 @@ class FiscalReceiptService
         }
     }
 
-    private function paymentIsPaid(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): bool
+    private function paymentIsPaid(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): bool
     {
         return match (true) {
             $payment instanceof CustomerPurchase => $payment->status === CustomerPurchaseStatus::PaymentPaid,
             $payment instanceof CustomerPurchaseRefund => $payment->exists,
             $payment instanceof EventOrder => in_array($payment->status, [EventOrderStatus::Paid, EventOrderStatus::RefundRequired], true),
             $payment instanceof AccountSubscriptionPayment => $payment->status === AccountSubscriptionPaymentStatus::PaymentPaid,
+            $payment instanceof SmsTopUpPayment => $payment->status === SmsTopUpPaymentStatus::PaymentPaid,
         };
     }
 
-    private function receiptFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment, IntegrationSetting $setting): FiscalReceipt
+    private function receiptFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment, IntegrationSetting $setting): FiscalReceipt
     {
         return DB::transaction(function () use ($payment, $setting): FiscalReceipt {
             $receipt = FiscalReceipt::query()
@@ -146,10 +154,10 @@ class FiscalReceiptService
             $accountId = $this->paymentAccountId($payment);
             $receipt = new FiscalReceipt([
                 'account_id' => $accountId,
-                'scope_type' => $payment instanceof AccountSubscriptionPayment
+                'scope_type' => $payment instanceof AccountSubscriptionPayment || $payment instanceof SmsTopUpPayment
                     ? IntegrationScope::Platform->value
                     : IntegrationScope::Account->value,
-                'scope_id' => $payment instanceof AccountSubscriptionPayment ? 0 : (int) $accountId,
+                'scope_id' => $payment instanceof AccountSubscriptionPayment || $payment instanceof SmsTopUpPayment ? 0 : (int) $accountId,
                 'provider' => $setting->provider->value,
                 'status' => FiscalReceiptStatus::Pending->value,
             ]);
@@ -160,7 +168,7 @@ class FiscalReceiptService
         });
     }
 
-    private function markSending(FiscalReceipt $receipt, CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): FiscalReceipt
+    private function markSending(FiscalReceipt $receipt, CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): FiscalReceipt
     {
         $externalUuid = (string) Str::uuid();
 
@@ -212,7 +220,7 @@ class FiscalReceiptService
     /**
      * @return array<string, mixed>
      */
-    private function payloadFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment, string $externalUuid): array
+    private function payloadFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment, string $externalUuid): array
     {
         $name = $this->itemName($payment);
         $isReturn = $payment instanceof CustomerPurchaseRefund;
@@ -248,7 +256,7 @@ class FiscalReceiptService
         return $payload;
     }
 
-    private function itemName(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): string
+    private function itemName(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): string
     {
         if ($payment instanceof CustomerPurchaseRefund) {
             $payment->loadMissing('customerPurchase');
@@ -266,6 +274,10 @@ class FiscalReceiptService
             return Str::limit($payment->event?->title ?: __('app.events'), 128, '');
         }
 
+        if ($payment instanceof SmsTopUpPayment) {
+            return Str::limit(__('app.sms_top_up_receipt_item'), 128, '');
+        }
+
         $payment->loadMissing('plan');
         $planName = $payment->plan_name_snapshot ?: $payment->plan?->name ?: __('app.subscription_plan');
         $locations = $payment->billable_location_count
@@ -278,7 +290,7 @@ class FiscalReceiptService
     /**
      * @return array<string, string>
      */
-    private function deliveryFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): array
+    private function deliveryFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): array
     {
         if ($payment instanceof CustomerPurchaseRefund) {
             $payment->loadMissing('customerPurchase.customer');
@@ -321,12 +333,12 @@ class FiscalReceiptService
         return is_string($label) ? $label : $provider;
     }
 
-    private function paymentAccountId(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): ?int
+    private function paymentAccountId(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): ?int
     {
         return $payment->account_id ? (int) $payment->account_id : null;
     }
 
-    private function paymentReference(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment $payment): string
+    private function paymentReference(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment $payment): string
     {
         if ($payment instanceof CustomerPurchaseRefund) {
             $payment->loadMissing('customerPurchase');

@@ -94,6 +94,13 @@ class CompletePaymentMethodVerification
 
         $paymentMethod->save();
 
+        if ($callback->status === PaymentCallbackStatus::Paid) {
+            $paymentMethod->account?->smsWallet()->update([
+                'auto_top_up_suspended_at' => null,
+                'last_auto_top_up_failure_warning_at' => null,
+            ]);
+        }
+
         return true;
     }
 

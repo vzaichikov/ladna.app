@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
+use App\Enums\SmsSendingMode;
 use App\Http\Requests\UpdateAccountIntegrationRequest;
 use App\Models\Account;
 use App\Models\IntegrationSetting;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\IntegrationCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,8 +16,11 @@ use Illuminate\View\View;
 
 class AccountIntegrationController extends Controller
 {
-    public function index(Request $request, Account $account): View
-    {
+    public function index(
+        Request $request,
+        Account $account,
+        CustomerAuthAvailability $customerAuthAvailability,
+    ): View {
         abort_unless($account->isOwnedBy($request->user()), 403);
 
         $categories = IntegrationCatalog::categories(IntegrationScope::Account);
@@ -23,6 +29,9 @@ class AccountIntegrationController extends Controller
             ->orderBy('provider')
             ->get()
             ->keyBy(fn (IntegrationSetting $setting): string => $setting->provider->value);
+        $smsSettings = $activeCategory === IntegrationCategory::Messaging
+            ? $customerAuthAvailability->settingsFor($account)
+            : null;
 
         return view('integrations.index', [
             'account' => $account,
@@ -37,6 +46,12 @@ class AccountIntegrationController extends Controller
             'tabRouteParameters' => ['account' => $account],
             'updateRoute' => 'dashboard.accounts.integrations.update',
             'updateRouteParameters' => ['account' => $account],
+            'smsSendingModes' => SmsSendingMode::cases(),
+            'smsSettings' => $smsSettings,
+            'smsReadiness' => $smsSettings
+                ? $customerAuthAvailability->readinessFor($account)
+                : null,
+            'smsSendingModeUpdateRoute' => 'dashboard.accounts.integrations.sms-sending.update',
         ]);
     }
 

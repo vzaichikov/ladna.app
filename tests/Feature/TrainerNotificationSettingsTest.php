@@ -41,7 +41,15 @@ class TrainerNotificationSettingsTest extends TestCase
             ->get(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']))
             ->assertOk()
             ->assertSee(__('app.notifications_customers'))
+            ->assertSee('name="allow_otp"', false)
+            ->assertDontSee('name="telegram_bots[customer][token]"', false)
+            ->assertDontSee('name="trainer_assignment_enabled"', false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram']))
+            ->assertOk()
             ->assertSee('name="telegram_bots[customer][token]"', false)
+            ->assertDontSee('name="allow_otp"', false)
             ->assertDontSee('name="trainer_assignment_enabled"', false);
 
         $this->assertFalse($account->trainerNotificationSetting()->exists());
@@ -152,10 +160,12 @@ class TrainerNotificationSettingsTest extends TestCase
             ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'qr']))
             ->assertRedirect(route('dashboard.accounts.qr-links.show', $account));
 
-        foreach (['customer_notifications', 'ai'] as $legacyTab) {
-            $this->actingAs($owner)
-                ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => $legacyTab]))
-                ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']));
-        }
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'customer_notifications']))
+            ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'ai']))
+            ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram']));
     }
 }

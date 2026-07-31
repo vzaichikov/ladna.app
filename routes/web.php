@@ -12,6 +12,10 @@ use App\Http\Controllers\AccountNotificationSettingsController;
 use App\Http\Controllers\AccountOwnerProfileController;
 use App\Http\Controllers\AccountPaymentController;
 use App\Http\Controllers\AccountQrLinksController;
+use App\Http\Controllers\AccountSmsAccountController;
+use App\Http\Controllers\AccountSmsAutoTopUpController;
+use App\Http\Controllers\AccountSmsSendingSettingsController;
+use App\Http\Controllers\AccountSmsTopUpController;
 use App\Http\Controllers\AccountSubscriptionController;
 use App\Http\Controllers\AccountTariffPaymentController;
 use App\Http\Controllers\AccountTelegramAlertController;
@@ -57,6 +61,7 @@ use App\Http\Controllers\PeopleCounterReportController;
 use App\Http\Controllers\PeopleCounterScreenshotController;
 use App\Http\Controllers\Platform\AccountBillingEnrollmentController;
 use App\Http\Controllers\Platform\AccountBillingTariffController;
+use App\Http\Controllers\Platform\AccountSmsController as PlatformAccountSmsController;
 use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
 use App\Http\Controllers\Platform\AiUsageController as PlatformAiUsageController;
 use App\Http\Controllers\Platform\CustomerAuthSettingsController as PlatformCustomerAuthSettingsController;
@@ -70,6 +75,7 @@ use App\Http\Controllers\Platform\PlatformAccountController;
 use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\ProfileController as PlatformProfileController;
 use App\Http\Controllers\Platform\ScheduledTaskController;
+use App\Http\Controllers\Platform\SmsDeliveryController as PlatformSmsDeliveryController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SubscriptionPriceVersionController;
 use App\Http\Controllers\Platform\SystemSettingsController;
@@ -329,6 +335,7 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
         Route::post('telegram-support/authorizations/{telegramAuthorization}/reset', [PlatformTelegramSupportController::class, 'reset'])->name('telegram-support.authorizations.reset');
         Route::delete('telegram-support/authorizations/{telegramAuthorization}', [PlatformTelegramSupportController::class, 'revoke'])->name('telegram-support.authorizations.revoke');
         Route::get('customer-notifications', [PlatformCustomerNotificationController::class, 'index'])->name('customer-notifications.index');
+        Route::get('sms-deliveries', [PlatformSmsDeliveryController::class, 'index'])->name('sms-deliveries.index');
         Route::get('email-deliveries', [PlatformEmailDeliveryController::class, 'index'])->name('email-deliveries.index');
         Route::get('email-deliveries/{emailDelivery}/preview', [PlatformEmailDeliveryController::class, 'preview'])->name('email-deliveries.preview');
         Route::get('email-scenarios', [PlatformEmailScenarioController::class, 'index'])->name('email-scenarios.index');
@@ -349,7 +356,12 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
         Route::get('accounts/{account}/customer-auth', [PlatformCustomerAuthSettingsController::class, 'edit'])
             ->name('accounts.customer-auth.edit');
         Route::put('accounts/{account}/customer-auth', [PlatformCustomerAuthSettingsController::class, 'update'])
+            ->middleware(RecordAccountActivity::class)
             ->name('accounts.customer-auth.update');
+        Route::get('accounts/{account}/sms-account', [PlatformAccountSmsController::class, 'show'])
+            ->name('accounts.sms-account.show');
+        Route::post('accounts/{account}/sms-account/adjustments', [PlatformAccountSmsController::class, 'adjust'])
+            ->name('accounts.sms-account.adjust');
         Route::resource('subscription-plans', SubscriptionPlanController::class)->except(['show']);
         Route::prefix('subscription-plans/{subscriptionPlan}/price-versions')
             ->name('subscription-plans.price-versions.')
@@ -483,6 +495,12 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.activity-logs.index');
         Route::get('accounts/{account}/customer-notification-logs', [AccountCustomerNotificationController::class, 'index'])
             ->name('accounts.customer-notification-logs.index');
+        Route::get('accounts/{account}/sms-account', [AccountSmsAccountController::class, 'show'])
+            ->name('accounts.sms-account.show');
+        Route::post('accounts/{account}/sms-account/top-ups', [AccountSmsTopUpController::class, 'store'])
+            ->name('accounts.sms-account.top-ups.store');
+        Route::put('accounts/{account}/sms-account/auto-top-up', [AccountSmsAutoTopUpController::class, 'update'])
+            ->name('accounts.sms-account.auto-top-up.update');
         Route::get('accounts/{account}/trainer-telegram-alert-logs', [AccountTelegramAlertController::class, 'index'])
             ->name('accounts.trainer-telegram-alert-logs.index');
         Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])
@@ -664,6 +682,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->scoped();
         Route::get('accounts/{account}/integrations', [AccountIntegrationController::class, 'index'])
             ->name('accounts.integrations.index');
+        Route::put('accounts/{account}/integrations/sms-sending', [AccountSmsSendingSettingsController::class, 'update'])
+            ->name('accounts.integrations.sms-sending.update');
         Route::put('accounts/{account}/integrations/{provider}', [AccountIntegrationController::class, 'update'])
             ->name('accounts.integrations.update');
         Route::get('accounts/{account}/scheduled-classes', ScheduledClassController::class)

@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
+use App\Enums\SmsSendingMode;
 use App\Models\Account;
 use App\Models\IntegrationSetting;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\Sms\SmsServiceSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -221,6 +223,11 @@ class IntegrationSettingsTest extends TestCase
             'bearer_token' => 'smsclub-secret',
             'src_addr' => 'Ladna',
         ]);
+        SystemSetting::setValue(SystemSetting::CentralSmsProviderKey, 'turbosms');
+        SystemSetting::setValue(SmsServiceSettings::ProviderBalanceCentsKey, '12345');
+        SystemSetting::setValue(SmsServiceSettings::ProviderBalanceCurrencyKey, 'UAH');
+        SystemSetting::setValue(SmsServiceSettings::ProviderBalanceCheckedAtKey, now()->toIso8601String());
+        SystemSetting::setValue(SmsServiceSettings::ProviderBalanceErrorKey, 'stale error');
 
         $this->actingAs($platformAdmin)
             ->get(route('platform.integrations.index', ['tab' => 'messaging']))
@@ -230,7 +237,10 @@ class IntegrationSettingsTest extends TestCase
             ->assertDontSee('falls back to TurboSMS')
             ->assertDontSee('Ladna currently falls back');
 
-        $this->assertNull(app(CustomerAuthAvailability::class)->platformSmsSetting());
+        $this->assertSame(
+            'turbosms',
+            app(CustomerAuthAvailability::class)->platformSmsSetting()?->provider->value,
+        );
 
         $this->put(route('platform.integrations.central-sms-provider.update'), [
             'central_sms_provider' => 'smsclub',
@@ -244,6 +254,12 @@ class IntegrationSettingsTest extends TestCase
             'smsclub',
             app(CustomerAuthAvailability::class)->platformSmsSetting()?->provider->value,
         );
+        $this->assertSame([
+            'amount_cents' => null,
+            'currency' => null,
+            'checked_at' => null,
+            'error' => null,
+        ], app(SmsServiceSettings::class)->providerBalanceStatus());
 
         $smsclub->forceFill(['is_enabled' => false])->save();
 
@@ -273,11 +289,46 @@ class IntegrationSettingsTest extends TestCase
         $this->assertNull(SystemSetting::stringValue(SystemSetting::CentralSmsProviderKey));
     }
 
+    public function test_updating_the_active_central_sms_integration_clears_cached_provider_health(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $this->createPlatformSmsIntegration('smsclub', [
+            'bearer_token' => 'old-secret',
+            'src_addr' => 'Ladna',
+        ]);
+        SystemSetting::setValue(SystemSetting::CentralSmsProviderKey, 'smsclub');
+        SystemSetting::setValue(SmsServiceSettings::ProviderBalanceCentsKey, '12345');
+        SystemSetting::setValue(SmsServiceSettings::ProviderBalanceCurrencyKey, 'UAH');
+        SystemSetting::setValue(SmsServiceSettings::ProviderBalanceCheckedAtKey, now()->toIso8601String());
+        SystemSetting::setValue(SmsServiceSettings::ProviderBalanceErrorKey, 'stale error');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.integrations.update', 'smsclub'), [
+                'is_enabled' => '1',
+                'credentials' => [
+                    'bearer_token' => 'new-secret',
+                    'src_addr' => 'NewLadna',
+                ],
+            ])
+            ->assertRedirect(route('platform.integrations.index', ['tab' => 'messaging']));
+
+        $this->assertSame([
+            'amount_cents' => null,
+            'currency' => null,
+            'checked_at' => null,
+            'error' => null,
+        ], app(SmsServiceSettings::class)->providerBalanceStatus());
+    }
+
     public function test_account_owner_can_view_and_update_own_account_integrations(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
+        $account->customerAuthSetting()->create([
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'turbosms',
+        ]);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
@@ -313,6 +364,10 @@ class IntegrationSettingsTest extends TestCase
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
+        $account->customerAuthSetting()->create([
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'sendpulse',
+        ]);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))

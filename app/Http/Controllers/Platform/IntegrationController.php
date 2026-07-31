@@ -11,6 +11,7 @@ use App\Models\IntegrationSetting;
 use App\Models\SystemSetting;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\IntegrationCatalog;
+use App\Support\Sms\SmsServiceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -49,6 +50,7 @@ class IntegrationController extends Controller
     public function updateCentralSmsProvider(
         UpdateCentralSmsProviderRequest $request,
         CustomerAuthAvailability $availability,
+        SmsServiceSettings $smsServiceSettings,
     ): RedirectResponse {
         $provider = $request->provider();
 
@@ -58,6 +60,10 @@ class IntegrationController extends Controller
                 ->withErrors(['central_sms_provider' => __('app.central_sms_provider_unavailable')]);
         }
 
+        if (SystemSetting::stringValue(SystemSetting::CentralSmsProviderKey) !== $provider) {
+            $smsServiceSettings->clearProviderBalanceStatus();
+        }
+
         SystemSetting::setValue(SystemSetting::CentralSmsProviderKey, $provider);
 
         return redirect()
@@ -65,8 +71,11 @@ class IntegrationController extends Controller
             ->with('status', __('app.central_sms_provider_updated'));
     }
 
-    public function update(UpdatePlatformIntegrationRequest $request, string $provider): RedirectResponse
-    {
+    public function update(
+        UpdatePlatformIntegrationRequest $request,
+        string $provider,
+        SmsServiceSettings $smsServiceSettings,
+    ): RedirectResponse {
         $category = IntegrationCatalog::providerCategory($provider);
 
         IntegrationSetting::updateOrCreate(
@@ -81,6 +90,13 @@ class IntegrationController extends Controller
                 ...$request->payload(),
             ],
         );
+
+        if (
+            $category === IntegrationCategory::Messaging
+            && SystemSetting::stringValue(SystemSetting::CentralSmsProviderKey) === $provider
+        ) {
+            $smsServiceSettings->clearProviderBalanceStatus();
+        }
 
         return redirect()
             ->route('platform.integrations.index', ['tab' => $category->value])

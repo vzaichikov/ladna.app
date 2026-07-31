@@ -8,11 +8,11 @@ use App\Actions\RestoreScheduledClassCancellation;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerNotificationStatus;
 use App\Enums\CustomerNotificationType;
-use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
 use App\Enums\ScheduleKind;
+use App\Enums\SmsSendingMode;
 use App\Enums\TelegramAlertStatus;
 use App\Enums\TelegramAlertType;
 use App\Models\Account;
@@ -218,6 +218,7 @@ class NotificationCancellationScenarioTest extends TestCase
             ->expectsOutput(__('app.customer_notifications_send_command_result', [
                 'processed' => 1,
                 'sent' => 1,
+                'waiting' => 0,
                 'retried' => 0,
                 'failed' => 0,
                 'cancelled' => 0,
@@ -321,13 +322,14 @@ class NotificationCancellationScenarioTest extends TestCase
             ]);
             CustomerAuthSetting::create([
                 'account_id' => $account->id,
-                'customer_sms_sender_scope' => CustomerOtpSenderScope::Platform->value,
-                'customer_sms_provider' => IntegrationProvider::Turbosms->value,
+                'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+                'sms_provider' => IntegrationProvider::Turbosms->value,
             ]);
             IntegrationSetting::query()->firstOrCreate(
                 [
-                    'scope_type' => IntegrationScope::Platform->value,
-                    'scope_id' => 0,
+                    'scope_type' => IntegrationScope::Account->value,
+                    'scope_id' => $account->id,
+                    'account_id' => $account->id,
                     'provider' => IntegrationProvider::Turbosms->value,
                     'category' => IntegrationCategory::Messaging->value,
                 ],

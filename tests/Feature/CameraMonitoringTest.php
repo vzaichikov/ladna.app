@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Enums\CustomerOtpSenderScope;
+use App\Enums\SmsSendingMode;
 use App\Models\Account;
 use App\Models\Location;
 use App\Models\Room;
@@ -74,8 +74,8 @@ class CameraMonitoringTest extends TestCase
                 'allow_rtsp_cameras' => '1',
                 'enable_people_counter' => '1',
                 'enable_telegram_alerts' => '0',
-                'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
-                'otp_provider' => null,
+                'sms_sending_mode' => SmsSendingMode::Disabled->value,
+                'sms_provider' => null,
             ])
             ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
 
@@ -101,8 +101,8 @@ class CameraMonitoringTest extends TestCase
                 'allow_rtsp_cameras' => '0',
                 'enable_people_counter' => '0',
                 'enable_telegram_alerts' => '0',
-                'otp_sender_scope' => CustomerOtpSenderScope::Account->value,
-                'otp_provider' => null,
+                'sms_sending_mode' => SmsSendingMode::Disabled->value,
+                'sms_provider' => null,
             ])
             ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
 
@@ -113,7 +113,7 @@ class CameraMonitoringTest extends TestCase
                 'allow_rtsp_cameras' => '0',
                 'enable_people_counter' => '0',
                 'enable_telegram_alerts' => '1',
-                'otp_sender_scope' => CustomerOtpSenderScope::Platform->value,
+                'sms_sending_mode' => SmsSendingMode::Disabled->value,
             ])
             ->assertForbidden();
     }

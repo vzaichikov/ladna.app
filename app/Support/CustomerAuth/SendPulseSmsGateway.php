@@ -3,6 +3,7 @@
 namespace App\Support\CustomerAuth;
 
 use App\Support\SendPulse\SendPulseApiClient;
+use Illuminate\Http\Client\ConnectionException;
 
 class SendPulseSmsGateway implements SmsGateway
 {
@@ -30,10 +31,21 @@ class SendPulseSmsGateway implements SmsGateway
             'body' => $message,
         ];
 
-        $response = (new SendPulseApiClient($apiKey))->post('/sms/send', $payload);
+        try {
+            $response = (new SendPulseApiClient($apiKey))->postWithoutRetry('/sms/send', $payload);
+        } catch (ConnectionException) {
+            return SmsGatewayResult::unknown('SendPulse request outcome is unknown.');
+        }
 
         if ($response->successful()) {
             return SmsGatewayResult::sent((string) ($response->json('data.id') ?? ''));
+        }
+
+        if ($response->serverError()) {
+            return SmsGatewayResult::unknown(sprintf(
+                'SendPulse request outcome is unknown after HTTP %d.',
+                $response->status(),
+            ));
         }
 
         $message = $response->json('message');

@@ -2,12 +2,11 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationProvider;
+use App\Enums\SmsSendingMode;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Validator;
 
 class UpdateCustomerAuthSettingsRequest extends FormRequest
 {
@@ -26,17 +25,9 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
             'allow_rtsp_cameras' => ['nullable', 'boolean'],
             'enable_people_counter' => ['nullable', 'boolean'],
             'enable_customer_notifications' => ['nullable', 'boolean'],
-            'otp_sender_scope' => ['required', Rule::enum(CustomerOtpSenderScope::class)],
-            'otp_provider' => [
-                'nullable',
-                Rule::in([
-                    IntegrationProvider::Turbosms->value,
-                    IntegrationProvider::Smsclub->value,
-                    IntegrationProvider::Sendpulse->value,
-                ]),
-            ],
-            'customer_sms_sender_scope' => ['required', Rule::enum(CustomerOtpSenderScope::class)],
-            'customer_sms_provider' => [
+            'sms_sending_mode' => ['required', Rule::enum(SmsSendingMode::class)],
+            'sms_provider' => [
+                Rule::requiredIf($this->input('sms_sending_mode') === SmsSendingMode::OwnGateway->value),
                 'nullable',
                 Rule::in([
                     IntegrationProvider::Turbosms->value,
@@ -48,16 +39,18 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
     }
 
     /**
-     * @return array{allow_otp: bool, otp_sender_scope: string, otp_provider: ?string, customer_sms_sender_scope: string, customer_sms_provider: ?string}
+     * @return array{allow_otp: bool, sms_sending_mode: string, sms_provider: ?string}
      */
     public function payload(): array
     {
+        $mode = SmsSendingMode::from((string) $this->validated('sms_sending_mode'));
+
         return [
             'allow_otp' => $this->boolean('allow_otp'),
-            'otp_sender_scope' => (string) $this->validated('otp_sender_scope'),
-            'otp_provider' => $this->validated('otp_provider'),
-            'customer_sms_sender_scope' => (string) $this->validated('customer_sms_sender_scope'),
-            'customer_sms_provider' => $this->validated('customer_sms_provider'),
+            'sms_sending_mode' => $mode->value,
+            'sms_provider' => $mode === SmsSendingMode::OwnGateway
+                ? (string) $this->validated('sms_provider')
+                : null,
         ];
     }
 
@@ -71,40 +64,5 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
             'enable_people_counter' => $this->boolean('enable_people_counter'),
             'enable_customer_notifications' => $this->boolean('enable_customer_notifications'),
         ];
-    }
-
-    /**
-     * @return array<int, callable(Validator): void>
-     */
-    public function after(): array
-    {
-        return [
-            function (Validator $validator): void {
-                if (
-                    $this->boolean('allow_otp')
-                    && $this->input('otp_sender_scope') === CustomerOtpSenderScope::Platform->value
-                    && blank($this->input('otp_provider'))
-                ) {
-                    $validator->errors()->add('otp_provider', __('app.sms_provider_required_for_platform_scope'));
-                }
-
-                if (
-                    $this->boolean('enable_customer_notifications')
-                    && $this->input('customer_sms_sender_scope') === CustomerOtpSenderScope::Platform->value
-                    && blank($this->input('customer_sms_provider'))
-                ) {
-                    $validator->errors()->add('customer_sms_provider', __('app.sms_provider_required_for_platform_scope'));
-                }
-            },
-        ];
-    }
-
-    protected function prepareForValidation(): void
-    {
-        if (! $this->has('customer_sms_sender_scope')) {
-            $this->merge([
-                'customer_sms_sender_scope' => CustomerOtpSenderScope::Account->value,
-            ]);
-        }
     }
 }

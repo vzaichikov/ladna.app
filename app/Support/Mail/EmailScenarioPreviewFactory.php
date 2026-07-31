@@ -49,6 +49,9 @@ class EmailScenarioPreviewFactory
             'locations' => 2,
             'period' => '2026-08-01 - 2026-08-31',
             'period_ends_at' => '2026-08-31',
+            'notice' => $scenario->value,
+            'balance' => '45 UAH',
+            'outstanding' => $scenario === EmailScenario::SmsOutstandingCredit ? '12 UAH' : null,
             'notice_type' => $scenario->lifecycleType(),
             'notice_parameters' => [
                 'date' => '2026-08-31',

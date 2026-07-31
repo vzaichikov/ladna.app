@@ -2,6 +2,7 @@
 
 namespace App\Support\CustomerAuth;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class TurboSmsGateway implements SmsGateway
@@ -18,20 +19,31 @@ class TurboSmsGateway implements SmsGateway
 
     public function sendSms(string $phone, string $message): SmsGatewayResult
     {
-        $response = Http::withToken((string) ($this->credentials['api_token'] ?? ''))
-            ->acceptJson()
-            ->timeout(10)
-            ->retry(1, 200)
-            ->post('https://api.turbosms.ua/message/send.json', [
-                'recipients' => [$phone],
-                'sms' => [
-                    'sender' => (string) ($this->credentials['sms_sender'] ?? ''),
-                    'text' => $message,
-                ],
-            ]);
+        try {
+            $response = Http::withToken((string) ($this->credentials['api_token'] ?? ''))
+                ->acceptJson()
+                ->connectTimeout(3)
+                ->timeout(10)
+                ->post('https://api.turbosms.ua/message/send.json', [
+                    'recipients' => [$phone],
+                    'sms' => [
+                        'sender' => (string) ($this->credentials['sms_sender'] ?? ''),
+                        'text' => $message,
+                    ],
+                ]);
+        } catch (ConnectionException) {
+            return SmsGatewayResult::unknown('TurboSMS request outcome is unknown.');
+        }
 
         if ($response->successful()) {
             return SmsGatewayResult::sent((string) ($response->json('response_result.0.message_id') ?? ''));
+        }
+
+        if ($response->serverError()) {
+            return SmsGatewayResult::unknown(sprintf(
+                'TurboSMS request outcome is unknown after HTTP %d.',
+                $response->status(),
+            ));
         }
 
         return SmsGatewayResult::failed($response->body() ?: 'TurboSMS request failed.');

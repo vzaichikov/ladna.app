@@ -15,7 +15,7 @@ class LogSmsGateway implements SmsGateway
     {
         Log::info('Customer SMS requested.', [
             'phone' => $phone,
-            'message' => $message,
+            'message_length' => mb_strlen($message),
         ]);
 
         return SmsGatewayResult::sent();

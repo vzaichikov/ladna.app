@@ -102,7 +102,8 @@ class AccountController extends Controller
 
         $legacyRoute = match ($request->query('tab')) {
             'qr' => route('dashboard.accounts.qr-links.show', $account),
-            'customer_notifications', 'ai' => route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']),
+            'customer_notifications' => route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']),
+            'ai' => route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram']),
             default => null,
         };
 

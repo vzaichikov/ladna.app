@@ -6,6 +6,7 @@ use App\Enums\IntegrationProvider;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\AccountSubscriptionPaymentMethod;
 use App\Models\IntegrationSetting;
+use App\Models\SmsTopUpPayment;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\Payments\PaymentCheckout;
 use App\Support\Payments\PaymentGatewayException;
@@ -57,7 +58,7 @@ class MonopayTokenizedBilling
      * @return array{request: array<string, mixed>, response: array<string, mixed>}
      */
     public function charge(
-        AccountSubscriptionPayment $payment,
+        AccountSubscriptionPayment|SmsTopUpPayment $payment,
         AccountSubscriptionPaymentMethod $paymentMethod,
         IntegrationSetting $setting,
         string $redirectUrl,
@@ -126,9 +127,11 @@ class MonopayTokenizedBilling
     /**
      * @return array<string, mixed>
      */
-    private function merchantPaymentInfo(AccountSubscriptionPayment $payment): array
+    private function merchantPaymentInfo(AccountSubscriptionPayment|SmsTopUpPayment $payment): array
     {
-        $name = $payment->plan_name_snapshot ?: $payment->plan?->name ?: 'Ladna SaaS';
+        $name = $payment instanceof SmsTopUpPayment
+            ? 'Ladna SMS credit'
+            : ($payment->plan_name_snapshot ?: $payment->plan?->name ?: 'Ladna SaaS');
 
         return [
             'reference' => $payment->order_id,

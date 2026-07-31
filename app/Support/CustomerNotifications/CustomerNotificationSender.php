@@ -6,15 +6,17 @@ use App\Enums\CustomerNotificationChannel;
 use App\Enums\CustomerNotificationStatus;
 use App\Enums\CustomerNotificationType;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\SmsDeliveryPurpose;
+use App\Enums\SmsSendingMode;
 use App\Models\ClassBooking;
 use App\Models\CustomerNotification;
 use App\Models\ScheduledClassCancellation;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
-use App\Support\CustomerAuth\SmsGatewayResolver;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\Sms\SmsAutoTopUpService;
+use App\Support\Sms\StudioSmsSender;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Throwable;
 
 class CustomerNotificationSender
 {
@@ -22,7 +24,8 @@ class CustomerNotificationSender
 
     public function __construct(
         private readonly CustomerAuthAvailability $availability,
-        private readonly SmsGatewayResolver $gateways,
+        private readonly StudioSmsSender $smsSender,
+        private readonly SmsAutoTopUpService $autoTopUp,
         private readonly PhoneNumberNormalizer $phones,
         private readonly CustomerNotificationProducer $producer,
         private readonly CustomerNotificationSchedulePlanner $planner,
@@ -30,7 +33,7 @@ class CustomerNotificationSender
     ) {}
 
     /**
-     * @return array{processed: int, sent: int, retried: int, failed: int, cancelled: int, skipped: int, rescheduled: int}
+     * @return array{processed: int, sent: int, waiting: int, retried: int, failed: int, cancelled: int, skipped: int, rescheduled: int}
      */
     public function sendPending(int $limit = 50): array
     {
@@ -38,6 +41,7 @@ class CustomerNotificationSender
         $results = [
             'processed' => 0,
             'sent' => 0,
+            'waiting' => 0,
             'retried' => 0,
             'failed' => 0,
             'cancelled' => 0,
@@ -206,10 +210,9 @@ class CustomerNotificationSender
         }
 
         $authSettings = $this->availability->settingsFor($account);
-        $smsSetting = $this->availability->customerSmsSettingFor($account, $authSettings);
 
-        if (! $smsSetting) {
-            return $this->retryOrFail($notification, 'customer_sms_not_configured');
+        if ($authSettings->sms_sending_mode === SmsSendingMode::Disabled) {
+            return $this->cancel($notification, 'customer_sms_disabled');
         }
 
         $text = (string) ($notification->text ?: match ($notification->type) {
@@ -227,23 +230,58 @@ class CustomerNotificationSender
             };
         }
 
-        try {
-            $result = $this->gateways->resolve($smsSetting)->sendSms($phone, $text);
-        } catch (Throwable $exception) {
-            return $this->retryOrFail($notification, $exception->getMessage() ?: 'customer_sms_send_failed');
+        $sendResult = $this->smsSender->send(
+            account: $account,
+            phone: $phone,
+            message: $text,
+            purpose: SmsDeliveryPurpose::CustomerNotification,
+            source: $notification,
+            idempotencyKey: 'customer-notification:'.$notification->id.':attempt:'.$notification->attempts,
+        );
+
+        if ($sendResult->waitingForCredit()) {
+            $notification->forceFill([
+                'status' => CustomerNotificationStatus::WaitingForSmsCredit,
+                'recipient_phone' => $phone,
+                'text' => $text,
+                'provider_scope' => $authSettings->sms_sending_mode->value,
+                'provider' => $sendResult->delivery->provider,
+                'next_attempt_at' => null,
+                'last_error' => 'waiting_for_sms_credit',
+            ])->save();
+
+            $this->autoTopUp->attempt($account);
+
+            return 'waiting';
         }
 
-        if (! $result->sent) {
-            return $this->retryOrFail($notification, $result->message ?: 'customer_sms_send_failed');
+        if ($sendResult->unknown()) {
+            $notification->forceFill([
+                'status' => CustomerNotificationStatus::Failed,
+                'recipient_phone' => $phone,
+                'text' => $text,
+                'provider_scope' => $authSettings->sms_sending_mode->value,
+                'provider' => $sendResult->delivery->provider,
+                'provider_message_id' => $sendResult->delivery->provider_message_id,
+                'next_attempt_at' => null,
+                'failed_at' => now(),
+                'last_error' => 'sms_delivery_outcome_unknown',
+            ])->save();
+
+            return 'failed';
+        }
+
+        if (! $sendResult->accepted()) {
+            return $this->retryOrFail($notification, $sendResult->message ?: 'customer_sms_send_failed');
         }
 
         $notification->forceFill([
             'status' => CustomerNotificationStatus::Sent->value,
             'recipient_phone' => $phone,
             'text' => $text,
-            'provider_scope' => $authSettings->customer_sms_sender_scope->value,
-            'provider' => $smsSetting->provider->value,
-            'provider_message_id' => $result->providerMessageId,
+            'provider_scope' => $authSettings->sms_sending_mode->value,
+            'provider' => $sendResult->delivery->provider,
+            'provider_message_id' => $sendResult->delivery->provider_message_id,
             'next_attempt_at' => null,
             'sent_at' => now(),
             'failed_at' => null,

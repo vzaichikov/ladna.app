@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Platform;
 
-use App\Enums\CustomerOtpSenderScope;
 use App\Enums\IntegrationProvider;
+use App\Enums\SmsSendingMode;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateCustomerAuthSettingsRequest;
 use App\Models\Account;
@@ -19,7 +19,7 @@ class CustomerAuthSettingsController extends Controller
             'account' => $account,
             'settings' => $availability->settingsFor($account),
             'readiness' => $availability->readinessFor($account),
-            'senderScopes' => CustomerOtpSenderScope::cases(),
+            'smsSendingModes' => SmsSendingMode::cases(),
             'smsProviders' => [
                 IntegrationProvider::Turbosms,
                 IntegrationProvider::Smsclub,

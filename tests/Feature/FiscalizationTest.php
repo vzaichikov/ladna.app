@@ -12,6 +12,7 @@ use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
 use App\Models\Account;
+use App\Models\AccountSmsWallet;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\ClassPassPlan;
 use App\Models\Customer;
@@ -21,11 +22,13 @@ use App\Models\Event;
 use App\Models\EventTicketType;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
+use App\Models\SmsTopUpPayment;
 use App\Models\SubscriptionPlan;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use App\Support\SaasBilling\CompleteAccountSubscriptionPayment;
+use App\Support\Sms\CompleteSmsTopUpPayment;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -124,6 +127,54 @@ class FiscalizationTest extends TestCase
         $this->assertSame(0, $receipt->scope_id);
         $this->assertSame($account->id, $receipt->account_id);
         $this->assertSame('FN-SAAS-1', $receipt->fiscal_number);
+    }
+
+    public function test_sms_top_up_credits_once_and_retries_the_platform_receipt_after_checkbox_outage(): void
+    {
+        $this->enablePlatformFiscalization();
+        $account = Account::factory()->create();
+        $wallet = AccountSmsWallet::factory()->for($account)->create();
+        $payment = SmsTopUpPayment::factory()
+            ->for($account)
+            ->for($wallet, 'wallet')
+            ->create([
+                'amount_cents' => 5_000,
+                'currency' => 'UAH',
+            ]);
+        $this->fakeCheckboxFailureThenSuccess(
+            'Checkbox is temporarily unavailable.',
+            'FN-SMS-TOP-UP',
+        );
+
+        $completed = app(CompleteSmsTopUpPayment::class)->execute(
+            $payment,
+            $this->paidCallback($payment->order_id, $payment->amount_cents, $payment->currency),
+        );
+        $failedReceipt = $completed->fiscalReceipt()->firstOrFail();
+
+        $this->assertTrue($completed->isPaid());
+        $this->assertSame(5_000, $wallet->refresh()->balance_cents);
+        $this->assertSame(FiscalReceiptStatus::Failed, $failedReceipt->status);
+        $this->assertSame(1, $payment->ledgerEntries()->count());
+
+        $fiscalReceipts = app(FiscalReceiptService::class);
+        $this->assertNull($fiscalReceipts->skipReasonFor($completed->fresh()));
+        $this->assertNotNull($fiscalReceipts->fiscalizeSmsTopUpPayment($completed->fresh()));
+
+        $retriedReceipt = $completed->fiscalReceipt()->firstOrFail();
+        $this->assertSame($failedReceipt->id, $retriedReceipt->id);
+        $this->assertSame(
+            FiscalReceiptStatus::Fiscalized,
+            $retriedReceipt->status,
+            (string) $retriedReceipt->last_error,
+        );
+        $this->assertSame('FN-SMS-TOP-UP', $retriedReceipt->fiscal_number);
+        $this->assertSame(1, $completed->fiscalReceipts()->count());
+        $this->assertSame(5_000, $wallet->refresh()->balance_cents);
+        $this->assertSame(1, $payment->ledgerEntries()->count());
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'goods.0.good.name') === __('app.sms_top_up_receipt_item')
+            && data_get($request->data(), 'goods.0.good.price') === 5_000);
     }
 
     public function test_paid_event_order_is_fiscalized_with_event_and_buyer_snapshots(): void

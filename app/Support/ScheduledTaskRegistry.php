@@ -14,7 +14,7 @@ use Illuminate\Support\Stringable;
 class ScheduledTaskRegistry
 {
     /**
-     * @return array<int, array{key: string, command: string, expression: string, frequency_key: string, description_key: string, overlap_minutes: int|null}>
+     * @return array<int, array{key: string, command: string, expression: string, frequency_key: string, description_key: string, overlap_minutes: int|null, single_server?: bool}>
      */
     public function definitions(): array
     {
@@ -66,6 +66,33 @@ class ScheduledTaskRegistry
                 'frequency_key' => 'scheduled_task_frequency_every_thirty_minutes',
                 'description_key' => 'scheduled_task_customer_notifications_fill_description',
                 'overlap_minutes' => 10,
+            ],
+            [
+                'key' => 'sms_deliveries_sync_statuses',
+                'command' => 'sms-deliveries:sync-statuses',
+                'expression' => '*/5 * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_five_minutes',
+                'description_key' => 'scheduled_task_sms_deliveries_sync_statuses_description',
+                'overlap_minutes' => 10,
+                'single_server' => true,
+            ],
+            [
+                'key' => 'sms_service_check_provider_balance',
+                'command' => 'sms-service:check-provider-balance',
+                'expression' => '*/15 * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_fifteen_minutes',
+                'description_key' => 'scheduled_task_sms_service_check_provider_balance_description',
+                'overlap_minutes' => 10,
+                'single_server' => true,
+            ],
+            [
+                'key' => 'sms_wallets_reconcile',
+                'command' => 'sms-wallets:reconcile',
+                'expression' => '20 0 * * *',
+                'frequency_key' => 'scheduled_task_frequency_daily',
+                'description_key' => 'scheduled_task_sms_wallets_reconcile_description',
+                'overlap_minutes' => 30,
+                'single_server' => true,
             ],
             [
                 'key' => 'event_orders_expire',
@@ -130,6 +157,10 @@ class ScheduledTaskRegistry
                 ));
 
             $this->applyOverlapProtection($event, $definition['overlap_minutes']);
+
+            if ($definition['single_server'] ?? false) {
+                $event->onOneServer();
+            }
         }
     }
 

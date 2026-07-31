@@ -36,6 +36,10 @@
                     <x-ui.icon name="sliders-horizontal" class="h-4 w-4" />
                     {{ __('app.studio_capabilities_settings') }}
                 </x-ui.button>
+                <x-ui.button :href="route('platform.accounts.sms-account.show', $account)" variant="secondary">
+                    <x-ui.icon name="payments" class="h-4 w-4" />
+                    {{ __('app.sms_account') }}
+                </x-ui.button>
                 <x-ui.button :href="route('dashboard.accounts.rooms.index', $account)" variant="secondary">
                     <x-ui.icon name="rooms" class="h-4 w-4" />
                     {{ __('app.rooms') }}

@@ -59,7 +59,7 @@ class AccountAiTelegramSettingsController extends Controller
             );
         });
 
-        return redirect()->route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers'])
+        return redirect()->route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram'])
             ->with('status', __('app.ai_telegram_settings_updated'));
     }
 

@@ -12,6 +12,9 @@ use App\Models\SystemSetting;
 use App\Models\TelegramBotInstallation;
 use App\Models\TelegramBroadcastTarget;
 use App\Support\AccountActivityLogSettings;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\Payments\PaymentAmounts;
+use App\Support\Sms\SmsServiceSettings;
 use App\Support\SystemAppearance;
 use App\Support\Telegram\Announcements\TelegramBroadcastTargetVerifier;
 use Illuminate\Http\RedirectResponse;
@@ -22,14 +25,18 @@ use InvalidArgumentException;
 
 class SystemSettingsController extends Controller
 {
-    public function edit(): View
-    {
+    public function edit(
+        SmsServiceSettings $smsSettings,
+        CustomerAuthAvailability $customerAuthAvailability,
+    ): View {
         $fontOptions = SystemAppearance::fontOptions();
         $ownerTelegramBotInstallation = TelegramBotInstallation::query()
             ->where('scope_type', 'platform')
             ->where('scope_id', 0)
             ->where('profile', TelegramBotProfile::Owner->value)
             ->first();
+        $smsProviderBalance = $smsSettings->providerBalanceStatus();
+        $smsProviderLowBalanceThresholdCents = $smsSettings->providerLowBalanceThresholdCents();
 
         return view('platform.settings.edit', [
             'fontOptions' => $fontOptions,
@@ -49,16 +56,32 @@ class SystemSettingsController extends Controller
             'foundersTelegramTarget' => $ownerTelegramBotInstallation?->broadcastTargets()
                 ->where('purpose', TelegramBroadcastTarget::PurposeLadnaFounders)
                 ->first(),
+            'smsServiceEnabled' => $smsSettings->enabled(),
+            'smsTopUpPresets' => collect($smsSettings->topUpPresetsCents())
+                ->map(fn (int $amount): string => PaymentAmounts::centsToDecimalString($amount))
+                ->all(),
+            'smsOtpHourlyLimit' => $smsSettings->otpHourlyLimit(),
+            'smsOtpDailyLimit' => $smsSettings->otpDailyLimit(),
+            'smsProviderLowBalanceThreshold' => PaymentAmounts::centsToDecimalString(
+                $smsProviderLowBalanceThresholdCents
+            ),
+            'smsProviderBalance' => $smsProviderBalance,
+            'smsProviderBalanceChecked' => filled($smsProviderBalance['checked_at']),
+            'smsProviderBalanceLow' => $smsProviderBalance['currency'] === 'UAH'
+                && $smsProviderBalance['amount_cents'] !== null
+                && $smsProviderBalance['amount_cents'] <= $smsProviderLowBalanceThresholdCents,
+            'smsCentralProviderReady' => $customerAuthAvailability->platformSmsSetting() !== null,
         ]);
     }
 
     public function update(
         UpdateSystemSettingsRequest $request,
         TelegramBroadcastTargetVerifier $targetVerifier,
+        SmsServiceSettings $smsSettings,
     ): RedirectResponse {
         $validated = $request->validated();
 
-        $ownerTelegramBotInstallation = DB::transaction(function () use ($request, $validated): TelegramBotInstallation {
+        $ownerTelegramBotInstallation = DB::transaction(function () use ($request, $validated, $smsSettings): TelegramBotInstallation {
             SystemSetting::setValue(SystemAppearance::FontSettingKey, $validated['font_family']);
             SystemSetting::setValue(SystemSetting::SupportUrlKey, $validated['support_url'] ?? null);
             AccountActivityLogSettings::setEnabled(
@@ -69,6 +92,29 @@ class SystemSettingsController extends Controller
             AccountActivityLogSettings::setRetentionDays(
                 (int) ($validated['activity_log_retention_days'] ?? AccountActivityLogSettings::retentionDays())
             );
+            if ($request->hasAny([
+                'sms_service_enabled',
+                'sms_top_up_presets_uah',
+                'sms_otp_hourly_limit',
+                'sms_otp_daily_limit',
+                'sms_provider_low_balance_uah',
+            ])) {
+                $smsSettings->save(
+                    enabled: $request->has('sms_service_enabled')
+                        ? $request->boolean('sms_service_enabled')
+                        : $smsSettings->enabled(),
+                    presets: isset($validated['sms_top_up_presets_uah'])
+                        ? collect($validated['sms_top_up_presets_uah'])
+                            ->map(fn (mixed $amount): int => (int) PaymentAmounts::decimalToCents($amount))
+                            ->all()
+                        : $smsSettings->topUpPresetsCents(),
+                    otpHourlyLimit: (int) ($validated['sms_otp_hourly_limit'] ?? $smsSettings->otpHourlyLimit()),
+                    otpDailyLimit: (int) ($validated['sms_otp_daily_limit'] ?? $smsSettings->otpDailyLimit()),
+                    providerLowBalanceThresholdCents: isset($validated['sms_provider_low_balance_uah'])
+                        ? (int) PaymentAmounts::decimalToCents($validated['sms_provider_low_balance_uah'])
+                        : $smsSettings->providerLowBalanceThresholdCents(),
+                );
+            }
 
             $this->savePlatformAi($validated);
 

@@ -3,6 +3,7 @@
 namespace App\Support\SaasBilling;
 
 use App\Models\AccountSubscriptionPayment;
+use App\Models\SmsTopUpPayment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -13,7 +14,7 @@ class SaasPaymentCallbackLogger
      * @param  array<string, mixed>  $context
      */
     public function log(
-        ?AccountSubscriptionPayment $payment,
+        AccountSubscriptionPayment|SmsTopUpPayment|null $payment,
         string $provider,
         ?string $orderId,
         Request $request,
@@ -31,8 +32,11 @@ class SaasPaymentCallbackLogger
         Storage::disk('local')->put($path, json_encode([
             'event' => $event,
             'account_id' => $payment?->account_id,
-            'account_subscription_payment_id' => $payment?->id,
-            'account_signup_request_id' => $payment?->account_signup_request_id,
+            'account_subscription_payment_id' => $payment instanceof AccountSubscriptionPayment ? $payment->id : null,
+            'sms_top_up_payment_id' => $payment instanceof SmsTopUpPayment ? $payment->id : null,
+            'account_signup_request_id' => $payment instanceof AccountSubscriptionPayment
+                ? $payment->account_signup_request_id
+                : null,
             'provider' => $provider,
             'order_id' => $orderId,
             'ip' => $request->ip(),

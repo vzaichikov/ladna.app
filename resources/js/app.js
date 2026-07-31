@@ -6174,6 +6174,47 @@ function initIntegrationForms(root = document) {
     });
 }
 
+function initSmsSendingSettings(root = document) {
+    root.querySelectorAll('[data-sms-sending-settings]').forEach((form) => {
+        if (form.dataset.smsSendingSettingsReady === 'true') {
+            return;
+        }
+
+        const updateMode = () => {
+            const mode = form.querySelector('input[name="sms_sending_mode"]:checked')?.value || 'disabled';
+
+            form.querySelectorAll('[data-sms-mode-panel]').forEach((panel) => {
+                const isVisible = panel.dataset.smsModePanel === mode;
+
+                panel.classList.toggle('hidden', !isVisible);
+                panel.setAttribute('aria-hidden', String(!isVisible));
+            });
+
+            const provider = form.querySelector('select[name="sms_provider"]');
+            const ownGatewaySelected = mode === 'own_gateway';
+
+            if (provider) {
+                provider.disabled = !ownGatewaySelected;
+                provider.required = ownGatewaySelected;
+            }
+
+            document.querySelectorAll('[data-sms-own-gateway-settings]').forEach((settings) => {
+                settings.classList.toggle('hidden', !ownGatewaySelected);
+                settings.setAttribute('aria-hidden', String(!ownGatewaySelected));
+            });
+        };
+
+        form.addEventListener('change', (event) => {
+            if (event.target.matches('input[name="sms_sending_mode"]')) {
+                updateMode();
+            }
+        });
+
+        form.dataset.smsSendingSettingsReady = 'true';
+        updateMode();
+    });
+}
+
 function setEventVenueGroupEnabled(group, enabled) {
     if (!group) {
         return;
@@ -6348,6 +6389,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPublicBookingModal();
     initSalaryModelForms();
     initIntegrationForms();
+    initSmsSendingSettings();
     initTrialClassPassOverrideForms();
     syncPublicLegalReturnUrls();
 

@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\CustomerNotificationChannel;
-use App\Enums\CustomerNotificationRecipientKind;
-use App\Enums\CustomerNotificationStatus;
-use App\Enums\CustomerNotificationType;
+use App\Enums\SmsDeliveryPurpose;
+use App\Enums\SmsDeliveryStatus;
+use App\Enums\SmsSendingMode;
 use App\Models\Account;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -18,94 +16,54 @@ class AccountCustomerNotificationController extends Controller
     {
         $this->authorize('viewActivityLog', $account);
 
-        $search = trim((string) $request->query('search', ''));
-        $status = $this->validStatus((string) $request->query('status', ''));
-        $type = $this->validType((string) $request->query('type', ''));
-        $channel = $this->validChannel((string) $request->query('channel', ''));
+        $purpose = $this->validEnumValue(SmsDeliveryPurpose::cases(), (string) $request->query('purpose'));
+        $status = $this->validEnumValue(SmsDeliveryStatus::cases(), (string) $request->query('status'));
+        $mode = $this->validEnumValue(SmsSendingMode::cases(), (string) $request->query('mode'));
+        $provider = trim((string) $request->query('provider'));
+        $dateFrom = $this->validDate((string) $request->query('date_from'));
+        $dateTo = $this->validDate((string) $request->query('date_to'));
+        $search = trim((string) $request->query('search'));
 
-        $notifications = $account->customerNotifications()
-            ->with([
-                'account:id,name,slug,timezone',
-                'customer' => function (BelongsTo $relation) use ($account): void {
-                    $relation
-                        ->select(['id', 'account_id', 'name', 'phone', 'email'])
-                        ->whereBelongsTo($account);
-                },
-                'scheduledClass' => function (BelongsTo $relation) use ($account): void {
-                    $relation
-                        ->select(['id', 'account_id', 'location_id', 'room_id', 'class_type_id', 'trainer_id', 'title', 'starts_at', 'ends_at', 'status'])
-                        ->whereBelongsTo($account);
-                },
-                'scheduledClass.location:id,account_id,name,timezone',
-                'scheduledClass.room:id,account_id,name',
-                'scheduledClass.classType:id,account_id,name,schedule_kind',
-            ])
-            ->where('recipient_kind', CustomerNotificationRecipientKind::Customer->value)
-            ->where('channel', CustomerNotificationChannel::Sms->value)
-            ->when($search !== '', fn (Builder $query): Builder => $this->applySearch($query, $account, $search))
-            ->when($status !== '', fn (Builder $query): Builder => $query->where('status', $status))
-            ->when($type !== '', fn (Builder $query): Builder => $query->where('type', $type))
-            ->when($channel !== '', fn (Builder $query): Builder => $query->where('channel', $channel))
+        $deliveries = $account->smsDeliveries()
+            ->when($purpose, fn (Builder $query): Builder => $query->where('purpose', $purpose))
+            ->when($status, fn (Builder $query): Builder => $query->where('status', $status))
+            ->when($mode, fn (Builder $query): Builder => $query->where('source_mode', $mode))
+            ->when($provider !== '', fn (Builder $query): Builder => $query->where('provider', $provider))
+            ->when($dateFrom, fn (Builder $query): Builder => $query->whereDate('created_at', '>=', $dateFrom))
+            ->when($dateTo, fn (Builder $query): Builder => $query->whereDate('created_at', '<=', $dateTo))
+            ->when($search !== '', fn (Builder $query): Builder => $query->where(function (Builder $query) use ($search): void {
+                $query
+                    ->where('recipient_phone', 'like', '%'.$search.'%')
+                    ->orWhere('provider_message_id', 'like', '%'.$search.'%')
+                    ->orWhere('message_preview', 'like', '%'.$search.'%')
+                    ->orWhere('last_error', 'like', '%'.$search.'%');
+            }))
             ->latest('created_at')
             ->latest('id')
-            ->paginate(25, ['*'], 'notifications_page')
+            ->paginate(25)
             ->withQueryString();
 
-        return view('platform.customer-notifications.index', [
+        return view('accounts.sms-deliveries', [
             'account' => $account,
-            'channels' => CustomerNotificationChannel::cases(),
-            'channel' => $channel,
-            'notifications' => $notifications,
-            'search' => $search,
-            'status' => $status,
-            'statuses' => CustomerNotificationStatus::cases(),
-            'type' => $type,
-            'types' => CustomerNotificationType::cases(),
+            'deliveries' => $deliveries,
+            'purposes' => SmsDeliveryPurpose::cases(),
+            'statuses' => SmsDeliveryStatus::cases(),
+            'modes' => SmsSendingMode::cases(),
+            'providers' => $account->smsDeliveries()->whereNotNull('provider')->distinct()->orderBy('provider')->pluck('provider'),
+            'filters' => compact('purpose', 'status', 'mode', 'provider', 'dateFrom', 'dateTo', 'search'),
         ]);
     }
 
-    private function applySearch(Builder $query, Account $account, string $search): Builder
+    /**
+     * @param  array<int, object>  $cases
+     */
+    private function validEnumValue(array $cases, string $value): ?string
     {
-        return $query->where(function (Builder $query) use ($account, $search): void {
-            $query
-                ->where('recipient_name', 'like', '%'.$search.'%')
-                ->orWhere('recipient_phone', 'like', '%'.$search.'%')
-                ->orWhere('text', 'like', '%'.$search.'%')
-                ->orWhere('last_error', 'like', '%'.$search.'%')
-                ->orWhere('payload', 'like', '%'.$search.'%')
-                ->orWhereHas('customer', fn (Builder $query): Builder => $query
-                    ->whereBelongsTo($account)
-                    ->where(function (Builder $query) use ($search): void {
-                        $query->where('name', 'like', '%'.$search.'%')
-                            ->orWhere('phone', 'like', '%'.$search.'%')
-                            ->orWhere('email', 'like', '%'.$search.'%');
-                    }))
-                ->orWhereHas('scheduledClass', fn (Builder $query): Builder => $query
-                    ->whereBelongsTo($account)
-                    ->where(function (Builder $query) use ($account, $search): void {
-                        $query->where('title', 'like', '%'.$search.'%')
-                            ->orWhereHas('location', fn (Builder $query): Builder => $query
-                                ->whereBelongsTo($account)
-                                ->where('name', 'like', '%'.$search.'%'))
-                            ->orWhereHas('room', fn (Builder $query): Builder => $query
-                                ->whereBelongsTo($account)
-                                ->where('name', 'like', '%'.$search.'%'));
-                    }));
-        });
+        return in_array($value, array_column($cases, 'value'), true) ? $value : null;
     }
 
-    private function validStatus(string $status): string
+    private function validDate(string $value): ?string
     {
-        return in_array($status, array_column(CustomerNotificationStatus::cases(), 'value'), true) ? $status : '';
-    }
-
-    private function validType(string $type): string
-    {
-        return in_array($type, array_column(CustomerNotificationType::cases(), 'value'), true) ? $type : '';
-    }
-
-    private function validChannel(string $channel): string
-    {
-        return in_array($channel, array_column(CustomerNotificationChannel::cases(), 'value'), true) ? $channel : '';
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1 ? $value : null;
     }
 }

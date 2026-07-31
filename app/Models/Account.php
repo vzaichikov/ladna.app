@@ -668,6 +668,26 @@ class Account extends Model
         return $this->hasOne(AccountSubscriptionPaymentMethod::class);
     }
 
+    public function smsWallet(): HasOne
+    {
+        return $this->hasOne(AccountSmsWallet::class);
+    }
+
+    public function smsWalletLedgerEntries(): HasMany
+    {
+        return $this->hasMany(SmsWalletLedgerEntry::class);
+    }
+
+    public function smsTopUpPayments(): HasMany
+    {
+        return $this->hasMany(SmsTopUpPayment::class);
+    }
+
+    public function smsDeliveries(): HasMany
+    {
+        return $this->hasMany(SmsDelivery::class);
+    }
+
     public function fiscalReceipts(): HasMany
     {
         return $this->hasMany(FiscalReceipt::class);

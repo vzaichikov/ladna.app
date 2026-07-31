@@ -248,7 +248,7 @@ class MonopaySaasBilling
             'success' => PaymentCallbackStatus::Paid,
             'failure' => PaymentCallbackStatus::Failed,
             'expired' => PaymentCallbackStatus::Expired,
-            'reversed', 'cancelled' => PaymentCallbackStatus::Cancelled,
+            'reversed', 'refunded', 'cancelled' => PaymentCallbackStatus::Cancelled,
             default => PaymentCallbackStatus::Pending,
         };
     }

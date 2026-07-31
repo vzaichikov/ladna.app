@@ -22,12 +22,7 @@ class SendPulseApiClient
      */
     public function post(string $path, array $payload): Response
     {
-        return Http::baseUrl('https://api.sendpulse.com')
-            ->withToken($this->apiKey)
-            ->acceptJson()
-            ->asJson()
-            ->connectTimeout(3)
-            ->timeout(10)
+        return $this->request()
             ->retry(
                 times: 2,
                 sleepMilliseconds: 200,
@@ -36,5 +31,23 @@ class SendPulseApiClient
                 throw: false,
             )
             ->post($path, $payload);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function postWithoutRetry(string $path, array $payload): Response
+    {
+        return $this->request()->post($path, $payload);
+    }
+
+    private function request(): PendingRequest
+    {
+        return Http::baseUrl('https://api.sendpulse.com')
+            ->withToken($this->apiKey)
+            ->acceptJson()
+            ->asJson()
+            ->connectTimeout(3)
+            ->timeout(10);
     }
 }

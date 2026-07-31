@@ -17,11 +17,17 @@
     @error('description') <span class="crm-help">{{ $message }}</span> @enderror
 </label>
 
-<div class="grid gap-4 sm:grid-cols-3">
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
     <label class="block">
         <span class="crm-label">{{ __('app.price_uah') }}</span>
         <input name="price_uah" type="number" min="0" step="0.01" value="{{ old('price_uah', isset($plan->price_cents) ? number_format($plan->price_cents / 100, 2, '.', '') : '0.00') }}" required class="crm-field">
         @error('price_uah') <span class="crm-help">{{ $message }}</span> @enderror
+    </label>
+    <label class="block">
+        <span class="crm-label">{{ __('app.sms_segment_price_uah') }}</span>
+        <input name="sms_segment_price_uah" type="number" min="0" step="0.01" value="{{ old('sms_segment_price_uah', isset($plan->sms_segment_price_cents) ? number_format($plan->sms_segment_price_cents / 100, 2, '.', '') : '') }}" class="crm-field">
+        <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.sms_segment_price_uah_hint') }}</span>
+        @error('sms_segment_price_uah') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
     <label class="block">
         <span class="crm-label">{{ __('app.currency') }}</span>

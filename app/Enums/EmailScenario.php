@@ -25,6 +25,9 @@ enum EmailScenario: string
     case SaasCancellation = 'saas_cancellation';
     case SaasReactivation = 'saas_reactivation';
     case SaasTariffChange = 'saas_tariff_change';
+    case SmsCreditLow = 'sms_credit_low';
+    case SmsAutoTopUpFailed = 'sms_auto_top_up_failed';
+    case SmsOutstandingCredit = 'sms_outstanding_credit';
     case EventTicketsIssued = 'event_tickets_issued';
     case EventUpdated = 'event_updated';
     case EventCancelled = 'event_cancelled';
@@ -46,7 +49,10 @@ enum EmailScenario: string
             self::SaasPaymentFailed,
             self::SaasSubscriptionExpired,
             self::SaasAnnualRenewal,
-            self::SaasGraceExpiry => EmailScenarioGroup::SubscriptionPayments,
+            self::SaasGraceExpiry,
+            self::SmsCreditLow,
+            self::SmsAutoTopUpFailed,
+            self::SmsOutstandingCredit => EmailScenarioGroup::SubscriptionPayments,
 
             self::SaasTrialEnding7,
             self::SaasTrialEnding3,
@@ -101,6 +107,9 @@ enum EmailScenario: string
             self::SaasCancellation,
             self::SaasReactivation,
             self::SaasTariffChange => 'mail.content.saas-lifecycle-notice',
+            self::SmsCreditLow,
+            self::SmsAutoTopUpFailed,
+            self::SmsOutstandingCredit => 'mail.content.sms-account-notice',
             self::EventTicketsIssued => 'mail.content.event-tickets-issued',
             self::EventUpdated => 'mail.content.event-updated',
             self::EventCancelled => 'mail.content.event-cancelled',
@@ -139,7 +148,10 @@ enum EmailScenario: string
             self::SaasGraceExpiry,
             self::SaasCancellation,
             self::SaasReactivation,
-            self::SaasTariffChange => true,
+            self::SaasTariffChange,
+            self::SmsCreditLow,
+            self::SmsAutoTopUpFailed,
+            self::SmsOutstandingCredit => true,
             self::EventTicketsIssued,
             self::EventUpdated,
             self::EventCancelled,

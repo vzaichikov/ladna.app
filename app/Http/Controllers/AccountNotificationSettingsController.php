@@ -6,16 +6,20 @@ use App\Enums\TelegramBotMode;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\TrainerNotificationSetting;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class AccountNotificationSettingsController extends Controller
 {
-    public function edit(Request $request, Account $account): View
-    {
+    public function edit(
+        Request $request,
+        Account $account,
+        CustomerAuthAvailability $customerAuthAvailability,
+    ): View {
         $this->authorize('update', $account);
 
-        $activeTab = in_array($request->query('tab'), ['customers', 'trainers'], true)
+        $activeTab = in_array($request->query('tab'), ['customers', 'trainers', 'telegram'], true)
             ? $request->query('tab')
             : 'customers';
 
@@ -29,9 +33,8 @@ class AccountNotificationSettingsController extends Controller
                 ?? new TrainerNotificationSetting([
                     'account_id' => $account->id,
                 ]);
-        } else {
+        } elseif ($activeTab === 'telegram') {
             $viewData += [
-                'customerNotificationSetting' => $account->customerNotificationSetting()->first(),
                 'telegramBotProfilesList' => [TelegramBotProfile::Customer],
                 'telegramBotModes' => [TelegramBotMode::Disabled, TelegramBotMode::Simple],
                 'telegramBotInstallations' => $account->telegramBotInstallations()
@@ -42,6 +45,12 @@ class AccountNotificationSettingsController extends Controller
                     ->where('profile', TelegramBotProfile::Customer->value)
                     ->get()
                     ->keyBy(fn ($profile): string => $profile->profile->value),
+            ];
+        } else {
+            $viewData += [
+                'customerNotificationSetting' => $account->customerNotificationSetting()->first(),
+                'customerAuthSetting' => $customerAuthAvailability->settingsFor($account),
+                'customerAuthReadiness' => $customerAuthAvailability->readinessFor($account),
             ];
         }
 

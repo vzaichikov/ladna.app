@@ -14,7 +14,7 @@
         </x-ui.button>
     </div>
 
-    <form method="POST" action="{{ route('platform.accounts.customer-auth.update', $account) }}" class="mt-6 max-w-6xl space-y-5">
+    <form method="POST" action="{{ route('platform.accounts.customer-auth.update', $account) }}" data-sms-sending-settings class="mt-6 max-w-6xl space-y-5">
         @csrf
         @method('PUT')
 
@@ -63,55 +63,49 @@
                 <h2 class="text-lg font-semibold text-slate-950">{{ __('app.studio_capabilities_sms_title') }}</h2>
                 <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.studio_capabilities_sms_copy') }}</p>
 
-                <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.otp_sender_scope') }}</span>
-                        <select name="otp_sender_scope" class="crm-field">
-                            @foreach ($senderScopes as $scope)
-                                <option value="{{ $scope->value }}" @selected(old('otp_sender_scope', $settings->otp_sender_scope?->value ?? 'account') === $scope->value)>
-                                    {{ __('app.otp_sender_scope_'.$scope->value) }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('otp_sender_scope') <span class="crm-help">{{ $message }}</span> @enderror
-                    </label>
+                @php
+                    $selectedSmsSendingMode = old('sms_sending_mode', $settings->sms_sending_mode?->value ?? \App\Enums\SmsSendingMode::Disabled->value);
+                @endphp
 
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.otp_provider') }}</span>
-                        <select name="otp_provider" class="crm-field">
-                            <option value="">{{ __('app.otp_provider_auto') }}</option>
+                <div class="mt-5 grid gap-3">
+                    @foreach ($smsSendingModes as $mode)
+                        <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm has-checked:border-violet-crm-500 has-checked:bg-violet-crm-50">
+                            <input
+                                type="radio"
+                                name="sms_sending_mode"
+                                value="{{ $mode->value }}"
+                                class="crm-radio mt-0.5"
+                                @checked($selectedSmsSendingMode === $mode->value)
+                            >
+                            <span class="grid gap-1">
+                                <span class="font-semibold text-slate-900">{{ __('app.sms_sending_mode_'.$mode->value) }}</span>
+                                <span class="font-normal leading-6 text-slate-500">{{ __('app.sms_sending_mode_'.$mode->value.'_copy') }}</span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+                @error('sms_sending_mode') <span class="crm-help">{{ $message }}</span> @enderror
+
+                <div
+                    data-sms-mode-panel="{{ \App\Enums\SmsSendingMode::OwnGateway->value }}"
+                    class="{{ $selectedSmsSendingMode === \App\Enums\SmsSendingMode::OwnGateway->value ? '' : 'hidden' }}"
+                >
+                    <label class="mt-5 block">
+                        <span class="crm-label">{{ __('app.sms_active_provider') }}</span>
+                        <select
+                            name="sms_provider"
+                            class="crm-field"
+                            @required($selectedSmsSendingMode === \App\Enums\SmsSendingMode::OwnGateway->value)
+                            @disabled($selectedSmsSendingMode !== \App\Enums\SmsSendingMode::OwnGateway->value)
+                        >
+                            <option value="">{{ __('app.choose') }}</option>
                             @foreach ($smsProviders as $provider)
-                                <option value="{{ $provider->value }}" @selected(old('otp_provider', $settings->otp_provider) === $provider->value)>
+                                <option value="{{ $provider->value }}" @selected(old('sms_provider', $settings->sms_provider) === $provider->value)>
                                     {{ config('integrations.providers.'.$provider->value.'.label') }}
                                 </option>
                             @endforeach
                         </select>
-                        @error('otp_provider') <span class="crm-help">{{ $message }}</span> @enderror
-                    </label>
-
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.customer_notification_sender_scope') }}</span>
-                        <select name="customer_sms_sender_scope" class="crm-field">
-                            @foreach ($senderScopes as $scope)
-                                <option value="{{ $scope->value }}" @selected(old('customer_sms_sender_scope', $settings->customer_sms_sender_scope?->value ?? 'account') === $scope->value)>
-                                    {{ __('app.otp_sender_scope_'.$scope->value) }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('customer_sms_sender_scope') <span class="crm-help">{{ $message }}</span> @enderror
-                    </label>
-
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.customer_notification_provider') }}</span>
-                        <select name="customer_sms_provider" class="crm-field">
-                            <option value="">{{ __('app.otp_provider_auto') }}</option>
-                            @foreach ($smsProviders as $provider)
-                                <option value="{{ $provider->value }}" @selected(old('customer_sms_provider', $settings->customer_sms_provider) === $provider->value)>
-                                    {{ config('integrations.providers.'.$provider->value.'.label') }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('customer_sms_provider') <span class="crm-help">{{ $message }}</span> @enderror
+                        @error('sms_provider') <span class="crm-help">{{ $message }}</span> @enderror
                     </label>
                 </div>
 

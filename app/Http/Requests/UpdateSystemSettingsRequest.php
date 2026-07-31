@@ -48,7 +48,13 @@ class UpdateSystemSettingsRequest extends FormRequest
             'founders_telegram_chat_id' => ['nullable', 'string', 'max:32', 'regex:/\A-?\d+\z/'],
             'founders_telegram_title' => ['nullable', 'string', 'max:255'],
             'founders_telegram_enabled' => ['nullable', 'boolean'],
-            'settings_tab' => ['nullable', Rule::in(['appearance', 'support', 'activity-log', 'ai-owner'])],
+            'sms_service_enabled' => ['nullable', 'boolean'],
+            'sms_top_up_presets_uah' => ['sometimes', 'required', 'array', 'min:1', 'max:10'],
+            'sms_top_up_presets_uah.*' => ['required', 'numeric', 'min:1', 'max:100000', 'decimal:0,2', 'distinct'],
+            'sms_otp_hourly_limit' => ['sometimes', 'required', 'integer', 'min:1', 'max:10000'],
+            'sms_otp_daily_limit' => ['sometimes', 'required', 'integer', 'min:1', 'max:100000'],
+            'sms_provider_low_balance_uah' => ['sometimes', 'required', 'numeric', 'min:0', 'max:10000000', 'decimal:0,2'],
+            'settings_tab' => ['nullable', Rule::in(['appearance', 'support', 'activity-log', 'ai-owner', 'sms-service'])],
         ];
     }
 
@@ -94,6 +100,15 @@ class UpdateSystemSettingsRequest extends FormRequest
 
                 if (blank($this->input('founders_telegram_title'))) {
                     $validator->errors()->add('founders_telegram_title', __('app.telegram_founders_title_required'));
+                }
+            },
+            function (Validator $validator): void {
+                if (
+                    $this->has('sms_otp_daily_limit')
+                    && $this->has('sms_otp_hourly_limit')
+                    && (int) $this->input('sms_otp_daily_limit') < (int) $this->input('sms_otp_hourly_limit')
+                ) {
+                    $validator->errors()->add('sms_otp_daily_limit', __('app.sms_otp_daily_limit_must_cover_hourly'));
                 }
             },
         ];

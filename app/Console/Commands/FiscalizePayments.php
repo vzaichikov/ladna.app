@@ -6,11 +6,13 @@ use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\CustomerPurchaseStatus;
 use App\Enums\EventOrderStatus;
 use App\Enums\FiscalReceiptStatus;
+use App\Enums\SmsTopUpPaymentStatus;
 use App\Models\Account;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
+use App\Models\SmsTopUpPayment;
 use App\Support\Fiscalization\FiscalReceiptService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -58,6 +60,24 @@ class FiscalizePayments extends Command
             ->lazyById()
             ->each(function (AccountSubscriptionPayment $payment) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {
                 [$result, $message] = $this->processPayment('saas', $payment, $fiscalReceipts);
+                $this->line($message);
+                $processed++;
+
+                match ($result) {
+                    'fiscalized' => $fiscalized++,
+                    'failed' => $failed++,
+                    default => $skipped++,
+                };
+            });
+
+        SmsTopUpPayment::query()
+            ->where('status', SmsTopUpPaymentStatus::PaymentPaid->value)
+            ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
+            ->when($accountId === null, fn ($query) => $query->whereHas('account', fn ($query) => $query->operational()))
+            ->with(['account', 'fiscalReceipt'])
+            ->lazyById()
+            ->each(function (SmsTopUpPayment $payment) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {
+                [$result, $message] = $this->processPayment('sms-top-up', $payment, $fiscalReceipts);
                 $this->line($message);
                 $processed++;
 
@@ -145,7 +165,7 @@ class FiscalizePayments extends Command
      */
     private function processPayment(
         string $kind,
-        AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder $payment,
+        AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder|SmsTopUpPayment $payment,
         FiscalReceiptService $fiscalReceipts,
     ): array {
         if ($payment->fiscalReceipt?->isFiscalized()) {
@@ -162,6 +182,7 @@ class FiscalizePayments extends Command
             $payment instanceof CustomerPurchase => $fiscalReceipts->fiscalizeCustomerPurchase($payment),
             $payment instanceof CustomerPurchaseRefund => $fiscalReceipts->fiscalizeCustomerPurchaseRefund($payment),
             $payment instanceof EventOrder => $fiscalReceipts->fiscalizeEventOrder($payment),
+            $payment instanceof SmsTopUpPayment => $fiscalReceipts->fiscalizeSmsTopUpPayment($payment),
             default => $fiscalReceipts->fiscalizeAccountSubscriptionPayment($payment),
         };
 
@@ -180,7 +201,7 @@ class FiscalizePayments extends Command
         return ['skipped', "[{$kind}] #{$payment->id} {$this->paymentReference($payment)}: {$receipt->status->value}."];
     }
 
-    private function paymentReference(AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder $payment): string
+    private function paymentReference(AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder|SmsTopUpPayment $payment): string
     {
         if ($payment instanceof CustomerPurchaseRefund) {
             return ($payment->customerPurchase?->order_id ?? 'payment').'/refund-'.$payment->id;

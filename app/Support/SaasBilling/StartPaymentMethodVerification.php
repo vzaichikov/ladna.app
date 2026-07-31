@@ -2,6 +2,7 @@
 
 namespace App\Support\SaasBilling;
 
+use App\Enums\AccountPaymentMethodVerificationPurpose;
 use App\Enums\IntegrationProvider;
 use App\Enums\SubscriptionBillingInterval;
 use App\Enums\SubscriptionPaymentMethodStatus;
@@ -69,6 +70,8 @@ class StartPaymentMethodVerification
             'status' => SubscriptionPaymentMethodStatus::PendingVerification,
             'verification_reference' => 'SAAS-VERIFY-'.Str::upper(Str::random(24)),
             'verification_invoice_id' => null,
+            'verification_purpose' => AccountPaymentMethodVerificationPurpose::Subscription,
+            'verification_amount_cents' => null,
             'last_callback_payload' => null,
             'verified_at' => null,
             'revoked_at' => null,
