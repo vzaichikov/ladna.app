@@ -547,7 +547,7 @@ class CustomerAuthFlowTest extends TestCase
         $this->assertNull($target->fresh()->email);
     }
 
-    public function test_home_redirects_logged_in_customer_to_customer_dashboard(): void
+    public function test_home_remains_available_to_logged_in_customer(): void
     {
         $account = Account::factory()->create([
             'default_language' => 'en',
@@ -559,8 +559,10 @@ class CustomerAuthFlowTest extends TestCase
         ]);
 
         $this->actingAs($customer, 'customer')
-            ->get('/')
-            ->assertRedirect(route('customer.dashboard', $account->slug));
+            ->get(route('home'))
+            ->assertOk()
+            ->assertViewIs('welcome')
+            ->assertSessionHas('locale', 'uk');
     }
 
     public function test_pwa_login_start_redirects_logged_in_customer_to_customer_dashboard(): void
@@ -603,10 +605,7 @@ class CustomerAuthFlowTest extends TestCase
         ]);
 
         $this->actingAs($currentCustomer, 'customer')
-            ->get('/')
-            ->assertRedirect(route('customer.studios.index'));
-
-        $this->get(route('customer.studios.index'))
+            ->get(route('customer.studios.index'))
             ->assertOk()
             ->assertSee('data-customer-page-topbar', false)
             ->assertSee('data-customer-locale-switcher', false)
@@ -644,10 +643,7 @@ class CustomerAuthFlowTest extends TestCase
         ]);
 
         $this->actingAs($currentCustomer, 'customer')
-            ->get('/')
-            ->assertRedirect(route('customer.dashboard', $firstAccount->slug));
-
-        $this->post(route('customer.studios.switch', $secondStudioCustomer))
+            ->post(route('customer.studios.switch', $secondStudioCustomer))
             ->assertNotFound();
 
         $this->assertAuthenticatedAs($currentCustomer, 'customer');

@@ -69,10 +69,6 @@ class HomeController extends Controller
             return $redirect;
         }
 
-        if ($redirect = $this->redirectForAuthenticatedCustomer($request)) {
-            return $redirect;
-        }
-
         return view('welcome', $this->landingData());
     }
 
