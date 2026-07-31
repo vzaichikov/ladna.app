@@ -21,14 +21,97 @@
         <section class="mx-auto max-w-6xl px-4 py-4 sm:px-6">
             @include('public._compact-header')
 
-            <section class="mt-8 space-y-10">
-                @forelse ($priceGroups as $group)
-                    <div>
-                        <h2 class="text-2xl font-semibold text-slate-950">{{ $group['title'] }}</h2>
-                        <div class="mt-4 space-y-6">
-                            @foreach ($group['sections'] as $section)
-                                <section>
-                                    @if ($section['title'] !== '')
+            @if ($priceGroups->isNotEmpty())
+                @php
+                    $initialGroupKey = $priceGroups->first()['key'];
+                @endphp
+                <section class="mt-8" data-public-price-kind-tabs data-active-kind="{{ $initialGroupKey }}">
+                    <div class="overflow-x-auto pb-1">
+                        <div class="grid min-w-[21rem] grid-cols-3 gap-1 rounded-xl bg-brand-600 p-1.5 shadow-crm" role="tablist" aria-label="{{ __('app.public_price_title') }}">
+                            @foreach ($priceGroups as $groupIndex => $group)
+                                @php
+                                    $kindTabId = 'public-price-kind-tab-'.$groupIndex;
+                                    $kindPanelId = 'public-price-kind-panel-'.$groupIndex;
+                                @endphp
+                                <button
+                                    type="button"
+                                    id="{{ $kindTabId }}"
+                                    class="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-600 aria-selected:bg-white aria-selected:text-brand-700 aria-selected:shadow-xs"
+                                    role="tab"
+                                    data-public-price-kind-tab="{{ $group['key'] }}"
+                                    aria-controls="{{ $kindPanelId }}"
+                                    aria-selected="{{ $loop->first ? 'true' : 'false' }}"
+                                    tabindex="{{ $loop->first ? '0' : '-1' }}"
+                                >
+                                    {{ __('app.public_price_'.$group['key'].'_tab') }}
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        @foreach ($priceGroups as $groupIndex => $group)
+                            @php
+                                $kindTabId = 'public-price-kind-tab-'.$groupIndex;
+                                $kindPanelId = 'public-price-kind-panel-'.$groupIndex;
+                                $hasSectionTabs = $group['sections']->count() > 1;
+                            @endphp
+                            <section
+                                id="{{ $kindPanelId }}"
+                                role="tabpanel"
+                                data-public-price-kind-panel="{{ $group['key'] }}"
+                                aria-labelledby="{{ $kindTabId }}"
+                            >
+                                <h2 class="sr-only">{{ $group['title'] }}</h2>
+                                <div
+                                    @if ($hasSectionTabs)
+                                        data-public-price-segment-tabs
+                                        data-active-section="{{ $group['sections']->first()['key'] }}"
+                                    @endif
+                                >
+                        @if ($hasSectionTabs)
+                            <div class="overflow-x-auto pb-1">
+                                <div class="flex min-w-max gap-1 rounded-lg bg-stone-100 p-1" role="tablist" aria-label="{{ $group['title'] }}">
+                                    @foreach ($group['sections'] as $sectionIndex => $section)
+                                        @php
+                                            $sectionLabel = $section['title'] !== ''
+                                                ? $section['title']
+                                                : __('app.public_price_other_options');
+                                            $tabId = 'public-price-segment-tab-'.$groupIndex.'-'.$sectionIndex;
+                                            $panelId = 'public-price-segment-panel-'.$groupIndex.'-'.$sectionIndex;
+                                        @endphp
+                                        <button
+                                            type="button"
+                                            id="{{ $tabId }}"
+                                            class="crm-tab whitespace-nowrap"
+                                            role="tab"
+                                            data-public-price-segment-tab="{{ $section['key'] }}"
+                                            aria-controls="{{ $panelId }}"
+                                            aria-selected="{{ $loop->first ? 'true' : 'false' }}"
+                                            tabindex="{{ $loop->first ? '0' : '-1' }}"
+                                        >
+                                            {{ $sectionLabel }}
+                                        </button>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+
+                        <div @class(['mt-4' => $hasSectionTabs, 'space-y-6' => ! $hasSectionTabs])>
+                            @foreach ($group['sections'] as $sectionIndex => $section)
+                                @php
+                                    $tabId = 'public-price-segment-tab-'.$groupIndex.'-'.$sectionIndex;
+                                    $panelId = 'public-price-segment-panel-'.$groupIndex.'-'.$sectionIndex;
+                                @endphp
+                                <section
+                                    @if ($hasSectionTabs)
+                                        id="{{ $panelId }}"
+                                        role="tabpanel"
+                                        data-public-price-segment-panel="{{ $section['key'] }}"
+                                        aria-labelledby="{{ $tabId }}"
+                                    @endif
+                                >
+                                    @if (! $hasSectionTabs && $section['title'] !== '')
                                         <div class="mb-3 flex items-center gap-3">
                                             <span class="inline-flex items-center rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 shadow-xs">
                                                 {{ $section['title'] }}
@@ -78,7 +161,9 @@
                                                         </span>
                                                     @endforeach
                                                     @if ($classPassPlan->classTypes->count() > 2)
-                                                        @php($hiddenClassTypesCount = $classPassPlan->classTypes->count() - 2)
+                                                        @php
+                                                            $hiddenClassTypesCount = $classPassPlan->classTypes->count() - 2;
+                                                        @endphp
                                                         <button
                                                             type="button"
                                                             class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 transition hover:border-slate-300 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
@@ -109,13 +194,18 @@
                                 </section>
                             @endforeach
                         </div>
+                                </div>
+                            </section>
+                        @endforeach
                     </div>
-                @empty
+                </section>
+            @else
+                <section class="mt-8">
                     <x-ui.empty-state icon="class-pass-plans">
                         {{ __('app.no_class_pass_plans') }}
                     </x-ui.empty-state>
-                @endforelse
-            </section>
+                </section>
+            @endif
 
             @unless ($isEmbed)
                 <x-ui.public-contact-links :account="$account" class="mt-8" />

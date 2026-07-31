@@ -992,6 +992,104 @@ function initCustomerAuthTabs(root = document) {
     });
 }
 
+function initPublicPriceTabSet(container, tabSelector, panelSelector, activeValue) {
+    if (container.dataset.publicPriceTabsReady === 'true') {
+        return;
+    }
+
+    const tabs = Array.from(container.querySelectorAll(tabSelector));
+    const panels = Array.from(container.querySelectorAll(panelSelector));
+
+    if (!tabs.length || !panels.length) {
+        return;
+    }
+
+    container.dataset.publicPriceTabsReady = 'true';
+
+    const tabAttribute = tabSelector.slice(1, -1);
+    const panelAttribute = panelSelector.slice(1, -1);
+    const valueFor = (element, attribute) => element.getAttribute(attribute);
+
+    const activate = (tabValue, focusTab = false) => {
+        tabs.forEach((tab) => {
+            const selected = valueFor(tab, tabAttribute) === tabValue;
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+            tab.tabIndex = selected ? 0 : -1;
+
+            if (selected && focusTab) {
+                tab.focus();
+            }
+        });
+
+        panels.forEach((panel) => {
+            panel.classList.toggle('hidden', valueFor(panel, panelAttribute) !== tabValue);
+        });
+    };
+
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => {
+            const tabValue = valueFor(tab, tabAttribute);
+
+            if (tabValue) {
+                activate(tabValue);
+            }
+        });
+
+        tab.addEventListener('keydown', (event) => {
+            const lastIndex = tabs.length - 1;
+            let nextIndex = index;
+
+            if (event.key === 'ArrowRight') {
+                nextIndex = index === lastIndex ? 0 : index + 1;
+            } else if (event.key === 'ArrowLeft') {
+                nextIndex = index === 0 ? lastIndex : index - 1;
+            } else if (event.key === 'Home') {
+                nextIndex = 0;
+            } else if (event.key === 'End') {
+                nextIndex = lastIndex;
+            } else {
+                return;
+            }
+
+            event.preventDefault();
+
+            const tabValue = tabs[nextIndex] ? valueFor(tabs[nextIndex], tabAttribute) : null;
+
+            if (tabValue) {
+                activate(tabValue, true);
+            }
+        });
+    });
+
+    const initialValue = tabs.some((tab) => valueFor(tab, tabAttribute) === activeValue)
+        ? activeValue
+        : valueFor(tabs[0], tabAttribute);
+
+    if (initialValue) {
+        activate(initialValue);
+    }
+}
+
+function initPublicPriceTabs(root = document) {
+    root.querySelectorAll('[data-public-price-kind-tabs]').forEach((container) => {
+        initPublicPriceTabSet(
+            container,
+            '[data-public-price-kind-tab]',
+            '[data-public-price-kind-panel]',
+            container.dataset.activeKind,
+        );
+    });
+
+    root.querySelectorAll('[data-public-price-segment-tabs]').forEach((container) => {
+        initPublicPriceTabSet(
+            container,
+            '[data-public-price-segment-tab]',
+            '[data-public-price-segment-panel]',
+            container.dataset.activeSection,
+        );
+    });
+}
+
 function initPlatformSettingsTabs(root = document) {
     root.querySelectorAll('[data-platform-settings-tabs]').forEach((container) => {
         if (container.dataset.platformSettingsTabsReady === 'true') {
@@ -5902,6 +6000,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initStudioLoginPickers();
     initClassPassPreviews();
     initCustomerAuthTabs();
+    initPublicPriceTabs();
     initPlatformSettingsTabs();
     initAiProviderModels();
     initPlatformTelegramWebhook();

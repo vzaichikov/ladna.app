@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.112.0',
+                'date' => '2026-07-31',
+                'title' => 'Shorter public class-pass price pages',
+                'items' => ['Public class-pass price pages now use two tab levels: Group, Individual, and Rent first, followed by the studio-configured price segments for the selected category.', 'On mobile, clients see one focused category and segment at a time instead of one long combined list. The pass details and visible Buy actions stay unchanged.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.111.0',
                 'date' => '2026-07-30',
                 'title' => 'Manual full and partial payment refunds',
@@ -982,6 +989,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.112.0',
+                'date' => '2026-07-31',
+                'title' => 'Коротші публічні сторінки цін на абонементи',
+                'items' => ['Публічні сторінки цін на абонементи тепер мають два рівні вкладок: спочатку групові, індивідуальні заняття й оренда, а нижче — налаштовані студією сегменти цін для вибраної категорії.', 'На мобільному клієнт бачить одну категорію та сегмент за раз замість довгого спільного списку. Деталі абонементів і помітні кнопки купівлі залишилися без змін.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.111.0',
                 'date' => '2026-07-30',
