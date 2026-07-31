@@ -25,16 +25,17 @@ class SmsDeliveryController extends Controller
         $dateTo = $this->validDate((string) $request->query('date_to'));
 
         $deliveries = SmsDelivery::query()
+            ->withLogDetails()
             ->with('account:id,name,timezone')
-            ->when($purpose, fn (Builder $query): Builder => $query->where('purpose', $purpose))
-            ->when($status, fn (Builder $query): Builder => $query->where('status', $status))
-            ->when($mode, fn (Builder $query): Builder => $query->where('source_mode', $mode))
-            ->when($provider !== '', fn (Builder $query): Builder => $query->where('provider', $provider))
-            ->when($accountId, fn (Builder $query): Builder => $query->where('account_id', $accountId))
-            ->when($dateFrom, fn (Builder $query): Builder => $query->whereDate('created_at', '>=', $dateFrom))
-            ->when($dateTo, fn (Builder $query): Builder => $query->whereDate('created_at', '<=', $dateTo))
-            ->latest('created_at')
-            ->latest('id')
+            ->when($purpose, fn (Builder $query): Builder => $query->where('sms_deliveries.purpose', $purpose))
+            ->when($status, fn (Builder $query): Builder => $query->where('sms_deliveries.status', $status))
+            ->when($mode, fn (Builder $query): Builder => $query->where('sms_deliveries.source_mode', $mode))
+            ->when($provider !== '', fn (Builder $query): Builder => $query->where('sms_deliveries.provider', $provider))
+            ->when($accountId, fn (Builder $query): Builder => $query->where('sms_deliveries.account_id', $accountId))
+            ->when($dateFrom, fn (Builder $query): Builder => $query->whereDate('sms_deliveries.created_at', '>=', $dateFrom))
+            ->when($dateTo, fn (Builder $query): Builder => $query->whereDate('sms_deliveries.created_at', '<=', $dateTo))
+            ->latest('sms_deliveries.created_at')
+            ->latest('sms_deliveries.id')
             ->paginate(50)
             ->withQueryString();
 

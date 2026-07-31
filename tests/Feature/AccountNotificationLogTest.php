@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\CustomerNotificationStatus;
 use App\Enums\SmsDeliveryPurpose;
 use App\Enums\SmsDeliveryStatus;
 use App\Enums\SmsSendingMode;
@@ -12,12 +13,16 @@ use App\Enums\TelegramAlertStatus;
 use App\Enums\TelegramAlertType;
 use App\Models\Account;
 use App\Models\AccountMembership;
+use App\Models\Customer;
+use App\Models\CustomerNotification;
+use App\Models\CustomerOtpChallenge;
 use App\Models\SmsDelivery;
 use App\Models\TelegramAlert;
 use App\Models\Trainer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AccountNotificationLogTest extends TestCase
@@ -94,6 +99,111 @@ class AccountNotificationLogTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.customer-notification-logs.index', $otherAccount))
             ->assertForbidden();
+    }
+
+    public function test_owner_and_platform_sms_logs_show_customer_details_and_full_text_without_exposing_otp_codes(): void
+    {
+        $owner = User::factory()->create();
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $customer = Customer::factory()->for($account)->create([
+            'name' => 'Current OTP Customer',
+            'phone' => '+380501112233',
+        ]);
+        $messageTail = 'FULL MESSAGE TAIL';
+        $fullMessage = str_repeat('A', 260).$messageTail;
+        $notification = CustomerNotification::factory()->create([
+            'account_id' => $account->id,
+            'customer_id' => $customer->id,
+            'scheduled_class_id' => null,
+            'class_booking_id' => null,
+            'status' => CustomerNotificationStatus::Sent->value,
+            'recipient_name' => 'Saved Notification Recipient',
+            'recipient_phone' => $customer->phone,
+            'text' => $fullMessage,
+        ]);
+
+        SmsDelivery::factory()->for($account)->create([
+            'account_sms_wallet_id' => null,
+            'source_type' => CustomerNotification::class,
+            'source_id' => $notification->id,
+            'purpose' => SmsDeliveryPurpose::CustomerNotification->value,
+            'recipient_phone' => $customer->phone,
+            'message_preview' => str_repeat('A', 255),
+        ]);
+
+        $otpCode = '481516';
+        $challenge = CustomerOtpChallenge::query()->create([
+            'account_id' => $account->id,
+            'phone' => $customer->phone,
+            'code_hash' => Hash::make($otpCode),
+            'expires_at' => now()->addMinutes(10),
+            'resend_available_at' => now()->addMinute(),
+            'send_count' => 1,
+            'last_sent_at' => now(),
+            'provider_scope' => SmsSendingMode::LadnaService->value,
+            'provider' => 'smsclub',
+        ]);
+
+        SmsDelivery::factory()->for($account)->create([
+            'account_sms_wallet_id' => null,
+            'source_type' => CustomerOtpChallenge::class,
+            'source_id' => $challenge->id,
+            'purpose' => SmsDeliveryPurpose::CustomerOtp->value,
+            'recipient_phone' => $customer->phone,
+            'message_preview' => 'Stored legacy OTP: '.$otpCode,
+        ]);
+
+        $otherAccount = Account::factory()->create();
+        Customer::factory()->for($otherAccount)->create([
+            'name' => 'Other Studio Customer',
+            'phone' => '+380501112244',
+        ]);
+        SmsDelivery::factory()->for($account)->create([
+            'account_sms_wallet_id' => null,
+            'purpose' => SmsDeliveryPurpose::CustomerOtp->value,
+            'recipient_phone' => '+380501112244',
+            'message_preview' => null,
+        ]);
+        $otherNotification = CustomerNotification::factory()->create([
+            'account_id' => $otherAccount->id,
+            'customer_id' => null,
+            'scheduled_class_id' => null,
+            'class_booking_id' => null,
+            'recipient_name' => 'Other Source Recipient',
+            'recipient_phone' => '+380501112255',
+            'text' => 'Other source secret message',
+        ]);
+        SmsDelivery::factory()->for($account)->create([
+            'account_sms_wallet_id' => null,
+            'source_type' => CustomerNotification::class,
+            'source_id' => $otherNotification->id,
+            'purpose' => SmsDeliveryPurpose::CustomerNotification->value,
+            'recipient_phone' => '+380501112255',
+            'message_preview' => 'Safe source fallback',
+        ]);
+
+        foreach ([$owner, $platformAdmin] as $viewer) {
+            $route = $viewer->isPlatformAdmin()
+                ? route('platform.sms-deliveries.index', ['account_id' => $account->id])
+                : route('dashboard.accounts.customer-notification-logs.index', $account);
+
+            $this->actingAs($viewer)
+                ->get($route)
+                ->assertOk()
+                ->assertSee('data-sms-recipient', false)
+                ->assertSee('data-sms-message', false)
+                ->assertSee('Saved Notification Recipient')
+                ->assertSee('Current OTP Customer')
+                ->assertSee($messageTail)
+                ->assertSee(__('app.sms_otp_message_hidden'))
+                ->assertSee('Safe source fallback')
+                ->assertDontSee($otpCode)
+                ->assertDontSee('Other Studio Customer')
+                ->assertDontSee('Other Source Recipient')
+                ->assertDontSee('Other source secret message');
+        }
     }
 
     public function test_studio_owner_can_filter_only_their_paginated_trainer_telegram_alert_log(): void

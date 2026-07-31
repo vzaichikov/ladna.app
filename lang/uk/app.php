@@ -1621,6 +1621,8 @@ return [
     'sms_delivery_status_failed' => 'Відхилено',
     'sms_delivery_status_cancelled' => 'Скасовано',
     'sms_delivery_status_unknown' => 'Статус невідомий',
+    'sms_charge' => 'Сегменти й нарахування',
+    'sms_otp_message_hidden' => 'Текст OTP-коду не зберігається з міркувань безпеки.',
     'sms_segments_short' => 'сегм.',
     'balance_after' => 'Залишок після операції',
     'amount_uah' => 'Сума, грн',

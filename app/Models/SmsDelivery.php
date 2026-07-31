@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Query\JoinClause;
 
 #[Fillable(['account_id', 'account_sms_wallet_id', 'subscription_plan_id', 'subscription_plan_name_snapshot', 'source_type', 'source_id', 'purpose', 'source_mode', 'provider', 'status', 'recipient_phone', 'message_preview', 'idempotency_key', 'estimated_segments', 'provider_segments', 'billed_segments', 'sms_segment_price_cents', 'reserved_amount_cents', 'amount_cents', 'wholesale_cost_cents', 'currency', 'provider_message_id', 'reserved_at', 'accepted_at', 'delivered_at', 'failed_at', 'cancelled_at', 'last_status_checked_at', 'next_status_check_at', 'status_polling_expires_at', 'error_code', 'last_error'])]
 class SmsDelivery extends Model
@@ -65,6 +66,30 @@ class SmsDelivery extends Model
                     ->whereNull('status_polling_expires_at')
                     ->orWhere('status_polling_expires_at', '>', now());
             });
+    }
+
+    public function scopeWithLogDetails(Builder $query): Builder
+    {
+        return $query
+            ->leftJoin('customer_notifications as sms_log_notification', function (JoinClause $join): void {
+                $join
+                    ->on('sms_log_notification.id', '=', 'sms_deliveries.source_id')
+                    ->on('sms_log_notification.account_id', '=', 'sms_deliveries.account_id')
+                    ->where('sms_deliveries.source_type', CustomerNotification::class);
+            })
+            ->leftJoin('customers as sms_log_customer', function (JoinClause $join): void {
+                $join
+                    ->on('sms_log_customer.account_id', '=', 'sms_deliveries.account_id')
+                    ->on('sms_log_customer.phone', '=', 'sms_deliveries.recipient_phone');
+            })
+            ->select([
+                'sms_deliveries.*',
+                'sms_log_notification.customer_id as notification_customer_id',
+                'sms_log_notification.recipient_name as notification_recipient_name',
+                'sms_log_notification.text as notification_text',
+                'sms_log_customer.id as resolved_customer_id',
+                'sms_log_customer.name as resolved_customer_name',
+            ]);
     }
 
     public function account(): BelongsTo

@@ -3,10 +3,6 @@
 @section('title', __('app.sms_delivery_log').' - '.__('app.app_name'))
 
 @section('content')
-    @php
-        $formatMoney = fn (?int $cents): string => \App\Support\MoneyFormatter::format($cents, 'UAH');
-    @endphp
-
     <div>
         <h1 class="crm-page-title">{{ __('app.sms_delivery_log') }}</h1>
         <p class="crm-page-copy">{{ __('app.sms_delivery_log_platform_copy') }}</p>
@@ -74,30 +70,7 @@
         </form>
     </x-ui.panel>
 
-    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
-        @forelse ($deliveries as $delivery)
-            <div class="crm-row lg:grid-cols-[minmax(0,1.5fr)_140px_100px_120px_120px_170px] lg:items-center">
-                <div>
-                    <div class="font-semibold text-slate-950">
-                        {{ $delivery->account?->name }} · {{ __('app.sms_purpose_'.$delivery->purpose->value) }} · {{ $delivery->recipient_phone }}
-                    </div>
-                    <div class="mt-1 text-sm text-slate-500">
-                        {{ __('app.sms_mode_'.$delivery->source_mode->value) }} · {{ $delivery->provider ?: '—' }} · {{ $delivery->provider_message_id ?: '—' }}
-                    </div>
-                    @if ($delivery->last_error)
-                        <div class="mt-1 text-xs text-rose-700">{{ $delivery->last_error }}</div>
-                    @endif
-                </div>
-                <span class="{{ $delivery->status === \App\Enums\SmsDeliveryStatus::Delivered ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.sms_delivery_status_'.$delivery->status->value) }}</span>
-                <div class="text-sm text-slate-600">{{ $delivery->billed_segments ?? $delivery->estimated_segments }} {{ __('app.sms_segments_short') }}</div>
-                <div class="text-sm text-slate-600">{{ $delivery->sms_segment_price_cents === null ? '—' : $formatMoney($delivery->sms_segment_price_cents) }}</div>
-                <div class="font-semibold text-slate-700">{{ $delivery->amount_cents === null ? '—' : $formatMoney($delivery->amount_cents) }}</div>
-                <div class="text-sm text-slate-500">{{ $delivery->created_at?->timezone($delivery->account?->timezone ?: config('app.timezone'))->format('d.m.Y H:i') }}</div>
-            </div>
-        @empty
-            <x-ui.empty-state :title="__('app.sms_no_deliveries')" icon="bell" class="m-5" />
-        @endforelse
-    </x-ui.panel>
+    <x-sms-delivery-table :deliveries="$deliveries" :show-account="true" />
 
     @if ($deliveries->hasPages())
         <div class="mt-6">{{ $deliveries->links() }}</div>

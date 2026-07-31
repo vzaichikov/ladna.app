@@ -25,21 +25,22 @@ class AccountCustomerNotificationController extends Controller
         $search = trim((string) $request->query('search'));
 
         $deliveries = $account->smsDeliveries()
-            ->when($purpose, fn (Builder $query): Builder => $query->where('purpose', $purpose))
-            ->when($status, fn (Builder $query): Builder => $query->where('status', $status))
-            ->when($mode, fn (Builder $query): Builder => $query->where('source_mode', $mode))
-            ->when($provider !== '', fn (Builder $query): Builder => $query->where('provider', $provider))
-            ->when($dateFrom, fn (Builder $query): Builder => $query->whereDate('created_at', '>=', $dateFrom))
-            ->when($dateTo, fn (Builder $query): Builder => $query->whereDate('created_at', '<=', $dateTo))
+            ->withLogDetails()
+            ->when($purpose, fn (Builder $query): Builder => $query->where('sms_deliveries.purpose', $purpose))
+            ->when($status, fn (Builder $query): Builder => $query->where('sms_deliveries.status', $status))
+            ->when($mode, fn (Builder $query): Builder => $query->where('sms_deliveries.source_mode', $mode))
+            ->when($provider !== '', fn (Builder $query): Builder => $query->where('sms_deliveries.provider', $provider))
+            ->when($dateFrom, fn (Builder $query): Builder => $query->whereDate('sms_deliveries.created_at', '>=', $dateFrom))
+            ->when($dateTo, fn (Builder $query): Builder => $query->whereDate('sms_deliveries.created_at', '<=', $dateTo))
             ->when($search !== '', fn (Builder $query): Builder => $query->where(function (Builder $query) use ($search): void {
                 $query
-                    ->where('recipient_phone', 'like', '%'.$search.'%')
-                    ->orWhere('provider_message_id', 'like', '%'.$search.'%')
-                    ->orWhere('message_preview', 'like', '%'.$search.'%')
-                    ->orWhere('last_error', 'like', '%'.$search.'%');
+                    ->where('sms_deliveries.recipient_phone', 'like', '%'.$search.'%')
+                    ->orWhere('sms_deliveries.provider_message_id', 'like', '%'.$search.'%')
+                    ->orWhere('sms_deliveries.message_preview', 'like', '%'.$search.'%')
+                    ->orWhere('sms_deliveries.last_error', 'like', '%'.$search.'%');
             }))
-            ->latest('created_at')
-            ->latest('id')
+            ->latest('sms_deliveries.created_at')
+            ->latest('sms_deliveries.id')
             ->paginate(25)
             ->withQueryString();
 

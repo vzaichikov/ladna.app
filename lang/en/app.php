@@ -1621,6 +1621,8 @@ return [
     'sms_delivery_status_failed' => 'Rejected',
     'sms_delivery_status_cancelled' => 'Cancelled',
     'sms_delivery_status_unknown' => 'Unknown status',
+    'sms_charge' => 'Segments and charge',
+    'sms_otp_message_hidden' => 'OTP code text is not stored for security.',
     'sms_segments_short' => 'seg.',
     'balance_after' => 'Balance after',
     'amount_uah' => 'Amount, UAH',
