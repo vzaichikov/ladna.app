@@ -58,6 +58,11 @@ class AccountNotificationLogTest extends TestCase
                 && $deliveries->perPage() === 25
                 && $deliveries->hasPages())
             ->assertSee(__('app.sms_delivery_log'))
+            ->assertSee('name="purpose" class="crm-field"', false)
+            ->assertSee('name="status" class="crm-field"', false)
+            ->assertSee('name="mode" class="crm-field"', false)
+            ->assertSee('name="provider" class="crm-field"', false)
+            ->assertDontSee('crm-select', false)
             ->assertSee('Scoped SMS 01')
             ->assertSee('page=2', false)
             ->assertDontSee('Scoped SMS 26')

@@ -48,7 +48,7 @@
                 <label class="block" for="central-sms-provider">
                     <span class="crm-label">{{ __('app.central_sms_provider_label') }}</span>
                     <select id="central-sms-provider" name="central_sms_provider" class="crm-field" required>
-                        <option value="" disabled @selected(blank($selectedCentralSmsProvider))>{{ __('app.choose') }}</option>
+                        <option value="" disabled @selected(blank($selectedCentralSmsProvider))>{{ __('app.select') }}</option>
                         @foreach ($providers as $providerKey => $provider)
                             <option value="{{ $providerKey }}" @selected($selectedCentralSmsProvider === $providerKey)>
                                 {{ $provider['label'] }}
@@ -162,7 +162,7 @@
                         @required($selectedSmsSendingMode === \App\Enums\SmsSendingMode::OwnGateway->value)
                         @disabled($selectedSmsSendingMode !== \App\Enums\SmsSendingMode::OwnGateway->value)
                     >
-                        <option value="">{{ __('app.choose') }}</option>
+                        <option value="">{{ __('app.select') }}</option>
                         @foreach ($providers as $providerKey => $provider)
                             <option value="{{ $providerKey }}" @selected($selectedSmsProvider === $providerKey)>
                                 {{ $provider['label'] }}

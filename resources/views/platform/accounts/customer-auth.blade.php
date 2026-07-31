@@ -98,7 +98,7 @@
                             @required($selectedSmsSendingMode === \App\Enums\SmsSendingMode::OwnGateway->value)
                             @disabled($selectedSmsSendingMode !== \App\Enums\SmsSendingMode::OwnGateway->value)
                         >
-                            <option value="">{{ __('app.choose') }}</option>
+                            <option value="">{{ __('app.select') }}</option>
                             @foreach ($smsProviders as $provider)
                                 <option value="{{ $provider->value }}" @selected(old('sms_provider', $settings->sms_provider) === $provider->value)>
                                     {{ config('integrations.providers.'.$provider->value.'.label') }}

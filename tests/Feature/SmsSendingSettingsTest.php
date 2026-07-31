@@ -27,6 +27,8 @@ class SmsSendingSettingsTest extends TestCase
             ->assertSee(__('app.sms_sending_mode_disabled'))
             ->assertSee(__('app.sms_sending_mode_ladna_service'))
             ->assertSee(__('app.sms_sending_mode_own_gateway'))
+            ->assertSee(__('app.select'))
+            ->assertDontSee('app.choose')
             ->assertSee('data-sms-own-gateway-settings', false)
             ->assertSee('class="mt-6 grid gap-5 xl:grid-cols-2 hidden"', false);
 
@@ -149,6 +151,8 @@ class SmsSendingSettingsTest extends TestCase
             ->assertOk()
             ->assertSee('name="sms_sending_mode"', false)
             ->assertSee('name="sms_provider"', false)
+            ->assertSee(__('app.select'))
+            ->assertDontSee('app.choose')
             ->assertDontSee('name="otp_sender_scope"', false)
             ->assertDontSee('name="customer_sms_sender_scope"', false);
     }

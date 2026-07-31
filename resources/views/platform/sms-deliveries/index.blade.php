@@ -16,7 +16,7 @@
         <form method="GET" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <label class="block">
                 <span class="crm-label">{{ __('app.studio') }}</span>
-                <select name="account_id" class="crm-select mt-2">
+                <select name="account_id" class="crm-field">
                     <option value="">{{ __('app.all') }}</option>
                     @foreach ($accounts as $account)
                         <option value="{{ $account->id }}" @selected($filters['accountId'] === $account->id)>{{ $account->name }}</option>
@@ -25,7 +25,7 @@
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.sms_purpose') }}</span>
-                <select name="purpose" class="crm-select mt-2">
+                <select name="purpose" class="crm-field">
                     <option value="">{{ __('app.all') }}</option>
                     @foreach ($purposes as $purpose)
                         <option value="{{ $purpose->value }}" @selected($filters['purpose'] === $purpose->value)>{{ __('app.sms_purpose_'.$purpose->value) }}</option>
@@ -34,7 +34,7 @@
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.status') }}</span>
-                <select name="status" class="crm-select mt-2">
+                <select name="status" class="crm-field">
                     <option value="">{{ __('app.all') }}</option>
                     @foreach ($statuses as $status)
                         <option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.sms_delivery_status_'.$status->value) }}</option>
@@ -43,7 +43,7 @@
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.sms_source') }}</span>
-                <select name="mode" class="crm-select mt-2">
+                <select name="mode" class="crm-field">
                     <option value="">{{ __('app.all') }}</option>
                     @foreach ($modes as $mode)
                         <option value="{{ $mode->value }}" @selected($filters['mode'] === $mode->value)>{{ __('app.sms_mode_'.$mode->value) }}</option>
@@ -52,7 +52,7 @@
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.provider') }}</span>
-                <select name="provider" class="crm-select mt-2">
+                <select name="provider" class="crm-field">
                     <option value="">{{ __('app.all') }}</option>
                     @foreach ($providers as $provider)
                         <option value="{{ $provider }}" @selected($filters['provider'] === $provider)>{{ $provider }}</option>

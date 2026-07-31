@@ -24,7 +24,7 @@
         @if ($platformView)
             <x-ui.button :href="route('platform.accounts.show', $account)" variant="secondary">{{ __('app.back') }}</x-ui.button>
         @else
-            <x-ui.button :href="route('dashboard.accounts.integrations.index', $account)" variant="secondary">{{ __('app.sms_settings') }}</x-ui.button>
+            <x-ui.button :href="route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging'])" variant="secondary">{{ __('app.sms_settings') }}</x-ui.button>
         @endif
     </div>
 

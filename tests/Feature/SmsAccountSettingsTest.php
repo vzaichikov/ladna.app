@@ -56,6 +56,7 @@ class SmsAccountSettingsTest extends TestCase
             ->get(route('dashboard.accounts.sms-account.show', $account))
             ->assertOk()
             ->assertSee(__('app.sms_account'))
+            ->assertSee(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']), false)
             ->assertSee('4444 **** **** 1111');
 
         $this->actingAs($owner)
@@ -159,11 +160,12 @@ class SmsAccountSettingsTest extends TestCase
             ->assertOk()
             ->assertSee($account->name)
             ->assertSee($delivery->provider_message_id)
-            ->assertSee('name="account_id"', false)
-            ->assertSee('name="purpose"', false)
-            ->assertSee('name="status"', false)
-            ->assertSee('name="mode"', false)
-            ->assertSee('name="provider"', false);
+            ->assertSee('name="account_id" class="crm-field"', false)
+            ->assertSee('name="purpose" class="crm-field"', false)
+            ->assertSee('name="status" class="crm-field"', false)
+            ->assertSee('name="mode" class="crm-field"', false)
+            ->assertSee('name="provider" class="crm-field"', false)
+            ->assertDontSee('crm-select', false);
     }
 
     public function test_platform_admin_can_update_sms_service_settings(): void

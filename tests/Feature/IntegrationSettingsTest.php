@@ -234,6 +234,8 @@ class IntegrationSettingsTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.central_sms_provider'))
             ->assertSee('name="central_sms_provider"', false)
+            ->assertSee(__('app.select'))
+            ->assertDontSee('app.choose')
             ->assertDontSee('falls back to TurboSMS')
             ->assertDontSee('Ladna currently falls back');
 
