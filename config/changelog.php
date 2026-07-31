@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.114.0',
+                'date' => '2026-07-31',
+                'title' => 'Sortable class-pass catalog',
+                'items' => ['Studio owners can now reorder class passes independently inside each price segment using drag handles or accessible move buttons. Changes save automatically, and the current display order is visible directly in the catalog.', 'The All segments view groups passes into separate sortable sections, including passes without a segment. The same saved order is used consistently on public price pages, embeds, and the public price API.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.113.0',
                 'date' => '2026-07-31',
                 'title' => 'Percentage-based trainer salary models',
@@ -996,6 +1003,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.114.0',
+                'date' => '2026-07-31',
+                'title' => 'Сортування каталогу абонементів',
+                'items' => ['Власники студій тепер можуть окремо впорядковувати абонементи в кожному ціновому сегменті перетягуванням або доступними кнопками переміщення. Зміни зберігаються автоматично, а поточний порядок показу видно безпосередньо в каталозі.', 'Перегляд усіх сегментів групує абонементи в окремі розділи, зокрема абонементи без сегмента. Збережений порядок однаково застосовується на публічних сторінках цін, у віджетах і публічному API цін.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.113.0',
                 'date' => '2026-07-31',

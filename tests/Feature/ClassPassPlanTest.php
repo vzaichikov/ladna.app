@@ -501,6 +501,168 @@ class ClassPassPlanTest extends TestCase
         $this->assertTrue($copy->rooms()->whereKey($room->getKey())->exists());
     }
 
+    public function test_owner_can_reorder_every_class_pass_plan_inside_one_segment(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $segment = ClassPassSegment::factory()->for($account)->create([
+            'name' => 'Morning passes',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 20,
+        ]);
+        $firstPlan = ClassPassPlan::factory()->for($account)->for($segment)->create([
+            'name' => 'First plan',
+            'sort_order' => 10,
+        ]);
+        $secondPlan = ClassPassPlan::factory()->for($account)->for($segment)->create([
+            'name' => 'Second plan',
+            'sort_order' => 20,
+        ]);
+        $inactivePlan = ClassPassPlan::factory()->for($account)->for($segment)->create([
+            'name' => 'Inactive plan',
+            'is_active' => false,
+            'sort_order' => 30,
+        ]);
+        $otherSegment = ClassPassSegment::factory()->for($account)->create(['schedule_kind' => 'group_class']);
+        $otherSegmentPlan = ClassPassPlan::factory()->for($account)->for($otherSegment)->create(['sort_order' => 75]);
+        $privatePlan = ClassPassPlan::factory()->for($account)->create([
+            'schedule_kind' => 'private_lesson',
+            'sort_order' => 85,
+        ]);
+
+        $response = $this->actingAs($owner)->patchJson(
+            route('dashboard.accounts.class-pass-plans.reorder', $account),
+            [
+                'schedule_kind' => 'group_class',
+                'class_pass_segment_id' => $segment->id,
+                'plan_ids' => [$inactivePlan->id, $secondPlan->id, $firstPlan->id],
+            ],
+        );
+
+        $response->assertOk()
+            ->assertJsonPath('message', __('app.class_pass_plan_order_updated'))
+            ->assertJsonPath('plan_ids', [$inactivePlan->id, $secondPlan->id, $firstPlan->id])
+            ->assertJsonPath('sort_orders.'.$inactivePlan->id, 10)
+            ->assertJsonPath('sort_orders.'.$secondPlan->id, 20)
+            ->assertJsonPath('sort_orders.'.$firstPlan->id, 30);
+
+        $this->assertSame(10, $inactivePlan->fresh()->sort_order);
+        $this->assertSame(20, $secondPlan->fresh()->sort_order);
+        $this->assertSame(30, $firstPlan->fresh()->sort_order);
+        $this->assertSame(75, $otherSegmentPlan->fresh()->sort_order);
+        $this->assertSame(85, $privatePlan->fresh()->sort_order);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.class-pass-plans.index', [
+                $account,
+                'tab' => 'group_class',
+                'segment' => $segment->id,
+            ]))
+            ->assertOk()
+            ->assertSee('data-class-pass-sort-section', false)
+            ->assertSee('data-class-pass-sort-handle', false)
+            ->assertSee('data-class-pass-sort-up', false)
+            ->assertSee('data-class-pass-sort-down', false)
+            ->assertSee('data-class-pass-sort-order-cell', false)
+            ->assertSee('<div class="mt-1 font-semibold text-slate-950" data-class-pass-sort-order-value>10</div>', false)
+            ->assertSeeInOrder([$inactivePlan->name, $secondPlan->name, $firstPlan->name]);
+    }
+
+    public function test_all_segments_view_renders_independent_sortable_sections(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $segment = ClassPassSegment::factory()->for($account)->create([
+            'name' => 'Kids passes',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 10,
+        ]);
+        $unsegmentedPlan = ClassPassPlan::factory()->for($account)->create(['name' => 'Other option']);
+        $segmentedPlan = ClassPassPlan::factory()->for($account)->for($segment)->create(['name' => 'Kids option']);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.class-pass-plans.index', [
+                $account,
+                'tab' => 'group_class',
+                'segment' => 'all',
+            ]))
+            ->assertOk()
+            ->assertSee('data-class-pass-sort-group="none"', false)
+            ->assertSee('data-class-pass-sort-group="segment:'.$segment->id.'"', false)
+            ->assertSeeInOrder([
+                __('app.without_class_pass_segment'),
+                $unsegmentedPlan->name,
+                $segment->name,
+                $segmentedPlan->name,
+            ]);
+    }
+
+    public function test_reorder_requires_the_exact_tenant_segment_plan_set(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $otherAccount = Account::factory()->create();
+        $account->addOwner($owner);
+        $segment = ClassPassSegment::factory()->for($account)->create(['schedule_kind' => 'group_class']);
+        $otherSegment = ClassPassSegment::factory()->for($account)->create(['schedule_kind' => 'group_class']);
+        $firstPlan = ClassPassPlan::factory()->for($account)->for($segment)->create(['sort_order' => 10]);
+        $secondPlan = ClassPassPlan::factory()->for($account)->for($segment)->create(['sort_order' => 20]);
+        $otherSegmentPlan = ClassPassPlan::factory()->for($account)->for($otherSegment)->create();
+        $foreignPlan = ClassPassPlan::factory()->for($otherAccount)->create();
+        $url = route('dashboard.accounts.class-pass-plans.reorder', $account);
+        $payload = [
+            'schedule_kind' => 'group_class',
+            'class_pass_segment_id' => $segment->id,
+        ];
+
+        $this->actingAs($owner)->patchJson($url, $payload + [
+            'plan_ids' => [$firstPlan->id],
+        ])->assertUnprocessable()->assertJsonValidationErrors('plan_ids');
+
+        $this->actingAs($owner)->patchJson($url, $payload + [
+            'plan_ids' => [$firstPlan->id, $firstPlan->id],
+        ])->assertUnprocessable()->assertJsonValidationErrors('plan_ids.1');
+
+        $this->actingAs($owner)->patchJson($url, $payload + [
+            'plan_ids' => [$firstPlan->id, $otherSegmentPlan->id],
+        ])->assertUnprocessable()->assertJsonValidationErrors('plan_ids');
+
+        $this->actingAs($owner)->patchJson($url, $payload + [
+            'plan_ids' => [$firstPlan->id, $foreignPlan->id],
+        ])->assertUnprocessable()->assertJsonValidationErrors('plan_ids.1');
+
+        $this->actingAs($owner)->patchJson($url, $payload + [
+            'plan_ids' => [$firstPlan->id, 'invalid'],
+        ])->assertUnprocessable()->assertJsonValidationErrors('plan_ids.1');
+
+        $this->assertSame(10, $firstPlan->fresh()->sort_order);
+        $this->assertSame(20, $secondPlan->fresh()->sort_order);
+    }
+
+    public function test_non_owners_cannot_reorder_class_pass_plans(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        $manager = User::factory()->create();
+        $account = Account::factory()->create();
+        $plan = ClassPassPlan::factory()->for($account)->create();
+        $account->users()->attach($manager->id, [
+            'role' => AccountRole::Manager->value,
+            'permissions' => null,
+        ]);
+        $payload = [
+            'schedule_kind' => 'group_class',
+            'class_pass_segment_id' => null,
+            'plan_ids' => [$plan->id],
+        ];
+        $url = route('dashboard.accounts.class-pass-plans.reorder', $account);
+
+        $this->actingAs($platformAdmin)->patchJson($url, $payload)->assertForbidden();
+        $this->actingAs($manager)->patchJson($url, $payload)->assertForbidden();
+        $this->assertSame(0, $plan->fresh()->sort_order);
+    }
+
     public function test_platform_admin_cannot_manage_studio_class_pass_plans(): void
     {
         $platformAdmin = User::factory()->platformAdmin()->create();

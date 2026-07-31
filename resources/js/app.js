@@ -1159,6 +1159,252 @@ function initPublicPriceTabs(root = document) {
     });
 }
 
+function classPassSortItems(section) {
+    return Array.from(section.querySelectorAll('[data-class-pass-sort-item]'));
+}
+
+function classPassSortPlanIds(section) {
+    return classPassSortItems(section).map((item) => item.dataset.planId);
+}
+
+function restoreClassPassSortOrder(section, planIds) {
+    const list = section.querySelector('[data-class-pass-sort-list]');
+    const itemsById = new Map(classPassSortItems(section).map((item) => [item.dataset.planId, item]));
+
+    planIds.forEach((planId) => {
+        const item = itemsById.get(String(planId));
+
+        if (item) {
+            list?.append(item);
+        }
+    });
+}
+
+function syncClassPassSortInputs(section) {
+    const form = section.querySelector('[data-class-pass-reorder-form]');
+
+    if (!form) {
+        return;
+    }
+
+    form.querySelectorAll('input[name="plan_ids[]"]').forEach((input) => input.remove());
+    classPassSortPlanIds(section).forEach((planId) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'plan_ids[]';
+        input.value = planId;
+        form.append(input);
+    });
+}
+
+function syncClassPassSortControls(section) {
+    const items = classPassSortItems(section);
+    const multipleItems = items.length > 1;
+
+    items.forEach((item, index) => {
+        const handle = item.querySelector('[data-class-pass-sort-handle]');
+        const upButton = item.querySelector('[data-class-pass-sort-up]');
+        const downButton = item.querySelector('[data-class-pass-sort-down]');
+
+        if (handle) {
+            handle.disabled = !multipleItems;
+            handle.draggable = multipleItems;
+        }
+
+        if (upButton) {
+            upButton.disabled = index === 0;
+        }
+
+        if (downButton) {
+            downButton.disabled = index === items.length - 1;
+        }
+    });
+}
+
+function setClassPassSortBusy(section, busy) {
+    section.querySelectorAll('[data-class-pass-sort-control]').forEach((control) => {
+        if (busy) {
+            control.dataset.classPassSortWasDisabled = control.disabled ? 'true' : 'false';
+            control.disabled = true;
+            return;
+        }
+
+        control.disabled = control.dataset.classPassSortWasDisabled === 'true';
+        delete control.dataset.classPassSortWasDisabled;
+    });
+    section.setAttribute('aria-busy', busy ? 'true' : 'false');
+
+    if (!busy) {
+        syncClassPassSortControls(section);
+    }
+}
+
+function classPassSortErrorMessage(payload, form) {
+    const firstValidationMessage = payload.errors
+        ? Object.values(payload.errors).flat().find(Boolean)
+        : null;
+
+    return firstValidationMessage ?? payload.message ?? fallbackAsyncMessage('error', form);
+}
+
+async function saveClassPassSortOrder(section, previousPlanIds) {
+    const form = section.querySelector('[data-class-pass-reorder-form]');
+
+    if (!form) {
+        return;
+    }
+
+    syncClassPassSortInputs(section);
+    clearAsyncFormErrors(form);
+    const formData = new FormData(form);
+    setClassPassSortBusy(section, true);
+
+    try {
+        const response = await fetch(form.action, {
+            method: form.method.toUpperCase(),
+            body: formData,
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            restoreClassPassSortOrder(section, previousPlanIds);
+            syncClassPassSortInputs(section);
+            setAsyncStatus(classPassSortErrorMessage(payload, form), 'error', form);
+            return;
+        }
+
+        Object.entries(payload.sort_orders ?? {}).forEach(([planId, sortOrder]) => {
+            const item = section.querySelector(`[data-class-pass-sort-item][data-plan-id="${planId}"]`);
+            const value = item?.querySelector('[data-class-pass-sort-order-value]');
+
+            if (value) {
+                value.textContent = sortOrder;
+            }
+        });
+        setAsyncStatus(payload.message, 'success', form);
+    } catch {
+        restoreClassPassSortOrder(section, previousPlanIds);
+        syncClassPassSortInputs(section);
+        setAsyncStatus(fallbackAsyncMessage('error', form), 'error', form);
+    } finally {
+        setClassPassSortBusy(section, false);
+    }
+}
+
+function initClassPassPlanSorting(root = document) {
+    root.querySelectorAll('[data-class-pass-sort-section]').forEach((section) => {
+        if (section.dataset.classPassSortReady === 'true') {
+            return;
+        }
+
+        const list = section.querySelector('[data-class-pass-sort-list]');
+
+        if (!list) {
+            return;
+        }
+
+        section.dataset.classPassSortReady = 'true';
+        let draggedItem = null;
+        let previousPlanIds = [];
+        let dropHandled = false;
+
+        section.querySelectorAll('[data-class-pass-sort-handle]').forEach((handle) => {
+            handle.addEventListener('dragstart', (event) => {
+                if (handle.disabled) {
+                    event.preventDefault();
+                    return;
+                }
+
+                draggedItem = handle.closest('[data-class-pass-sort-item]');
+                previousPlanIds = classPassSortPlanIds(section);
+                dropHandled = false;
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', draggedItem?.dataset.planId ?? '');
+                draggedItem?.classList.add('opacity-50', 'ring-2', 'ring-violet-crm-300');
+            });
+
+            handle.addEventListener('dragend', () => {
+                if (!dropHandled && draggedItem) {
+                    restoreClassPassSortOrder(section, previousPlanIds);
+                }
+
+                draggedItem?.classList.remove('opacity-50', 'ring-2', 'ring-violet-crm-300');
+                draggedItem = null;
+                dropHandled = false;
+                syncClassPassSortControls(section);
+            });
+        });
+
+        list.addEventListener('dragover', (event) => {
+            if (!draggedItem) {
+                return;
+            }
+
+            const target = event.target.closest('[data-class-pass-sort-item]');
+
+            if (!target || target === draggedItem || target.parentElement !== list) {
+                return;
+            }
+
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            const targetBox = target.getBoundingClientRect();
+            const insertBeforeTarget = event.clientY < targetBox.top + (targetBox.height / 2);
+            list.insertBefore(draggedItem, insertBeforeTarget ? target : target.nextElementSibling);
+        });
+
+        list.addEventListener('drop', async (event) => {
+            if (!draggedItem) {
+                return;
+            }
+
+            event.preventDefault();
+            dropHandled = true;
+            const currentPlanIds = classPassSortPlanIds(section);
+
+            if (currentPlanIds.join(',') !== previousPlanIds.join(',')) {
+                syncClassPassSortControls(section);
+                await saveClassPassSortOrder(section, previousPlanIds);
+            }
+        });
+
+        section.addEventListener('click', async (event) => {
+            const upButton = event.target.closest('[data-class-pass-sort-up]');
+            const downButton = event.target.closest('[data-class-pass-sort-down]');
+            const button = upButton ?? downButton;
+
+            if (!button || button.disabled) {
+                return;
+            }
+
+            const item = button.closest('[data-class-pass-sort-item]');
+            const sibling = upButton ? item?.previousElementSibling : item?.nextElementSibling;
+
+            if (!item || !sibling) {
+                return;
+            }
+
+            const originalPlanIds = classPassSortPlanIds(section);
+
+            if (upButton) {
+                list.insertBefore(item, sibling);
+            } else {
+                list.insertBefore(sibling, item);
+            }
+
+            syncClassPassSortControls(section);
+            await saveClassPassSortOrder(section, originalPlanIds);
+        });
+
+        syncClassPassSortControls(section);
+    });
+}
+
 function initPlatformSettingsTabs(root = document) {
     root.querySelectorAll('[data-platform-settings-tabs]').forEach((container) => {
         if (container.dataset.platformSettingsTabsReady === 'true') {
@@ -6070,6 +6316,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initClassPassPreviews();
     initCustomerAuthTabs();
     initPublicPriceTabs();
+    initClassPassPlanSorting();
     initPlatformSettingsTabs();
     initAiProviderModels();
     initPlatformTelegramWebhook();

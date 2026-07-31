@@ -584,6 +584,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->defaults('schedule_kind', ScheduleKind::GroupClass->value)
             ->name('accounts.class-types.destroy');
 
+        Route::patch('accounts/{account}/class-pass-plans/reorder', [ClassPassPlanController::class, 'reorder'])
+            ->name('accounts.class-pass-plans.reorder');
         Route::post('accounts/{account}/class-pass-plans/{class_pass_plan}/copy', [ClassPassPlanController::class, 'copy'])
             ->name('accounts.class-pass-plans.copy');
         Route::resource('accounts.class-pass-plans', ClassPassPlanController::class)

@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\TrainerType;
+use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -271,6 +272,43 @@ class PublicPriceTest extends TestCase
             ->assertJsonPath('data.0.sections.0.plans.2.segment', null)
             ->assertJsonMissing(['key' => 'segment:inactive-segment'])
             ->assertJsonMissing(['key' => 'segment:private-segment']);
+    }
+
+    public function test_admin_reorder_controls_public_html_embed_and_api_plan_order(): void
+    {
+        [$account, $location, $plans] = $this->priceContext();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $classType = $plans['group']->classTypes()->firstOrFail();
+        $secondGroupPlan = ClassPassPlan::factory()->for($account)->create([
+            'name' => 'Second public group plan',
+            'slug' => 'second-public-group-plan',
+            'schedule_kind' => 'group_class',
+            'sort_order' => 40,
+        ]);
+        $secondGroupPlan->classTypes()->sync([$classType->id]);
+
+        $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.class-pass-plans.reorder', $account), [
+                'schedule_kind' => 'group_class',
+                'class_pass_segment_id' => null,
+                'plan_ids' => [$secondGroupPlan->id, $plans['group']->id, $plans['inactive']->id],
+            ])
+            ->assertOk();
+
+        $this->get(route('public.price', [$account->slug, $location->slug]))
+            ->assertOk()
+            ->assertSeeInOrder([$secondGroupPlan->name, $plans['group']->name]);
+
+        $this->get(route('public.price.embed', [$account->slug, $location->slug]))
+            ->assertOk()
+            ->assertSeeInOrder([$secondGroupPlan->name, $plans['group']->name]);
+
+        $this->getJson("/api/v1/public/{$account->slug}/{$location->slug}/price")
+            ->assertOk()
+            ->assertJsonPath('data.0.sections.0.plans.0.name', $secondGroupPlan->name)
+            ->assertJsonPath('data.0.sections.0.plans.1.name', $plans['group']->name)
+            ->assertJsonMissingPath('data.0.sections.0.plans.0.sort_order');
     }
 
     /**

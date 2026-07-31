@@ -40,6 +40,7 @@ class ClassPassPlan extends Model
             'allows_any_time' => 'boolean',
             'is_trial' => 'boolean',
             'is_active' => 'boolean',
+            'sort_order' => 'integer',
         ];
     }
 

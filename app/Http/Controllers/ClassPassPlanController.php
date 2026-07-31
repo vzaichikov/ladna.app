@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\ReorderClassPassPlans;
+use App\Http\Requests\ReorderClassPassPlansRequest;
 use App\Http\Requests\StoreClassPassPlanRequest;
 use App\Http\Requests\UpdateClassPassPlanRequest;
 use App\Models\Account;
@@ -9,6 +11,7 @@ use App\Models\ClassPassPlan;
 use App\Models\ClassPassSegment;
 use App\Support\ScheduleKindRegistry;
 use App\Support\SlugGenerator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -24,6 +27,15 @@ class ClassPassPlanController extends Controller
         $scheduleKindTabs = $this->scheduleKindTabs($account);
         $activeScheduleKindValue = $this->activeScheduleKindValue($account, $request->query('tab'));
         $activeSegmentValue = $this->activeSegmentValue($account, $activeScheduleKindValue, $request->query('segment'));
+        $classPassPlans = $account->classPassPlans()
+            ->with(['classPassSegment', 'classTypes', 'trainerTypes', 'rooms'])
+            ->where('schedule_kind', $activeScheduleKindValue)
+            ->when($activeSegmentValue === 'none', fn ($query) => $query->whereNull('class_pass_segment_id'))
+            ->when(is_numeric($activeSegmentValue), fn ($query) => $query->where('class_pass_segment_id', (int) $activeSegmentValue))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
 
         return view('class-pass-plans.index', [
             'account' => $account,
@@ -31,14 +43,7 @@ class ClassPassPlanController extends Controller
             'activeScheduleKindValue' => $activeScheduleKindValue,
             'classPassSegmentFilters' => $this->classPassSegmentFilters($account, $activeScheduleKindValue),
             'activeSegmentValue' => $activeSegmentValue,
-            'classPassPlans' => $account->classPassPlans()
-                ->with(['classPassSegment', 'classTypes', 'trainerTypes', 'rooms'])
-                ->where('schedule_kind', $activeScheduleKindValue)
-                ->when($activeSegmentValue === 'none', fn ($query) => $query->whereNull('class_pass_segment_id'))
-                ->when(is_numeric($activeSegmentValue), fn ($query) => $query->where('class_pass_segment_id', (int) $activeSegmentValue))
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(),
+            'classPassPlanGroups' => $this->classPassPlanGroups($classPassPlans),
         ]);
     }
 
@@ -76,6 +81,30 @@ class ClassPassPlanController extends Controller
 
         return redirect()->route('dashboard.accounts.class-pass-plans.index', $this->indexRouteParameters($account, $validated))
             ->with('status', __('app.class_pass_plan_created'));
+    }
+
+    public function reorder(
+        ReorderClassPassPlansRequest $request,
+        Account $account,
+        ReorderClassPassPlans $reorderClassPassPlans,
+    ): JsonResponse|RedirectResponse {
+        $validated = $request->validated();
+        $result = $reorderClassPassPlans->execute(
+            $account,
+            $validated['schedule_kind'],
+            isset($validated['class_pass_segment_id']) ? (int) $validated['class_pass_segment_id'] : null,
+            $validated['plan_ids'],
+        );
+        $message = __('app.class_pass_plan_order_updated');
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                ...$result,
+            ]);
+        }
+
+        return back()->with('status', $message);
     }
 
     public function show(Account $account, ClassPassPlan $classPassPlan): never
@@ -295,6 +324,34 @@ class ClassPassPlanController extends Controller
             ->where('schedule_kind', $scheduleKindValue)
             ->ordered()
             ->get();
+    }
+
+    /**
+     * @param  Collection<int, ClassPassPlan>  $classPassPlans
+     * @return Collection<int, array{key: string, title: string, segment_id: int|null, segment_is_active: bool, plans: Collection<int, ClassPassPlan>, sort_key: string}>
+     */
+    private function classPassPlanGroups(Collection $classPassPlans): Collection
+    {
+        return $classPassPlans
+            ->groupBy(fn (ClassPassPlan $classPassPlan): string => $classPassPlan->class_pass_segment_id === null
+                ? 'none'
+                : 'segment:'.$classPassPlan->class_pass_segment_id)
+            ->map(function (Collection $plans, string $key): array {
+                $segment = $plans->first()->classPassSegment;
+
+                return [
+                    'key' => $key,
+                    'title' => $segment?->name ?? __('app.without_class_pass_segment'),
+                    'segment_id' => $segment?->id,
+                    'segment_is_active' => $segment?->is_active ?? true,
+                    'plans' => $plans->values(),
+                    'sort_key' => $segment === null
+                        ? '0'
+                        : sprintf('1-%05d-%s-%010d', $segment->sort_order, mb_strtolower($segment->name), $segment->id),
+                ];
+            })
+            ->sortBy('sort_key')
+            ->values();
     }
 
     private function activeSegmentValue(Account $account, string $scheduleKindValue, mixed $requestedValue): string
