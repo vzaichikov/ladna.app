@@ -8,6 +8,8 @@ use App\Enums\CustomerNotificationType;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
+use App\Enums\SmsDeliveryPurpose;
+use App\Enums\SmsDeliveryStatus;
 use App\Enums\SmsSendingMode;
 use App\Models\Account;
 use App\Models\ClassBooking;
@@ -90,6 +92,16 @@ class CustomerNotificationQueueTest extends TestCase
 
         $this->assertSame(CustomerNotificationStatus::Sent, $notification->status);
         $this->assertSame('sms-1', $notification->provider_message_id);
+
+        $delivery = $notification->account->smsDeliveries()->sole();
+
+        $this->assertSame(SmsDeliveryPurpose::CustomerNotification, $delivery->purpose);
+        $this->assertSame(SmsDeliveryStatus::Accepted, $delivery->status);
+        $this->assertSame($notification->getMorphClass(), $delivery->source_type);
+        $this->assertSame($notification->id, $delivery->source_id);
+        $this->assertSame($notification->text, $delivery->message_preview);
+        $this->assertSame('sms-1', $delivery->provider_message_id);
+        $this->assertNull($delivery->amount_cents);
         Http::assertSent(fn (Request $request): bool => $request['recipients'] === ['+380501112233']
             && $request['sms']['text'] === 'Чекаємо Вас на тренуванні у Studio SMS 07.07.2026 о 17:30');
     }

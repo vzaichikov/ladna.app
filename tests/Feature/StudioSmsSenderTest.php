@@ -14,9 +14,11 @@ use App\Models\AccountSubscription;
 use App\Models\IntegrationSetting;
 use App\Models\SubscriptionPlan;
 use App\Models\SystemSetting;
+use App\Support\CustomerAuth\CustomerOtpService;
 use App\Support\CustomerAuth\SmsGateway;
 use App\Support\CustomerAuth\SmsGatewayResolver;
 use App\Support\CustomerAuth\SmsGatewayResult;
+use App\Support\CustomerAuth\SmsSegmentCalculator;
 use App\Support\Sms\SmsServiceSettings;
 use App\Support\Sms\SmsWalletService;
 use App\Support\Sms\StudioSmsSender;
@@ -61,6 +63,38 @@ class StudioSmsSenderTest extends TestCase
 
         $this->assertSame(100, $result->delivery->refresh()->sms_segment_price_cents);
         $this->assertSame(200, $result->delivery->amount_cents);
+    }
+
+    public function test_customer_otp_service_creates_the_normal_charged_delivery_log(): void
+    {
+        [$account, $wallet] = $this->ladnaAccount(balanceCents: 1_000, segmentPriceCents: 100);
+        Http::fake([
+            'https://im.smsclub.mobi/sms/send' => Http::response([
+                'success_request' => ['info' => ['customer-otp-id' => '+380501112233']],
+            ]),
+        ]);
+
+        $result = app(CustomerOtpService::class)->send($account, '+380501112233');
+
+        $this->assertTrue($result->ok);
+        $this->assertNotNull($result->challenge);
+
+        $delivery = $account->smsDeliveries()->sole();
+        $expectedSegments = app(SmsSegmentCalculator::class)->estimate(__('app.customer_otp_sms_message', [
+            'code' => $result->debugCode,
+            'studio' => $account->name,
+        ]))->segments;
+
+        $this->assertSame(SmsDeliveryPurpose::CustomerOtp, $delivery->purpose);
+        $this->assertSame(SmsDeliveryStatus::Accepted, $delivery->status);
+        $this->assertSame($expectedSegments, $delivery->billed_segments);
+        $this->assertSame(100, $delivery->sms_segment_price_cents);
+        $this->assertSame($expectedSegments * 100, $delivery->amount_cents);
+        $this->assertSame('customer-otp-id', $delivery->provider_message_id);
+        $this->assertNull($delivery->message_preview);
+        $this->assertSame($result->challenge->getMorphClass(), $delivery->source_type);
+        $this->assertSame($result->challenge->id, $delivery->source_id);
+        $this->assertSame(1_000 - ($expectedSegments * 100), $wallet->refresh()->balance_cents);
     }
 
     public function test_ambiguous_provider_timeout_holds_the_reservation_and_is_not_retried(): void
