@@ -20,6 +20,7 @@ class AccountSmsAccountController extends Controller
     ): View {
         $this->authorize('view', $account);
         abort_unless($account->isOwnedBy($request->user()), 403);
+        $activeReportTab = $this->activeReportTab($request);
 
         $account->loadMissing([
             'customerAuthSetting',
@@ -39,21 +40,56 @@ class AccountSmsAccountController extends Controller
                 ->whereNotNull('accepted_at')
                 ->where('accepted_at', '>=', now($account->timezone ?: config('app.timezone'))->startOfMonth()->utc())
                 ->sum('amount_cents'),
-            'ledgerEntries' => $account->smsWalletLedgerEntries()
-                ->with(['actor', 'reference'])
-                ->latest('id')
-                ->limit(100)
-                ->get(),
-            'topUpPayments' => $account->smsTopUpPayments()
-                ->with('fiscalReceipt')
-                ->latest('id')
-                ->limit(50)
-                ->get(),
-            'deliveries' => $account->smsDeliveries()
-                ->latest('id')
-                ->limit(50)
-                ->get(),
+            'activeReportTab' => $activeReportTab,
+            ...$this->reportData($account, $activeReportTab),
             'platformView' => false,
         ]);
+    }
+
+    private function activeReportTab(Request $request): string
+    {
+        $tab = $request->string('tab')->toString();
+
+        if (in_array($tab, ['ledger', 'top-ups', 'deliveries'], true)) {
+            return $tab;
+        }
+
+        return match (true) {
+            $request->has('top_ups_page') => 'top-ups',
+            $request->has('deliveries_page') => 'deliveries',
+            default => 'ledger',
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function reportData(Account $account, string $activeReportTab): array
+    {
+        return match ($activeReportTab) {
+            'top-ups' => [
+                'topUpPayments' => $account->smsTopUpPayments()
+                    ->with('fiscalReceipt')
+                    ->latest('id')
+                    ->paginate(25, ['*'], 'top_ups_page')
+                    ->withQueryString()
+                    ->appends(['tab' => 'top-ups']),
+            ],
+            'deliveries' => [
+                'deliveries' => $account->smsDeliveries()
+                    ->latest('id')
+                    ->paginate(25, ['*'], 'deliveries_page')
+                    ->withQueryString()
+                    ->appends(['tab' => 'deliveries']),
+            ],
+            default => [
+                'ledgerEntries' => $account->smsWalletLedgerEntries()
+                    ->with(['actor', 'reference'])
+                    ->latest('id')
+                    ->paginate(25, ['*'], 'ledger_page')
+                    ->withQueryString()
+                    ->appends(['tab' => 'ledger']),
+            ],
+        };
     }
 }

@@ -1584,6 +1584,7 @@ return [
     'sms_auto_top_up_saved' => 'Automatic top-up settings saved.',
     'sms_segments_explainer_title' => 'Why one message can cost more than one SMS',
     'sms_segments_explainer_copy' => 'A Cyrillic message fits up to 70 characters in one segment; longer messages are split into 67-character parts. Latin messages usually use 160 and 153 character boundaries. Each accepted segment is billed.',
+    'sms_account_reports' => 'SMS account reports',
     'sms_wallet_ledger' => 'SMS credit activity',
     'sms_top_up_history' => 'Top-up history',
     'sms_recent_deliveries' => 'Recent SMS',

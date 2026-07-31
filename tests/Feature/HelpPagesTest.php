@@ -289,7 +289,7 @@ class HelpPagesTest extends TestCase
     {
         $this->get(route('help.show', 'trainers', false))
             ->assertOk()
-            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-07-30', false)
+            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-07-31', false)
             ->assertSee('assets/help/screenshots/trainer-types.png', false)
             ->assertSee('assets/help/screenshots/trainer-editor.png', false)
             ->assertSee('assets/help/screenshots/trainer-private-timeframes.png', false)
@@ -569,11 +569,45 @@ class HelpPagesTest extends TestCase
             ->assertSee('Новий сценарій скасування початково вимкнений', false)
             ->assertSee('Телеграм-бот студії', false)
             ->assertSee('не змінює SMS-режим', false)
+            ->assertSee(route('help.show', 'sms-service', false), false)
             ->assertSee('assets/help/screenshots/notification-settings-customers.png', false)
             ->assertSee('assets/help/screenshots/notification-settings-trainers.png', false)
             ->assertDontSee('endpoint', false)
             ->assertDontSee('database', false)
             ->assertDontSee('tenant', false);
+    }
+
+    public function test_sms_service_help_explains_the_complete_owner_flow(): void
+    {
+        $this->get(route('help.show', 'sms-service', false))
+            ->assertOk()
+            ->assertSee('SMS-сервіс Ladna', false)
+            ->assertSee('Вимкнено, SMS від Ladna та Власний SMS-шлюз', false)
+            ->assertSee('Ціна 0 означає безоплатні SMS без поповнення', false)
+            ->assertSee('потім продовжить вибране поповнення', false)
+            ->assertSee('не згорає, не переказується іншій студії та не виплачується готівкою', false)
+            ->assertSee('Поріг — сума, нижче якої Ladna починає поповнення', false)
+            ->assertSee('Ручні поповнення ліміт не витрачають', false)
+            ->assertSee('70 символів', false)
+            ->assertSee('вартість списується, навіть якщо пізніше телефон не прийняв доставку', false)
+            ->assertSee('Чекає поповнення', false)
+            ->assertSee('OTP-код не очікує поповнення', false)
+            ->assertSee('Рух SMS-кредиту', false)
+            ->assertSee('Звіти показуються по 25 рядків на сторінці', false)
+            ->assertSee('Доставлено показується лише після підтвердження провайдера', false)
+            ->assertSee('Статус Невідомий', false)
+            ->assertSee('assets/help/screenshots/sms-service-messaging.png', false)
+            ->assertSee('assets/help/screenshots/sms-service-account.png', false)
+            ->assertSee('assets/help/screenshots/sms-service-reports.png', false)
+            ->assertDontSee('endpoint', false)
+            ->assertDontSee('database', false)
+            ->assertDontSee('tenant', false);
+
+        foreach (['як налаштувати автопоповнення sms', 'чому sms чекає поповнення', 'де подивитися рух sms кредиту'] as $question) {
+            $result = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame('sms-service', $result[0]['slug'] ?? null, $question);
+        }
     }
 
     public function test_install_web_app_help_explains_android_and_ios_pwa_installation(): void

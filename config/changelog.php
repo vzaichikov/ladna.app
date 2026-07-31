@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.115.1',
+                'date' => '2026-07-31',
+                'title' => 'Clearer SMS account reports and complete help',
+                'items' => ['SMS account credit activity, top-ups, and recent SMS are now organized into three accessible tabs. Each report is independently paginated by 25 records and keeps the selected tab while browsing its pages.', 'The owner help now covers the complete Ladna SMS service: choosing an SMS source, tariff readiness, manual and automatic top-ups, segment charging, insufficient-credit and OTP behavior, warnings, debt, delivery statuses, and report interpretation.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.115.0',
                 'date' => '2026-07-31',
                 'title' => 'Ladna SMS service and simpler messaging settings',
@@ -1010,6 +1017,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.115.1',
+                'date' => '2026-07-31',
+                'title' => 'Зручніші звіти SMS-рахунку та повна довідка',
+                'items' => ['Рух кредиту, історію поповнень і останні SMS на сторінці SMS-рахунку тепер згруповано у три доступні вкладки. Кожен звіт має незалежну пагінацію по 25 записів і зберігає вибрану вкладку під час переходу між сторінками.', 'Довідка для власників тепер описує весь SMS-сервіс Ladna: вибір джерела SMS, готовність тарифу, ручне й автоматичне поповнення, тарифікацію сегментів, поведінку при нестачі кредиту та для OTP, попередження, борг, статуси доставки й читання звітів.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.115.0',
                 'date' => '2026-07-31',

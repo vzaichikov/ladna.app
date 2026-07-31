@@ -13,6 +13,14 @@
         $approximatelyAvailableSegments = ($segmentPriceCents ?? 0) > 0
             ? intdiv($wallet->spendableBalanceCents(), $segmentPriceCents)
             : null;
+        $smsAccountReportRoute = $platformView
+            ? 'platform.accounts.sms-account.show'
+            : 'dashboard.accounts.sms-account.show';
+        $smsAccountReportTabs = [
+            'ledger' => __('app.sms_wallet_ledger'),
+            'top-ups' => __('app.sms_top_up_history'),
+            'deliveries' => __('app.sms_recent_deliveries'),
+        ];
     @endphp
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -176,63 +184,92 @@
         <p class="mt-2 text-sm leading-6 text-slate-600">{{ __('app.sms_segments_explainer_copy') }}</p>
     </x-ui.panel>
 
-    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
-        <div class="border-b border-stone-100 p-5">
-            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.sms_wallet_ledger') }}</h2>
+    <div class="mt-6 rounded-xl border border-stone-200 bg-white p-2 shadow-crm">
+        <div class="grid gap-1 rounded-lg bg-stone-100 p-1 sm:inline-grid sm:grid-flow-col" role="tablist" aria-label="{{ __('app.sms_account_reports') }}" data-active-sms-report="{{ $activeReportTab }}">
+            @foreach ($smsAccountReportTabs as $reportTabKey => $reportTabLabel)
+                <a
+                    href="{{ route($smsAccountReportRoute, [$account, 'tab' => $reportTabKey]) }}"
+                    id="sms-account-report-tab-{{ $reportTabKey }}"
+                    class="crm-tab justify-start sm:justify-center"
+                    role="tab"
+                    aria-controls="sms-account-report-panel"
+                    aria-selected="{{ $activeReportTab === $reportTabKey ? 'true' : 'false' }}"
+                    tabindex="{{ $activeReportTab === $reportTabKey ? '0' : '-1' }}"
+                >
+                    {{ $reportTabLabel }}
+                </a>
+            @endforeach
         </div>
-        @forelse ($ledgerEntries as $entry)
-            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_140px_150px_170px] lg:items-center">
-                <div>
-                    <div class="font-semibold text-slate-950">{{ __('app.sms_ledger_'.$entry->type->value) }}</div>
-                    <div class="mt-1 text-sm text-slate-500">{{ $entry->reason ?: '—' }}</div>
-                </div>
-                <div class="font-semibold {{ $entry->amount_cents >= 0 ? 'text-emerald-700' : 'text-rose-700' }}">
-                    {{ $entry->amount_cents > 0 ? '+' : '' }}{{ $formatMoney($entry->amount_cents) }}
-                </div>
-                <div class="text-sm text-slate-600">{{ __('app.balance_after') }}: {{ $formatMoney($entry->balance_after_cents) }}</div>
-                <div class="text-sm text-slate-500">{{ $entry->created_at?->timezone($timezone)->format('d.m.Y H:i') }}</div>
-            </div>
-        @empty
-            <x-ui.empty-state :title="__('app.sms_no_ledger_entries')" icon="payments" class="m-5" />
-        @endforelse
-    </x-ui.panel>
+    </div>
 
-    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+    <x-ui.panel
+        padding="none"
+        id="sms-account-report-panel"
+        class="mt-4 overflow-hidden"
+        role="tabpanel"
+        aria-labelledby="sms-account-report-tab-{{ $activeReportTab }}"
+    >
         <div class="border-b border-stone-100 p-5">
-            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.sms_top_up_history') }}</h2>
+            <h2 class="text-lg font-semibold text-slate-950">{{ $smsAccountReportTabs[$activeReportTab] }}</h2>
         </div>
-        @forelse ($topUpPayments as $payment)
-            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_140px_160px_180px] lg:items-center">
-                <div>
-                    <div class="font-semibold text-slate-950">{{ __('app.sms_top_up_kind_'.$payment->kind->value) }}</div>
-                    <div class="mt-1 text-sm text-slate-500">{{ $payment->order_id }}</div>
-                </div>
-                <div class="font-semibold text-slate-700">{{ $formatMoney($payment->amount_cents) }}</div>
-                <span class="{{ $payment->isPaid() ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$payment->status->value) }}</span>
-                <div class="text-sm text-slate-500">{{ ($payment->paid_at ?? $payment->started_at)?->timezone($timezone)->format('d.m.Y H:i') }}</div>
-            </div>
-        @empty
-            <x-ui.empty-state :title="__('app.sms_no_top_ups')" icon="payments" class="m-5" />
-        @endforelse
-    </x-ui.panel>
 
-    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
-        <div class="border-b border-stone-100 p-5">
-            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.sms_recent_deliveries') }}</h2>
-        </div>
-        @forelse ($deliveries as $delivery)
-            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_150px_120px_150px_170px] lg:items-center">
-                <div>
-                    <div class="font-semibold text-slate-950">{{ __('app.sms_purpose_'.$delivery->purpose->value) }} · {{ $delivery->recipient_phone }}</div>
-                    <div class="mt-1 text-sm text-slate-500">{{ $delivery->provider_message_id ?: '—' }}</div>
+        @if ($activeReportTab === 'top-ups')
+            @forelse ($topUpPayments as $payment)
+                <div class="crm-row lg:grid-cols-[minmax(0,1fr)_140px_160px_180px] lg:items-center">
+                    <div>
+                        <div class="font-semibold text-slate-950">{{ __('app.sms_top_up_kind_'.$payment->kind->value) }}</div>
+                        <div class="mt-1 text-sm text-slate-500">{{ $payment->order_id }}</div>
+                    </div>
+                    <div class="font-semibold text-slate-700">{{ $formatMoney($payment->amount_cents) }}</div>
+                    <span class="{{ $payment->isPaid() ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.'.$payment->status->value) }}</span>
+                    <div class="text-sm text-slate-500">{{ ($payment->paid_at ?? $payment->started_at)?->timezone($timezone)->format('d.m.Y H:i') }}</div>
                 </div>
-                <span class="{{ $delivery->status === \App\Enums\SmsDeliveryStatus::Delivered ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.sms_delivery_status_'.$delivery->status->value) }}</span>
-                <div class="text-sm text-slate-600">{{ $delivery->billed_segments ?? $delivery->estimated_segments }} {{ __('app.sms_segments_short') }}</div>
-                <div class="text-sm font-semibold text-slate-700">{{ $formatMoney($delivery->amount_cents) }}</div>
-                <div class="text-sm text-slate-500">{{ $delivery->created_at?->timezone($timezone)->format('d.m.Y H:i') }}</div>
-            </div>
-        @empty
-            <x-ui.empty-state :title="__('app.sms_no_deliveries')" icon="bell" class="m-5" />
-        @endforelse
+            @empty
+                <x-ui.empty-state :title="__('app.sms_no_top_ups')" icon="payments" class="m-5" />
+            @endforelse
+
+            @if ($topUpPayments->hasPages())
+                <div class="border-t border-stone-100 px-5 py-4">{{ $topUpPayments->links() }}</div>
+            @endif
+        @elseif ($activeReportTab === 'deliveries')
+            @forelse ($deliveries as $delivery)
+                <div class="crm-row lg:grid-cols-[minmax(0,1fr)_150px_120px_150px_170px] lg:items-center">
+                    <div>
+                        <div class="font-semibold text-slate-950">{{ __('app.sms_purpose_'.$delivery->purpose->value) }} · {{ $delivery->recipient_phone }}</div>
+                        <div class="mt-1 text-sm text-slate-500">{{ $delivery->provider_message_id ?: '—' }}</div>
+                    </div>
+                    <span class="{{ $delivery->status === \App\Enums\SmsDeliveryStatus::Delivered ? 'crm-status-active' : 'crm-status-muted' }}">{{ __('app.sms_delivery_status_'.$delivery->status->value) }}</span>
+                    <div class="text-sm text-slate-600">{{ $delivery->billed_segments ?? $delivery->estimated_segments }} {{ __('app.sms_segments_short') }}</div>
+                    <div class="text-sm font-semibold text-slate-700">{{ $formatMoney($delivery->amount_cents) }}</div>
+                    <div class="text-sm text-slate-500">{{ $delivery->created_at?->timezone($timezone)->format('d.m.Y H:i') }}</div>
+                </div>
+            @empty
+                <x-ui.empty-state :title="__('app.sms_no_deliveries')" icon="bell" class="m-5" />
+            @endforelse
+
+            @if ($deliveries->hasPages())
+                <div class="border-t border-stone-100 px-5 py-4">{{ $deliveries->links() }}</div>
+            @endif
+        @else
+            @forelse ($ledgerEntries as $entry)
+                <div class="crm-row lg:grid-cols-[minmax(0,1fr)_140px_150px_170px] lg:items-center">
+                    <div>
+                        <div class="font-semibold text-slate-950">{{ __('app.sms_ledger_'.$entry->type->value) }}</div>
+                        <div class="mt-1 text-sm text-slate-500">{{ $entry->reason ?: '—' }}</div>
+                    </div>
+                    <div class="font-semibold {{ $entry->amount_cents >= 0 ? 'text-emerald-700' : 'text-rose-700' }}">
+                        {{ $entry->amount_cents > 0 ? '+' : '' }}{{ $formatMoney($entry->amount_cents) }}
+                    </div>
+                    <div class="text-sm text-slate-600">{{ __('app.balance_after') }}: {{ $formatMoney($entry->balance_after_cents) }}</div>
+                    <div class="text-sm text-slate-500">{{ $entry->created_at?->timezone($timezone)->format('d.m.Y H:i') }}</div>
+                </div>
+            @empty
+                <x-ui.empty-state :title="__('app.sms_no_ledger_entries')" icon="payments" class="m-5" />
+            @endforelse
+
+            @if ($ledgerEntries->hasPages())
+                <div class="border-t border-stone-100 px-5 py-4">{{ $ledgerEntries->links() }}</div>
+            @endif
+        @endif
     </x-ui.panel>
 @endsection

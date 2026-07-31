@@ -8,14 +8,18 @@ use App\Enums\SmsDeliveryStatus;
 use App\Enums\SmsSendingMode;
 use App\Enums\SubscriptionPaymentMethodStatus;
 use App\Models\Account;
+use App\Models\AccountSmsWallet;
 use App\Models\AccountSubscription;
 use App\Models\AccountSubscriptionPaymentMethod;
 use App\Models\SmsDelivery;
+use App\Models\SmsTopUpPayment;
+use App\Models\SmsWalletLedgerEntry;
 use App\Models\SubscriptionPlan;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Support\Sms\SmsServiceSettings;
 use App\Support\SystemAppearance;
+use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -117,6 +121,99 @@ class SmsAccountSettingsTest extends TestCase
         ]);
     }
 
+    public function test_sms_account_reports_use_tabs_and_independent_pagination(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $wallet = AccountSmsWallet::factory()->for($account)->create();
+
+        SmsWalletLedgerEntry::factory()
+            ->count(26)
+            ->sequence(fn (Sequence $sequence): array => [
+                'reason' => sprintf('Ledger report %02d', $sequence->index + 1),
+            ])
+            ->create([
+                'account_sms_wallet_id' => $wallet->id,
+                'account_id' => $account->id,
+            ]);
+        SmsTopUpPayment::factory()
+            ->count(26)
+            ->sequence(fn (Sequence $sequence): array => [
+                'order_id' => sprintf('SMS-TAB-TOP-UP-%02d', $sequence->index + 1),
+            ])
+            ->create([
+                'account_sms_wallet_id' => $wallet->id,
+                'account_id' => $account->id,
+            ]);
+        SmsDelivery::factory()
+            ->count(26)
+            ->sequence(fn (Sequence $sequence): array => [
+                'provider_message_id' => sprintf('SMS-TAB-DELIVERY-%02d', $sequence->index + 1),
+            ])
+            ->create([
+                'account_sms_wallet_id' => $wallet->id,
+                'account_id' => $account->id,
+            ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.sms-account.show', $account))
+            ->assertOk()
+            ->assertSee('data-active-sms-report="ledger"', false)
+            ->assertSee('aria-selected="true"', false)
+            ->assertSee('Ledger report 26')
+            ->assertDontSee('Ledger report 01')
+            ->assertDontSee('SMS-TAB-TOP-UP-26')
+            ->assertSee('ledger_page=2', false)
+            ->assertSee('tab=ledger', false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.sms-account.show', [$account, 'ledger_page' => 2]))
+            ->assertOk()
+            ->assertSee('data-active-sms-report="ledger"', false)
+            ->assertSee('Ledger report 01')
+            ->assertDontSee('Ledger report 26');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.sms-account.show', [$account, 'tab' => 'top-ups']))
+            ->assertOk()
+            ->assertSee('data-active-sms-report="top-ups"', false)
+            ->assertSee('SMS-TAB-TOP-UP-26')
+            ->assertDontSee('SMS-TAB-TOP-UP-01')
+            ->assertDontSee('Ledger report 26')
+            ->assertSee('top_ups_page=2', false)
+            ->assertSee('tab=top-ups', false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.sms-account.show', [$account, 'top_ups_page' => 2]))
+            ->assertOk()
+            ->assertSee('data-active-sms-report="top-ups"', false)
+            ->assertSee('SMS-TAB-TOP-UP-01')
+            ->assertDontSee('SMS-TAB-TOP-UP-26');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.sms-account.show', [$account, 'tab' => 'deliveries']))
+            ->assertOk()
+            ->assertSee('data-active-sms-report="deliveries"', false)
+            ->assertSee('SMS-TAB-DELIVERY-26')
+            ->assertDontSee('SMS-TAB-DELIVERY-01')
+            ->assertDontSee('Ledger report 26')
+            ->assertSee('deliveries_page=2', false)
+            ->assertSee('tab=deliveries', false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.sms-account.show', [$account, 'deliveries_page' => 2]))
+            ->assertOk()
+            ->assertSee('data-active-sms-report="deliveries"', false)
+            ->assertSee('SMS-TAB-DELIVERY-01')
+            ->assertDontSee('SMS-TAB-DELIVERY-26');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.sms-account.show', [$account, 'tab' => 'invalid']))
+            ->assertOk()
+            ->assertSee('data-active-sms-report="ledger"', false);
+    }
+
     public function test_platform_admin_can_inspect_sms_service_settings_account_and_delivery_log(): void
     {
         $admin = User::factory()->platformAdmin()->create();
@@ -147,7 +244,14 @@ class SmsAccountSettingsTest extends TestCase
             ->get(route('platform.accounts.sms-account.show', $account))
             ->assertOk()
             ->assertSee(__('app.sms_wallet_adjustment'))
-            ->assertSee('name="reason"', false);
+            ->assertSee('name="reason"', false)
+            ->assertSee('data-active-sms-report="ledger"', false);
+
+        $this->actingAs($admin)
+            ->get(route('platform.accounts.sms-account.show', [$account, 'tab' => 'deliveries']))
+            ->assertOk()
+            ->assertSee('data-active-sms-report="deliveries"', false)
+            ->assertSee($delivery->provider_message_id);
 
         $this->actingAs($admin)
             ->get(route('platform.sms-deliveries.index', [
