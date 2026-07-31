@@ -106,6 +106,34 @@
                                         <dd class="mt-1 font-semibold text-slate-800">{{ $entry['counted_people'] }}</dd>
                                     </div>
                                 </dl>
+                                @if ($entry['class_value_percentage'] !== null)
+                                    <dl class="mt-4 grid gap-3 rounded-xl border border-violet-crm-100 bg-violet-crm-50 p-4 text-sm sm:grid-cols-2 xl:grid-cols-5">
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.salary_class_value') }}</dt>
+                                            <dd class="mt-1 font-semibold text-slate-950">
+                                                {{ $entry['class_value_cents'] === null
+                                                    ? __('app.not_calculated')
+                                                    : \App\Support\MoneyFormatter::format($entry['class_value_cents'], $entry['currency']) }}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.salary_class_value_from_passes') }}</dt>
+                                            <dd class="mt-1 font-semibold text-slate-800">{{ \App\Support\MoneyFormatter::format($entry['class_value_pass_cents'], $entry['currency']) }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.salary_class_value_direct') }}</dt>
+                                            <dd class="mt-1 font-semibold text-slate-800">{{ \App\Support\MoneyFormatter::format($entry['class_value_direct_cents'], $entry['currency']) }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.salary_class_value_bookings') }}</dt>
+                                            <dd class="mt-1 font-semibold text-slate-800">{{ $entry['class_value_bookings_count'] }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.class_value_percentage') }}</dt>
+                                            <dd class="mt-1 font-semibold text-slate-800">{{ $entry['class_value_percentage'] }}%</dd>
+                                        </div>
+                                    </dl>
+                                @endif
                             @else
                                 <h3 class="mt-3 font-semibold text-slate-950">
                                     {{ __('app.salary_fixed_period', ['from' => $entry['period_start'], 'to' => $entry['period_end']]) }}

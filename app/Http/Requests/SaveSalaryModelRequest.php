@@ -6,9 +6,11 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\SalaryClassFormulaType;
 use App\Enums\SalaryModelType;
 use App\Enums\SalaryPeriodUnit;
+use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassType;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -59,6 +61,7 @@ class SaveSalaryModelRequest extends FormRequest
             ],
             'rules.*.is_default' => ['nullable', 'boolean'],
             'rules.*.formula_type' => ['required_with:rules', Rule::enum(SalaryClassFormulaType::class)],
+            'rules.*.class_value_percentage' => ['nullable', 'numeric', 'decimal:0,2', 'min:0.01', 'max:100'],
             'rules.*.flat_amount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:42949672.95'],
             'rules.*.person_rate' => ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:42949672.95'],
             'rules.*.minimum_people' => ['nullable', 'integer', 'min:0', 'max:10000'],
@@ -124,6 +127,13 @@ class SaveSalaryModelRequest extends FormRequest
         ];
     }
 
+    protected function failedValidation(ValidatorContract $validator): void
+    {
+        $this->selectTabForFirstRuleError($validator);
+
+        parent::failedValidation($validator);
+    }
+
     protected function prepareForValidation(): void
     {
         $isFixedPeriod = $this->input('type') === SalaryModelType::FixedPeriod->value;
@@ -173,6 +183,7 @@ class SaveSalaryModelRequest extends FormRequest
             SalaryClassFormulaType::BasePlusExtra => ['base_amount', 'extra_person_rate'],
             SalaryClassFormulaType::HourlyPlusExtra => ['hourly_rate', 'extra_person_rate'],
             SalaryClassFormulaType::AttendanceTiers => [],
+            SalaryClassFormulaType::ClassValuePercentage => ['class_value_percentage'],
             default => [],
         };
 
@@ -221,6 +232,43 @@ class SaveSalaryModelRequest extends FormRequest
 
         if (filled($tiers->last()['maximum_people'] ?? null)) {
             $validator->errors()->add("rules.{$index}.tiers", __('app.salary_last_tier_must_be_open'));
+        }
+    }
+
+    private function selectTabForFirstRuleError(ValidatorContract $validator): void
+    {
+        $ruleErrorIndices = collect($validator->errors()->keys())
+            ->map(function (string $key): ?int {
+                preg_match('/^rules\.(\d+)\./', $key, $matches);
+
+                return isset($matches[1]) ? (int) $matches[1] : null;
+            })
+            ->filter(fn (?int $index): bool => $index !== null)
+            ->unique()
+            ->values();
+        $account = $this->route('account');
+
+        if (! ($account instanceof Account)) {
+            return;
+        }
+
+        foreach ($ruleErrorIndices as $ruleErrorIndex) {
+            $classTypeId = data_get($this->input('rules'), $ruleErrorIndex.'.class_type_id');
+
+            if (! filled($classTypeId)) {
+                continue;
+            }
+
+            $scheduleKind = $account->classTypes()->whereKey($classTypeId)->value('schedule_kind');
+
+            if ($scheduleKind instanceof ScheduleKind || is_string($scheduleKind)) {
+                $this->session()->flash(
+                    'salary_model_error_schedule_kind_tab',
+                    $scheduleKind instanceof ScheduleKind ? $scheduleKind->value : $scheduleKind,
+                );
+
+                return;
+            }
         }
     }
 }

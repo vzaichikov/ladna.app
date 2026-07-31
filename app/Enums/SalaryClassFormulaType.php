@@ -9,6 +9,7 @@ enum SalaryClassFormulaType: string
     case BasePlusExtra = 'base_plus_extra';
     case HourlyPlusExtra = 'hourly_plus_extra';
     case AttendanceTiers = 'attendance_tiers';
+    case ClassValuePercentage = 'class_value_percentage';
 
     public function labelKey(): string
     {

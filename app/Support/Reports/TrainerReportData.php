@@ -11,6 +11,7 @@ use App\Models\ClassType;
 use App\Models\CustomerClassPassReservation;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
+use App\Support\Salary\ClassPassSessionValueResolver;
 use App\Support\ScheduleKindRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -20,6 +21,8 @@ use Illuminate\Support\Collection;
 
 class TrainerReportData
 {
+    public function __construct(private ClassPassSessionValueResolver $sessionValueResolver) {}
+
     /**
      * @param  array{date_from: string, date_to: string, location_id: int|null, booking_statuses: array<int, string>}  $filters
      * @return Collection<int, array{trainer: Trainer, classes_count: int, private_lessons_count: int, group_people_count: int, private_people_count: int}>
@@ -77,7 +80,13 @@ class TrainerReportData
             ->withQueryString();
         $lessons = $paginator->getCollection();
         $reservationPositions = $includeFinancials
-            ? $this->reservationPositions($lessons)
+            ? $this->sessionValueResolver->positionsFor(
+                $account,
+                $lessons
+                    ->map(fn (ScheduledClass $lesson): ?CustomerClassPassReservation => $this->activeReservation($lesson->classBookings->first()))
+                    ->filter()
+                    ->values(),
+            )
             : collect();
 
         $paginator->setCollection($lessons->map(function (ScheduledClass $lesson) use ($includeFinancials, $reservationPositions): array {
@@ -224,61 +233,17 @@ class TrainerReportData
     }
 
     /**
-     * @param  Collection<int, ScheduledClass>  $lessons
-     * @return Collection<int, int>
-     */
-    private function reservationPositions(Collection $lessons): Collection
-    {
-        $customerClassPassIds = $lessons
-            ->map(fn (ScheduledClass $lesson): ?CustomerClassPassReservation => $this->activeReservation($lesson->classBookings->first()))
-            ->filter()
-            ->pluck('customer_class_pass_id')
-            ->unique()
-            ->values();
-
-        if ($customerClassPassIds->isEmpty()) {
-            return collect();
-        }
-
-        return CustomerClassPassReservation::query()
-            ->whereIn('customer_class_pass_id', $customerClassPassIds)
-            ->whereIn('status', [
-                CustomerClassPassReservationStatus::Reserved->value,
-                CustomerClassPassReservationStatus::Used->value,
-            ])
-            ->orderBy('customer_class_pass_id')
-            ->orderBy('reserved_at')
-            ->orderBy('id')
-            ->get(['id', 'customer_class_pass_id', 'reserved_at'])
-            ->groupBy('customer_class_pass_id')
-            ->reduce(function (Collection $positions, Collection $reservations): Collection {
-                $reservations->values()->each(function (CustomerClassPassReservation $reservation, int $index) use ($positions): void {
-                    $positions->put($reservation->id, $index + 1);
-                });
-
-                return $positions;
-            }, collect());
-    }
-
-    /**
      * @param  Collection<int, int>  $reservationPositions
      */
     private function lessonAmountCents(ScheduledClass $lesson, Collection $reservationPositions): ?int
     {
         $reservation = $this->activeReservation($lesson->classBookings->first());
-        $customerClassPass = $reservation?->customerClassPass;
-        $sessionsCount = (int) ($customerClassPass?->sessions_count ?? 0);
 
-        if (! $reservation || ! $customerClassPass || $sessionsCount < 1) {
+        if (! $reservation) {
             return null;
         }
 
-        $priceCents = max(0, (int) $customerClassPass->price_cents);
-        $baseAmount = intdiv($priceCents, $sessionsCount);
-        $remainder = $priceCents % $sessionsCount;
-        $position = (int) $reservationPositions->get($reservation->id, 0);
-
-        return $baseAmount + ($position > 0 && $position <= $remainder ? 1 : 0);
+        return $this->sessionValueResolver->amountCents($reservation, $reservationPositions);
     }
 
     private function activeReservation(?ClassBooking $booking): ?CustomerClassPassReservation

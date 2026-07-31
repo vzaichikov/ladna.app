@@ -184,6 +184,73 @@ function updateSalaryRule(rule, formulaDescriptions) {
     renameSalaryTierFields(rule);
 }
 
+function initSalaryRuleTabs(form) {
+    const container = form.querySelector('[data-salary-rule-tabs]');
+
+    if (!container || container.dataset.salaryRuleTabsReady === 'true') {
+        return;
+    }
+
+    const tabs = Array.from(container.querySelectorAll('[data-salary-rule-tab]'));
+    const panels = Array.from(container.querySelectorAll('[data-salary-rule-panel]'));
+    const activeTabInput = container.querySelector('[data-salary-rule-active-tab]');
+
+    if (!tabs.length || !panels.length) {
+        return;
+    }
+
+    container.dataset.salaryRuleTabsReady = 'true';
+
+    const activate = (tabValue, focusTab = false) => {
+        tabs.forEach((tab) => {
+            const selected = tab.dataset.salaryRuleTab === tabValue;
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+            tab.tabIndex = selected ? 0 : -1;
+
+            if (selected && focusTab) {
+                tab.focus();
+            }
+        });
+
+        panels.forEach((panel) => {
+            panel.classList.toggle('hidden', panel.dataset.salaryRulePanel !== tabValue);
+        });
+
+        if (activeTabInput) {
+            activeTabInput.value = tabValue;
+        }
+    };
+
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => activate(tab.dataset.salaryRuleTab));
+        tab.addEventListener('keydown', (event) => {
+            const lastIndex = tabs.length - 1;
+            let nextIndex = index;
+
+            if (event.key === 'ArrowRight') {
+                nextIndex = index === lastIndex ? 0 : index + 1;
+            } else if (event.key === 'ArrowLeft') {
+                nextIndex = index === 0 ? lastIndex : index - 1;
+            } else if (event.key === 'Home') {
+                nextIndex = 0;
+            } else if (event.key === 'End') {
+                nextIndex = lastIndex;
+            } else {
+                return;
+            }
+
+            event.preventDefault();
+            activate(tabs[nextIndex].dataset.salaryRuleTab, true);
+        });
+    });
+
+    const initialTab = tabs.some((tab) => tab.dataset.salaryRuleTab === container.dataset.activeTab)
+        ? container.dataset.activeTab
+        : tabs[0].dataset.salaryRuleTab;
+
+    activate(initialTab);
+}
+
 function initSalaryModelForms() {
     document.querySelectorAll('[data-salary-model-form]').forEach((form) => {
         let formulaDescriptions = {};
@@ -193,6 +260,8 @@ function initSalaryModelForms() {
         } catch {
             formulaDescriptions = {};
         }
+
+        initSalaryRuleTabs(form);
 
         const updateModelType = () => {
             const modelType = form.querySelector('[data-salary-model-type]:checked')?.value

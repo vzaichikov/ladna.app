@@ -63,6 +63,26 @@
             </label>
         </div>
 
+        <div class="grid gap-4 sm:grid-cols-2" data-salary-formula-fields="class_value_percentage">
+            <label class="block">
+                <span class="crm-label">{{ __('app.class_value_percentage') }}</span>
+                <div class="relative">
+                    <input
+                        name="{{ $rulePrefix }}[class_value_percentage]"
+                        type="number"
+                        min="0.01"
+                        max="100"
+                        step="0.01"
+                        value="{{ data_get($rule, 'class_value_percentage') }}"
+                        class="crm-field pr-10"
+                    >
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-slate-500">%</span>
+                </div>
+                <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.class_value_percentage_help') }}</span>
+                @error("rules.{$ruleIndex}.class_value_percentage") <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+        </div>
+
         <div class="grid gap-4 sm:grid-cols-2" data-salary-formula-fields="per_person">
             <label class="block">
                 <span class="crm-label">{{ __('app.person_rate') }}</span>

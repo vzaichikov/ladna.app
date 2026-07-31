@@ -8,6 +8,7 @@ use App\Enums\SalaryPeriodUnit;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
+use App\Models\ClassBooking;
 use App\Models\SalaryModelClassRule;
 use App\Models\SalaryModelVersion;
 use App\Models\ScheduledClass;
@@ -20,7 +21,10 @@ use Illuminate\Support\Collection;
 
 class TrainerSalaryCalculator
 {
-    public function __construct(private SalaryModelResolver $resolver) {}
+    public function __construct(
+        private SalaryModelResolver $resolver,
+        private ClassPassSessionValueResolver $sessionValueResolver,
+    ) {}
 
     /**
      * @param  array{date_from: string, date_to: string, location_id: int|null}  $filters
@@ -91,13 +95,27 @@ class TrainerSalaryCalculator
             ->orderBy('effective_from')
             ->orderBy('id')
             ->get();
+        $needsClassValues = $versions
+            ->flatMap(fn (SalaryModelVersion $version): Collection => $version->classRules)
+            ->contains(fn (SalaryModelClassRule $rule): bool => $rule->formula_type === SalaryClassFormulaType::ClassValuePercentage);
         $classes = $this->classes(
             $account,
             $trainerIds,
             $databaseFrom,
             $databaseTo,
             $filters['location_id'],
+            $needsClassValues,
         );
+        $reservationPositions = $needsClassValues
+            ? $this->sessionValueResolver->positionsFor(
+                $account,
+                $classes
+                    ->flatMap(fn (ScheduledClass $scheduledClass): Collection => $scheduledClass->classBookings)
+                    ->map(fn (ClassBooking $booking) => $booking->activeClassPassReservation())
+                    ->filter()
+                    ->values(),
+            )
+            : collect();
         $trainerResults = $trainers->mapWithKeys(function (Trainer $trainer) use (
             $account,
             $assignments,
@@ -106,6 +124,7 @@ class TrainerSalaryCalculator
             $localFrom,
             $localTo,
             $today,
+            $reservationPositions,
         ): array {
             $trainerAssignments = $assignments->where('trainer_id', $trainer->id)->values();
             $classEntries = $classes
@@ -115,6 +134,7 @@ class TrainerSalaryCalculator
                     $scheduledClass,
                     $trainerAssignments,
                     $versions,
+                    $reservationPositions,
                 ))
                 ->reject(fn (array $entry): bool => $entry['skip']);
             $fixedEntries = $this->fixedEntries(
@@ -175,6 +195,7 @@ class TrainerSalaryCalculator
         CarbonImmutable $databaseFrom,
         CarbonImmutable $databaseTo,
         ?int $locationId,
+        bool $withClassValues,
     ): Collection {
         return ScheduledClass::query()
             ->whereBelongsTo($account)
@@ -188,10 +209,21 @@ class TrainerSalaryCalculator
             ->with([
                 'classType:id,account_id,name,schedule_kind',
                 'location:id,account_id,name,timezone',
-                'classBookings' => fn ($query) => $query
-                    ->notCorrectedRemoved()
-                    ->orderBy('id')
-                    ->select(['id', 'account_id', 'scheduled_class_id', 'status', 'corrected_removed_at']),
+                'classBookings' => function ($query) use ($withClassValues): void {
+                    $query
+                        ->notCorrectedRemoved()
+                        ->orderBy('id')
+                        ->select(['id', 'account_id', 'scheduled_class_id', 'status', 'corrected_removed_at']);
+
+                    if ($withClassValues) {
+                        $query->with([
+                            'classPassReservation:id,account_id,customer_class_pass_id,class_booking_id,scheduled_class_id,status,reserved_at',
+                            'classPassReservation.customerClassPass:id,account_id,price_cents,currency,sessions_count',
+                            'manualCashPayment:id,account_id,class_booking_id,payment_source,status,amount_cents,currency',
+                            'manualCashPayment.refunds:id,account_id,customer_purchase_id,amount_cents,currency',
+                        ]);
+                    }
+                },
             ])
             ->orderBy('starts_at')
             ->orderBy('id')
@@ -208,6 +240,7 @@ class TrainerSalaryCalculator
         ScheduledClass $scheduledClass,
         Collection $assignments,
         Collection $versions,
+        Collection $reservationPositions,
     ): array {
         $localDate = $scheduledClass->starts_at
             ->copy()
@@ -260,7 +293,34 @@ class TrainerSalaryCalculator
             ];
         }
 
-        $calculation = $this->calculateRule($rule, $countedPeople, $scheduledClass->durationMinutes());
+        $classValue = $rule->formula_type === SalaryClassFormulaType::ClassValuePercentage
+            ? $this->classValue($account, $scheduledClass, $version, $reservationPositions)
+            : null;
+
+        if ($classValue && $classValue['reason_key']) {
+            return [
+                ...$baseEntry,
+                'version' => $version,
+                'rule' => $rule,
+                'counted_people' => $countedPeople,
+                'amount_cents' => null,
+                'currency' => $version->currency,
+                'class_value_cents' => null,
+                'class_value_pass_cents' => $classValue['pass_amount_cents'],
+                'class_value_direct_cents' => $classValue['direct_amount_cents'],
+                'class_value_bookings_count' => $classValue['bookings_count'],
+                'class_value_percentage_basis_points' => $rule->class_value_percentage_basis_points,
+                'class_value_percentage' => $this->decimalPercentage((int) $rule->class_value_percentage_basis_points),
+                'reason_key' => $classValue['reason_key'],
+            ];
+        }
+
+        $calculation = $this->calculateRule(
+            $rule,
+            $countedPeople,
+            $scheduledClass->durationMinutes(),
+            $classValue['amount_cents'] ?? null,
+        );
 
         return [
             ...$baseEntry,
@@ -270,6 +330,16 @@ class TrainerSalaryCalculator
             'amount_cents' => $calculation['amount_cents'],
             'currency' => $version->currency,
             'formula' => $calculation['formula'],
+            'class_value_cents' => $classValue['amount_cents'] ?? null,
+            'class_value_pass_cents' => $classValue['pass_amount_cents'] ?? null,
+            'class_value_direct_cents' => $classValue['direct_amount_cents'] ?? null,
+            'class_value_bookings_count' => $classValue['bookings_count'] ?? null,
+            'class_value_percentage_basis_points' => $rule->formula_type === SalaryClassFormulaType::ClassValuePercentage
+                ? $rule->class_value_percentage_basis_points
+                : null,
+            'class_value_percentage' => $rule->formula_type === SalaryClassFormulaType::ClassValuePercentage
+                ? $this->decimalPercentage((int) $rule->class_value_percentage_basis_points)
+                : null,
             'reason_key' => null,
         ];
     }
@@ -302,6 +372,12 @@ class TrainerSalaryCalculator
             'duration_minutes' => $scheduledClass->durationMinutes(),
             'actual_bookings' => $scheduledClass->classBookings->count(),
             'counted_people' => 0,
+            'class_value_cents' => null,
+            'class_value_pass_cents' => null,
+            'class_value_direct_cents' => null,
+            'class_value_bookings_count' => null,
+            'class_value_percentage_basis_points' => null,
+            'class_value_percentage' => null,
             'model_name' => $assignment?->salaryModel?->name,
             'assignment' => $assignment,
             'formula' => null,
@@ -312,13 +388,7 @@ class TrainerSalaryCalculator
 
     private function countedPeople(ScheduledClass $scheduledClass, SalaryModelVersion $version): int
     {
-        $matchingBookings = $scheduledClass->classBookings
-            ->filter(fn ($booking): bool => in_array(
-                $booking->status->value,
-                $version->countedBookingStatusValues(),
-                true,
-            ))
-            ->count();
+        $matchingBookings = $this->countedBookings($scheduledClass, $version)->count();
 
         return match ($scheduledClass->classType?->schedule_kind) {
             ScheduleKind::PrivateLesson, ScheduleKind::RoomRental => $matchingBookings > 0
@@ -329,10 +399,166 @@ class TrainerSalaryCalculator
     }
 
     /**
+     * @return Collection<int, ClassBooking>
+     */
+    private function countedBookings(ScheduledClass $scheduledClass, SalaryModelVersion $version): Collection
+    {
+        return $scheduledClass->classBookings
+            ->filter(fn (ClassBooking $booking): bool => in_array(
+                $booking->status->value,
+                $version->countedBookingStatusValues(),
+                true,
+            ))
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, int>  $reservationPositions
+     * @return array{
+     *     amount_cents: int|null,
+     *     pass_amount_cents: int,
+     *     direct_amount_cents: int,
+     *     bookings_count: int,
+     *     reason_key: string|null
+     * }
+     */
+    private function classValue(
+        Account $account,
+        ScheduledClass $scheduledClass,
+        SalaryModelVersion $version,
+        Collection $reservationPositions,
+    ): array {
+        $bookings = $this->countedBookings($scheduledClass, $version);
+        $passAmountCents = 0;
+        $directAmountCents = 0;
+        $currency = strtoupper($version->currency);
+
+        foreach ($bookings as $booking) {
+            $hasValueSource = false;
+            $reservation = $booking->activeClassPassReservation();
+
+            if ($reservation) {
+                $customerClassPass = $reservation->customerClassPass;
+
+                if ($reservation->account_id !== $account->id
+                    || ! $customerClassPass
+                    || $customerClassPass->account_id !== $account->id
+                    || (int) $customerClassPass->sessions_count < 1) {
+                    return $this->classValueFailure(
+                        $passAmountCents,
+                        $directAmountCents,
+                        $bookings->count(),
+                        'salary_reason_class_value_missing',
+                    );
+                }
+
+                if (strtoupper((string) $customerClassPass->currency) !== $currency) {
+                    return $this->classValueFailure(
+                        $passAmountCents,
+                        $directAmountCents,
+                        $bookings->count(),
+                        'salary_reason_class_value_currency_mismatch',
+                    );
+                }
+
+                $sessionValueCents = $this->sessionValueResolver->amountCents($reservation, $reservationPositions);
+                if ($sessionValueCents === null) {
+                    return $this->classValueFailure(
+                        $passAmountCents,
+                        $directAmountCents,
+                        $bookings->count(),
+                        'salary_reason_class_value_missing',
+                    );
+                }
+
+                $passAmountCents += $sessionValueCents;
+                $hasValueSource = true;
+            }
+
+            $directPayment = $booking->manualCashPayment;
+            if ($directPayment?->isPaid()) {
+                if ($directPayment->account_id !== $account->id
+                    || $directPayment->refunds->contains(
+                        fn ($refund): bool => $refund->account_id !== $account->id,
+                    )) {
+                    return $this->classValueFailure(
+                        $passAmountCents,
+                        $directAmountCents,
+                        $bookings->count(),
+                        'salary_reason_class_value_missing',
+                    );
+                }
+
+                $hasCurrencyMismatch = strtoupper((string) $directPayment->currency) !== $currency
+                    || $directPayment->refunds->contains(
+                        fn ($refund): bool => strtoupper((string) $refund->currency) !== $currency,
+                    );
+
+                if ($hasCurrencyMismatch) {
+                    return $this->classValueFailure(
+                        $passAmountCents,
+                        $directAmountCents,
+                        $bookings->count(),
+                        'salary_reason_class_value_currency_mismatch',
+                    );
+                }
+
+                $directAmountCents += $directPayment->remainingRefundableAmountCents();
+                $hasValueSource = true;
+            }
+
+            if (! $hasValueSource) {
+                return $this->classValueFailure(
+                    $passAmountCents,
+                    $directAmountCents,
+                    $bookings->count(),
+                    'salary_reason_class_value_missing',
+                );
+            }
+        }
+
+        return [
+            'amount_cents' => $passAmountCents + $directAmountCents,
+            'pass_amount_cents' => $passAmountCents,
+            'direct_amount_cents' => $directAmountCents,
+            'bookings_count' => $bookings->count(),
+            'reason_key' => null,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     amount_cents: null,
+     *     pass_amount_cents: int,
+     *     direct_amount_cents: int,
+     *     bookings_count: int,
+     *     reason_key: string
+     * }
+     */
+    private function classValueFailure(
+        int $passAmountCents,
+        int $directAmountCents,
+        int $bookingsCount,
+        string $reasonKey,
+    ): array {
+        return [
+            'amount_cents' => null,
+            'pass_amount_cents' => $passAmountCents,
+            'direct_amount_cents' => $directAmountCents,
+            'bookings_count' => $bookingsCount,
+            'reason_key' => $reasonKey,
+        ];
+    }
+
+    /**
      * @return array{amount_cents: int, formula: string}
      */
-    private function calculateRule(SalaryModelClassRule $rule, int $people, int $durationMinutes): array
-    {
+    private function calculateRule(
+        SalaryModelClassRule $rule,
+        int $people,
+        int $durationMinutes,
+        ?int $classValueCents,
+    ): array {
         [$amount, $formula] = match ($rule->formula_type) {
             SalaryClassFormulaType::Flat => [
                 (int) $rule->flat_amount_cents,
@@ -342,6 +568,7 @@ class TrainerSalaryCalculator
             SalaryClassFormulaType::BasePlusExtra => $this->basePlusExtraCalculation($rule, $people),
             SalaryClassFormulaType::HourlyPlusExtra => $this->hourlyPlusExtraCalculation($rule, $people, $durationMinutes),
             SalaryClassFormulaType::AttendanceTiers => $this->tierCalculation($rule, $people),
+            SalaryClassFormulaType::ClassValuePercentage => $this->classValuePercentageCalculation($rule, $classValueCents ?? 0),
         };
         $clampedAmount = max((int) ($rule->minimum_pay_cents ?? 0), $amount);
         if ($rule->maximum_pay_cents !== null) {
@@ -417,6 +644,22 @@ class TrainerSalaryCalculator
             : '—';
 
         return [$amount, $range.' = '.$this->decimalAmount($amount)];
+    }
+
+    /**
+     * @return array{0: int, 1: string}
+     */
+    private function classValuePercentageCalculation(SalaryModelClassRule $rule, int $classValueCents): array
+    {
+        $percentageBasisPoints = (int) $rule->class_value_percentage_basis_points;
+        $amount = intdiv(($classValueCents * $percentageBasisPoints) + 5000, 10000);
+
+        return [
+            $amount,
+            $this->decimalAmount($classValueCents)
+                .' × '.$this->decimalPercentage($percentageBasisPoints).'%'
+                .' = '.$this->decimalAmount($amount),
+        ];
     }
 
     /**
@@ -529,6 +772,11 @@ class TrainerSalaryCalculator
     private function decimalAmount(int $amountCents): string
     {
         return number_format($amountCents / 100, 2, '.', '');
+    }
+
+    private function decimalPercentage(int $basisPoints): string
+    {
+        return rtrim(rtrim(number_format($basisPoints / 100, 2, '.', ''), '0'), '.');
     }
 
     /**

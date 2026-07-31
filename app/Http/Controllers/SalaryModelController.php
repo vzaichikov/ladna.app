@@ -165,6 +165,9 @@ class SalaryModelController extends Controller
                 ClassBookingStatus::Booked,
                 ClassBookingStatus::NoShow,
             ],
+            'scheduleKindTabs' => collect(ScheduleKindRegistry::all())
+                ->filter(fn (array $definition): bool => (bool) $definition['trainer_reportable'])
+                ->all(),
             'classTypes' => $account->classTypes()
                 ->whereIn('schedule_kind', ScheduleKindRegistry::trainerReportableValues())
                 ->orderBy('name')

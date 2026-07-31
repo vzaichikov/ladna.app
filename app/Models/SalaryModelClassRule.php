@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'account_id', 'salary_model_version_id', 'class_type_id', 'class_type_name', 'is_default',
-    'formula_type', 'flat_amount_cents', 'person_rate_cents', 'minimum_people', 'base_amount_cents',
+    'formula_type', 'class_value_percentage_basis_points', 'flat_amount_cents', 'person_rate_cents', 'minimum_people', 'base_amount_cents',
     'included_people', 'hourly_rate_cents', 'extra_person_rate_cents', 'minimum_pay_cents',
     'maximum_pay_cents',
 ])]
@@ -32,6 +32,7 @@ class SalaryModelClassRule extends Model
         return [
             'is_default' => 'boolean',
             'formula_type' => SalaryClassFormulaType::class,
+            'class_value_percentage_basis_points' => 'integer',
             'flat_amount_cents' => 'integer',
             'person_rate_cents' => 'integer',
             'minimum_people' => 'integer',

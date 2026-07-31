@@ -94,6 +94,9 @@ class SaveSalaryModel
     private function ruleAmounts(array $ruleData): array
     {
         return [
+            'class_value_percentage_basis_points' => ($ruleData['formula_type'] ?? null) === SalaryClassFormulaType::ClassValuePercentage->value
+                ? $this->amount($ruleData, 'class_value_percentage')
+                : null,
             'flat_amount_cents' => $this->amount($ruleData, 'flat_amount'),
             'person_rate_cents' => $this->amount($ruleData, 'person_rate'),
             'base_amount_cents' => $this->amount($ruleData, 'base_amount'),

@@ -11,6 +11,7 @@
                 return [
                     '_remove' => $remove,
                     'formula_type' => \App\Enums\SalaryClassFormulaType::Flat->value,
+                    'class_value_percentage' => null,
                     'flat_amount' => '0.00',
                     'minimum_people' => 0,
                     'included_people' => 0,
@@ -21,6 +22,9 @@
             return [
                 '_remove' => $remove,
                 'formula_type' => $rule->formula_type->value,
+                'class_value_percentage' => $rule->class_value_percentage_basis_points === null
+                    ? null
+                    : $centsToDecimal($rule->class_value_percentage_basis_points),
                 'flat_amount' => $rule->flat_amount_cents === null ? null : $centsToDecimal($rule->flat_amount_cents),
                 'person_rate' => $rule->person_rate_cents === null ? null : $centsToDecimal($rule->person_rate_cents),
                 'minimum_people' => $rule->minimum_people,
@@ -40,30 +44,59 @@
         $savedRuleRows = collect([
             [
                 'class_type_id' => null,
+                'key' => 'default',
+                'schedule_kind' => null,
                 'title' => __('app.salary_default_rule'),
                 'is_default' => true,
                 'values' => $toRuleValues($storedRules->get('default')),
             ],
         ])->concat($classTypes->map(fn ($classType) => [
             'class_type_id' => $classType->id,
+            'key' => 'class:'.$classType->id,
+            'schedule_kind' => $classType->schedule_kind->value,
             'title' => $classType->name,
             'is_default' => false,
             'values' => $toRuleValues($storedRules->get($classType->id), ! $storedRules->has($classType->id)),
         ]))->values();
-        $ruleRows = old('rules')
-            ? collect(old('rules'))->map(function ($rule, $index) use ($savedRuleRows) {
+        $submittedRules = old('rules');
+        if (is_array($submittedRules)) {
+            $submittedRuleRows = collect($submittedRules)->map(function ($rule, $index) use ($savedRuleRows) {
                 $classTypeId = data_get($rule, 'class_type_id');
-                $metadata = $savedRuleRows->first(fn ($row) => (string) $row['class_type_id'] === (string) $classTypeId)
-                    ?? $savedRuleRows->get($index);
+                $isDefault = (bool) data_get($rule, 'is_default');
+                $key = $isDefault ? 'default' : 'class:'.$classTypeId;
+                $metadata = $savedRuleRows->firstWhere('key', $key);
 
                 return [
+                    'key' => $key,
+                    'rule_index' => (int) $index,
                     'class_type_id' => $classTypeId,
                     'title' => $metadata['title'] ?? __('app.class_type'),
-                    'is_default' => (bool) data_get($rule, 'is_default'),
+                    'schedule_kind' => $metadata['schedule_kind'] ?? null,
+                    'is_default' => $isDefault,
                     'values' => $rule,
                 ];
-            })->values()
-            : $savedRuleRows;
+            })->values();
+            $submittedKeys = $submittedRuleRows->pluck('key');
+            $nextRuleIndex = ((int) $submittedRuleRows->max('rule_index')) + 1;
+            $missingRuleRows = $savedRuleRows
+                ->reject(fn (array $row): bool => $submittedKeys->contains($row['key']))
+                ->values()
+                ->map(fn (array $row, int $index): array => [
+                    ...$row,
+                    'rule_index' => $nextRuleIndex + $index,
+                ]);
+            $ruleRows = $submittedRuleRows->concat($missingRuleRows)->values();
+        } else {
+            $ruleRows = $savedRuleRows
+                ->map(fn (array $row, int $index): array => [...$row, 'rule_index' => $index])
+                ->values();
+        }
+        $defaultRuleRow = $ruleRows->firstWhere('is_default', true);
+        $overrideRuleRows = $ruleRows->reject(fn (array $row): bool => $row['is_default'])->values();
+        $requestedSalaryTab = session('salary_model_error_schedule_kind_tab') ?: old('salary_schedule_kind_tab');
+        $activeSalaryTab = is_string($requestedSalaryTab) && array_key_exists($requestedSalaryTab, $scheduleKindTabs)
+            ? $requestedSalaryTab
+            : (array_key_first($scheduleKindTabs) ?? 'group_class');
         $countedStatuses = old('counted_booking_statuses', $version?->countedBookingStatusValues() ?? [\App\Enums\ClassBookingStatus::Attended->value]);
     @endphp
 
@@ -202,17 +235,74 @@
                 </label>
             </x-ui.panel>
 
-            <div class="space-y-4">
-                @foreach ($ruleRows as $ruleIndex => $ruleRow)
-                    @include('reports._salary-rule', [
-                        'ruleIndex' => $ruleIndex,
-                        'rule' => $ruleRow['values'],
-                        'isDefault' => $ruleRow['is_default'],
-                        'classTypeId' => $ruleRow['class_type_id'],
-                        'ruleTitle' => $ruleRow['title'],
-                    ])
+            @if ($defaultRuleRow)
+                @include('reports._salary-rule', [
+                    'ruleIndex' => $defaultRuleRow['rule_index'],
+                    'rule' => $defaultRuleRow['values'],
+                    'isDefault' => true,
+                    'classTypeId' => null,
+                    'ruleTitle' => $defaultRuleRow['title'],
+                ])
+            @endif
+
+            <section
+                class="space-y-4"
+                data-salary-rule-tabs
+                data-active-tab="{{ $activeSalaryTab }}"
+            >
+                <input type="hidden" name="salary_schedule_kind_tab" value="{{ $activeSalaryTab }}" data-salary-rule-active-tab>
+
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.salary_class_overrides') }}</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.salary_class_overrides_copy') }}</p>
+                </div>
+
+                <div class="overflow-x-auto pb-1">
+                    <div class="flex min-w-max gap-1 rounded-lg bg-stone-100 p-1" role="tablist" aria-label="{{ __('app.salary_class_overrides') }}">
+                        @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
+                            <button
+                                type="button"
+                                id="salary-rule-tab-{{ $scheduleKindValue }}"
+                                class="crm-tab whitespace-nowrap"
+                                role="tab"
+                                data-salary-rule-tab="{{ $scheduleKindValue }}"
+                                aria-controls="salary-rule-panel-{{ $scheduleKindValue }}"
+                                aria-selected="{{ $activeSalaryTab === $scheduleKindValue ? 'true' : 'false' }}"
+                                tabindex="{{ $activeSalaryTab === $scheduleKindValue ? '0' : '-1' }}"
+                            >
+                                {{ __('app.'.$scheduleKindDefinition['title_key']) }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+
+                @foreach ($scheduleKindTabs as $scheduleKindValue => $scheduleKindDefinition)
+                    @php
+                        $scheduleKindRuleRows = $overrideRuleRows->where('schedule_kind', $scheduleKindValue)->values();
+                    @endphp
+                    <section
+                        id="salary-rule-panel-{{ $scheduleKindValue }}"
+                        role="tabpanel"
+                        data-salary-rule-panel="{{ $scheduleKindValue }}"
+                        aria-labelledby="salary-rule-tab-{{ $scheduleKindValue }}"
+                        @class(['hidden' => $activeSalaryTab !== $scheduleKindValue])
+                    >
+                        <div class="space-y-4">
+                            @forelse ($scheduleKindRuleRows as $ruleRow)
+                                @include('reports._salary-rule', [
+                                    'ruleIndex' => $ruleRow['rule_index'],
+                                    'rule' => $ruleRow['values'],
+                                    'isDefault' => false,
+                                    'classTypeId' => $ruleRow['class_type_id'],
+                                    'ruleTitle' => $ruleRow['title'],
+                                ])
+                            @empty
+                                <x-ui.empty-state :title="__('app.salary_no_class_types_for_kind')" icon="class-types" />
+                            @endforelse
+                        </div>
+                    </section>
                 @endforeach
-            </div>
+            </section>
         </div>
 
         <div class="flex flex-wrap justify-end gap-2">

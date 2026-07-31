@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.113.0',
+                'date' => '2026-07-31',
+                'title' => 'Percentage-based trainer salary models',
+                'items' => ['Salary models now include a sixth formula that pays a percentage of the class value calculated from class-pass session coverage and net direct payments. Free coverage remains valid, while missing values or currency mismatches are clearly marked as not calculated.', 'The salary model editor keeps one shared default rule and groups concrete class-format overrides into Group, Individual, and Rent tabs. Trainer reports show the class value, percentage, and complete calculation formula.', 'This is an early version of the salary-model framework. It already covers common studio scenarios and will continue to gain more calculation options from founder feedback.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.112.0',
                 'date' => '2026-07-31',
                 'title' => 'Shorter public class-pass price pages',
@@ -989,6 +996,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.113.0',
+                'date' => '2026-07-31',
+                'title' => 'Відсоткова модель зарплати тренерів',
+                'items' => ['У моделях зарплати зʼявилася шоста формула: відсоток від вартості заняття, складеної з часток занять за абонементами та чистих прямих оплат. Безкоштовне покриття залишається коректним, а відсутню вартість чи розбіжність валют Ladna чітко позначає як нерозраховану.', 'У редакторі є одне спільне правило за замовчуванням, а окремі правила для конкретних форматів згруповано у вкладки «Групові заняття», «Індивідуальні заняття» та «Оренда». У звіті тренера видно вартість заняття, відсоток і повну формулу розрахунку.', 'Це попередня версія конструктора моделей зарплати. Вона вже покриває поширені сценарії студій і буде доповнюватися новими варіантами розрахунку за відгуками засновниць і засновників.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.112.0',
                 'date' => '2026-07-31',
