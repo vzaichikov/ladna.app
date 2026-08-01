@@ -77,6 +77,10 @@ class FinanceDangerousOperationTest extends TestCase
             'cash_entry_confirmation_title',
             'start_finance_epoch_confirmation_title',
             'cashbox_reconciliation_confirmation_title',
+            'deposit_cash_operation_help',
+            'collect_cash_operation_help',
+            'start_finance_epoch_operation_help',
+            'cashbox_reconciliation_operation_help',
         ] as $translationKey) {
             $cash->assertSee(__('app.'.$translationKey));
         }
@@ -102,6 +106,11 @@ class FinanceDangerousOperationTest extends TestCase
             'confirm_payroll_close_title',
             'void_payroll_run',
             'confirm_payroll_replace_title',
+            'payroll_cadence_semi_monthly',
+            'payroll_cadence_change_help',
+            'payroll_close_operation_help',
+            'payroll_void_operation_help',
+            'payroll_replace_operation_help',
         ] as $translationKey) {
             $payroll->assertSee(__('app.'.$translationKey));
         }

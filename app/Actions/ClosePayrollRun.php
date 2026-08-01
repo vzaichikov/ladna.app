@@ -52,7 +52,9 @@ class ClosePayrollRun
                 return $existingRun->load(['lines.trainer', 'supersedes']);
             }
 
-            if (! $this->periodResolver->matches($lockedAccount, $start, $end)) {
+            $lockedSupersedes = $this->lockedSupersededRun($lockedAccount, $supersedes);
+
+            if (! $lockedSupersedes && ! $this->periodResolver->matches($lockedAccount, $start, $end)) {
                 throw ValidationException::withMessages([
                     'period_starts_on' => __('app.payroll_period_invalid'),
                 ]);
@@ -64,7 +66,6 @@ class ClosePayrollRun
                 ]);
             }
 
-            $lockedSupersedes = $this->lockedSupersededRun($lockedAccount, $supersedes);
             $this->ensurePeriodIsAvailable($lockedAccount, $start, $end, $lockedSupersedes);
 
             $calculation = $this->salaryCalculator->forAccount($lockedAccount, [
@@ -83,7 +84,7 @@ class ClosePayrollRun
                 'account_id' => $lockedAccount->id,
                 'finance_epoch_id' => $lockedAccount->activeFinanceEpoch()?->id,
                 'supersedes_payroll_run_id' => $lockedSupersedes?->id,
-                'cadence' => $lockedAccount->payroll_cadence,
+                'cadence' => $lockedSupersedes?->cadence ?? $lockedAccount->payroll_cadence,
                 'period_starts_on' => $start->toDateString(),
                 'period_ends_on' => $end->toDateString(),
                 'status' => PayrollRun::StatusClosed,

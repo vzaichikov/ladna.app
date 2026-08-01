@@ -34,6 +34,10 @@
             <p class="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                 {{ __('app.payroll_cadence_explanation') }}
             </p>
+            <div class="mt-3 rounded-xl border border-violet-crm-100 bg-violet-crm-50 p-4 text-sm text-slate-700">
+                <div class="font-semibold text-slate-950">{{ __('app.cash_control_operations_help_title') }}</div>
+                <p class="mt-1 leading-6">{{ __('app.payroll_cadence_change_help') }}</p>
+            </div>
 
             <form
                 method="POST"
@@ -80,6 +84,10 @@
         <x-ui.panel>
             <h2 class="text-lg font-semibold text-slate-950">{{ __('app.close_payroll_period') }}</h2>
             <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.close_payroll_period_copy') }}</p>
+            <div class="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-4 text-sm text-slate-700">
+                <div class="font-semibold text-slate-950">{{ __('app.cash_control_operations_help_title') }}</div>
+                <p class="mt-1 leading-6">{{ __('app.payroll_close_operation_help') }}</p>
+            </div>
 
             <form
                 method="POST"
@@ -197,6 +205,7 @@
 
                     <div class="mt-5 flex flex-wrap items-start gap-3 border-t border-stone-100 pt-4">
                         @if (! $run->isVoided())
+                            <p class="w-full rounded-lg bg-rose-50 p-3 text-sm leading-6 text-rose-800">{{ __('app.payroll_void_operation_help') }}</p>
                             <form
                                 method="POST"
                                 action="{{ route('dashboard.accounts.payroll.runs.void', [$account, $run]) }}"
@@ -217,6 +226,7 @@
                                 <x-ui.button type="submit" variant="danger">{{ __('app.void_payroll_run') }}</x-ui.button>
                             </form>
                         @elseif ($run->replacements->where('status', \App\Models\PayrollRun::StatusClosed)->isEmpty())
+                            <p class="w-full rounded-lg bg-violet-crm-50 p-3 text-sm leading-6 text-slate-700">{{ __('app.payroll_replace_operation_help') }}</p>
                             <form
                                 method="POST"
                                 action="{{ route('dashboard.accounts.payroll.runs.store', $account) }}"

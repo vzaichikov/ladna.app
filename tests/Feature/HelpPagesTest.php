@@ -511,6 +511,8 @@ class HelpPagesTest extends TestCase
             ->assertSee('Продаж абонемента є отриманням грошей, але не повторним доходом', false)
             ->assertSee('дату, локацію, зал, клієнта, тривалість, нараховано, оплачено, повернено, борг і статус', false)
             ->assertSee('Закриття створює незмінний знімок', false)
+            ->assertSee('1–15 та 16–останній день', false)
+            ->assertSee('28 або 29 лютого', false)
             ->assertSee('Фактична виплата грошей тренеру на цьому етапі не створюється', false)
             ->assertSee('assets/help/screenshots/finance-cashbox.png', false)
             ->assertSee('assets/help/screenshots/finance-epoch-confirmation.png', false)
@@ -530,6 +532,7 @@ class HelpPagesTest extends TestCase
             'де звіт по заробітку',
             'звіт по орендах',
             'закрити зарплатний період',
+            'як рахувати зарплату 1-15 і 16-кінець місяця',
         ] as $question) {
             $result = app(OwnerHelpIndex::class)->search($question, 1);
 

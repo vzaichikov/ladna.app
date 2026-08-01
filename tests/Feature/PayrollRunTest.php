@@ -41,7 +41,7 @@ class PayrollRunTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_payroll_periods_resolve_weekly_biweekly_and_monthly_boundaries(): void
+    public function test_payroll_periods_resolve_weekly_biweekly_semi_monthly_and_monthly_boundaries(): void
     {
         $account = Account::factory()->create(['timezone' => 'UTC']);
         $resolver = app(PayrollPeriodResolver::class);
@@ -63,7 +63,42 @@ class PayrollRunTest extends TestCase
         $this->assertSame('2026-06-22', $biweeklyBeforeAnchor['starts_on']->toDateString());
         $this->assertSame('2026-07-05', $biweeklyBeforeAnchor['ends_on']->toDateString());
 
-        $account->update(['payroll_cadence' => PayrollCadence::Monthly, 'payroll_anchor_date' => null]);
+        $account->update(['payroll_cadence' => PayrollCadence::SemiMonthly, 'payroll_anchor_date' => null]);
+        $semiMonthlyFirstHalf = $resolver->containing($account->fresh(), '2028-02-15');
+        $this->assertSame('2028-02-01', $semiMonthlyFirstHalf['starts_on']->toDateString());
+        $this->assertSame('2028-02-15', $semiMonthlyFirstHalf['ends_on']->toDateString());
+        $this->assertTrue($resolver->matches($account->fresh(), '2028-02-01', '2028-02-15'));
+        $this->assertFalse($resolver->matches($account->fresh(), '2028-02-01', '2028-02-14'));
+
+        $semiMonthlyLeapYearSecondHalf = $resolver->containing($account->fresh(), '2028-02-16');
+        $this->assertSame('2028-02-16', $semiMonthlyLeapYearSecondHalf['starts_on']->toDateString());
+        $this->assertSame('2028-02-29', $semiMonthlyLeapYearSecondHalf['ends_on']->toDateString());
+
+        $semiMonthlyRegularFebruary = $resolver->containing($account->fresh(), '2027-02-28');
+        $this->assertSame('2027-02-16', $semiMonthlyRegularFebruary['starts_on']->toDateString());
+        $this->assertSame('2027-02-28', $semiMonthlyRegularFebruary['ends_on']->toDateString());
+
+        $latestCompletedAtSecondHalfStart = $resolver->latestCompleted(
+            $account->fresh(),
+            Carbon::parse('2028-02-16 12:00:00', 'UTC'),
+        );
+        $this->assertSame('2028-02-01', $latestCompletedAtSecondHalfStart['starts_on']->toDateString());
+        $this->assertSame('2028-02-15', $latestCompletedAtSecondHalfStart['ends_on']->toDateString());
+
+        Carbon::setTestNow('2028-03-01 12:00:00');
+        $latestCompletedSemiMonthly = $resolver->latestCompleted($account->fresh());
+        $this->assertSame('2028-02-16', $latestCompletedSemiMonthly['starts_on']->toDateString());
+        $this->assertSame('2028-02-29', $latestCompletedSemiMonthly['ends_on']->toDateString());
+
+        $account->update(['timezone' => 'America/New_York']);
+        $timezoneBoundary = $resolver->containing(
+            $account->fresh(),
+            Carbon::parse('2028-03-01 00:30:00', 'UTC'),
+        );
+        $this->assertSame('2028-02-16', $timezoneBoundary['starts_on']->toDateString());
+        $this->assertSame('2028-02-29', $timezoneBoundary['ends_on']->toDateString());
+
+        $account->update(['timezone' => 'UTC', 'payroll_cadence' => PayrollCadence::Monthly, 'payroll_anchor_date' => null]);
         $monthly = $resolver->containing($account->fresh(), '2028-02-12');
         $this->assertSame('2028-02-01', $monthly['starts_on']->toDateString());
         $this->assertSame('2028-02-29', $monthly['ends_on']->toDateString());
@@ -121,6 +156,15 @@ class PayrollRunTest extends TestCase
             ])
             ->assertSessionDoesntHaveErrors();
         $this->assertSame(PayrollCadence::Weekly, $account->fresh()->payroll_cadence);
+        $this->assertNull($account->fresh()->payroll_anchor_date);
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.payroll.cadence.update', $account), [
+                'cadence' => PayrollCadence::SemiMonthly->value,
+                'payroll_anchor_date' => '2025-01-01',
+            ])
+            ->assertSessionDoesntHaveErrors();
+        $this->assertSame(PayrollCadence::SemiMonthly, $account->fresh()->payroll_cadence);
         $this->assertNull($account->fresh()->payroll_anchor_date);
     }
 
@@ -357,6 +401,34 @@ class PayrollRunTest extends TestCase
         $this->assertSame('2026-06-01', $run->period_starts_on->toDateString());
         $this->assertSame('2026-06-30', $run->period_ends_on->toDateString());
         $this->assertTrue(Str::isUuid($run->idempotency_key));
+    }
+
+    public function test_semi_monthly_close_uses_the_last_completed_half_month_and_rejects_custom_boundaries(): void
+    {
+        Carbon::setTestNow('2028-03-01 12:00:00');
+        $owner = User::factory()->create();
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'payroll_cadence' => PayrollCadence::SemiMonthly,
+        ]);
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.payroll.runs.store', $account), [
+                'period_starts_on' => '2028-02-16',
+                'period_ends_on' => '2028-02-28',
+                'idempotency_key' => (string) Str::uuid(),
+            ])
+            ->assertSessionHasErrors('period_starts_on');
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.payroll.runs.store', $account), [])
+            ->assertSessionDoesntHaveErrors();
+
+        $run = $account->payrollRuns()->sole();
+        $this->assertSame(PayrollCadence::SemiMonthly, $run->cadence);
+        $this->assertSame('2028-02-16', $run->period_starts_on->toDateString());
+        $this->assertSame('2028-02-29', $run->period_ends_on->toDateString());
     }
 
     public function test_idempotency_key_rejects_changed_period_tenant_and_replacement_payload(): void
@@ -604,6 +676,7 @@ class PayrollRunTest extends TestCase
             ->assertRedirect(route('dashboard.accounts.payroll.index', $account));
 
         $this->assertTrue($run->fresh()->isVoided());
+        $account->update(['payroll_cadence' => PayrollCadence::SemiMonthly]);
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.payroll.runs.store', $account), [
@@ -625,6 +698,7 @@ class PayrollRunTest extends TestCase
         $replacement = $account->payrollRuns()->whereKeyNot($run->id)->sole();
         $this->assertTrue($replacement->isClosed());
         $this->assertSame($run->id, $replacement->supersedes_payroll_run_id);
+        $this->assertSame(PayrollCadence::Monthly, $replacement->cadence);
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.payroll.runs.store', $account), [

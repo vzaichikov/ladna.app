@@ -22,6 +22,7 @@ class PayrollPeriodResolver
                 'ends_on' => $localDate->endOfWeek(CarbonInterface::SUNDAY),
             ],
             PayrollCadence::Biweekly => $this->biweeklyPeriod($account, $localDate),
+            PayrollCadence::SemiMonthly => $this->semiMonthlyPeriod($localDate),
             PayrollCadence::Monthly => [
                 'starts_on' => $localDate->startOfMonth(),
                 'ends_on' => $localDate->endOfMonth(),
@@ -79,6 +80,26 @@ class PayrollPeriodResolver
         return [
             'starts_on' => $startsOn,
             'ends_on' => $startsOn->addDays(13),
+        ];
+    }
+
+    /**
+     * @return array{starts_on: CarbonImmutable, ends_on: CarbonImmutable}
+     */
+    private function semiMonthlyPeriod(CarbonImmutable $date): array
+    {
+        $startsOn = $date->startOfMonth();
+
+        if ($date->day <= 15) {
+            return [
+                'starts_on' => $startsOn,
+                'ends_on' => $startsOn->addDays(14),
+            ];
+        }
+
+        return [
+            'starts_on' => $startsOn->addDays(15),
+            'ends_on' => $date->endOfMonth(),
         ];
     }
 

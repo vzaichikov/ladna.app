@@ -83,7 +83,7 @@ class LadnaBusinessLogicReference
         'payroll_run_immutability' => [
             'path' => 'app/Models/PayrollRun.php',
             'symbol' => 'App\\Models\\PayrollRun',
-            'summary' => 'Stores an immutable salary accrual snapshot for one completed weekly, biweekly, or monthly payroll period.',
+            'summary' => 'Stores an immutable salary accrual snapshot for one completed weekly, biweekly, semi-monthly, or monthly payroll period.',
             'excerpt' => 'A mistaken run is voided with a reason and replaced by a new run. Closing a payroll run accrues salary for reports but does not record an actual payout.',
         ],
     ];

@@ -678,6 +678,9 @@
                             >
                                 @csrf
                                 <input type="hidden" name="direction" value="{{ $direction }}">
+                                <p class="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+                                    {{ __($direction === \App\Models\StudioCashEntry::DirectionIn ? 'app.deposit_cash_operation_help' : 'app.collect_cash_operation_help') }}
+                                </p>
                                 <label class="block">
                                     <span class="crm-label">{{ __('app.location') }}</span>
                                     <select name="location_id" class="crm-field min-h-11" required>
@@ -785,6 +788,10 @@
                             ? __('app.finance_epoch_active_since', ['date' => $formatDateTime($activeFinanceEpoch->starts_at)])
                             : __('app.finance_epoch_legacy_copy') }}
                     </p>
+                    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                        <div class="font-semibold">{{ __('app.cash_control_operations_help_title') }}</div>
+                        <p class="mt-1 leading-6">{{ __('app.start_finance_epoch_operation_help') }}</p>
+                    </div>
                     @if ($account->isOwnedBy(auth()->user()))
                         <details class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3" @if ($errors->has('approval')) open @endif>
                             <summary class="crm-focus min-h-11 cursor-pointer text-sm font-semibold text-amber-900">{{ __('app.start_finance_epoch') }}</summary>
@@ -832,6 +839,10 @@
                 <x-ui.panel>
                     <h3 class="text-base font-semibold text-slate-950">{{ __('app.cashbox_reconciliation') }}</h3>
                     <p class="mt-1 text-sm text-slate-500">{{ __('app.cashbox_reconciliation_copy') }}</p>
+                    <div class="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-4 text-sm text-slate-700">
+                        <div class="font-semibold text-slate-950">{{ __('app.cash_control_operations_help_title') }}</div>
+                        <p class="mt-1 leading-6">{{ __('app.cashbox_reconciliation_operation_help') }}</p>
+                    </div>
                     <form
                         method="POST"
                         action="{{ route('dashboard.accounts.cashbox-reconciliations.store', $account) }}"
