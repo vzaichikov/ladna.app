@@ -2513,6 +2513,8 @@ return [
     'payment_method' => 'Спосіб оплати',
     'payment_method_copy' => 'Оберіть платіжну систему студії.',
     'pay_with_provider' => 'Оплатити через :provider',
+    'pay_by_card' => 'Сплатити карткою',
+    'accepted_cards' => 'Приймаємо картки',
     'studio_rules_accepted' => 'Погодьтеся з правилами студії, щоб продовжити.',
     'no_payment_methods_available' => 'Онлайн-оплати для цієї студії ще не налаштовані.',
     'payment_provider_unavailable' => 'Цей спосіб оплати недоступний.',

@@ -49,6 +49,9 @@ class CustomerPurchaseFlowTest extends TestCase
             'studio_rules_html' => '<p>Checkout rules</p>',
             'public_offer_html' => '<p>Checkout offer</p>',
         ]);
+        $this->accountIntegration($account, IntegrationProvider::Monopay, [
+            'api_token' => 'mono-token',
+        ]);
         $this->accountIntegration($account, IntegrationProvider::Liqpay, [
             'public_key' => 'public-key',
             'private_key' => 'private-key',
@@ -58,6 +61,14 @@ class CustomerPurchaseFlowTest extends TestCase
             ->get(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]))
             ->assertOk()
             ->assertSee($plan->name)
+            ->assertSee('Pay by card')
+            ->assertSee('bg-emerald-600 text-white', false)
+            ->assertSee('data-lucide="credit-card" class="h-5 w-5 shrink-0 text-white"', false)
+            ->assertSee('alt="Google Pay"', false)
+            ->assertSee('alt="Apple Pay" class="h-5 w-auto"', false)
+            ->assertSee('alt="Visa"', false)
+            ->assertSee('alt="Mastercard"', false)
+            ->assertDontSee('Monopay')
             ->assertSee('LiqPay')
             ->assertDontSee('data-customer-page-topbar', false)
             ->assertSee('data-customer-locale-switcher', false)
@@ -67,11 +78,17 @@ class CustomerPurchaseFlowTest extends TestCase
             ->assertSee('data-public-offer-footer-link', false)
             ->assertDontSee('We will create a payment attempt before sending you to the provider.')
             ->assertSee('name="provider"', false)
+            ->assertSee('value="monopay"', false)
             ->assertSee('name="studio_rules_accepted"', false)
             ->assertSee(route('public.studio-rules', $account->slug), false)
             ->assertSee(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), false)
             ->assertSee(__('app.validity_days_after_first_class'))
             ->assertSee(__('app.total_validity_days'));
+
+        $this->withSession(['locale' => 'uk'])
+            ->get(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]))
+            ->assertOk()
+            ->assertSee('Сплатити карткою');
     }
 
     public function test_purchase_requires_studio_rules_acceptance(): void

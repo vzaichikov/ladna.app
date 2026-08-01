@@ -2513,6 +2513,8 @@ return [
     'payment_method' => 'Payment method',
     'payment_method_copy' => 'Choose a studio payment provider.',
     'pay_with_provider' => 'Pay with :provider',
+    'pay_by_card' => 'Pay by card',
+    'accepted_cards' => 'Accepted cards',
     'studio_rules_accepted' => 'Accept the studio rules to continue.',
     'no_payment_methods_available' => 'Online payments are not configured for this studio yet.',
     'payment_provider_unavailable' => 'This payment method is not available.',

@@ -101,8 +101,8 @@
                                 <div class="mb-3">
                                     @include('public._studio-rules-agreement')
                                 </div>
-                                <x-ui.button type="submit" variant="secondary" size="lg" class="w-full justify-start px-3">
-                                    <x-ui.payment-brand :provider="$provider" :label="$label" class="w-full" />
+                                <x-ui.button type="submit" variant="success" size="lg" class="w-full justify-start px-3">
+                                    <x-ui.payment-brand :provider="$provider" :label="$label" presentation="card" class="w-full" />
                                 </x-ui.button>
                             </form>
                         @empty
@@ -111,6 +111,14 @@
                             </div>
                         @endforelse
                     </div>
+
+                    @if ($paymentSettings->isNotEmpty())
+                        <div class="mt-5 flex items-center justify-center gap-2 border-t border-stone-100 pt-4">
+                            <span class="sr-only">{{ __('app.accepted_cards') }}</span>
+                            <img src="{{ asset('assets/payment-methods/visa.svg') }}" alt="Visa" class="h-auto w-20">
+                            <img src="{{ asset('assets/payment-methods/mastercard.svg') }}" alt="Mastercard" class="h-auto w-14">
+                        </div>
+                    @endif
                 </aside>
             </section>
         </section>
