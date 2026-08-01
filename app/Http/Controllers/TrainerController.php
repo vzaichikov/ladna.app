@@ -283,7 +283,8 @@ class TrainerController extends Controller
         );
 
         return [
-            'studioPermissions' => StudioPermission::cases(),
+            'studioPermissionGroups' => collect(StudioPermission::cases())
+                ->groupBy(fn (StudioPermission $permission): string => $permission->group()),
             'selectedPermissions' => $selectedPermissions,
             'trainerTypes' => $account->trainerTypes()->ordered()->get(),
             'activeLocations' => $account->locations()->active()->orderBy('name')->get(),

@@ -11,6 +11,7 @@ let publicScheduleAbortController = null;
 let publicCalendarSwipeStart = null;
 let publicBookingModalOpener = null;
 let trainerPrivateLessonsAbortController = null;
+let trainerPermissionDetailsOpener = null;
 
 const confirmationButtonVariants = {
     danger: 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
@@ -1078,6 +1079,106 @@ function initCustomerAuthTabs(root = document) {
     });
 }
 
+function initTrainerFormTabs(root = document) {
+    root.querySelectorAll('[data-trainer-form-tabs]').forEach((container) => {
+        if (container.dataset.trainerFormTabsReady === 'true') {
+            return;
+        }
+
+        const tabs = Array.from(container.querySelectorAll('[data-trainer-form-tab]'));
+        const panels = Array.from(container.querySelectorAll('[data-trainer-form-panel]'));
+        const activeTabInput = container.querySelector('[data-trainer-form-active-tab]');
+
+        if (!tabs.length || !panels.length) {
+            return;
+        }
+
+        container.dataset.trainerFormTabsReady = 'true';
+
+        const activate = (tabName, focusTab = false) => {
+            tabs.forEach((tab) => {
+                const selected = tab.dataset.trainerFormTab === tabName;
+                tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+                tab.tabIndex = selected ? 0 : -1;
+
+                if (selected && focusTab) {
+                    tab.focus();
+                }
+            });
+
+            panels.forEach((panel) => {
+                panel.classList.toggle('hidden', panel.dataset.trainerFormPanel !== tabName);
+            });
+
+            if (activeTabInput) {
+                activeTabInput.value = tabName;
+            }
+        };
+
+        tabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => {
+                if (tab.dataset.trainerFormTab) {
+                    activate(tab.dataset.trainerFormTab);
+                }
+            });
+
+            tab.addEventListener('keydown', (event) => {
+                const lastIndex = tabs.length - 1;
+                let nextIndex = index;
+
+                if (event.key === 'ArrowRight') {
+                    nextIndex = index === lastIndex ? 0 : index + 1;
+                } else if (event.key === 'ArrowLeft') {
+                    nextIndex = index === 0 ? lastIndex : index - 1;
+                } else if (event.key === 'Home') {
+                    nextIndex = 0;
+                } else if (event.key === 'End') {
+                    nextIndex = lastIndex;
+                } else {
+                    return;
+                }
+
+                event.preventDefault();
+
+                const tabName = tabs[nextIndex]?.dataset.trainerFormTab;
+
+                if (tabName) {
+                    activate(tabName, true);
+                }
+            });
+        });
+
+        let invalidPanelActivated = false;
+        const form = container.closest('form');
+
+        form?.addEventListener('invalid', (event) => {
+            if (invalidPanelActivated) {
+                return;
+            }
+
+            const invalidPanel = event.target.closest('[data-trainer-form-panel]');
+
+            if (!invalidPanel?.dataset.trainerFormPanel) {
+                return;
+            }
+
+            invalidPanelActivated = true;
+            activate(invalidPanel.dataset.trainerFormPanel);
+            window.setTimeout(() => {
+                invalidPanelActivated = false;
+            }, 0);
+        }, true);
+
+        const initialTab = tabs.some((tab) => tab.dataset.trainerFormTab === container.dataset.activeTab)
+            ? container.dataset.activeTab
+            : tabs[0]?.dataset.trainerFormTab;
+
+        if (initialTab) {
+            activate(initialTab);
+        }
+    });
+}
+
 function initPublicPriceTabSet(container, tabSelector, panelSelector, activeValue) {
     if (container.dataset.publicPriceTabsReady === 'true') {
         return;
@@ -2129,6 +2230,17 @@ function closeTrainerSubstitutionModal(modal) {
 function closeTrainerIssuesModal(modal) {
     modal?.classList.add('hidden');
     modal?.classList.remove('flex');
+}
+
+function closeTrainerPermissionDetailsModal(modal, restoreFocus = true) {
+    modal?.classList.add('hidden');
+    modal?.classList.remove('flex');
+
+    if (restoreFocus && trainerPermissionDetailsOpener?.isConnected) {
+        trainerPermissionDetailsOpener.focus();
+    }
+
+    trainerPermissionDetailsOpener = null;
 }
 
 function closeTrainerPrivateLessonsModal(modal) {
@@ -3495,6 +3607,72 @@ function initTrainerIssueModals() {
 
         button.dataset.trainerIssuesCloseReady = 'true';
         button.addEventListener('click', () => closeTrainerIssuesModal(button.closest('[data-trainer-issues-modal]')));
+    });
+}
+
+function initTrainerPermissionDetailsModal() {
+    const modal = document.querySelector('[data-trainer-permission-details-modal]');
+
+    if (!modal || modal.dataset.trainerPermissionDetailsReady === 'true') {
+        return;
+    }
+
+    modal.dataset.trainerPermissionDetailsReady = 'true';
+    const title = modal.querySelector('[data-trainer-permission-details-title]');
+    const summary = modal.querySelector('[data-trainer-permission-details-summary]');
+    const details = modal.querySelector('[data-trainer-permission-details-copy]');
+    const group = modal.querySelector('[data-trainer-permission-details-group]');
+    const sensitivity = modal.querySelector('[data-trainer-permission-details-sensitivity]');
+    const sensitivityCopy = modal.querySelector('[data-trainer-permission-details-sensitivity-copy]');
+
+    document.querySelectorAll('[data-trainer-permission-details-open]').forEach((button) => {
+        button.addEventListener('click', () => {
+            trainerPermissionDetailsOpener = button;
+
+            if (title) {
+                title.textContent = button.dataset.permissionTitle || '';
+            }
+
+            if (summary) {
+                summary.textContent = button.dataset.permissionSummary || '';
+            }
+
+            if (details) {
+                details.textContent = button.dataset.permissionDetails || '';
+            }
+
+            if (group) {
+                group.textContent = button.dataset.permissionGroup || '';
+            }
+
+            if (sensitivity) {
+                sensitivity.textContent = button.dataset.permissionSensitivity || '';
+            }
+
+            if (sensitivityCopy) {
+                sensitivityCopy.textContent = button.dataset.permissionSensitivityCopy || '';
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.querySelector('[data-trainer-permission-details-close]')?.focus();
+        });
+    });
+
+    modal.querySelectorAll('[data-trainer-permission-details-close]').forEach((button) => {
+        button.addEventListener('click', () => closeTrainerPermissionDetailsModal(modal));
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeTrainerPermissionDetailsModal(modal);
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeTrainerPermissionDetailsModal(modal);
+        }
     });
 }
 
@@ -6373,6 +6551,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initStudioLoginPickers();
     initClassPassPreviews();
     initCustomerAuthTabs();
+    initTrainerFormTabs();
     initPublicPriceTabs();
     initClassPassPlanSorting();
     initPlatformSettingsTabs();
@@ -6387,6 +6566,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTrainerSubstitutionModals();
     initScheduledClassTrainerModals();
     initTrainerIssueModals();
+    initTrainerPermissionDetailsModal();
     initTrainerPrivateLessonsModal();
     initPaymentRefundModal();
     initTrainerPrivateTimeframes();

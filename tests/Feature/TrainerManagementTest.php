@@ -18,6 +18,66 @@ class TrainerManagementTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_trainer_form_uses_tabs_grouped_rights_and_detailed_permission_modal(): void
+    {
+        $owner = User::factory()->create();
+        $trainerUser = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $trainerType = TrainerType::factory()->for($account)->default()->create();
+        $trainer = $account->trainers()->create([
+            'user_id' => $trainerUser->id,
+            'trainer_type_id' => $trainerType->id,
+            'name' => 'Марія',
+            'slug' => 'mariia',
+            'is_active' => true,
+        ]);
+        $account->memberships()->create([
+            'user_id' => $trainerUser->id,
+            'role' => AccountRole::Trainer->value,
+            'permissions' => [
+                StudioPermission::ManageSchedule->value,
+                StudioPermission::CorrectClosedClasses->value,
+            ],
+        ]);
+
+        app()->setLocale('en');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.trainers.edit', [$account, $trainer]))
+            ->assertOk()
+            ->assertSee(__('app.trainer_information_and_classes'))
+            ->assertSee(__('app.trainer_access_rights'))
+            ->assertSee('role="tablist"', false)
+            ->assertSee('aria-controls="trainer-form-panel-rights"', false)
+            ->assertSeeInOrder([
+                __('app.permission_group_schedule_and_classes'),
+                __('app.permission_group_customers_and_sales'),
+                __('app.permission_group_payments_and_finance'),
+                __('app.permission_group_team_and_settings'),
+                __('app.permission_group_events_and_tools'),
+            ])
+            ->assertSee('data-trainer-permission-details-open', false)
+            ->assertSee('data-trainer-permission-details-modal', false)
+            ->assertSee(__('app.permission_manage_schedule_details'))
+            ->assertSee(__('app.permission_correct_closed_classes_details'))
+            ->assertSee('id="trainer-permission-manage_schedule"', false)
+            ->assertSee('id="trainer-permission-correct_closed_classes"', false);
+    }
+
+    public function test_every_studio_permission_has_group_and_detail_translations(): void
+    {
+        foreach (['en', 'uk'] as $locale) {
+            foreach (StudioPermission::cases() as $permission) {
+                $this->assertNotSame($permission->labelKey(), trans($permission->labelKey(), locale: $locale));
+                $this->assertNotSame($permission->descriptionKey(), trans($permission->descriptionKey(), locale: $locale));
+                $this->assertNotSame($permission->detailsKey(), trans($permission->detailsKey(), locale: $locale));
+                $this->assertNotSame($permission->groupLabelKey(), trans($permission->groupLabelKey(), locale: $locale));
+                $this->assertNotSame($permission->groupDescriptionKey(), trans($permission->groupDescriptionKey(), locale: $locale));
+            }
+        }
+    }
+
     public function test_owner_can_create_trainer_with_photo_and_optional_login(): void
     {
         Storage::fake('public');

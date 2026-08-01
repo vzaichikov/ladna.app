@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.117.0',
+                'date' => '2026-08-01',
+                'title' => 'Clearer trainer access rights',
+                'items' => ['The trainer editor now separates profile information and class scope from system access rights in two focused tabs.', 'Trainer rights are grouped by schedule and classes, customers and class passes, payments and finance, team and settings, and events and connected tools. Every right has a detailed explanation of what it allows, which separate rights may still be required, and why its access level matters.', 'The bilingual tabs and detail dialogs work on desktop and mobile, support keyboard navigation, and automatically reveal the section containing a validation error.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.116.0',
                 'date' => '2026-08-01',
                 'title' => 'Simpler studio finances and cashbox control',
@@ -1024,6 +1031,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.117.0',
+                'date' => '2026-08-01',
+                'title' => 'Зрозуміліші права доступу тренерів',
+                'items' => ['Редактор тренера тепер розділяє дані профілю й робочі напрямки від прав доступу до системи у двох зосереджених вкладках.', 'Права тренера згруповано за розкладом і заняттями, клієнтами й абонементами, оплатами й фінансами, командою й налаштуваннями, а також подіями та підключеними інструментами. Кожне право має детальне пояснення дозволених дій, потрібних суміжних прав і важливості рівня доступу.', 'Двомовні вкладки й діалоги працюють на комп’ютері та мобільному, підтримують клавіатурну навігацію й автоматично показують розділ із помилкою перевірки.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.116.0',
                 'date' => '2026-08-01',
