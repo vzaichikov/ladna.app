@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
-@section('title', __('app.payments').' - '.$account->name)
+@section('title', __(
+    $financeSection === 'cash' ? 'app.cash_overview' : ($financeSection === 'expenses' ? 'app.operational_expenses' : 'app.payments')
+).' - '.$account->name)
 
 @section('content')
     @php
@@ -31,7 +33,8 @@
             return $label === $translationKey ? config('integrations.providers.'.$provider.'.label', $provider) : $label;
         };
         $defaultCashLocationId = old('location_id', $locations->first()?->id);
-        $defaultExpenseLocationId = old('location_id', $locations->first()?->id);
+        $defaultExpenseLocationId = old('expense_location_id', old('location_id', $locations->first()?->id));
+        $defaultCashExpenseLocationId = old('cash_location_id', old('location_id', $locations->first()?->id));
         $defaultExpenseCategoryId = old('expense_category_id', $activeExpenseCategories->first()?->id);
         $defaultExpenseMethod = old('payment_method', \App\Models\StudioExpense::PaymentMethodCashdesk);
         $hasValue = static fn (mixed $value): bool => $value !== null && $value !== '';
@@ -56,14 +59,22 @@
         $isToday = $filters['date_from'] === $accountToday && $filters['date_to'] === $accountToday;
         $hasAdvancedPaymentFilters = filled($filters['provider']) || filled($filters['location_id']);
         $refundValidationPaymentId = old('refund_payment_id');
+        $activeFinanceEpoch = $financeSection === 'cash' ? $account->activeFinanceEpoch() : null;
+        $indexRouteName = match ($financeSection) {
+            'cash' => 'dashboard.accounts.cash.index',
+            'expenses' => 'dashboard.accounts.expenses.index',
+            default => 'dashboard.accounts.payments.index',
+        };
     @endphp
 
     <div>
-        <h1 class="crm-page-title">{{ __('app.payments') }}</h1>
-        <p class="crm-page-copy">{{ __('app.account_payments_copy') }}</p>
+        <h1 class="crm-page-title">{{ __($financeSection === 'cash' ? 'app.cash_overview' : ($financeSection === 'expenses' ? 'app.operational_expenses' : 'app.payments')) }}</h1>
+        <p class="crm-page-copy">{{ __($financeSection === 'cash' ? 'app.cash_overview_copy' : ($financeSection === 'expenses' ? 'app.operational_expenses_copy' : 'app.account_payments_history_copy')) }}</p>
     </div>
 
-    <form method="GET" action="{{ route('dashboard.accounts.payments.index', $account) }}" class="mt-5 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-crm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+    @include('accounts.finance._nav')
+
+    <form method="GET" action="{{ route($indexRouteName, $account) }}" class="mt-5 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-crm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
         @foreach ($periodPreservedFilterValues as $filterName => $filterValue)
             <input type="hidden" name="{{ $filterName }}" value="{{ $filterValue }}">
         @endforeach
@@ -83,12 +94,13 @@
                 <x-ui.icon name="calendar" class="h-4 w-4" />
                 {{ __('app.apply_filters') }}
             </x-ui.button>
-            <a href="{{ route('dashboard.accounts.payments.index', ['account' => $account, ...$periodPreservedFilterValues]) }}" class="crm-focus inline-flex min-h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700">
+            <a href="{{ route($indexRouteName, ['account' => $account, ...$periodPreservedFilterValues]) }}" class="crm-focus inline-flex min-h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700">
                 {{ __('app.today') }}
             </a>
         </div>
     </form>
 
+    @if ($financeSection === 'overview')
     <section class="mt-6" data-payments-section="overview">
         <div class="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -154,7 +166,9 @@
             </div>
         </x-ui.panel>
     </section>
+    @endif
 
+    @if ($financeSection === 'payments')
     <section class="mt-6" data-payments-section="history">
         <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -483,8 +497,19 @@
                                 <summary class="crm-focus inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 transition hover:border-brand-100 hover:bg-brand-50">
                                     {{ __('app.edit_payment') }}
                                 </summary>
-                                <form method="POST" action="{{ route('dashboard.accounts.payments.corrections.store', [$account, $payment]) }}" class="mt-3 grid gap-3 rounded-lg border border-stone-200 bg-white p-3 sm:grid-cols-2">
+                                <form
+                                    method="POST"
+                                    action="{{ route('dashboard.accounts.payments.corrections.store', [$account, $payment]) }}"
+                                    class="mt-3 grid gap-3 rounded-lg border border-stone-200 bg-white p-3 sm:grid-cols-2"
+                                    data-confirm-action
+                                    data-confirm-title="{{ __('app.confirm_payment_correction_title') }}"
+                                    data-confirm-body="{{ __('app.confirm_payment_correction_body') }}"
+                                    data-confirm-accept="{{ __('app.save_correction') }}"
+                                    data-confirm-variant="danger"
+                                    data-confirm-icon="file-pen-line"
+                                >
                                     @csrf
+                                    <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key', (string) \Illuminate\Support\Str::uuid()) }}">
                                     <label class="block">
                                         <span class="crm-label">{{ __('app.amount') }}</span>
                                         <input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{ $formatMoneyInput($payment->amount_cents) }}" class="crm-field min-h-11" required>
@@ -623,7 +648,9 @@
             </div>
         </div>
     </section>
+    @endif
 
+    @if ($financeSection === 'cash')
     <section class="mt-8" data-payments-section="cash">
         <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -638,7 +665,17 @@
                                 <x-ui.icon :name="$direction === \App\Models\StudioCashEntry::DirectionIn ? 'plus' : 'minus'" class="h-4 w-4" />
                                 {{ $label }}
                             </summary>
-                            <form method="POST" action="{{ route('dashboard.accounts.cash-entries.store', $account) }}" class="absolute left-0 z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] space-y-3 rounded-xl border border-stone-200 bg-white p-4 shadow-xl sm:left-auto sm:right-0">
+                            <form
+                                method="POST"
+                                action="{{ route('dashboard.accounts.cash-entries.store', $account) }}"
+                                class="absolute left-0 z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] space-y-3 rounded-xl border border-stone-200 bg-white p-4 shadow-xl sm:left-auto sm:right-0"
+                                data-confirm-action
+                                data-confirm-title="{{ __('app.cash_entry_confirmation_title') }}"
+                                data-confirm-body="{{ __($direction === \App\Models\StudioCashEntry::DirectionIn ? 'app.deposit_cash_confirmation_body' : 'app.collect_cash_confirmation_body') }}"
+                                data-confirm-accept="{{ $label }}"
+                                data-confirm-variant="{{ $direction === \App\Models\StudioCashEntry::DirectionIn ? 'primary' : 'danger' }}"
+                                data-confirm-icon="{{ $direction === \App\Models\StudioCashEntry::DirectionIn ? 'plus' : 'minus' }}"
+                            >
                                 @csrf
                                 <input type="hidden" name="direction" value="{{ $direction }}">
                                 <label class="block">
@@ -687,7 +724,13 @@
                                 <div class="font-semibold text-slate-950">{{ $formatMoneyTotals($cashBalance['balance_by_currency']) }}</div>
                             </div>
                             <div class="mt-2 grid gap-2 text-xs font-semibold text-slate-500 sm:grid-cols-3">
-                                <span>{{ __('app.manual_cash_payments') }}: {{ $formatMoneyTotals($cashBalance['manual_cash_by_currency']) }}</span>
+                                <span>
+                                    @if (collect($cashBalance['reconciled_by_currency'])->contains(true))
+                                        {{ __('app.cashbox_last_count') }}: {{ $formatMoneyTotals($cashBalance['base_actual_by_currency']) }}
+                                    @else
+                                        {{ __('app.cashbox_not_reconciled') }}
+                                    @endif
+                                </span>
                                 <span>{{ __('app.cash_in') }}: {{ $formatMoneyTotals($cashBalance['cash_in_by_currency']) }}</span>
                                 <span>{{ __('app.cash_out') }}: {{ $formatMoneyTotals($cashBalance['cash_out_by_currency']) }}</span>
                             </div>
@@ -727,8 +770,106 @@
                 </div>
             </x-ui.panel>
         </div>
-    </section>
 
+        <div class="mt-10 border-t border-stone-200 pt-7" data-cash-control-operations>
+            <div class="mb-4">
+                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.cash_control_operations') }}</h2>
+                <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.cash_control_operations_copy') }}</p>
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-2">
+                <x-ui.panel>
+                    <h3 class="text-base font-semibold text-slate-950">{{ __('app.cashbox_source_of_truth') }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">
+                        {{ $activeFinanceEpoch && ! $activeFinanceEpoch->is_legacy
+                            ? __('app.finance_epoch_active_since', ['date' => $formatDateTime($activeFinanceEpoch->starts_at)])
+                            : __('app.finance_epoch_legacy_copy') }}
+                    </p>
+                    @if ($account->isOwnedBy(auth()->user()))
+                        <details class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3" @if ($errors->has('approval')) open @endif>
+                            <summary class="crm-focus min-h-11 cursor-pointer text-sm font-semibold text-amber-900">{{ __('app.start_finance_epoch') }}</summary>
+                            <p class="mt-2 text-sm leading-6 text-amber-900">{{ __('app.start_finance_epoch_warning') }}</p>
+                            <form
+                                method="POST"
+                                action="{{ route('dashboard.accounts.finance-epochs.store', $account) }}"
+                                class="mt-4 space-y-3"
+                                data-confirm-action
+                                data-confirm-title="{{ __('app.start_finance_epoch_confirmation_title') }}"
+                                data-confirm-body="{{ __('app.start_finance_epoch_confirmation_body') }}"
+                                data-confirm-accept="{{ __('app.start_finance_epoch_confirm') }}"
+                                data-confirm-variant="danger"
+                                data-confirm-icon="triangle-alert"
+                                data-confirm-phrase="approve"
+                                data-confirm-phrase-label="{{ __('app.finance_epoch_approval_label') }}"
+                                data-confirm-phrase-help="{{ __('app.finance_epoch_approval_help') }}"
+                                data-confirm-phrase-placeholder="{{ __('app.finance_epoch_approval_placeholder') }}"
+                            >
+                                @csrf
+                                <input type="hidden" name="approval" value="" data-confirm-approval-output>
+                                @php $cashboxIndex = 0; @endphp
+                                @foreach ($cashBalances as $locationBalance)
+                                    @foreach ($locationBalance['balance_by_currency'] as $currency => $currentBalanceCents)
+                                        <input type="hidden" name="cashboxes[{{ $cashboxIndex }}][location_id]" value="{{ $locationBalance['location']->id }}">
+                                        <input type="hidden" name="cashboxes[{{ $cashboxIndex }}][currency]" value="{{ $currency }}">
+                                        <label class="block">
+                                            <span class="crm-label">{{ $locationBalance['location']->name }} · {{ $currency }}</span>
+                                            <input name="cashboxes[{{ $cashboxIndex }}][actual_amount]" type="number" min="0" step="0.01" inputmode="decimal" value="{{ old('cashboxes.'.$cashboxIndex.'.actual_amount', $formatMoneyInput($currentBalanceCents)) }}" class="crm-field min-h-11" required>
+                                        </label>
+                                        @php $cashboxIndex++; @endphp
+                                    @endforeach
+                                @endforeach
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.reason') }}</span>
+                                    <textarea name="reason" rows="3" minlength="3" maxlength="2000" class="crm-field" required placeholder="{{ __('app.start_finance_epoch_reason_placeholder') }}">{{ old('reason') }}</textarea>
+                                </label>
+                                @error('approval') <span class="crm-help">{{ $message }}</span> @enderror
+                                <x-ui.button type="submit" variant="danger">{{ __('app.start_finance_epoch_confirm') }}</x-ui.button>
+                            </form>
+                        </details>
+                    @endif
+                </x-ui.panel>
+
+                <x-ui.panel>
+                    <h3 class="text-base font-semibold text-slate-950">{{ __('app.cashbox_reconciliation') }}</h3>
+                    <p class="mt-1 text-sm text-slate-500">{{ __('app.cashbox_reconciliation_copy') }}</p>
+                    <form
+                        method="POST"
+                        action="{{ route('dashboard.accounts.cashbox-reconciliations.store', $account) }}"
+                        class="mt-4 grid gap-3 sm:grid-cols-2"
+                        data-confirm-action
+                        data-confirm-title="{{ __('app.cashbox_reconciliation_confirmation_title') }}"
+                        data-confirm-body="{{ __('app.cashbox_reconciliation_confirmation_body') }}"
+                        data-confirm-accept="{{ __('app.reconcile_cashbox') }}"
+                        data-confirm-variant="primary"
+                        data-confirm-icon="scale"
+                    >
+                        @csrf
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.location') }}</span>
+                            <select name="location_id" class="crm-field min-h-11" required>
+                                @foreach ($locations as $location)
+                                    <option value="{{ $location->id }}">{{ $location->name }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.actual_cash_amount') }}</span>
+                            <input name="actual_amount" type="number" min="0" step="0.01" inputmode="decimal" class="crm-field min-h-11" placeholder="0.00" required>
+                        </label>
+                        <input type="hidden" name="currency" value="{{ $account->default_currency }}">
+                        <label class="block sm:col-span-2">
+                            <span class="crm-label">{{ __('app.reason') }}</span>
+                            <textarea name="reason" rows="3" minlength="3" maxlength="2000" class="crm-field" required placeholder="{{ __('app.cashbox_reconciliation_reason_placeholder') }}"></textarea>
+                        </label>
+                        <x-ui.button type="submit" variant="secondary" class="sm:col-span-2 sm:w-fit">{{ __('app.reconcile_cashbox') }}</x-ui.button>
+                    </form>
+                </x-ui.panel>
+            </div>
+        </div>
+    </section>
+    @endif
+
+    @if ($financeSection === 'expenses')
     <section class="mt-8" data-payments-section="expenses">
         <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -741,8 +882,19 @@
                         <x-ui.icon name="plus" class="h-4 w-4" />
                         {{ __('app.add_operational_expense') }}
                     </summary>
-                    <form method="POST" action="{{ route('dashboard.accounts.expenses.store', $account) }}" class="absolute left-0 z-30 mt-2 w-[min(24rem,calc(100vw-2rem))] space-y-3 rounded-xl border border-stone-200 bg-white p-4 shadow-xl sm:left-auto sm:right-0">
+                    <form
+                        method="POST"
+                        action="{{ route('dashboard.accounts.expenses.store', $account) }}"
+                        class="absolute left-0 z-30 mt-2 w-[min(24rem,calc(100vw-2rem))] space-y-3 rounded-xl border border-stone-200 bg-white p-4 shadow-xl sm:left-auto sm:right-0"
+                        data-confirm-action
+                        data-confirm-title="{{ __('app.confirm_expense_create_title') }}"
+                        data-confirm-body="{{ __('app.confirm_expense_create_body') }}"
+                        data-confirm-accept="{{ __('app.save_expense') }}"
+                        data-confirm-variant="primary"
+                        data-confirm-icon="receipt-text"
+                    >
                         @csrf
+                        <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key', (string) \Illuminate\Support\Str::uuid()) }}">
                         @if ($activeExpenseCategories->isEmpty())
                             <p class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{{ __('app.create_expense_category_first') }}</p>
                         @else
@@ -767,11 +919,20 @@
                                 </select>
                             </label>
                             <label class="block">
-                                <span class="crm-label">{{ __('app.location') }}</span>
-                                <select name="location_id" class="crm-field min-h-11">
+                                <span class="crm-label">{{ __('app.expense_operational_location') }}</span>
+                                <select name="expense_location_id" class="crm-field min-h-11">
                                     <option value="">{{ __('app.not_set') }}</option>
                                     @foreach ($locations as $location)
                                         <option value="{{ $location->id }}" @selected((int) $defaultExpenseLocationId === $location->id)>{{ $location->name }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.expense_cash_location') }}</span>
+                                <select name="cash_location_id" class="crm-field min-h-11">
+                                    <option value="">{{ __('app.not_set') }}</option>
+                                    @foreach ($locations as $location)
+                                        <option value="{{ $location->id }}" @selected((int) $defaultCashExpenseLocationId === $location->id)>{{ $location->name }}</option>
                                     @endforeach
                                 </select>
                                 <span class="mt-1 block text-xs text-slate-500">{{ __('app.expense_cashdesk_location_hint') }}</span>
@@ -791,7 +952,7 @@
             @endif
         </div>
 
-        <form method="GET" action="{{ route('dashboard.accounts.payments.index', $account) }}" class="grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-crm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <form method="GET" action="{{ route('dashboard.accounts.expenses.index', $account) }}" class="grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-crm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
             <input type="hidden" name="date_from" value="{{ $filters['date_from'] }}">
             <input type="hidden" name="date_to" value="{{ $filters['date_to'] }}">
             @foreach ($paymentFilterValues as $filterName => $filterValue)
@@ -818,7 +979,7 @@
             </label>
             <div class="flex min-h-11 flex-wrap items-center gap-2">
                 <x-ui.button type="submit" variant="secondary" class="min-h-11">{{ __('app.apply_filters') }}</x-ui.button>
-                <a href="{{ route('dashboard.accounts.payments.index', $expenseResetParameters) }}" class="crm-focus inline-flex min-h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700">{{ __('app.reset_filters') }}</a>
+                <a href="{{ route('dashboard.accounts.expenses.index', $expenseResetParameters) }}" class="crm-focus inline-flex min-h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:text-brand-700">{{ __('app.reset_filters') }}</a>
             </div>
         </form>
 
@@ -866,7 +1027,17 @@
                                 @if (! $expense->isVoided())
                                     <details>
                                         <summary class="crm-focus inline-flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100">{{ __('app.void_expense') }}</summary>
-                                        <form method="POST" action="{{ route('dashboard.accounts.expenses.void', [$account, $expense]) }}" class="mt-3 space-y-3 rounded-lg border border-rose-200 bg-rose-50 p-3">
+                                        <form
+                                            method="POST"
+                                            action="{{ route('dashboard.accounts.expenses.void', [$account, $expense]) }}"
+                                            class="mt-3 space-y-3 rounded-lg border border-rose-200 bg-rose-50 p-3"
+                                            data-confirm-action
+                                            data-confirm-title="{{ __('app.confirm_expense_void_title') }}"
+                                            data-confirm-body="{{ __('app.confirm_expense_void_body') }}"
+                                            data-confirm-accept="{{ __('app.confirm_void_expense') }}"
+                                            data-confirm-variant="danger"
+                                            data-confirm-icon="ban"
+                                        >
                                             @csrf
                                             @method('PATCH')
                                             <label class="block">
@@ -962,4 +1133,5 @@
             </details>
         </x-ui.panel>
     </section>
+    @endif
 @endsection

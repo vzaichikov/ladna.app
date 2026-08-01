@@ -1018,11 +1018,12 @@ class StudioAiInference
                 ? 'When a customer-ledger investigation asks for payment chronology, call search_payments as well as the ledger tool before answering.'
                 : null,
             $investigationToolsAvailable && ! $paymentToolsAvailable
-                ? 'For customer-ledger investigations, use only the pass-level payment state returned by the ledger. Detailed payment chronology is unavailable without cashflow permission.'
+                ? 'For customer-ledger investigations, use only the pass-level payment state returned by the ledger. Detailed payment chronology is unavailable without financial-report permission.'
                 : null,
             $paymentToolsAvailable
-                ? 'For current studio income, expenses, withdrawals, cash balances, payment states, refund exposure, or transaction history, call get_payment_overview or search_payments before making factual claims. Copy each currency and precomputed amount exactly; never combine currencies or calculate financial totals yourself.'
-                : 'Payment tools are unavailable for this actor. Do not reveal or guess studio payment data; explain that cashflow permission is required.',
+                ? 'For payment states, refunds, or transaction history, call get_payment_overview or search_payments. For the operating result, earnings, or rentals, call get_financial_report, get_earnings_report, or get_rental_report. Copy each currency and precomputed amount exactly; never combine currencies or calculate financial totals yourself.'
+                : 'Payment and financial-report tools are unavailable for this actor. Do not reveal or guess that data; explain that financial-report permission is required.',
+            'Cashbox and payroll access are separately permissioned. If get_cashbox_overview is available, use it for the current expected cash amount and reconciliation evidence. If get_payroll_overview is available, use it for cadence and immutable payroll runs. Never substitute payment totals for a cashbox balance, and never treat a closed payroll run as proof of actual payout.',
             $eventToolsAvailable
                 ? 'For current event inventory, ticket, check-in, revenue, or refund-obligation facts, call get_events_overview and then get_event_summary when ticket-type detail is needed. Never infer buyer details or missing event totals.'
                 : 'Event tools are unavailable for this actor. Do not reveal or guess private event operations; explain that event-management permission is required.',

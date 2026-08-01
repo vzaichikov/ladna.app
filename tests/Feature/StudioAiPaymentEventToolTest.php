@@ -34,9 +34,17 @@ class StudioAiPaymentEventToolTest extends TestCase
         $account = Account::factory()->create();
         $owner = User::factory()->create();
         $account->addOwner($owner);
+        $reportStaff = $this->addStaff($account, [
+            StudioPermission::InteractWithTelegramBot,
+            StudioPermission::ViewStudioFinancialReports,
+        ]);
         $cashflowStaff = $this->addStaff($account, [
             StudioPermission::InteractWithTelegramBot,
             StudioPermission::ManageStudioCashflow,
+        ]);
+        $payrollStaff = $this->addStaff($account, [
+            StudioPermission::InteractWithTelegramBot,
+            StudioPermission::ManageStudioPayroll,
         ]);
         $eventStaff = $this->addStaff($account, [
             StudioPermission::InteractWithTelegramBot,
@@ -49,20 +57,42 @@ class StudioAiPaymentEventToolTest extends TestCase
         $executor = app(StudioAiToolExecutor::class);
 
         $this->assertEqualsCanonicalizing(
-            ['get_payment_overview', 'search_payments', 'get_events_overview', 'get_event_summary'],
+            [
+                'get_payment_overview',
+                'search_payments',
+                'get_financial_report',
+                'get_earnings_report',
+                'get_rental_report',
+                'get_cashbox_overview',
+                'get_payroll_overview',
+                'get_events_overview',
+                'get_event_summary',
+            ],
             $this->sensitiveToolNames($executor->definitions($account, $owner)),
         );
         $this->assertEqualsCanonicalizing(
-            ['get_payment_overview', 'search_payments'],
-            $this->sensitiveToolNames($executor->definitions($account, $cashflowStaff)),
+            ['get_payment_overview', 'search_payments', 'get_financial_report', 'get_earnings_report', 'get_rental_report'],
+            $this->sensitiveToolNames($executor->definitions($account, $reportStaff)),
         );
+        $this->assertSame(['get_cashbox_overview'], $this->sensitiveToolNames($executor->definitions($account, $cashflowStaff)));
+        $this->assertSame(['get_payroll_overview'], $this->sensitiveToolNames($executor->definitions($account, $payrollStaff)));
         $this->assertEqualsCanonicalizing(
             ['get_events_overview', 'get_event_summary'],
             $this->sensitiveToolNames($executor->definitions($account, $eventStaff)),
         );
         $this->assertSame([], $this->sensitiveToolNames($executor->definitions($account, $basicStaff)));
         $this->assertEqualsCanonicalizing(
-            ['get_payment_overview', 'search_payments', 'get_events_overview', 'get_event_summary'],
+            [
+                'get_payment_overview',
+                'search_payments',
+                'get_financial_report',
+                'get_earnings_report',
+                'get_rental_report',
+                'get_cashbox_overview',
+                'get_payroll_overview',
+                'get_events_overview',
+                'get_event_summary',
+            ],
             $this->sensitiveToolNames($executor->definitions($account, $platformAdmin)),
         );
     }
@@ -72,7 +102,7 @@ class StudioAiPaymentEventToolTest extends TestCase
         $account = Account::factory()->create();
         $staff = $this->addStaff($account, [
             StudioPermission::InteractWithTelegramBot,
-            StudioPermission::ManageStudioCashflow,
+            StudioPermission::ViewStudioFinancialReports,
         ]);
         $executor = app(StudioAiToolExecutor::class);
 
@@ -107,7 +137,7 @@ class StudioAiPaymentEventToolTest extends TestCase
         $account = Account::factory()->create();
         $authorizedStaff = $this->addStaff($account, [
             StudioPermission::InteractWithTelegramBot,
-            StudioPermission::ManageStudioCashflow,
+            StudioPermission::ViewStudioFinancialReports,
         ]);
         $unauthorizedStaff = $this->addStaff($account, [
             StudioPermission::InteractWithTelegramBot,
@@ -163,7 +193,7 @@ class StudioAiPaymentEventToolTest extends TestCase
         $account = Account::factory()->create();
         $authorizedStaff = $this->addStaff($account, [
             StudioPermission::InteractWithTelegramBot,
-            StudioPermission::ManageStudioCashflow,
+            StudioPermission::ViewStudioFinancialReports,
         ]);
         $unauthorizedStaff = $this->addStaff($account, [
             StudioPermission::InteractWithTelegramBot,
@@ -213,7 +243,7 @@ class StudioAiPaymentEventToolTest extends TestCase
         $account = Account::factory()->create();
         $staff = $this->addStaff($account, [
             StudioPermission::InteractWithTelegramBot,
-            StudioPermission::ManageStudioCashflow,
+            StudioPermission::ViewStudioFinancialReports,
         ]);
         $authorization = TelegramChatAuthorization::factory()
             ->for($account)
@@ -329,6 +359,11 @@ class StudioAiPaymentEventToolTest extends TestCase
             ->filter(fn (string $name): bool => in_array($name, [
                 'get_payment_overview',
                 'search_payments',
+                'get_financial_report',
+                'get_cashbox_overview',
+                'get_earnings_report',
+                'get_rental_report',
+                'get_payroll_overview',
                 'get_events_overview',
                 'get_event_summary',
             ], true))

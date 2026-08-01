@@ -18,7 +18,7 @@ class TrainerSalaryReportController extends Controller
         TrainerSalaryCalculator $calculator,
     ): View {
         abort_unless($trainer->account_id === $account->id, 404);
-        abort_unless($request->user()?->can('manageStudioCashflow', $account), 403);
+        abort_unless($request->user()?->can('manageStudioPayroll', $account), 403);
         $filters = $request->filters();
         $salary = $calculator->forTrainer($account, $trainer, $filters);
         $entries = $salary['entries'];

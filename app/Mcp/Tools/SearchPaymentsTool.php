@@ -7,7 +7,6 @@ use App\Enums\CustomerPurchaseStatus;
 use App\Enums\EventOrderStatus;
 use App\Enums\McpToolInvocationStatus;
 use App\Models\CustomerPurchaseRefund;
-use App\Models\StudioExpense;
 use App\Support\Mcp\McpAccountContext;
 use App\Support\Payments\StudioPaymentToolData;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -23,7 +22,7 @@ use Laravel\Mcp\Server\Tool;
 use Throwable;
 
 #[Name('search-payments')]
-#[Description('Searches bounded customer payments, event payments, operational expenses, deposits, and owner withdrawals in the bearer token account scope. Contacts are masked and gateway secrets are never returned.')]
+#[Description('Searches bounded customer payments, customer refunds, and event payments in the bearer token account scope. Contacts are masked and gateway secrets are never returned.')]
 class SearchPaymentsTool extends Tool
 {
     public function handle(
@@ -86,7 +85,7 @@ class SearchPaymentsTool extends Tool
         return [
             'date_from' => $schema->string()->format('date')->description('Optional first date in YYYY-MM-DD in the studio timezone. Defaults to today.'),
             'date_to' => $schema->string()->format('date')->description('Optional last date in YYYY-MM-DD in the studio timezone. Defaults to today; maximum period is 366 days.'),
-            'query' => $schema->string()->max(120)->description('Optional customer, buyer, event, expense, or reference search. The value is not stored in the MCP audit log.'),
+            'query' => $schema->string()->max(120)->description('Optional customer, buyer, event, plan, or reference search. The value is not stored in the MCP audit log.'),
             'kind' => $schema->string()->enum($this->kinds())->description('Optional transaction kind.'),
             'status' => $schema->string()->enum($this->statuses())->description('Optional exact payment, order, or expense status.'),
             'location_id' => $schema->integer()->min(1)->description('Optional location ID from the studio profile.'),
@@ -99,7 +98,7 @@ class SearchPaymentsTool extends Tool
      */
     private function kinds(): array
     {
-        return ['customer_payment', 'customer_refund', 'event_payment', 'operational_expense', 'cash_movement'];
+        return ['customer_payment', 'customer_refund', 'event_payment'];
     }
 
     /**
@@ -110,7 +109,6 @@ class SearchPaymentsTool extends Tool
         return array_values(array_unique([
             ...array_column(CustomerPurchaseStatus::cases(), 'value'),
             ...array_column(EventOrderStatus::cases(), 'value'),
-            ...StudioExpense::statuses(),
             CustomerPurchaseRefund::StatusRecorded,
         ]));
     }

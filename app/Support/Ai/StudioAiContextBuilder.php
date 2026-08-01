@@ -102,7 +102,7 @@ class StudioAiContextBuilder
             ],
         ];
 
-        if ($actorUser && $account->userCan($actorUser, StudioPermission::ManageStudioCashflow)) {
+        if ($actorUser && $account->userCan($actorUser, StudioPermission::ViewStudioFinancialReports)) {
             $context['metrics']['unpaid_class_passes'] = CustomerClassPass::query()
                 ->whereBelongsTo($account)
                 ->outstandingBalance()

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\AccountMode;
 use App\Enums\AccountRole;
 use App\Enums\AccountStatus;
+use App\Enums\PayrollCadence;
 use App\Enums\PublicScheduleView;
 use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'public_offer_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'public_group_booking_modal_views', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'trainer_private_timeframe_weeks'])]
+#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'public_offer_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'public_group_booking_modal_views', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'trainer_private_timeframe_weeks', 'payroll_cadence', 'payroll_anchor_date'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -47,7 +48,19 @@ class Account extends Model
         'enable_telegram_alerts' => true,
         'enable_customer_notifications' => false,
         'trainer_private_timeframes_enabled' => false,
+        'payroll_cadence' => 'monthly',
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (self $account): void {
+            PayrollRunLine::query()->whereBelongsTo($account)->delete();
+            PayrollRun::query()->whereBelongsTo($account)->delete();
+            CashboxReconciliation::query()->whereBelongsTo($account)->delete();
+            StudioCashEntry::query()->whereBelongsTo($account)->delete();
+            FinanceEpoch::query()->whereBelongsTo($account)->delete();
+        });
+    }
 
     /**
      * @return array<string, string>
@@ -70,6 +83,8 @@ class Account extends Model
             'schedule_generation_weeks' => 'integer',
             'trainer_private_timeframes_enabled' => 'boolean',
             'trainer_private_timeframe_weeks' => 'integer',
+            'payroll_cadence' => PayrollCadence::class,
+            'payroll_anchor_date' => 'date',
         ];
     }
 
@@ -646,6 +661,26 @@ class Account extends Model
     public function studioCashEntries(): HasMany
     {
         return $this->hasMany(StudioCashEntry::class);
+    }
+
+    public function financeEpochs(): HasMany
+    {
+        return $this->hasMany(FinanceEpoch::class);
+    }
+
+    public function cashboxReconciliations(): HasMany
+    {
+        return $this->hasMany(CashboxReconciliation::class);
+    }
+
+    public function payrollRuns(): HasMany
+    {
+        return $this->hasMany(PayrollRun::class);
+    }
+
+    public function activeFinanceEpoch(): ?FinanceEpoch
+    {
+        return $this->financeEpochs()->orderByDesc('starts_at')->orderByDesc('id')->first();
     }
 
     public function expenseCategories(): HasMany

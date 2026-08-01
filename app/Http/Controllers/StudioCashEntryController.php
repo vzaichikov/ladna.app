@@ -21,6 +21,7 @@ class StudioCashEntryController extends Controller
             $request->occurredAt(),
             $request->user(),
             $request->validated('reason'),
+            sourceKey: 'manual:'.$request->validated('idempotency_key'),
         );
 
         return back()->with('status', __('app.studio_cash_entry_saved'));

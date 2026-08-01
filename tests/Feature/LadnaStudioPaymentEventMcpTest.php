@@ -136,11 +136,10 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
             ->assertJsonPath('result.structuredContent.totals.event_income.0.amount_cents', 5000)
             ->assertJsonPath('result.structuredContent.totals.income.0.amount_cents', 13700)
             ->assertJsonPath('result.structuredContent.totals.income.1.amount_cents', 3000)
-            ->assertJsonPath('result.structuredContent.totals.operational_expenses.0.amount_cents', 2000)
-            ->assertJsonPath('result.structuredContent.totals.owner_withdrawals.0.amount_cents', 1000)
-            ->assertJsonPath('result.structuredContent.totals.remaining.0.amount_cents', 10700)
-            ->assertJsonPath('result.structuredContent.totals.remaining.0.currency', 'UAH')
-            ->assertJsonPath('result.structuredContent.totals.remaining.1.amount_cents', 3000)
+            ->assertJsonMissingPath('result.structuredContent.totals.operational_expenses')
+            ->assertJsonMissingPath('result.structuredContent.totals.owner_withdrawals')
+            ->assertJsonMissingPath('result.structuredContent.totals.remaining')
+            ->assertJsonMissingPath('result.structuredContent.cash_balances')
             ->assertJsonPath('result.structuredContent.counts.customer_payments_by_status.payment_pending', 1);
 
         $invocation = McpToolInvocation::query()
@@ -234,24 +233,14 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
         $this->assertArrayNotHasKey('query', $invocation->input);
         $this->assertSame(['status' => 'found', 'returned' => 1, 'truncated' => false], $invocation->output);
 
-        StudioExpense::factory()->for($account)->create([
-            'reason' => 'Credentials secret-123 and bank account UA123456',
-            'occurred_at' => Carbon::parse('2026-07-21 11:00:00', 'Europe/Kyiv'),
-        ]);
-
-        $expenseResponse = $this->withToken($allowedToken->tokenValue())
+        $this->withToken($allowedToken->tokenValue())
             ->postJson('/mcp/ladna-studio', $this->toolPayload('search-payments', [
                 'date_from' => '2026-07-01',
                 'date_to' => '2026-07-31',
-                'query' => 'Credentials secret-123',
                 'kind' => 'operational_expense',
             ]))
             ->assertOk()
-            ->assertJsonPath('result.structuredContent.returned', 1);
-
-        $expenseResponse
-            ->assertDontSee('Credentials secret-123')
-            ->assertDontSee('UA123456');
+            ->assertJsonPath('result.isError', true);
 
         CustomerPurchase::factory()
             ->count(2)
@@ -390,7 +379,7 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
                 'jsonrpc' => '2.0',
                 'id' => 1,
                 'method' => 'tools/list',
-                'params' => [],
+                'params' => ['per_page' => 50],
             ])
             ->assertOk();
 
@@ -408,6 +397,8 @@ class LadnaStudioPaymentEventMcpTest extends TestCase
 
         $this->assertSame(50, data_get($tools, 'search-payments.inputSchema.properties.limit.maximum'));
         $this->assertContains('customer_refund', data_get($tools, 'search-payments.inputSchema.properties.kind.enum'));
+        $this->assertNotContains('operational_expense', data_get($tools, 'search-payments.inputSchema.properties.kind.enum'));
+        $this->assertNotContains('cash_movement', data_get($tools, 'search-payments.inputSchema.properties.kind.enum'));
         $this->assertContains('event_id', data_get($tools, 'get-event-summary.inputSchema.required'));
     }
 

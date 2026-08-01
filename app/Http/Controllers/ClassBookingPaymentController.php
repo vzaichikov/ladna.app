@@ -23,7 +23,13 @@ class ClassBookingPaymentController extends Controller
         $this->ensureBookingBelongsToAccount($account, $classBooking);
 
         try {
-            $recordManualClassBookingPayment->execute($account, $classBooking, $request->amountCents());
+            $recordManualClassBookingPayment->execute(
+                $account,
+                $classBooking,
+                $request->amountCents(),
+                $request->user(),
+                (string) $request->validated('idempotency_key'),
+            );
         } catch (ValidationException $exception) {
             if ($request->expectsJson()) {
                 return response()->json([

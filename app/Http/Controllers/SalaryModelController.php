@@ -181,7 +181,7 @@ class SalaryModelController extends Controller
 
     private function authorizeCashflow(Request $request, Account $account): void
     {
-        abort_unless($request->user()?->can('manageStudioCashflow', $account), 403);
+        abort_unless($request->user()?->can('manageStudioPayroll', $account), 403);
     }
 
     private function ensureBelongsToAccount(Account $account, SalaryModel $salaryModel): void

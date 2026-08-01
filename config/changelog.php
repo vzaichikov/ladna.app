@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.116.0',
+                'date' => '2026-08-01',
+                'title' => 'Simpler studio finances and cashbox control',
+                'items' => ['Daily finance work is now split into clear Payments, Cashbox, Operating expenses, and Payroll periods pages. Financial, earnings, and rental reports live together in the Reports section, while delegated permissions keep payment entry, cashflow management, financial reporting, and payroll separate.', 'Each location cashbox now shows how much cash should be present. Owners can start accounting from a confirmed actual amount or reconcile a later count through guarded confirmations; only expenses paid from a cashbox reduce its balance, and refunds, corrections, reversals, deposits, and withdrawals remain visible as separate history.', 'New financial, earnings, rental, and immutable payroll-period reports avoid counting class-pass sales twice as earned revenue. Ladna AI and MCP access follow the same report, cashflow, and payroll permissions, and the owner help now explains the complete workflow with current screenshots.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.115.1',
                 'date' => '2026-07-31',
                 'title' => 'Clearer SMS account reports and complete help',
@@ -1017,6 +1024,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.116.0',
+                'date' => '2026-08-01',
+                'title' => 'Простіші фінанси студії та контроль каси',
+                'items' => ['Щоденну роботу з фінансами розділено на зрозумілі сторінки «Платежі», «Каса», «Операційні витрати» та «Зарплатні періоди». Фінансовий звіт, заробіток і оренди зібрано в розділі «Звіти», а окремі права розмежовують внесення оплат, керування касою, перегляд звітів і зарплатні операції.', 'Для кожної каси локації тепер видно суму, яка має бути в ній зараз. Власник може почати облік із підтвердженої фактичної суми або пізніше звірити перерахунок через захищене підтвердження; лише витрати з джерелом «готівкова каса» зменшують її баланс, а повернення, корекції, сторно, внесення та вилучення залишаються окремими записами історії.', 'Нові фінансовий, заробітковий, орендний звіти та незмінні знімки зарплатних періодів не рахують продаж абонемента повторно як заробіток. Доступ Ladna AI й MCP підпорядковується тим самим окремим правам на звіти, касу та зарплату, а довідка для власників описує повний процес з актуальними скриншотами.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.115.1',
                 'date' => '2026-07-31',

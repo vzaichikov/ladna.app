@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
+use LogicException;
 
 #[Fillable(['account_id', 'customer_purchase_id', 'location_id', 'cash_location_id', 'method', 'amount_cents', 'currency', 'refunded_at', 'idempotency_key', 'actor_user_id', 'actor_trainer_id', 'actor_name', 'actor_email', 'actor_role', 'reason'])]
 class CustomerPurchaseRefund extends Model
@@ -92,6 +93,12 @@ class CustomerPurchaseRefund extends Model
     public function isCashless(): bool
     {
         return $this->method === self::MethodCashless;
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(fn (): never => throw new LogicException('Customer purchase refunds are immutable.'));
+        static::deleting(fn (): never => throw new LogicException('Customer purchase refunds cannot be deleted.'));
     }
 
     public function effectiveOccurredAt(): ?Carbon

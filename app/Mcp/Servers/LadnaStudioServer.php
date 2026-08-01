@@ -4,12 +4,17 @@ namespace App\Mcp\Servers;
 
 use App\Mcp\Tools\DescribeLadnaSkillsTool;
 use App\Mcp\Tools\GetBusinessLogicReferenceTool;
+use App\Mcp\Tools\GetCashboxOverviewTool;
 use App\Mcp\Tools\GetClassBookingsForDayTool;
 use App\Mcp\Tools\GetClassCountsForDayTool;
+use App\Mcp\Tools\GetEarningsReportTool;
 use App\Mcp\Tools\GetEventsOverviewTool;
 use App\Mcp\Tools\GetEventSummaryTool;
+use App\Mcp\Tools\GetFinancialReportTool;
 use App\Mcp\Tools\GetOwnerHelpPageTool;
 use App\Mcp\Tools\GetPaymentOverviewTool;
+use App\Mcp\Tools\GetPayrollOverviewTool;
+use App\Mcp\Tools\GetRentalReportTool;
 use App\Mcp\Tools\GetStudioProfileTool;
 use App\Mcp\Tools\InvestigateCustomerBookingLedgerTool;
 use App\Mcp\Tools\SearchCustomersTool;
@@ -32,8 +37,13 @@ class LadnaStudioServer extends Server
         GetEventsOverviewTool::class,
         GetEventSummaryTool::class,
         GetBusinessLogicReferenceTool::class,
+        GetCashboxOverviewTool::class,
+        GetEarningsReportTool::class,
         GetOwnerHelpPageTool::class,
+        GetFinancialReportTool::class,
         GetPaymentOverviewTool::class,
+        GetPayrollOverviewTool::class,
+        GetRentalReportTool::class,
         GetStudioProfileTool::class,
         SearchCustomersTool::class,
         InvestigateCustomerBookingLedgerTool::class,

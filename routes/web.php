@@ -26,6 +26,7 @@ use App\Http\Controllers\ApiDocumentationController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\CameraController;
+use App\Http\Controllers\CashboxReconciliationController;
 use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\ClassBookingController;
 use App\Http\Controllers\ClassBookingPaymentController;
@@ -44,11 +45,14 @@ use App\Http\Controllers\CustomerPurchaseRefundController;
 use App\Http\Controllers\CustomerPurchaseReturnController;
 use App\Http\Controllers\CustomerSearchController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EarningsReportController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventOrderController;
 use App\Http\Controllers\EventScannerController;
 use App\Http\Controllers\EventTicketTypeController;
 use App\Http\Controllers\ExpenseCategoryController;
+use App\Http\Controllers\FinanceEpochController;
+use App\Http\Controllers\FinancialReportController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LegalPageController;
@@ -57,6 +61,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ManualScheduledClassController;
 use App\Http\Controllers\OwnerOnboardingController;
 use App\Http\Controllers\OwnerOnboardingOtpController;
+use App\Http\Controllers\PayrollRunController;
 use App\Http\Controllers\PeopleCounterReportController;
 use App\Http\Controllers\PeopleCounterScreenshotController;
 use App\Http\Controllers\Platform\AccountBillingEnrollmentController;
@@ -92,6 +97,7 @@ use App\Http\Controllers\PublicStudioOfferController;
 use App\Http\Controllers\PublicStudioRulesController;
 use App\Http\Controllers\PwaController;
 use App\Http\Controllers\QuickBookingController;
+use App\Http\Controllers\RentalReportController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoomCameraTestController;
 use App\Http\Controllers\RoomController;
@@ -103,6 +109,7 @@ use App\Http\Controllers\ScheduledClassHistoryController;
 use App\Http\Controllers\ScheduledClassTrainerController;
 use App\Http\Controllers\ScheduleSeriesController;
 use App\Http\Controllers\ServiceRoomController;
+use App\Http\Controllers\StudioCashController;
 use App\Http\Controllers\StudioCashEntryController;
 use App\Http\Controllers\StudioExpenseController;
 use App\Http\Controllers\StudioSettingsController;
@@ -414,6 +421,14 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.tariff-payments.locations.approve');
         Route::get('accounts/{account}/payments', [AccountPaymentController::class, 'index'])
             ->name('accounts.payments.index');
+        Route::get('accounts/{account}/cash', [StudioCashController::class, 'index'])
+            ->name('accounts.cash.index');
+        Route::get('accounts/{account}/expenses', [StudioExpenseController::class, 'index'])
+            ->name('accounts.expenses.index');
+        Route::post('accounts/{account}/finance-epochs', FinanceEpochController::class)
+            ->name('accounts.finance-epochs.store');
+        Route::post('accounts/{account}/cashbox-reconciliations', CashboxReconciliationController::class)
+            ->name('accounts.cashbox-reconciliations.store');
         Route::get('accounts/{account}/events', [EventController::class, 'index'])->name('accounts.events.index');
         Route::get('accounts/{account}/events/create', [EventController::class, 'create'])->name('accounts.events.create');
         Route::post('accounts/{account}/events', [EventController::class, 'store'])->name('accounts.events.store');
@@ -455,6 +470,21 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.payments.refunds.store');
         Route::get('accounts/{account}/reports', [ReportController::class, 'index'])
             ->name('accounts.reports.index');
+        Route::get('accounts/{account}/reports/financial', FinancialReportController::class)
+            ->name('accounts.reports.financial');
+        Route::get('accounts/{account}/reports/earnings', EarningsReportController::class)
+            ->name('accounts.reports.earnings');
+        Route::get('accounts/{account}/reports/rentals', RentalReportController::class)
+            ->name('accounts.reports.rentals');
+        Route::get('accounts/{account}/payroll', [PayrollRunController::class, 'index'])
+            ->name('accounts.payroll.index');
+        Route::patch('accounts/{account}/payroll/cadence', [PayrollRunController::class, 'updateCadence'])
+            ->name('accounts.payroll.cadence.update');
+        Route::post('accounts/{account}/payroll/runs', [PayrollRunController::class, 'store'])
+            ->name('accounts.payroll.runs.store');
+        Route::patch('accounts/{account}/payroll/runs/{payrollRun}/void', [PayrollRunController::class, 'void'])
+            ->scopeBindings()
+            ->name('accounts.payroll.runs.void');
         Route::get('accounts/{account}/reports/trainers', TrainerReportController::class)
             ->name('accounts.reports.trainers');
         Route::get('accounts/{account}/reports/trainers/{trainer}/private-lessons', TrainerPrivateLessonReportController::class)

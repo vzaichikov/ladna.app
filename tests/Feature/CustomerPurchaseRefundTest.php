@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\RecordStudioCashEntry;
 use App\Enums\AccountRole;
 use App\Enums\CustomerPurchaseStatus;
 use App\Models\Account;
@@ -15,7 +16,9 @@ use App\Models\StudioCashEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use LogicException;
 use Tests\TestCase;
 
 class CustomerPurchaseRefundTest extends TestCase
@@ -69,6 +72,18 @@ class CustomerPurchaseRefundTest extends TestCase
 
         $this->assertSame(1, CustomerPurchaseRefund::query()->count());
         $this->assertSame(1, StudioCashEntry::query()->count());
+
+        foreach ([
+            fn () => $refund->update(['amount_cents' => 1]),
+            fn () => $refund->delete(),
+        ] as $mutation) {
+            try {
+                $mutation();
+                $this->fail('An audited refund was mutated.');
+            } catch (LogicException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 
     public function test_multiple_cashless_refunds_are_capped_and_create_no_cash_movements(): void
@@ -106,6 +121,75 @@ class CustomerPurchaseRefundTest extends TestCase
             ->assertSessionHasErrors('amount');
 
         $this->assertSame(2, $purchase->refunds()->count());
+    }
+
+    public function test_refund_idempotency_key_rejects_any_changed_business_payload(): void
+    {
+        [$owner, $account, $location, , $purchase] = $this->classPassPaymentContext();
+        $idempotencyKey = (string) Str::uuid();
+        $payload = [
+            'amount' => '100.00',
+            'method' => CustomerPurchaseRefund::MethodCash,
+            'cash_location_id' => $location->id,
+            'reason' => 'Original cash refund.',
+            'idempotency_key' => $idempotencyKey,
+        ];
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.payments.refunds.store', [$account, $purchase]), $payload)
+            ->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+
+        foreach ([
+            [...$payload, 'amount' => '101.00'],
+            [...$payload, 'method' => CustomerPurchaseRefund::MethodCashless, 'cash_location_id' => null],
+            [...$payload, 'reason' => 'Changed refund reason.'],
+        ] as $changedPayload) {
+            $this->actingAs($owner)
+                ->post(route('dashboard.accounts.payments.refunds.store', [$account, $purchase]), $changedPayload)
+                ->assertRedirect()
+                ->assertSessionHasErrors('idempotency_key');
+        }
+
+        $refund = CustomerPurchaseRefund::query()->sole();
+
+        $this->assertSame(10000, $refund->amount_cents);
+        $this->assertSame(CustomerPurchaseRefund::MethodCash, $refund->method);
+        $this->assertSame('Original cash refund.', $refund->reason);
+        $this->assertSame(1, StudioCashEntry::query()->count());
+    }
+
+    public function test_cash_refund_rolls_back_when_its_ledger_write_fails(): void
+    {
+        [$owner, $account, $location, $customerClassPass, $purchase] = $this->classPassPaymentContext();
+        $nextRefundId = $this->nextAutoIncrementId('customer_purchase_refunds');
+
+        app(RecordStudioCashEntry::class)->execute(
+            $account,
+            $location,
+            StudioCashEntry::DirectionIn,
+            1,
+            now(),
+            $owner,
+            'Reserve a conflicting refund source key.',
+            sourceKey: 'refund:'.$nextRefundId,
+        );
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.payments.refunds.store', [$account, $purchase]), [
+                'amount' => '100.00',
+                'method' => CustomerPurchaseRefund::MethodCash,
+                'cash_location_id' => $location->id,
+                'reason' => 'This refund must roll back.',
+                'idempotency_key' => (string) Str::uuid(),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('source_key');
+
+        $this->assertSame(0, CustomerPurchaseRefund::query()->count());
+        $this->assertSame(100000, $customerClassPass->fresh()->paid_amount_cents);
+        $this->assertTrue($customerClassPass->fresh()->is_paid);
+        $this->assertSame(1, StudioCashEntry::query()->count());
     }
 
     public function test_payment_correction_cannot_reduce_source_below_recorded_refunds(): void
@@ -290,5 +374,15 @@ class CustomerPurchaseRefundTest extends TestCase
             ]);
 
         return [$owner, $account, $location, $customerClassPass, $purchase];
+    }
+
+    private function nextAutoIncrementId(string $table): int
+    {
+        $result = DB::selectOne(
+            'SELECT AUTO_INCREMENT AS next_id FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+            [$table],
+        );
+
+        return (int) $result->next_id;
     }
 }

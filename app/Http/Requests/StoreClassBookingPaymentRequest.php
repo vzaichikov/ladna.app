@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Support\Payments\PaymentAmounts;
@@ -10,6 +9,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator as ValidationContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Validator;
 
 class StoreClassBookingPaymentRequest extends FormRequest
@@ -25,7 +25,7 @@ class StoreClassBookingPaymentRequest extends FormRequest
         return $account instanceof Account
             && $classBooking instanceof ClassBooking
             && (int) $classBooking->account_id === (int) $account->id
-            && ($this->user()?->can('manageBookings', $account) ?? false);
+            && ($this->user()?->can('recordCustomerPayments', $account) ?? false);
     }
 
     /**
@@ -38,6 +38,7 @@ class StoreClassBookingPaymentRequest extends FormRequest
         return [
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'return_to' => ['nullable', 'string', 'max:2048'],
+            'idempotency_key' => ['required', 'uuid'],
         ];
     }
 
@@ -54,13 +55,8 @@ class StoreClassBookingPaymentRequest extends FormRequest
                     return;
                 }
 
-                $classBooking->loadMissing('scheduledClass.classType');
                 $anyTimeAddonAmountCents = $classBooking->anyTimeAddonAmountCents();
                 $isAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
-
-                if (! $isAnyTimeAddonPayment && $classBooking->scheduledClass?->classType?->schedule_kind !== ScheduleKind::RoomRental) {
-                    $validator->errors()->add('amount', __('app.class_booking_payment_rental_only'));
-                }
 
                 if ($classBooking->activeClassPassReservation() && ! $isAnyTimeAddonPayment) {
                     $validator->errors()->add('amount', __('app.class_booking_payment_class_pass_reserved'));
@@ -88,6 +84,13 @@ class StoreClassBookingPaymentRequest extends FormRequest
     public function amountCents(): int
     {
         return PaymentAmounts::decimalToCents($this->input('amount')) ?? 0;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'idempotency_key' => $this->input('idempotency_key') ?: (string) Str::uuid(),
+        ]);
     }
 
     public function safeReturnUrl(Account $account): ?string

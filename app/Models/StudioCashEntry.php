@@ -6,6 +6,7 @@ use Database\Factories\StudioCashEntryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use LogicException;
 
 class StudioCashEntry extends Model
 {
@@ -26,11 +27,21 @@ class StudioCashEntry extends Model
 
     public const PurposePaymentRefund = 'payment_refund';
 
+    public const PurposeCustomerPayment = 'customer_payment';
+
+    public const PurposePaymentCorrectionReversal = 'payment_correction_reversal';
+
+    public const PurposePaymentCorrection = 'payment_correction';
+
     protected $fillable = [
         'account_id',
+        'finance_epoch_id',
         'location_id',
         'studio_expense_id',
+        'customer_purchase_id',
+        'customer_purchase_correction_id',
         'customer_purchase_refund_id',
+        'source_key',
         'direction',
         'purpose',
         'amount_cents',
@@ -60,6 +71,9 @@ class StudioCashEntry extends Model
             self::PurposeOperationalExpense,
             self::PurposeExpenseReversal,
             self::PurposePaymentRefund,
+            self::PurposeCustomerPayment,
+            self::PurposePaymentCorrectionReversal,
+            self::PurposePaymentCorrection,
         ];
     }
 
@@ -83,6 +97,21 @@ class StudioCashEntry extends Model
         return $this->belongsTo(Location::class);
     }
 
+    public function financeEpoch(): BelongsTo
+    {
+        return $this->belongsTo(FinanceEpoch::class);
+    }
+
+    public function customerPurchase(): BelongsTo
+    {
+        return $this->belongsTo(CustomerPurchase::class);
+    }
+
+    public function customerPurchaseCorrection(): BelongsTo
+    {
+        return $this->belongsTo(CustomerPurchaseCorrection::class);
+    }
+
     public function expense(): BelongsTo
     {
         return $this->belongsTo(StudioExpense::class, 'studio_expense_id');
@@ -91,5 +120,11 @@ class StudioCashEntry extends Model
     public function customerPurchaseRefund(): BelongsTo
     {
         return $this->belongsTo(CustomerPurchaseRefund::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(fn (): never => throw new LogicException('Studio cash ledger entries are immutable.'));
+        static::deleting(fn (): never => throw new LogicException('Studio cash ledger entries cannot be deleted.'));
     }
 }

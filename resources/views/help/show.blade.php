@@ -115,14 +115,18 @@
                     <section class="mt-8 grid gap-5" aria-label="{{ $copy['screenshot_title'] }}">
                         <h2 class="text-2xl font-semibold text-slate-950">{{ $copy['screenshot_title'] }}</h2>
 
-                        @forelse ($page['screenshots'] ?? [] as $screenshot)
-                            <figure class="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-crm">
-                                <img src="{{ asset($screenshot['path']) }}?v={{ config('help.updated_at') }}" alt="{{ $screenshot['alt'] }}" class="w-full bg-white object-contain">
-                                <figcaption class="border-t border-stone-100 px-5 py-4 text-sm leading-6 text-slate-600">{{ $screenshot['caption'] }}</figcaption>
-                            </figure>
-                        @empty
-                            <p class="rounded-xl border border-dashed border-stone-200 bg-white/75 p-5 text-sm leading-6 text-slate-500">{{ $copy['no_screenshot'] }}</p>
-                        @endforelse
+                        @if ($page['show_screenshot_gallery'] ?? true)
+                            @forelse ($page['screenshots'] ?? [] as $screenshot)
+                                <figure class="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-crm">
+                                    <img src="{{ asset($screenshot['path']) }}?v={{ config('help.updated_at') }}" alt="{{ $screenshot['alt'] }}" class="w-full bg-white object-contain">
+                                    <figcaption class="border-t border-stone-100 px-5 py-4 text-sm leading-6 text-slate-600">{{ $screenshot['caption'] }}</figcaption>
+                                </figure>
+                            @empty
+                                <p class="rounded-xl border border-dashed border-stone-200 bg-white/75 p-5 text-sm leading-6 text-slate-500">{{ $copy['no_screenshot'] }}</p>
+                            @endforelse
+                        @else
+                            <p class="rounded-xl border border-stone-100 bg-slate-50 p-5 text-sm leading-6 text-slate-600">{{ $copy['section_screenshots_body'] }}</p>
+                        @endif
                     </section>
 
                     <section class="mt-8 grid gap-5" aria-label="{{ $page['title'] }}">

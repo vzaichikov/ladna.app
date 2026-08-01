@@ -13,16 +13,19 @@ use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Models\StudioCashEntry;
 use App\Models\User;
+use App\Support\Finance\CashboxBalanceService;
 use App\Support\MoneyFormatter;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
+use LogicException;
 use Tests\TestCase;
 
 class StudioCashflowCorrectionTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_studio_cashflow_permission_is_required_for_non_owner_payment_page_access(): void
+    public function test_financial_report_permission_is_required_for_non_owner_payment_page_access(): void
     {
         $owner = User::factory()->create();
         $trainer = User::factory()->create();
@@ -46,23 +49,39 @@ class StudioCashflowCorrectionTest extends TestCase
 
         $this->actingAs($trainer->fresh())
             ->get(route('dashboard.accounts.payments.index', $account))
-            ->assertOk()
-            ->assertSee(__('app.cash_now'));
+            ->assertForbidden();
+
+        $account->memberships()
+            ->whereBelongsTo($trainer)
+            ->update(['permissions' => [StudioPermission::ViewStudioFinancialReports->value]]);
+
+        $this->actingAs($trainer->fresh())
+            ->get(route('dashboard.accounts.payments.index', $account))
+            ->assertOk();
     }
 
     public function test_manual_cash_payment_edit_stores_history_and_updates_purchase(): void
     {
         [$owner, $account, $location, $secondLocation, $customerClassPass, $purchase] = $this->manualClassPassPaymentContext();
+        $idempotencyKey = (string) Str::uuid();
+        $payload = [
+            'location_id' => $secondLocation->id,
+            'amount' => '600.50',
+            'paid_at' => '2026-07-04T12:30',
+            'reason' => 'Trainer entered the wrong cash amount.',
+            'idempotency_key' => $idempotencyKey,
+        ];
 
         $this->actingAs($owner)
             ->from(route('dashboard.accounts.payments.index', $account))
-            ->post(route('dashboard.accounts.payments.corrections.store', [$account, $purchase]), [
-                'location_id' => $secondLocation->id,
-                'amount' => '600.50',
-                'paid_at' => '2026-07-04T12:30',
-                'reason' => 'Trainer entered the wrong cash amount.',
-            ])
+            ->post(route('dashboard.accounts.payments.corrections.store', [$account, $purchase]), $payload)
             ->assertRedirect(route('dashboard.accounts.payments.index', $account));
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.payments.index', $account))
+            ->post(route('dashboard.accounts.payments.corrections.store', [$account, $purchase]), $payload)
+            ->assertRedirect(route('dashboard.accounts.payments.index', $account))
+            ->assertSessionDoesntHaveErrors();
 
         $purchase->refresh();
         $customerClassPass->refresh();
@@ -80,6 +99,33 @@ class StudioCashflowCorrectionTest extends TestCase
             'new_amount_cents' => 60050,
             'reason' => 'Trainer entered the wrong cash amount.',
         ]);
+        $this->assertSame(1, $purchase->corrections()->count());
+        $this->assertSame(2, $purchase->cashEntries()->count());
+        $this->assertSame(-40000, app(CashboxBalanceService::class)->balanceFor($account, $location));
+        $this->assertSame(60050, app(CashboxBalanceService::class)->balanceFor($account, $secondLocation));
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.payments.index', $account))
+            ->post(route('dashboard.accounts.payments.corrections.store', [$account, $purchase]), [
+                ...$payload,
+                'amount' => '601.50',
+            ])
+            ->assertRedirect(route('dashboard.accounts.payments.index', $account))
+            ->assertSessionHasErrors('idempotency_key');
+
+        $correction = $purchase->corrections()->sole();
+
+        foreach ([
+            fn () => $correction->update(['new_amount_cents' => 1]),
+            fn () => $correction->delete(),
+        ] as $mutation) {
+            try {
+                $mutation();
+                $this->fail('An audited payment correction was mutated.');
+            } catch (LogicException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 
     public function test_class_pass_manual_cash_payment_edit_recalculates_paid_status(): void
@@ -137,7 +183,7 @@ class StudioCashflowCorrectionTest extends TestCase
         $otherLocation = Location::factory()->for($otherAccount)->create();
 
         $this->actingAs($owner)
-            ->from(route('dashboard.accounts.payments.index', $account))
+            ->from(route('dashboard.accounts.cash.index', $account))
             ->post(route('dashboard.accounts.cash-entries.store', $account), [
                 'direction' => StudioCashEntry::DirectionIn,
                 'location_id' => $location->id,
@@ -145,10 +191,10 @@ class StudioCashflowCorrectionTest extends TestCase
                 'occurred_at' => '2026-07-04T10:00',
                 'reason' => 'Owner added opening cash.',
             ])
-            ->assertRedirect(route('dashboard.accounts.payments.index', $account));
+            ->assertRedirect(route('dashboard.accounts.cash.index', $account));
 
         $this->actingAs($owner)
-            ->from(route('dashboard.accounts.payments.index', $account))
+            ->from(route('dashboard.accounts.cash.index', $account))
             ->post(route('dashboard.accounts.cash-entries.store', $account), [
                 'direction' => StudioCashEntry::DirectionOut,
                 'location_id' => $location->id,
@@ -156,10 +202,10 @@ class StudioCashflowCorrectionTest extends TestCase
                 'occurred_at' => '2026-07-04T11:00',
                 'reason' => 'Owner took cash from desk.',
             ])
-            ->assertRedirect(route('dashboard.accounts.payments.index', $account));
+            ->assertRedirect(route('dashboard.accounts.cash.index', $account));
 
         $this->actingAs($owner)
-            ->from(route('dashboard.accounts.payments.index', $account))
+            ->from(route('dashboard.accounts.cash.index', $account))
             ->post(route('dashboard.accounts.cash-entries.store', $account), [
                 'direction' => StudioCashEntry::DirectionIn,
                 'location_id' => $otherLocation->id,
@@ -167,14 +213,14 @@ class StudioCashflowCorrectionTest extends TestCase
                 'occurred_at' => '2026-07-04T12:00',
                 'reason' => 'Wrong tenant location.',
             ])
-            ->assertRedirect(route('dashboard.accounts.payments.index', $account))
+            ->assertRedirect(route('dashboard.accounts.cash.index', $account))
             ->assertSessionHasErrors('location_id');
 
         $this->assertSame(2, StudioCashEntry::whereBelongsTo($account)->count());
         $this->assertSame(0, StudioCashEntry::whereBelongsTo($otherAccount)->count());
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.payments.index', $account))
+            ->get(route('dashboard.accounts.cash.index', $account))
             ->assertOk()
             ->assertSee('Main cashdesk')
             ->assertSee(MoneyFormatter::format(7000, 'UAH'));

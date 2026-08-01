@@ -126,7 +126,7 @@
                     </div>
                 </div>
 
-                @if ($customerClassPass->source === 'manual' && $customerClassPass->remainingPaymentCents() > 0)
+                @if ($customerClassPass->source === 'manual' && $customerClassPass->remainingPaymentCents() > 0 && auth()->user()?->can('recordCustomerPayments', $account))
                     <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.payments.store', [$account, $customerClassPass]) }}" class="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                         @csrf
                         <label class="block">

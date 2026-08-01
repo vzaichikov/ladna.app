@@ -18,7 +18,7 @@ class TrainerReportController extends Controller
         TrainerSalaryCalculator $salaryCalculator,
     ): View {
         $filters = $request->filters();
-        $canManageStudioCashflow = $request->user()?->can('manageStudioCashflow', $account) ?? false;
+        $canManageStudioCashflow = $request->user()?->can('manageStudioPayroll', $account) ?? false;
         $rows = $reportData->forAccount($account, $filters);
         $salaryReport = $canManageStudioCashflow
             ? $salaryCalculator->forAccount($account, $filters)

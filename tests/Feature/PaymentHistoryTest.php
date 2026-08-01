@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\IssueCustomerClassPass;
 use App\Actions\RecordManualCustomerClassPassPayment;
+use App\Actions\RecordStudioCashEntry;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\CustomerPurchaseStatus;
@@ -339,8 +340,12 @@ class PaymentHistoryTest extends TestCase
             ->assertSee('Partial Client')
             ->assertSee(MoneyFormatter::format(40000, 'UAH'))
             ->assertSee(MoneyFormatter::format(60000, 'UAH'))
-            ->assertSee(MoneyFormatter::format(100000, 'UAH'))
             ->assertSee('Main cash desk');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.cash.index', $account))
+            ->assertOk()
+            ->assertSee(MoneyFormatter::format(100000, 'UAH'));
     }
 
     public function test_studio_owner_can_filter_payment_history_by_location(): void
@@ -488,24 +493,9 @@ class PaymentHistoryTest extends TestCase
                 'amount_cents' => 8000,
                 'occurred_at' => '2026-06-30 23:59:59',
             ]);
-        StudioCashEntry::factory()->for($account)->for($location)->create([
-            'direction' => StudioCashEntry::DirectionIn,
-            'purpose' => StudioCashEntry::PurposeDeposit,
-            'amount_cents' => 1000,
-            'occurred_at' => '2026-06-30 10:00:00',
-        ]);
-        StudioCashEntry::factory()->for($account)->for($location)->create([
-            'direction' => StudioCashEntry::DirectionOut,
-            'purpose' => StudioCashEntry::PurposeOwnerWithdrawal,
-            'amount_cents' => 300,
-            'occurred_at' => '2026-07-13 10:00:00',
-        ]);
-        StudioCashEntry::factory()->for($account)->for($location)->create([
-            'direction' => StudioCashEntry::DirectionOut,
-            'purpose' => StudioCashEntry::PurposeOwnerWithdrawal,
-            'amount_cents' => 200,
-            'occurred_at' => '2026-07-14 10:00:00',
-        ]);
+        $this->studioCashEntry($account, $location, StudioCashEntry::DirectionIn, StudioCashEntry::PurposeDeposit, 1000, '2026-06-30 10:00:00');
+        $this->studioCashEntry($account, $location, StudioCashEntry::DirectionOut, StudioCashEntry::PurposeOwnerWithdrawal, 300, '2026-07-13 10:00:00');
+        $this->studioCashEntry($account, $location, StudioCashEntry::DirectionOut, StudioCashEntry::PurposeOwnerWithdrawal, 200, '2026-07-14 10:00:00');
 
         $response = $this->actingAs($owner)
             ->get(route('dashboard.accounts.payments.index', [
@@ -574,7 +564,7 @@ class PaymentHistoryTest extends TestCase
             'plan_name' => 'UAH payment',
             'amount_cents' => 10000,
             'currency' => 'UAH',
-            'paid_at' => '2026-07-10 10:00:00',
+            'paid_at' => '2026-07-12 10:00:00',
         ]);
         $this->customerPurchase($account, $location, [
             'plan_name' => 'USD cash payment',
@@ -594,13 +584,7 @@ class PaymentHistoryTest extends TestCase
                 'currency' => 'UAH',
                 'occurred_at' => '2026-07-12 10:00:00',
             ]);
-        StudioCashEntry::factory()->for($account)->for($location)->create([
-            'direction' => StudioCashEntry::DirectionIn,
-            'purpose' => StudioCashEntry::PurposeDeposit,
-            'amount_cents' => 1000,
-            'currency' => 'UAH',
-            'occurred_at' => '2026-07-13 10:00:00',
-        ]);
+        $this->studioCashEntry($account, $location, StudioCashEntry::DirectionIn, StudioCashEntry::PurposeDeposit, 1000, '2026-07-13 10:00:00');
 
         $response = $this->actingAs($owner)
             ->get(route('dashboard.accounts.payments.index', [
@@ -749,37 +733,22 @@ class PaymentHistoryTest extends TestCase
         $account->addOwner($owner);
         $location = Location::factory()->for($account)->create();
         $this->customerPurchase($account, $location, [
-            'plan_name' => 'Today cash',
-            'amount_cents' => 10000,
-            'provider' => CustomerPurchase::ProviderStudioCash,
-            'payment_source' => CustomerPurchase::SourceManualCashClassPass,
-            'paid_at' => '2026-07-17 10:00:00',
-        ]);
-        $this->customerPurchase($account, $location, [
             'plan_name' => 'Previous cash',
             'amount_cents' => 5000,
             'provider' => CustomerPurchase::ProviderStudioCash,
             'payment_source' => CustomerPurchase::SourceManualCashClassPass,
             'paid_at' => '2026-07-16 10:00:00',
         ]);
-        StudioCashEntry::factory()->for($account)->for($location)->create([
-            'direction' => StudioCashEntry::DirectionIn,
-            'purpose' => StudioCashEntry::PurposeDeposit,
-            'amount_cents' => 500,
-            'occurred_at' => '2026-07-16 09:00:00',
+        $this->customerPurchase($account, $location, [
+            'plan_name' => 'Today cash',
+            'amount_cents' => 10000,
+            'provider' => CustomerPurchase::ProviderStudioCash,
+            'payment_source' => CustomerPurchase::SourceManualCashClassPass,
+            'paid_at' => '2026-07-17 10:00:00',
         ]);
-        StudioCashEntry::factory()->for($account)->for($location)->create([
-            'direction' => StudioCashEntry::DirectionOut,
-            'purpose' => StudioCashEntry::PurposeOwnerWithdrawal,
-            'amount_cents' => 1000,
-            'occurred_at' => '2026-07-16 11:00:00',
-        ]);
-        StudioCashEntry::factory()->for($account)->for($location)->create([
-            'direction' => StudioCashEntry::DirectionOut,
-            'purpose' => StudioCashEntry::PurposeOwnerWithdrawal,
-            'amount_cents' => 3000,
-            'occurred_at' => '2026-07-17 11:00:00',
-        ]);
+        $this->studioCashEntry($account, $location, StudioCashEntry::DirectionIn, StudioCashEntry::PurposeDeposit, 500, '2026-07-16 09:00:00');
+        $this->studioCashEntry($account, $location, StudioCashEntry::DirectionOut, StudioCashEntry::PurposeOwnerWithdrawal, 1000, '2026-07-16 11:00:00');
+        $this->studioCashEntry($account, $location, StudioCashEntry::DirectionOut, StudioCashEntry::PurposeOwnerWithdrawal, 3000, '2026-07-17 11:00:00');
 
         $response = $this->actingAs($owner)
             ->get(route('dashboard.accounts.payments.index', $account))
@@ -805,7 +774,7 @@ class PaymentHistoryTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_payment_page_renders_sections_in_owner_task_order_and_hides_empty_attention(): void
+    public function test_finance_pages_render_only_their_dedicated_sections(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create();
@@ -819,18 +788,25 @@ class PaymentHistoryTest extends TestCase
             ->assertDontSee(__('app.payment_failed_attention', ['count' => 0]))
             ->getContent();
 
-        $overviewPosition = strpos($content, 'data-payments-section="overview"');
         $historyPosition = strpos($content, 'data-payments-section="history"');
-        $cashPosition = strpos($content, 'data-payments-section="cash"');
-        $expensesPosition = strpos($content, 'data-payments-section="expenses"');
-
-        $this->assertIsInt($overviewPosition);
         $this->assertIsInt($historyPosition);
-        $this->assertIsInt($cashPosition);
-        $this->assertIsInt($expensesPosition);
-        $this->assertTrue($overviewPosition < $historyPosition);
-        $this->assertTrue($historyPosition < $cashPosition);
-        $this->assertTrue($cashPosition < $expensesPosition);
+        $this->assertStringNotContainsString('data-payments-section="overview"', $content);
+        $this->assertStringNotContainsString('data-payments-section="cash"', $content);
+        $this->assertStringNotContainsString('data-payments-section="expenses"', $content);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.cash.index', $account))
+            ->assertOk()
+            ->assertSee('data-payments-section="cash"', false)
+            ->assertDontSee('data-payments-section="history"', false)
+            ->assertDontSee('data-payments-section="expenses"', false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.expenses.index', $account))
+            ->assertOk()
+            ->assertSee('data-payments-section="expenses"', false)
+            ->assertDontSee('data-payments-section="history"', false)
+            ->assertDontSee('data-payments-section="cash"', false);
     }
 
     public function test_payment_period_boundaries_use_the_account_timezone(): void
@@ -925,7 +901,7 @@ class PaymentHistoryTest extends TestCase
             'sessions_count' => 8,
         ]);
 
-        return CustomerPurchase::factory()
+        $purchase = CustomerPurchase::factory()
             ->for($account)
             ->for($customer)
             ->for($plan, 'classPassPlan')
@@ -940,6 +916,50 @@ class PaymentHistoryTest extends TestCase
                 'paid_at' => now(),
                 ...$attributes,
             ]);
+
+        if ($purchase->status === CustomerPurchaseStatus::PaymentPaid
+            && in_array($purchase->payment_source, [
+                CustomerPurchase::SourceManualCashClassPass,
+                CustomerPurchase::SourceManualCashBooking,
+            ], true)) {
+            app(RecordStudioCashEntry::class)->execute(
+                $account,
+                $location,
+                StudioCashEntry::DirectionIn,
+                $purchase->amount_cents,
+                $purchase->effectiveOccurredAt(),
+                null,
+                'Test customer cash payment.',
+                StudioCashEntry::PurposeCustomerPayment,
+                purchase: $purchase,
+                currency: $purchase->currency,
+                sourceKey: 'purchase:'.$purchase->id.':cash-in',
+            );
+        }
+
+        return $purchase;
+    }
+
+    private function studioCashEntry(
+        Account $account,
+        Location $location,
+        string $direction,
+        string $purpose,
+        int $amountCents,
+        string $occurredAt,
+        string $currency = 'UAH',
+    ): StudioCashEntry {
+        return app(RecordStudioCashEntry::class)->execute(
+            $account,
+            $location,
+            $direction,
+            $amountCents,
+            Carbon::parse($occurredAt, 'UTC'),
+            null,
+            'Test cash movement.',
+            $purpose,
+            currency: $currency,
+        );
     }
 
     private function enableAccountFiscalization(Account $account): void

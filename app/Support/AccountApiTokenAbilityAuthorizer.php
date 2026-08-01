@@ -58,7 +58,9 @@ class AccountApiTokenAbilityAuthorizer
             AccountApiTokenAbility::McpBookingsCancel => StudioPermission::ManageBookings,
             AccountApiTokenAbility::McpCustomersRead => StudioPermission::ManageClients,
             AccountApiTokenAbility::McpClassPassesRead => StudioPermission::ManageCustomerClassPasses,
-            AccountApiTokenAbility::McpPaymentsRead => StudioPermission::ManageStudioCashflow,
+            AccountApiTokenAbility::McpPaymentsRead => StudioPermission::ViewStudioFinancialReports,
+            AccountApiTokenAbility::McpCashflowRead => StudioPermission::ManageStudioCashflow,
+            AccountApiTokenAbility::McpPayrollRead => StudioPermission::ManageStudioPayroll,
             AccountApiTokenAbility::McpEventsRead => StudioPermission::ManageEvents,
         };
     }

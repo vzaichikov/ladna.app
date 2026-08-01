@@ -55,12 +55,32 @@ class TrainerReportTest extends TestCase
             ->get(route('dashboard.accounts.show', $account))
             ->assertOk()
             ->assertSee(__('app.reports'))
-            ->assertSee(route('dashboard.accounts.reports.index', $account), false);
+            ->assertSee(__('app.finance'))
+            ->assertSee(route('dashboard.accounts.reports.index', $account), false)
+            ->assertSeeInOrder([
+                route('dashboard.accounts.events.index', $account),
+                route('dashboard.accounts.reports.index', $account),
+                route('dashboard.accounts.payments.index', $account),
+                route('dashboard.accounts.cash.index', $account),
+                route('dashboard.accounts.expenses.index', $account),
+                route('dashboard.accounts.payroll.index', $account),
+            ], false)
+            ->assertDontSee(route('dashboard.accounts.reports.financial', $account), false)
+            ->assertDontSee(route('dashboard.accounts.reports.earnings', $account), false)
+            ->assertDontSee(route('dashboard.accounts.reports.rentals', $account), false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.reports.index', $account))
             ->assertOk()
+            ->assertSee(__('app.financial_reports'))
+            ->assertSee(__('app.operational_reports'))
             ->assertSee(__('app.trainer_report_title'));
+
+        $this->actingAs($staff)
+            ->get(route('dashboard.accounts.reports.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.operational_reports'))
+            ->assertDontSee(__('app.financial_reports'));
 
         $this->actingAs($staff)
             ->get(route('dashboard.accounts.reports.trainers', $account))

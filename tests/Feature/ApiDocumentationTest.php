@@ -28,6 +28,11 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('search-owner-help')
             ->assertSee('get-payment-overview')
             ->assertSee('search-payments')
+            ->assertSee('get-financial-report')
+            ->assertSee('get-cashbox-overview')
+            ->assertSee('get-earnings-report')
+            ->assertSee('get-rental-report')
+            ->assertSee('get-payroll-overview')
             ->assertSee('get-events-overview')
             ->assertSee('get-event-summary')
             ->assertSee('PHP')
@@ -87,6 +92,12 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.payment_overview.value.params.arguments.date_from', '2026-07-01')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.payment_search.value.params.name', 'search-payments')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.payment_search.value.params.arguments.query', 'Коваль')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.financial_report.value.params.name', 'get-financial-report')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.cashbox_overview.value.params.name', 'get-cashbox-overview')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.cashbox_overview.value.params.arguments.currency', 'UAH')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.earnings_report.value.params.name', 'get-earnings-report')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.rental_report.value.params.name', 'get-rental-report')
+            ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.payroll_overview.value.params.name', 'get-payroll-overview')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.events_overview.value.params.name', 'get-events-overview')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.events_overview.value.params.arguments.status_bucket', 'upcoming')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.event_summary.value.params.name', 'get-event-summary')
@@ -146,6 +157,11 @@ class ApiDocumentationTest extends TestCase
         $this->assertContains('investigate-customer-booking-ledger', $toolNames);
         $this->assertContains('get-payment-overview', $toolNames);
         $this->assertContains('search-payments', $toolNames);
+        $this->assertContains('get-financial-report', $toolNames);
+        $this->assertContains('get-cashbox-overview', $toolNames);
+        $this->assertContains('get-earnings-report', $toolNames);
+        $this->assertContains('get-rental-report', $toolNames);
+        $this->assertContains('get-payroll-overview', $toolNames);
         $this->assertContains('get-events-overview', $toolNames);
         $this->assertContains('get-event-summary', $toolNames);
     }

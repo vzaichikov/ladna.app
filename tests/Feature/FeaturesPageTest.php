@@ -33,7 +33,7 @@ class FeaturesPageTest extends TestCase
             ->assertSee('public-schedule.png', false)
             ->assertSee('active-passes.png', false)
             ->assertSee('trainer-permissions.png', false)
-            ->assertSee('payments-period.png', false)
+            ->assertSee('finance-payments.png', false)
             ->assertSee('events-list.png', false)
             ->assertSee('assistant-events-uk.png', false)
             ->assertSee('assistant-customer-uk.png', false)

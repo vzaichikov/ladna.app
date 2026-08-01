@@ -41,6 +41,7 @@ class AccountPaymentController extends Controller
             'expenseStatuses' => StudioExpense::statuses(),
             'fiscalizationEnabled' => $fiscalizationEnabled,
             'canManageStudioCashflow' => true,
+            'financeSection' => 'payments',
         ]);
     }
 }

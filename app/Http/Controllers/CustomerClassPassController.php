@@ -237,7 +237,7 @@ class CustomerClassPassController extends Controller
         RecordManualCustomerClassPassPayment $recordManualCustomerClassPassPayment,
     ): RedirectResponse {
         $this->ensureBelongsToAccount($account, $customerClassPass);
-        $this->authorize('manageCustomerClassPasses', $account);
+        $this->authorize('recordCustomerPayments', $account);
 
         $location = $account->locations()->whereKey($request->validated('location_id'))->firstOrFail();
 
@@ -246,6 +246,8 @@ class CustomerClassPassController extends Controller
             $customerClassPass,
             $location,
             $request->amountCents(),
+            user: $request->user(),
+            idempotencyKey: (string) $request->validated('idempotency_key'),
         );
 
         return redirect()

@@ -13,13 +13,17 @@ use App\Models\ExpenseCategory;
 use App\Models\FiscalReceipt;
 use App\Models\StudioCashEntry;
 use App\Models\StudioExpense;
+use App\Support\Finance\CashboxBalanceService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class AccountPaymentDashboardData
 {
-    public function __construct(private readonly AccountPaymentHistory $paymentHistory) {}
+    public function __construct(
+        private readonly AccountPaymentHistory $paymentHistory,
+        private readonly CashboxBalanceService $cashboxBalanceService,
+    ) {}
 
     /**
      * @param  array{date_from: string, date_to: string, search: string|null, payment_method: string|null, status: string|null, provider: string|null, location_id: int|null, expense_category_id: int|null, expense_payment_method: string|null, expense_status: string|null}  $filters
@@ -32,6 +36,11 @@ class AccountPaymentDashboardData
         CarbonInterface $endsAt,
         bool $fiscalizationEnabled,
     ): array {
+        $activeEpoch = $account->activeFinanceEpoch();
+        if ($activeEpoch && $activeEpoch->starts_at->greaterThan($startsAt)) {
+            $startsAt = $activeEpoch->starts_at;
+        }
+
         $periodPaymentQuery = $this->periodPaymentQuery($account, $startsAt, $endsAt);
         $paymentQuery = $this->paymentQuery(clone $periodPaymentQuery, $filters);
         $periodRefundQuery = CustomerPurchaseRefund::query()
@@ -58,6 +67,7 @@ class AccountPaymentDashboardData
                 ->withQueryString(),
             'cashEntries' => $account->studioCashEntries()
                 ->with(['location', 'expense.category', 'customerPurchaseRefund.customerPurchase.customer'])
+                ->when($activeEpoch, fn (Builder $query) => $query->whereBelongsTo($activeEpoch, 'financeEpoch'))
                 ->whereBetween('occurred_at', [$startsAt, $endsAt])
                 ->orderByDesc('occurred_at')
                 ->orderByDesc('id')
@@ -350,47 +360,50 @@ class AccountPaymentDashboardData
     }
 
     /**
-     * @return Collection<int, array{location: mixed, manual_cash_by_currency: array<string, int>, cash_in_by_currency: array<string, int>, cash_out_by_currency: array<string, int>, balance_by_currency: array<string, int>}>
+     * @return Collection<int, array{location: mixed, base_actual_by_currency: array<string, int>, reconciled_by_currency: array<string, bool>, cash_in_by_currency: array<string, int>, cash_out_by_currency: array<string, int>, balance_by_currency: array<string, int>}>
      */
     private function cashBalances(Account $account): Collection
     {
         $locations = $account->locations()
             ->orderBy('name')
             ->get();
-        $locationIds = $locations->pluck('id');
-        $manualCashByLocation = $account->customerPurchases()
-            ->whereIn('location_id', $locationIds)
-            ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
-            ->whereIn('payment_source', [
-                CustomerPurchase::SourceManualCashClassPass,
-                CustomerPurchase::SourceManualCashBooking,
-            ])
-            ->selectRaw('location_id, currency, SUM(amount_cents) as amount_cents')
-            ->groupBy('location_id', 'currency')
-            ->get()
-            ->groupBy('location_id');
-        $cashEntriesByLocation = $account->studioCashEntries()
-            ->whereIn('location_id', $locationIds)
-            ->selectRaw('location_id, direction, currency, SUM(amount_cents) as amount_cents')
-            ->groupBy('location_id', 'direction', 'currency')
-            ->get()
-            ->groupBy('location_id');
+        $epoch = $account->activeFinanceEpoch();
+        $snapshots = $this->cashboxBalanceService->forAccount($account, $epoch)->groupBy('location_id');
 
-        return $locations->map(function ($location) use ($manualCashByLocation, $cashEntriesByLocation): array {
-            $entries = $cashEntriesByLocation->get($location->id, collect());
-            $manualCashByCurrency = $this->currencyTotalsFromRows($manualCashByLocation->get($location->id, collect()));
-            $cashInByCurrency = $this->currencyTotalsFromRows($entries->where('direction', StudioCashEntry::DirectionIn));
-            $cashOutByCurrency = $this->currencyTotalsFromRows($entries->where('direction', StudioCashEntry::DirectionOut));
+        return $locations->map(function ($location) use ($account, $epoch, $snapshots): array {
+            $locationSnapshots = $snapshots->get($location->id, collect());
+            $baseActualByCurrency = [];
+            $reconciledByCurrency = [];
+            $cashInByCurrency = [];
+            $cashOutByCurrency = [];
+            $balanceByCurrency = [];
+
+            foreach ($locationSnapshots as $snapshot) {
+                $currency = $snapshot['currency'];
+                $baseActualByCurrency[$currency] = $snapshot['base_actual_cents'];
+                $reconciledByCurrency[$currency] = $snapshot['reconciliation_id'] !== null;
+                $balanceByCurrency[$currency] = $snapshot['balance_cents'];
+                $entryQuery = StudioCashEntry::query()
+                    ->whereBelongsTo($account)
+                    ->when($epoch, fn (Builder $query) => $query->whereBelongsTo($epoch, 'financeEpoch'))
+                    ->whereBelongsTo($location)
+                    ->where('currency', $currency)
+                    ->where('id', '>', $snapshot['cutoff_cash_entry_id']);
+                $cashInByCurrency[$currency] = (int) (clone $entryQuery)
+                    ->where('direction', StudioCashEntry::DirectionIn)
+                    ->sum('amount_cents');
+                $cashOutByCurrency[$currency] = (int) (clone $entryQuery)
+                    ->where('direction', StudioCashEntry::DirectionOut)
+                    ->sum('amount_cents');
+            }
 
             return [
                 'location' => $location,
-                'manual_cash_by_currency' => $manualCashByCurrency,
+                'base_actual_by_currency' => $baseActualByCurrency,
+                'reconciled_by_currency' => $reconciledByCurrency,
                 'cash_in_by_currency' => $cashInByCurrency,
                 'cash_out_by_currency' => $cashOutByCurrency,
-                'balance_by_currency' => $this->subtractCurrencyTotals(
-                    $this->mergeCurrencyTotals($manualCashByCurrency, $cashInByCurrency),
-                    $cashOutByCurrency,
-                ),
+                'balance_by_currency' => $balanceByCurrency,
             ];
         });
     }
@@ -405,18 +418,6 @@ class AccountPaymentDashboardData
             ->groupBy('currency')
             ->pluck('amount_cents', 'currency')
             ->map(fn (mixed $amountCents): int => (int) $amountCents)
-            ->sortKeys()
-            ->all();
-    }
-
-    /**
-     * @param  Collection<int, mixed>  $rows
-     * @return array<string, int>
-     */
-    private function currencyTotalsFromRows(Collection $rows): array
-    {
-        return $rows
-            ->mapWithKeys(fn (mixed $row): array => [(string) $row->currency => (int) $row->amount_cents])
             ->sortKeys()
             ->all();
     }

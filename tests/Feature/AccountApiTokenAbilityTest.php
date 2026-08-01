@@ -70,7 +70,9 @@ class AccountApiTokenAbilityTest extends TestCase
         $this->assertSame(StudioPermission::ManageBookings, $authorizer->requiredPermission(AccountApiTokenAbility::McpBookingsCancel));
         $this->assertSame(StudioPermission::ManageClients, $authorizer->requiredPermission(AccountApiTokenAbility::McpCustomersRead));
         $this->assertSame(StudioPermission::ManageCustomerClassPasses, $authorizer->requiredPermission(AccountApiTokenAbility::McpClassPassesRead));
-        $this->assertSame(StudioPermission::ManageStudioCashflow, $authorizer->requiredPermission(AccountApiTokenAbility::McpPaymentsRead));
+        $this->assertSame(StudioPermission::ViewStudioFinancialReports, $authorizer->requiredPermission(AccountApiTokenAbility::McpPaymentsRead));
+        $this->assertSame(StudioPermission::ManageStudioCashflow, $authorizer->requiredPermission(AccountApiTokenAbility::McpCashflowRead));
+        $this->assertSame(StudioPermission::ManageStudioPayroll, $authorizer->requiredPermission(AccountApiTokenAbility::McpPayrollRead));
         $this->assertSame(StudioPermission::ManageEvents, $authorizer->requiredPermission(AccountApiTokenAbility::McpEventsRead));
     }
 
@@ -85,7 +87,7 @@ class AccountApiTokenAbilityTest extends TestCase
                 'role' => AccountRole::Admin->value,
                 'permissions' => [
                     StudioPermission::ManageStudioSettings->value,
-                    StudioPermission::ManageStudioCashflow->value,
+                    StudioPermission::ViewStudioFinancialReports->value,
                 ],
             ]);
 
@@ -93,6 +95,20 @@ class AccountApiTokenAbilityTest extends TestCase
             ->post(route('dashboard.accounts.api-tokens.store', $account), [
                 'name' => 'Forged event token',
                 'abilities' => [AccountApiTokenAbility::McpEventsRead->value],
+            ])
+            ->assertSessionHasErrors('abilities.0');
+
+        $this->actingAs($staff)
+            ->post(route('dashboard.accounts.api-tokens.store', $account), [
+                'name' => 'Forged cashbox token',
+                'abilities' => [AccountApiTokenAbility::McpCashflowRead->value],
+            ])
+            ->assertSessionHasErrors('abilities.0');
+
+        $this->actingAs($staff)
+            ->post(route('dashboard.accounts.api-tokens.store', $account), [
+                'name' => 'Forged payroll token',
+                'abilities' => [AccountApiTokenAbility::McpPayrollRead->value],
             ])
             ->assertSessionHasErrors('abilities.0');
 
@@ -150,6 +166,8 @@ class AccountApiTokenAbilityTest extends TestCase
                 'name' => 'Platform operations',
                 'abilities' => [
                     AccountApiTokenAbility::McpPaymentsRead->value,
+                    AccountApiTokenAbility::McpCashflowRead->value,
+                    AccountApiTokenAbility::McpPayrollRead->value,
                     AccountApiTokenAbility::McpEventsRead->value,
                 ],
             ])
@@ -161,6 +179,8 @@ class AccountApiTokenAbilityTest extends TestCase
             ->firstOrFail();
 
         $this->assertTrue($token->hasAbility(AccountApiTokenAbility::McpPaymentsRead));
+        $this->assertTrue($token->hasAbility(AccountApiTokenAbility::McpCashflowRead));
+        $this->assertTrue($token->hasAbility(AccountApiTokenAbility::McpPayrollRead));
         $this->assertTrue($token->hasAbility(AccountApiTokenAbility::McpEventsRead));
     }
 }

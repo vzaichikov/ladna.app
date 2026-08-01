@@ -45,7 +45,16 @@ class RecordCustomerPurchaseRefund
                 ->first();
 
             if ($existingRefund) {
-                if ($existingRefund->customer_purchase_id !== $purchase->id) {
+                $expectedCashLocationId = $method === CustomerPurchaseRefund::MethodCash
+                    ? $cashLocation?->id
+                    : null;
+
+                if ($existingRefund->account_id !== $account->id
+                    || $existingRefund->customer_purchase_id !== $purchase->id
+                    || $existingRefund->method !== $method
+                    || $existingRefund->cash_location_id !== $expectedCashLocationId
+                    || $existingRefund->amount_cents !== $amountCents
+                    || $existingRefund->reason !== $reason) {
                     throw ValidationException::withMessages([
                         'idempotency_key' => __('app.payment_refund_duplicate_request'),
                     ]);
@@ -112,6 +121,7 @@ class RecordCustomerPurchaseRefund
                     StudioCashEntry::PurposePaymentRefund,
                     refund: $refund,
                     currency: $refund->currency,
+                    sourceKey: 'refund:'.$refund->id,
                 );
             }
 

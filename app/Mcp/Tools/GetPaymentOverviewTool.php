@@ -18,7 +18,7 @@ use Laravel\Mcp\Server\Tool;
 use Throwable;
 
 #[Name('get-payment-overview')]
-#[Description('Returns a read-only, currency-grouped studio payment overview for a bounded period in the bearer token account scope.')]
+#[Description('Returns a read-only, currency-grouped overview of customer payments, customer refunds, event payments, outstanding class-pass balances, and fiscal failures for a bounded period in the active finance epoch.')]
 class GetPaymentOverviewTool extends Tool
 {
     public function handle(

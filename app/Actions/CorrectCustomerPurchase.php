@@ -6,10 +6,12 @@ use App\Models\Account;
 use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseCorrection;
 use App\Models\Location;
+use App\Models\StudioCashEntry;
 use App\Models\User;
 use App\Support\ActorSnapshot;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CorrectCustomerPurchase
@@ -17,6 +19,7 @@ class CorrectCustomerPurchase
     public function __construct(
         private readonly ActorSnapshot $actorSnapshot,
         private readonly RecalculateCustomerClassPassPayment $recalculateCustomerClassPassPayment,
+        private readonly RecordStudioCashEntry $recordStudioCashEntry,
     ) {}
 
     public function execute(
@@ -27,8 +30,15 @@ class CorrectCustomerPurchase
         CarbonInterface $paidAt,
         ?User $user,
         string $reason,
+        ?string $idempotencyKey = null,
     ): CustomerPurchaseCorrection {
-        return DB::transaction(function () use ($account, $customerPurchase, $location, $amountCents, $paidAt, $user, $reason): CustomerPurchaseCorrection {
+        $idempotencyKey ??= (string) Str::uuid();
+        validator(
+            ['idempotency_key' => $idempotencyKey],
+            ['idempotency_key' => ['required', 'uuid']],
+        )->validate();
+
+        return DB::transaction(function () use ($account, $customerPurchase, $location, $amountCents, $paidAt, $user, $reason, $idempotencyKey): CustomerPurchaseCorrection {
             $purchase = CustomerPurchase::query()
                 ->with(['customerClassPass', 'fiscalReceipts', 'refunds'])
                 ->whereBelongsTo($account)
@@ -38,6 +48,24 @@ class CorrectCustomerPurchase
 
             if ($location->account_id !== $account->id) {
                 abort(404);
+            }
+
+            $existingCorrection = CustomerPurchaseCorrection::query()
+                ->where('idempotency_key', $idempotencyKey)
+                ->first();
+
+            if ($existingCorrection) {
+                $this->ensureIdempotentMatch(
+                    $existingCorrection,
+                    $account,
+                    $purchase,
+                    $location,
+                    $amountCents,
+                    $paidAt,
+                    $reason,
+                );
+
+                return $existingCorrection;
             }
 
             if (! $purchase->canBeCorrectedAsStudioCash()) {
@@ -67,9 +95,45 @@ class CorrectCustomerPurchase
                 'new_amount_cents' => $amountCents,
                 'previous_paid_at' => $purchase->paid_at,
                 'new_paid_at' => $paidAt,
+                'idempotency_key' => $idempotencyKey,
                 ...$this->actorSnapshot->capture($account, $user),
                 'reason' => $reason,
             ]);
+
+            $previousLocation = Location::query()
+                ->whereBelongsTo($account)
+                ->whereKey($purchase->location_id)
+                ->firstOrFail();
+            $correctedAt = now();
+
+            $this->recordStudioCashEntry->execute(
+                $account,
+                $previousLocation,
+                StudioCashEntry::DirectionOut,
+                (int) $purchase->amount_cents,
+                $correctedAt,
+                $user,
+                $reason,
+                StudioCashEntry::PurposePaymentCorrectionReversal,
+                purchase: $purchase,
+                correction: $correction,
+                currency: $purchase->currency,
+                sourceKey: 'correction:'.$correction->id.':reversal',
+            );
+            $this->recordStudioCashEntry->execute(
+                $account,
+                $location,
+                StudioCashEntry::DirectionIn,
+                $amountCents,
+                $correctedAt,
+                $user,
+                $reason,
+                StudioCashEntry::PurposePaymentCorrection,
+                purchase: $purchase,
+                correction: $correction,
+                currency: $purchase->currency,
+                sourceKey: 'correction:'.$correction->id.':corrected',
+            );
 
             $purchase->forceFill([
                 'location_id' => $location->id,
@@ -83,6 +147,27 @@ class CorrectCustomerPurchase
             }
 
             return $correction;
-        });
+        }, attempts: 5);
+    }
+
+    private function ensureIdempotentMatch(
+        CustomerPurchaseCorrection $correction,
+        Account $account,
+        CustomerPurchase $purchase,
+        Location $location,
+        int $amountCents,
+        CarbonInterface $paidAt,
+        string $reason,
+    ): void {
+        if ($correction->account_id !== $account->id
+            || $correction->customer_purchase_id !== $purchase->id
+            || $correction->new_location_id !== $location->id
+            || $correction->new_amount_cents !== $amountCents
+            || ! $correction->new_paid_at->equalTo($paidAt)
+            || $correction->reason !== $reason) {
+            throw ValidationException::withMessages([
+                'idempotency_key' => __('validation.unique', ['attribute' => 'idempotency key']),
+            ]);
+        }
     }
 }

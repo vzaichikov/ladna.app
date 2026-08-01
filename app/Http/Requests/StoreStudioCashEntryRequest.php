@@ -10,6 +10,7 @@ use App\Support\Payments\PaymentAmounts;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class StoreStudioCashEntryRequest extends FormRequest
@@ -43,7 +44,15 @@ class StoreStudioCashEntryRequest extends FormRequest
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'occurred_at' => ['required', 'date_format:Y-m-d\TH:i'],
             'reason' => ['required', 'string', 'min:3', 'max:2000'],
+            'idempotency_key' => ['required', 'uuid'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'idempotency_key' => $this->input('idempotency_key') ?: (string) Str::uuid(),
+        ]);
     }
 
     public function amountCents(): int

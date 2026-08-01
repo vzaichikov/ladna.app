@@ -289,7 +289,7 @@ class HelpPagesTest extends TestCase
     {
         $this->get(route('help.show', 'trainers', false))
             ->assertOk()
-            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-07-31', false)
+            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-08-01', false)
             ->assertSee('assets/help/screenshots/trainer-types.png', false)
             ->assertSee('assets/help/screenshots/trainer-editor.png', false)
             ->assertSee('assets/help/screenshots/trainer-private-timeframes.png', false)
@@ -394,15 +394,15 @@ class HelpPagesTest extends TestCase
             ->assertSee('Готівкова оплата, яка вже була привʼязана до помилкового запису, не змінюється автоматично', false)
             ->assertSee('assets/help/screenshots/closed-class-corrections.png', false);
 
-        $this->get(route('help.show', 'integrations-payments', false))
+        $this->get(route('help.show', 'finances', false))
             ->assertStatus(200)
-            ->assertSee('Як виправляти готівкові оплати і вести касу', false)
+            ->assertSee('Платежі клієнтів і повернення', false)
             ->assertSee('Внесення готівки', false)
-            ->assertSee('Вилучення власником', false)
-            ->assertSee('Онлайн-оплати, платежі через платіжний сервіс і фіскалізовані платежі не редагуються вручну', false)
+            ->assertSee('Вилучення власника', false)
+            ->assertSee('платежі через платіжний сервіс не редагуються як ручна готівка', false)
             ->assertSee('Повернути оплату', false)
-            ->assertSee('Ladna не надсилає гроші через банк або платіжний сервіс', false)
-            ->assertSee('assets/help/screenshots/payments-period.png', false);
+            ->assertSee('може виконати лише власниця', false)
+            ->assertSee('assets/help/screenshots/finance-payments.png', false);
 
         $this->get(route('help.show', 'trainers', false))
             ->assertStatus(200)
@@ -473,33 +473,68 @@ class HelpPagesTest extends TestCase
             ->assertDontSee('tenant', false);
     }
 
-    public function test_integrations_help_explains_api_mcp_payments_and_ladna_tariff(): void
+    public function test_integrations_help_explains_api_mcp_online_payments_and_ladna_tariff(): void
     {
         $this->get(route('help.show', 'integrations-payments', false))
             ->assertStatus(200)
             ->assertSee('Онлайн-оплати', false)
             ->assertSee('Заявки з сайту', false)
-            ->assertSee('Як працює історія оплат клієнтів', false)
             ->assertSee('Як підключати сайт через API або MCP', false)
             ->assertSee('Де дивитися тариф і оплату Ladna', false)
             ->assertSee('Ключ працює тільки в межах цієї студії', false)
+            ->assertSee('mcp:cashflow:read', false)
+            ->assertDontSee('Як працює історія оплат клієнтів', false)
+            ->assertDontSee('Як записувати операційні витрати студії', false)
             ->assertDontSee('Bearer', false)
             ->assertDontSee('tenant', false);
     }
 
-    public function test_payments_help_explains_periods_operational_expenses_and_cash_audit(): void
+    public function test_finance_help_explains_cash_source_of_truth_expenses_reports_and_payroll(): void
     {
-        $this->get(route('help.show', 'integrations-payments', false))
+        $this->get(route('help.show', 'finances', false))
             ->assertStatus(200)
-            ->assertSee('надходження до повернень, суму повернень і дохід після повернень', false)
-            ->assertSee('Поточний Баланс каси за локаціями не обмежується вибраними датами', false)
-            ->assertSee('Як записувати операційні витрати студії', false)
-            ->assertSee('Для Готівки з каси локація обовʼязкова', false)
-            ->assertSee('Банківська картка, Банківський переказ та Інше не змінюють касу', false)
-            ->assertSee('Вилучення власником не є витратою студії', false)
-            ->assertSee('повернення в ту саму касу', false)
-            ->assertSee('assets/help/screenshots/payments-period.png', false)
-            ->assertSee('assets/help/screenshots/operational-expenses.png', false);
+            ->assertSee('Як розділені фінанси та права доступу', false)
+            ->assertSee('Право Керувати касою студії відкриває Касу й Операційні витрати, але не історію клієнтських платежів', false)
+            ->assertSee('Скільки грошей має бути в касі зараз', false)
+            ->assertSee('останн', false)
+            ->assertSee('фактичн', false)
+            ->assertSee('плюс усі наступні записи незмінного журналу готівки', false)
+            ->assertSee('Нульова точка та звірка каси', false)
+            ->assertSee('очікувану суму до перерахунку', false)
+            ->assertSee('фактично пораховану суму', false)
+            ->assertSee('різницю між ними', false)
+            ->assertSee('введіть approve точно латиницею', false)
+            ->assertSee('операційна локація', false)
+            ->assertSee('каса-джерело', false)
+            ->assertSee('Тільки спосіб Готівка з каси створює вилучення з каси', false)
+            ->assertSee('Внесення й вилучення власника показуються як рух грошей, але не впливають на прибуток', false)
+            ->assertSee('Продаж абонемента є отриманням грошей, але не повторним доходом', false)
+            ->assertSee('дату, локацію, зал, клієнта, тривалість, нараховано, оплачено, повернено, борг і статус', false)
+            ->assertSee('Закриття створює незмінний знімок', false)
+            ->assertSee('Фактична виплата грошей тренеру на цьому етапі не створюється', false)
+            ->assertSee('assets/help/screenshots/finance-cashbox.png', false)
+            ->assertSee('assets/help/screenshots/finance-epoch-confirmation.png', false)
+            ->assertSee('assets/help/screenshots/finance-expenses.png', false)
+            ->assertSee('assets/help/screenshots/finance-reports-hub.png', false)
+            ->assertSee('assets/help/screenshots/finance-financial-report.png', false)
+            ->assertSee('assets/help/screenshots/finance-earnings.png', false)
+            ->assertSee('assets/help/screenshots/finance-rentals.png', false)
+            ->assertSee('assets/help/screenshots/finance-payroll.png', false)
+            ->assertDontSee('tenant', false)
+            ->assertDontSee('Bearer', false);
+
+        foreach ([
+            'скільки зараз має бути в касі',
+            'зафіксувати нульову точку',
+            'звідки оплачена витрата',
+            'де звіт по заробітку',
+            'звіт по орендах',
+            'закрити зарплатний період',
+        ] as $question) {
+            $result = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame('finances', $result[0]['slug'] ?? null, $question);
+        }
     }
 
     public function test_public_pages_help_explains_studio_landing_maps_and_support_links(): void
@@ -656,10 +691,11 @@ class HelpPagesTest extends TestCase
             ->assertSee('Майбутні й скасовані заняття до звіту по тренерах не потрапляють', false)
             ->assertSee('людей на групових заняттях і людей на індивідуальних заняттях', false)
             ->assertSee('Натисніть на кількість індивідуальних занять тренера', false)
-            ->assertSee('Керувати касою студії також бачить суму одного заняття', false)
+            ->assertSee('Переглядати фінансові звіти також бачить суму одного заняття', false)
             ->assertSee('Суму не вказано', false)
             ->assertSee('Кнопка з іконкою фільтра', false)
             ->assertSee('автоматично нараховану зарплату', false)
+            ->assertSee('Керувати зарплатою студії', false)
             ->assertSee('Як налаштувати автоматичний розрахунок зарплати', false)
             ->assertSee('Мінімум людей 2', false)
             ->assertSee('Стала ставка розподіляється за календарними днями', false)

@@ -450,18 +450,17 @@
                     </div>
                     @php
                         $canRecordBookingPayment = ! $readonly
+                            && auth()->user()?->can('recordCustomerPayments', $account)
                             && ! $isCancelledClass
                             && ! $isClosedClass
-                            && (
-                                ($isRoomRental && ! $hasActivePassReservation)
-                                || ($hasAnyTimeAddonPayment && ! $manualCashPayment)
-                            )
+                            && ! $manualCashPayment
+                            && (! $hasActivePassReservation || $hasAnyTimeAddonPayment)
                             && in_array($booking->status->value, ['booked', 'attended'], true);
                         $bookingPaymentValue = $manualCashPayment
                             ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $manualCashPayment->amount_cents)
                             : ($hasAnyTimeAddonPayment ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $anyTimeAddonAmountCents) : '');
                     @endphp
-                    @if (($isRoomRental || $hasAnyTimeAddonPayment) && $manualCashPayment)
+                    @if ($manualCashPayment)
                         <div class="mt-3 inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
                             {{ $hasAnyTimeAddonPayment ? __('app.any_time_addon_paid') : __('app.class_booking_payment') }}: {{ \App\Support\MoneyFormatter::format($manualCashPayment->amount_cents, $manualCashPayment->currency) }}
                         </div>
@@ -487,7 +486,7 @@
                                     @readonly($hasAnyTimeAddonPayment)
                                 >
                             </label>
-                            <x-ui.button type="submit" variant="secondary" size="sm">{{ $hasAnyTimeAddonPayment ? __('app.record_any_time_addon_payment') : ($manualCashPayment ? __('app.update_payment') : __('app.record_payment')) }}</x-ui.button>
+                            <x-ui.button type="submit" variant="secondary" size="sm">{{ $hasAnyTimeAddonPayment ? __('app.record_any_time_addon_payment') : __('app.record_payment') }}</x-ui.button>
                         </form>
                     @endif
                     @unless ($isCancelledClass || $readonly || $isClosedClass)

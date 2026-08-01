@@ -87,7 +87,7 @@ class AccountApiTokenTest extends TestCase
         $this->assertFalse(AccountApiToken::whereBelongsTo($account)->exists());
     }
 
-    public function test_settings_manager_without_cashflow_permission_cannot_reveal_or_regenerate_payment_token_but_can_revoke_it(): void
+    public function test_settings_manager_without_financial_report_permission_cannot_reveal_or_regenerate_payment_token_but_can_revoke_it(): void
     {
         $manager = User::factory()->create();
         $account = Account::factory()->create();
@@ -125,7 +125,7 @@ class AccountApiTokenTest extends TestCase
         $this->assertFalse($apiToken->refresh()->is_active);
     }
 
-    public function test_settings_manager_with_cashflow_permission_can_reveal_and_regenerate_payment_token(): void
+    public function test_settings_manager_with_financial_report_permission_can_reveal_and_regenerate_payment_token(): void
     {
         $manager = User::factory()->create();
         $account = Account::factory()->create();
@@ -136,7 +136,7 @@ class AccountApiTokenTest extends TestCase
                 'role' => AccountRole::Admin->value,
                 'permissions' => [
                     StudioPermission::ManageStudioSettings->value,
-                    StudioPermission::ManageStudioCashflow->value,
+                    StudioPermission::ViewStudioFinancialReports->value,
                 ],
             ]);
         $apiToken = app(AccountApiTokenIssuer::class)->issue($account, 'Payment automation', [

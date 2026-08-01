@@ -10,12 +10,13 @@ use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\McpToolInvocation;
-use App\Models\StudioExpense;
 use App\Models\User;
 use App\Support\CustomerBookingLedgerInvestigation;
 use App\Support\CustomerInvestigationSearch;
 use App\Support\Events\StudioEventToolData;
+use App\Support\Finance\FinanceMcpData;
 use App\Support\LadnaBusinessLogicReference;
 use App\Support\OwnerHelpIndex;
 use App\Support\Payments\StudioPaymentToolData;
@@ -43,6 +44,16 @@ class StudioAiToolExecutor
 
     private const SearchPayments = 'search_payments';
 
+    private const GetFinancialReport = 'get_financial_report';
+
+    private const GetCashboxOverview = 'get_cashbox_overview';
+
+    private const GetEarningsReport = 'get_earnings_report';
+
+    private const GetRentalReport = 'get_rental_report';
+
+    private const GetPayrollOverview = 'get_payroll_overview';
+
     private const GetEventsOverview = 'get_events_overview';
 
     private const GetEventSummary = 'get_event_summary';
@@ -54,6 +65,7 @@ class StudioAiToolExecutor
         private readonly StudioAiLedgerEvidencePresenter $ledgerEvidencePresenter,
         private readonly OwnerHelpIndex $helpIndex,
         private readonly StudioPaymentToolData $paymentData,
+        private readonly FinanceMcpData $financeData,
         private readonly StudioEventToolData $eventData,
     ) {}
 
@@ -72,7 +84,19 @@ class StudioAiToolExecutor
     public function paymentsAvailableFor(Account $account, ?User $actorUser): bool
     {
         return $this->helpAvailableFor($account, $actorUser)
+            && $account->userCan($actorUser, StudioPermission::ViewStudioFinancialReports);
+    }
+
+    public function cashflowAvailableFor(Account $account, ?User $actorUser): bool
+    {
+        return $this->helpAvailableFor($account, $actorUser)
             && $account->userCan($actorUser, StudioPermission::ManageStudioCashflow);
+    }
+
+    public function payrollAvailableFor(Account $account, ?User $actorUser): bool
+    {
+        return $this->helpAvailableFor($account, $actorUser)
+            && $account->userCan($actorUser, StudioPermission::ManageStudioPayroll);
     }
 
     public function eventsAvailableFor(Account $account, ?User $actorUser): bool
@@ -94,6 +118,14 @@ class StudioAiToolExecutor
 
         if ($this->paymentsAvailableFor($account, $actorUser)) {
             $definitions = [...$definitions, ...$this->paymentDefinitions()];
+        }
+
+        if ($this->cashflowAvailableFor($account, $actorUser)) {
+            $definitions = [...$definitions, ...$this->cashboxDefinitions()];
+        }
+
+        if ($this->payrollAvailableFor($account, $actorUser)) {
+            $definitions = [...$definitions, ...$this->payrollDefinitions()];
         }
 
         if ($this->eventsAvailableFor($account, $actorUser)) {
@@ -168,7 +200,7 @@ class StudioAiToolExecutor
                 'type' => 'function',
                 'function' => [
                     'name' => self::GetPaymentOverview,
-                    'description' => 'Read authoritative studio income, expenses, owner withdrawals, cash balances, payment states, and refund exposure for a bounded period. Never changes data.',
+                    'description' => 'Read customer payments, customer refunds, event payments, payment states, and refund exposure for a bounded period in the active finance epoch. Never changes data.',
                     'parameters' => [
                         'type' => 'object',
                         'additionalProperties' => false,
@@ -196,7 +228,7 @@ class StudioAiToolExecutor
                 'type' => 'function',
                 'function' => [
                     'name' => self::SearchPayments,
-                    'description' => 'Search authoritative customer payments, event payments, operational expenses, deposits, and owner withdrawals. Contacts are masked and gateway secrets are excluded.',
+                    'description' => 'Search authoritative customer payments, customer refunds, and event payments. Contacts are masked and gateway secrets are excluded.',
                     'parameters' => [
                         'type' => 'object',
                         'additionalProperties' => false,
@@ -215,14 +247,14 @@ class StudioAiToolExecutor
                             ],
                             'kind' => [
                                 'type' => 'string',
-                                'enum' => ['customer_payment', 'event_payment', 'operational_expense', 'cash_movement'],
+                                'enum' => ['customer_payment', 'customer_refund', 'event_payment'],
                             ],
                             'status' => [
                                 'type' => 'string',
                                 'enum' => [
                                     ...array_column(CustomerPurchaseStatus::cases(), 'value'),
                                     ...array_column(EventOrderStatus::cases(), 'value'),
-                                    ...StudioExpense::statuses(),
+                                    CustomerPurchaseRefund::StatusRecorded,
                                 ],
                             ],
                             'location_id' => [
@@ -240,7 +272,108 @@ class StudioAiToolExecutor
                     ],
                 ],
             ],
+            ...$this->financialReportDefinitions(),
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function financialReportDefinitions(): array
+    {
+        $properties = [
+            'date_from' => ['type' => 'string', 'format' => 'date'],
+            'date_to' => ['type' => 'string', 'format' => 'date'],
+            'location_id' => ['type' => 'integer', 'minimum' => 1],
+            'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 20],
+        ];
+
+        return [
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => self::GetFinancialReport,
+                    'description' => 'Read payments, refunds, operational expenses, owner deposits, owner withdrawals, and operating cash result. Owner movements are not profit.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => $properties,
+                        'required' => [],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => self::GetEarningsReport,
+                    'description' => 'Read recognized earnings from completed lessons and rentals less operational expenses and accrued salary. A class-pass sale is cashflow, not repeated lesson earnings.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => $properties,
+                        'required' => [],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => self::GetRentalReport,
+                    'description' => 'Read completed rentals with location, room, customer, duration, accrued, paid, refunded, debt, and status.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => $properties,
+                        'required' => [],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function cashboxDefinitions(): array
+    {
+        return [[
+            'type' => 'function',
+            'function' => [
+                'name' => self::GetCashboxOverview,
+                'description' => 'Read current cashbox balances from the latest actual reconciliation plus subsequent append-only cash-ledger movements in the active finance epoch.',
+                'parameters' => [
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => [
+                        'location_id' => ['type' => 'integer', 'minimum' => 1],
+                        'currency' => ['type' => 'string', 'minLength' => 3, 'maxLength' => 3],
+                    ],
+                    'required' => [],
+                ],
+            ],
+        ]];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function payrollDefinitions(): array
+    {
+        return [[
+            'type' => 'function',
+            'function' => [
+                'name' => self::GetPayrollOverview,
+                'description' => 'Read payroll cadence and immutable closed or voided payroll-run snapshots. Closing a run accrues salary but does not record an actual payout.',
+                'parameters' => [
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => [
+                        'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 20],
+                    ],
+                    'required' => [],
+                ],
+            ],
+        ]];
     }
 
     /**
@@ -438,6 +571,11 @@ class StudioAiToolExecutor
                 self::GetBusinessLogicReference => $this->businessLogic($validated, $progress),
                 self::GetPaymentOverview => $this->paymentOverview($account, $validated, $progress),
                 self::SearchPayments => $this->searchPayments($account, $validated, $progress),
+                self::GetFinancialReport => $this->financialReport($account, $validated, $progress),
+                self::GetCashboxOverview => $this->cashboxOverview($account, $validated, $progress),
+                self::GetEarningsReport => $this->earningsReport($account, $validated, $progress),
+                self::GetRentalReport => $this->rentalReport($account, $validated, $progress),
+                self::GetPayrollOverview => $this->payrollOverview($account, $validated, $progress),
                 self::GetEventsOverview => $this->eventsOverview($account, $validated, $progress),
                 self::GetEventSummary => $this->eventSummary($account, $validated, $progress),
                 default => throw new InvalidArgumentException('Unknown AI investigation tool.'),
@@ -540,13 +678,26 @@ class StudioAiToolExecutor
                 'date_from' => ['nullable', 'date_format:Y-m-d'],
                 'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
                 'query' => ['nullable', 'string', 'max:120'],
-                'kind' => ['nullable', Rule::in(['customer_payment', 'event_payment', 'operational_expense', 'cash_movement'])],
+                'kind' => ['nullable', Rule::in(['customer_payment', 'customer_refund', 'event_payment'])],
                 'status' => ['nullable', Rule::in(array_values(array_unique([
                     ...array_column(CustomerPurchaseStatus::cases(), 'value'),
                     ...array_column(EventOrderStatus::cases(), 'value'),
-                    ...StudioExpense::statuses(),
+                    CustomerPurchaseRefund::StatusRecorded,
                 ])))],
                 'location_id' => ['nullable', 'integer', 'min:1'],
+                'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            ],
+            self::GetFinancialReport, self::GetEarningsReport, self::GetRentalReport => [
+                'date_from' => ['nullable', 'date_format:Y-m-d'],
+                'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+                'location_id' => ['nullable', 'integer', 'min:1'],
+                'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            ],
+            self::GetCashboxOverview => [
+                'location_id' => ['nullable', 'integer', 'min:1'],
+                'currency' => ['nullable', 'string', 'size:3', 'regex:/^[A-Za-z]{3}$/'],
+            ],
+            self::GetPayrollOverview => [
                 'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
             ],
             self::GetEventsOverview => [
@@ -702,6 +853,66 @@ class StudioAiToolExecutor
      * @param  callable(string): mixed|null  $progress
      * @return array<string, mixed>
      */
+    private function financialReport(Account $account, array $arguments, ?callable $progress): array
+    {
+        $this->progress($progress, 'assistant_status_checking_payments');
+
+        return $this->financeData->financialReport($account, $arguments);
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  callable(string): mixed|null  $progress
+     * @return array<string, mixed>
+     */
+    private function cashboxOverview(Account $account, array $arguments, ?callable $progress): array
+    {
+        $this->progress($progress, 'assistant_status_checking_payments');
+
+        return $this->financeData->cashboxOverview($account, $arguments);
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  callable(string): mixed|null  $progress
+     * @return array<string, mixed>
+     */
+    private function earningsReport(Account $account, array $arguments, ?callable $progress): array
+    {
+        $this->progress($progress, 'assistant_status_checking_payments');
+
+        return $this->financeData->earningsReport($account, $arguments);
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  callable(string): mixed|null  $progress
+     * @return array<string, mixed>
+     */
+    private function rentalReport(Account $account, array $arguments, ?callable $progress): array
+    {
+        $this->progress($progress, 'assistant_status_checking_payments');
+
+        return $this->financeData->rentalReport($account, $arguments);
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  callable(string): mixed|null  $progress
+     * @return array<string, mixed>
+     */
+    private function payrollOverview(Account $account, array $arguments, ?callable $progress): array
+    {
+        $this->progress($progress, 'assistant_status_checking_payments');
+
+        return $this->financeData->payrollOverview($account, $arguments);
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  callable(string): mixed|null  $progress
+     * @return array<string, mixed>
+     */
     private function eventsOverview(Account $account, array $arguments, ?callable $progress): array
     {
         $this->progress($progress, 'assistant_status_checking_events');
@@ -728,7 +939,13 @@ class StudioAiToolExecutor
             self::SearchCustomers => AccountApiTokenAbility::McpCustomersRead,
             self::InvestigateCustomerBookingLedger => AccountApiTokenAbility::McpClassPassesRead,
             self::GetBusinessLogicReference => AccountApiTokenAbility::McpLogicRead,
-            self::GetPaymentOverview, self::SearchPayments => AccountApiTokenAbility::McpPaymentsRead,
+            self::GetPaymentOverview,
+            self::SearchPayments,
+            self::GetFinancialReport,
+            self::GetEarningsReport,
+            self::GetRentalReport => AccountApiTokenAbility::McpPaymentsRead,
+            self::GetCashboxOverview => AccountApiTokenAbility::McpCashflowRead,
+            self::GetPayrollOverview => AccountApiTokenAbility::McpPayrollRead,
             self::GetEventsOverview, self::GetEventSummary => AccountApiTokenAbility::McpEventsRead,
             default => null,
         };
@@ -739,7 +956,13 @@ class StudioAiToolExecutor
         return match ($toolName) {
             self::SearchOwnerHelp, self::GetOwnerHelpPage => $this->helpAvailableFor($account, $actorUser),
             self::SearchCustomers, self::InvestigateCustomerBookingLedger, self::GetBusinessLogicReference => $this->investigationAvailableFor($account, $actorUser),
-            self::GetPaymentOverview, self::SearchPayments => $this->paymentsAvailableFor($account, $actorUser),
+            self::GetPaymentOverview,
+            self::SearchPayments,
+            self::GetFinancialReport,
+            self::GetEarningsReport,
+            self::GetRentalReport => $this->paymentsAvailableFor($account, $actorUser),
+            self::GetCashboxOverview => $this->cashflowAvailableFor($account, $actorUser),
+            self::GetPayrollOverview => $this->payrollAvailableFor($account, $actorUser),
             self::GetEventsOverview, self::GetEventSummary => $this->eventsAvailableFor($account, $actorUser),
             default => false,
         };
@@ -755,6 +978,11 @@ class StudioAiToolExecutor
             self::GetBusinessLogicReference,
             self::GetPaymentOverview,
             self::SearchPayments,
+            self::GetFinancialReport,
+            self::GetCashboxOverview,
+            self::GetEarningsReport,
+            self::GetRentalReport,
+            self::GetPayrollOverview,
             self::GetEventsOverview,
             self::GetEventSummary,
         ], true);
@@ -785,6 +1013,11 @@ class StudioAiToolExecutor
         if (! in_array($toolName, [
             self::GetPaymentOverview,
             self::SearchPayments,
+            self::GetFinancialReport,
+            self::GetCashboxOverview,
+            self::GetEarningsReport,
+            self::GetRentalReport,
+            self::GetPayrollOverview,
             self::GetEventsOverview,
             self::GetEventSummary,
         ], true)) {
@@ -801,6 +1034,11 @@ class StudioAiToolExecutor
         if (! in_array($toolName, [
             self::GetPaymentOverview,
             self::SearchPayments,
+            self::GetFinancialReport,
+            self::GetCashboxOverview,
+            self::GetEarningsReport,
+            self::GetRentalReport,
+            self::GetPayrollOverview,
             self::GetEventsOverview,
             self::GetEventSummary,
         ], true) || $throwable instanceof AuthorizationException || $throwable instanceof ValidationException) {

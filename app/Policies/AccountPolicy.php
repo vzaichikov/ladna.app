@@ -45,6 +45,22 @@ class AccountPolicy
         return $account->userCan($user, StudioPermission::ManageBookings);
     }
 
+    public function viewReportIndex(User $user, Account $account): bool
+    {
+        return $this->viewReports($user, $account)
+            || $this->viewStudioFinancialReports($user, $account);
+    }
+
+    public function viewStudioFinancialReports(User $user, Account $account): bool
+    {
+        return $account->userCan($user, StudioPermission::ViewStudioFinancialReports);
+    }
+
+    public function manageStudioPayroll(User $user, Account $account): bool
+    {
+        return $account->userCan($user, StudioPermission::ManageStudioPayroll);
+    }
+
     /**
      * Determine whether the user can delete the model.
      */

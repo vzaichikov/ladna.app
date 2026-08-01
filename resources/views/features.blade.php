@@ -44,7 +44,7 @@
             'clients' => ['icon' => 'heart-handshake', 'image' => 'public-schedule.png'],
             'passes' => ['icon' => 'ticket-check', 'image' => 'active-passes.png'],
             'team' => ['icon' => 'users-round', 'image' => 'trainer-permissions.png'],
-            'money' => ['icon' => 'chart-no-axes-combined', 'image' => 'payments-period.png'],
+            'money' => ['icon' => 'chart-no-axes-combined', 'image' => 'finance-payments.png'],
             'assistant' => ['icon' => 'bot', 'image' => null],
         ];
         $optionalIcons = ['credit-card', 'message-circle', 'plug', 'video', 'smartphone'];

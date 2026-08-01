@@ -64,6 +64,16 @@ class Location extends Model
         return $this->hasMany(CustomerPurchase::class);
     }
 
+    public function studioCashEntries(): HasMany
+    {
+        return $this->hasMany(StudioCashEntry::class);
+    }
+
+    public function cashboxReconciliations(): HasMany
+    {
+        return $this->hasMany(CashboxReconciliation::class);
+    }
+
     public function scheduleSeries(): HasMany
     {
         return $this->hasMany(ScheduleSeries::class);

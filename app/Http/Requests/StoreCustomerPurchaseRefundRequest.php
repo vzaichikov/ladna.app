@@ -24,7 +24,7 @@ class StoreCustomerPurchaseRefundRequest extends FormRequest
         return $account instanceof Account
             && $customerPurchase instanceof CustomerPurchase
             && $customerPurchase->account_id === $account->id
-            && ($this->user()?->can('manageStudioCashflow', $account) ?? false);
+            && $account->isOwnedBy($this->user());
     }
 
     /**

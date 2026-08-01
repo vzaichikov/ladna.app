@@ -18,7 +18,7 @@ class TrainerPrivateLessonReportController extends Controller
     ): View {
         abort_unless($trainer->account_id === $account->id, 404);
 
-        $canManageStudioCashflow = $request->user()?->can('manageStudioCashflow', $account) ?? false;
+        $canManageStudioCashflow = $request->user()?->can('viewStudioFinancialReports', $account) ?? false;
 
         return view('reports.trainer-private-lessons', [
             'account' => $account,

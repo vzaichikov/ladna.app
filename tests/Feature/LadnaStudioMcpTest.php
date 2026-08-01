@@ -105,9 +105,24 @@ class LadnaStudioMcpTest extends TestCase
                 && $capability['required_ability'] === AccountApiTokenAbility::McpCustomersRead->value
         ));
         $this->assertTrue(collect($capabilities)->contains(
-            fn (array $capability): bool => ($capability['key'] ?? null) === 'payment_tracking'
+            fn (array $capability): bool => ($capability['key'] ?? null) === 'payment_history'
                 && ($capability['required_ability'] ?? null) === AccountApiTokenAbility::McpPaymentsRead->value
+                && ($capability['required_user_permission'] ?? null) === 'view_studio_financial_reports'
+        ));
+        $this->assertTrue(collect($capabilities)->contains(
+            fn (array $capability): bool => ($capability['key'] ?? null) === 'financial_reporting'
+                && in_array('get-earnings-report', $capability['tools'] ?? [], true)
+                && ($capability['required_ability'] ?? null) === AccountApiTokenAbility::McpPaymentsRead->value
+        ));
+        $this->assertTrue(collect($capabilities)->contains(
+            fn (array $capability): bool => ($capability['key'] ?? null) === 'cashbox_control'
+                && ($capability['required_ability'] ?? null) === AccountApiTokenAbility::McpCashflowRead->value
                 && ($capability['required_user_permission'] ?? null) === 'manage_studio_cashflow'
+        ));
+        $this->assertTrue(collect($capabilities)->contains(
+            fn (array $capability): bool => ($capability['key'] ?? null) === 'payroll_periods'
+                && ($capability['required_ability'] ?? null) === AccountApiTokenAbility::McpPayrollRead->value
+                && ($capability['required_user_permission'] ?? null) === 'manage_studio_payroll'
         ));
         $this->assertTrue(collect($capabilities)->contains(
             fn (array $capability): bool => ($capability['key'] ?? null) === 'event_operations'
@@ -535,7 +550,7 @@ class LadnaStudioMcpTest extends TestCase
                 'jsonrpc' => '2.0',
                 'id' => 1,
                 'method' => 'tools/list',
-                'params' => [],
+                'params' => ['per_page' => 50],
             ])
             ->assertOk();
 

@@ -146,6 +146,11 @@ class CustomerPurchase extends Model
         return $this->hasMany(CustomerPurchaseRefund::class);
     }
 
+    public function cashEntries(): HasMany
+    {
+        return $this->hasMany(StudioCashEntry::class);
+    }
+
     public function isPaid(): bool
     {
         return $this->status === CustomerPurchaseStatus::PaymentPaid;

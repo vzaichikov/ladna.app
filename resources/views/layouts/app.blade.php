@@ -61,6 +61,8 @@
     $canManageTrainers = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageTrainers);
     $canManageStudioSettings = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioSettings);
     $canManageStudioCashflow = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioCashflow);
+    $canViewStudioFinancialReports = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ViewStudioFinancialReports);
+    $canManageStudioPayroll = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageStudioPayroll);
     $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
     $canManageEvents = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageEvents);
     $canCheckInEventTickets = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::CheckInEventTickets);
@@ -68,7 +70,7 @@
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $assistantImageInferenceEnabled = $showAssistantWidget && \App\Models\PlatformAiSetting::imageInferenceEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
-    $canViewPayments = $showAccountNav && $authUser && ($activeAccount->isOwnedBy($authUser) || $canManageStudioCashflow);
+    $canViewPayments = $canViewStudioFinancialReports;
     $canViewTariffPayments = ! $isReadOnlyDemo && $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
     $subscriptionAccess = $showAccountNav ? app(\App\Support\SaasBilling\AccountSubscriptionAccess::class) : null;
     $subscriptionWarning = ! $isReadOnlyDemo && $showAccountNav && $subscriptionAccess?->shouldShowWarning($activeAccount);
@@ -156,13 +158,13 @@
             'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customer-class-passes.*'),
         ]] : []),
-        ...($canViewPayments ? [[
-            'label' => __('app.payments'),
-            'icon' => 'payments',
-            'href' => route('dashboard.accounts.payments.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.payments.*'),
+        ...($canManageEvents || $canCheckInEventTickets ? [[
+            'label' => __('app.events'),
+            'icon' => 'calendar-days',
+            'href' => route('dashboard.accounts.events.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.events.*'),
         ]] : []),
-        ...($canViewReports ? [[
+        ...($canViewReports || $canViewStudioFinancialReports ? [[
             'label' => __('app.reports'),
             'icon' => 'reports',
             'href' => route('dashboard.accounts.reports.index', $activeAccount),
@@ -174,11 +176,31 @@
             'href' => route('dashboard.accounts.cameras.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.cameras.*'),
         ]] : []),
-        ...($canManageEvents || $canCheckInEventTickets ? [[
-            'label' => __('app.events'),
-            'icon' => 'calendar-days',
-            'href' => route('dashboard.accounts.events.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.events.*'),
+    ] : [];
+
+    $financeNav = $showAccountNav ? [
+        ...($canViewPayments ? [[
+            'label' => __('app.payments'),
+            'icon' => 'payments',
+            'href' => route('dashboard.accounts.payments.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.payments.*'),
+        ]] : []),
+        ...($canManageStudioCashflow ? [[
+            'label' => __('app.cash_overview'),
+            'icon' => 'wallet',
+            'href' => route('dashboard.accounts.cash.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.cash.*', 'dashboard.accounts.cashbox-reconciliations.*', 'dashboard.accounts.finance-epochs.*'),
+        ], [
+            'label' => __('app.operational_expenses'),
+            'icon' => 'minus',
+            'href' => route('dashboard.accounts.expenses.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.expenses.*', 'dashboard.accounts.expense-categories.*'),
+        ]] : []),
+        ...($canManageStudioPayroll ? [[
+            'label' => __('app.payroll_periods'),
+            'icon' => 'payments',
+            'href' => route('dashboard.accounts.payroll.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.payroll.*'),
         ]] : []),
     ] : [];
 
@@ -248,7 +270,7 @@
             'href' => route('dashboard.accounts.class-pass-segments.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.class-pass-segments.*'),
         ]] : []),
-        ...($canManageStudioCashflow ? [[
+        ...($canManageStudioPayroll ? [[
             'label' => __('app.salary_settings'),
             'icon' => 'payments',
             'href' => route('dashboard.accounts.salary-models.index', $activeAccount),
@@ -472,6 +494,20 @@
                             <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.my_studio') }}</div>
                             <div class="mt-3 space-y-1">
                                 @foreach ($studioNav as $item)
+                                    <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
+                                        <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
+                                        <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($financeNav)
+                        <div>
+                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.finance') }}</div>
+                            <div class="mt-3 space-y-1">
+                                @foreach ($financeNav as $item)
                                     <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
                                         <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
                                         <span>{{ $item['label'] }}</span>
@@ -870,6 +906,24 @@
                             {{ __('app.confirm_delete_body') }}
                         </p>
                     </div>
+                </div>
+
+                <div class="mt-5 hidden" data-confirm-phrase-container>
+                    <label for="confirmation-phrase" class="crm-label" data-confirm-phrase-label data-default-text="{{ __('app.confirmation_phrase_label') }}">
+                        {{ __('app.confirmation_phrase_label') }}
+                    </label>
+                    <input
+                        id="confirmation-phrase"
+                        type="text"
+                        class="crm-field min-h-11"
+                        autocomplete="off"
+                        spellcheck="false"
+                        aria-describedby="confirmation-phrase-help"
+                        data-confirm-phrase-input
+                    >
+                    <p id="confirmation-phrase-help" class="mt-2 text-sm leading-6 text-slate-500" data-confirm-phrase-help data-default-text="{{ __('app.confirmation_phrase_help') }}">
+                        {{ __('app.confirmation_phrase_help') }}
+                    </p>
                 </div>
 
                 <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">

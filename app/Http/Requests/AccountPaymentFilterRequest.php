@@ -23,7 +23,7 @@ class AccountPaymentFilterRequest extends FormRequest
 
         return $account instanceof Account
             && ($this->user()?->can('view', $account) ?? false)
-            && ($this->user()?->can('manageStudioCashflow', $account) ?? false);
+            && ($this->user()?->can('viewStudioFinancialReports', $account) ?? false);
     }
 
     /**

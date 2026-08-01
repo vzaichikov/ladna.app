@@ -7,14 +7,23 @@ use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\CustomerPurchase;
+use App\Models\StudioCashEntry;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class RecordManualClassBookingPayment
 {
-    public function execute(Account $account, ClassBooking $classBooking, int $amountCents): CustomerPurchase
-    {
+    public function __construct(private readonly RecordStudioCashEntry $recordStudioCashEntry) {}
+
+    public function execute(
+        Account $account,
+        ClassBooking $classBooking,
+        int $amountCents,
+        ?User $user = null,
+        ?string $idempotencyKey = null,
+    ): CustomerPurchase {
         if ($classBooking->account_id !== $account->id) {
             abort(404);
         }
@@ -25,7 +34,7 @@ class RecordManualClassBookingPayment
             ]);
         }
 
-        return DB::transaction(function () use ($account, $classBooking, $amountCents): CustomerPurchase {
+        return DB::transaction(function () use ($account, $classBooking, $amountCents, $user, $idempotencyKey): CustomerPurchase {
             $lockedBooking = ClassBooking::query()
                 ->with(['scheduledClass.location', 'scheduledClass.room', 'scheduledClass.classType', 'customer', 'classPassReservation.customerClassPass'])
                 ->whereBelongsTo($account)
@@ -36,12 +45,6 @@ class RecordManualClassBookingPayment
             $isAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
             $activeReservation = $lockedBooking->activeClassPassReservation();
             $reservedClassPass = $activeReservation?->customerClassPass;
-
-            if (! $isAnyTimeAddonPayment && $lockedBooking->scheduledClass?->classType?->schedule_kind !== ScheduleKind::RoomRental) {
-                throw ValidationException::withMessages([
-                    'amount' => __('app.class_booking_payment_rental_only'),
-                ]);
-            }
 
             if ($activeReservation && ! $isAnyTimeAddonPayment) {
                 throw ValidationException::withMessages([
@@ -56,8 +59,38 @@ class RecordManualClassBookingPayment
             }
 
             $scheduledClass = $lockedBooking->scheduledClass;
-            $paidAt = $scheduledClass?->starts_at?->lessThan(now()) ? $scheduledClass->starts_at : now();
+            $paidAt = now();
+            $orderId = $this->orderId($idempotencyKey);
+            $idempotentPayment = $idempotencyKey
+                ? CustomerPurchase::query()
+                    ->where('order_id', $orderId)
+                    ->first()
+                : null;
+
+            if ($idempotentPayment) {
+                if ($idempotentPayment->account_id !== $account->id
+                    || $idempotentPayment->class_booking_id !== $lockedBooking->id
+                    || $idempotentPayment->amount_cents !== $amountCents
+                    || $idempotentPayment->location_id !== $scheduledClass?->location_id) {
+                    throw ValidationException::withMessages([
+                        'idempotency_key' => __('app.payment_refund_duplicate_request'),
+                    ]);
+                }
+
+                return $idempotentPayment;
+            }
+
             $payment = $lockedBooking->manualCashPayment()->lockForUpdate()->first();
+
+            if ($payment) {
+                if ((int) $payment->amount_cents === $amountCents) {
+                    return $payment;
+                }
+
+                throw ValidationException::withMessages([
+                    'amount' => __('app.payment_correction_required'),
+                ]);
+            }
             $attributes = [
                 'account_id' => $account->id,
                 'customer_id' => $lockedBooking->customer_id,
@@ -82,23 +115,33 @@ class RecordManualClassBookingPayment
                 'gateway_checkout_payload' => null,
                 'last_callback_payload' => null,
                 'failure_reason' => null,
-                'started_at' => $payment?->started_at ?? $paidAt,
+                'started_at' => $paidAt,
                 'paid_at' => $paidAt,
                 'failed_at' => null,
                 'expires_at' => null,
             ];
 
-            if ($payment) {
-                $payment->forceFill($attributes)->save();
-
-                return $payment->refresh();
-            }
-
-            return CustomerPurchase::query()->create([
+            $payment = CustomerPurchase::query()->create([
                 ...$attributes,
-                'order_id' => $this->orderId(),
+                'order_id' => $orderId,
             ]);
-        });
+
+            $this->recordStudioCashEntry->execute(
+                $account,
+                $scheduledClass?->location,
+                StudioCashEntry::DirectionIn,
+                $amountCents,
+                $paidAt,
+                $user,
+                $payment->plan_name,
+                StudioCashEntry::PurposeCustomerPayment,
+                purchase: $payment,
+                currency: $payment->currency,
+                sourceKey: 'purchase:'.$payment->id.':cash-in',
+            );
+
+            return $payment;
+        }, attempts: 5);
     }
 
     private function paymentName(ClassBooking $classBooking, bool $isAnyTimeAddonPayment): string
@@ -122,8 +165,12 @@ class RecordManualClassBookingPayment
             ->join(' · ');
     }
 
-    private function orderId(): string
+    private function orderId(?string $idempotencyKey): string
     {
+        if ($idempotencyKey) {
+            return 'CASH-BOOKING-'.$idempotencyKey;
+        }
+
         do {
             $orderId = 'CASH-BOOKING-'.now()->format('YmdHis').'-'.Str::upper(Str::random(8));
         } while (CustomerPurchase::query()->where('order_id', $orderId)->exists());

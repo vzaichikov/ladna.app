@@ -16,7 +16,7 @@ class UnpaidClassPaymentReportController extends Controller
         return view('reports.unpaid-class-payments', [
             'account' => $account,
             'bookings' => $report->paginateForAccount($account),
-            'canManageBookingPayments' => $request->user()?->can('manageBookings', $account) ?? false,
+            'canManageBookingPayments' => $request->user()?->can('recordCustomerPayments', $account) ?? false,
         ]);
     }
 }

@@ -62,6 +62,30 @@ class LadnaBusinessLogicReference
             'summary' => 'Records explicit correction history for additions or removals made after a class is closed.',
             'excerpt' => 'Corrections preserve actor snapshots, the booking status transition, and the exact pass/reservation effect instead of silently rewriting history.',
         ],
+        'finance_cash_ledger' => [
+            'path' => 'app/Support/Finance/CashboxBalanceService.php',
+            'symbol' => 'App\\Support\\Finance\\CashboxBalanceService::snapshotFor',
+            'summary' => 'Calculates the current cashbox amount from the latest actual reconciliation and every subsequent append-only cash ledger movement inside the active finance epoch.',
+            'excerpt' => 'Cash purchases, cash refunds, cash-paid expenses, reversals, owner deposits, and owner withdrawals create ledger rows. Card, bank-transfer, and other non-cash expenses never change a cashbox.',
+        ],
+        'finance_epoch_reconciliation' => [
+            'path' => 'app/Actions/StartFinanceEpoch.php',
+            'symbol' => 'App\\Actions\\StartFinanceEpoch::execute',
+            'summary' => 'Starts owner-approved finance tracking from actual counted cashbox amounts without deleting or rewriting prior records.',
+            'excerpt' => 'The new epoch archives earlier movements from current reports. Each opening reconciliation preserves expected, actual, variance, cutoff, actor, reason, and idempotency evidence.',
+        ],
+        'finance_earnings_recognition' => [
+            'path' => 'app/Support/Finance/EarningsReportData.php',
+            'symbol' => 'App\\Support\\Finance\\EarningsReportData::forAccount',
+            'summary' => 'Recognizes revenue from completed lessons and rentals, then subtracts operational expenses and accrued trainer salary.',
+            'excerpt' => 'Selling a class pass is cashflow. Its session value is recognized when the related lesson is completed, so a pass sale is never counted again as lesson earnings.',
+        ],
+        'payroll_run_immutability' => [
+            'path' => 'app/Models/PayrollRun.php',
+            'symbol' => 'App\\Models\\PayrollRun',
+            'summary' => 'Stores an immutable salary accrual snapshot for one completed weekly, biweekly, or monthly payroll period.',
+            'excerpt' => 'A mistaken run is voided with a reason and replaced by a new run. Closing a payroll run accrues salary for reports but does not record an actual payout.',
+        ],
     ];
 
     /**

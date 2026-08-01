@@ -25,7 +25,7 @@ class SaveSalaryModelRequest extends FormRequest
         $account = $this->route('account');
 
         return $account instanceof Account
-            && ($this->user()?->can('manageStudioCashflow', $account) ?? false);
+            && ($this->user()?->can('manageStudioPayroll', $account) ?? false);
     }
 
     /**

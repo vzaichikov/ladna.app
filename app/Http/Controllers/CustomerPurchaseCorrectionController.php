@@ -24,6 +24,7 @@ class CustomerPurchaseCorrectionController extends Controller
             $request->paidAt(),
             $request->user(),
             $request->validated('reason'),
+            $request->validated('idempotency_key'),
         );
 
         return back()->with('status', __('app.payment_correction_saved'));

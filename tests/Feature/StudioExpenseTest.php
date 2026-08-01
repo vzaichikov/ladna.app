@@ -12,6 +12,8 @@ use App\Models\StudioExpense;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
+use LogicException;
 use Tests\TestCase;
 
 class StudioExpenseTest extends TestCase
@@ -168,9 +170,87 @@ class StudioExpenseTest extends TestCase
                 'reason' => 'Missing cashdesk location.',
                 'payment_method' => StudioExpense::PaymentMethodCashdesk,
             ])
-            ->assertSessionHasErrors('location_id');
+            ->assertSessionHasErrors('cash_location_id');
 
         $this->assertSame(3, $account->studioExpenses()->count());
+    }
+
+    public function test_expense_double_submit_is_idempotent_and_changed_replay_is_rejected(): void
+    {
+        [$owner, $account] = $this->ownerContext(['default_currency' => 'UAH', 'timezone' => 'UTC']);
+        $location = Location::factory()->for($account)->create();
+        $category = ExpenseCategory::factory()->for($account)->create();
+        $idempotencyKey = (string) Str::uuid();
+        $payload = [
+            'expense_category_id' => $category->id,
+            'amount' => '125.50',
+            'occurred_at' => '2026-07-15T10:00',
+            'reason' => 'Idempotent cash expense.',
+            'payment_method' => StudioExpense::PaymentMethodCashdesk,
+            'expense_location_id' => $location->id,
+            'cash_location_id' => $location->id,
+            'idempotency_key' => $idempotencyKey,
+        ];
+
+        foreach (range(1, 2) as $attempt) {
+            $this->actingAs($owner)
+                ->post(route('dashboard.accounts.expenses.store', $account), $payload)
+                ->assertRedirect()
+                ->assertSessionDoesntHaveErrors();
+        }
+
+        $this->assertSame(1, $account->studioExpenses()->count());
+        $this->assertSame(1, $account->studioCashEntries()->count());
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.expenses.store', $account), [
+                ...$payload,
+                'amount' => '126.50',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('idempotency_key');
+
+        $expense = $account->studioExpenses()->sole();
+
+        $this->assertSame(12550, $expense->amount_cents);
+        $this->assertSame(1, $expense->cashEntries()->count());
+    }
+
+    public function test_expense_core_fields_and_audit_record_cannot_be_rewritten_or_deleted(): void
+    {
+        [$owner, $account] = $this->ownerContext();
+        $location = Location::factory()->for($account)->create();
+        $category = ExpenseCategory::factory()->for($account)->create();
+        $expense = StudioExpense::factory()
+            ->for($account)
+            ->for($category, 'category')
+            ->for($location)
+            ->create([
+                'amount_cents' => 1000,
+                'payment_method' => StudioExpense::PaymentMethodBankCard,
+            ]);
+
+        foreach ([
+            fn () => $expense->update(['amount_cents' => 2000]),
+            fn () => $expense->delete(),
+        ] as $mutation) {
+            try {
+                $mutation();
+                $this->fail('An audited expense was mutated.');
+            } catch (LogicException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.expenses.void', [$account, $expense]), [
+                'reason' => 'Valid audited void transition.',
+            ])
+            ->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertTrue($expense->fresh()->isVoided());
+        $this->assertSame(1000, $expense->fresh()->amount_cents);
     }
 
     public function test_expense_management_requires_permission_and_enforces_account_boundaries(): void

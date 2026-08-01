@@ -13,8 +13,6 @@ use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\FiscalReceipt;
 use App\Models\Location;
-use App\Models\StudioCashEntry;
-use App\Models\StudioExpense;
 use App\Support\DateTimePresenter;
 use App\Support\MaskedContactPresenter;
 use Carbon\CarbonImmutable;
@@ -47,14 +45,6 @@ class StudioPaymentToolData
         $customerPayments = $this->customerPayments($account, $startsAt, $endsAt, $locationId);
         $customerRefunds = $this->customerRefunds($account, $startsAt, $endsAt, $locationId);
         $eventPayments = $this->eventPayments($account, $startsAt, $endsAt, $locationId);
-        $expenses = $this->expenses($account, $startsAt, $endsAt, $locationId);
-        $ownerWithdrawals = StudioCashEntry::query()
-            ->whereBelongsTo($account)
-            ->where('purpose', StudioCashEntry::PurposeOwnerWithdrawal)
-            ->whereBetween('occurred_at', [$startsAt, $endsAt])
-            ->when($locationId, fn (Builder $query, int $id): Builder => $query->where('location_id', $id));
-        $cashBalances = $this->cashBalances($account, $locationId);
-
         $customerIncome = $this->totalsByCurrency(
             (clone $customerPayments)->where('status', CustomerPurchaseStatus::PaymentPaid->value),
         );
@@ -68,19 +58,6 @@ class StudioPaymentToolData
             ]),
         );
         $income = $this->mergeCurrencyTotals($netCustomerIncome, $eventIncome);
-        $expenseTotals = $this->totalsByCurrency((clone $expenses)->active());
-        $withdrawalTotals = $this->totalsByCurrency(clone $ownerWithdrawals);
-        $cashReceived = $this->totalsByCurrency(
-            (clone $customerPayments)
-                ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
-                ->whereIn('payment_source', [
-                    CustomerPurchase::SourceManualCashClassPass,
-                    CustomerPurchase::SourceManualCashBooking,
-                ]),
-        );
-        $cashBalanceTotals = $this->mergeCurrencyTotals(
-            ...$cashBalances->pluck('balance_by_currency')->all(),
-        );
 
         $outstandingPasses = CustomerClassPass::query()
             ->whereBelongsTo($account)
@@ -104,25 +81,11 @@ class StudioPaymentToolData
                 'net_customer_income' => $this->moneyTotals($netCustomerIncome),
                 'event_income' => $this->moneyTotals($eventIncome),
                 'income' => $this->moneyTotals($income),
-                'operational_expenses' => $this->moneyTotals($expenseTotals),
-                'owner_withdrawals' => $this->moneyTotals($withdrawalTotals),
-                'remaining' => $this->moneyTotals(
-                    $this->subtractCurrencyTotals(
-                        $this->subtractCurrencyTotals($income, $expenseTotals),
-                        $withdrawalTotals,
-                    ),
-                ),
-                'cash_received' => $this->moneyTotals($cashReceived),
-                'cash_balance' => $this->moneyTotals($cashBalanceTotals),
             ],
             'counts' => [
                 'customer_payments_by_status' => $this->countsByStatus(clone $customerPayments),
                 'customer_refunds' => (clone $customerRefunds)->count(),
                 'event_payments_by_status' => $this->countsByStatus(clone $eventPayments),
-                'operational_expenses' => [
-                    StudioExpense::StatusActive => (clone $expenses)->active()->count(),
-                    StudioExpense::StatusVoided => (clone $expenses)->voided()->count(),
-                ],
                 'refund_required' => (clone $eventPayments)
                     ->whereIn('status', [
                         EventOrderStatus::RefundRequired->value,
@@ -135,17 +98,6 @@ class StudioPaymentToolData
                     'partial' => (clone $outstandingPasses)->partiallyPaid()->count(),
                 ],
             ],
-            'cash_balances' => $cashBalances
-                ->map(fn (array $balance): array => [
-                    'location_id' => $balance['location']->id,
-                    'location_name' => $balance['location']->name,
-                    'manual_cash' => $this->moneyTotals($balance['manual_cash_by_currency']),
-                    'cash_in' => $this->moneyTotals($balance['cash_in_by_currency']),
-                    'cash_out' => $this->moneyTotals($balance['cash_out_by_currency']),
-                    'balance' => $this->moneyTotals($balance['balance_by_currency']),
-                ])
-                ->values()
-                ->all(),
         ];
     }
 
@@ -196,29 +148,6 @@ class StudioPaymentToolData
                 $locationId,
                 $query,
                 $status,
-                $limit,
-            ));
-        }
-
-        if ($kind === null || $kind === 'operational_expense') {
-            $rows = $rows->concat($this->expenseRows(
-                $account,
-                $startsAt,
-                $endsAt,
-                $locationId,
-                $query,
-                $status,
-                $limit,
-            ));
-        }
-
-        if (($kind === null || $kind === 'cash_movement') && $status === null) {
-            $rows = $rows->concat($this->cashMovementRows(
-                $account,
-                $startsAt,
-                $endsAt,
-                $locationId,
-                $query,
                 $limit,
             ));
         }
@@ -413,100 +342,6 @@ class StudioPaymentToolData
             ]);
     }
 
-    /**
-     * @return Collection<int, array<string, mixed>>
-     */
-    private function expenseRows(
-        Account $account,
-        CarbonInterface $startsAt,
-        CarbonInterface $endsAt,
-        ?int $locationId,
-        string $search,
-        ?string $status,
-        int $limit,
-    ): Collection {
-        return $this->expenses($account, $startsAt, $endsAt, $locationId)
-            ->with([
-                'category:id,account_id,name',
-                'location:id,account_id,name',
-            ])
-            ->when($search !== '', function (Builder $query) use ($search): void {
-                $escaped = addcslashes($search, '\\%_');
-                $query->where(fn (Builder $query): Builder => $query
-                    ->where('reason', 'like', '%'.$escaped.'%')
-                    ->orWhereHas('category', fn (Builder $query): Builder => $query->where('name', 'like', '%'.$escaped.'%')));
-            })
-            ->when($status === StudioExpense::StatusActive, fn (Builder $query): Builder => $query->active())
-            ->when($status === StudioExpense::StatusVoided, fn (Builder $query): Builder => $query->voided())
-            ->when($status !== null && ! in_array($status, StudioExpense::statuses(), true), fn (Builder $query): Builder => $query->whereRaw('1 = 0'))
-            ->orderByDesc('occurred_at')
-            ->orderByDesc('id')
-            ->limit($limit + 1)
-            ->get()
-            ->map(fn (StudioExpense $expense): array => [
-                '_sort_at' => $expense->occurred_at?->getTimestamp() ?? 0,
-                'kind' => 'operational_expense',
-                'payment_id' => $expense->id,
-                'reference' => null,
-                'status' => $expense->status(),
-                'occurred_at' => $this->occurredAt($account, $expense->occurred_at),
-                'amount' => $this->money((int) $expense->amount_cents, (string) $expense->currency),
-                'payment_method' => $expense->payment_method,
-                'category' => $expense->category?->name,
-                'location' => $expense->location ? [
-                    'location_id' => $expense->location->id,
-                    'name' => $expense->location->name,
-                ] : null,
-            ]);
-    }
-
-    /**
-     * @return Collection<int, array<string, mixed>>
-     */
-    private function cashMovementRows(
-        Account $account,
-        CarbonInterface $startsAt,
-        CarbonInterface $endsAt,
-        ?int $locationId,
-        string $search,
-        int $limit,
-    ): Collection {
-        return StudioCashEntry::query()
-            ->whereBelongsTo($account)
-            ->with(['location:id,account_id,name'])
-            ->whereBetween('occurred_at', [$startsAt, $endsAt])
-            ->whereNotIn('purpose', [
-                StudioCashEntry::PurposeOperationalExpense,
-                StudioCashEntry::PurposeExpenseReversal,
-                StudioCashEntry::PurposePaymentRefund,
-            ])
-            ->when($locationId, fn (Builder $query, int $id): Builder => $query->where('location_id', $id))
-            ->when($search !== '', function (Builder $query) use ($search): void {
-                $escaped = addcslashes($search, '\\%_');
-                $query->where(fn (Builder $query): Builder => $query
-                    ->where('reason', 'like', '%'.$escaped.'%')
-                    ->orWhere('purpose', 'like', '%'.$escaped.'%'));
-            })
-            ->orderByDesc('occurred_at')
-            ->orderByDesc('id')
-            ->limit($limit + 1)
-            ->get()
-            ->map(fn (StudioCashEntry $entry): array => [
-                '_sort_at' => $entry->occurred_at?->getTimestamp() ?? 0,
-                'kind' => 'cash_movement',
-                'payment_id' => $entry->id,
-                'reference' => null,
-                'status' => $entry->direction,
-                'occurred_at' => $this->occurredAt($account, $entry->occurred_at),
-                'amount' => $this->money((int) $entry->amount_cents, (string) $entry->currency),
-                'purpose' => $entry->purpose,
-                'location' => $entry->location ? [
-                    'location_id' => $entry->location->id,
-                    'name' => $entry->location->name,
-                ] : null,
-            ]);
-    }
-
     private function customerPayments(
         Account $account,
         CarbonInterface $startsAt,
@@ -548,18 +383,6 @@ class StudioPaymentToolData
             ->when($locationId, fn (Builder $query, int $id): Builder => $query->where('location_id', $id));
     }
 
-    private function expenses(
-        Account $account,
-        CarbonInterface $startsAt,
-        CarbonInterface $endsAt,
-        ?int $locationId,
-    ): Builder {
-        return StudioExpense::query()
-            ->whereBelongsTo($account)
-            ->whereBetween('occurred_at', [$startsAt, $endsAt])
-            ->when($locationId, fn (Builder $query, int $id): Builder => $query->where('location_id', $id));
-    }
-
     /**
      * @return array{0: string, 1: string, 2: CarbonImmutable, 3: CarbonImmutable}
      */
@@ -582,11 +405,26 @@ class StudioPaymentToolData
             ]);
         }
 
+        $startsAt = $from->startOfDay()->timezone((string) config('app.timezone'));
+        $endsAt = $to->endOfDay()->timezone((string) config('app.timezone'));
+        $epoch = $account->activeFinanceEpoch();
+
+        if ($epoch?->starts_at && $startsAt->lessThan($epoch->starts_at)) {
+            $startsAt = $epoch->starts_at->toImmutable();
+            $fromDate = $epoch->starts_at->copy()->timezone($timezone)->toDateString();
+        }
+
+        if ($startsAt->greaterThan($endsAt)) {
+            throw ValidationException::withMessages([
+                'date_to' => 'The selected payment period ends before the active finance epoch.',
+            ]);
+        }
+
         return [
             $fromDate,
             $toDate,
-            $from->startOfDay()->timezone((string) config('app.timezone')),
-            $to->endOfDay()->timezone((string) config('app.timezone')),
+            $startsAt,
+            $endsAt,
         ];
     }
 
@@ -608,53 +446,6 @@ class StudioPaymentToolData
         }
 
         return $location;
-    }
-
-    /**
-     * @return Collection<int, array{location: Location, manual_cash_by_currency: array<string, int>, cash_in_by_currency: array<string, int>, cash_out_by_currency: array<string, int>, balance_by_currency: array<string, int>}>
-     */
-    private function cashBalances(Account $account, ?int $locationId): Collection
-    {
-        $locations = $account->locations()
-            ->when($locationId, fn (Builder $query, int $id): Builder => $query->whereKey($id))
-            ->orderBy('name')
-            ->get(['id', 'account_id', 'name']);
-        $locationIds = $locations->pluck('id');
-        $manualCashByLocation = $account->customerPurchases()
-            ->whereIn('location_id', $locationIds)
-            ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
-            ->whereIn('payment_source', [
-                CustomerPurchase::SourceManualCashClassPass,
-                CustomerPurchase::SourceManualCashBooking,
-            ])
-            ->selectRaw('location_id, currency, SUM(amount_cents) as amount_cents')
-            ->groupBy('location_id', 'currency')
-            ->get()
-            ->groupBy('location_id');
-        $cashEntriesByLocation = $account->studioCashEntries()
-            ->whereIn('location_id', $locationIds)
-            ->selectRaw('location_id, direction, currency, SUM(amount_cents) as amount_cents')
-            ->groupBy('location_id', 'direction', 'currency')
-            ->get()
-            ->groupBy('location_id');
-
-        return $locations->map(function (Location $location) use ($manualCashByLocation, $cashEntriesByLocation): array {
-            $entries = $cashEntriesByLocation->get($location->id, collect());
-            $manualCash = $this->currencyTotalsFromRows($manualCashByLocation->get($location->id, collect()));
-            $cashIn = $this->currencyTotalsFromRows($entries->where('direction', StudioCashEntry::DirectionIn));
-            $cashOut = $this->currencyTotalsFromRows($entries->where('direction', StudioCashEntry::DirectionOut));
-
-            return [
-                'location' => $location,
-                'manual_cash_by_currency' => $manualCash,
-                'cash_in_by_currency' => $cashIn,
-                'cash_out_by_currency' => $cashOut,
-                'balance_by_currency' => $this->subtractCurrencyTotals(
-                    $this->mergeCurrencyTotals($manualCash, $cashIn),
-                    $cashOut,
-                ),
-            ];
-        });
     }
 
     private function fiscalFailureCount(Builder $customerPayments, Builder $customerRefunds, Builder $eventPayments): int
@@ -700,18 +491,6 @@ class StudioPaymentToolData
             ->groupBy('currency')
             ->pluck('amount_cents', 'currency')
             ->map(fn (mixed $amount): int => (int) $amount)
-            ->sortKeys()
-            ->all();
-    }
-
-    /**
-     * @param  Collection<int, mixed>  $rows
-     * @return array<string, int>
-     */
-    private function currencyTotalsFromRows(Collection $rows): array
-    {
-        return $rows
-            ->mapWithKeys(fn (mixed $row): array => [(string) $row->currency => (int) $row->amount_cents])
             ->sortKeys()
             ->all();
     }

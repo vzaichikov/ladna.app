@@ -178,6 +178,51 @@ class LadnaOpenApiSpec
                     'limit' => 20,
                 ])),
             ],
+            'mcp_financial_report' => [
+                'title' => __('app.api_docs_example_mcp_financial_report'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-financial-report', [
+                    'date_from' => '2026-07-01',
+                    'date_to' => '2026-07-31',
+                    'limit' => 20,
+                ])),
+            ],
+            'mcp_cashbox_overview' => [
+                'title' => __('app.api_docs_example_mcp_cashbox_overview'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-cashbox-overview', [
+                    'location_id' => 12,
+                    'currency' => 'UAH',
+                ])),
+            ],
+            'mcp_earnings_report' => [
+                'title' => __('app.api_docs_example_mcp_earnings_report'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-earnings-report', [
+                    'date_from' => '2026-07-01',
+                    'date_to' => '2026-07-31',
+                ])),
+            ],
+            'mcp_rental_report' => [
+                'title' => __('app.api_docs_example_mcp_rental_report'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-rental-report', [
+                    'date_from' => '2026-07-01',
+                    'date_to' => '2026-07-31',
+                ])),
+            ],
+            'mcp_payroll_overview' => [
+                'title' => __('app.api_docs_example_mcp_payroll_overview'),
+                'method' => 'POST',
+                'path' => '/mcp/ladna-studio',
+                'samples' => $this->codeSamples('POST', '/mcp/ladna-studio', $this->mcpToolCallBody('get-payroll-overview', [
+                    'limit' => 20,
+                ])),
+            ],
             'mcp_events_overview' => [
                 'title' => __('app.api_docs_example_mcp_events_overview'),
                 'method' => 'POST',
@@ -834,7 +879,7 @@ class LadnaOpenApiSpec
             'post' => [
                 'tags' => ['MCP'],
                 'summary' => 'Calls Ladna studio MCP tools through JSON-RPC in the bearer token account scope.',
-                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, including mcp:read, mcp:customers:read, mcp:class-passes:read, mcp:payments:read, mcp:events:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Payment abilities may be granted only by users with manage_studio_cashflow; event abilities require manage_events. Customer booking-ledger investigation requires both mcp:customers:read and mcp:class-passes:read. Tool calls never accept account_id or tenant_id arguments for scoping. Read tools remain available for a read-only demo; mutation abilities return HTTP 423.',
+                'description' => 'The endpoint is not public. It requires a Ladna account API bearer token. Each tool checks its own ability, including mcp:read, mcp:customers:read, mcp:class-passes:read, mcp:payments:read, mcp:cashflow:read, mcp:payroll:read, mcp:events:read, mcp:bookings:create, mcp:bookings:cancel, or mcp:logic:read. Payment and financial-report abilities require view_studio_financial_reports; cashbox reads require manage_studio_cashflow; payroll reads require manage_studio_payroll; event abilities require manage_events. Customer booking-ledger investigation requires both mcp:customers:read and mcp:class-passes:read. Tool calls never accept account_id or tenant_id arguments for scoping. Read tools remain available for a read-only demo; mutation abilities return HTTP 423.',
                 'security' => [
                     ['AccountBearerToken' => []],
                 ],
@@ -886,6 +931,36 @@ class LadnaOpenApiSpec
                                         'date_from' => '2026-07-01',
                                         'date_to' => '2026-07-31',
                                         'query' => 'Коваль',
+                                        'limit' => 20,
+                                    ]),
+                                ],
+                                'financial_report' => [
+                                    'value' => $this->mcpToolCallBody('get-financial-report', [
+                                        'date_from' => '2026-07-01',
+                                        'date_to' => '2026-07-31',
+                                        'limit' => 20,
+                                    ]),
+                                ],
+                                'cashbox_overview' => [
+                                    'value' => $this->mcpToolCallBody('get-cashbox-overview', [
+                                        'location_id' => 12,
+                                        'currency' => 'UAH',
+                                    ]),
+                                ],
+                                'earnings_report' => [
+                                    'value' => $this->mcpToolCallBody('get-earnings-report', [
+                                        'date_from' => '2026-07-01',
+                                        'date_to' => '2026-07-31',
+                                    ]),
+                                ],
+                                'rental_report' => [
+                                    'value' => $this->mcpToolCallBody('get-rental-report', [
+                                        'date_from' => '2026-07-01',
+                                        'date_to' => '2026-07-31',
+                                    ]),
+                                ],
+                                'payroll_overview' => [
+                                    'value' => $this->mcpToolCallBody('get-payroll-overview', [
                                         'limit' => 20,
                                     ]),
                                 ],
@@ -1623,6 +1698,11 @@ class LadnaOpenApiSpec
                                     'get-business-logic-reference',
                                     'get-payment-overview',
                                     'search-payments',
+                                    'get-financial-report',
+                                    'get-cashbox-overview',
+                                    'get-earnings-report',
+                                    'get-rental-report',
+                                    'get-payroll-overview',
                                     'get-events-overview',
                                     'get-event-summary',
                                 ],

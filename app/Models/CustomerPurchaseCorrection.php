@@ -6,6 +6,7 @@ use Database\Factories\CustomerPurchaseCorrectionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use LogicException;
 
 class CustomerPurchaseCorrection extends Model
 {
@@ -21,6 +22,7 @@ class CustomerPurchaseCorrection extends Model
         'new_amount_cents',
         'previous_paid_at',
         'new_paid_at',
+        'idempotency_key',
         'actor_user_id',
         'actor_trainer_id',
         'actor_name',
@@ -58,5 +60,11 @@ class CustomerPurchaseCorrection extends Model
     public function newLocation(): BelongsTo
     {
         return $this->belongsTo(Location::class, 'new_location_id');
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(fn (): never => throw new LogicException('Customer purchase corrections are immutable.'));
+        static::deleting(fn (): never => throw new LogicException('Customer purchase corrections cannot be deleted.'));
     }
 }

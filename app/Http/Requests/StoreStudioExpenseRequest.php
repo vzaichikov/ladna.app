@@ -11,6 +11,7 @@ use App\Support\Payments\PaymentAmounts;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class StoreStudioExpenseRequest extends FormRequest
@@ -45,14 +46,39 @@ class StoreStudioExpenseRequest extends FormRequest
             'amount' => ['required', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'occurred_at' => ['required', 'date_format:Y-m-d\TH:i'],
             'reason' => ['required', 'string', 'min:3', 'max:2000'],
+            'idempotency_key' => ['required', 'uuid'],
             'payment_method' => ['required', Rule::in(StudioExpense::paymentMethods())],
-            'location_id' => [
+            'expense_location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id),
+            ],
+            'cash_location_id' => [
                 Rule::requiredIf($this->input('payment_method') === StudioExpense::PaymentMethodCashdesk),
                 'nullable',
                 'integer',
                 Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id),
             ],
+            'location_id' => [
+                'nullable',
+                'integer',
+                Rule::exists((new Location)->getTable(), 'id')->where('account_id', $account?->id),
+            ],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $legacyLocationId = $this->input('location_id');
+        $isCash = $this->input('payment_method') === StudioExpense::PaymentMethodCashdesk;
+
+        $this->merge([
+            'idempotency_key' => $this->input('idempotency_key') ?: (string) Str::uuid(),
+            'expense_location_id' => $this->input('expense_location_id') ?: $legacyLocationId,
+            'cash_location_id' => $isCash
+                ? ($this->input('cash_location_id') ?: $legacyLocationId)
+                : null,
+        ]);
     }
 
     public function amountCents(): int

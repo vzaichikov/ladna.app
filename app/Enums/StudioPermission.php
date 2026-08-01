@@ -12,7 +12,10 @@ enum StudioPermission: string
     case IssueCustomerClassPasses = 'issue_customer_class_passes';
     case ManageCustomerClassPasses = 'manage_customer_class_passes';
     case CorrectClosedClasses = 'correct_closed_classes';
+    case RecordCustomerPayments = 'record_customer_payments';
     case ManageStudioCashflow = 'manage_studio_cashflow';
+    case ViewStudioFinancialReports = 'view_studio_financial_reports';
+    case ManageStudioPayroll = 'manage_studio_payroll';
     case ViewActivityLog = 'view_activity_log';
     case MarkAttendance = 'mark_attendance';
     case ManageTrainers = 'manage_trainers';
@@ -33,7 +36,10 @@ enum StudioPermission: string
     public function sensitivity(): string
     {
         return match ($this) {
-            self::CorrectClosedClasses, self::ManageStudioCashflow => 'critical',
+            self::CorrectClosedClasses,
+            self::ManageStudioCashflow,
+            self::ViewStudioFinancialReports,
+            self::ManageStudioPayroll => 'critical',
             self::ManageStudioSettings, self::ManageTrainers, self::ManageCustomerClassPasses, self::IssueCustomerClassPasses, self::ManageEvents => 'high',
             default => 'standard',
         };

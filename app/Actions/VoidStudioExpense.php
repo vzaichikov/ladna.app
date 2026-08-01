@@ -25,7 +25,7 @@ class VoidStudioExpense
 
         return DB::transaction(function () use ($account, $studioExpense, $user, $reason): StudioExpense {
             $lockedExpense = StudioExpense::query()
-                ->with('location')
+                ->with(['expenseLocation', 'cashLocation'])
                 ->whereBelongsTo($account)
                 ->whereKey($studioExpense->id)
                 ->lockForUpdate()
@@ -46,7 +46,7 @@ class VoidStudioExpense
             if ($lockedExpense->payment_method === StudioExpense::PaymentMethodCashdesk) {
                 $this->recordStudioCashEntry->execute(
                     $account,
-                    $lockedExpense->location,
+                    $lockedExpense->cashLocation ?? $lockedExpense->expenseLocation,
                     StudioCashEntry::DirectionIn,
                     (int) $lockedExpense->amount_cents,
                     $voidedAt,
@@ -54,6 +54,7 @@ class VoidStudioExpense
                     $reason,
                     StudioCashEntry::PurposeExpenseReversal,
                     $lockedExpense,
+                    sourceKey: 'expense:'.$lockedExpense->id.':reversal',
                 );
             }
 
