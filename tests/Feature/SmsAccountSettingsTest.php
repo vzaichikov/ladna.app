@@ -61,7 +61,8 @@ class SmsAccountSettingsTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.sms_account'))
             ->assertSee(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']), false)
-            ->assertSee('4444 **** **** 1111');
+            ->assertSee('4444 **** **** 1111')
+            ->assertDontSee(__('app.sms_first_top_up_card_copy'));
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.sms-account.auto-top-up.update', $account), [
@@ -88,6 +89,31 @@ class SmsAccountSettingsTest extends TestCase
             'auto_top_up_target_cents' => 5_000,
             'auto_top_up_monthly_cap_cents' => 20_000,
         ]);
+    }
+
+    public function test_first_sms_top_up_explains_secure_card_linking_and_shows_presets(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $plan = SubscriptionPlan::factory()->create(['sms_segment_price_cents' => 100]);
+        AccountSubscription::factory()
+            ->for($account)
+            ->for($plan, 'plan')
+            ->create();
+        $account->customerAuthSetting()->create([
+            'sms_sending_mode' => SmsSendingMode::LadnaService->value,
+        ]);
+        SystemSetting::setValue(SmsServiceSettings::EnabledKey, '1');
+        SystemSetting::setValue(SmsServiceSettings::TopUpPresetsKey, '5000,10000,20000');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.sms-account.show', $account))
+            ->assertOk()
+            ->assertSee(__('app.sms_first_top_up_card_copy'))
+            ->assertSee('name="amount_cents" value="5000"', false)
+            ->assertSee('name="amount_cents" value="10000"', false)
+            ->assertSee('name="amount_cents" value="20000"', false);
     }
 
     public function test_platform_adjustment_requires_a_reason_and_is_append_only(): void

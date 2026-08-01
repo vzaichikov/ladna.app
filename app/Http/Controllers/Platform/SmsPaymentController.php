@@ -2,44 +2,46 @@
 
 namespace App\Http\Controllers\Platform;
 
-use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\FiscalReceiptStatus;
+use App\Enums\SmsTopUpKind;
+use App\Enums\SmsTopUpPaymentStatus;
 use App\Http\Controllers\Controller;
-use App\Models\AccountSubscriptionPayment;
 use App\Models\FiscalReceipt;
+use App\Models\SmsTopUpPayment;
 use App\Support\Fiscalization\FiscalizationAvailability;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
-class PaymentController extends Controller
+class SmsPaymentController extends Controller
 {
     public function index(Request $request, FiscalizationAvailability $fiscalization): View
     {
+        $providers = $this->providerOptions();
         $status = $this->statusFilter($request->query('status'));
-        $provider = $this->providerFilter($request->query('provider'));
+        $provider = $this->providerFilter($request->query('provider'), $providers);
+        $kind = $this->kindFilter($request->query('kind'));
         $fiscalizationEnabled = $fiscalization->enabledForPlatform();
-        $baseQuery = AccountSubscriptionPayment::query()
-            ->where(function (Builder $query): void {
-                $query
-                    ->whereNull('account_id')
-                    ->orWhereHas('account', fn (Builder $query): Builder => $query->operational());
-            })
+        $baseQuery = SmsTopUpPayment::query()
+            ->whereHas('account', fn (Builder $query): Builder => $query->operational())
             ->when($status, fn (Builder $query): Builder => $query->where('status', $status))
-            ->when($provider, fn (Builder $query): Builder => $query->where('provider', $provider));
+            ->when($provider, fn (Builder $query): Builder => $query->where('provider', $provider))
+            ->when($kind, fn (Builder $query): Builder => $query->where('kind', $kind));
 
         $payments = (clone $baseQuery)
-            ->with(['account', 'subscription', 'plan', 'fiscalReceipt'])
-            ->latest()
+            ->with(['account', 'fiscalReceipt'])
+            ->latest('id')
             ->paginate(20)
             ->withQueryString();
 
-        return view('platform.payments.index', [
+        return view('platform.sms-payments.index', [
             'payments' => $payments,
             'status' => $status,
             'provider' => $provider,
-            'providers' => $this->providerOptions(),
-            'statuses' => AccountSubscriptionPaymentStatus::cases(),
+            'kind' => $kind,
+            'providers' => $providers,
+            'statuses' => SmsTopUpPaymentStatus::cases(),
+            'kinds' => SmsTopUpKind::cases(),
             'fiscalizationEnabled' => $fiscalizationEnabled,
             'stats' => $this->stats($baseQuery, $fiscalizationEnabled),
         ]);
@@ -51,12 +53,24 @@ class PaymentController extends Controller
             return null;
         }
 
-        return in_array($value, array_column(AccountSubscriptionPaymentStatus::cases(), 'value'), true) ? $value : null;
+        return in_array($value, array_column(SmsTopUpPaymentStatus::cases(), 'value'), true) ? $value : null;
     }
 
-    private function providerFilter(mixed $value): ?string
+    /**
+     * @param  array<string, string>  $providers
+     */
+    private function providerFilter(mixed $value, array $providers): ?string
     {
-        return is_string($value) && array_key_exists($value, config('integrations.providers', [])) ? $value : null;
+        return is_string($value) && array_key_exists($value, $providers) ? $value : null;
+    }
+
+    private function kindFilter(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        return in_array($value, array_column(SmsTopUpKind::cases(), 'value'), true) ? $value : null;
     }
 
     /**
@@ -64,12 +78,8 @@ class PaymentController extends Controller
      */
     private function providerOptions(): array
     {
-        return AccountSubscriptionPayment::query()
-            ->where(function (Builder $query): void {
-                $query
-                    ->whereNull('account_id')
-                    ->orWhereHas('account', fn (Builder $query): Builder => $query->operational());
-            })
+        return SmsTopUpPayment::query()
+            ->whereHas('account', fn (Builder $query): Builder => $query->operational())
             ->select('provider')
             ->distinct()
             ->orderBy('provider')
@@ -87,32 +97,29 @@ class PaymentController extends Controller
     {
         return [
             'total' => (clone $baseQuery)->count(),
-            'paid_amount_cents' => (clone $baseQuery)
-                ->where('status', AccountSubscriptionPaymentStatus::PaymentPaid->value)
+            'paid_amount_cents' => (int) (clone $baseQuery)
+                ->where('status', SmsTopUpPaymentStatus::PaymentPaid->value)
                 ->sum('amount_cents'),
             'pending' => (clone $baseQuery)
                 ->whereIn('status', [
-                    AccountSubscriptionPaymentStatus::PaymentStarted->value,
-                    AccountSubscriptionPaymentStatus::PaymentPending->value,
+                    SmsTopUpPaymentStatus::PaymentStarted->value,
+                    SmsTopUpPaymentStatus::PaymentPending->value,
                 ])
                 ->count(),
             'failed' => (clone $baseQuery)
                 ->whereIn('status', [
-                    AccountSubscriptionPaymentStatus::PaymentFailed->value,
-                    AccountSubscriptionPaymentStatus::PaymentCancelled->value,
-                    AccountSubscriptionPaymentStatus::PaymentExpired->value,
+                    SmsTopUpPaymentStatus::PaymentFailed->value,
+                    SmsTopUpPaymentStatus::PaymentCancelled->value,
+                    SmsTopUpPaymentStatus::PaymentExpired->value,
+                    SmsTopUpPaymentStatus::PaymentReversed->value,
                 ])
                 ->count(),
             'fiscal_failed' => $fiscalizationEnabled
                 ? FiscalReceipt::query()
                     ->where('scope_type', 'platform')
                     ->where('scope_id', 0)
-                    ->where('payment_type', (new AccountSubscriptionPayment)->getMorphClass())
-                    ->where(function (Builder $query): void {
-                        $query
-                            ->whereNull('account_id')
-                            ->orWhereHas('account', fn (Builder $query): Builder => $query->operational());
-                    })
+                    ->where('payment_type', (new SmsTopUpPayment)->getMorphClass())
+                    ->whereHas('account', fn (Builder $query): Builder => $query->operational())
                     ->where('status', FiscalReceiptStatus::Failed->value)
                     ->count()
                 : 0,

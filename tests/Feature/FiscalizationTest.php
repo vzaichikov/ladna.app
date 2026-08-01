@@ -24,6 +24,7 @@ use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\SmsTopUpPayment;
 use App\Models\SubscriptionPlan;
+use App\Models\User;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -103,6 +104,8 @@ class FiscalizationTest extends TestCase
     {
         $this->enablePlatformFiscalization();
         $account = Account::factory()->create();
+        $owner = User::factory()->create(['email' => 'saas-receipt-owner@example.com']);
+        $account->addOwner($owner);
         $plan = SubscriptionPlan::factory()->create(['name' => 'Studio Pro']);
         $payment = AccountSubscriptionPayment::factory()
             ->for($account)
@@ -127,12 +130,16 @@ class FiscalizationTest extends TestCase
         $this->assertSame(0, $receipt->scope_id);
         $this->assertSame($account->id, $receipt->account_id);
         $this->assertSame('FN-SAAS-1', $receipt->fiscal_number);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'delivery.email') === 'saas-receipt-owner@example.com');
     }
 
     public function test_sms_top_up_credits_once_and_retries_the_platform_receipt_after_checkbox_outage(): void
     {
         $this->enablePlatformFiscalization();
         $account = Account::factory()->create();
+        $owner = User::factory()->create(['email' => 'sms-receipt-owner@example.com']);
+        $account->addOwner($owner);
         $wallet = AccountSmsWallet::factory()->for($account)->create();
         $payment = SmsTopUpPayment::factory()
             ->for($account)
@@ -174,7 +181,8 @@ class FiscalizationTest extends TestCase
         $this->assertSame(1, $payment->ledgerEntries()->count());
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
             && data_get($request->data(), 'goods.0.good.name') === __('app.sms_top_up_receipt_item')
-            && data_get($request->data(), 'goods.0.good.price') === 5_000);
+            && data_get($request->data(), 'goods.0.good.price') === 5_000
+            && data_get($request->data(), 'delivery.email') === 'sms-receipt-owner@example.com');
     }
 
     public function test_paid_event_order_is_fiscalized_with_event_and_buyer_snapshots(): void

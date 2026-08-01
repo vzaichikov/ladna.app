@@ -28,7 +28,7 @@ class CustomerNotificationTextRenderer
         return __('app.customer_notification_class_cancellation_sms', [
             'studio' => $account->name,
             'class' => $scheduledClass->displayTitle(),
-            'date' => $startsAt->format('d.m.Y'),
+            'date' => $startsAt->format('d.m'),
             'time' => $startsAt->format('H:i'),
         ], $locale);
     }

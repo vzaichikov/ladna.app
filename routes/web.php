@@ -81,6 +81,7 @@ use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\ProfileController as PlatformProfileController;
 use App\Http\Controllers\Platform\ScheduledTaskController;
 use App\Http\Controllers\Platform\SmsDeliveryController as PlatformSmsDeliveryController;
+use App\Http\Controllers\Platform\SmsPaymentController as PlatformSmsPaymentController;
 use App\Http\Controllers\Platform\SubscriptionPlanController;
 use App\Http\Controllers\Platform\SubscriptionPriceVersionController;
 use App\Http\Controllers\Platform\SystemSettingsController;
@@ -355,6 +356,7 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
         Route::put('integrations/{provider}', [PlatformIntegrationController::class, 'update'])->name('integrations.update');
         Route::get('scheduled-tasks', ScheduledTaskController::class)->name('scheduled-tasks.index');
         Route::get('payments', [PlatformPaymentController::class, 'index'])->name('payments.index');
+        Route::get('sms-payments', [PlatformSmsPaymentController::class, 'index'])->name('sms-payments.index');
         Route::resource('accounts', PlatformAccountController::class);
         Route::post('accounts/{account}/billing/enroll', AccountBillingEnrollmentController::class)
             ->name('accounts.billing.enroll');

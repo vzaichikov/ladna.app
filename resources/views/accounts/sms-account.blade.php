@@ -88,6 +88,12 @@
             <h2 class="text-lg font-semibold text-slate-950">{{ __('app.sms_top_up') }}</h2>
             <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.sms_top_up_copy') }}</p>
 
+            @if ($canFund && ! $paymentMethod?->isActive())
+                <p class="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950">
+                    {{ __('app.sms_first_top_up_card_copy') }}
+                </p>
+            @endif
+
             @if ($isFree)
                 <p class="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ __('app.sms_free_tariff_no_top_up') }}</p>
             @elseif ($canFund)

@@ -30,6 +30,7 @@ use App\Models\ScheduledClassCancellation;
 use App\Models\TelegramAlert;
 use App\Models\Trainer;
 use App\Models\TrainerNotificationSetting;
+use App\Support\CustomerAuth\SmsSegmentCalculator;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\Telegram\Alerts\QueueTrainerAssignmentTelegramAlert;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -234,8 +235,11 @@ class NotificationCancellationScenarioTest extends TestCase
         $this->assertSame(CustomerNotificationStatus::Sent, $notification->status);
         $this->assertNull($notification->class_booking_id);
         $this->assertSame('cancel-sms-1', $notification->provider_message_id);
+        $expectedText = 'Studio Cancel скасувала заняття "Pole Class" 27.07 о 11:00. За деталями зверніться до студії';
+
         Http::assertSent(fn (Request $request): bool => $request['recipients'] === ['+380501112230']
-            && str_contains((string) $request['sms']['text'], 'скасувала заняття'));
+            && $request['sms']['text'] === $expectedText);
+        $this->assertSame(2, app(SmsSegmentCalculator::class)->estimate($expectedText)->segments);
     }
 
     public function test_switches_disabled_after_queueing_stop_external_delivery(): void

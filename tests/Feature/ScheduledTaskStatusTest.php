@@ -40,6 +40,7 @@ class ScheduledTaskStatusTest extends TestCase
             ->assertSee('telegram-alerts:send --limit=50')
             ->assertSee('customer-notifications:send --limit=50')
             ->assertSee('customer-notifications:fill --lookahead-hours=192 --limit=1000')
+            ->assertSee('sms-wallets:auto-top-up --limit=100')
             ->assertSee('account-activity-logs:prune')
             ->assertSee('*/15 * * * *')
             ->assertSee(__('app.scheduled_task_status_succeeded'))
@@ -128,5 +129,18 @@ class ScheduledTaskStatusTest extends TestCase
         $this->assertSame('*/30 * * * *', $definition['expression']);
         $this->assertSame('scheduled_task_frequency_every_thirty_minutes', $definition['frequency_key']);
         $this->assertSame(10, $definition['overlap_minutes']);
+    }
+
+    public function test_sms_wallet_auto_top_up_runs_every_ten_minutes_on_one_server(): void
+    {
+        $definition = collect(app(ScheduledTaskRegistry::class)->definitions())
+            ->firstWhere('key', 'sms_wallets_auto_top_up');
+
+        $this->assertNotNull($definition);
+        $this->assertSame('sms-wallets:auto-top-up --limit=100', $definition['command']);
+        $this->assertSame('*/10 * * * *', $definition['expression']);
+        $this->assertSame('scheduled_task_frequency_every_ten_minutes', $definition['frequency_key']);
+        $this->assertSame(5, $definition['overlap_minutes']);
+        $this->assertTrue($definition['single_server']);
     }
 }

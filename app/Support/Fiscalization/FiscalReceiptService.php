@@ -2,6 +2,7 @@
 
 namespace App\Support\Fiscalization;
 
+use App\Enums\AccountRole;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\CustomerPurchaseStatus;
 use App\Enums\EventOrderStatus;
@@ -306,6 +307,23 @@ class FiscalReceiptService
                 'email' => $payment->buyer_email,
                 'phone' => $payment->buyer_phone,
             ]);
+        }
+
+        if ($payment instanceof AccountSubscriptionPayment || $payment instanceof SmsTopUpPayment) {
+            $payment->loadMissing('account');
+
+            if (! $payment->account) {
+                return [];
+            }
+
+            $ownerEmail = $payment->account->users()
+                ->wherePivot('role', AccountRole::Owner->value)
+                ->whereNotNull('email')
+                ->orderBy('account_memberships.id')
+                ->pluck('email')
+                ->first(fn (string $email): bool => filter_var(trim($email), FILTER_VALIDATE_EMAIL) !== false);
+
+            return $ownerEmail ? ['email' => trim($ownerEmail)] : [];
         }
 
         if (! $payment instanceof CustomerPurchase) {

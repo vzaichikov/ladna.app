@@ -16,6 +16,8 @@ use App\Models\AccountSmsWallet;
 use App\Models\AccountSubscription;
 use App\Models\IntegrationSetting;
 use App\Models\SmsTopUpPayment;
+use App\Models\SubscriptionPlan;
+use App\Models\SystemSetting;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use App\Support\SaasBilling\CompletePaymentMethodVerification;
@@ -24,6 +26,7 @@ use App\Support\Sms\CreateSmsTopUpPayment;
 use App\Support\Sms\ResolveSmsTopUpPayment;
 use App\Support\Sms\ResumeSmsPaymentAfterVerification;
 use App\Support\Sms\SmsAutoTopUpService;
+use App\Support\Sms\SmsServiceSettings;
 use App\Support\Sms\StartSmsPaymentMethodVerification;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
@@ -226,6 +229,72 @@ class SmsTopUpPaymentTest extends TestCase
         ));
 
         $this->assertSame(900, $wallet->refresh()->auto_top_up_monthly_spent_cents);
+    }
+
+    public function test_scheduled_command_starts_auto_top_up_below_the_configured_threshold(): void
+    {
+        $account = Account::factory()->create(['timezone' => 'Europe/Kyiv']);
+        $plan = SubscriptionPlan::factory()->create(['sms_segment_price_cents' => 134]);
+        $subscription = AccountSubscription::factory()
+            ->for($account)
+            ->for($plan, 'plan')
+            ->create();
+        $subscription->paymentMethod()->create([
+            'account_id' => $account->id,
+            'provider' => IntegrationProvider::Monopay->value,
+            'provider_wallet_id' => 'scheduled-auto-wallet',
+            'provider_card_token' => 'scheduled-auto-card-token',
+            'masked_pan' => '444403******1902',
+            'status' => SubscriptionPaymentMethodStatus::Active->value,
+            'verification_reference' => 'SCHEDULED-AUTO-VERIFY',
+            'verified_at' => now(),
+        ]);
+        $account->customerAuthSetting()->create([
+            'sms_sending_mode' => SmsSendingMode::LadnaService->value,
+        ]);
+        $wallet = AccountSmsWallet::factory()->for($account)->create([
+            'balance_cents' => 5_000,
+            'reserved_cents' => 0,
+            'auto_top_up_enabled' => true,
+            'auto_top_up_threshold_cents' => 10_000,
+            'auto_top_up_target_cents' => 20_000,
+            'auto_top_up_monthly_cap_cents' => 50_000,
+        ]);
+        SystemSetting::setValue(SmsServiceSettings::EnabledKey, '1');
+        $this->platformMonopaySetting();
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/wallet/payment' => Http::response([
+                'invoiceId' => 'scheduled-auto-top-up-invoice',
+                'status' => 'processing',
+            ]),
+        ]);
+
+        $this->artisan('sms-wallets:auto-top-up')
+            ->expectsOutput(__('app.sms_auto_top_up_command_result', [
+                'wallets' => 1,
+                'payments' => 1,
+                'failures' => 0,
+            ]))
+            ->assertSuccessful();
+
+        $this->artisan('sms-wallets:auto-top-up')
+            ->expectsOutput(__('app.sms_auto_top_up_command_result', [
+                'wallets' => 0,
+                'payments' => 0,
+                'failures' => 0,
+            ]))
+            ->assertSuccessful();
+
+        $payment = SmsTopUpPayment::query()
+            ->whereBelongsTo($account)
+            ->where('kind', SmsTopUpKind::Automatic->value)
+            ->sole();
+
+        $this->assertSame(15_000, $payment->amount_cents);
+        $this->assertSame(SmsTopUpPaymentStatus::PaymentPending, $payment->status);
+        $this->assertSame('scheduled-auto-top-up-invoice', $payment->gateway_invoice_id);
+        $this->assertSame(5_000, $wallet->refresh()->balance_cents);
+        Http::assertSentCount(1);
     }
 
     public function test_auto_top_up_never_partially_charges_when_monthly_cap_is_insufficient(): void

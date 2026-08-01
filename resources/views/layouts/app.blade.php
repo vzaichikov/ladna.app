@@ -49,6 +49,12 @@
             'href' => route('platform.payments.index'),
             'active' => request()->routeIs('platform.payments.*'),
         ],
+        [
+            'label' => __('app.sms_payments'),
+            'icon' => 'payments',
+            'href' => route('platform.sms-payments.index'),
+            'active' => request()->routeIs('platform.sms-payments.*'),
+        ],
     ] : [];
 
     $canManageSchedule = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageSchedule);
