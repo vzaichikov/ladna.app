@@ -13,15 +13,19 @@ use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Enums\TelegramCustomerSessionState;
 use App\Models\Account;
+use App\Models\ActivityDirection;
 use App\Models\ClassBooking;
+use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\Location;
+use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramCustomerSession;
 use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
+use App\Models\Trainer;
 use App\Support\ClassBookingCancellationWindow;
 use App\Support\CustomerAuth\TelegramCustomerLoginTokenService;
 use App\Support\PhoneNumberNormalizer;
@@ -36,6 +40,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use Throwable;
 
 class CustomerTelegramUpdateProcessor
 {
@@ -57,6 +62,7 @@ class CustomerTelegramUpdateProcessor
         private readonly CancelClassBooking $cancelClassBooking,
         private readonly ClassBookingCancellationWindow $cancellationWindow,
         private readonly TelegramCustomerLoginTokenService $customerLoginTokens,
+        private readonly CustomerTelegramPrivateLessonOptions $privateLessonOptions,
     ) {}
 
     public function handle(TelegramUpdate $telegramUpdate): bool
@@ -201,7 +207,7 @@ class CustomerTelegramUpdateProcessor
         $action = (string) $callback['action'];
         $value = $callback['value'] ?? null;
 
-        if (in_array($action, ['confirm_customer', 'confirm_booking', 'cancel_booking', 'confirm_unlink'], true)) {
+        if (in_array($action, ['confirm_customer', 'confirm_booking', 'confirm_private_booking', 'cancel_booking', 'confirm_unlink'], true)) {
             $confirmationKey = 'telegram-customer-confirm:'.$telegramUpdate->telegram_bot_installation_id.':'.$session->telegram_chat_id;
 
             if (RateLimiter::tooManyAttempts($confirmationKey, 10)) {
@@ -224,11 +230,31 @@ class CustomerTelegramUpdateProcessor
             'edit_customer' => $this->askForFullName($telegramUpdate, $session),
             'menu' => $this->showMainMenu($telegramUpdate, $session, $authorization, $this->t($session, 'telegram_customer_choose_menu_action')),
             'bookings' => $this->showBookings($telegramUpdate, $session, $authorization),
+            'booking_types' => $this->showBookingTypes($telegramUpdate, $session, $authorization, true),
+            'book_type' => $this->beginBookingType($telegramUpdate, $session, $authorization, (string) $value),
             'book_location' => $this->showBookingDates($telegramUpdate, $session, $authorization, (int) $value, 0),
             'book_dates_page' => $this->showBookingDates($telegramUpdate, $session, $authorization, (int) data_get($session->encrypted_context, 'location_id'), (int) $value),
             'book_date' => $this->showClassesForDate($telegramUpdate, $session, $authorization, (string) $value),
             'book_class' => $this->showBookingConfirmation($telegramUpdate, $session, $authorization, (int) $value),
             'confirm_booking' => $this->confirmBooking($telegramUpdate, $session, $authorization, (int) $value),
+            'private_locations' => $this->beginPrivateBooking($telegramUpdate, $session, $authorization, true),
+            'private_location' => $this->showPrivateDirections($telegramUpdate, $session, $authorization, (int) $value),
+            'private_directions' => $this->showPrivateDirections($telegramUpdate, $session, $authorization, (int) data_get($session->encrypted_context, 'private_location_id'), false),
+            'private_direction' => $this->showPrivateServices($telegramUpdate, $session, $authorization, (int) data_get($session->encrypted_context, 'private_location_id'), (int) $value),
+            'private_services' => $this->showPrivateServices($telegramUpdate, $session, $authorization, (int) data_get($session->encrypted_context, 'private_location_id'), $this->privateContextId($session, 'private_direction_id'), false),
+            'private_service' => $this->showPrivateTrainers($telegramUpdate, $session, $authorization, (int) data_get($session->encrypted_context, 'private_location_id'), $this->privateContextId($session, 'private_direction_id'), (int) $value),
+            'private_trainers' => $this->showPrivateTrainers($telegramUpdate, $session, $authorization, (int) data_get($session->encrypted_context, 'private_location_id'), $this->privateContextId($session, 'private_direction_id'), (int) data_get($session->encrypted_context, 'private_class_type_id'), false),
+            'private_trainer' => $this->continuePrivateAfterTrainer($telegramUpdate, $session, $authorization, (int) data_get($session->encrypted_context, 'private_location_id'), $this->privateContextId($session, 'private_direction_id'), (int) data_get($session->encrypted_context, 'private_class_type_id'), (int) $value),
+            'private_rooms' => $this->showPrivateRooms($telegramUpdate, $session, $authorization, $this->privateSelectionFromSession($session), false),
+            'private_room' => $this->selectPrivateRoom($telegramUpdate, $session, $authorization, (int) $value),
+            'private_dates' => $this->showPrivateDates($telegramUpdate, $session, $authorization, $this->privateSelectionFromSession($session), (int) data_get($session->encrypted_context, 'private_date_page', 0)),
+            'private_dates_page' => $this->showPrivateDates($telegramUpdate, $session, $authorization, $this->privateSelectionFromSession($session), (int) $value),
+            'private_date' => $this->showPrivateTimes($telegramUpdate, $session, $authorization, $this->privateSelectionFromSession($session), (string) $value),
+            'private_times' => $this->showPrivateTimes($telegramUpdate, $session, $authorization, $this->privateSelectionFromSession($session), (string) data_get($session->encrypted_context, 'private_date')),
+            'private_time' => $this->selectPrivateTime($telegramUpdate, $session, $authorization, (string) $value),
+            'private_slot_rooms' => $this->showPrivateSlotRooms($telegramUpdate, $session, $authorization, $this->privateSelectionFromSession($session), (string) data_get($session->encrypted_context, 'private_starts_at'), false),
+            'private_slot_room' => $this->showPrivateBookingConfirmation($telegramUpdate, $session, $authorization, [...$this->privateSelectionFromSession($session), 'room_id' => (int) $value], (string) data_get($session->encrypted_context, 'private_starts_at')),
+            'confirm_private_booking' => $this->confirmPrivateBooking($telegramUpdate, $session, $authorization),
             'booking_detail' => $this->showBookingDetail($telegramUpdate, $session, $authorization, (int) $value),
             'booking_history' => $this->showBookingHistory($telegramUpdate, $session, $authorization, (int) $value),
             'confirm_cancel_booking' => $this->showCancellationConfirmation($telegramUpdate, $session, $authorization, (int) $value),
@@ -393,7 +419,70 @@ class CustomerTelegramUpdateProcessor
 
     private function beginBooking(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization): bool
     {
-        $classes = $this->eligibleClasses($authorization->account, $authorization->customer);
+        return $this->showBookingTypes($telegramUpdate, $session, $authorization);
+    }
+
+    private function showBookingTypes(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization, bool $forceChoice = false): bool
+    {
+        $groupClasses = $this->eligibleClasses($authorization->account, $authorization->customer);
+        $groupAvailable = $groupClasses->isNotEmpty();
+        $privateAvailable = $this->privateLessonOptions->isConfigured($authorization->account);
+
+        if (! $forceChoice && $groupAvailable && ! $privateAvailable) {
+            return $this->beginGroupBooking($telegramUpdate, $session, $authorization, $groupClasses);
+        }
+
+        if (! $forceChoice && $privateAvailable && ! $groupAvailable) {
+            return $this->beginPrivateBooking($telegramUpdate, $session, $authorization);
+        }
+
+        $rows = [];
+
+        if ($groupAvailable) {
+            $rows[] = [[
+                'text' => $this->t($session, 'telegram_customer_booking_type_group'),
+                'action' => 'book_type',
+                'value' => ScheduleKind::GroupClass->value,
+            ]];
+        }
+
+        if ($privateAvailable) {
+            $rows[] = [[
+                'text' => $this->t($session, 'telegram_customer_booking_type_private'),
+                'action' => 'book_type',
+                'value' => ScheduleKind::PrivateLesson->value,
+            ]];
+        }
+
+        if ($rows === []) {
+            return $this->showMainMenu($telegramUpdate, $session, $authorization, $this->t($session, 'telegram_customer_no_available_classes'));
+        }
+
+        $markup = $this->callbackMarkup($session, TelegramCustomerSessionState::ChoosingBookingType, $rows);
+        $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_choose_booking_type'), $markup, $authorization);
+
+        return true;
+    }
+
+    private function beginBookingType(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization, string $scheduleKind): bool
+    {
+        return match ($scheduleKind) {
+            ScheduleKind::GroupClass->value => $this->beginGroupBooking($telegramUpdate, $session, $authorization),
+            ScheduleKind::PrivateLesson->value => $this->beginPrivateBooking($telegramUpdate, $session, $authorization),
+            default => $this->showBookingTypes($telegramUpdate, $session, $authorization, true),
+        };
+    }
+
+    /**
+     * @param  Collection<int, ScheduledClass>|null  $classes
+     */
+    private function beginGroupBooking(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        ?Collection $classes = null,
+    ): bool {
+        $classes ??= $this->eligibleClasses($authorization->account, $authorization->customer);
         $locationIds = $classes->pluck('location_id')->unique()->values();
 
         if ($locationIds->isEmpty()) {
@@ -416,6 +505,639 @@ class CustomerTelegramUpdateProcessor
         $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_choose_location'), $markup, $authorization);
 
         return true;
+    }
+
+    private function beginPrivateBooking(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization, bool $forceChoice = false): bool
+    {
+        if (! $this->privateLessonOptions->isConfigured($authorization->account)) {
+            return $this->showBookingTypes($telegramUpdate, $session, $authorization, true);
+        }
+
+        $locations = $this->privateLessonOptions->locations($authorization->account);
+
+        if (! $forceChoice && $locations->count() === 1) {
+            return $this->showPrivateDirections($telegramUpdate, $session, $authorization, (int) $locations->first()->id);
+        }
+
+        $rows = $locations->map(fn (Location $location): array => [[
+            'text' => $location->name,
+            'action' => 'private_location',
+            'value' => $location->id,
+        ]])->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => 'booking_types',
+        ]];
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ChoosingPrivateLocation,
+            $rows,
+            ['booking_type' => ScheduleKind::PrivateLesson->value],
+        );
+        $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_choose_private_location'), $markup, $authorization);
+
+        return true;
+    }
+
+    private function showPrivateDirections(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        int $locationId,
+        bool $autoSelect = true,
+    ): bool {
+        $location = $this->privateLessonOptions->locations($authorization->account)->firstWhere('id', $locationId);
+
+        if (! $location instanceof Location) {
+            return $this->beginPrivateBooking($telegramUpdate, $session, $authorization, true);
+        }
+
+        $directions = $this->privateLessonOptions->directions($authorization->account);
+
+        if ($directions->isEmpty()) {
+            return $this->showPrivateServices($telegramUpdate, $session, $authorization, $location->id, null);
+        }
+
+        if ($autoSelect && $directions->count() === 1) {
+            return $this->showPrivateServices($telegramUpdate, $session, $authorization, $location->id, (int) $directions->first()->id);
+        }
+
+        $rows = $directions->map(fn (ActivityDirection $direction): array => [[
+            'text' => $direction->name,
+            'action' => 'private_direction',
+            'value' => $direction->id,
+        ]])->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => 'private_locations',
+        ]];
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ChoosingPrivateDirection,
+            $rows,
+            $this->privateContext(['location_id' => $location->id]),
+        );
+        $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_choose_private_direction'), $markup, $authorization);
+
+        return true;
+    }
+
+    private function showPrivateServices(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        int $locationId,
+        ?int $activityDirectionId,
+        bool $autoSelect = true,
+    ): bool {
+        $location = $this->privateLessonOptions->locations($authorization->account)->firstWhere('id', $locationId);
+        $directions = $this->privateLessonOptions->directions($authorization->account);
+        $direction = $activityDirectionId ? $directions->firstWhere('id', $activityDirectionId) : null;
+
+        if (! $location instanceof Location) {
+            return $this->beginPrivateBooking($telegramUpdate, $session, $authorization, true);
+        }
+
+        if ($directions->isNotEmpty() && ! $direction) {
+            return $this->showPrivateDirections($telegramUpdate, $session, $authorization, $location->id, false);
+        }
+
+        $classTypes = $this->privateLessonOptions->classTypes($authorization->account, $direction?->id);
+
+        if ($autoSelect && $classTypes->count() === 1) {
+            return $this->showPrivateTrainers(
+                $telegramUpdate,
+                $session,
+                $authorization,
+                $location->id,
+                $direction?->id,
+                (int) $classTypes->first()->id,
+            );
+        }
+
+        $rows = $classTypes->map(fn (ClassType $classType): array => [[
+            'text' => $classType->name,
+            'action' => 'private_service',
+            'value' => $classType->id,
+        ]])->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => $directions->isEmpty() ? 'private_locations' : 'private_directions',
+        ]];
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ChoosingPrivateService,
+            $rows,
+            $this->privateContext([
+                'location_id' => $location->id,
+                'direction_id' => $direction?->id,
+            ]),
+        );
+        $text = $classTypes->isEmpty()
+            ? $this->t($session, 'telegram_customer_no_private_services')
+            : $this->t($session, 'telegram_customer_choose_private_service');
+        $this->send($telegramUpdate, $session->telegram_chat_id, $text, $markup, $authorization);
+
+        return true;
+    }
+
+    private function showPrivateTrainers(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        int $locationId,
+        ?int $activityDirectionId,
+        int $classTypeId,
+        bool $autoSelect = true,
+    ): bool {
+        $location = $this->privateLessonOptions->locations($authorization->account)->firstWhere('id', $locationId);
+        $classType = $this->privateLessonOptions->classTypes($authorization->account, $activityDirectionId)->firstWhere('id', $classTypeId);
+
+        if (! $location instanceof Location || ! $classType) {
+            return $this->showPrivateServices($telegramUpdate, $session, $authorization, $locationId, $activityDirectionId, false);
+        }
+
+        $trainers = $this->privateLessonOptions->trainers($authorization->account, $location, $classType, $activityDirectionId);
+
+        if ($autoSelect && $trainers->count() === 1) {
+            return $this->continuePrivateAfterTrainer(
+                $telegramUpdate,
+                $session,
+                $authorization,
+                $location->id,
+                $activityDirectionId,
+                $classType->id,
+                (int) $trainers->first()->id,
+            );
+        }
+
+        $rows = $trainers->map(fn (Trainer $trainer): array => [[
+            'text' => $trainer->name,
+            'action' => 'private_trainer',
+            'value' => $trainer->id,
+        ]])->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => 'private_services',
+        ]];
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ChoosingPrivateTrainer,
+            $rows,
+            $this->privateContext([
+                'location_id' => $location->id,
+                'direction_id' => $activityDirectionId,
+                'class_type_id' => $classType->id,
+            ]),
+        );
+        $text = $trainers->isEmpty()
+            ? $this->t($session, 'telegram_customer_no_private_trainers')
+            : $this->t($session, 'telegram_customer_choose_private_trainer');
+        $this->send($telegramUpdate, $session->telegram_chat_id, $text, $markup, $authorization);
+
+        return true;
+    }
+
+    private function continuePrivateAfterTrainer(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        int $locationId,
+        ?int $activityDirectionId,
+        int $classTypeId,
+        int $trainerId,
+    ): bool {
+        $selection = [
+            'location_id' => $locationId,
+            'direction_id' => $activityDirectionId,
+            'class_type_id' => $classTypeId,
+            'trainer_id' => $trainerId,
+            'room_id' => null,
+        ];
+        $resolved = $this->resolvePrivateSelection($authorization, $selection, false);
+
+        if (! $resolved) {
+            return $this->showPrivateTrainers($telegramUpdate, $session, $authorization, $locationId, $activityDirectionId, $classTypeId, false);
+        }
+
+        if ($this->privateLessonOptions->usesTrainerTimeframes($authorization->account)) {
+            return $this->showPrivateDates($telegramUpdate, $session, $authorization, $selection, 0);
+        }
+
+        return $this->showPrivateRooms($telegramUpdate, $session, $authorization, $selection);
+    }
+
+    /**
+     * @param  array{location_id: int, direction_id: ?int, class_type_id: int, trainer_id: int, room_id: ?int}  $selection
+     */
+    private function showPrivateRooms(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        array $selection,
+        bool $autoSelect = true,
+    ): bool {
+        $resolved = $this->resolvePrivateSelection($authorization, $selection, false);
+
+        if (! $resolved) {
+            return $this->beginPrivateBooking($telegramUpdate, $session, $authorization, true);
+        }
+
+        $rooms = $this->privateLessonOptions->rooms(
+            $authorization->account,
+            $resolved['location'],
+            $resolved['class_type'],
+            $selection['direction_id'],
+        );
+
+        if ($autoSelect && $rooms->count() === 1) {
+            return $this->showPrivateDates(
+                $telegramUpdate,
+                $session,
+                $authorization,
+                [...$selection, 'room_id' => (int) $rooms->first()->id],
+                0,
+            );
+        }
+
+        $rows = $rooms->map(fn (Room $room): array => [[
+            'text' => $room->name,
+            'action' => 'private_room',
+            'value' => $room->id,
+        ]])->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => 'private_trainers',
+        ]];
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ChoosingPrivateRoom,
+            $rows,
+            $this->privateContext($selection),
+        );
+        $text = $rooms->isEmpty()
+            ? $this->t($session, 'telegram_customer_no_private_rooms')
+            : $this->t($session, 'telegram_customer_choose_private_room');
+        $this->send($telegramUpdate, $session->telegram_chat_id, $text, $markup, $authorization);
+
+        return true;
+    }
+
+    private function selectPrivateRoom(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization, int $roomId): bool
+    {
+        $selection = [...$this->privateSelectionFromSession($session), 'room_id' => $roomId];
+
+        return $this->showPrivateDates($telegramUpdate, $session, $authorization, $selection, 0);
+    }
+
+    /**
+     * @param  array{location_id: int, direction_id: ?int, class_type_id: int, trainer_id: int, room_id: ?int}  $selection
+     */
+    private function showPrivateDates(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        array $selection,
+        int $page,
+    ): bool {
+        $usesTrainerTimeframes = $this->privateLessonOptions->usesTrainerTimeframes($authorization->account);
+        $resolved = $this->resolvePrivateSelection($authorization, $selection, ! $usesTrainerTimeframes);
+
+        if (! $resolved) {
+            return $this->beginPrivateBooking($telegramUpdate, $session, $authorization, true);
+        }
+
+        $lastPage = max(0, (int) ceil(self::ScheduleDays / self::DatePageSize) - 1);
+        $page = max(0, min($lastPage, $page));
+        $timezone = $resolved['location']->timezone ?? $authorization->account->timezone ?? config('app.timezone');
+        $pageStart = Carbon::now($timezone)->startOfDay()->addDays($page * self::DatePageSize);
+        $candidateDates = collect(range(0, self::DatePageSize - 1))
+            ->map(fn (int $offset): Carbon => $pageStart->copy()->addDays($offset))
+            ->filter(fn (Carbon $date): bool => $date->diffInDays(Carbon::now($timezone)->startOfDay()) < self::ScheduleDays)
+            ->values();
+        $availableDates = $this->privateLessonOptions->candidateDates(
+            $authorization->account,
+            $resolved['location'],
+            $resolved['class_type'],
+            $resolved['trainer'],
+            $candidateDates,
+        );
+        $rows = $availableDates
+            ->map(fn (Carbon $date): array => [[
+                'text' => $date->locale($session->locale)->translatedFormat('D, d.m'),
+                'action' => 'private_date',
+                'value' => $date->toDateString(),
+            ]])
+            ->all();
+        $pagination = [];
+
+        if ($page > 0) {
+            $pagination[] = ['text' => '←', 'action' => 'private_dates_page', 'value' => $page - 1];
+        }
+
+        if ($page < $lastPage) {
+            $pagination[] = ['text' => '→', 'action' => 'private_dates_page', 'value' => $page + 1];
+        }
+
+        if ($pagination !== []) {
+            $rows[] = $pagination;
+        }
+
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => $usesTrainerTimeframes ? 'private_trainers' : 'private_rooms',
+        ]];
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ChoosingPrivateDate,
+            $rows,
+            $this->privateContext($selection, ['private_date_page' => $page]),
+        );
+        $text = $availableDates->isEmpty()
+            ? $this->t($session, 'telegram_customer_no_private_slots_week')
+            : $this->t($session, 'telegram_customer_choose_private_date', [
+                'service' => $resolved['class_type']->name,
+                'trainer' => $resolved['trainer']->name,
+            ]);
+        $this->send($telegramUpdate, $session->telegram_chat_id, $text, $markup, $authorization);
+
+        return true;
+    }
+
+    /**
+     * @param  array{location_id: int, direction_id: ?int, class_type_id: int, trainer_id: int, room_id: ?int}  $selection
+     */
+    private function showPrivateTimes(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        array $selection,
+        string $date,
+        string $prefix = '',
+    ): bool {
+        $usesTrainerTimeframes = $this->privateLessonOptions->usesTrainerTimeframes($authorization->account);
+        $resolved = $this->resolvePrivateSelection($authorization, $selection, ! $usesTrainerTimeframes);
+
+        if (! $resolved || ! $this->privateDateIsInRange($authorization, $resolved['location'], $date)) {
+            return $this->showPrivateDates($telegramUpdate, $session, $authorization, $selection, 0);
+        }
+
+        $availability = $this->privateLessonOptions->availability(
+            $authorization->account,
+            $authorization->customer,
+            $resolved['location'],
+            $resolved['class_type'],
+            $resolved['trainer'],
+            $resolved['room'],
+            $selection['direction_id'],
+            $date,
+        );
+        $slots = collect($availability['slots'] ?? []);
+        $rows = $slots
+            ->map(fn (array $slot): array => [
+                'text' => (string) $slot['label'],
+                'action' => 'private_time',
+                'value' => (string) $slot['starts_at'],
+            ])
+            ->chunk(2)
+            ->map(fn (Collection $row): array => $row->values()->all())
+            ->values()
+            ->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => 'private_dates',
+        ]];
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ChoosingPrivateTime,
+            $rows,
+            $this->privateContext($selection, [
+                'private_date' => $date,
+                'private_date_page' => (int) data_get($session->encrypted_context, 'private_date_page', 0),
+            ]),
+        );
+        $text = $slots->isEmpty()
+            ? $this->t($session, 'telegram_customer_no_private_times')
+            : $this->t($session, 'telegram_customer_choose_private_time', ['date' => Carbon::parse($date)->locale($session->locale)->translatedFormat('D, d.m.Y')]);
+
+        if ($prefix !== '') {
+            $text = $prefix."\n\n".$text;
+        }
+
+        $this->send($telegramUpdate, $session->telegram_chat_id, $text, $markup, $authorization);
+
+        return true;
+    }
+
+    private function selectPrivateTime(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization, string $startsAt): bool
+    {
+        $selection = $this->privateSelectionFromSession($session);
+
+        if ($this->privateLessonOptions->usesTrainerTimeframes($authorization->account)) {
+            return $this->showPrivateSlotRooms($telegramUpdate, $session, $authorization, $selection, $startsAt);
+        }
+
+        return $this->showPrivateBookingConfirmation($telegramUpdate, $session, $authorization, $selection, $startsAt);
+    }
+
+    /**
+     * @param  array{location_id: int, direction_id: ?int, class_type_id: int, trainer_id: int, room_id: ?int}  $selection
+     */
+    private function showPrivateSlotRooms(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        array $selection,
+        string $startsAt,
+        bool $autoSelect = true,
+    ): bool {
+        $resolved = $this->resolvePrivateSelection($authorization, $selection, false);
+        $date = substr($startsAt, 0, 10);
+
+        if (! $resolved || ! $this->privateDateIsInRange($authorization, $resolved['location'], $date)) {
+            return $this->showPrivateDates($telegramUpdate, $session, $authorization, $selection, 0);
+        }
+
+        $availability = $this->privateLessonOptions->availability(
+            $authorization->account,
+            $authorization->customer,
+            $resolved['location'],
+            $resolved['class_type'],
+            $resolved['trainer'],
+            null,
+            $selection['direction_id'],
+            $date,
+        );
+        $slot = collect($availability['slots'] ?? [])->first(fn (array $slot): bool => (string) $slot['starts_at'] === $startsAt);
+
+        if (! is_array($slot)) {
+            return $this->showPrivateTimes($telegramUpdate, $session, $authorization, $selection, $date, $this->t($session, 'telegram_customer_private_slot_unavailable'));
+        }
+
+        $freeRoomIds = collect($slot['rooms'] ?? [])->pluck('id')->map(fn (mixed $id): int => (int) $id);
+        $rooms = $this->privateLessonOptions
+            ->rooms($authorization->account, $resolved['location'], $resolved['class_type'], $selection['direction_id'])
+            ->filter(fn (Room $room): bool => $freeRoomIds->contains($room->id))
+            ->values();
+
+        if ($autoSelect && $rooms->count() === 1) {
+            return $this->showPrivateBookingConfirmation(
+                $telegramUpdate,
+                $session,
+                $authorization,
+                [...$selection, 'room_id' => (int) $rooms->first()->id],
+                $startsAt,
+            );
+        }
+
+        if ($rooms->isEmpty()) {
+            return $this->showPrivateTimes($telegramUpdate, $session, $authorization, $selection, $date, $this->t($session, 'telegram_customer_private_slot_unavailable'));
+        }
+
+        $rows = $rooms->map(fn (Room $room): array => [[
+            'text' => $room->name,
+            'action' => 'private_slot_room',
+            'value' => $room->id,
+        ]])->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => 'private_times',
+        ]];
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ChoosingPrivateRoom,
+            $rows,
+            $this->privateContext($selection, [
+                'private_date' => $date,
+                'private_starts_at' => $startsAt,
+                'private_date_page' => (int) data_get($session->encrypted_context, 'private_date_page', 0),
+            ]),
+        );
+        $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_choose_private_slot_room'), $markup, $authorization);
+
+        return true;
+    }
+
+    /**
+     * @param  array{location_id: int, direction_id: ?int, class_type_id: int, trainer_id: int, room_id: ?int}  $selection
+     */
+    private function showPrivateBookingConfirmation(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        array $selection,
+        string $startsAt,
+    ): bool {
+        $resolved = $this->resolvePrivateSelection($authorization, $selection, true);
+        $date = substr($startsAt, 0, 10);
+
+        if (! $resolved || ! $this->privateDateIsInRange($authorization, $resolved['location'], $date)) {
+            return $this->beginPrivateBooking($telegramUpdate, $session, $authorization, true);
+        }
+
+        $availability = $this->privateLessonOptions->availability(
+            $authorization->account,
+            $authorization->customer,
+            $resolved['location'],
+            $resolved['class_type'],
+            $resolved['trainer'],
+            $resolved['room'],
+            $selection['direction_id'],
+            $date,
+        );
+        $slot = collect($availability['slots'] ?? [])->first(fn (array $slot): bool => (string) $slot['starts_at'] === $startsAt);
+
+        if (! is_array($slot)) {
+            return $this->showPrivateTimes($telegramUpdate, $session, $authorization, $selection, $date, $this->t($session, 'telegram_customer_private_slot_unavailable'));
+        }
+
+        if ($this->privateLessonOptions->usesTrainerTimeframes($authorization->account)) {
+            $selectedRoomAvailable = collect($slot['rooms'] ?? [])->contains(fn (array $room): bool => (int) $room['id'] === $resolved['room']->id);
+
+            if (! $selectedRoomAvailable) {
+                return $this->showPrivateSlotRooms($telegramUpdate, $session, $authorization, [...$selection, 'room_id' => null], $startsAt, false);
+            }
+        }
+
+        $previewClass = $this->privateLessonOptions->previewClass(
+            $authorization->account,
+            $resolved['location'],
+            $resolved['class_type'],
+            $resolved['trainer'],
+            $resolved['room'],
+            $startsAt,
+        );
+        $pass = $this->suitablePass($authorization->customer, $previewClass);
+        $localStartsAt = $previewClass->starts_at->copy()->timezone($previewClass->displayTimezone());
+        $cancellationCloses = $this->cancellationWindow->closesAt($previewClass)?->timezone($previewClass->displayTimezone())->format('d.m H:i') ?? '—';
+        $passText = $pass
+            ? $this->t($session, 'telegram_customer_booking_pass', ['pass' => $pass->plan_name, 'code' => $pass->code])
+            : $this->t($session, 'telegram_customer_booking_without_pass_warning');
+        $markup = $this->callbackMarkup(
+            $session,
+            TelegramCustomerSessionState::ConfirmingPrivateBooking,
+            [[
+                ['text' => $this->t($session, 'telegram_customer_confirm_booking_button'), 'action' => 'confirm_private_booking'],
+                ['text' => $this->t($session, 'back'), 'action' => 'private_times'],
+            ]],
+            $this->privateContext($selection, [
+                'private_date' => $date,
+                'private_starts_at' => $startsAt,
+                'private_date_page' => (int) data_get($session->encrypted_context, 'private_date_page', 0),
+            ]),
+            self::ConfirmationMinutes,
+        );
+        $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_private_booking_confirmation', [
+            'service' => $resolved['class_type']->name,
+            'date' => $localStartsAt->locale($session->locale)->translatedFormat('D, d.m.Y'),
+            'time' => (string) $slot['label'],
+            'duration' => (int) ($resolved['class_type']->default_duration_minutes ?: 60),
+            'trainer' => $resolved['trainer']->name,
+            'location' => $resolved['location']->name,
+            'room' => $resolved['room']->name,
+            'cancellation_cutoff' => $cancellationCloses,
+            'pass' => $passText,
+        ]), $markup, $authorization);
+
+        return true;
+    }
+
+    private function confirmPrivateBooking(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization): bool
+    {
+        $selection = $this->privateSelectionFromSession($session);
+        $startsAt = (string) data_get($session->encrypted_context, 'private_starts_at');
+        $date = substr($startsAt, 0, 10);
+        $resolved = $this->resolvePrivateSelection($authorization, $selection, true);
+
+        if (! $resolved || ! $this->privateDateIsInRange($authorization, $resolved['location'], $date)) {
+            return $this->beginPrivateBooking($telegramUpdate, $session, $authorization, true);
+        }
+
+        try {
+            $booking = $this->createPublicBooking->execute(
+                $authorization->account,
+                $resolved['location'],
+                $authorization->customer,
+                [
+                    'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                    'date' => $date,
+                    'starts_at' => $startsAt,
+                    'class_type_id' => $resolved['class_type']->id,
+                    'activity_direction_id' => $selection['direction_id'],
+                    'room_id' => $resolved['room']->id,
+                    'trainer_id' => $resolved['trainer']->id,
+                    'people_count' => 1,
+                    'notes' => null,
+                ],
+            );
+        } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first()
+                ?: $this->t($session, 'telegram_customer_private_slot_unavailable');
+
+            return $this->showPrivateTimes($telegramUpdate, $session, $authorization, [...$selection, 'room_id' => $this->privateLessonOptions->usesTrainerTimeframes($authorization->account) ? null : $selection['room_id']], $date, $message);
+        }
+
+        return $this->sendBookingCreated($telegramUpdate, $session, $authorization, $booking);
     }
 
     private function showBookingDates(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization, int $locationId, int $page): bool
@@ -575,7 +1297,22 @@ class CustomerTelegramUpdateProcessor
             return true;
         }
 
-        $booking->load(['scheduledClass.location', 'classPassReservation.customerClassPass']);
+        return $this->sendBookingCreated($telegramUpdate, $session, $authorization, $booking);
+    }
+
+    private function sendBookingCreated(
+        TelegramUpdate $telegramUpdate,
+        TelegramCustomerSession $session,
+        TelegramChatAuthorization $authorization,
+        ClassBooking $booking,
+    ): bool {
+        $booking->load([
+            'scheduledClass.location',
+            'scheduledClass.room',
+            'scheduledClass.classType',
+            'scheduledClass.trainer',
+            'classPassReservation.customerClassPass',
+        ]);
         $reservedPass = $booking->classPassReservation?->customerClassPass;
         $text = $this->t($session, 'telegram_customer_booking_created', [
             'class' => $booking->scheduledClass->displayTitle(),
@@ -1041,6 +1778,120 @@ class CustomerTelegramUpdateProcessor
         $this->send($telegramUpdate, $session->telegram_chat_id, $text, $markup, $authorization);
 
         return true;
+    }
+
+    private function privateContextId(TelegramCustomerSession $session, string $key): ?int
+    {
+        $value = (int) data_get($session->encrypted_context, $key);
+
+        return $value > 0 ? $value : null;
+    }
+
+    /**
+     * @return array{location_id: int, direction_id: ?int, class_type_id: int, trainer_id: int, room_id: ?int}
+     */
+    private function privateSelectionFromSession(TelegramCustomerSession $session): array
+    {
+        return [
+            'location_id' => (int) data_get($session->encrypted_context, 'private_location_id'),
+            'direction_id' => $this->privateContextId($session, 'private_direction_id'),
+            'class_type_id' => (int) data_get($session->encrypted_context, 'private_class_type_id'),
+            'trainer_id' => (int) data_get($session->encrypted_context, 'private_trainer_id'),
+            'room_id' => $this->privateContextId($session, 'private_room_id'),
+        ];
+    }
+
+    /**
+     * @param  array{location_id: int, direction_id?: ?int, class_type_id?: int, trainer_id?: int, room_id?: ?int}  $selection
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function privateContext(array $selection, array $extra = []): array
+    {
+        return [
+            'booking_type' => ScheduleKind::PrivateLesson->value,
+            'private_location_id' => $selection['location_id'],
+            'private_direction_id' => $selection['direction_id'] ?? null,
+            'private_class_type_id' => $selection['class_type_id'] ?? null,
+            'private_trainer_id' => $selection['trainer_id'] ?? null,
+            'private_room_id' => $selection['room_id'] ?? null,
+            ...$extra,
+        ];
+    }
+
+    /**
+     * @param  array{location_id: int, direction_id: ?int, class_type_id: int, trainer_id: int, room_id: ?int}  $selection
+     * @return array{location: Location, class_type: ClassType, trainer: Trainer, room: ?Room}|null
+     */
+    private function resolvePrivateSelection(TelegramChatAuthorization $authorization, array $selection, bool $requireRoom): ?array
+    {
+        $account = $authorization->account;
+        $location = $this->privateLessonOptions->locations($account)->firstWhere('id', $selection['location_id']);
+
+        if (! $location instanceof Location) {
+            return null;
+        }
+
+        $directions = $this->privateLessonOptions->directions($account);
+        $activityDirectionId = $selection['direction_id'];
+
+        if ($directions->isNotEmpty() && ! $directions->contains('id', $activityDirectionId)) {
+            return null;
+        }
+
+        if ($directions->isEmpty()) {
+            $activityDirectionId = null;
+        }
+
+        $classType = $this->privateLessonOptions->classTypes($account, $activityDirectionId)->firstWhere('id', $selection['class_type_id']);
+
+        if (! $classType instanceof ClassType) {
+            return null;
+        }
+
+        $trainer = $this->privateLessonOptions->trainers($account, $location, $classType, $activityDirectionId)->firstWhere('id', $selection['trainer_id']);
+
+        if (! $trainer instanceof Trainer) {
+            return null;
+        }
+
+        $room = $selection['room_id']
+            ? $this->privateLessonOptions->rooms($account, $location, $classType, $activityDirectionId)->firstWhere('id', $selection['room_id'])
+            : null;
+
+        if ($requireRoom && ! $room instanceof Room) {
+            return null;
+        }
+
+        return [
+            'location' => $location,
+            'class_type' => $classType,
+            'trainer' => $trainer,
+            'room' => $room instanceof Room ? $room : null,
+        ];
+    }
+
+    private function privateDateIsInRange(TelegramChatAuthorization $authorization, Location $location, string $date): bool
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) {
+            return false;
+        }
+
+        $timezone = $location->timezone ?? $authorization->account->timezone ?? config('app.timezone');
+
+        try {
+            $candidate = Carbon::createFromFormat('Y-m-d H:i:s', $date.' 00:00:00', $timezone);
+        } catch (Throwable) {
+            return false;
+        }
+
+        if (! $candidate || $candidate->toDateString() !== $date) {
+            return false;
+        }
+
+        $today = Carbon::now($timezone)->startOfDay();
+
+        return $candidate->betweenIncluded($today, $today->copy()->addDays(self::ScheduleDays - 1));
     }
 
     /**

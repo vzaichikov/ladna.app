@@ -44,7 +44,7 @@ class CreatePublicBooking
             $scheduleKind = ScheduleKind::from((string) $validated['schedule_kind']);
             $scheduledClass = $scheduleKind === ScheduleKind::GroupClass
                 ? $this->groupScheduledClass($account, $location, (int) $validated['scheduled_class_id'], $customer->id)
-                : $this->createManualScheduledClass($account, $location, $scheduleKind, $validated);
+                : $this->createManualScheduledClass($account, $location, $scheduleKind, $validated, $customer->id);
 
             $classBooking = $scheduledClass->classBookings()->updateOrCreate(
                 ['customer_id' => $customer->id],
@@ -108,7 +108,7 @@ class CreatePublicBooking
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function createManualScheduledClass(Account $account, Location $location, ScheduleKind $scheduleKind, array $validated): ScheduledClass
+    private function createManualScheduledClass(Account $account, Location $location, ScheduleKind $scheduleKind, array $validated, int $customerId): ScheduledClass
     {
         if (! $account->hasScheduleKindEnabled($scheduleKind) || ! in_array($scheduleKind, ScheduleKindRegistry::manualKinds(), true)) {
             throw ValidationException::withMessages([
@@ -176,6 +176,7 @@ class CreatePublicBooking
             'room_id' => $room->id,
             'class_type_id' => $classType->id,
             'trainer_id' => $trainer?->id,
+            'customer_id' => $customerId,
             'activity_direction_id' => $activityDirectionId,
         ])) {
             throw ValidationException::withMessages([

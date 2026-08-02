@@ -14,6 +14,7 @@ use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
+use App\Models\Event;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -1291,6 +1292,39 @@ class QuickBookingTest extends TestCase
             ->assertJsonPath('selected', true);
 
         $this->createTrainerTimeframes($account, $trainer, $location, ['12:30']);
+
+        $response = $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [
+                'account' => $account,
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-22',
+                'location_id' => $location->id,
+                'class_type_id' => $classType->id,
+                'trainer_id' => $trainer->id,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.0.time', '12:00');
+
+        $this->assertSame([['id' => $smallRoom->id, 'name' => $smallRoom->name]], $response->json('data.0.rooms'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_private_timeframe_availability_excludes_rooms_occupied_by_published_events(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-22 09:00:00', 'UTC'));
+
+        [$owner, $account, $location, $bigRoom, $smallRoom, $classType, $trainer] = $this->privateTimeframeSetup();
+        $this->createTrainerTimeframes($account, $trainer, $location, ['12:00', '12:30']);
+        $event = Event::factory()
+            ->published()
+            ->for($account)
+            ->for($location)
+            ->create([
+                'starts_at' => '2026-06-22 12:00:00',
+                'ends_at' => '2026-06-22 13:00:00',
+            ]);
+        $event->rooms()->attach($bigRoom, ['account_id' => $account->id]);
 
         $response = $this->actingAs($owner)
             ->getJson(route('dashboard.accounts.quick-bookings.manual-availability', [

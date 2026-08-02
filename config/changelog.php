@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.120.0',
+                'date' => '2026-08-02',
+                'title' => 'Individual lessons in studio Telegram bots',
+                'items' => ['Customers can now book individual lessons directly through a studio-owned Telegram bot by choosing the location, direction, service, trainer, room, date, and time. Studios that use trainer availability timeframes get the same room-after-time selection as the Ladna schedule.', 'The bot respects studio opening hours, trainer and room availability, existing customer bookings, and published events. It books exactly one participant, reserves a suitable class pass when available, clearly warns when no pass is found, and checks availability again before creating the booking.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.119.0',
                 'date' => '2026-08-02',
                 'title' => 'Safer Telegram customer access',
@@ -1045,6 +1052,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.120.0',
+                'date' => '2026-08-02',
+                'title' => 'Індивідуальні заняття в Telegram-ботах студій',
+                'items' => ['Клієнти тепер можуть записуватися на індивідуальні заняття безпосередньо через Telegram-бот студії: обирати локацію, напрям, послугу, тренера, зал, дату й час. Для студій із часовими вікнами тренерів бот використовує такий самий вибір вільного залу після часу, як розклад Ladna.', 'Бот враховує години роботи студії, доступність тренера й залу, інші записи клієнта та опубліковані події. Запис створюється на одного учасника, відповідний абонемент резервується автоматично, за його відсутності клієнт бачить попередження, а доступність повторно перевіряється перед створенням запису.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.119.0',
                 'date' => '2026-08-02',

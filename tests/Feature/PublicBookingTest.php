@@ -642,6 +642,57 @@ class PublicBookingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_private_lesson_public_booking_rejects_a_customer_schedule_collision(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-17 09:00:00', 'UTC'));
+
+        [$account, $location, $privateRoom] = $this->manualBookingSetup('public-private-customer-collision');
+        $otherRoom = Room::factory()->for($account)->for($location)->create();
+        $privateClassType = ClassType::factory()->for($account)->create([
+            'name' => 'Private 60',
+            'schedule_kind' => ScheduleKind::PrivateLesson->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $groupClassType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $privateTrainer = Trainer::factory()->for($account)->create();
+        $groupTrainer = Trainer::factory()->for($account)->create();
+        $customer = Customer::factory()->for($account)->create();
+        $existingClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($otherRoom)
+            ->for($groupClassType)
+            ->for($groupTrainer)
+            ->create([
+                'starts_at' => '2026-06-18 15:00:00',
+                'ends_at' => '2026-06-18 16:00:00',
+            ]);
+        ClassBooking::factory()
+            ->for($account)
+            ->for($existingClass, 'scheduledClass')
+            ->for($customer)
+            ->create(['status' => ClassBookingStatus::Booked->value]);
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.booking.store', [$account->slug, $location->slug]), [
+                'schedule_kind' => ScheduleKind::PrivateLesson->value,
+                'date' => '2026-06-18',
+                'starts_at' => '2026-06-18T15:00',
+                'class_type_id' => $privateClassType->id,
+                'room_id' => $privateRoom->id,
+                'trainer_id' => $privateTrainer->id,
+                'people_count' => 1,
+            ])
+            ->assertSessionHasErrors('starts_at');
+
+        $this->assertSame(0, ScheduledClass::whereBelongsTo($account)->whereBelongsTo($privateClassType)->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_public_private_lesson_rejects_slot_without_trainer_timeframe_when_enabled(): void
     {
         Mail::fake();

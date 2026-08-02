@@ -3,10 +3,12 @@
 namespace App\Support;
 
 use App\Enums\ClassBookingStatus;
+use App\Enums\EventStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\ScheduleKind;
 use App\Models\Account;
 use App\Models\ClassType;
+use App\Models\Event;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
@@ -251,17 +253,32 @@ class TrainerPrivateLessonAvailability
             return $rooms;
         }
 
+        $roomIds = $rooms->pluck('id')->all();
+        $rangeStartsAt = $startsAt->timezone(config('app.timezone'));
+        $rangeEndsAt = $endsAt->timezone(config('app.timezone'));
         $blockedRoomIds = $account->scheduledClasses()
             ->where('status', ScheduledClassStatus::Scheduled->value)
             ->where('location_id', $location->id)
-            ->whereIn('room_id', $rooms->pluck('id')->all())
-            ->where('starts_at', '<', $endsAt->timezone(config('app.timezone')))
-            ->where('ends_at', '>', $startsAt->timezone(config('app.timezone')))
+            ->whereIn('room_id', $roomIds)
+            ->where('starts_at', '<', $rangeEndsAt)
+            ->where('ends_at', '>', $rangeStartsAt)
             ->pluck('room_id')
             ->filter()
             ->map(fn (mixed $roomId): int => (int) $roomId)
             ->unique()
             ->values();
+        $eventRoomIds = $account->events()
+            ->where('status', EventStatus::Published->value)
+            ->where('starts_at', '<', $rangeEndsAt)
+            ->where('ends_at', '>', $rangeStartsAt)
+            ->whereHas('rooms', fn ($query) => $query->whereIn('rooms.id', $roomIds))
+            ->with(['rooms' => fn ($query) => $query->whereIn('rooms.id', $roomIds)])
+            ->get(['id'])
+            ->flatMap(fn (Event $event): Collection => $event->rooms->pluck('id'))
+            ->map(fn (mixed $roomId): int => (int) $roomId);
+        $blockedRoomIds = $blockedRoomIds
+            ->merge($eventRoomIds)
+            ->unique();
 
         return $rooms
             ->reject(fn (Room $room): bool => $blockedRoomIds->contains($room->id))
