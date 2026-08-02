@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\Location;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -19,24 +20,41 @@ class AccountQrLinksController extends Controller
 
         $studioLandingUrl = route('public.studio', $account->slug);
         $customerLoginUrl = route('customer.studio.login', $account->slug);
+        $customerTelegramBotUsername = trim((string) $account->telegramBotInstallations()
+            ->where('scope_type', 'account')
+            ->where('scope_id', $account->id)
+            ->where('profile', TelegramBotProfile::Customer->value)
+            ->whereNotNull('token_last_four')
+            ->latest('id')
+            ->value('bot_username'));
         $publicLinkLocations = $this->publicLinkLocations($account);
+        $printableLinks = collect([
+            $this->printableLink(
+                'app.studio_public_landing_qr',
+                'app.studio_public_landing',
+                $studioLandingUrl,
+                __('app.studio_public_landing_qr_copy'),
+            ),
+            $this->printableLink(
+                'app.login_qr_codes',
+                'app.customer_login',
+                $customerLoginUrl,
+                __('app.login_qr_codes_copy'),
+            ),
+        ]);
+
+        if ($customerTelegramBotUsername !== '') {
+            $printableLinks->push($this->printableLink(
+                'app.customer_telegram_bot_menu',
+                'app.customer_telegram_bot_settings',
+                'https://t.me/'.ltrim($customerTelegramBotUsername, '@').'?start=ladna',
+                __('app.telegram_bot_share_with_customers_copy'),
+            ));
+        }
 
         return view('accounts.qr-links', [
             'account' => $account,
-            'printableLinks' => collect([
-                $this->printableLink(
-                    'app.studio_public_landing_qr',
-                    'app.studio_public_landing',
-                    $studioLandingUrl,
-                    __('app.studio_public_landing_qr_copy'),
-                ),
-                $this->printableLink(
-                    'app.login_qr_codes',
-                    'app.customer_login',
-                    $customerLoginUrl,
-                    __('app.login_qr_codes_copy'),
-                ),
-            ])->concat($publicLinkLocations->pluck('printable_links')->flatten(1)),
+            'printableLinks' => $printableLinks->concat($publicLinkLocations->pluck('printable_links')->flatten(1)),
             'generalPublicLinks' => [
                 [
                     'label' => __('app.studio_public_landing'),

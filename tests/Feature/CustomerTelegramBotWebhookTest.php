@@ -18,7 +18,9 @@ use App\Models\ScheduledClass;
 use App\Models\TelegramBotInstallation;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramCustomerSession;
+use App\Models\TelegramMessage;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -220,6 +222,70 @@ class CustomerTelegramBotWebhookTest extends TestCase
         ])->assertNoContent();
 
         $this->assertSame(ClassBookingStatus::Cancelled, $booking->refresh()->status);
+    }
+
+    public function test_studio_menu_responds_when_support_contacts_include_non_http_links(): void
+    {
+        Http::fake(function (Request $request) {
+            $buttonUrls = collect($request['reply_markup']['inline_keyboard'] ?? [])
+                ->flatten(1)
+                ->pluck('url')
+                ->filter();
+            $hasInvalidButtonUrl = $buttonUrls->contains(fn (string $url): bool => ! Str::startsWith(Str::lower($url), [
+                'http://',
+                'https://',
+                'tg://',
+            ]));
+
+            if ($hasInvalidButtonUrl) {
+                return Http::response(['ok' => false, 'description' => 'Bad Request: BUTTON_URL_INVALID'], 400);
+            }
+
+            return Http::response(['ok' => true, 'result' => ['message_id' => 901]]);
+        });
+        $account = Account::factory()->create([
+            'default_language' => 'uk',
+            'name' => 'Studio menu response',
+            'support_phone_url' => '+380501112233',
+            'support_viber_url' => 'viber://chat?number=%2B380501112233',
+        ]);
+        $customer = Customer::factory()->for($account)->create([
+            'default_language' => 'uk',
+            'phone' => '+380671112233',
+        ]);
+        [$installation, $webhookKey] = $this->customerInstallation($account);
+        $chatId = 70004;
+        $telegramUserId = 80004;
+        TelegramChatAuthorization::factory()
+            ->for($account)
+            ->for($installation, 'installation')
+            ->for($customer)
+            ->create([
+                'user_id' => null,
+                'profile' => TelegramBotProfile::Customer->value,
+                'telegram_chat_id' => (string) $chatId,
+                'telegram_user_id' => (string) $telegramUserId,
+                'status' => TelegramChatAuthorizationStatus::Authorized->value,
+            ]);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 40001,
+            'message' => $this->message($chatId, $telegramUserId, 1, '🏠 Студія'),
+        ])->assertNoContent();
+
+        $outboundText = (string) TelegramMessage::query()
+            ->whereBelongsTo($installation, 'installation')
+            ->where('direction', 'outbound')
+            ->value('text');
+        $this->assertStringContainsString('Studio menu response', $outboundText);
+        $this->assertStringContainsString('Телефон: +380501112233', $outboundText);
+        $this->assertStringContainsString('Viber: viber://chat?number=%2B380501112233', $outboundText);
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendMessage')
+            && collect($request['reply_markup']['inline_keyboard'] ?? [])
+                ->flatten(1)
+                ->pluck('url')
+                ->filter()
+                ->every(fn (string $url): bool => Str::startsWith(Str::lower($url), ['http://', 'https://', 'tg://'])));
     }
 
     /**

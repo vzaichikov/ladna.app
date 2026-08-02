@@ -897,8 +897,23 @@ class CustomerTelegramUpdateProcessor
             $rows[] = [['text' => $this->t($session, 'public_offer'), 'url' => route('public.studio-offer', $account->slug)]];
         }
 
+        $plainSupportLinks = [];
+
         foreach ($account->publicSupportLinks() as $link) {
+            if (! $this->isTelegramButtonUrl($link['url'])) {
+                $displayUrl = in_array($link['key'], ['phone', 'secondary_phone'], true)
+                    ? Str::after($link['url'], 'tel://')
+                    : $link['url'];
+                $plainSupportLinks[] = __($link['label_key'], [], $session->locale).': '.$displayUrl;
+
+                continue;
+            }
+
             $rows[] = [['text' => __($link['label_key'], [], $session->locale), 'url' => $link['url']]];
+        }
+
+        if ($plainSupportLinks !== []) {
+            $text .= "\n\n".implode("\n", $plainSupportLinks);
         }
 
         $callbackMarkup = $this->callbackMarkup($session, TelegramCustomerSessionState::Idle, [[
@@ -1502,6 +1517,11 @@ class CustomerTelegramUpdateProcessor
         }
 
         return null;
+    }
+
+    private function isTelegramButtonUrl(string $url): bool
+    {
+        return Str::startsWith(Str::lower($url), ['http://', 'https://', 'tg://']);
     }
 
     private function calendarUrl(ScheduledClass $class): string

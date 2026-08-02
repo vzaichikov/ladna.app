@@ -25,7 +25,7 @@ class CustomerTelegramConnectionManagerTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_owner_can_open_the_hidden_account_scoped_connection_manager(): void
+    public function test_owner_can_open_the_account_scoped_connection_manager(): void
     {
         [$owner, $account, $installation] = $this->studioBotFixture('first_studio_bot');
         [, $otherAccount, $otherInstallation] = $this->studioBotFixture('second_studio_bot');
@@ -106,7 +106,21 @@ class CustomerTelegramConnectionManagerTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.show', $account))
             ->assertOk()
-            ->assertDontSee($managerUrl, false);
+            ->assertSee($managerUrl, false)
+            ->assertSee(__('app.customer_telegram_bot_menu'));
+    }
+
+    public function test_sidebar_hides_customer_bot_manager_until_the_bot_is_configured(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertDontSee(route('dashboard.accounts.telegram-connections.index', $account), false)
+            ->assertDontSee(__('app.customer_telegram_bot_menu'));
     }
 
     public function test_connection_manager_is_restricted_to_users_who_manage_the_account(): void

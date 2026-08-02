@@ -2064,6 +2064,7 @@ return [
     'telegram_bot_profile_owner_copy' => 'AI-assisted текстовий бот для власників і тренерів з правом Telegram бота.',
     'telegram_bot_profile_customer_copy' => 'Окремий детермінований бот студії для самообслуговування клієнтів, без ШІ.',
     'customer_telegram_bot_settings' => 'Telegram-бот студії',
+    'customer_telegram_bot_menu' => 'Клієнтський телеграм-бот',
     'customer_telegram_bot_settings_copy' => 'Підключіть окремого бота, що належить вашій студії. Клієнти зможуть ідентифікуватися, записуватися, керувати записами та переглядати абонементи й відвідування.',
     'customer_telegram_bot_enabled_copy' => 'Увімкнути детермінованого бота самообслуговування клієнтів.',
     'telegram_bot_mode_disabled' => 'Вимкнено',

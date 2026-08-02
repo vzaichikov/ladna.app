@@ -40,7 +40,38 @@ class CustomerTelegramBotSettingsTest extends TestCase
             ->assertDontSee('123456789:abcdefghijklmnopqrstuvwxyz_ABCDE')
             ->assertDontSee(__('app.ai_provider_openai_api_key'))
             ->assertSee('name="token"', false)
+            ->assertSee('data-customer-telegram-settings-layout', false)
+            ->assertSee('lg:grid-cols-[minmax(0,1fr)_20rem]', false)
+            ->assertSee('data-customer-telegram-share-card', false)
             ->assertDontSee('name="allow_otp"', false);
+    }
+
+    public function test_qr_links_page_includes_the_configured_customer_bot(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        TelegramBotInstallation::factory()->for($account)->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'bot_username' => '@studio_customer_bot',
+        ]);
+        $otherAccount = Account::factory()->create();
+        TelegramBotInstallation::factory()->for($otherAccount)->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'bot_username' => '@other_studio_customer_bot',
+        ]);
+
+        $botUrl = 'https://t.me/studio_customer_bot?start=ladna';
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.qr-links.show', $account))
+            ->assertOk()
+            ->assertSee(__('app.customer_telegram_bot_menu'))
+            ->assertSee(__('app.telegram_bot_share_with_customers_copy'))
+            ->assertSee($botUrl, false)
+            ->assertDontSee('https://t.me/other_studio_customer_bot?start=ladna', false);
+
+        $this->assertSame(3, substr_count($response->getContent(), 'data-print-section'));
+        $this->assertSame(3, substr_count($response->getContent(), 'data-qr-print-poster'));
     }
 
     public function test_owner_connects_a_verified_studio_bot_and_registers_localized_commands(): void

@@ -2064,6 +2064,7 @@ return [
     'telegram_bot_profile_owner_copy' => 'AI-assisted text bot for owners and trainers with the Telegram bot permission.',
     'telegram_bot_profile_customer_copy' => 'A separate deterministic studio bot for customer self-service, without AI.',
     'customer_telegram_bot_settings' => 'Studio Telegram bot',
+    'customer_telegram_bot_menu' => 'Customer Telegram bot',
     'customer_telegram_bot_settings_copy' => 'Connect a separate bot owned by your studio. Customers can identify themselves, book classes, manage bookings, and view passes and attendance.',
     'customer_telegram_bot_enabled_copy' => 'Enable the deterministic customer self-service bot.',
     'telegram_bot_mode_disabled' => 'Disabled',

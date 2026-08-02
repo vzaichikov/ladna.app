@@ -1,11 +1,17 @@
-<div class="mt-6 max-w-4xl space-y-6">
+<div class="mt-6 max-w-6xl">
     @error('telegram_bot')
-        <div class="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm leading-6 text-rose-800">
+        <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm leading-6 text-rose-800">
             {{ $message }}
         </div>
     @enderror
 
-    <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+    <div @class([
+        'grid gap-6',
+        'max-w-4xl' => ! $telegramBotLink,
+        'lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start' => $telegramBotLink,
+    ]) data-customer-telegram-settings-layout>
+        <div class="space-y-6">
+            <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_telegram_bot_settings') }}</h2>
@@ -58,10 +64,10 @@
                 </x-ui.button>
             </div>
         </form>
-    </section>
+            </section>
 
-    @if ($telegramBotInstallation?->token_last_four)
-        <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+            @if ($telegramBotInstallation?->token_last_four)
+                <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.telegram_bot_connection') }}</h2>
@@ -193,12 +199,13 @@
                     <x-ui.button type="submit" variant="danger">{{ __('app.telegram_bot_disconnect') }}</x-ui.button>
                 </form>
             </div>
-        </section>
-    @endif
+                </section>
+            @endif
+        </div>
 
-    @if ($telegramBotLink)
-        <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
-            <div class="grid gap-6 sm:grid-cols-[1fr_auto] sm:items-center">
+        @if ($telegramBotLink)
+            <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6" data-customer-telegram-share-card>
+                <div class="grid gap-6 sm:grid-cols-[1fr_auto] sm:items-center lg:grid-cols-1">
                 <div>
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.telegram_bot_share_with_customers') }}</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.telegram_bot_share_with_customers_copy') }}</p>
@@ -207,10 +214,11 @@
                         <x-ui.button type="button" variant="secondary" data-copy-button data-copy-value="{{ $telegramBotLink }}" data-copy-success-label="{{ __('app.copied') }}">{{ __('app.copy_link') }}</x-ui.button>
                     </div>
                 </div>
-                <div class="w-40 rounded-xl border border-stone-200 bg-white p-3 text-slate-950 [&_svg]:h-auto [&_svg]:w-full">
+                <div class="w-40 rounded-xl border border-stone-200 bg-white p-3 text-slate-950 sm:justify-self-end lg:justify-self-center [&_svg]:h-auto [&_svg]:w-full">
                     {!! $telegramBotQrSvg !!}
                 </div>
             </div>
-        </section>
-    @endif
+            </section>
+        @endif
+    </div>
 </div>

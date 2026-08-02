@@ -107,6 +107,15 @@
             : 'https://t.me/'.ltrim($ownerTelegramBotUsername, '@');
     }
 
+    $customerTelegramBotConfigured = $showAccountNav && $canManageStudioSettings
+        ? $activeAccount->telegramBotInstallations()
+            ->where('scope_type', 'account')
+            ->where('scope_id', $activeAccount->id)
+            ->where('profile', \App\Enums\TelegramBotProfile::Customer->value)
+            ->whereNotNull('token_last_four')
+            ->exists()
+        : false;
+
     $classFormatNav = [];
 
     if ($showAccountNav && $canManageStudioSettings) {
@@ -361,6 +370,12 @@
             'icon' => 'telegram',
             'href' => route('dashboard.accounts.trainer-telegram-alert-logs.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.trainer-telegram-alert-logs.*'),
+        ]] : []),
+        ...($customerTelegramBotConfigured ? [[
+            'label' => __('app.customer_telegram_bot_menu'),
+            'icon' => 'telegram',
+            'href' => route('dashboard.accounts.telegram-connections.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.telegram-connections.*'),
         ]] : []),
     ] : [];
 
