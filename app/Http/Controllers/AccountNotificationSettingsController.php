@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\TelegramBotMode;
 use App\Enums\TelegramBotProfile;
+use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\Account;
 use App\Models\TrainerNotificationSetting;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -34,17 +38,38 @@ class AccountNotificationSettingsController extends Controller
                     'account_id' => $account->id,
                 ]);
         } elseif ($activeTab === 'telegram') {
+            $installation = $account->telegramBotInstallations()
+                ->where('profile', TelegramBotProfile::Customer->value)
+                ->first();
+            $botLink = $installation?->bot_username
+                ? 'https://t.me/'.ltrim($installation->bot_username, '@').'?start=ladna'
+                : null;
+
             $viewData += [
-                'telegramBotProfilesList' => [TelegramBotProfile::Customer],
-                'telegramBotModes' => [TelegramBotMode::Disabled, TelegramBotMode::Simple],
-                'telegramBotInstallations' => $account->telegramBotInstallations()
+                'telegramBotInstallation' => $installation,
+                'telegramBotProfile' => $account->telegramBotProfiles()
                     ->where('profile', TelegramBotProfile::Customer->value)
-                    ->get()
-                    ->keyBy(fn ($installation): string => $installation->profile->value),
-                'telegramBotProfiles' => $account->telegramBotProfiles()
+                    ->first(),
+                'telegramBotLink' => $botLink,
+                'telegramBotQrSvg' => $botLink ? $this->qrCodeSvg($botLink) : null,
+                'telegramBotActiveConnectionsCount' => $installation?->chatAuthorizations()
                     ->where('profile', TelegramBotProfile::Customer->value)
-                    ->get()
-                    ->keyBy(fn ($profile): string => $profile->profile->value),
+                    ->where('status', TelegramChatAuthorizationStatus::Authorized->value)
+                    ->count() ?? 0,
+                'telegramBotLastMessage' => $installation?->messages()
+                    ->where('profile', TelegramBotProfile::Customer->value)
+                    ->latest('sent_at')
+                    ->latest('id')
+                    ->first(),
+                'telegramBotLastUpdate' => $installation?->updates()
+                    ->where('profile', TelegramBotProfile::Customer->value)
+                    ->latest('received_at')
+                    ->latest('id')
+                    ->first(),
+                'latestTelegramBotError' => $installation?->updates()
+                    ->where('status', 'failed')
+                    ->latest('id')
+                    ->value('error_message'),
             ];
         } else {
             $viewData += [
@@ -55,5 +80,12 @@ class AccountNotificationSettingsController extends Controller
         }
 
         return view('accounts.notification-settings', $viewData);
+    }
+
+    private function qrCodeSvg(string $url): string
+    {
+        $renderer = new ImageRenderer(new RendererStyle(240), new SvgImageBackEnd);
+
+        return (new Writer($renderer))->writeString($url);
     }
 }

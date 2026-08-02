@@ -52,6 +52,15 @@ class ScheduledTaskRegistry
                 'overlap_minutes' => 5,
             ],
             [
+                'key' => 'telegram_updates_process',
+                'command' => 'telegram-updates:process --limit=50',
+                'expression' => '* * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_minute',
+                'description_key' => 'scheduled_task_telegram_updates_process_description',
+                'overlap_minutes' => 5,
+                'single_server' => true,
+            ],
+            [
                 'key' => 'customer_notifications_send',
                 'command' => 'customer-notifications:send --limit=50',
                 'expression' => '* * * * *',

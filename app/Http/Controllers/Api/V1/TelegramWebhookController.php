@@ -6,7 +6,7 @@ use App\Enums\TelegramUpdateStatus;
 use App\Http\Controllers\Controller;
 use App\Models\TelegramBotInstallation;
 use App\Models\TelegramUpdate;
-use App\Support\Telegram\TelegramUpdateProcessor;
+use App\Support\Telegram\TelegramUpdateDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -15,7 +15,7 @@ use function Illuminate\Support\defer;
 
 class TelegramWebhookController extends Controller
 {
-    public function __invoke(Request $request, string $webhookKey, TelegramUpdateProcessor $processor): Response|JsonResponse
+    public function __invoke(Request $request, string $webhookKey, TelegramUpdateDispatcher $dispatcher): Response|JsonResponse
     {
         $installation = TelegramBotInstallation::query()
             ->with('account')
@@ -55,13 +55,15 @@ class TelegramWebhookController extends Controller
                 'profile' => $installation->profile->value,
                 'payload' => $request->all(),
                 'status' => TelegramUpdateStatus::Pending->value,
+                'attempts' => 0,
+                'available_at' => now(),
                 'received_at' => now(),
             ],
         );
 
         if ($telegramUpdate->wasRecentlyCreated) {
-            defer(function () use ($processor, $telegramUpdate): void {
-                $processor->process($telegramUpdate->id);
+            defer(function () use ($dispatcher, $telegramUpdate): void {
+                $dispatcher->process($telegramUpdate->id);
             })->always();
         }
 

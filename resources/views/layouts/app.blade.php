@@ -319,7 +319,7 @@
                     'dashboard.accounts.notification-settings.*',
                     'dashboard.accounts.customer-notification-settings.*',
                     'dashboard.accounts.trainer-notification-settings.*',
-                    'dashboard.accounts.ai-telegram-settings.*',
+                    'dashboard.accounts.customer-telegram-bot.*',
                 ),
             ],
         ] : []),

@@ -2,11 +2,12 @@
 
 use App\Enums\ScheduleKind;
 use App\Http\Controllers\AccountActivityLogController;
-use App\Http\Controllers\AccountAiTelegramSettingsController;
 use App\Http\Controllers\AccountApiTokenController;
 use App\Http\Controllers\AccountAssistantController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountCustomerNotificationController;
+use App\Http\Controllers\AccountCustomerTelegramBotController;
+use App\Http\Controllers\AccountCustomerTelegramWebhookController;
 use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountNotificationSettingsController;
 use App\Http\Controllers\AccountOwnerProfileController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\AccountSmsTopUpController;
 use App\Http\Controllers\AccountSubscriptionController;
 use App\Http\Controllers\AccountTariffPaymentController;
 use App\Http\Controllers\AccountTelegramAlertController;
+use App\Http\Controllers\AccountTelegramConnectionController;
 use App\Http\Controllers\ActivityDirectionController;
 use App\Http\Controllers\AdminCustomerLoginController;
 use App\Http\Controllers\AiConversationMessageAttachmentController;
@@ -543,8 +545,28 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.api-tokens.destroy');
         Route::put('accounts/{account}/customer-notification-settings', [CustomerNotificationSettingsController::class, 'update'])
             ->name('accounts.customer-notification-settings.update');
-        Route::put('accounts/{account}/ai-telegram-settings', [AccountAiTelegramSettingsController::class, 'update'])
-            ->name('accounts.ai-telegram-settings.update');
+        Route::put('accounts/{account}/customer-telegram-bot', [AccountCustomerTelegramBotController::class, 'update'])
+            ->name('accounts.customer-telegram-bot.update');
+        Route::get('accounts/{account}/customer-telegram-bot/webhook-status', [AccountCustomerTelegramWebhookController::class, 'show'])
+            ->name('accounts.customer-telegram-bot.webhook-status');
+        Route::post('accounts/{account}/customer-telegram-bot/register-webhook', [AccountCustomerTelegramWebhookController::class, 'store'])
+            ->name('accounts.customer-telegram-bot.register-webhook');
+        Route::delete('accounts/{account}/customer-telegram-bot/webhook', [AccountCustomerTelegramWebhookController::class, 'destroy'])
+            ->name('accounts.customer-telegram-bot.delete-webhook');
+        Route::post('accounts/{account}/customer-telegram-bot/reconnect', [AccountCustomerTelegramBotController::class, 'reconnect'])
+            ->name('accounts.customer-telegram-bot.reconnect');
+        Route::post('accounts/{account}/customer-telegram-bot/check', [AccountCustomerTelegramBotController::class, 'check'])
+            ->name('accounts.customer-telegram-bot.check');
+        Route::patch('accounts/{account}/customer-telegram-bot/disable', [AccountCustomerTelegramBotController::class, 'disable'])
+            ->name('accounts.customer-telegram-bot.disable');
+        Route::delete('accounts/{account}/customer-telegram-bot', [AccountCustomerTelegramBotController::class, 'destroy'])
+            ->name('accounts.customer-telegram-bot.destroy');
+        Route::get('accounts/{account}/telegram-connections', [AccountTelegramConnectionController::class, 'index'])
+            ->name('accounts.telegram-connections.index');
+        Route::post('accounts/{account}/telegram-connections/{telegramAuthorization}/reset', [AccountTelegramConnectionController::class, 'reset'])
+            ->name('accounts.telegram-connections.reset');
+        Route::delete('accounts/{account}/telegram-connections/{telegramAuthorization}', [AccountTelegramConnectionController::class, 'revoke'])
+            ->name('accounts.telegram-connections.revoke');
         Route::put('accounts/{account}/trainer-notification-settings', [TrainerNotificationSettingsController::class, 'update'])
             ->name('accounts.trainer-notification-settings.update');
         Route::get('accounts/{account}/assistant', [AccountAssistantController::class, 'show'])

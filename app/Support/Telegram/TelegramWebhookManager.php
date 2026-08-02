@@ -5,6 +5,7 @@ namespace App\Support\Telegram;
 use App\Enums\TelegramBotProfile;
 use App\Models\TelegramBotInstallation;
 use Illuminate\Http\Client\Response;
+use RuntimeException;
 use Throwable;
 
 class TelegramWebhookManager
@@ -57,10 +58,10 @@ class TelegramWebhookManager
         try {
             $webhookResponse = $this->telegramClient->setWebhook($installation);
             $webhookOk = $this->telegramOk($webhookResponse);
-            $commandsResponse = $webhookOk
-                ? $this->telegramClient->setCommands($installation, $this->ownerCommands())
-                : null;
-            $commandsOk = $webhookOk && $this->telegramOk($commandsResponse);
+            $commandResponses = $webhookOk ? $this->registerCommands($installation) : [];
+            $commandsOk = $webhookOk && collect($commandResponses)->every(
+                fn (?Response $response): bool => $this->telegramOk($response),
+            );
             $ok = $webhookOk && $commandsOk;
 
             $installation->forceFill([
@@ -73,12 +74,15 @@ class TelegramWebhookManager
                 'message' => match (true) {
                     $ok => __('app.telegram_webhook_registered'),
                     ! $webhookOk => $this->telegramError($webhookResponse, __('app.telegram_webhook_registration_failed')),
-                    default => $this->telegramError($commandsResponse, __('app.telegram_bot_commands_registration_failed')),
+                    default => $this->telegramError(
+                        collect($commandResponses)->first(fn (?Response $response): bool => ! $this->telegramOk($response)),
+                        __('app.telegram_bot_commands_registration_failed'),
+                    ),
                 },
                 'status' => $this->status($installation->fresh()),
             ];
         } catch (Throwable $throwable) {
-            report($throwable);
+            $this->reportRequestFailure($throwable, 'registration');
 
             $installation->forceFill(['status' => self::StatusFailed])->save();
 
@@ -122,7 +126,7 @@ class TelegramWebhookManager
                 'status' => $this->status($installation->fresh()),
             ];
         } catch (Throwable $throwable) {
-            report($throwable);
+            $this->reportRequestFailure($throwable, 'deletion');
 
             $installation->forceFill(['status' => self::StatusFailed])->save();
 
@@ -158,6 +162,7 @@ class TelegramWebhookManager
             'enabled' => (bool) $installation->is_enabled,
             'status' => $installation->status,
             'status_label' => __('app.'.$installation->status),
+            'bot_id' => $installation->bot_id,
             'bot_username' => $installation->bot_username,
             'has_token' => (bool) $installation->tokenValue(),
             'token_last_four' => $installation->token_last_four,
@@ -205,7 +210,7 @@ class TelegramWebhookManager
                 'allowed_updates' => data_get($result, 'allowed_updates', []),
             ];
         } catch (Throwable $throwable) {
-            report($throwable);
+            $this->reportRequestFailure($throwable, 'status check');
 
             return [
                 'checked' => true,
@@ -242,6 +247,11 @@ class TelegramWebhookManager
         return $fallback;
     }
 
+    private function reportRequestFailure(Throwable $throwable, string $operation): void
+    {
+        report(new RuntimeException('Telegram API '.$operation.' failed ('.$throwable::class.').'));
+    }
+
     /**
      * @return array<int, array{command: string, description: string}>
      */
@@ -261,5 +271,44 @@ class TelegramWebhookManager
                 'description' => __('app.telegram_command_restart_description'),
             ],
         ];
+    }
+
+    /**
+     * @return array<int, Response|null>
+     */
+    private function registerCommands(TelegramBotInstallation $installation): array
+    {
+        if ($installation->profile === TelegramBotProfile::Customer) {
+            return collect(['uk', 'en'])
+                ->map(fn (string $locale): ?Response => $this->telegramClient->setCommands(
+                    $installation,
+                    $this->customerCommands($locale),
+                    $locale,
+                ))
+                ->all();
+        }
+
+        return [$this->telegramClient->setCommands($installation, $this->ownerCommands())];
+    }
+
+    /**
+     * @return array<int, array{command: string, description: string}>
+     */
+    private function customerCommands(string $locale): array
+    {
+        return collect([
+            'start',
+            'book',
+            'bookings',
+            'passes',
+            'attendance',
+            'studio',
+            'language',
+            'unlink',
+            'cancel',
+        ])->map(fn (string $command): array => [
+            'command' => $command,
+            'description' => __('app.telegram_customer_command_'.$command, [], $locale),
+        ])->all();
     }
 }

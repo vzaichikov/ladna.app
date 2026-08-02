@@ -35,20 +35,20 @@ class TrainerNotificationSettingsTest extends TestCase
             ->assertSee('name="trainer_assignment_enabled"', false)
             ->assertSee('name="class_cancellation_enabled"', false)
             ->assertDontSee('name="class_reminder_hours_before"', false)
-            ->assertDontSee('name="telegram_bots[customer][token]"', false);
+            ->assertDontSee('name="token"', false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']))
             ->assertOk()
             ->assertSee(__('app.notifications_customers'))
             ->assertSee('name="allow_otp"', false)
-            ->assertDontSee('name="telegram_bots[customer][token]"', false)
+            ->assertDontSee('name="token"', false)
             ->assertDontSee('name="trainer_assignment_enabled"', false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram']))
             ->assertOk()
-            ->assertSee('name="telegram_bots[customer][token]"', false)
+            ->assertSee('name="token"', false)
             ->assertDontSee('name="allow_otp"', false)
             ->assertDontSee('name="trainer_assignment_enabled"', false);
 

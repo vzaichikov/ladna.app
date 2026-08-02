@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'telegram_bot_installation_id', 'profile', 'update_id', 'payload', 'status', 'error_message', 'received_at', 'processed_at'])]
+#[Fillable(['account_id', 'telegram_bot_installation_id', 'profile', 'update_id', 'payload', 'status', 'attempts', 'available_at', 'processing_started_at', 'error_message', 'received_at', 'processed_at'])]
 class TelegramUpdate extends Model
 {
     use HasFactory;
@@ -23,6 +23,9 @@ class TelegramUpdate extends Model
             'profile' => TelegramBotProfile::class,
             'payload' => 'array',
             'status' => TelegramUpdateStatus::class,
+            'attempts' => 'integer',
+            'available_at' => 'datetime',
+            'processing_started_at' => 'datetime',
             'received_at' => 'datetime',
             'processed_at' => 'datetime',
         ];

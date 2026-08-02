@@ -16,6 +16,7 @@ use App\Models\ScheduledClass;
 use App\Models\ScheduledClassCancellation;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
@@ -26,6 +27,7 @@ class CustomerNotificationProducer
         private readonly CustomerNotificationSchedulePlanner $planner,
         private readonly CustomerNotificationTextRenderer $renderer,
         private readonly PhoneNumberNormalizer $phones,
+        private readonly CustomerTelegramLinkResolver $telegramLinks,
     ) {}
 
     public function queueClassReminder(ClassBooking $booking): ?CustomerNotification
@@ -74,8 +76,9 @@ class CustomerNotificationProducer
         }
 
         $recipientPhone = $this->phones->normalize($booking->customer->phone, $account->country_code ?? 'UA');
+        $telegramPreferred = $this->telegramLinks->botEnabled($account);
 
-        if (! $this->phones->isValid($recipientPhone, $account->country_code ?? 'UA')) {
+        if (! $telegramPreferred && ! $this->phones->isValid($recipientPhone, $account->country_code ?? 'UA')) {
             $this->cancelClassReminder($booking, 'customer_phone_invalid');
 
             return null;
@@ -84,7 +87,7 @@ class CustomerNotificationProducer
         $authSettings = $this->availability->settingsFor($account);
         $smsSetting = $this->availability->customerSmsSettingFor($account, $authSettings);
 
-        if (! $smsSetting) {
+        if (! $telegramPreferred && ! $smsSetting) {
             $this->cancelClassReminder($booking, 'customer_sms_not_configured');
 
             return null;
@@ -95,7 +98,9 @@ class CustomerNotificationProducer
             'customer_id' => $booking->customer_id,
             'scheduled_class_id' => $scheduledClass->id,
             'class_booking_id' => $booking->id,
-            'channel' => CustomerNotificationChannel::Sms->value,
+            'channel' => $telegramPreferred ? CustomerNotificationChannel::Automatic->value : CustomerNotificationChannel::Sms->value,
+            'resolved_channel' => null,
+            'telegram_chat_authorization_id' => null,
             'type' => CustomerNotificationType::ClassReminder->value,
             'status' => CustomerNotificationStatus::Pending->value,
             'recipient_kind' => CustomerNotificationRecipientKind::Customer->value,
@@ -112,8 +117,8 @@ class CustomerNotificationProducer
                 'starts_at' => $scheduledClass->starts_at?->toIso8601String(),
                 'reminder_hours_before' => $notificationSetting->class_reminder_hours_before,
             ],
-            'provider_scope' => $authSettings->sms_sending_mode->value,
-            'provider' => $smsSetting->provider->value,
+            'provider_scope' => $smsSetting ? $authSettings->sms_sending_mode->value : null,
+            'provider' => $smsSetting?->provider->value,
             'provider_message_id' => null,
             'attempts' => 0,
             'scheduled_send_at' => $scheduledSendAt,
@@ -122,6 +127,7 @@ class CustomerNotificationProducer
             'failed_at' => null,
             'cancelled_at' => null,
             'skipped_at' => null,
+            'fallback_used_at' => null,
             'last_error' => null,
         ];
 
@@ -193,6 +199,7 @@ class CustomerNotificationProducer
 
         $authSettings = $this->availability->settingsFor($account);
         $smsSetting = $this->availability->customerSmsSettingFor($account, $authSettings);
+        $telegramPreferred = $this->telegramLinks->botEnabled($account);
         $queued = 0;
 
         foreach ($cancellation->effects as $effect) {
@@ -205,7 +212,11 @@ class CustomerNotificationProducer
 
             $recipientPhone = $this->phones->normalize($customer->phone, $account->country_code ?? 'UA');
 
-            if (! $this->phones->isValid($recipientPhone, $account->country_code ?? 'UA')) {
+            if (! $telegramPreferred && ! $this->phones->isValid($recipientPhone, $account->country_code ?? 'UA')) {
+                continue;
+            }
+
+            if (! $telegramPreferred && ! $smsSetting) {
                 continue;
             }
 
@@ -224,7 +235,9 @@ class CustomerNotificationProducer
                 'customer_id' => $customer->id,
                 'scheduled_class_id' => $scheduledClass->id,
                 'class_booking_id' => $booking->id,
-                'channel' => CustomerNotificationChannel::Sms->value,
+                'channel' => $telegramPreferred ? CustomerNotificationChannel::Automatic->value : CustomerNotificationChannel::Sms->value,
+                'resolved_channel' => null,
+                'telegram_chat_authorization_id' => null,
                 'type' => CustomerNotificationType::ClassCancellation->value,
                 'status' => CustomerNotificationStatus::Pending->value,
                 'recipient_kind' => CustomerNotificationRecipientKind::Customer->value,
@@ -241,7 +254,7 @@ class CustomerNotificationProducer
                     'timezone' => $scheduledClass->displayTimezone(),
                     'starts_at' => $scheduledClass->starts_at?->toIso8601String(),
                 ],
-                'provider_scope' => $authSettings->sms_sending_mode->value,
+                'provider_scope' => $smsSetting ? $authSettings->sms_sending_mode->value : null,
                 'provider' => $smsSetting?->provider->value,
                 'provider_message_id' => null,
                 'attempts' => 0,
@@ -251,6 +264,7 @@ class CustomerNotificationProducer
                 'failed_at' => null,
                 'cancelled_at' => null,
                 'skipped_at' => null,
+                'fallback_used_at' => null,
                 'last_error' => null,
             ]);
             $notification->save();

@@ -8,15 +8,25 @@ use App\Enums\CustomerNotificationType;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\SmsDeliveryPurpose;
 use App\Enums\SmsSendingMode;
+use App\Enums\TelegramChatAuthorizationStatus;
+use App\Models\Account;
 use App\Models\ClassBooking;
+use App\Models\Customer;
 use App\Models\CustomerNotification;
 use App\Models\ScheduledClassCancellation;
+use App\Models\TelegramChatAuthorization;
+use App\Models\TelegramMessage;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
 use App\Support\Sms\StudioSmsSender;
+use App\Support\Telegram\CustomerTelegramLinkResolver;
+use App\Support\Telegram\TelegramClient;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
+use Throwable;
 
 class CustomerNotificationSender
 {
@@ -30,6 +40,8 @@ class CustomerNotificationSender
         private readonly CustomerNotificationProducer $producer,
         private readonly CustomerNotificationSchedulePlanner $planner,
         private readonly CustomerNotificationTextRenderer $renderer,
+        private readonly CustomerTelegramLinkResolver $telegramLinks,
+        private readonly TelegramClient $telegramClient,
     ) {}
 
     /**
@@ -120,9 +132,10 @@ class CustomerNotificationSender
             'scheduledClass.account.customerNotificationSetting',
             'scheduledClass.location',
             'scheduledClass.classType',
+            'telegramChatAuthorization.installation',
         ]);
 
-        if ($notification->channel !== CustomerNotificationChannel::Sms) {
+        if (! in_array($notification->channel, CustomerNotificationChannel::cases(), true)) {
             return $this->skip($notification, 'unsupported_customer_notification_channel');
         }
 
@@ -203,6 +216,24 @@ class CustomerNotificationSender
             }
         }
 
+        $text = (string) ($notification->text ?: match ($notification->type) {
+            CustomerNotificationType::ClassReminder => $this->renderer->renderClassReminder($account, $scheduledClass, $customer),
+            CustomerNotificationType::ClassCancellation => $this->renderer->renderClassCancellation($account, $scheduledClass, $customer),
+        });
+
+        if ($this->deliveryChannel($notification, $account, $customer) === CustomerNotificationChannel::Telegram) {
+            $telegramResult = $this->sendTelegram($notification, $account, $customer, $text);
+
+            if ($telegramResult !== null) {
+                return $telegramResult;
+            }
+        }
+
+        return $this->sendSms($notification, $account, $customer, $text);
+    }
+
+    private function sendSms(CustomerNotification $notification, Account $account, Customer $customer, string $text): string
+    {
         $phone = $this->phones->normalize($notification->recipient_phone ?: $customer->phone, $account->country_code ?? 'UA');
 
         if (! $this->phones->isValid($phone, $account->country_code ?? 'UA')) {
@@ -215,10 +246,6 @@ class CustomerNotificationSender
             return $this->cancel($notification, 'customer_sms_disabled');
         }
 
-        $text = (string) ($notification->text ?: match ($notification->type) {
-            CustomerNotificationType::ClassReminder => $this->renderer->renderClassReminder($account, $scheduledClass, $customer),
-            CustomerNotificationType::ClassCancellation => $this->renderer->renderClassCancellation($account, $scheduledClass, $customer),
-        });
         $currentStatus = $notification->fresh()->status;
 
         if ($currentStatus !== CustomerNotificationStatus::Processing) {
@@ -291,6 +318,155 @@ class CustomerNotificationSender
         ])->save();
 
         return 'sent';
+    }
+
+    private function deliveryChannel(CustomerNotification $notification, Account $account, Customer $customer): CustomerNotificationChannel
+    {
+        if ($notification->channel === CustomerNotificationChannel::Sms) {
+            return CustomerNotificationChannel::Sms;
+        }
+
+        if ($notification->channel === CustomerNotificationChannel::Telegram) {
+            return CustomerNotificationChannel::Telegram;
+        }
+
+        if ($notification->resolved_channel instanceof CustomerNotificationChannel) {
+            return $notification->resolved_channel;
+        }
+
+        $authorization = $this->telegramLinks->activeAuthorization($account, $customer);
+        $channel = $authorization ? CustomerNotificationChannel::Telegram : CustomerNotificationChannel::Sms;
+        $notification->forceFill([
+            'resolved_channel' => $channel->value,
+            'telegram_chat_authorization_id' => $authorization?->id,
+        ])->save();
+
+        if ($authorization) {
+            $notification->setRelation('telegramChatAuthorization', $authorization);
+        }
+
+        return $channel;
+    }
+
+    private function sendTelegram(CustomerNotification $notification, Account $account, Customer $customer, string $text): ?string
+    {
+        $authorization = $notification->telegramChatAuthorization
+            ?? $this->telegramLinks->activeAuthorization($account, $customer);
+
+        if (! $this->telegramAuthorizationIsCurrent($authorization, $account, $customer)) {
+            $this->fallBackToSms($notification);
+
+            return null;
+        }
+
+        try {
+            $response = $this->telegramClient->sendMessage(
+                $authorization->installation,
+                $authorization->telegram_chat_id,
+                $text,
+                ['disable_web_page_preview' => true],
+            );
+        } catch (Throwable $throwable) {
+            report(new RuntimeException('Customer Telegram notification delivery failed ('.$throwable::class.').'));
+
+            return $this->retryOrFail($notification, 'telegram_customer_notification_failed');
+        }
+
+        if ($this->telegramOk($response)) {
+            $messageId = filled($response?->json('result.message_id'))
+                ? (string) $response?->json('result.message_id')
+                : null;
+            $notification->forceFill([
+                'status' => CustomerNotificationStatus::Sent->value,
+                'resolved_channel' => CustomerNotificationChannel::Telegram->value,
+                'telegram_chat_authorization_id' => $authorization->id,
+                'text' => $text,
+                'provider_scope' => 'studio_bot',
+                'provider' => 'telegram',
+                'provider_message_id' => $messageId,
+                'next_attempt_at' => null,
+                'sent_at' => now(),
+                'failed_at' => null,
+                'cancelled_at' => null,
+                'skipped_at' => null,
+                'last_error' => null,
+            ])->save();
+            TelegramMessage::create([
+                'account_id' => $account->id,
+                'telegram_bot_installation_id' => $authorization->telegram_bot_installation_id,
+                'telegram_chat_authorization_id' => $authorization->id,
+                'profile' => $authorization->profile->value,
+                'telegram_chat_id' => $authorization->telegram_chat_id,
+                'telegram_message_id' => $messageId,
+                'direction' => 'outbound',
+                'message_type' => 'notification',
+                'text' => $text,
+                'payload' => ['customer_notification_id' => $notification->id],
+                'sent_at' => now(),
+            ]);
+
+            return 'sent';
+        }
+
+        if ($this->telegramRecipientUnavailable($response)) {
+            $authorization->forceFill([
+                'status' => TelegramChatAuthorizationStatus::Revoked->value,
+                'revoked_at' => now(),
+            ])->save();
+            $this->fallBackToSms($notification);
+
+            return null;
+        }
+
+        return $this->retryOrFail(
+            $notification,
+            (string) ($response?->json('description') ?: 'telegram_customer_notification_failed'),
+        );
+    }
+
+    private function telegramAuthorizationIsCurrent(?TelegramChatAuthorization $authorization, Account $account, Customer $customer): bool
+    {
+        if (! $authorization || $authorization->account_id !== $account->id || $authorization->customer_id !== $customer->id) {
+            return false;
+        }
+
+        $authorization->loadMissing('installation');
+
+        return $authorization->status === TelegramChatAuthorizationStatus::Authorized
+            && $authorization->installation?->account_id === $account->id
+            && $authorization->installation?->is_enabled
+            && filled($authorization->installation?->tokenValue());
+    }
+
+    private function fallBackToSms(CustomerNotification $notification): void
+    {
+        $notification->forceFill([
+            'resolved_channel' => CustomerNotificationChannel::Sms->value,
+            'telegram_chat_authorization_id' => null,
+            'fallback_used_at' => now(),
+            'provider_scope' => null,
+            'provider' => null,
+            'provider_message_id' => null,
+        ])->save();
+        $notification->unsetRelation('telegramChatAuthorization');
+    }
+
+    private function telegramRecipientUnavailable(?Response $response): bool
+    {
+        $description = Str::lower((string) $response?->json('description', ''));
+
+        return $response?->status() === 403
+            || Str::contains($description, [
+                'bot was blocked',
+                'chat not found',
+                'user is deactivated',
+                "bot can't initiate conversation",
+            ]);
+    }
+
+    private function telegramOk(?Response $response): bool
+    {
+        return $response?->successful() === true && $response->json('ok') === true;
     }
 
     private function retryOrFail(CustomerNotification $notification, string $error): string

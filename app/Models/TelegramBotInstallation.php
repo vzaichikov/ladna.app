@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-#[Fillable(['account_id', 'scope_type', 'scope_id', 'profile', 'bot_username', 'encrypted_token', 'token_last_four', 'encrypted_webhook_key', 'webhook_key_hash', 'encrypted_webhook_secret', 'webhook_secret_token_hash', 'webhook_url', 'status', 'is_enabled', 'last_webhook_synced_at'])]
+#[Fillable(['account_id', 'scope_type', 'scope_id', 'profile', 'bot_id', 'bot_username', 'encrypted_token', 'token_last_four', 'encrypted_webhook_key', 'webhook_key_hash', 'encrypted_webhook_secret', 'webhook_secret_token_hash', 'webhook_url', 'status', 'is_enabled', 'last_webhook_synced_at'])]
 #[Hidden(['encrypted_token', 'encrypted_webhook_key', 'webhook_key_hash', 'encrypted_webhook_secret', 'webhook_secret_token_hash'])]
 class TelegramBotInstallation extends Model
 {
@@ -61,6 +61,11 @@ class TelegramBotInstallation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(TelegramMessage::class);
+    }
+
+    public function customerSessions(): HasMany
+    {
+        return $this->hasMany(TelegramCustomerSession::class);
     }
 
     public function authorizationSelections(): HasMany

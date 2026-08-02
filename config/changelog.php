@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.118.0',
+                'date' => '2026-08-02',
+                'title' => 'Studio-owned Telegram self-service bots',
+                'items' => ['Each studio can now connect its own BotFather bot for customer self-service. The bot follows fixed Ladna scenarios without AI, asks customers to share their own Telegram phone number, links an existing studio profile, or creates a new profile only after name and phone confirmation.', 'Customers can book and cancel group classes, view upcoming and previous bookings, class passes, attendance, studio information, and their customer cabinet in Ukrainian or English. Eligible reminders use the studio bot first and automatically fall back to SMS when Telegram is unavailable.', 'Studio owners and authorized staff have a restricted connection manager with customer links, message and notification delivery histories, webhook update logs, session restart and unlink controls, plus live webhook status, registration, deletion, pending-update, error, and last-activity details.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.117.0',
                 'date' => '2026-08-01',
                 'title' => 'Clearer trainer access rights',
@@ -1031,6 +1038,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.118.0',
+                'date' => '2026-08-02',
+                'title' => 'Власні Telegram-боти студій для самообслуговування',
+                'items' => ['Кожна студія тепер може підключити власного бота з BotFather для самообслуговування клієнтів. Бот працює за фіксованими сценаріями Ladna без ШІ, просить клієнта поділитися власним номером Telegram, прив’язує наявний профіль студії або створює новий лише після підтвердження імені й телефону.', 'Клієнти можуть записуватися та скасовувати записи на групові заняття, переглядати майбутні й попередні записи, абонементи, відвідування, інформацію про студію та клієнтський кабінет українською або англійською. Відповідні нагадування спочатку надходять через бота студії та автоматично переходять на SMS, якщо Telegram недоступний.', 'Власники студій і уповноважені працівники отримали обмежений менеджер підключень із прив’язками клієнтів, історією повідомлень і доставок, логами webhook-оновлень, перезапуском сесії та відв’язуванням, а також живим статусом webhook, його реєстрацією й видаленням, кількістю очікуваних оновлень, помилками та останньою активністю.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.117.0',
                 'date' => '2026-08-01',

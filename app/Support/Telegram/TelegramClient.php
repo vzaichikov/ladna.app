@@ -93,7 +93,7 @@ class TelegramClient
     /**
      * @param  array<int, array{command: string, description: string}>  $commands
      */
-    public function setCommands(TelegramBotInstallation $installation, array $commands): ?Response
+    public function setCommands(TelegramBotInstallation $installation, array $commands, ?string $languageCode = null): ?Response
     {
         $token = $installation->tokenValue();
 
@@ -104,9 +104,11 @@ class TelegramClient
         return Http::timeout(8)
             ->connectTimeout(3)
             ->retry([100, 300], throw: false)
-            ->post($this->methodUrl($token, 'setMyCommands'), [
+            ->post($this->methodUrl($token, 'setMyCommands'), array_filter([
                 'commands' => array_values($commands),
-            ]);
+                'scope' => ['type' => 'all_private_chats'],
+                'language_code' => $languageCode,
+            ], fn (mixed $value): bool => $value !== null && $value !== ''));
     }
 
     public function getWebhookInfo(TelegramBotInstallation $installation): ?Response

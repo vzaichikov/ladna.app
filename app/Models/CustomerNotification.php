@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'customer_id', 'scheduled_class_id', 'class_booking_id', 'channel', 'type', 'status', 'recipient_kind', 'dedupe_key', 'recipient_name', 'recipient_phone', 'text', 'payload', 'provider_scope', 'provider', 'provider_message_id', 'attempts', 'scheduled_send_at', 'next_attempt_at', 'sent_at', 'failed_at', 'cancelled_at', 'skipped_at', 'last_error'])]
+#[Fillable(['account_id', 'customer_id', 'scheduled_class_id', 'class_booking_id', 'telegram_chat_authorization_id', 'channel', 'resolved_channel', 'type', 'status', 'recipient_kind', 'dedupe_key', 'recipient_name', 'recipient_phone', 'text', 'payload', 'provider_scope', 'provider', 'provider_message_id', 'attempts', 'scheduled_send_at', 'next_attempt_at', 'sent_at', 'failed_at', 'cancelled_at', 'skipped_at', 'fallback_used_at', 'last_error'])]
 class CustomerNotification extends Model
 {
     /** @use HasFactory<CustomerNotificationFactory> */
@@ -32,6 +32,7 @@ class CustomerNotification extends Model
     {
         return [
             'channel' => CustomerNotificationChannel::class,
+            'resolved_channel' => CustomerNotificationChannel::class,
             'type' => CustomerNotificationType::class,
             'status' => CustomerNotificationStatus::class,
             'recipient_kind' => CustomerNotificationRecipientKind::class,
@@ -43,6 +44,7 @@ class CustomerNotification extends Model
             'failed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'skipped_at' => 'datetime',
+            'fallback_used_at' => 'datetime',
         ];
     }
 
@@ -64,5 +66,10 @@ class CustomerNotification extends Model
     public function classBooking(): BelongsTo
     {
         return $this->belongsTo(ClassBooking::class);
+    }
+
+    public function telegramChatAuthorization(): BelongsTo
+    {
+        return $this->belongsTo(TelegramChatAuthorization::class);
     }
 }
