@@ -7,6 +7,7 @@ use App\Enums\TelegramBotMode;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Enums\TelegramCustomerSessionState;
+use App\Enums\TelegramUpdateStatus;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\ClassBooking;
@@ -19,6 +20,7 @@ use App\Models\TelegramBotInstallation;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramCustomerSession;
 use App\Models\TelegramMessage;
+use App\Models\TelegramUpdate;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -222,6 +224,30 @@ class CustomerTelegramBotWebhookTest extends TestCase
         ])->assertNoContent();
 
         $this->assertSame(ClassBookingStatus::Cancelled, $booking->refresh()->status);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 30009,
+            'message' => $this->message($chatId, $telegramUserId, 9, '/bookings'),
+        ])->assertNoContent();
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 30010,
+            'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'booking_history')),
+        ])->assertNoContent();
+
+        $historyUpdate = TelegramUpdate::query()
+            ->whereBelongsTo($installation, 'installation')
+            ->where('update_id', 30010)
+            ->sole();
+        $this->assertSame(TelegramUpdateStatus::Processed, $historyUpdate->status);
+        $historyText = (string) TelegramMessage::query()
+            ->whereBelongsTo($historyUpdate, 'telegramUpdate')
+            ->where('direction', 'outbound')
+            ->value('text');
+        $this->assertStringContainsString('Telegram Pole Class', $historyText);
+        $this->assertStringContainsString(
+            __('app.telegram_customer_booking_status_cancelled', [], $session->refresh()->locale),
+            $historyText,
+        );
     }
 
     public function test_studio_menu_responds_when_support_contacts_include_non_http_links(): void
@@ -286,6 +312,12 @@ class CustomerTelegramBotWebhookTest extends TestCase
                 ->pluck('url')
                 ->filter()
                 ->every(fn (string $url): bool => Str::startsWith(Str::lower($url), ['http://', 'https://', 'tg://'])));
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendMessage')
+            && collect($request['reply_markup']['inline_keyboard'] ?? [])
+                ->flatten(1)
+                ->pluck('url')
+                ->filter()
+                ->contains(fn (string $url): bool => str_contains($url, '/customer/telegram-login/')));
     }
 
     /**

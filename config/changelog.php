@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.119.0',
+                'date' => '2026-08-02',
+                'title' => 'Safer Telegram customer access',
+                'items' => ['Linked customers can now open their customer cabinet from the studio bot without signing in again. The bot uses a short-lived, single-use link that stops working after it expires, is used, or the Telegram connection is revoked.', 'The booking-history button now reliably shows previous and cancelled classes.', 'Telegram message, update, and customer-notification histories now follow the same automatic retention period configured for the activity log.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.118.0',
                 'date' => '2026-08-02',
                 'title' => 'Studio-owned Telegram self-service bots',
@@ -1038,6 +1045,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.119.0',
+                'date' => '2026-08-02',
+                'title' => 'Безпечніший доступ клієнтів із Telegram',
+                'items' => ['Привʼязані клієнти тепер можуть відкрити свій кабінет із бота студії без повторного входу. Бот використовує короткочасне одноразове посилання, яке перестає працювати після завершення строку, використання або відʼєднання Telegram.', 'Кнопка історії записів тепер надійно показує минулі та скасовані заняття.', 'Історія повідомлень, оновлень і клієнтських сповіщень Telegram тепер автоматично очищається за тим самим строком, який налаштовано для журналу дій.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.118.0',
                 'date' => '2026-08-02',

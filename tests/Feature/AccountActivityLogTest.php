@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\CustomerNotificationChannel;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AccountActivityLog;
@@ -12,6 +13,7 @@ use App\Models\AiConversationMessage;
 use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
 use App\Models\AiProviderRequest;
+use App\Models\CustomerNotification;
 use App\Models\McpToolInvocation;
 use App\Models\TelegramAlert;
 use App\Models\TelegramAuthorizationSelection;
@@ -251,6 +253,32 @@ class AccountActivityLogTest extends TestCase
             'sent_at' => now()->subDays(44),
             'created_at' => now()->subDays(44),
         ]);
+        $oldPlatformUpdate = TelegramUpdate::factory()->create([
+            'account_id' => null,
+            'telegram_bot_installation_id' => $installation->id,
+            'received_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $recentPlatformUpdate = TelegramUpdate::factory()->create([
+            'account_id' => null,
+            'telegram_bot_installation_id' => $installation->id,
+            'received_at' => now()->subDays(44),
+            'created_at' => now()->subDays(44),
+        ]);
+        $oldPlatformMessage = TelegramMessage::factory()->create([
+            'account_id' => null,
+            'telegram_bot_installation_id' => $installation->id,
+            'telegram_update_id' => $oldPlatformUpdate->id,
+            'sent_at' => now()->subDays(46),
+            'created_at' => now()->subDays(46),
+        ]);
+        $recentPlatformMessage = TelegramMessage::factory()->create([
+            'account_id' => null,
+            'telegram_bot_installation_id' => $installation->id,
+            'telegram_update_id' => $recentPlatformUpdate->id,
+            'sent_at' => now()->subDays(44),
+            'created_at' => now()->subDays(44),
+        ]);
         $telegramConversation = AiConversation::factory()->for($account)->create([
             'telegram_chat_authorization_id' => $authorization->id,
             'user_id' => $user->id,
@@ -364,14 +392,49 @@ class AccountActivityLogTest extends TestCase
             'created_at' => now()->subDays(44),
             'updated_at' => now()->subDays(44),
         ]);
+        $oldPlatformAlert = TelegramAlert::factory()->create([
+            'account_id' => null,
+            'created_at' => now()->subDays(46),
+            'updated_at' => now()->subDays(46),
+        ]);
+        $recentPlatformAlert = TelegramAlert::factory()->create([
+            'account_id' => null,
+            'created_at' => now()->subDays(44),
+            'updated_at' => now()->subDays(44),
+        ]);
+        $oldCustomerTelegramNotification = CustomerNotification::factory()->for($account)->create([
+            'customer_id' => null,
+            'scheduled_class_id' => null,
+            'class_booking_id' => null,
+            'channel' => CustomerNotificationChannel::Automatic->value,
+            'created_at' => now()->subDays(46),
+            'updated_at' => now()->subDays(46),
+        ]);
+        $recentCustomerTelegramNotification = CustomerNotification::factory()->for($account)->create([
+            'customer_id' => null,
+            'scheduled_class_id' => null,
+            'class_booking_id' => null,
+            'channel' => CustomerNotificationChannel::Automatic->value,
+            'created_at' => now()->subDays(44),
+            'updated_at' => now()->subDays(44),
+        ]);
+        $oldSmsNotification = CustomerNotification::factory()->for($account)->create([
+            'customer_id' => null,
+            'scheduled_class_id' => null,
+            'class_booking_id' => null,
+            'channel' => CustomerNotificationChannel::Sms->value,
+            'created_at' => now()->subDays(46),
+            'updated_at' => now()->subDays(46),
+        ]);
 
         $this->artisan('account-activity-logs:prune')
             ->expectsOutput(__('app.account_activity_logs_pruned', ['count' => 1]))
             ->expectsOutput(__('app.ai_provider_requests_pruned', ['count' => 1]))
             ->expectsOutput(__('app.telegram_logs_pruned', [
-                'messages' => 1,
-                'updates' => 1,
-                'alerts' => 1,
+                'messages' => 2,
+                'updates' => 2,
+                'alerts' => 2,
+                'notifications' => 1,
                 'conversation_messages' => 1,
                 'conversations' => 1,
                 'pending_actions' => 1,
@@ -384,10 +447,19 @@ class AccountActivityLogTest extends TestCase
         $this->assertModelExists($recentActivityLog);
         $this->assertModelMissing($oldUpdate);
         $this->assertModelExists($recentUpdate);
+        $this->assertModelMissing($oldPlatformUpdate);
+        $this->assertModelExists($recentPlatformUpdate);
         $this->assertModelMissing($oldAlert);
         $this->assertModelExists($recentAlert);
+        $this->assertModelMissing($oldPlatformAlert);
+        $this->assertModelExists($recentPlatformAlert);
         $this->assertModelMissing($oldMessage);
         $this->assertModelExists($recentMessage);
+        $this->assertModelMissing($oldPlatformMessage);
+        $this->assertModelExists($recentPlatformMessage);
+        $this->assertModelMissing($oldCustomerTelegramNotification);
+        $this->assertModelExists($recentCustomerTelegramNotification);
+        $this->assertModelExists($oldSmsNotification);
         $this->assertModelMissing($oldAiMessage);
         $this->assertModelExists($recentAiMessage);
         $this->assertModelMissing($oldProviderRequest);

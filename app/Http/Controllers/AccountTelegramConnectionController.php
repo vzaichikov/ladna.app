@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\CustomerNotificationChannel;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\Account;
@@ -45,12 +44,7 @@ class AccountTelegramConnectionController extends Controller
             ->where('profile', TelegramBotProfile::Customer->value);
         $notificationQuery = CustomerNotification::query()
             ->whereBelongsTo($account)
-            ->where(function (Builder $query): void {
-                $query->where('channel', CustomerNotificationChannel::Automatic->value)
-                    ->orWhere('resolved_channel', CustomerNotificationChannel::Telegram->value)
-                    ->orWhereNotNull('telegram_chat_authorization_id')
-                    ->orWhereNotNull('fallback_used_at');
-            });
+            ->telegramInteraction();
 
         $authorizations = (clone $authorizationQuery)
             ->with(['customer:id,account_id,name,email,phone,default_language'])

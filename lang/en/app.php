@@ -2432,7 +2432,7 @@ return [
     'customer_class_passes_normalized' => ':count class passes normalized.',
     'account_activity_logs_pruned' => ':count activity log entries pruned.',
     'ai_provider_requests_pruned' => ':count AI provider usage records pruned.',
-    'telegram_logs_pruned' => ':messages Telegram messages, :updates Telegram updates, :alerts Telegram alerts, :conversation_messages Telegram assistant messages, :conversations Telegram conversations, :pending_actions pending actions, :tool_invocations tool invocations, and :authorization_selections authorization selections pruned.',
+    'telegram_logs_pruned' => ':messages Telegram messages, :updates Telegram updates, :alerts Telegram alerts, :notifications customer Telegram notifications, :conversation_messages Telegram assistant messages, :conversations Telegram conversations, :pending_actions pending actions, :tool_invocations tool invocations, and :authorization_selections authorization selections pruned.',
     'attempts' => 'Attempts',
     'next_attempt_at' => 'Next attempt',
     'recipient' => 'Recipient',

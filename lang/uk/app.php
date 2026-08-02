@@ -2432,7 +2432,7 @@ return [
     'customer_class_passes_normalized' => ':count абонементів нормалізовано.',
     'account_activity_logs_pruned' => ':count записів журналу дій видалено.',
     'ai_provider_requests_pruned' => 'Видалено записів використання AI-провайдера: :count.',
-    'telegram_logs_pruned' => 'Видалено Telegram: повідомлення - :messages, updates - :updates, сповіщення - :alerts, повідомлення асистента - :conversation_messages, розмови - :conversations, pending actions - :pending_actions, tool invocations - :tool_invocations, вибори авторизації - :authorization_selections.',
+    'telegram_logs_pruned' => 'Видалено Telegram: повідомлення - :messages, updates - :updates, сповіщення - :alerts, клієнтські сповіщення - :notifications, повідомлення асистента - :conversation_messages, розмови - :conversations, pending actions - :pending_actions, tool invocations - :tool_invocations, вибори авторизації - :authorization_selections.',
     'attempts' => 'Спроби',
     'next_attempt_at' => 'Наступна спроба',
     'recipient' => 'Отримувач',

@@ -116,6 +116,7 @@ use App\Http\Controllers\StudioCashController;
 use App\Http\Controllers\StudioCashEntryController;
 use App\Http\Controllers\StudioExpenseController;
 use App\Http\Controllers\StudioSettingsController;
+use App\Http\Controllers\TelegramCustomerLoginController;
 use App\Http\Controllers\TrainerController;
 use App\Http\Controllers\TrainerNotificationSettingsController;
 use App\Http\Controllers\TrainerPrivateLessonReportController;
@@ -286,6 +287,10 @@ Route::prefix('{accountSlug}/customer')
             ->middleware(['signed', 'throttle:customer-login'])
             ->where('token', '[A-Za-z0-9]+')
             ->name('admin-login.consume');
+        Route::get('telegram-login/{token}', TelegramCustomerLoginController::class)
+            ->middleware(['signed', 'throttle:customer-login'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->name('telegram-login.consume');
         Route::post('login/email', [CustomerAuthController::class, 'emailLogin'])->middleware('throttle:customer-login')->name('email.login');
         Route::post('login/otp', [CustomerAuthController::class, 'sendOtp'])->middleware('throttle:customer-otp')->name('otp.send');
         Route::get('login/otp', [CustomerAuthController::class, 'otpChallenge'])->name('otp.challenge');

@@ -23,6 +23,7 @@ use App\Models\TelegramCustomerSession;
 use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
 use App\Support\ClassBookingCancellationWindow;
+use App\Support\CustomerAuth\TelegramCustomerLoginTokenService;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
 use Illuminate\Database\Eloquent\Builder;
@@ -55,6 +56,7 @@ class CustomerTelegramUpdateProcessor
         private readonly CreatePublicBooking $createPublicBooking,
         private readonly CancelClassBooking $cancelClassBooking,
         private readonly ClassBookingCancellationWindow $cancellationWindow,
+        private readonly TelegramCustomerLoginTokenService $customerLoginTokens,
     ) {}
 
     public function handle(TelegramUpdate $telegramUpdate): bool
@@ -739,9 +741,10 @@ class CustomerTelegramUpdateProcessor
 
     private function showBookingHistory(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization, int $page): bool
     {
-        $query = $authorization->customer->classBookings()
+        $query = ClassBooking::query()
+            ->whereBelongsTo($authorization->customer)
+            ->whereBelongsTo($authorization->account)
             ->notCorrectedRemoved()
-            ->where('account_id', $authorization->account_id)
             ->where(function (Builder $query): void {
                 $query->where('status', ClassBookingStatus::Cancelled->value)
                     ->orWhereHas('scheduledClass', fn (Builder $query): Builder => $query->where('starts_at', '<=', now()));
@@ -887,7 +890,10 @@ class CustomerTelegramUpdateProcessor
             $text .= "\n\n".$locationText;
         }
 
-        $rows = [[['text' => $this->t($session, 'telegram_customer_open_cabinet'), 'url' => route('customer.dashboard', $account->slug)]]];
+        $rows = [[[
+            'text' => $this->t($session, 'telegram_customer_open_cabinet'),
+            'url' => $this->customerLoginTokens->issueUrl($account, $authorization->customer, $authorization),
+        ]]];
 
         if ($account->studio_rules_html) {
             $rows[] = [['text' => $this->t($session, 'studio_rules'), 'url' => route('public.studio-rules', $account->slug)]];

@@ -7,6 +7,7 @@ use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiPendingAction;
 use App\Models\AiProviderRequest;
+use App\Models\CustomerNotification;
 use App\Models\McpToolInvocation;
 use App\Models\TelegramAlert;
 use App\Models\TelegramAuthorizationSelection;
@@ -44,6 +45,7 @@ class PruneAccountActivityLogs extends Command
         $deletedAiMessages = $this->deleteOldTelegramAiMessages($cutoff, $imageCleaner);
         $deletedAiConversations = $this->deleteOldTelegramAiConversations($cutoff);
         $deletedTelegramAlerts = $this->deleteOldTelegramAlerts($cutoff);
+        $deletedCustomerTelegramNotifications = $this->deleteOldCustomerTelegramNotifications($cutoff);
         $deletedTelegramMessages = $this->deleteOldTelegramMessages($cutoff);
         $deletedTelegramUpdates = $this->deleteOldTelegramUpdates($cutoff);
         $deletedAuthorizationSelections = $this->deleteOldTelegramAuthorizationSelections($cutoff);
@@ -54,6 +56,7 @@ class PruneAccountActivityLogs extends Command
             'messages' => $deletedTelegramMessages,
             'updates' => $deletedTelegramUpdates,
             'alerts' => $deletedTelegramAlerts,
+            'notifications' => $deletedCustomerTelegramNotifications,
             'conversations' => $deletedAiConversations,
             'conversation_messages' => $deletedAiMessages,
             'pending_actions' => $deletedAiPendingActions,
@@ -111,7 +114,16 @@ class PruneAccountActivityLogs extends Command
     private function deleteOldTelegramAlerts(Carbon $cutoff): int
     {
         return TelegramAlert::query()
+            ->where(fn (Builder $query): Builder => $this->wherePrunableTelegramAccount($query))
+            ->where(fn (Builder $query): Builder => $this->whereOlderThan($query, 'created_at', $cutoff))
+            ->delete();
+    }
+
+    private function deleteOldCustomerTelegramNotifications(Carbon $cutoff): int
+    {
+        return CustomerNotification::query()
             ->whereHas('account', fn (Builder $query): Builder => $query->operational())
+            ->telegramInteraction()
             ->where(fn (Builder $query): Builder => $this->whereOlderThan($query, 'created_at', $cutoff))
             ->delete();
     }
@@ -119,7 +131,7 @@ class PruneAccountActivityLogs extends Command
     private function deleteOldTelegramMessages(Carbon $cutoff): int
     {
         return TelegramMessage::query()
-            ->whereHas('account', fn (Builder $query): Builder => $query->operational())
+            ->where(fn (Builder $query): Builder => $this->wherePrunableTelegramAccount($query))
             ->where(fn (Builder $query): Builder => $this->whereOlderThan($query, 'sent_at', $cutoff))
             ->delete();
     }
@@ -127,7 +139,7 @@ class PruneAccountActivityLogs extends Command
     private function deleteOldTelegramUpdates(Carbon $cutoff): int
     {
         return TelegramUpdate::query()
-            ->whereHas('account', fn (Builder $query): Builder => $query->operational())
+            ->where(fn (Builder $query): Builder => $this->wherePrunableTelegramAccount($query))
             ->where(fn (Builder $query): Builder => $this->whereOlderThan($query, 'received_at', $cutoff))
             ->delete();
     }
@@ -144,6 +156,13 @@ class PruneAccountActivityLogs extends Command
         return $query
             ->where('channel', 'telegram_owner')
             ->whereNotNull('telegram_chat_authorization_id');
+    }
+
+    private function wherePrunableTelegramAccount(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('account_id')
+            ->orWhereHas('account', fn (Builder $query): Builder => $query->operational());
     }
 
     private function whereOlderThan(Builder $query, string $dateColumn, Carbon $cutoff): Builder

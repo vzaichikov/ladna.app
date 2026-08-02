@@ -8,6 +8,7 @@ use App\Enums\CustomerNotificationStatus;
 use App\Enums\CustomerNotificationType;
 use Database\Factories\CustomerNotificationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -46,6 +47,16 @@ class CustomerNotification extends Model
             'skipped_at' => 'datetime',
             'fallback_used_at' => 'datetime',
         ];
+    }
+
+    public function scopeTelegramInteraction(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query->where('channel', CustomerNotificationChannel::Automatic->value)
+                ->orWhere('resolved_channel', CustomerNotificationChannel::Telegram->value)
+                ->orWhereNotNull('telegram_chat_authorization_id')
+                ->orWhereNotNull('fallback_used_at');
+        });
     }
 
     public function account(): BelongsTo
