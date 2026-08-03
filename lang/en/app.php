@@ -2549,6 +2549,7 @@ return [
     'sessions_to_remove' => 'Sessions to remove',
     'class_pass_session_adjustment' => 'Adjust sessions',
     'class_pass_validity_days_adjustment' => 'Adjust validity days',
+    'class_pass_system_dates_help' => 'These dates are calculated by Ladna and cannot be edited directly. To change the validity period or number of sessions, use the corresponding adjustment controls below.',
     'sessions_to_adjust' => 'Number of sessions',
     'days_to_adjust' => 'Number of days',
     'adjustment_reason' => 'Reason',

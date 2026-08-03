@@ -35,10 +35,12 @@ class UpdateCustomerClassPassRequest extends FormRequest
                 Rule::exists((new Location)->getTable(), 'id')
                     ->where('account_id', $account?->id),
             ],
-            'purchased_at' => ['required', 'date'],
-            'opened_at' => ['nullable', 'date'],
-            'expires_at' => ['nullable', 'date'],
-            'closed_at' => ['nullable', 'date'],
+            'purchased_at' => ['prohibited'],
+            'opened_at' => ['prohibited'],
+            'expires_at' => ['prohibited'],
+            'usable_until_at' => ['prohibited'],
+            'closed_at' => ['prohibited'],
+            'frozen_at' => ['prohibited'],
             'is_active' => ['nullable', 'boolean'],
         ];
     }

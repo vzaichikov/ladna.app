@@ -641,6 +641,8 @@ class CustomerClassPassTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.class_pass_session_adjustment'))
             ->assertSee(__('app.class_pass_validity_days_adjustment'))
+            ->assertSee(__('app.class_pass_system_dates_help'))
+            ->assertSee('data-class-pass-system-dates-help', false)
             ->assertSee(__('app.confirm_add_class_pass_sessions_title'))
             ->assertSee(__('app.confirm_remove_class_pass_sessions_title'))
             ->assertSee(__('app.confirm_add_class_pass_days_title'))
@@ -1062,7 +1064,7 @@ class CustomerClassPassTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_customer_class_pass_dates_display_and_save_in_account_timezone(): void
+    public function test_customer_class_pass_dates_display_in_account_timezone_and_cannot_be_updated_directly(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 02:30:00', 'UTC'));
         [$owner, $account, $customer, $plan, , $location] = $this->passContext();
@@ -1076,18 +1078,22 @@ class CustomerClassPassTest extends TestCase
         ]);
 
         $this->actingAs($owner)
-            ->post(route('dashboard.accounts.customer-class-passes.adjustments.store', [$account, $customerClassPass]), [
-                'direction' => 'add',
-                'sessions_delta' => 1,
-                'reason' => 'Timezone audit',
-            ])
-            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]));
-
-        $this->actingAs($owner)
             ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
             ->assertOk()
-            ->assertSee('value="2026-06-19T22:30"', false)
+            ->assertSee('value="2026-06-19 22:30"', false)
             ->assertSee('2026-06-19 22:30')
+            ->assertSee('data-system-managed-date="purchased_at" readonly', false)
+            ->assertSee('data-system-managed-date="opened_at" readonly', false)
+            ->assertSee('data-system-managed-date="expires_at" readonly', false)
+            ->assertSee('data-system-managed-date="usable_until_at" readonly', false)
+            ->assertSee('data-system-managed-date="closed_at" readonly', false)
+            ->assertSee('data-system-managed-date="frozen_at" readonly', false)
+            ->assertDontSee('name="purchased_at"', false)
+            ->assertDontSee('name="opened_at"', false)
+            ->assertDontSee('name="expires_at"', false)
+            ->assertDontSee('name="usable_until_at"', false)
+            ->assertDontSee('name="closed_at"', false)
+            ->assertDontSee('name="frozen_at"', false)
             ->assertDontSee('2026-06-20T02:30')
             ->assertDontSee('2026-06-20 02:30');
 
@@ -1096,19 +1102,30 @@ class CustomerClassPassTest extends TestCase
                 'status' => CustomerClassPassStatus::Active->value,
                 'is_active' => '1',
                 'issued_location_id' => $location->id,
-                'purchased_at' => '2026-06-19T22:30',
-                'opened_at' => '',
-                'expires_at' => '',
-                'closed_at' => '',
+                'purchased_at' => '2030-01-01T10:00',
+                'opened_at' => '2030-01-02T10:00',
+                'expires_at' => '2030-02-01T10:00',
+                'usable_until_at' => '2030-03-01T10:00',
+                'closed_at' => '2030-04-01T10:00',
+                'frozen_at' => '2030-05-01T10:00',
             ])
-            ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
+            ->assertSessionHasErrors([
+                'purchased_at',
+                'opened_at',
+                'expires_at',
+                'usable_until_at',
+                'closed_at',
+                'frozen_at',
+            ]);
 
         $customerClassPass->refresh();
 
         $this->assertTrue($customerClassPass->purchased_at->equalTo(Carbon::parse('2026-06-20 02:30:00', 'UTC')));
-        $this->assertNull($customerClassPass->opened_at);
-        $this->assertNull($customerClassPass->expires_at);
+        $this->assertTrue($customerClassPass->opened_at->equalTo(Carbon::parse('2026-06-20 02:30:00', 'UTC')));
+        $this->assertTrue($customerClassPass->expires_at->equalTo(Carbon::parse('2026-07-20 02:30:00', 'UTC')));
+        $this->assertTrue($customerClassPass->usable_until_at->equalTo(Carbon::parse('2026-10-18 02:30:00', 'UTC')));
         $this->assertNull($customerClassPass->closed_at);
+        $this->assertNull($customerClassPass->frozen_at);
 
         Carbon::setTestNow();
     }
@@ -1261,10 +1278,6 @@ class CustomerClassPassTest extends TestCase
             ->put(route('dashboard.accounts.customer-class-passes.update', [$account, $customerClassPass]), [
                 'status' => CustomerClassPassStatus::Active->value,
                 'issued_location_id' => $location->id,
-                'purchased_at' => '2026-06-20T10:00',
-                'opened_at' => null,
-                'expires_at' => null,
-                'closed_at' => null,
                 'is_active' => '1',
             ])
             ->assertRedirect(route('dashboard.accounts.customer-class-passes.index', $account));
@@ -1447,17 +1460,9 @@ class CustomerClassPassTest extends TestCase
      */
     private function classPassUpdatePayload(CustomerClassPass $customerClassPass, Location $location, bool $isPaid): array
     {
-        $account = $customerClassPass->account()->firstOrFail();
-        $timezone = $account->timezone ?? config('app.timezone');
-        $formatDate = static fn ($date): string => $date ? $date->copy()->timezone($timezone)->format('Y-m-d\TH:i') : '';
-
         return [
             'status' => $customerClassPass->status->value,
             'issued_location_id' => (string) $location->id,
-            'purchased_at' => $formatDate($customerClassPass->purchased_at ?? now()),
-            'opened_at' => $formatDate($customerClassPass->opened_at),
-            'expires_at' => $formatDate($customerClassPass->expires_at),
-            'closed_at' => $formatDate($customerClassPass->closed_at),
             'is_active' => $customerClassPass->is_active ? '1' : '0',
             'is_paid' => $isPaid ? '1' : '0',
         ];

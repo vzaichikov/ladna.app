@@ -20,7 +20,6 @@ use App\Http\Requests\UpdateCustomerClassPassRequest;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
-use App\Support\DateTimePresenter;
 use App\Support\ScheduleKindRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -171,16 +170,7 @@ class CustomerClassPassController extends Controller
         $this->ensureBelongsToAccount($account, $customerClassPass);
 
         $validated = $request->validated();
-
-        foreach (['purchased_at', 'opened_at', 'expires_at', 'closed_at'] as $dateField) {
-            $validated[$dateField] = DateTimePresenter::parseAccountDateTime($validated[$dateField] ?? null, $account);
-        }
-
         $validated['is_active'] = $request->boolean('is_active');
-        $validated['usable_until_at'] = $validated['purchased_at']
-            ->timezone(DateTimePresenter::accountTimezone($account))
-            ->addDays($customerClassPass->total_validity_days)
-            ->timezone((string) config('app.timezone', 'UTC'));
 
         $requestedStatus = CustomerClassPassStatus::from((string) $validated['status']);
 
@@ -192,12 +182,10 @@ class CustomerClassPassController extends Controller
             $validated['is_active'] = false;
         }
 
-        if (! $validated['is_active'] && blank($validated['closed_at'] ?? null)) {
-            $validated['closed_at'] = now();
-        }
-
         if ($validated['is_active']) {
             $validated['closed_at'] = null;
+        } else {
+            $validated['closed_at'] = $customerClassPass->closed_at ?? now();
         }
 
         $customerWithReleasedReservations = null;

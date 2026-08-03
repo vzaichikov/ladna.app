@@ -2549,6 +2549,7 @@ return [
     'sessions_to_remove' => 'Скільки занять зняти',
     'class_pass_session_adjustment' => 'Зняти або додати заняття до абонементу',
     'class_pass_validity_days_adjustment' => 'Зняти або додати дні до строку абонемента',
+    'class_pass_system_dates_help' => 'Ці дати розраховує Ladna, тому їх не можна редагувати напряму. Щоб змінити строк дії або кількість занять, скористайтеся відповідними блоками коригування нижче.',
     'sessions_to_adjust' => 'Кількість занять',
     'days_to_adjust' => 'Кількість днів',
     'adjustment_reason' => 'Причина',

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.121.1',
+                'date' => '2026-08-03',
+                'title' => 'Safer class-pass date management',
+                'items' => ['Purchased class-pass dates are now displayed as system-managed, read-only values. Studio staff use the audited session and validity-day adjustment controls instead of editing lifecycle dates directly.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.121.0',
                 'date' => '2026-08-03',
                 'title' => 'Booking bot links and safer cancellations',
@@ -1059,6 +1066,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.121.1',
+                'date' => '2026-08-03',
+                'title' => 'Безпечніше керування датами абонементів',
+                'items' => ['Дати придбаних абонементів тепер відображаються як системні значення без прямого редагування. Працівники студії змінюють кількість занять і строк дії через окремі коригування з історією замість ручної зміни дат життєвого циклу.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.121.0',
                 'date' => '2026-08-03',

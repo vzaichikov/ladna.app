@@ -4,7 +4,6 @@
 
 @section('content')
     @php
-        $formatDateTimeLocal = static fn ($date): ?string => \App\Support\DateTimePresenter::dateTimeLocal($date, $account);
         $formatDateTime = static fn ($date): string => \App\Support\DateTimePresenter::format($date, $account) ?? __('app.not_set');
         $formatMoney = static fn (?int $priceCents, ?string $currency = null): string => \App\Support\MoneyFormatter::format($priceCents ?? 0, $currency ?: $account->default_currency);
         $formatScheduledClassDateTime = static function ($scheduledClass) use ($account): string {
@@ -336,32 +335,29 @@
         <div class="grid gap-4 sm:grid-cols-2">
             <label class="block">
                 <span class="crm-label">{{ __('app.purchased_at') }}</span>
-                <input name="purchased_at" type="datetime-local" value="{{ old('purchased_at', $formatDateTimeLocal($customerClassPass->purchased_at)) }}" class="crm-field" required>
-                @error('purchased_at') <span class="crm-help">{{ $message }}</span> @enderror
+                <input type="text" value="{{ $formatDateTime($customerClassPass->purchased_at) }}" class="crm-field cursor-default bg-slate-50 text-slate-600" data-system-managed-date="purchased_at" readonly aria-readonly="true">
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.opened_at') }}</span>
-                <input name="opened_at" type="datetime-local" value="{{ old('opened_at', $formatDateTimeLocal($customerClassPass->opened_at)) }}" class="crm-field">
-                @error('opened_at') <span class="crm-help">{{ $message }}</span> @enderror
+                <input type="text" value="{{ $formatDateTime($customerClassPass->opened_at) }}" class="crm-field cursor-default bg-slate-50 text-slate-600" data-system-managed-date="opened_at" readonly aria-readonly="true">
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.expires_after_first_class') }}</span>
-                <input name="expires_at" type="datetime-local" value="{{ old('expires_at', $formatDateTimeLocal($customerClassPass->expires_at)) }}" class="crm-field">
-                @error('expires_at') <span class="crm-help">{{ $message }}</span> @enderror
+                <input type="text" value="{{ $formatDateTime($customerClassPass->expires_at) }}" class="crm-field cursor-default bg-slate-50 text-slate-600" data-system-managed-date="expires_at" readonly aria-readonly="true">
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.usable_until_at') }}</span>
-                <input type="datetime-local" value="{{ $formatDateTimeLocal($customerClassPass->usableUntilAt()) }}" class="crm-field" disabled>
+                <input type="text" value="{{ $formatDateTime($customerClassPass->usableUntilAt()) }}" class="crm-field cursor-default bg-slate-50 text-slate-600" data-system-managed-date="usable_until_at" readonly aria-readonly="true">
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.closed_at') }}</span>
-                <input name="closed_at" type="datetime-local" value="{{ old('closed_at', $formatDateTimeLocal($customerClassPass->closed_at)) }}" class="crm-field">
-                @error('closed_at') <span class="crm-help">{{ $message }}</span> @enderror
+                <input type="text" value="{{ $formatDateTime($customerClassPass->closed_at) }}" class="crm-field cursor-default bg-slate-50 text-slate-600" data-system-managed-date="closed_at" readonly aria-readonly="true">
             </label>
             <label class="block">
                 <span class="crm-label">{{ __('app.frozen_at') }}</span>
-                <input type="datetime-local" value="{{ $formatDateTimeLocal($customerClassPass->frozen_at) }}" class="crm-field" disabled>
+                <input type="text" value="{{ $formatDateTime($customerClassPass->frozen_at) }}" class="crm-field cursor-default bg-slate-50 text-slate-600" data-system-managed-date="frozen_at" readonly aria-readonly="true">
             </label>
+            <p class="text-sm leading-6 text-slate-500 sm:col-span-2" data-class-pass-system-dates-help>{{ __('app.class_pass_system_dates_help') }}</p>
         </div>
 
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
