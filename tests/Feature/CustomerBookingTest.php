@@ -840,7 +840,11 @@ class CustomerBookingTest extends TestCase
         $this->actingAs($customer, 'customer')
             ->get(route('customer.dashboard', $account->slug))
             ->assertOk()
-            ->assertSee(route('customer.bookings.cancel', [$account->slug, $booking]), false);
+            ->assertSee(route('customer.bookings.cancel', [$account->slug, $booking]), false)
+            ->assertSee('data-confirm-action', false)
+            ->assertSee(__('app.confirm_customer_booking_cancellation_title'), false)
+            ->assertSee(__('app.confirm_customer_booking_cancellation_body'), false)
+            ->assertSee('id="delete-confirmation-modal"', false);
 
         $this->actingAs($customer, 'customer')
             ->patch(route('customer.bookings.cancel', [$account->slug, $booking]))

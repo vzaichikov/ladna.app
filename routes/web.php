@@ -552,6 +552,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.customer-notification-settings.update');
         Route::put('accounts/{account}/customer-telegram-bot', [AccountCustomerTelegramBotController::class, 'update'])
             ->name('accounts.customer-telegram-bot.update');
+        Route::put('accounts/{account}/customer-telegram-bot/placements', [AccountCustomerTelegramBotController::class, 'updatePlacements'])
+            ->name('accounts.customer-telegram-bot.placements.update');
         Route::get('accounts/{account}/customer-telegram-bot/webhook-status', [AccountCustomerTelegramWebhookController::class, 'show'])
             ->name('accounts.customer-telegram-bot.webhook-status');
         Route::post('accounts/{account}/customer-telegram-bot/register-webhook', [AccountCustomerTelegramWebhookController::class, 'store'])

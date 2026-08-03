@@ -77,6 +77,8 @@
             @endif
         @endunless
 
+        <x-ui.action-confirmation-modal />
+
         @if ($pwaServiceWorkerUrl)
             <x-ui.update-reload-toast :revision="$applicationRevision" :version-url="$pwaVersionUrl" :service-worker-url="$pwaServiceWorkerUrl" />
         @endif

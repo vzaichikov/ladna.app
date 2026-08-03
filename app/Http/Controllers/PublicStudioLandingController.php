@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\Customer;
+use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
@@ -11,7 +12,7 @@ use Illuminate\View\View;
 
 class PublicStudioLandingController extends Controller
 {
-    public function __invoke(string $accountSlug): View
+    public function __invoke(string $accountSlug, CustomerTelegramLinkResolver $telegramLinks): View
     {
         $account = Account::active()
             ->where('slug', $accountSlug)
@@ -40,6 +41,14 @@ class PublicStudioLandingController extends Controller
             'customer' => $this->currentCustomerFor($account),
             'locations' => $locations,
             'events' => $events,
+            'customerTelegramBotPublicStudioLink' => $telegramLinks->linkForPlacement(
+                $account,
+                CustomerTelegramLinkResolver::PlacementPublicStudio,
+            ),
+            'customerTelegramBotPublicContactsLink' => $telegramLinks->linkForPlacement(
+                $account,
+                CustomerTelegramLinkResolver::PlacementPublicContacts,
+            ),
         ]);
     }
 

@@ -6,6 +6,8 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduleKind;
+use App\Enums\TelegramBotMode;
+use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
@@ -16,7 +18,9 @@ use App\Models\CustomerClassPassReservation;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\ScheduledClass;
+use App\Models\TelegramBotInstallation;
 use App\Support\MoneyFormatter;
+use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Testing\TestResponse;
@@ -684,6 +688,61 @@ class CustomerDashboardTest extends TestCase
             ->assertDontSee($inactiveLocation->name)
             ->assertDontSee(route('public.price', [$account->slug, $inactiveLocation->slug]), false)
             ->assertDontSee(route('public.schedule', [$account->slug, $inactiveLocation->slug]), false);
+    }
+
+    public function test_customer_dashboard_shows_only_its_enabled_studio_bot_link(): void
+    {
+        $account = Account::factory()->create([
+            'slug' => 'customer-dashboard-telegram-link',
+            'default_language' => 'uk',
+        ]);
+        $customer = Customer::factory()->for($account)->create();
+        $profile = $account->telegramBotProfiles()->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'mode' => TelegramBotMode::Simple->value,
+            'is_enabled' => true,
+            'settings' => [
+                CustomerTelegramLinkResolver::PlacementSettingsKey => [
+                    CustomerTelegramLinkResolver::PlacementCustomerDashboard => true,
+                ],
+            ],
+        ]);
+        $otherAccount = Account::factory()->create();
+        TelegramBotInstallation::factory()->for($otherAccount)->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'bot_username' => 'other_studio_bot',
+        ]);
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertDontSee('other_studio_bot', false)
+            ->assertDontSee('data-customer-telegram-bot-link="customer-dashboard"', false);
+
+        TelegramBotInstallation::factory()->for($account)->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'bot_username' => '@customer_dashboard_bot',
+        ]);
+        $botLink = 'https://t.me/customer_dashboard_bot?start=ladna';
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee('data-customer-telegram-bot-link="customer-dashboard"', false)
+            ->assertSee($botLink, false)
+            ->assertSee(__('app.customer_telegram_booking_bot', [], 'uk'))
+            ->assertSee('assets/social/telegram.svg', false);
+
+        $profile->forceFill(['settings' => [
+            CustomerTelegramLinkResolver::PlacementSettingsKey => [
+                CustomerTelegramLinkResolver::PlacementCustomerDashboard => false,
+            ],
+        ]])->save();
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertDontSee($botLink, false);
     }
 
     /**

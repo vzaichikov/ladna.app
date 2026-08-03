@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.121.0',
+                'date' => '2026-08-03',
+                'title' => 'Booking bot links and safer cancellations',
+                'items' => ['Studios can now independently show a Booking bot button in the customer account, the public studio page header, and the bottom contact block. Each link is visible only while the studio customer Telegram bot is active.', 'Customer class cancellation now asks for confirmation before releasing the place and returning a reserved class-pass session.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.120.0',
                 'date' => '2026-08-02',
                 'title' => 'Individual lessons in studio Telegram bots',
@@ -1052,6 +1059,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.121.0',
+                'date' => '2026-08-03',
+                'title' => 'Кнопки бота для запису та безпечніше скасування',
+                'items' => ['Студії тепер можуть окремо показувати кнопку «Бот для запису» в кабінеті клієнта, верхньому блоці публічної сторінки студії та нижньому блоці контактів. Кожне посилання відображається лише поки клієнтський Telegram-бот студії активний.', 'Скасування запису клієнтом тепер потребує підтвердження перед звільненням місця та поверненням зарезервованого заняття до абонемента.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.120.0',
                 'date' => '2026-08-02',

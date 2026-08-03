@@ -86,7 +86,7 @@
                 </div>
             @endif
 
-            @if ($publicLocations->isNotEmpty())
+            @if ($publicLocations->isNotEmpty() || $customerTelegramBotLink)
                 <div class="mt-6 flex flex-col gap-3 sm:flex-row">
                     @foreach ($publicLocations as $publicLocation)
                         <x-ui.button :href="route('public.price', [$account->slug, $publicLocation->slug])" variant="secondary" class="w-full sm:w-auto">
@@ -98,6 +98,19 @@
                             {{ __('app.customer_dashboard_book_class') }}
                         </x-ui.button>
                     @endforeach
+                    @if ($customerTelegramBotLink)
+                        <x-ui.button
+                            :href="$customerTelegramBotLink"
+                            variant="secondary"
+                            class="w-full sm:w-auto"
+                            target="_blank"
+                            rel="noopener"
+                            data-customer-telegram-bot-link="customer-dashboard"
+                        >
+                            <img src="{{ asset('assets/social/telegram.svg') }}" alt="" class="h-4 w-4 shrink-0">
+                            {{ __('app.customer_telegram_booking_bot') }}
+                        </x-ui.button>
+                    @endif
                 </div>
             @endif
 
@@ -241,7 +254,17 @@
                                             </div>
                                         @endif
                                         @if ($canCancelBooking)
-                                            <form method="POST" action="{{ route('customer.bookings.cancel', [$account->slug, $booking]) }}" class="mt-3">
+                                            <form
+                                                method="POST"
+                                                action="{{ route('customer.bookings.cancel', [$account->slug, $booking]) }}"
+                                                class="mt-3"
+                                                data-confirm-action
+                                                data-confirm-title="{{ __('app.confirm_customer_booking_cancellation_title') }}"
+                                                data-confirm-body="{{ __('app.confirm_customer_booking_cancellation_body') }}"
+                                                data-confirm-accept="{{ __('app.cancel_booking') }}"
+                                                data-confirm-icon="calendar-x-2"
+                                                data-confirm-variant="danger"
+                                            >
                                                 @csrf
                                                 @method('PATCH')
                                                 <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.cancel_booking') }}</x-ui.button>

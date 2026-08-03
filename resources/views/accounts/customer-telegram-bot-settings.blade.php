@@ -1,4 +1,8 @@
-<div class="mt-6 max-w-6xl">
+@php
+    $telegramBotLinkPlacements = data_get($telegramBotProfile?->settings, \App\Support\Telegram\CustomerTelegramLinkResolver::PlacementSettingsKey, []);
+@endphp
+
+<div class="mt-6">
     @error('telegram_bot')
         <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm leading-6 text-rose-800">
             {{ $message }}
@@ -8,7 +12,7 @@
     <div @class([
         'grid gap-6',
         'max-w-4xl' => ! $telegramBotLink,
-        'lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start' => $telegramBotLink,
+        'lg:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)] lg:items-start' => $telegramBotLink,
     ]) data-customer-telegram-settings-layout>
         <div class="space-y-6">
             <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
@@ -204,21 +208,73 @@
         </div>
 
         @if ($telegramBotLink)
-            <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6" data-customer-telegram-share-card>
-                <div class="grid gap-6 sm:grid-cols-[1fr_auto] sm:items-center lg:grid-cols-1">
-                <div>
-                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.telegram_bot_share_with_customers') }}</h2>
-                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.telegram_bot_share_with_customers_copy') }}</p>
-                    <div class="mt-4 flex flex-wrap gap-3">
-                        <x-ui.button :href="$telegramBotLink" target="_blank" rel="noopener">{{ __('app.open_bot') }}</x-ui.button>
-                        <x-ui.button type="button" variant="secondary" data-copy-button data-copy-value="{{ $telegramBotLink }}" data-copy-success-label="{{ __('app.copied') }}">{{ __('app.copy_link') }}</x-ui.button>
+            <div class="space-y-6" data-customer-telegram-sharing-column>
+                <section class="w-full rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6" data-customer-telegram-share-card>
+                    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_10rem] xl:items-center">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.telegram_bot_share_with_customers') }}</h2>
+                            <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.telegram_bot_share_with_customers_copy') }}</p>
+                            <div class="mt-4 flex flex-wrap gap-3">
+                                <x-ui.button :href="$telegramBotLink" target="_blank" rel="noopener">
+                                    <img src="{{ asset('assets/social/telegram.svg') }}" alt="" class="h-4 w-4 shrink-0">
+                                    {{ __('app.open_bot') }}
+                                </x-ui.button>
+                                <x-ui.button type="button" variant="secondary" data-copy-button data-copy-value="{{ $telegramBotLink }}" data-copy-success-label="{{ __('app.copied') }}">{{ __('app.copy_link') }}</x-ui.button>
+                            </div>
+                        </div>
+                        <div class="w-40 rounded-xl border border-stone-200 bg-white p-3 text-slate-950 xl:justify-self-end [&_svg]:h-auto [&_svg]:w-full">
+                            {!! $telegramBotQrSvg !!}
+                        </div>
                     </div>
-                </div>
-                <div class="w-40 rounded-xl border border-stone-200 bg-white p-3 text-slate-950 sm:justify-self-end lg:justify-self-center [&_svg]:h-auto [&_svg]:w-full">
-                    {!! $telegramBotQrSvg !!}
-                </div>
+                </section>
+
+                <section class="w-full rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6" data-customer-telegram-placement-settings>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.telegram_bot_placement_settings') }}</h2>
+                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.telegram_bot_placement_settings_copy') }}</p>
+
+                    <form method="POST" action="{{ route('dashboard.accounts.customer-telegram-bot.placements.update', $account) }}" class="mt-5 grid gap-3">
+                        @csrf
+                        @method('PUT')
+
+                        @foreach ([
+                            \App\Support\Telegram\CustomerTelegramLinkResolver::PlacementCustomerDashboard => [
+                                'title' => __('app.telegram_bot_placement_customer_dashboard'),
+                                'copy' => __('app.telegram_bot_placement_customer_dashboard_copy'),
+                            ],
+                            \App\Support\Telegram\CustomerTelegramLinkResolver::PlacementPublicStudio => [
+                                'title' => __('app.telegram_bot_placement_public_studio'),
+                                'copy' => __('app.telegram_bot_placement_public_studio_copy'),
+                            ],
+                            \App\Support\Telegram\CustomerTelegramLinkResolver::PlacementPublicContacts => [
+                                'title' => __('app.telegram_bot_placement_public_contacts'),
+                                'copy' => __('app.telegram_bot_placement_public_contacts_copy'),
+                            ],
+                        ] as $placement => $placementCopy)
+                            <label class="flex items-start gap-3 rounded-lg border border-stone-200 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-900">
+                                <input type="hidden" name="{{ $placement }}" value="0">
+                                <input
+                                    name="{{ $placement }}"
+                                    type="checkbox"
+                                    value="1"
+                                    @checked(old($placement, (bool) data_get($telegramBotLinkPlacements, $placement, false)))
+                                    class="crm-checkbox mt-0.5"
+                                >
+                                <span class="grid gap-1">
+                                    <span>{{ $placementCopy['title'] }}</span>
+                                    <span class="text-sm font-normal leading-6 text-slate-600">{{ $placementCopy['copy'] }}</span>
+                                </span>
+                            </label>
+                        @endforeach
+
+                        <div class="mt-2">
+                            <x-ui.button type="submit">
+                                <x-ui.icon name="save" class="h-4 w-4" />
+                                {{ __('app.save_changes') }}
+                            </x-ui.button>
+                        </div>
+                    </form>
+                </section>
             </div>
-            </section>
         @endif
     </div>
 </div>

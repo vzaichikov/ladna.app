@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\TelegramBotProfile;
+use App\Http\Requests\UpdateAccountCustomerTelegramBotPlacementsRequest;
 use App\Http\Requests\UpdateAccountCustomerTelegramBotRequest;
 use App\Models\Account;
 use App\Support\Telegram\CustomerTelegramBotConnector;
+use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -19,6 +22,20 @@ class AccountCustomerTelegramBotController extends Controller
         );
 
         return $this->redirect($account, $result);
+    }
+
+    public function updatePlacements(UpdateAccountCustomerTelegramBotPlacementsRequest $request, Account $account): RedirectResponse
+    {
+        $profile = $account->telegramBotProfiles()->firstOrNew([
+            'profile' => TelegramBotProfile::Customer->value,
+        ]);
+        $settings = is_array($profile->settings) ? $profile->settings : [];
+        $settings[CustomerTelegramLinkResolver::PlacementSettingsKey] = $request->payload();
+        $profile->forceFill(['settings' => $settings])->save();
+
+        return redirect()
+            ->route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram'])
+            ->with('status', __('app.telegram_bot_placement_settings_saved'));
     }
 
     public function reconnect(Request $request, Account $account, CustomerTelegramBotConnector $connector): RedirectResponse

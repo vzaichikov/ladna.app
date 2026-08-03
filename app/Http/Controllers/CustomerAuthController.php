@@ -24,6 +24,7 @@ use App\Support\CustomerAuth\GoogleUserData;
 use App\Support\CustomerAuth\TurnstileVerifier;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
+use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
@@ -456,7 +457,7 @@ class CustomerAuthController extends Controller
         return $this->loginCustomer($customer, $account);
     }
 
-    public function studioDashboard(Request $request, string $accountSlug): View
+    public function studioDashboard(Request $request, string $accountSlug, CustomerTelegramLinkResolver $telegramLinks): View
     {
         $account = $this->account($accountSlug);
         $customer = $this->customerForAccount($account);
@@ -514,6 +515,10 @@ class CustomerAuthController extends Controller
             'bookingHistoryCount' => $bookingHistoryCount,
             'publicLocations' => $publicLocations,
             'purchaseHistory' => $purchaseHistory,
+            'customerTelegramBotLink' => $telegramLinks->linkForPlacement(
+                $account,
+                CustomerTelegramLinkResolver::PlacementCustomerDashboard,
+            ),
         ]);
     }
 

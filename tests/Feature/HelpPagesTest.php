@@ -289,7 +289,7 @@ class HelpPagesTest extends TestCase
     {
         $this->get(route('help.show', 'trainers', false))
             ->assertOk()
-            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-08-01', false)
+            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-08-03', false)
             ->assertSee('assets/help/screenshots/trainer-types.png', false)
             ->assertSee('assets/help/screenshots/trainer-editor.png', false)
             ->assertSee('assets/help/screenshots/trainer-private-timeframes.png', false)
@@ -606,6 +606,9 @@ class HelpPagesTest extends TestCase
             ->assertSee('всі записані клієнти скасували свої записи', false)
             ->assertSee('Новий сценарій скасування початково вимкнений', false)
             ->assertSee('Телеграм-бот студії', false)
+            ->assertSee('Де показувати бота', false)
+            ->assertSee('кабінеті клієнта', false)
+            ->assertSee('нижньому блоці контактів', false)
             ->assertSee('не змінює SMS-режим', false)
             ->assertSee(route('help.show', 'sms-service', false), false)
             ->assertSee('assets/help/screenshots/notification-settings-customers.png', false)

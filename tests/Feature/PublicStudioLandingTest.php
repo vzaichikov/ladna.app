@@ -4,10 +4,14 @@ namespace Tests\Feature;
 
 use App\Enums\SubscriptionPlanType;
 use App\Enums\SubscriptionStatus;
+use App\Enums\TelegramBotMode;
+use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Location;
 use App\Models\SubscriptionPlan;
+use App\Models\TelegramBotInstallation;
+use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -117,6 +121,60 @@ class PublicStudioLandingTest extends TestCase
             ->assertDontSee($customer->name)
             ->assertDontSee('data-customer-dashboard-link', false)
             ->assertSee('href="'.route('customer.studio.login', $otherAccount->slug).'"', false);
+    }
+
+    public function test_public_studio_bot_placements_are_independent_and_tenant_scoped(): void
+    {
+        $account = Account::factory()->create([
+            'slug' => 'public-studio-telegram-placements',
+            'default_language' => 'uk',
+        ]);
+        Location::factory()->for($account)->create(['slug' => 'main']);
+        $profile = $account->telegramBotProfiles()->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'mode' => TelegramBotMode::Simple->value,
+            'is_enabled' => true,
+            'settings' => [
+                CustomerTelegramLinkResolver::PlacementSettingsKey => [
+                    CustomerTelegramLinkResolver::PlacementPublicStudio => true,
+                    CustomerTelegramLinkResolver::PlacementPublicContacts => false,
+                ],
+            ],
+        ]);
+        TelegramBotInstallation::factory()->for($account)->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'bot_username' => 'public_studio_bot',
+        ]);
+        $otherAccount = Account::factory()->create();
+        TelegramBotInstallation::factory()->for($otherAccount)->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'bot_username' => 'other_public_studio_bot',
+        ]);
+        $botLink = 'https://t.me/public_studio_bot?start=ladna';
+
+        $response = $this->get(route('public.studio', $account->slug))
+            ->assertOk()
+            ->assertSee('data-customer-telegram-bot-link="public-studio"', false)
+            ->assertSee($botLink, false)
+            ->assertSee(__('app.customer_telegram_booking_bot', [], 'uk'))
+            ->assertDontSee('data-public-support-link="customer_telegram_bot"', false)
+            ->assertDontSee('other_public_studio_bot', false);
+        $this->assertSame(1, substr_count($response->getContent(), $botLink));
+
+        $profile->forceFill(['settings' => [
+            CustomerTelegramLinkResolver::PlacementSettingsKey => [
+                CustomerTelegramLinkResolver::PlacementPublicStudio => false,
+                CustomerTelegramLinkResolver::PlacementPublicContacts => true,
+            ],
+        ]])->save();
+
+        $response = $this->get(route('public.studio', $account->slug))
+            ->assertOk()
+            ->assertDontSee('data-customer-telegram-bot-link="public-studio"', false)
+            ->assertSee('data-public-support-link="customer_telegram_bot"', false)
+            ->assertSee(__('app.customer_telegram_booking_bot', [], 'uk'))
+            ->assertSee($botLink, false);
+        $this->assertSame(1, substr_count($response->getContent(), $botLink));
     }
 
     public function test_public_studio_landing_shows_selector_for_multiple_active_locations(): void

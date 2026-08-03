@@ -30,21 +30,35 @@
                             @endif
                         </div>
                     </div>
-                    @if ($customer)
-                        <a
-                            href="{{ route('customer.dashboard', $account->slug) }}"
-                            class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-xs transition hover:border-emerald-300 hover:bg-emerald-100"
-                            data-customer-dashboard-link
-                        >
-                            <x-ui.icon name="user" class="h-4 w-4" />
-                            {{ __('app.public_schedule_logged_in_as', ['name' => $customerDisplayName ?? __('app.customer_section')]) }}
-                        </a>
-                    @else
-                        <x-ui.button :href="route('customer.studio.login', $account->slug)" variant="brand">
-                            <x-ui.icon name="log-in" class="h-4 w-4" />
-                            {{ __('app.customer_login') }}
-                        </x-ui.button>
-                    @endif
+                    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+                        @if ($customerTelegramBotPublicStudioLink)
+                            <x-ui.button
+                                :href="$customerTelegramBotPublicStudioLink"
+                                variant="secondary"
+                                target="_blank"
+                                rel="noopener"
+                                data-customer-telegram-bot-link="public-studio"
+                            >
+                                <img src="{{ asset('assets/social/telegram.svg') }}" alt="" class="h-4 w-4 shrink-0">
+                                {{ __('app.customer_telegram_booking_bot') }}
+                            </x-ui.button>
+                        @endif
+                        @if ($customer)
+                            <a
+                                href="{{ route('customer.dashboard', $account->slug) }}"
+                                class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-xs transition hover:border-emerald-300 hover:bg-emerald-100"
+                                data-customer-dashboard-link
+                            >
+                                <x-ui.icon name="user" class="h-4 w-4" />
+                                {{ __('app.public_schedule_logged_in_as', ['name' => $customerDisplayName ?? __('app.customer_section')]) }}
+                            </a>
+                        @else
+                            <x-ui.button :href="route('customer.studio.login', $account->slug)" variant="brand">
+                                <x-ui.icon name="log-in" class="h-4 w-4" />
+                                {{ __('app.customer_login') }}
+                            </x-ui.button>
+                        @endif
+                    </div>
                 </div>
             </header>
 
@@ -156,7 +170,7 @@
                 </section>
             @endif
 
-            <x-ui.public-contact-links :account="$account" class="mt-8" />
+            <x-ui.public-contact-links :account="$account" :telegram-bot-link="$customerTelegramBotPublicContactsLink" class="mt-8" />
         </section>
     </main>
 @endsection

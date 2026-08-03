@@ -7,6 +7,7 @@ use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\TelegramBotInstallation;
 use App\Models\User;
+use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -41,9 +42,61 @@ class CustomerTelegramBotSettingsTest extends TestCase
             ->assertDontSee(__('app.ai_provider_openai_api_key'))
             ->assertSee('name="token"', false)
             ->assertSee('data-customer-telegram-settings-layout', false)
-            ->assertSee('lg:grid-cols-[minmax(0,1fr)_20rem]', false)
+            ->assertSee('lg:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]', false)
             ->assertSee('data-customer-telegram-share-card', false)
+            ->assertSee('data-customer-telegram-placement-settings', false)
+            ->assertSee('name="customer_dashboard"', false)
+            ->assertSee('name="public_studio"', false)
+            ->assertSee('name="public_contacts"', false)
             ->assertDontSee('name="allow_otp"', false);
+    }
+
+    public function test_owner_can_save_customer_bot_placements_without_reconnecting_the_bot(): void
+    {
+        Http::fake();
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $profile = $account->telegramBotProfiles()->create([
+            'profile' => TelegramBotProfile::Customer->value,
+            'mode' => TelegramBotMode::Simple->value,
+            'is_enabled' => true,
+            'settings' => ['future_setting' => 'preserved'],
+        ]);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.customer-telegram-bot.placements.update', $account), [
+                CustomerTelegramLinkResolver::PlacementCustomerDashboard => '1',
+                CustomerTelegramLinkResolver::PlacementPublicStudio => '0',
+                CustomerTelegramLinkResolver::PlacementPublicContacts => '1',
+            ])
+            ->assertRedirect(route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram']))
+            ->assertSessionHas('status', __('app.telegram_bot_placement_settings_saved'));
+
+        $this->assertSame([
+            'future_setting' => 'preserved',
+            CustomerTelegramLinkResolver::PlacementSettingsKey => [
+                CustomerTelegramLinkResolver::PlacementCustomerDashboard => true,
+                CustomerTelegramLinkResolver::PlacementPublicStudio => false,
+                CustomerTelegramLinkResolver::PlacementPublicContacts => true,
+            ],
+        ], $profile->refresh()->settings);
+        Http::assertNothingSent();
+
+        $outsider = User::factory()->create();
+        $this->actingAs($outsider)
+            ->put(route('dashboard.accounts.customer-telegram-bot.placements.update', $account), [
+                CustomerTelegramLinkResolver::PlacementCustomerDashboard => '0',
+                CustomerTelegramLinkResolver::PlacementPublicStudio => '0',
+                CustomerTelegramLinkResolver::PlacementPublicContacts => '0',
+            ])
+            ->assertForbidden();
+
+        $this->assertTrue((bool) data_get(
+            $profile->refresh()->settings,
+            CustomerTelegramLinkResolver::PlacementSettingsKey.'.'.CustomerTelegramLinkResolver::PlacementCustomerDashboard,
+        ));
     }
 
     public function test_qr_links_page_includes_the_configured_customer_bot(): void

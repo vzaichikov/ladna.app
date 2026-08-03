@@ -1,7 +1,18 @@
-@props(['account'])
+@props([
+    'account',
+    'telegramBotLink' => null,
+])
 
 @php
     $supportLinks = $account->publicSupportLinks();
+    if (filled($telegramBotLink)) {
+        $supportLinks[] = [
+            'key' => 'customer_telegram_bot',
+            'label_key' => 'app.customer_telegram_booking_bot',
+            'url' => $telegramBotLink,
+            'icon_path' => 'assets/social/telegram.svg',
+        ];
+    }
     $studioColor = is_string($account->brand_color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $account->brand_color)
         ? $account->brand_color
         : '#3B223F';
@@ -30,6 +41,7 @@
                                 rel="noopener"
                             @endif
                             class="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-brand-100 hover:bg-brand-50 hover:text-brand-700"
+                            data-public-support-link="{{ $supportLink['key'] }}"
                         >
                             <img src="{{ asset($supportLink['icon_path']) }}" alt="" class="h-5 w-5 shrink-0">
                             <span>{{ __($supportLink['label_key']) }}</span>
