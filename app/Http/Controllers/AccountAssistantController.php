@@ -20,9 +20,13 @@ use App\Support\Ai\InvalidAiConversationImage;
 use App\Support\Ai\StudioAiActionInput;
 use App\Support\Ai\StudioAiInference;
 use App\Support\Ai\StudioAiResult;
+use App\Support\Ai\StudioAiUsageFirewall;
+use App\Support\Ai\StudioAiUsageLimitExceeded;
 use App\Support\Ai\StudioAssistantActionExecutor;
 use App\Support\Ai\StudioAssistantActionPlan;
 use App\Support\Ai\StudioAssistantActionPlanner;
+use App\Support\Ai\Voice\VoiceTranscriptionException;
+use App\Support\Ai\Voice\VoiceTranscriptionService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -53,12 +57,59 @@ class AccountAssistantController extends Controller
         StudioAssistantActionPlanner $planner,
         AiConversationImageStore $imageStore,
         AiConversationImageCleaner $imageCleaner,
+        VoiceTranscriptionService $voiceTranscriptionService,
+        StudioAiUsageFirewall $usageFirewall,
     ): JsonResponse|StreamedResponse {
         $this->authorizeAssistant($request, $account);
 
         $conversation = $this->conversationFor($account, $request);
         $text = $request->messageText();
         $trainer = $this->trainerFor($account, $request);
+
+        if ($request->hasFile('voice')) {
+            try {
+                $voiceContents = $request->file('voice')->getContent();
+            } catch (Throwable $throwable) {
+                throw ValidationException::withMessages([
+                    'voice' => $this->voiceValidationMessage(
+                        new VoiceTranscriptionException('invalid_audio', $throwable),
+                    ),
+                ]);
+            }
+
+            if (Str::contains((string) $request->header('Accept'), 'application/x-ndjson')) {
+                return $this->streamVoiceAssistantMessage(
+                    $account,
+                    $request,
+                    $inference,
+                    $planner,
+                    $conversation,
+                    $trainer,
+                    $voiceContents,
+                    $voiceTranscriptionService,
+                    $usageFirewall,
+                );
+            }
+
+            try {
+                $text = $voiceTranscriptionService->transcribe(
+                    $voiceContents,
+                    $account,
+                    $request->user(),
+                    'dashboard_chat',
+                    PlatformAiSetting::current(),
+                    $conversation,
+                );
+            } catch (VoiceTranscriptionException $exception) {
+                throw ValidationException::withMessages([
+                    'voice' => $this->voiceValidationMessage($exception),
+                ]);
+            } catch (StudioAiUsageLimitExceeded $exception) {
+                throw ValidationException::withMessages([
+                    'voice' => $usageFirewall->resultForDecision($exception->decision, $account)->text,
+                ]);
+            }
+        }
 
         $currentMessage = $conversation->messages()->create([
             'account_id' => $account->id,
@@ -140,6 +191,106 @@ class AccountAssistantController extends Controller
             $text,
             $trainer,
         ));
+    }
+
+    private function streamVoiceAssistantMessage(
+        Account $account,
+        Request $request,
+        StudioAiInference $inference,
+        StudioAssistantActionPlanner $planner,
+        AiConversation $conversation,
+        ?Trainer $trainer,
+        string $voiceContents,
+        VoiceTranscriptionService $voiceTranscriptionService,
+        StudioAiUsageFirewall $usageFirewall,
+    ): StreamedResponse {
+        return response()->stream(function () use (
+            $account,
+            $request,
+            $inference,
+            $planner,
+            $conversation,
+            $trainer,
+            $voiceContents,
+            $voiceTranscriptionService,
+            $usageFirewall,
+        ): void {
+            try {
+                $this->writeNdjson([
+                    'type' => 'status',
+                    'key' => 'assistant_status_transcribing_voice',
+                    'message' => __('app.assistant_status_transcribing_voice'),
+                ]);
+                $text = $voiceTranscriptionService->transcribe(
+                    $voiceContents,
+                    $account,
+                    $request->user(),
+                    'dashboard_chat',
+                    PlatformAiSetting::current(),
+                    $conversation,
+                );
+                $currentMessage = $conversation->messages()->create([
+                    'account_id' => $account->id,
+                    'role' => AiConversationMessageRole::User->value,
+                    'content' => $text,
+                    'occurred_at' => now(),
+                ]);
+                $payload = $this->processAssistantMessage(
+                    $account,
+                    $request,
+                    $inference,
+                    $planner,
+                    $conversation,
+                    $currentMessage,
+                    $text,
+                    $trainer,
+                    fn (string $statusKey) => $this->writeNdjson([
+                        'type' => 'status',
+                        'key' => $statusKey,
+                        'message' => __('app.'.$statusKey),
+                    ]),
+                );
+                $this->writeNdjson([
+                    'type' => 'result',
+                    'payload' => $payload,
+                ]);
+            } catch (VoiceTranscriptionException $exception) {
+                $this->writeNdjson([
+                    'type' => 'error',
+                    'message' => $this->voiceValidationMessage($exception),
+                ]);
+            } catch (StudioAiUsageLimitExceeded $exception) {
+                $this->writeNdjson([
+                    'type' => 'error',
+                    'message' => $usageFirewall->resultForDecision($exception->decision, $account)->text,
+                ]);
+            } catch (Throwable $throwable) {
+                report($throwable);
+                $this->writeNdjson([
+                    'type' => 'error',
+                    'message' => __('app.assistant_chat_error'),
+                ]);
+            }
+        }, 200, [
+            'Content-Type' => 'application/x-ndjson; charset=UTF-8',
+            'Cache-Control' => 'no-cache, no-store, no-transform',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
+    private function voiceValidationMessage(VoiceTranscriptionException $exception): string
+    {
+        return __(match ($exception->reason()) {
+            'busy' => 'app.assistant_voice_busy',
+            'empty_audio', 'invalid_audio' => 'app.assistant_voice_invalid',
+            'audio_too_large' => 'app.assistant_voice_too_large',
+            'audio_too_long' => 'app.assistant_voice_too_long',
+            'provider_unavailable' => 'app.assistant_voice_provider_unavailable',
+            'missing_openai_api_key' => 'app.assistant_voice_openai_key_missing',
+            'empty_transcript' => 'app.assistant_voice_empty_transcript',
+            'transcript_too_long' => 'app.assistant_voice_transcript_too_long',
+            default => 'app.assistant_voice_transcription_failed',
+        });
     }
 
     /**

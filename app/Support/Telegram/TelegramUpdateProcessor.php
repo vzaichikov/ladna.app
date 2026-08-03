@@ -3,15 +3,18 @@
 namespace App\Support\Telegram;
 
 use App\Enums\AiConversationMessageRole;
+use App\Enums\AiProvider;
 use App\Enums\StudioAiDisposition;
 use App\Enums\StudioPermission;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Enums\TelegramUpdateStatus;
+use App\Enums\VoiceRecognitionProvider;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiPendingAction;
+use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
@@ -22,9 +25,14 @@ use App\Support\Ai\AiConversationImageStore;
 use App\Support\Ai\InvalidAiConversationImage;
 use App\Support\Ai\StudioAiActionInput;
 use App\Support\Ai\StudioAiResult;
+use App\Support\Ai\StudioAiUsageFirewall;
+use App\Support\Ai\StudioAiUsageLimitExceeded;
 use App\Support\Ai\StudioAssistantActionExecutor;
 use App\Support\Ai\StudioAssistantActionPlan;
 use App\Support\Ai\StudioAssistantActionPlanner;
+use App\Support\Ai\Voice\VoiceAudioNormalizer;
+use App\Support\Ai\Voice\VoiceTranscriptionException;
+use App\Support\Ai\Voice\VoiceTranscriptionService;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Client\Response;
@@ -56,6 +64,8 @@ class TelegramUpdateProcessor
         private readonly TelegramAssistantTextFormatter $assistantTextFormatter,
         private readonly AiConversationImageStore $conversationImageStore,
         private readonly AccountSubscriptionAccess $subscriptionAccess,
+        private readonly VoiceTranscriptionService $voiceTranscriptionService,
+        private readonly StudioAiUsageFirewall $usageFirewall,
     ) {}
 
     public function process(int $telegramUpdateId): void
@@ -311,6 +321,16 @@ class TelegramUpdateProcessor
             return true;
         }
 
+        if ($this->hasVoice($message)) {
+            return $this->processAuthorizedOwnerVoice(
+                $telegramUpdate,
+                $authorization,
+                $inboundMessage,
+                $chatId,
+                $message,
+            );
+        }
+
         if ($this->hasImage($message) && $this->isSupportedTelegramCommand($text)) {
             $processed = $this->processAuthorizedOwnerText($telegramUpdate, $authorization, $inboundMessage, $chatId, $text);
 
@@ -364,6 +384,121 @@ class TelegramUpdateProcessor
             imageContents: $image['contents'],
             imageOriginalName: $image['original_name'],
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     */
+    private function processAuthorizedOwnerVoice(
+        TelegramUpdate $telegramUpdate,
+        TelegramChatAuthorization $authorization,
+        TelegramMessage $inboundMessage,
+        string $chatId,
+        array $message,
+    ): bool {
+        $setting = PlatformAiSetting::current();
+        $unavailableMessage = $this->voiceAvailabilityMessage($setting);
+
+        if ($unavailableMessage !== null) {
+            $this->sendAndStore(
+                $telegramUpdate,
+                $chatId,
+                $unavailableMessage,
+                [],
+                $authorization->account_id,
+                $authorization,
+            );
+
+            return true;
+        }
+
+        $candidate = $this->voiceCandidate($message);
+
+        if (is_string($candidate)) {
+            $this->sendAndStore(
+                $telegramUpdate,
+                $chatId,
+                __('app.'.$candidate),
+                [],
+                $authorization->account_id,
+                $authorization,
+            );
+
+            return true;
+        }
+
+        $statusMessage = $this->startStatusMessage($telegramUpdate, $chatId);
+        $typing = $this->startTyping($telegramUpdate, $chatId);
+
+        try {
+            $this->updateStatus($statusMessage, 'assistant_status_transcribing_voice');
+            $this->refreshTyping($typing, force: true);
+            $download = $this->downloadVoice($telegramUpdate, $candidate);
+
+            if (is_string($download)) {
+                $this->sendAndStore(
+                    $telegramUpdate,
+                    $chatId,
+                    __('app.'.$download),
+                    [],
+                    $authorization->account_id,
+                    $authorization,
+                    statusMessage: $statusMessage,
+                );
+
+                return true;
+            }
+
+            $conversation = $this->conversationFor($authorization);
+            $text = $this->voiceTranscriptionService->transcribe(
+                $download['contents'],
+                $authorization->account,
+                $authorization->user,
+                'telegram_owner',
+                $setting,
+                $conversation,
+            );
+            $inboundMessage->update(['text' => $text]);
+
+            return $this->processAuthorizedOwnerText(
+                $telegramUpdate,
+                $authorization,
+                $inboundMessage,
+                $chatId,
+                $text,
+                $typing,
+                $statusMessage,
+            );
+        } catch (VoiceTranscriptionException $exception) {
+            $this->sendAndStore(
+                $telegramUpdate,
+                $chatId,
+                __('app.'.$this->voiceErrorTranslationKey($exception)),
+                [],
+                $authorization->account_id,
+                $authorization,
+                statusMessage: $statusMessage,
+            );
+
+            return true;
+        } catch (StudioAiUsageLimitExceeded $exception) {
+            $messageText = $this->usageFirewall
+                ->resultForDecision($exception->decision, $authorization->account)
+                ->text;
+            $this->sendAndStore(
+                $telegramUpdate,
+                $chatId,
+                $messageText,
+                [],
+                $authorization->account_id,
+                $authorization,
+                statusMessage: $statusMessage,
+            );
+
+            return true;
+        } finally {
+            $this->stopTyping($typing);
+        }
     }
 
     private function processAuthorizedOwnerText(TelegramUpdate $telegramUpdate, TelegramChatAuthorization $authorization, TelegramMessage $inboundMessage, string $chatId, string $text, ?TelegramTypingIndicator $typing = null, ?TelegramStatusMessage $statusMessage = null, ?string $imageContents = null, ?string $imageOriginalName = null): bool
@@ -523,6 +658,112 @@ class TelegramUpdateProcessor
         }
     }
 
+    private function voiceAvailabilityMessage(PlatformAiSetting $setting): ?string
+    {
+        if (! $setting->owner_voice_input_enabled) {
+            return __('app.telegram_voice_disabled');
+        }
+
+        if ($setting->owner_voice_recognition_provider !== VoiceRecognitionProvider::OpenAi) {
+            return __('app.telegram_voice_provider_unavailable');
+        }
+
+        $apiKey = PlatformAiProviderCredential::query()
+            ->where('provider', AiProvider::OpenAiApiKey->value)
+            ->first()
+            ?->apiKey();
+
+        return filled($apiKey) ? null : __('app.telegram_voice_openai_key_missing');
+    }
+
+    /**
+     * @param  array{file_id: string}  $candidate
+     * @return array{contents: string}|string
+     */
+    private function downloadVoice(TelegramUpdate $telegramUpdate, array $candidate): array|string
+    {
+        $fileResponse = $this->telegramClient->getFile(
+            $telegramUpdate->installation,
+            $candidate['file_id'],
+        );
+
+        if (! $fileResponse?->successful()) {
+            return 'telegram_voice_download_failed';
+        }
+
+        $filePath = (string) data_get($fileResponse->json(), 'result.file_path', '');
+        $fileSize = (int) data_get($fileResponse->json(), 'result.file_size', 0);
+
+        if ($fileSize > VoiceAudioNormalizer::MaxBytes) {
+            return 'assistant_voice_too_large';
+        }
+
+        $download = $this->telegramClient->downloadFile(
+            $telegramUpdate->installation,
+            $filePath,
+            VoiceAudioNormalizer::MaxBytes,
+        );
+
+        if ($download['too_large']) {
+            return 'assistant_voice_too_large';
+        }
+
+        $downloadResponse = $download['response'];
+
+        if (! $downloadResponse?->successful()) {
+            return 'telegram_voice_download_failed';
+        }
+
+        $contentLength = (int) $downloadResponse->header('Content-Length');
+        $contents = $downloadResponse->body();
+
+        if ($contentLength > VoiceAudioNormalizer::MaxBytes || strlen($contents) > VoiceAudioNormalizer::MaxBytes) {
+            return 'assistant_voice_too_large';
+        }
+
+        return $contents !== '' ? ['contents' => $contents] : 'assistant_voice_invalid';
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     * @return array{file_id: string}|string
+     */
+    private function voiceCandidate(array $message): array|string
+    {
+        $voice = data_get($message, 'voice');
+
+        if (! is_array($voice)) {
+            return 'assistant_voice_invalid';
+        }
+
+        if ((int) data_get($voice, 'duration', 0) > VoiceAudioNormalizer::MaxDurationSeconds) {
+            return 'assistant_voice_too_long';
+        }
+
+        if ((int) data_get($voice, 'file_size', 0) > VoiceAudioNormalizer::MaxBytes) {
+            return 'assistant_voice_too_large';
+        }
+
+        $fileId = (string) data_get($voice, 'file_id', '');
+
+        return $fileId !== '' ? ['file_id' => $fileId] : 'assistant_voice_invalid';
+    }
+
+    private function voiceErrorTranslationKey(VoiceTranscriptionException $exception): string
+    {
+        return match ($exception->reason()) {
+            'busy' => 'assistant_voice_busy',
+            'empty_audio', 'invalid_audio' => 'assistant_voice_invalid',
+            'audio_too_large' => 'assistant_voice_too_large',
+            'audio_too_long' => 'assistant_voice_too_long',
+            'provider_unavailable' => 'assistant_voice_provider_unavailable',
+            'missing_openai_api_key' => 'assistant_voice_openai_key_missing',
+            'empty_transcript' => 'assistant_voice_empty_transcript',
+            'transcript_too_long' => 'assistant_voice_transcript_too_long',
+            default => 'assistant_voice_transcription_failed',
+        };
+    }
+
     /**
      * @param  array<string, mixed>  $message
      * @return array{contents: string, original_name: string}|string
@@ -649,6 +890,10 @@ class TelegramUpdateProcessor
             return 'contact';
         }
 
+        if ($this->hasVoice($message)) {
+            return 'voice';
+        }
+
         if (data_get($message, 'photo')) {
             return 'photo';
         }
@@ -658,6 +903,14 @@ class TelegramUpdateProcessor
         }
 
         return 'text';
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     */
+    private function hasVoice(array $message): bool
+    {
+        return is_array(data_get($message, 'voice'));
     }
 
     /**

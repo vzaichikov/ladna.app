@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AiProvider;
+use App\Enums\VoiceRecognitionProvider;
 use Database\Factories\PlatformAiSettingFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
     'owner_ai_assistant_enabled',
+    'owner_voice_input_enabled',
+    'owner_voice_recognition_provider',
     'active_provider',
     'active_model',
     'bot_display_name',
@@ -41,6 +44,8 @@ class PlatformAiSetting extends Model
 
     protected $attributes = [
         'owner_ai_assistant_enabled' => false,
+        'owner_voice_input_enabled' => false,
+        'owner_voice_recognition_provider' => VoiceRecognitionProvider::OpenAi->value,
         'firewall_enabled' => true,
         'firewall_user_turns_per_minute' => 6,
         'firewall_user_turns_per_hour' => 30,
@@ -69,6 +74,8 @@ class PlatformAiSetting extends Model
     {
         return [
             'owner_ai_assistant_enabled' => 'boolean',
+            'owner_voice_input_enabled' => 'boolean',
+            'owner_voice_recognition_provider' => VoiceRecognitionProvider::class,
             'firewall_enabled' => 'boolean',
             'active_provider' => AiProvider::class,
             'firewall_user_turns_per_minute' => 'integer',
@@ -96,6 +103,8 @@ class PlatformAiSetting extends Model
     {
         return self::query()->firstOrCreate([], [
             'owner_ai_assistant_enabled' => false,
+            'owner_voice_input_enabled' => false,
+            'owner_voice_recognition_provider' => VoiceRecognitionProvider::OpenAi->value,
             'bot_display_name' => 'Ladna assistant',
         ]);
     }
@@ -105,6 +114,24 @@ class PlatformAiSetting extends Model
         $setting = self::query()->first();
 
         return (bool) $setting?->owner_ai_assistant_enabled;
+    }
+
+    public static function ownerVoiceInputEnabled(): bool
+    {
+        $setting = self::query()->first();
+
+        if (
+            ! $setting?->owner_ai_assistant_enabled
+            || ! $setting->owner_voice_input_enabled
+            || $setting->owner_voice_recognition_provider !== VoiceRecognitionProvider::OpenAi
+        ) {
+            return false;
+        }
+
+        return PlatformAiProviderCredential::query()
+            ->where('provider', AiProvider::OpenAiApiKey->value)
+            ->first()
+            ?->apiKey() !== null;
     }
 
     public static function imageInferenceEnabled(): bool

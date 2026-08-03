@@ -75,6 +75,7 @@
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $assistantImageInferenceEnabled = $showAssistantWidget && \App\Models\PlatformAiSetting::imageInferenceEnabled();
+    $assistantVoiceInputEnabled = $showAssistantWidget && \App\Models\PlatformAiSetting::ownerVoiceInputEnabled();
     $canManageClassPassPlans = $showAccountNav && $activeAccount->isOwnedBy($authUser);
     $canViewPayments = $canViewStudioFinancialReports;
     $canViewTariffPayments = ! $isReadOnlyDemo && $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
@@ -783,6 +784,11 @@
                 data-image-invalid-type-message="{{ __('app.assistant_image_invalid_type') }}"
                 data-image-too-large-message="{{ __('app.assistant_image_too_large') }}"
                 data-image-input-enabled="{{ $assistantImageInferenceEnabled ? 'true' : 'false' }}"
+                data-voice-input-enabled="{{ $assistantVoiceInputEnabled ? 'true' : 'false' }}"
+                data-voice-message-label="{{ __('app.assistant_voice_message') }}"
+                data-voice-permission-message="{{ __('app.assistant_voice_permission_denied') }}"
+                data-voice-recording-error-message="{{ __('app.assistant_voice_recording_failed') }}"
+                data-voice-too-large-message="{{ __('app.assistant_voice_too_large') }}"
                 class="fixed bottom-5 right-5 z-40"
             >
                 <button
@@ -867,7 +873,7 @@
                                 </div>
                             @endif
 
-                            <div class="flex gap-2">
+                            <div data-assistant-composer-controls class="flex gap-2">
                                 @if ($assistantImageInferenceEnabled)
                                     <input
                                         data-assistant-image-input
@@ -885,6 +891,17 @@
                                         <x-ui.icon name="image" class="h-4 w-4" />
                                     </button>
                                 @endif
+                                @if ($assistantVoiceInputEnabled)
+                                    <button
+                                        type="button"
+                                        data-assistant-voice-record
+                                        class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-500 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                        aria-label="{{ __('app.assistant_voice_record') }}"
+                                        title="{{ __('app.assistant_voice_record') }}"
+                                    >
+                                        <x-ui.icon name="mic" class="h-4 w-4" />
+                                    </button>
+                                @endif
                                 <input
                                     data-assistant-input
                                     class="min-w-0 flex-1 rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
@@ -896,6 +913,28 @@
                                     <x-ui.icon name="send" class="h-4 w-4" />
                                 </button>
                             </div>
+                            @if ($assistantVoiceInputEnabled)
+                                <div data-assistant-voice-recording class="hidden items-center gap-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2">
+                                    <span class="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-rose-600"></span>
+                                    <span class="min-w-0 flex-1 text-sm font-semibold text-rose-900">{{ __('app.assistant_voice_recording') }}</span>
+                                    <span data-assistant-voice-timer class="font-mono text-sm font-semibold text-rose-800">00:00</span>
+                                    <button
+                                        type="button"
+                                        data-assistant-voice-stop
+                                        class="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-2.5 text-xs font-semibold text-white transition hover:bg-rose-700"
+                                    >
+                                        <x-ui.icon name="square" class="h-3.5 w-3.5" />
+                                        {{ __('app.assistant_voice_stop') }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        data-assistant-voice-cancel
+                                        class="inline-flex h-8 items-center justify-center rounded-lg px-2 text-xs font-semibold text-slate-600 transition hover:bg-white hover:text-slate-900"
+                                    >
+                                        {{ __('app.cancel') }}
+                                    </button>
+                                </div>
+                            @endif
                             @if ($assistantImageInferenceEnabled)
                                 <p class="pt-1.5 text-center text-[11px] leading-4 text-slate-400">
                                     {{ __('app.assistant_image_hint') }}

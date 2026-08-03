@@ -7,6 +7,7 @@ use App\Enums\AiProvider;
 use App\Enums\ScheduleKind;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramUpdateStatus;
+use App\Enums\VoiceRecognitionProvider;
 use App\Models\Account;
 use App\Models\AccountMembership;
 use App\Models\AiConversation;
@@ -30,6 +31,8 @@ use App\Models\TelegramMessage;
 use App\Models\TelegramUpdate;
 use App\Models\Trainer;
 use App\Models\User;
+use App\Support\Ai\Voice\VoiceTranscriptionException;
+use App\Support\Ai\Voice\VoiceTranscriptionService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
@@ -37,6 +40,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class TelegramWebhookTest extends TestCase
@@ -478,6 +482,213 @@ class TelegramWebhookTest extends TestCase
             'direction' => 'outbound',
             'text' => __('app.telegram_share_contact_to_authorize'),
         ]);
+    }
+
+    public function test_unauthorized_owner_voice_does_not_download_or_transcribe(): void
+    {
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
+        $this->mock(VoiceTranscriptionService::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('transcribe');
+        });
+        [$installation, $webhookKey] = $this->ownerInstallation();
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1201,
+            'message' => [
+                'message_id' => 301,
+                'chat' => ['id' => 680, 'type' => 'private'],
+                'from' => ['id' => 900, 'username' => 'owner'],
+                'voice' => [
+                    'file_id' => 'unauthorized-voice',
+                    'file_unique_id' => 'unauthorized-voice-unique',
+                    'duration' => 12,
+                    'file_size' => 2048,
+                ],
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
+        $this->assertDatabaseHas('telegram_messages', [
+            'telegram_chat_id' => '680',
+            'direction' => 'inbound',
+            'message_type' => 'voice',
+        ]);
+    }
+
+    public function test_authorized_owner_voice_is_transcribed_once_and_uses_the_normal_ollama_flow(): void
+    {
+        $voiceContents = 'telegram-ogg-voice';
+        [$account, $installation, $webhookKey] = $this->authorizedOwnerVoiceChat('681', '901');
+        $this->mock(VoiceTranscriptionService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('transcribe')->once()->andReturn('How many classes are scheduled today?');
+        });
+        Http::fake(function (Request $request) use ($voiceContents) {
+            if (str_contains($request->url(), '/getFile')) {
+                return Http::response([
+                    'ok' => true,
+                    'result' => [
+                        'file_path' => 'voice/file_1.oga',
+                        'file_size' => strlen($voiceContents),
+                    ],
+                ]);
+            }
+
+            if (str_contains($request->url(), '/file/bot')) {
+                return Http::response($voiceContents, 200, [
+                    'Content-Type' => 'audio/ogg',
+                    'Content-Length' => (string) strlen($voiceContents),
+                ]);
+            }
+
+            if (str_ends_with($request->url(), '/api/chat')) {
+                return Http::response([
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => '{"disposition":"answer","answer":"Telegram voice answer.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"studio question"}',
+                    ],
+                ]);
+            }
+
+            return Http::response(['ok' => true, 'result' => ['message_id' => 9301]]);
+        });
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1202,
+            'message' => [
+                'message_id' => 302,
+                'chat' => ['id' => 681, 'type' => 'private'],
+                'from' => ['id' => 901, 'username' => 'owner'],
+                'voice' => [
+                    'file_id' => 'voice-file-1',
+                    'file_unique_id' => 'voice-file-unique-1',
+                    'duration' => 14,
+                    'file_size' => strlen($voiceContents),
+                ],
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        $processedUpdate = TelegramUpdate::query()->where('update_id', 1202)->firstOrFail();
+        $this->assertSame(TelegramUpdateStatus::Processed, $processedUpdate->status, $processedUpdate->error_message ?? 'Voice update failed.');
+        $this->assertDatabaseHas('telegram_messages', [
+            'account_id' => $account->id,
+            'telegram_chat_id' => '681',
+            'direction' => 'inbound',
+            'message_type' => 'voice',
+            'text' => 'How many classes are scheduled today?',
+        ]);
+        $this->assertDatabaseHas('ai_conversation_messages', [
+            'account_id' => $account->id,
+            'role' => AiConversationMessageRole::User->value,
+            'content' => 'How many classes are scheduled today?',
+        ]);
+        $this->assertDatabaseHas('telegram_messages', [
+            'account_id' => $account->id,
+            'direction' => 'outbound',
+            'text' => 'Telegram voice answer.',
+        ]);
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/file/bot'));
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/chat'));
+    }
+
+    public function test_disabled_or_overlong_owner_voice_is_rejected_before_download(): void
+    {
+        [$account, $installation, $webhookKey] = $this->authorizedOwnerVoiceChat('682', '902');
+        PlatformAiSetting::current()->update(['owner_voice_input_enabled' => false]);
+        $this->mock(VoiceTranscriptionService::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('transcribe');
+        });
+        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1203,
+            'message' => [
+                'message_id' => 303,
+                'chat' => ['id' => 682, 'type' => 'private'],
+                'from' => ['id' => 902, 'username' => 'owner'],
+                'voice' => ['file_id' => 'disabled-voice', 'duration' => 10, 'file_size' => 1000],
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        $this->assertDatabaseHas('telegram_messages', [
+            'account_id' => $account->id,
+            'direction' => 'outbound',
+            'text' => __('app.telegram_voice_disabled'),
+        ]);
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
+
+        PlatformAiSetting::current()->update(['owner_voice_input_enabled' => true]);
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1204,
+            'message' => [
+                'message_id' => 304,
+                'chat' => ['id' => 682, 'type' => 'private'],
+                'from' => ['id' => 902, 'username' => 'owner'],
+                'voice' => ['file_id' => 'long-voice', 'duration' => 121, 'file_size' => 1000],
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        $this->assertDatabaseHas('telegram_messages', [
+            'account_id' => $account->id,
+            'direction' => 'outbound',
+            'text' => __('app.assistant_voice_too_long'),
+        ]);
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/getFile'));
+    }
+
+    public function test_owner_voice_provider_failure_is_processed_once_without_creating_a_conversation_turn(): void
+    {
+        $voiceContents = 'telegram-voice-failure';
+        [$account, $installation, $webhookKey] = $this->authorizedOwnerVoiceChat('683', '903');
+        $this->mock(VoiceTranscriptionService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('transcribe')
+                ->once()
+                ->andThrow(new VoiceTranscriptionException('provider_failed'));
+        });
+        Http::fake(function (Request $request) use ($voiceContents) {
+            if (str_contains($request->url(), '/getFile')) {
+                return Http::response(['ok' => true, 'result' => [
+                    'file_path' => 'voice/failure.oga',
+                    'file_size' => strlen($voiceContents),
+                ]]);
+            }
+
+            if (str_contains($request->url(), '/file/bot')) {
+                return Http::response($voiceContents, 200, ['Content-Length' => (string) strlen($voiceContents)]);
+            }
+
+            return Http::response(['ok' => true, 'result' => ['message_id' => 9302]]);
+        });
+
+        $this->postJson(route('api.v1.telegram.webhooks.handle', $webhookKey), [
+            'update_id' => 1205,
+            'message' => [
+                'message_id' => 305,
+                'chat' => ['id' => 683, 'type' => 'private'],
+                'from' => ['id' => 903, 'username' => 'owner'],
+                'voice' => ['file_id' => 'failed-voice', 'duration' => 8, 'file_size' => strlen($voiceContents)],
+            ],
+        ], [
+            'X-Telegram-Bot-Api-Secret-Token' => $installation->webhookSecret(),
+        ])->assertNoContent();
+
+        $processedUpdate = TelegramUpdate::query()->where('update_id', 1205)->firstOrFail();
+        $this->assertSame(TelegramUpdateStatus::Processed, $processedUpdate->status, $processedUpdate->error_message ?? 'Voice failure was retried.');
+        $this->assertFalse(AiConversationMessage::query()->whereBelongsTo($account)->exists());
+        $this->assertDatabaseHas('telegram_messages', [
+            'account_id' => $account->id,
+            'direction' => 'outbound',
+            'text' => __('app.assistant_voice_transcription_failed'),
+        ]);
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'ollama.com/'));
     }
 
     public function test_authorized_owner_photo_is_rejected_before_download_or_ai_inference_for_ollama(): void
@@ -2873,6 +3084,26 @@ class TelegramWebhookTest extends TestCase
         ]);
 
         Carbon::setTestNow();
+    }
+
+    /**
+     * @return array{Account, TelegramBotInstallation, string, TelegramChatAuthorization}
+     */
+    private function authorizedOwnerVoiceChat(string $chatId, string $telegramUserId): array
+    {
+        [$account, $installation, $webhookKey, $authorization] = $this->authorizedOwnerImageChat($chatId, $telegramUserId);
+        PlatformAiSetting::current()->update([
+            'owner_voice_input_enabled' => true,
+            'owner_voice_recognition_provider' => VoiceRecognitionProvider::OpenAi->value,
+        ]);
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OpenAiApiKey->value,
+            'model' => 'gpt-5.5',
+            'credentials' => ['api_key' => 'test-openai-voice-key'],
+            'is_configured' => true,
+        ]);
+
+        return [$account, $installation, $webhookKey, $authorization];
     }
 
     /**

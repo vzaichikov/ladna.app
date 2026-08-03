@@ -9,6 +9,7 @@ use App\Models\AiConversationMessage;
 use App\Models\AiProviderRequest;
 use App\Models\PlatformAiSetting;
 use App\Models\User;
+use App\Support\Ai\Voice\VoiceTranscriptionException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Throwable;
@@ -80,7 +81,7 @@ class AiProviderRequestRecorder
                 AiProviderRequest::StatusFailed,
                 $startedAt,
                 $startedNanoseconds,
-                errorCode: class_basename($throwable),
+                errorCode: $this->errorCode($throwable),
             );
 
             throw $throwable;
@@ -168,5 +169,12 @@ class AiProviderRequestRecorder
     private function nullableString(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function errorCode(Throwable $throwable): string
+    {
+        return $throwable instanceof VoiceTranscriptionException
+            ? $throwable->reason()
+            : class_basename($throwable);
     }
 }

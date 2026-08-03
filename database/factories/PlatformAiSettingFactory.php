@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\AiProvider;
+use App\Enums\VoiceRecognitionProvider;
 use App\Models\PlatformAiSetting;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,6 +21,8 @@ class PlatformAiSettingFactory extends Factory
     {
         return [
             'owner_ai_assistant_enabled' => true,
+            'owner_voice_input_enabled' => false,
+            'owner_voice_recognition_provider' => VoiceRecognitionProvider::OpenAi->value,
             'active_provider' => AiProvider::OllamaCloud->value,
             'active_model' => 'gemma3:27b-cloud',
             'bot_display_name' => 'Ladna assistant',

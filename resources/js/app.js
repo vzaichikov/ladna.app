@@ -1608,6 +1608,43 @@ function initPlatformSettingsTabs(root = document) {
     });
 }
 
+function initOwnerVoiceSettings(root = document) {
+    root.querySelectorAll('[data-owner-voice-settings]').forEach((settings) => {
+        if (settings.dataset.ownerVoiceSettingsReady === 'true') {
+            return;
+        }
+
+        const form = settings.closest('form');
+        const ownerAssistantToggle = form?.querySelector('[data-owner-ai-assistant-toggle]');
+        const voiceInputToggle = settings.querySelector('[data-owner-voice-input-toggle]');
+        const voiceProvider = settings.querySelector('[data-owner-voice-provider]');
+        const hiddenVoiceProvider = settings.querySelector('input[type="hidden"][name="owner_voice_recognition_provider"]');
+
+        if (!ownerAssistantToggle || !voiceInputToggle || !voiceProvider || !hiddenVoiceProvider) {
+            return;
+        }
+
+        const sync = () => {
+            const assistantEnabled = ownerAssistantToggle.checked;
+            const providerAvailable = voiceProvider.value === 'openai';
+
+            if (!assistantEnabled || !providerAvailable) {
+                voiceInputToggle.checked = false;
+            }
+
+            voiceInputToggle.disabled = !assistantEnabled || !providerAvailable;
+            voiceProvider.disabled = !assistantEnabled;
+            hiddenVoiceProvider.value = voiceProvider.value;
+            settings.classList.toggle('opacity-60', !assistantEnabled);
+        };
+
+        ownerAssistantToggle.addEventListener('change', sync);
+        voiceProvider.addEventListener('change', sync);
+        settings.dataset.ownerVoiceSettingsReady = 'true';
+        sync();
+    });
+}
+
 function initAiProviderModels(root = document) {
     root.querySelectorAll('[data-ai-models-url]').forEach((container) => {
         if (container.dataset.aiModelsReady === 'true') {
@@ -5238,6 +5275,13 @@ function initAssistantChat() {
         const imageRemove = widget.querySelector('[data-assistant-image-remove]');
         const dropZone = widget.querySelector('[data-assistant-drop-zone]');
         const imageInputEnabled = widget.dataset.imageInputEnabled === 'true';
+        const voiceRecord = widget.querySelector('[data-assistant-voice-record]');
+        const voiceRecording = widget.querySelector('[data-assistant-voice-recording]');
+        const voiceTimer = widget.querySelector('[data-assistant-voice-timer]');
+        const voiceStop = widget.querySelector('[data-assistant-voice-stop]');
+        const voiceCancel = widget.querySelector('[data-assistant-voice-cancel]');
+        const composerControls = widget.querySelector('[data-assistant-composer-controls]');
+        const voiceInputEnabled = widget.dataset.voiceInputEnabled === 'true';
 
         if (
             !toggle
@@ -5248,9 +5292,14 @@ function initAssistantChat() {
             || !form
             || !input
             || !dropZone
+            || !composerControls
             || (
                 imageInputEnabled
                 && (!imageInput || !imagePicker || !imagePreview || !imagePreviewSource || !imageRemove)
+            )
+            || (
+                voiceInputEnabled
+                && (!voiceRecord || !voiceRecording || !voiceTimer || !voiceStop || !voiceCancel)
             )
         ) {
             return;
@@ -5264,9 +5313,21 @@ function initAssistantChat() {
         let selectedImage = null;
         let selectedImageUrl = '';
         let dragDepth = 0;
+        let voiceRecorder = null;
+        let voiceStream = null;
+        let voiceChunks = [];
+        let voiceStartedAt = 0;
+        let voiceTimerId = null;
+        let voiceCancelled = false;
+        let recordingVoice = false;
         const localImageUrls = new Set();
         const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
         const maximumImageSize = 2 * 1024 * 1024;
+        const maximumVoiceSize = 25 * 1024 * 1024;
+        const maximumVoiceDurationSeconds = 120;
+        const voiceSupported = voiceInputEnabled
+            && typeof window.MediaRecorder !== 'undefined'
+            && typeof navigator.mediaDevices?.getUserMedia === 'function';
 
         const csrfToken = widget.dataset.csrfToken || '';
         const focusInputSoon = () => {
@@ -5309,19 +5370,38 @@ function initAssistantChat() {
             imagePreview?.classList.add('hidden');
         };
 
+        const syncComposerControls = () => {
+            const composerDisabled = loading || recordingVoice;
+            input.disabled = composerDisabled;
+
+            if (imageInput) {
+                imageInput.disabled = composerDisabled;
+            }
+
+            if (imagePicker) {
+                imagePicker.disabled = composerDisabled;
+            }
+
+            if (imageRemove) {
+                imageRemove.disabled = composerDisabled;
+            }
+
+            form.querySelector('button[type="submit"]').disabled = composerDisabled;
+
+            if (voiceRecord) {
+                voiceRecord.disabled = composerDisabled || input.value.trim() !== '' || Boolean(selectedImage);
+                voiceRecord.classList.toggle('hidden', !voiceSupported);
+                voiceRecord.classList.toggle('inline-flex', voiceSupported);
+            }
+
+            composerControls.classList.toggle('hidden', recordingVoice);
+            voiceRecording?.classList.toggle('hidden', !recordingVoice);
+            voiceRecording?.classList.toggle('flex', recordingVoice);
+        };
+
         const setLoading = (value) => {
             loading = value;
-            input.disabled = value;
-            if (imageInput) {
-                imageInput.disabled = value;
-            }
-            if (imagePicker) {
-                imagePicker.disabled = value;
-            }
-            if (imageRemove) {
-                imageRemove.disabled = value;
-            }
-            form.querySelector('button[type="submit"]').disabled = value;
+            syncComposerControls();
             clear?.toggleAttribute('disabled', value);
             clearConfirm?.toggleAttribute('disabled', value);
             form.classList.toggle('opacity-70', value);
@@ -5557,10 +5637,12 @@ function initAssistantChat() {
                 }]
                 : [];
 
+            const localMessageId = `local-${Date.now()}`;
+
             currentMessages = [
                 ...currentMessages,
                 {
-                    id: `local-${Date.now()}`,
+                    id: localMessageId,
                     role: 'user',
                     content: message,
                     attachments,
@@ -5573,6 +5655,8 @@ function initAssistantChat() {
             ];
             renderMessages(currentMessages);
             renderFollowUps([]);
+
+            return localMessageId;
         };
 
         const updateThinkingStatus = (statusMessage) => {
@@ -5588,7 +5672,7 @@ function initAssistantChat() {
             }
         };
 
-        const requestAssistantStream = async (message, image = null) => {
+        const requestAssistantStream = async (message, image = null, voice = null) => {
             const body = new FormData();
 
             if (message) {
@@ -5597,6 +5681,10 @@ function initAssistantChat() {
 
             if (image) {
                 body.append('image', image);
+            }
+
+            if (voice) {
+                body.append('voice', voice);
             }
 
             const response = await fetch(widget.dataset.sendUrl, {
@@ -5689,6 +5777,164 @@ function initAssistantChat() {
             messages.scrollTop = messages.scrollHeight;
         };
 
+        const removeOptimisticMessage = (messageId) => {
+            currentMessages = currentMessages.filter(
+                (item) => item.id !== messageId && item.role !== 'thinking',
+            );
+            renderMessages(currentMessages);
+            renderFollowUps(currentMessages, []);
+        };
+
+        const releaseVoiceStream = () => {
+            voiceStream?.getTracks().forEach((track) => track.stop());
+            voiceStream = null;
+        };
+
+        const clearVoiceTimer = () => {
+            if (voiceTimerId !== null) {
+                window.clearInterval(voiceTimerId);
+                voiceTimerId = null;
+            }
+        };
+
+        const updateVoiceTimer = () => {
+            if (!voiceTimer || !voiceStartedAt) {
+                return;
+            }
+
+            const elapsedSeconds = Math.min(
+                maximumVoiceDurationSeconds,
+                Math.floor((Date.now() - voiceStartedAt) / 1000),
+            );
+            const minutes = Math.floor(elapsedSeconds / 60).toString().padStart(2, '0');
+            const seconds = (elapsedSeconds % 60).toString().padStart(2, '0');
+            voiceTimer.textContent = `${minutes}:${seconds}`;
+
+            if (elapsedSeconds >= maximumVoiceDurationSeconds && voiceRecorder?.state === 'recording') {
+                voiceRecorder.stop();
+            }
+        };
+
+        const finishVoiceRecording = () => {
+            clearVoiceTimer();
+            releaseVoiceStream();
+            voiceRecorder = null;
+            voiceStartedAt = 0;
+            recordingVoice = false;
+            syncComposerControls();
+        };
+
+        const voiceFileExtension = (mimeType) => {
+            if (mimeType.includes('mp4')) {
+                return 'm4a';
+            }
+
+            if (mimeType.includes('ogg')) {
+                return 'ogg';
+            }
+
+            return 'webm';
+        };
+
+        const sendVoiceRecording = (blob) => {
+            if (!blob.size || blob.size > maximumVoiceSize) {
+                showError(widget.dataset.voiceTooLargeMessage);
+                return;
+            }
+
+            const voice = new File(
+                [blob],
+                `voice-message.${voiceFileExtension(blob.type)}`,
+                { type: blob.type || 'application/octet-stream' },
+            );
+            const localMessageId = renderWithLocalMessage(widget.dataset.voiceMessageLabel || 'Voice message');
+            setLoading(true);
+            requestAssistantStream('', null, voice)
+                .catch((error) => {
+                    removeOptimisticMessage(localMessageId);
+                    showError(error.message);
+                })
+                .finally(() => setLoading(false));
+        };
+
+        const cancelVoiceRecording = () => {
+            if (!recordingVoice) {
+                return;
+            }
+
+            voiceCancelled = true;
+
+            if (voiceRecorder?.state === 'recording') {
+                voiceRecorder.stop();
+                return;
+            }
+
+            voiceChunks = [];
+            finishVoiceRecording();
+        };
+
+        const startVoiceRecording = async () => {
+            if (!voiceSupported || loading || recordingVoice || input.value.trim() || selectedImage) {
+                return;
+            }
+
+            try {
+                voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const supportedMimeType = [
+                    'audio/webm;codecs=opus',
+                    'audio/ogg;codecs=opus',
+                    'audio/mp4',
+                    'audio/webm',
+                    'audio/ogg',
+                ].find((mimeType) => MediaRecorder.isTypeSupported(mimeType));
+                const recorderOptions = {
+                    audioBitsPerSecond: 64000,
+                    ...(supportedMimeType ? { mimeType: supportedMimeType } : {}),
+                };
+
+                try {
+                    voiceRecorder = new MediaRecorder(voiceStream, recorderOptions);
+                } catch {
+                    voiceRecorder = new MediaRecorder(voiceStream);
+                }
+                voiceChunks = [];
+                voiceCancelled = false;
+                recordingVoice = true;
+                voiceStartedAt = Date.now();
+                syncComposerControls();
+                updateVoiceTimer();
+                voiceTimerId = window.setInterval(updateVoiceTimer, 250);
+
+                voiceRecorder.addEventListener('dataavailable', (event) => {
+                    if (event.data.size > 0) {
+                        voiceChunks.push(event.data);
+                    }
+                });
+                voiceRecorder.addEventListener('error', () => {
+                    voiceCancelled = true;
+                    finishVoiceRecording();
+                    showError(widget.dataset.voiceRecordingErrorMessage);
+                });
+                voiceRecorder.addEventListener('stop', () => {
+                    const mimeType = voiceRecorder?.mimeType || supportedMimeType || 'audio/webm';
+                    const blob = new Blob(voiceChunks, { type: mimeType });
+                    const shouldSend = !voiceCancelled;
+                    voiceChunks = [];
+                    finishVoiceRecording();
+
+                    if (shouldSend) {
+                        sendVoiceRecording(blob);
+                    }
+                });
+                voiceRecorder.start(250);
+            } catch {
+                releaseVoiceStream();
+                recordingVoice = false;
+                syncComposerControls();
+                showError(widget.dataset.voicePermissionMessage);
+            }
+        };
+
         const selectImage = (file) => {
             if (!imageInputEnabled || !file || loading) {
                 return;
@@ -5713,6 +5959,7 @@ function initAssistantChat() {
             imagePreviewSource.src = selectedImageUrl;
             imagePreviewSource.alt = file.name || widget.dataset.imageLabel || '';
             imagePreview.classList.remove('hidden');
+            syncComposerControls();
         };
 
         const setDropActive = (active) => {
@@ -5771,10 +6018,15 @@ function initAssistantChat() {
             if (!panel.classList.contains('hidden')) {
                 load();
                 input.focus();
+            } else {
+                cancelVoiceRecording();
             }
         });
 
-        close?.addEventListener('click', () => panel.classList.add('hidden'));
+        close?.addEventListener('click', () => {
+            cancelVoiceRecording();
+            panel.classList.add('hidden');
+        });
         clear?.addEventListener('click', openClearModal);
         clearCancel?.addEventListener('click', closeClearModal);
         clearModal?.addEventListener('click', (event) => {
@@ -5790,6 +6042,7 @@ function initAssistantChat() {
             });
             imageRemove?.addEventListener('click', () => {
                 resetSelectedImage();
+                syncComposerControls();
                 focusInputSoon();
             });
             imageInput?.addEventListener('change', () => {
@@ -5845,6 +6098,16 @@ function initAssistantChat() {
             });
         }
 
+        voiceRecord?.addEventListener('click', startVoiceRecording);
+        voiceStop?.addEventListener('click', () => {
+            if (voiceRecorder?.state === 'recording') {
+                voiceRecorder.stop();
+            }
+        });
+        voiceCancel?.addEventListener('click', cancelVoiceRecording);
+        input.addEventListener('input', syncComposerControls);
+        syncComposerControls();
+
         form.addEventListener('submit', (event) => {
             event.preventDefault();
 
@@ -5852,7 +6115,7 @@ function initAssistantChat() {
             const image = selectedImage;
             const imageUrl = selectedImageUrl;
 
-            if ((!message && !image) || loading) {
+            if ((!message && !image) || loading || recordingVoice) {
                 return;
             }
 
@@ -6555,6 +6818,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPublicPriceTabs();
     initClassPassPlanSorting();
     initPlatformSettingsTabs();
+    initOwnerVoiceSettings();
     initAiProviderModels();
     initPlatformTelegramWebhook();
     initPhoneMasks();

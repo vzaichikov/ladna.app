@@ -307,7 +307,7 @@
                     <div class="grid gap-5 lg:grid-cols-2">
                         <label class="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4">
                             <input type="hidden" name="owner_ai_assistant_enabled" value="0">
-                            <input type="checkbox" name="owner_ai_assistant_enabled" value="1" class="crm-checkbox mt-1" @checked((bool) old('owner_ai_assistant_enabled', $platformAiSetting->owner_ai_assistant_enabled))>
+                            <input type="checkbox" name="owner_ai_assistant_enabled" value="1" class="crm-checkbox mt-1" data-owner-ai-assistant-toggle @checked((bool) old('owner_ai_assistant_enabled', $platformAiSetting->owner_ai_assistant_enabled))>
                             <span>
                                 <span class="block text-sm font-semibold text-slate-950">{{ __('app.owner_ai_assistant_enabled') }}</span>
                                 <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.owner_ai_assistant_enabled_copy') }}</span>
@@ -328,6 +328,43 @@
                                 <span class="crm-help">{{ $message }}</span>
                             @enderror
                         </label>
+
+                        <div class="rounded-xl border border-stone-200 bg-white p-4 lg:col-span-2" data-owner-voice-settings>
+                            <div class="grid gap-5 lg:grid-cols-2">
+                                <label class="flex items-start gap-3">
+                                    <input type="hidden" name="owner_voice_input_enabled" value="0">
+                                    <input type="checkbox" name="owner_voice_input_enabled" value="1" class="crm-checkbox mt-1" data-owner-voice-input-toggle @checked((bool) old('owner_voice_input_enabled', $platformAiSetting->owner_voice_input_enabled))>
+                                    <span>
+                                        <span class="block text-sm font-semibold text-slate-950">{{ __('app.owner_voice_input_enabled') }}</span>
+                                        <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.owner_voice_input_enabled_copy') }}</span>
+                                    </span>
+                                </label>
+
+                                <label class="block">
+                                    <span class="crm-label">{{ __('app.owner_voice_recognition_provider') }}</span>
+                                    <input type="hidden" name="owner_voice_recognition_provider" value="{{ old('owner_voice_recognition_provider', $platformAiSetting->owner_voice_recognition_provider?->value) }}">
+                                    <select name="owner_voice_recognition_provider" class="crm-field" data-owner-voice-provider>
+                                        @foreach ($voiceRecognitionProviders as $provider)
+                                            <option value="{{ $provider->value }}" @selected(old('owner_voice_recognition_provider', $platformAiSetting->owner_voice_recognition_provider?->value) === $provider->value)>
+                                                {{ __($provider->labelKey()) }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('owner_voice_recognition_provider')
+                                        <span class="crm-help">{{ $message }}</span>
+                                    @enderror
+                                </label>
+                            </div>
+
+                            @error('owner_voice_input_enabled')
+                                <span class="crm-help mt-3 block">{{ $message }}</span>
+                            @enderror
+
+                            <div class="mt-4 space-y-1 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm leading-6 text-slate-600">
+                                <p>{{ __('app.owner_voice_openai_copy') }}</p>
+                                <p>{{ __('app.owner_voice_privacy_copy') }}</p>
+                            </div>
+                        </div>
 
                         <label class="block">
                             <span class="crm-label">{{ __('app.ai_bot_display_name') }}</span>

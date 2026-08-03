@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use App\Enums\AiProvider;
 use App\Enums\TelegramBotProfile;
+use App\Enums\VoiceRecognitionProvider;
+use App\Models\PlatformAiProviderCredential;
 use App\Models\TelegramBotInstallation;
 use App\Support\AccountActivityLogSettings;
 use App\Support\SystemAppearance;
@@ -35,6 +37,8 @@ class UpdateSystemSettingsRequest extends FormRequest
             'activity_log_enabled' => ['nullable', 'boolean'],
             'activity_log_retention_days' => ['nullable', 'integer', 'min:'.AccountActivityLogSettings::MinRetentionDays, 'max:'.AccountActivityLogSettings::MaxRetentionDays],
             'owner_ai_assistant_enabled' => ['nullable', 'boolean'],
+            'owner_voice_input_enabled' => ['nullable', 'boolean'],
+            'owner_voice_recognition_provider' => ['nullable', Rule::enum(VoiceRecognitionProvider::class)],
             'ai_active_provider' => ['nullable', Rule::in(array_column(AiProvider::cases(), 'value'))],
             'ai_bot_display_name' => ['nullable', 'string', 'max:80'],
             'ai_internal_instructions' => ['nullable', 'string', 'max:5000'],
@@ -71,6 +75,45 @@ class UpdateSystemSettingsRequest extends FormRequest
 
                 if ($activeProvider !== '' && blank($this->input("ai_provider_models.{$activeProvider}"))) {
                     $validator->errors()->add("ai_provider_models.{$activeProvider}", __('app.ai_model_required'));
+                }
+            },
+            function (Validator $validator): void {
+                if (! filter_var($this->input('owner_voice_input_enabled', false), FILTER_VALIDATE_BOOLEAN)) {
+                    return;
+                }
+
+                if (! filter_var($this->input('owner_ai_assistant_enabled', false), FILTER_VALIDATE_BOOLEAN)) {
+                    $validator->errors()->add('owner_voice_input_enabled', __('app.owner_voice_input_requires_assistant'));
+                }
+
+                $voiceProvider = VoiceRecognitionProvider::tryFrom(
+                    (string) $this->input('owner_voice_recognition_provider', '')
+                );
+
+                if ($voiceProvider === null) {
+                    $validator->errors()->add('owner_voice_recognition_provider', __('app.owner_voice_provider_required'));
+
+                    return;
+                }
+
+                if ($voiceProvider === VoiceRecognitionProvider::SelfHosted) {
+                    $validator->errors()->add('owner_voice_recognition_provider', __('app.owner_voice_self_hosted_unavailable'));
+
+                    return;
+                }
+
+                if ($voiceProvider !== VoiceRecognitionProvider::OpenAi) {
+                    return;
+                }
+
+                $submittedApiKey = $this->input('ai_provider_credentials.'.AiProvider::OpenAiApiKey->value);
+                $existingApiKey = PlatformAiProviderCredential::query()
+                    ->where('provider', AiProvider::OpenAiApiKey->value)
+                    ->first()
+                    ?->apiKey();
+
+                if (blank($submittedApiKey) && blank($existingApiKey)) {
+                    $validator->errors()->add('owner_voice_input_enabled', __('app.owner_voice_openai_key_required'));
                 }
             },
             function (Validator $validator): void {

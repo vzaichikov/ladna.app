@@ -41,6 +41,8 @@ class AiProviderRequest extends Model
 
     public const TypeVisualAnalysis = 'visual_analysis';
 
+    public const TypeTranscription = 'transcription';
+
     public const TypeInference = 'inference';
 
     public const TypeFinalSynthesis = 'final_synthesis';

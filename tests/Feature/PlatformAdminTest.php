@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AiProvider;
 use App\Enums\PublicScheduleView;
 use App\Enums\TelegramBotProfile;
+use App\Enums\VoiceRecognitionProvider;
 use App\Models\Account;
 use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
@@ -251,16 +252,25 @@ class PlatformAdminTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.platform_ai_owner_bot'))
             ->assertSee('name="owner_ai_assistant_enabled"', false)
+            ->assertSee('name="owner_voice_input_enabled"', false)
+            ->assertSee('data-owner-voice-provider', false)
+            ->assertSee(__('app.voice_recognition_provider_self_hosted'))
             ->assertSee('data-ai-model-select="'.AiProvider::OllamaCloud->value.'"', false)
             ->assertSee('name="owner_telegram_bot_token"', false)
             ->assertSee('name="founders_telegram_chat_id"', false)
             ->assertSee('name="founders_telegram_enabled"', false);
+
+        $defaultSetting = PlatformAiSetting::query()->firstOrFail();
+        $this->assertFalse($defaultSetting->owner_voice_input_enabled);
+        $this->assertSame(VoiceRecognitionProvider::OpenAi, $defaultSetting->owner_voice_recognition_provider);
 
         $this->actingAs($platformAdmin)
             ->put(route('platform.settings.update'), [
                 'font_family' => SystemAppearance::currentFontKey(),
                 'support_url' => null,
                 'owner_ai_assistant_enabled' => '1',
+                'owner_voice_input_enabled' => '1',
+                'owner_voice_recognition_provider' => VoiceRecognitionProvider::OpenAi->value,
                 'ai_active_provider' => AiProvider::OllamaCloud->value,
                 'ai_bot_display_name' => 'Ladna coach',
                 'ai_internal_instructions' => 'Answer only about studio work.',
@@ -268,6 +278,7 @@ class PlatformAdminTest extends TestCase
                     AiProvider::OllamaCloud->value => 'gemma3:27b-cloud',
                 ],
                 'ai_provider_credentials' => [
+                    AiProvider::OpenAiApiKey->value => 'openai-voice-secret',
                     AiProvider::OllamaCloud->value => 'ollama-secret',
                 ],
                 'owner_telegram_bot_enabled' => '1',
@@ -282,12 +293,19 @@ class PlatformAdminTest extends TestCase
 
         $setting = PlatformAiSetting::query()->firstOrFail();
         $this->assertTrue($setting->owner_ai_assistant_enabled);
+        $this->assertTrue($setting->owner_voice_input_enabled);
+        $this->assertSame(VoiceRecognitionProvider::OpenAi, $setting->owner_voice_recognition_provider);
         $this->assertSame(AiProvider::OllamaCloud, $setting->active_provider);
         $this->assertSame('gemma3:27b-cloud', $setting->active_model);
         $this->assertSame('Ladna coach', $setting->bot_display_name);
 
         $credential = PlatformAiProviderCredential::where('provider', AiProvider::OllamaCloud->value)->firstOrFail();
         $this->assertSame('ollama-secret', $credential->apiKey());
+        $this->assertSame(
+            'openai-voice-secret',
+            PlatformAiProviderCredential::where('provider', AiProvider::OpenAiApiKey->value)->firstOrFail()->apiKey(),
+        );
+        $this->assertTrue(PlatformAiSetting::ownerVoiceInputEnabled());
 
         $installation = TelegramBotInstallation::query()
             ->where('scope_type', 'platform')
@@ -312,6 +330,76 @@ class PlatformAdminTest extends TestCase
 
         Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/setWebhook'));
         Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/setMyCommands'));
+    }
+
+    public function test_owner_voice_settings_accept_stored_openai_key_with_ollama_chat(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        PlatformAiSetting::query()->delete();
+        PlatformAiProviderCredential::query()->delete();
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OpenAiApiKey->value,
+            'model' => null,
+            'credentials' => ['api_key' => 'stored-openai-key'],
+            'is_configured' => true,
+        ]);
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.settings.update'), $this->ownerVoiceSettingsPayload([
+                'owner_voice_input_enabled' => '1',
+            ]))
+            ->assertRedirect(route('platform.settings.edit', ['tab' => 'ai-owner']));
+
+        $setting = PlatformAiSetting::query()->firstOrFail();
+        $this->assertTrue($setting->owner_voice_input_enabled);
+        $this->assertSame(VoiceRecognitionProvider::OpenAi, $setting->owner_voice_recognition_provider);
+        $this->assertSame(AiProvider::OllamaCloud, $setting->active_provider);
+        $this->assertTrue(PlatformAiSetting::ownerVoiceInputEnabled());
+    }
+
+    public function test_owner_voice_settings_enforce_parent_provider_and_key_requirements(): void
+    {
+        $platformAdmin = User::factory()->platformAdmin()->create();
+        PlatformAiSetting::query()->delete();
+        PlatformAiProviderCredential::query()->delete();
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.settings.update'), $this->ownerVoiceSettingsPayload([
+                'owner_voice_input_enabled' => '1',
+            ]))
+            ->assertSessionHasErrors('owner_voice_input_enabled');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.settings.update'), $this->ownerVoiceSettingsPayload([
+                'owner_ai_assistant_enabled' => '0',
+                'owner_voice_input_enabled' => '1',
+                'ai_provider_credentials' => [
+                    AiProvider::OpenAiApiKey->value => 'same-request-openai-key',
+                ],
+            ]))
+            ->assertSessionHasErrors('owner_voice_input_enabled');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.settings.update'), $this->ownerVoiceSettingsPayload([
+                'owner_voice_input_enabled' => '1',
+                'owner_voice_recognition_provider' => VoiceRecognitionProvider::SelfHosted->value,
+                'ai_provider_credentials' => [
+                    AiProvider::OpenAiApiKey->value => 'same-request-openai-key',
+                ],
+            ]))
+            ->assertSessionHasErrors('owner_voice_recognition_provider');
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.settings.update'), $this->ownerVoiceSettingsPayload([
+                'owner_voice_input_enabled' => '0',
+                'owner_voice_recognition_provider' => VoiceRecognitionProvider::SelfHosted->value,
+            ]))
+            ->assertRedirect(route('platform.settings.edit', ['tab' => 'ai-owner']));
+
+        $setting = PlatformAiSetting::query()->firstOrFail();
+        $this->assertFalse($setting->owner_voice_input_enabled);
+        $this->assertSame(VoiceRecognitionProvider::SelfHosted, $setting->owner_voice_recognition_provider);
+        $this->assertFalse(PlatformAiSetting::ownerVoiceInputEnabled());
     }
 
     public function test_platform_owner_telegram_webhook_status_is_platform_only_and_redacted(): void
@@ -630,6 +718,26 @@ class PlatformAdminTest extends TestCase
             return $request->url() === 'https://ollama.com/api/tags'
                 && $request->hasHeader('Authorization', 'Bearer stored-secret');
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function ownerVoiceSettingsPayload(array $overrides = []): array
+    {
+        return array_replace([
+            'font_family' => SystemAppearance::currentFontKey(),
+            'support_url' => null,
+            'owner_ai_assistant_enabled' => '1',
+            'owner_voice_input_enabled' => '0',
+            'owner_voice_recognition_provider' => VoiceRecognitionProvider::OpenAi->value,
+            'ai_active_provider' => AiProvider::OllamaCloud->value,
+            'ai_provider_models' => [
+                AiProvider::OllamaCloud->value => 'gemma3:27b-cloud',
+            ],
+            'settings_tab' => 'ai-owner',
+        ], $overrides);
     }
 
     /**

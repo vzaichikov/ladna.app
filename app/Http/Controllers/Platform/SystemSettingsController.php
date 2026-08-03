@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Platform;
 
 use App\Enums\AiProvider;
 use App\Enums\TelegramBotProfile;
+use App\Enums\VoiceRecognitionProvider;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateSystemSettingsRequest;
 use App\Models\PlatformAiProviderCredential;
@@ -48,6 +49,7 @@ class SystemSettingsController extends Controller
             'activityLogMinRetentionDays' => AccountActivityLogSettings::MinRetentionDays,
             'activityLogMaxRetentionDays' => AccountActivityLogSettings::MaxRetentionDays,
             'aiProviders' => AiProvider::cases(),
+            'voiceRecognitionProviders' => VoiceRecognitionProvider::cases(),
             'platformAiSetting' => PlatformAiSetting::current(),
             'platformAiProviderCredentials' => PlatformAiProviderCredential::query()
                 ->get()
@@ -150,8 +152,14 @@ class SystemSettingsController extends Controller
         $activeProvider = $validated['ai_active_provider'] ?? null;
         $activeModel = $activeProvider ? (string) data_get($validated, "ai_provider_models.{$activeProvider}", '') : null;
 
-        PlatformAiSetting::current()->fill([
+        $platformAiSetting = PlatformAiSetting::current();
+
+        $platformAiSetting->fill([
             'owner_ai_assistant_enabled' => (bool) ($validated['owner_ai_assistant_enabled'] ?? false),
+            'owner_voice_input_enabled' => (bool) ($validated['owner_voice_input_enabled'] ?? false),
+            'owner_voice_recognition_provider' => $validated['owner_voice_recognition_provider']
+                ?? $platformAiSetting->owner_voice_recognition_provider
+                ?? VoiceRecognitionProvider::OpenAi,
             'active_provider' => $activeProvider ?: null,
             'active_model' => filled($activeModel) ? $activeModel : null,
             'bot_display_name' => $validated['ai_bot_display_name'] ?? null,

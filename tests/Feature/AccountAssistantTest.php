@@ -7,6 +7,7 @@ use App\Enums\AiProvider;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\ScheduleKind;
+use App\Enums\VoiceRecognitionProvider;
 use App\Http\Controllers\AccountController;
 use App\Models\Account;
 use App\Models\AiConversation;
@@ -27,12 +28,15 @@ use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\User;
 use App\Support\Ai\AiConversationImageCleaner;
+use App\Support\Ai\Voice\VoiceTranscriptionException;
+use App\Support\Ai\Voice\VoiceTranscriptionService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class AccountAssistantTest extends TestCase
@@ -565,6 +569,136 @@ class AccountAssistantTest extends TestCase
             ->assertSee('data-assistant-chat', false)
             ->assertSee('data-image-input-enabled="false"', false)
             ->assertDontSee('data-assistant-image-picker', false);
+    }
+
+    public function test_dashboard_chat_widget_shows_voice_recorder_only_when_openai_voice_is_usable(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllamaWithOpenAiVoice();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee('data-voice-input-enabled="true"', false)
+            ->assertSee('data-assistant-voice-record', false);
+
+        PlatformAiProviderCredential::query()
+            ->where('provider', AiProvider::OpenAiApiKey->value)
+            ->delete();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.show', $account))
+            ->assertOk()
+            ->assertSee('data-voice-input-enabled="false"', false)
+            ->assertDontSee('data-assistant-voice-record', false);
+    }
+
+    public function test_dashboard_voice_message_is_transcribed_before_the_normal_ollama_flow(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"Voice dashboard answer.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"studio question"}',
+                ],
+            ]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllamaWithOpenAiVoice();
+        $this->mock(VoiceTranscriptionService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('transcribe')->once()->andReturn('How many classes are scheduled today?');
+        });
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'voice' => UploadedFile::fake()->createWithContent('voice.wav', $this->wavAudioContents()),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('messages.0.content', 'How many classes are scheduled today?')
+            ->assertJsonPath('messages.1.content', 'Voice dashboard answer.');
+
+        $this->assertSame(
+            ['How many classes are scheduled today?', 'Voice dashboard answer.'],
+            AiConversationMessage::query()
+                ->whereBelongsTo($account)
+                ->oldest('id')
+                ->pluck('content')
+                ->all(),
+        );
+        $this->assertFalse(AiConversationMessageAttachment::query()->whereBelongsTo($account)->exists());
+        Http::assertSentCount(1);
+    }
+
+    public function test_dashboard_voice_transcription_failure_does_not_create_a_user_turn(): void
+    {
+        Http::fake();
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllamaWithOpenAiVoice();
+        $this->mock(VoiceTranscriptionService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('transcribe')
+                ->once()
+                ->andThrow(new VoiceTranscriptionException('empty_transcript'));
+        });
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'voice' => UploadedFile::fake()->createWithContent('voice.wav', $this->wavAudioContents()),
+            ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('voice')
+            ->assertJsonPath('errors.voice.0', __('app.assistant_voice_empty_transcript'));
+
+        $this->assertFalse(AiConversationMessage::query()->whereBelongsTo($account)->exists());
+        Http::assertNothingSent();
+    }
+
+    public function test_dashboard_voice_stream_starts_with_transcription_status_and_rejects_mixed_input(): void
+    {
+        Http::fake([
+            'ollama.com/api/chat' => Http::response([
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '{"disposition":"answer","answer":"Streamed voice answer.","follow_up_actions":[],"action":null,"calendar_reference":null,"reason":"studio question"}',
+                ],
+            ]),
+        ]);
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $this->configureGlobalOllamaWithOpenAiVoice();
+        $this->mock(VoiceTranscriptionService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('transcribe')->once()->andReturn('Stream this voice request.');
+        });
+
+        $response = $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'voice' => UploadedFile::fake()->createWithContent('voice.wav', $this->wavAudioContents()),
+            ], ['Accept' => 'application/x-ndjson'])
+            ->assertOk();
+        $events = collect(explode("\n", trim($response->streamedContent())))
+            ->filter()
+            ->map(fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR))
+            ->values();
+
+        $this->assertSame('assistant_status_transcribing_voice', $events->first()['key']);
+        $this->assertSame('Streamed voice answer.', $events->firstWhere('type', 'result')['payload']['messages'][1]['content']);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.assistant.messages.store', $account), [
+                'message' => 'Do both.',
+                'voice' => UploadedFile::fake()->createWithContent('voice.wav', $this->wavAudioContents()),
+            ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('voice');
     }
 
     public function test_dashboard_message_endpoint_uses_global_ai_and_stores_user_scoped_history(): void
@@ -1225,6 +1359,20 @@ class AccountAssistantTest extends TestCase
         ]);
     }
 
+    private function configureGlobalOllamaWithOpenAiVoice(): void
+    {
+        $this->configureGlobalOllama();
+        PlatformAiSetting::query()->firstOrFail()->update([
+            'owner_voice_input_enabled' => true,
+            'owner_voice_recognition_provider' => VoiceRecognitionProvider::OpenAi->value,
+        ]);
+        PlatformAiProviderCredential::factory()->create([
+            'provider' => AiProvider::OpenAiApiKey->value,
+            'model' => 'gpt-5.5',
+            'credentials' => ['api_key' => 'test-openai-voice-key'],
+        ]);
+    }
+
     private function configureGlobalOpenAi(): void
     {
         PlatformAiSetting::query()->delete();
@@ -1291,6 +1439,19 @@ class AccountAssistantTest extends TestCase
         $this->assertIsString($contents);
 
         return $contents;
+    }
+
+    private function wavAudioContents(): string
+    {
+        $samples = str_repeat("\0", 3200);
+
+        return 'RIFF'
+            .pack('V', 36 + strlen($samples))
+            .'WAVEfmt '
+            .pack('VvvVVvv', 16, 1, 1, 16000, 32000, 2, 16)
+            .'data'
+            .pack('V', strlen($samples))
+            .$samples;
     }
 
     private function bookingFor(Account $account, User $owner): ClassBooking
