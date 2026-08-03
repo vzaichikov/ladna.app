@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Actions\IssueCustomerClassPass;
+use App\Actions\NormalizeCustomerClassPasses;
 use App\Enums\AccountRole;
 use App\Enums\CustomerClassPassAdjustmentType;
 use App\Enums\CustomerClassPassReservationStatus;
@@ -968,6 +969,102 @@ class CustomerClassPassTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_owner_can_restore_expired_pass_by_adding_enough_days_and_unreserved_booking_is_attached(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00'));
+        [$owner, $account, $customer, $plan, $scheduledClass] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute(
+            $account,
+            $customer,
+            $plan,
+            purchasedAt: Carbon::parse('2026-05-01 09:00:00'),
+        );
+        $usedScheduledClass = $this->matchingScheduledClass($scheduledClass, '2026-05-15 09:00:00');
+        $usedBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($usedScheduledClass)
+            ->for($customer)
+            ->create([
+                'status' => 'attended',
+                'attended_at' => Carbon::parse('2026-05-15 09:00:00'),
+            ]);
+
+        $customerClassPass->reservations()->create([
+            'account_id' => $account->id,
+            'class_booking_id' => $usedBooking->id,
+            'scheduled_class_id' => $usedScheduledClass->id,
+            'status' => CustomerClassPassReservationStatus::Used->value,
+            'reserved_at' => Carbon::parse('2026-05-14 09:00:00'),
+            'used_at' => Carbon::parse('2026-05-15 09:00:00'),
+        ]);
+        app(NormalizeCustomerClassPasses::class)->forPass($customerClassPass);
+
+        $futureScheduledClass = $this->matchingScheduledClass($scheduledClass, '2026-06-22 09:00:00');
+        $futureBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($futureScheduledClass)
+            ->for($customer)
+            ->create(['status' => 'booked']);
+
+        $customerClassPass->refresh();
+        $this->assertSame(CustomerClassPassStatus::Expired, $customerClassPass->status);
+        $this->assertFalse($customerClassPass->is_active);
+        $this->assertTrue($customerClassPass->expires_at->equalTo(Carbon::parse('2026-06-14 09:00:00')));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertOk()
+            ->assertSee(__('app.class_pass_expired_validity_restore_help'))
+            ->assertSee(__('app.restore_and_add_days'));
+
+        $this->actingAs($owner)
+            ->followingRedirects()
+            ->post(route('dashboard.accounts.customer-class-passes.validity-adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
+                'days_delta' => 5,
+                'reason' => 'Force majeure extension',
+            ])
+            ->assertOk()
+            ->assertSee(__('app.class_pass_days_adjustment_does_not_restore'))
+            ->assertSee('data-class-pass-adjustment-error', false);
+
+        $customerClassPass->refresh();
+        $this->assertSame(30, $customerClassPass->validity_days);
+        $this->assertSame(CustomerClassPassStatus::Expired, $customerClassPass->status);
+        $this->assertSame(0, $customerClassPass->adjustments()->count());
+        $this->assertNull($futureBooking->classPassReservation()->first());
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.customer-class-passes.validity-adjustments.store', [$account, $customerClassPass]), [
+                'direction' => 'add',
+                'days_delta' => 10,
+                'reason' => 'Force majeure extension',
+            ])
+            ->assertRedirect(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertSessionHas('status', __('app.customer_class_pass_restored_with_days'));
+
+        $customerClassPass->refresh();
+        $adjustment = $customerClassPass->adjustments()->firstOrFail();
+        $futureReservation = $futureBooking->classPassReservation()->firstOrFail();
+
+        $this->assertSame(40, $customerClassPass->validity_days);
+        $this->assertSame(CustomerClassPassStatus::Active, $customerClassPass->status);
+        $this->assertTrue($customerClassPass->is_active);
+        $this->assertNull($customerClassPass->closed_at);
+        $this->assertTrue($customerClassPass->expires_at->equalTo(Carbon::parse('2026-06-24 09:00:00')));
+        $this->assertSame(1, $customerClassPass->used_sessions_count);
+        $this->assertSame(1, $customerClassPass->reserved_sessions_count);
+        $this->assertSame(CustomerClassPassAdjustmentType::ValidityDays, $adjustment->adjustment_type);
+        $this->assertSame(10, $adjustment->days_delta);
+        $this->assertSame(CustomerClassPassStatus::Expired->value, $adjustment->previous_status);
+        $this->assertSame(CustomerClassPassStatus::Active->value, $adjustment->new_status);
+        $this->assertSame('Force majeure extension', $adjustment->reason);
+        $this->assertSame($customerClassPass->id, $futureReservation->customer_class_pass_id);
+        $this->assertSame(CustomerClassPassReservationStatus::Reserved, $futureReservation->status);
+
+        Carbon::setTestNow();
+    }
+
     public function test_frozen_status_can_only_change_through_freeze_actions(): void
     {
         [$owner, $account, $customer, $plan, , $location] = $this->passContext();
@@ -1036,7 +1133,9 @@ class CustomerClassPassTest extends TestCase
                 'days_delta' => 1,
                 'reason' => 'Invalid validity compensation',
             ])
-            ->assertSessionHasErrors('days_delta');
+            ->assertSessionHasErrors([
+                'days_delta' => __('app.class_pass_days_adjustment_does_not_restore'),
+            ]);
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.customer-class-passes.unfreeze', [$account, $expiredPass]))
             ->assertSessionHasErrors('status');

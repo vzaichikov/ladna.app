@@ -42,6 +42,7 @@
             ->sortByDesc(fn ($payment) => $payment->paid_at?->timestamp ?? $payment->created_at?->timestamp ?? 0);
         $classPassHistoryEntries ??= collect();
         $canManageClients = auth()->user()?->can('manageClients', $account) ?? false;
+        $isExpiredClassPass = $customerClassPass->status === \App\Enums\CustomerClassPassStatus::Expired;
         $historyEventClass = static fn (string $type): string => match ($type) {
             'payment', 'reservation_used', 'opened' => 'crm-status-active',
             'adjustment', 'reservation_reserved' => 'crm-status-scheduled',
@@ -101,6 +102,17 @@
             <x-ui.button :href="route('dashboard.accounts.customer-class-passes.index', $account)" variant="secondary">{{ __('app.customer_class_passes') }}</x-ui.button>
         </div>
     </div>
+
+    @if ($errors->any())
+        <div id="class-pass-form-errors" class="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-xs" role="alert" data-class-pass-adjustment-error>
+            <div class="font-semibold">{{ __('app.class_pass_adjustment_failed') }}</div>
+            <ul class="mt-2 list-disc space-y-1 pl-5">
+                @foreach (array_unique($errors->all()) as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:items-start">
         <div class="order-2 space-y-6">
@@ -442,12 +454,17 @@
             action="{{ route('dashboard.accounts.customer-class-passes.validity-adjustments.store', [$account, $customerClassPass]) }}"
             class="mt-4 space-y-4"
             data-confirm-action
-            data-confirm-title="{{ __('app.confirm_add_class_pass_days_title') }}"
-            data-confirm-body="{{ __('app.confirm_add_class_pass_days_body') }}"
-            data-confirm-accept="{{ __('app.add_days') }}"
+            data-confirm-title="{{ __($isExpiredClassPass ? 'app.confirm_restore_class_pass_days_title' : 'app.confirm_add_class_pass_days_title') }}"
+            data-confirm-body="{{ __($isExpiredClassPass ? 'app.confirm_restore_class_pass_days_body' : 'app.confirm_add_class_pass_days_body') }}"
+            data-confirm-accept="{{ __($isExpiredClassPass ? 'app.restore_and_add_days' : 'app.add_days') }}"
             data-confirm-variant="success"
         >
             @csrf
+            @if ($isExpiredClassPass)
+                <p class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-950">
+                    {{ __('app.class_pass_expired_validity_restore_help') }}
+                </p>
+            @endif
             <label class="block">
                 <span class="crm-label">{{ __('app.days_to_adjust') }}</span>
                 <input name="days_delta" type="number" min="1" max="3650" value="{{ old('days_delta', 1) }}" class="crm-field" required>
@@ -465,29 +482,31 @@
                     name="direction"
                     value="add"
                     variant="success"
-                    data-confirm-title="{{ __('app.confirm_add_class_pass_days_title') }}"
-                    data-confirm-body="{{ __('app.confirm_add_class_pass_days_body') }}"
-                    data-confirm-accept="{{ __('app.add_days') }}"
+                    data-confirm-title="{{ __($isExpiredClassPass ? 'app.confirm_restore_class_pass_days_title' : 'app.confirm_add_class_pass_days_title') }}"
+                    data-confirm-body="{{ __($isExpiredClassPass ? 'app.confirm_restore_class_pass_days_body' : 'app.confirm_add_class_pass_days_body') }}"
+                    data-confirm-accept="{{ __($isExpiredClassPass ? 'app.restore_and_add_days' : 'app.add_days') }}"
                     data-confirm-icon="plus"
                     data-confirm-variant="success"
                 >
                     <x-ui.icon name="plus" class="h-4 w-4" />
-                    {{ __('app.add_days') }}
+                    {{ __($isExpiredClassPass ? 'app.restore_and_add_days' : 'app.add_days') }}
                 </x-ui.button>
-                <x-ui.button
-                    type="submit"
-                    name="direction"
-                    value="subtract"
-                    variant="danger"
-                    data-confirm-title="{{ __('app.confirm_remove_class_pass_days_title') }}"
-                    data-confirm-body="{{ __('app.confirm_remove_class_pass_days_body') }}"
-                    data-confirm-accept="{{ __('app.remove_days') }}"
-                    data-confirm-icon="minus"
-                    data-confirm-variant="danger"
-                >
-                    <x-ui.icon name="minus" class="h-4 w-4" />
-                    {{ __('app.remove_days') }}
-                </x-ui.button>
+                @unless ($isExpiredClassPass)
+                    <x-ui.button
+                        type="submit"
+                        name="direction"
+                        value="subtract"
+                        variant="danger"
+                        data-confirm-title="{{ __('app.confirm_remove_class_pass_days_title') }}"
+                        data-confirm-body="{{ __('app.confirm_remove_class_pass_days_body') }}"
+                        data-confirm-accept="{{ __('app.remove_days') }}"
+                        data-confirm-icon="minus"
+                        data-confirm-variant="danger"
+                    >
+                        <x-ui.icon name="minus" class="h-4 w-4" />
+                        {{ __('app.remove_days') }}
+                    </x-ui.button>
+                @endunless
             </div>
         </form>
     </x-ui.panel>

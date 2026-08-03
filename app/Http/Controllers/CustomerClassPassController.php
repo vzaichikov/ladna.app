@@ -264,7 +264,7 @@ class CustomerClassPassController extends Controller
     {
         $this->ensureBelongsToAccount($account, $customerClassPass);
 
-        $adjustCustomerClassPassValidityDays->execute(
+        $adjustment = $adjustCustomerClassPassValidityDays->execute(
             $account,
             $customerClassPass,
             $request->user(),
@@ -272,9 +272,14 @@ class CustomerClassPassController extends Controller
             (string) $request->validated('reason'),
         );
 
+        $statusMessage = $adjustment->previous_status === CustomerClassPassStatus::Expired->value
+            && $adjustment->new_status === CustomerClassPassStatus::Active->value
+                ? __('app.customer_class_pass_restored_with_days')
+                : __('app.customer_class_pass_days_adjusted');
+
         return redirect()
             ->route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass])
-            ->with('status', __('app.customer_class_pass_days_adjusted'));
+            ->with('status', $statusMessage);
     }
 
     public function freeze(Request $request, Account $account, CustomerClassPass $customerClassPass, FreezeCustomerClassPass $freezeCustomerClassPass): RedirectResponse

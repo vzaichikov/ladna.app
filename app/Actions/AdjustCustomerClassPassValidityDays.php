@@ -21,6 +21,7 @@ class AdjustCustomerClassPassValidityDays
 
     public function __construct(
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
+        private readonly ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings,
         private readonly ActorSnapshot $actorSnapshot,
         private readonly TransactionalMailDispatcher $mailDispatcher,
     ) {}
@@ -37,7 +38,7 @@ class AdjustCustomerClassPassValidityDays
 
             $lockedPass = $this->normalizeCustomerClassPasses->forPass($lockedPass);
 
-            if (! $this->canAdjust($lockedPass)) {
+            if (! $this->canAdjust($lockedPass, $daysDelta)) {
                 throw ValidationException::withMessages([
                     'days_delta' => __('app.class_pass_days_adjustment_unavailable'),
                 ]);
@@ -65,10 +66,27 @@ class AdjustCustomerClassPassValidityDays
             }
 
             $previousStatus = $lockedPass->status;
+            $isRestoringExpiredPass = $previousStatus === CustomerClassPassStatus::Expired;
 
-            $lockedPass->forceFill([
+            if ($isRestoringExpiredPass && ! $this->canRestore($lockedPass, $newValidityDays)) {
+                throw ValidationException::withMessages([
+                    'days_delta' => __('app.class_pass_days_adjustment_does_not_restore'),
+                ]);
+            }
+
+            $attributes = [
                 'validity_days' => $newValidityDays,
-            ])->save();
+            ];
+
+            if ($isRestoringExpiredPass) {
+                $attributes += [
+                    'status' => CustomerClassPassStatus::Active->value,
+                    'is_active' => true,
+                    'closed_at' => null,
+                ];
+            }
+
+            $lockedPass->forceFill($attributes)->save();
 
             $lockedPass = $this->normalizeCustomerClassPasses->forPass($lockedPass);
 
@@ -86,16 +104,31 @@ class AdjustCustomerClassPassValidityDays
             ]);
         });
 
+        $this->reconcileUnreservedCustomerBookings->execute($adjustment->customerClassPass()->firstOrFail());
         $this->mailDispatcher->classPassAdjusted($adjustment);
 
         return $adjustment;
     }
 
-    private function canAdjust(CustomerClassPass $customerClassPass): bool
+    private function canAdjust(CustomerClassPass $customerClassPass, int $daysDelta): bool
     {
-        return $customerClassPass->is_active && in_array($customerClassPass->status, [
+        if ($customerClassPass->is_active && in_array($customerClassPass->status, [
             CustomerClassPassStatus::Active,
             CustomerClassPassStatus::Freezed,
-        ], true);
+        ], true)) {
+            return true;
+        }
+
+        return $daysDelta > 0 && $customerClassPass->status === CustomerClassPassStatus::Expired;
+    }
+
+    private function canRestore(CustomerClassPass $customerClassPass, int $newValidityDays): bool
+    {
+        $expiresAt = $customerClassPass->opened_at?->copy()->addDays($newValidityDays);
+        $usableUntilAt = $customerClassPass->usableUntilAt();
+
+        return $expiresAt?->greaterThan(now()) === true
+            && (! $usableUntilAt || $usableUntilAt->greaterThan(now()))
+            && $customerClassPass->used_sessions_count < $customerClassPass->sessions_count;
     }
 }
