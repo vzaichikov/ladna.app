@@ -83,20 +83,79 @@ class VoiceAudioNormalizer
             $this->ffprobeBinary(),
             '-v',
             'error',
+            '-select_streams',
+            'a:0',
+            '-read_intervals',
+            '%+121',
             '-show_entries',
-            'format=duration',
+            'format=duration:stream=index,duration:packet=pts_time,dts_time,duration_time',
             '-of',
-            'default=noprint_wrappers=1:nokey=1',
+            'json',
             $inputPath,
         ]);
 
-        $duration = trim($result->output());
+        $probe = json_decode($result->output(), true);
 
-        if ($result->failed() || ! is_numeric($duration) || (float) $duration <= 0) {
+        if ($result->failed() || ! is_array($probe)) {
             throw new VoiceTranscriptionException('invalid_audio');
         }
 
-        return (float) $duration;
+        $streams = $probe['streams'] ?? null;
+
+        if (! is_array($streams) || $streams === []) {
+            throw new VoiceTranscriptionException('invalid_audio');
+        }
+
+        $durationCandidates = [];
+        $formatDuration = $this->finiteNumber($probe['format']['duration'] ?? null);
+
+        if ($formatDuration !== null && $formatDuration > 0) {
+            $durationCandidates[] = $formatDuration;
+        }
+
+        foreach ($streams as $stream) {
+            $streamDuration = is_array($stream)
+                ? $this->finiteNumber($stream['duration'] ?? null)
+                : null;
+
+            if ($streamDuration !== null && $streamDuration > 0) {
+                $durationCandidates[] = $streamDuration;
+            }
+        }
+
+        $packetStartedAt = null;
+        $packetFinishedAt = null;
+
+        foreach ($probe['packets'] ?? [] as $packet) {
+            if (! is_array($packet)) {
+                continue;
+            }
+
+            $packetTimestamp = $this->finiteNumber($packet['pts_time'] ?? null)
+                ?? $this->finiteNumber($packet['dts_time'] ?? null);
+
+            if ($packetTimestamp === null) {
+                continue;
+            }
+
+            $packetDuration = max(0, $this->finiteNumber($packet['duration_time'] ?? null) ?? 0);
+            $packetStartedAt = $packetStartedAt === null
+                ? $packetTimestamp
+                : min($packetStartedAt, $packetTimestamp);
+            $packetFinishedAt = $packetFinishedAt === null
+                ? $packetTimestamp + $packetDuration
+                : max($packetFinishedAt, $packetTimestamp + $packetDuration);
+        }
+
+        if ($packetStartedAt !== null && $packetFinishedAt !== null && $packetFinishedAt > $packetStartedAt) {
+            $durationCandidates[] = $packetFinishedAt - $packetStartedAt;
+        }
+
+        if ($durationCandidates === []) {
+            throw new VoiceTranscriptionException('invalid_audio');
+        }
+
+        return max($durationCandidates);
     }
 
     private function convertToMp3(string $inputPath, string $outputPath): void
@@ -143,6 +202,21 @@ class VoiceAudioNormalizer
         $binary = trim((string) config('services.voice_recognition.ffprobe_binary', 'ffprobe'));
 
         return $binary !== '' ? $binary : 'ffprobe';
+    }
+
+    private function finiteNumber(mixed $value): ?float
+    {
+        if (! is_int($value) && ! is_float($value) && ! is_string($value)) {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $number = (float) $value;
+
+        return is_finite($number) ? $number : null;
     }
 
     private function deleteTemporaryFile(string $path, string $kind): void

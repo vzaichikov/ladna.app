@@ -914,25 +914,29 @@
                                 </button>
                             </div>
                             @if ($assistantVoiceInputEnabled)
-                                <div data-assistant-voice-recording class="hidden items-center gap-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2">
-                                    <span class="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-rose-600"></span>
-                                    <span class="min-w-0 flex-1 text-sm font-semibold text-rose-900">{{ __('app.assistant_voice_recording') }}</span>
-                                    <span data-assistant-voice-timer class="font-mono text-sm font-semibold text-rose-800">00:00</span>
-                                    <button
-                                        type="button"
-                                        data-assistant-voice-stop
-                                        class="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-2.5 text-xs font-semibold text-white transition hover:bg-rose-700"
-                                    >
-                                        <x-ui.icon name="square" class="h-3.5 w-3.5" />
-                                        {{ __('app.assistant_voice_stop') }}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        data-assistant-voice-cancel
-                                        class="inline-flex h-8 items-center justify-center rounded-lg px-2 text-xs font-semibold text-slate-600 transition hover:bg-white hover:text-slate-900"
-                                    >
-                                        {{ __('app.cancel') }}
-                                    </button>
+                                <div data-assistant-voice-recording class="hidden flex-col gap-2 rounded-lg border border-rose-100 bg-rose-50 p-3">
+                                    <div class="flex items-center gap-2.5">
+                                        <span class="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-rose-600"></span>
+                                        <span class="min-w-0 flex-1 text-sm font-semibold text-rose-900">{{ __('app.assistant_voice_recording') }}</span>
+                                        <span data-assistant-voice-timer class="shrink-0 font-mono text-sm font-semibold tabular-nums text-rose-800">00:00</span>
+                                    </div>
+                                    <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-2">
+                                        <button
+                                            type="button"
+                                            data-assistant-voice-stop
+                                            class="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white transition hover:bg-rose-700"
+                                        >
+                                            <x-ui.icon name="square" class="h-3.5 w-3.5" />
+                                            {{ __('app.assistant_voice_stop') }}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            data-assistant-voice-cancel
+                                            class="inline-flex h-9 w-full items-center justify-center rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-rose-300 hover:text-slate-950"
+                                        >
+                                            {{ __('app.cancel') }}
+                                        </button>
+                                    </div>
                                 </div>
                             @endif
                             @if ($assistantImageInferenceEnabled)
