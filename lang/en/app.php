@@ -2230,7 +2230,7 @@ return [
     'telegram_bot_placement_customer_dashboard' => 'Customer account',
     'telegram_bot_placement_customer_dashboard_copy' => 'Show the button beside class-pass purchase and class-booking actions.',
     'telegram_bot_placement_public_studio' => 'Public studio page',
-    'telegram_bot_placement_public_studio_copy' => 'Show the button in the public studio page header.',
+    'telegram_bot_placement_public_studio_copy' => 'Show the button below Schedule and book on the public studio page.',
     'telegram_bot_placement_public_contacts' => 'Bottom contact block',
     'telegram_bot_placement_public_contacts_copy' => 'Add the bot as a separate Telegram button in the public studio contact block.',
     'telegram_bot_placement_settings_saved' => 'Telegram bot placement settings saved.',

@@ -31,18 +31,6 @@
                         </div>
                     </div>
                     <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
-                        @if ($customerTelegramBotPublicStudioLink)
-                            <x-ui.button
-                                :href="$customerTelegramBotPublicStudioLink"
-                                variant="secondary"
-                                target="_blank"
-                                rel="noopener"
-                                data-customer-telegram-bot-link="public-studio"
-                            >
-                                <img src="{{ asset('assets/social/telegram.svg') }}" alt="" class="h-4 w-4 shrink-0">
-                                {{ __('app.customer_telegram_booking_bot') }}
-                            </x-ui.button>
-                        @endif
                         @if ($customer)
                             <a
                                 href="{{ route('customer.dashboard', $account->slug) }}"
@@ -116,10 +104,25 @@
                                         <x-ui.icon name="class-pass-plans" class="h-4 w-4" />
                                         {{ __('app.studio_landing_price_cta') }}
                                     </x-ui.button>
-                                    <x-ui.button :href="route('public.schedule', [$account->slug, $location->slug])" variant="secondary" class="w-full sm:w-auto">
-                                        <x-ui.icon name="schedule" class="h-4 w-4" />
-                                        {{ __('app.studio_landing_schedule_cta') }}
-                                    </x-ui.button>
+                                    <div class="grid gap-3">
+                                        <x-ui.button :href="route('public.schedule', [$account->slug, $location->slug])" variant="secondary" class="w-full">
+                                            <x-ui.icon name="schedule" class="h-4 w-4" />
+                                            {{ __('app.studio_landing_schedule_cta') }}
+                                        </x-ui.button>
+                                        @if ($loop->first && $customerTelegramBotPublicStudioLink)
+                                            <x-ui.button
+                                                :href="$customerTelegramBotPublicStudioLink"
+                                                variant="secondary"
+                                                class="w-full"
+                                                target="_blank"
+                                                rel="noopener"
+                                                data-customer-telegram-bot-link="public-studio"
+                                            >
+                                                <img src="{{ asset('assets/social/telegram.svg') }}" alt="" class="h-4 w-4 shrink-0">
+                                                {{ __('app.customer_telegram_booking_bot') }}
+                                            </x-ui.button>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -129,7 +129,14 @@ class PublicStudioLandingTest extends TestCase
             'slug' => 'public-studio-telegram-placements',
             'default_language' => 'uk',
         ]);
-        Location::factory()->for($account)->create(['slug' => 'main']);
+        $firstLocation = Location::factory()->for($account)->create([
+            'name' => 'Alpha Studio',
+            'slug' => 'alpha',
+        ]);
+        $secondLocation = Location::factory()->for($account)->create([
+            'name' => 'Zulu Studio',
+            'slug' => 'zulu',
+        ]);
         $profile = $account->telegramBotProfiles()->create([
             'profile' => TelegramBotProfile::Customer->value,
             'mode' => TelegramBotMode::Simple->value,
@@ -155,11 +162,17 @@ class PublicStudioLandingTest extends TestCase
         $response = $this->get(route('public.studio', $account->slug))
             ->assertOk()
             ->assertSee('data-customer-telegram-bot-link="public-studio"', false)
+            ->assertSeeInOrder([
+                'href="'.route('public.schedule', [$account->slug, $firstLocation->slug]).'"',
+                'data-customer-telegram-bot-link="public-studio"',
+                'href="'.route('public.schedule', [$account->slug, $secondLocation->slug]).'"',
+            ], false)
             ->assertSee($botLink, false)
             ->assertSee(__('app.customer_telegram_booking_bot', [], 'uk'))
             ->assertDontSee('data-public-support-link="customer_telegram_bot"', false)
             ->assertDontSee('other_public_studio_bot', false);
         $this->assertSame(1, substr_count($response->getContent(), $botLink));
+        $this->assertSame(1, substr_count($response->getContent(), 'data-customer-telegram-bot-link="public-studio"'));
 
         $profile->forceFill(['settings' => [
             CustomerTelegramLinkResolver::PlacementSettingsKey => [

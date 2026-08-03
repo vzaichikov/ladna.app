@@ -2230,7 +2230,7 @@ return [
     'telegram_bot_placement_customer_dashboard' => 'Кабінет клієнта',
     'telegram_bot_placement_customer_dashboard_copy' => 'Показувати кнопку поруч із купівлею абонемента та записом на заняття.',
     'telegram_bot_placement_public_studio' => 'Публічна сторінка студії',
-    'telegram_bot_placement_public_studio_copy' => 'Показувати кнопку у верхньому блоці публічної сторінки студії.',
+    'telegram_bot_placement_public_studio_copy' => 'Показувати кнопку під кнопкою Розклад та запис на публічній сторінці студії.',
     'telegram_bot_placement_public_contacts' => 'Нижній блок контактів',
     'telegram_bot_placement_public_contacts_copy' => 'Додати бота окремою Telegram-кнопкою в блоці контактів публічної сторінки студії.',
     'telegram_bot_placement_settings_saved' => 'Налаштування показу Telegram-бота збережено.',

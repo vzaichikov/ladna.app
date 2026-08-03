@@ -608,6 +608,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('Телеграм-бот студії', false)
             ->assertSee('Де показувати бота', false)
             ->assertSee('кабінеті клієнта', false)
+            ->assertSee('під кнопкою Розклад та запис', false)
             ->assertSee('нижньому блоці контактів', false)
             ->assertSee('не змінює SMS-режим', false)
             ->assertSee(route('help.show', 'sms-service', false), false)
