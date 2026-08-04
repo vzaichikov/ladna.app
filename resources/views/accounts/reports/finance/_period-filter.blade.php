@@ -1,5 +1,10 @@
+@php($reportView ??= 'summary')
+
 <form method="GET" action="{{ url()->current() }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-5 shadow-crm">
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1.2fr_auto] xl:items-end">
+    @if ($reportView === 'compare')
+        <input type="hidden" name="view" value="compare">
+    @endif
+    <div class="grid gap-4 sm:grid-cols-2 {{ $reportView === 'compare' ? 'xl:grid-cols-[1fr_1fr_auto]' : 'xl:grid-cols-[1fr_1fr_1.2fr_auto]' }} xl:items-end">
         <label class="block">
             <span class="crm-label">{{ __('app.date_from') }}</span>
             <input type="date" name="date_from" value="{{ $filters['date_from'] }}" class="crm-field min-h-11" required>
@@ -12,22 +17,24 @@
             @error('date_to') <span class="crm-help">{{ $message }}</span> @enderror
         </label>
 
-        <label class="block">
-            <span class="crm-label">{{ __('app.location') }}</span>
-            <select name="location_id" class="crm-field min-h-11">
-                <option value="">{{ __('app.all_locations') }}</option>
-                @foreach ($locations as $location)
-                    <option value="{{ $location->id }}" @selected($filters['location_id'] === $location->id)>{{ $location->name }}</option>
-                @endforeach
-            </select>
-            @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
-        </label>
+        @if ($reportView !== 'compare')
+            <label class="block">
+                <span class="crm-label">{{ __('app.location') }}</span>
+                <select name="location_id" class="crm-field min-h-11">
+                    <option value="">{{ __('app.all_locations') }}</option>
+                    @foreach ($locations as $location)
+                        <option value="{{ $location->id }}" @selected($filters['location_id'] === $location->id)>{{ $location->name }}@unless ($location->is_active) · {{ __('app.inactive') }}@endunless</option>
+                    @endforeach
+                </select>
+                @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+        @endif
 
         <div class="flex gap-2">
             <x-ui.button type="submit" size="sm" class="min-h-11">
                 {{ __('app.apply_filters') }}
             </x-ui.button>
-            <x-ui.button :href="url()->current()" variant="secondary" size="sm" class="min-h-11">
+            <x-ui.button :href="$reportView === 'compare' ? url()->current().'?view=compare' : url()->current()" variant="secondary" size="sm" class="min-h-11">
                 {{ __('app.reset_filters') }}
             </x-ui.button>
         </div>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Multi-location UX"
+  short_description: "Apply Ladna working-location context consistently"
+  default_prompt: "Use $ladna-multi-location to extend or review Ladna multi-location behavior."

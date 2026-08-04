@@ -6,6 +6,9 @@
     <div>
         <div>
             <h1 class="crm-page-title">{{ __('app.website_leads') }}</h1>
+            @if ($hasMultipleWorkingLocations)
+                <x-ui.entity-scope-badge :label="__('app.account_wide')" class="mt-2" />
+            @endif
             <p class="crm-page-copy">{{ __('app.website_leads_copy') }}</p>
         </div>
     </div>
@@ -90,6 +93,7 @@
         'quickBookingRooms' => $quickBookingRooms,
         'quickBookingTrainers' => $quickBookingTrainers,
         'quickBookingActivityDirections' => $quickBookingActivityDirections,
+        'workingLocationId' => $workingLocationId,
         'groupAvailabilityUrl' => $groupAvailabilityUrl,
         'manualAvailabilityUrl' => $manualAvailabilityUrl,
         'customerSearchUrl' => $customerSearchUrl,

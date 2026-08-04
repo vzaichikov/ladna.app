@@ -10,16 +10,21 @@ use App\Http\Requests\UpdateScheduleSeriesRequest;
 use App\Models\Account;
 use App\Models\ScheduleSeries;
 use App\Support\RoomActivityDirectionEligibility;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 class ScheduleSeriesController extends Controller
 {
-    public function index(Account $account, RoomActivityDirectionEligibility $roomActivityDirectionEligibility): View
-    {
+    public function index(
+        Account $account,
+        RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('view', $account);
         $this->ensureGroupClassesEnabled($account);
 
+        $selectedLocationId = $workingLocationContext->filterLocationId($account, includeInactive: true);
         $series = $account->scheduleSeries()
             ->with([
                 'location',
@@ -27,6 +32,7 @@ class ScheduleSeriesController extends Controller
                 'classType.activityDirection',
                 'trainer',
             ])
+            ->when($selectedLocationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->orderBy('weekday')
             ->orderBy('start_time')
             ->get();
@@ -34,6 +40,8 @@ class ScheduleSeriesController extends Controller
         return view('schedule-series.index', [
             'account' => $account,
             'series' => $series,
+            'locations' => $account->locations()->orderBy('name')->get(['id', 'name', 'is_active']),
+            'selectedLocationId' => $selectedLocationId,
             'roomDirectionConflictSeriesIds' => $series
                 ->filter(fn (ScheduleSeries $scheduleSeries): bool => $scheduleSeries->status === ScheduleSeriesStatus::Active
                     && $scheduleSeries->room
@@ -49,12 +57,13 @@ class ScheduleSeriesController extends Controller
         ]);
     }
 
-    public function create(Account $account): View
+    public function create(Account $account, WorkingLocationContext $workingLocationContext): View
     {
         $this->authorize('manageSchedule', $account);
         $this->ensureGroupClassesEnabled($account);
 
         return view('schedule-series.create', $this->formData($account, new ScheduleSeries([
+            'location_id' => $workingLocationContext->formLocationId($account),
             'weekday' => now()->isoWeekday(),
             'start_time' => '18:00',
             'start_date' => now()->toDateString(),
@@ -125,7 +134,10 @@ class ScheduleSeriesController extends Controller
         return [
             'account' => $account,
             'scheduleSeries' => $scheduleSeries,
-            'locations' => $account->locations()->active()->orderBy('name')->get(),
+            'locations' => $account->locations()
+                ->where(fn ($query) => $query->active()->orWhere('locations.id', $scheduleSeries->location_id))
+                ->orderBy('name')
+                ->get(),
             'rooms' => $account->rooms()
                 ->active()
                 ->with(['location', 'activityDirections:id'])

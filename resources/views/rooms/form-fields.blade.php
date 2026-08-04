@@ -1,8 +1,9 @@
 <label class="block">
     <span class="crm-label">{{ __('app.location') }}</span>
     <select name="location_id" required class="crm-field">
+        <option value="">{{ __('app.choose_location') }}</option>
         @foreach ($locations as $location)
-            <option value="{{ $location->id }}" @selected((int) old('location_id', $room->location_id) === $location->id)>{{ $location->name }}</option>
+            <option value="{{ $location->id }}" @selected((int) old('location_id', $room->location_id) === $location->id)>{{ $location->name }}@unless ($location->is_active) · {{ __('app.inactive') }}@endunless</option>
         @endforeach
     </select>
     @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror

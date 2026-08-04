@@ -687,7 +687,28 @@
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-3">
+                        <div class="flex min-w-0 items-center gap-2 sm:gap-3">
+                            @if ($showAccountNav && isset($workingLocations) && $workingLocations->count() > 1)
+                                <form method="POST" action="{{ route('dashboard.accounts.working-location.update', $activeAccount) }}" class="min-w-0">
+                                    @csrf
+                                    <input type="hidden" name="redirect_to" value="{{ request()->getRequestUri() }}">
+                                    <label class="flex min-w-0 items-center gap-2 rounded-xl border border-stone-200 bg-white px-2.5 py-2 shadow-xs sm:px-3">
+                                        <x-ui.icon name="locations" class="h-4 w-4 shrink-0 text-violet-crm-600" />
+                                        <span class="hidden text-xs font-semibold text-slate-500 xl:inline">{{ __('app.work_with_location') }}</span>
+                                        <select
+                                            name="location_context"
+                                            class="max-w-32 min-w-0 bg-transparent text-sm font-semibold text-slate-950 outline-none sm:max-w-48"
+                                            aria-label="{{ __('app.work_with_location') }}"
+                                            onchange="this.form.submit()"
+                                        >
+                                            <option value="all" @selected($workingLocationValue === 'all')>{{ __('app.all_locations') }}</option>
+                                            @foreach ($workingLocations as $location)
+                                                <option value="{{ $location->id }}" @selected($workingLocationValue === (string) $location->id)>{{ $location->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </label>
+                                </form>
+                            @endif
                             <div class="flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-xs">
                                 @if ($authUser?->avatarUrl())
                                     <img src="{{ $authUser->avatarUrl() }}" alt="" class="h-8 w-8 rounded-full object-cover">

@@ -7,17 +7,19 @@ use App\Http\Requests\UpdateActivityDirectionRequest;
 use App\Models\Account;
 use App\Models\ActivityDirection;
 use App\Support\SlugGenerator;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 class ActivityDirectionController extends Controller
 {
-    public function index(Account $account): View
+    public function index(Account $account, WorkingLocationContext $workingLocationContext): View
     {
         $this->authorize('view', $account);
 
         return view('activity-directions.index', [
             'account' => $account,
+            'hasMultipleWorkingLocations' => $workingLocationContext->locations($account)->count() > 1,
             'activityDirections' => $account->activityDirections()->orderBy('name')->get(),
         ]);
     }

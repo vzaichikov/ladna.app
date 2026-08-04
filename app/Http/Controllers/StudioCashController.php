@@ -9,6 +9,7 @@ use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\StudioExpense;
 use App\Support\Payments\AccountPaymentDashboardData;
+use App\Support\WorkingLocationContext;
 use Illuminate\View\View;
 
 class StudioCashController extends Controller
@@ -17,6 +18,7 @@ class StudioCashController extends Controller
         CashflowFilterRequest $request,
         Account $account,
         AccountPaymentDashboardData $dashboardData,
+        WorkingLocationContext $workingLocationContext,
     ): View {
         $filters = $request->filters();
         [$startsAt, $endsAt] = $request->databaseRange();
@@ -28,6 +30,7 @@ class StudioCashController extends Controller
             'status' => $filters['status'],
             'provider' => $filters['provider'],
             'locationId' => $filters['location_id'],
+            'workingLocationId' => $workingLocationContext->formLocationId($account),
             'locations' => $account->locations()->orderBy('name')->get(),
             'statuses' => [
                 ...array_column(CustomerPurchaseStatus::cases(), 'value'),

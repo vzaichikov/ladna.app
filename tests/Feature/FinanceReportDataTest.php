@@ -173,7 +173,7 @@ class FinanceReportDataTest extends TestCase
         $this->assertSame(['UAH' => 50], $report['totals']['expenses']);
         $this->assertSame(['UAH' => 70], $report['totals']['owner_deposits']);
         $this->assertSame(['UAH' => 550], $report['totals']['operating_cash_result']);
-        $this->assertSame(['Main', null, 'Main'], $report['sections']['payments']->pluck('location')->all());
+        $this->assertSame(['Main', 'Main', 'Main'], $report['sections']['payments']->pluck('location')->all());
         $this->assertSame('Main', $report['sections']['expenses']->sole()['location']);
     }
 
@@ -200,6 +200,58 @@ class FinanceReportDataTest extends TestCase
         $this->assertSame($epoch->id, $response->viewData('epoch')->id);
         $this->assertSame('2026-07-10', $response->viewData('filters')['date_from']);
         $this->assertSame(['UAH' => 200], $response->viewData('report')['totals']['payments']);
+    }
+
+    public function test_location_comparison_reconciles_each_location_with_the_overall_totals(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-01 12:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['default_currency' => 'UAH', 'timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $main = Location::factory()->for($account)->create(['name' => 'Main']);
+        $secondary = Location::factory()->for($account)->create(['name' => 'Secondary']);
+        Location::factory()->for($account)->create(['name' => 'Archived', 'is_active' => false]);
+        $customer = Customer::factory()->for($account)->create();
+        $category = ExpenseCategory::factory()->for($account)->create();
+        $startsAt = Carbon::parse('2026-07-01 00:00:00', 'UTC');
+        $endsAt = Carbon::parse('2026-07-31 23:59:59', 'UTC');
+
+        $this->purchase($account, $customer, $main, 10000, 'UAH', '2026-07-10 10:00:00');
+        $this->purchase($account, $customer, $secondary, 5000, 'UAH', '2026-07-11 10:00:00');
+        $this->expense($account, $category, $main, 2000, 'UAH', '2026-07-12 10:00:00');
+        $this->expense($account, $category, $secondary, 1000, 'UAH', '2026-07-13 10:00:00');
+
+        $reportData = app(FinanceReportData::class);
+        $report = $this->report($account, $startsAt, $endsAt, null);
+        $comparison = $reportData->locationComparison(
+            $report,
+            $account->locations()->orderBy('name')->get(),
+        );
+        $rows = collect($comparison['rows'])->keyBy('name');
+
+        $this->assertSame(['UAH' => 8000], $rows['Main']['totals']['operating_cash_result']);
+        $this->assertSame(['UAH' => 4000], $rows['Secondary']['totals']['operating_cash_result']);
+        $this->assertSame([], $rows['Archived']['totals']['operating_cash_result']);
+        $this->assertFalse($rows['Archived']['is_active']);
+        $this->assertSame(['UAH' => 12000], $comparison['overall']['operating_cash_result']);
+
+        $response = $this->actingAs($owner)
+            ->withCookie('ladna_working_location_'.$account->id, (string) $main->id)
+            ->get(route('dashboard.accounts.reports.financial', [
+                'account' => $account,
+                'date_from' => '2026-07-01',
+                'date_to' => '2026-07-31',
+                'view' => 'compare',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertSee(__('app.compare_locations'))
+            ->assertSee('Archived')
+            ->assertSee(__('app.inactive'));
+        $this->assertNull($response->viewData('filters')['location_id']);
+        $this->assertSame(['UAH' => 12000], $response->viewData('locationComparison')['overall']['operating_cash_result']);
     }
 
     private function purchase(

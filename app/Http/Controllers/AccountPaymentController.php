@@ -10,6 +10,7 @@ use App\Models\CustomerPurchaseRefund;
 use App\Models\StudioExpense;
 use App\Support\Fiscalization\FiscalizationAvailability;
 use App\Support\Payments\AccountPaymentDashboardData;
+use App\Support\WorkingLocationContext;
 use Illuminate\View\View;
 
 class AccountPaymentController extends Controller
@@ -19,6 +20,7 @@ class AccountPaymentController extends Controller
         Account $account,
         FiscalizationAvailability $fiscalization,
         AccountPaymentDashboardData $dashboardData,
+        WorkingLocationContext $workingLocationContext,
     ): View {
         $filters = $request->filters();
         [$startsAt, $endsAt] = $request->databaseRange();
@@ -31,6 +33,7 @@ class AccountPaymentController extends Controller
             'status' => $filters['status'],
             'provider' => $filters['provider'],
             'locationId' => $filters['location_id'],
+            'workingLocationId' => $workingLocationContext->formLocationId($account),
             'locations' => $account->locations()->orderBy('name')->get(),
             'statuses' => [
                 ...array_column(CustomerPurchaseStatus::cases(), 'value'),

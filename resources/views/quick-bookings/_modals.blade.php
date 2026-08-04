@@ -2,7 +2,11 @@
     $quickBookingPrefill = $quickBookingPrefill ?? [];
     $defaultTimezone = $account->timezone ?? config('app.timezone');
     $defaultDate = now($defaultTimezone)->toDateString();
-    $defaultQuickBookingLocation = $quickBookingLocations->first();
+    $defaultQuickBookingLocation = $quickBookingLocations->firstWhere('id', (int) ($workingLocationId ?? 0));
+
+    if (! $defaultQuickBookingLocation && $quickBookingLocations->count() === 1) {
+        $defaultQuickBookingLocation = $quickBookingLocations->first();
+    }
     $defaultQuickBookingRooms = $defaultQuickBookingLocation
         ? $quickBookingRooms->where('location_id', $defaultQuickBookingLocation->id)->values()
         : collect();
@@ -95,6 +99,7 @@
                                         class="crm-field"
                                         data-group-class-date
                                         data-availability-url="{{ $groupAvailabilityUrl }}"
+                                        data-location-id="{{ $workingLocationId }}"
                                         data-loading="{{ __('app.loading') }}"
                                         data-empty="{{ __('app.no_available_group_classes') }}"
                                     >
@@ -132,8 +137,9 @@
                                             data-async-field="location_id"
                                             @disabled($quickBookingLocations->count() <= 1)
                                         >
+                                            <option value="">{{ __('app.choose_location') }}</option>
                                             @foreach ($quickBookingLocations as $location)
-                                                <option value="{{ $location->id }}">{{ $location->name }}</option>
+                                                <option value="{{ $location->id }}" @selected($defaultQuickBookingLocation?->id === $location->id)>{{ $location->name }}</option>
                                             @endforeach
                                         </select>
                                         <input

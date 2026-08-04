@@ -39,7 +39,7 @@
         $classPassBackfillPreview ??= null;
         $locations ??= collect();
         $manualTrialOverride ??= ['available' => false];
-        $selectedIssueLocationId = old('issued_location_id');
+        $selectedIssueLocationId = old('issued_location_id', $workingLocationId ?? null);
         $selectedClassPassPlanId = old('class_pass_plan_id', $classPassPlans->first()?->id);
         $selectedClassPassPlan = $classPassPlans->firstWhere('id', (int) $selectedClassPassPlanId);
         $selectedClassPassPlanIsTrial = (bool) $selectedClassPassPlan?->is_trial;

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.122.0',
+                'date' => '2026-08-04',
+                'title' => 'Focused workspaces for multi-location studios',
+                'items' => ['Studio teams with multiple locations can now choose all locations or one working location from the global header. The choice is remembered and automatically scopes dashboards, schedules, finance pages, rooms, events, class passes, and related forms where location context is available.', 'Account-wide pages and records are clearly identified while a concrete location is selected, and one-location studios keep a simpler interface without a redundant location switch or account-wide labels.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.121.1',
                 'date' => '2026-08-03',
                 'title' => 'Safer class-pass date management',
@@ -1066,6 +1073,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.122.0',
+                'date' => '2026-08-04',
+                'title' => 'Зручний робочий простір для мережі локацій',
+                'items' => ['Команди студій із кількома локаціями тепер можуть обрати всі локації або одну робочу локацію у верхній панелі. Вибір запамʼятовується й автоматично звужує дані на головній, у розкладі, фінансах, залах, подіях, абонементах і повʼязаних формах, де доступний контекст локації.', 'Сторінки та записи для всього акаунта мають зрозуміле позначення, коли обрано конкретну локацію, а студії з однією локацією зберігають простіший інтерфейс без зайвого перемикача й позначок для всього акаунта.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.121.1',
                 'date' => '2026-08-03',

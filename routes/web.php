@@ -129,6 +129,7 @@ use App\Http\Controllers\TrainerTypeController;
 use App\Http\Controllers\UnknownPresenceReportController;
 use App\Http\Controllers\UnpaidClassPaymentReportController;
 use App\Http\Controllers\WebsiteLeadController;
+use App\Http\Controllers\WorkingLocationController;
 use App\Http\Middleware\EnsureCustomerIsAuthenticated;
 use App\Http\Middleware\EnsureCustomerProfileIsComplete;
 use App\Http\Middleware\EnsureOwnerOnboardingComplete;
@@ -394,6 +395,10 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
                 Route::delete('{priceVersion}', [SubscriptionPriceVersionController::class, 'destroy'])->name('destroy');
             });
     });
+
+Route::post('/app/dashboard/accounts/{account}/working-location', WorkingLocationController::class)
+    ->middleware(['auth:web', EnsureOwnerOnboardingComplete::class])
+    ->name('dashboard.accounts.working-location.update');
 
 Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventReadOnlyDemoMutations::class, PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
     ->prefix('app/dashboard')

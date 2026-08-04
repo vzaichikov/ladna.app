@@ -2,8 +2,9 @@
     <label class="block">
         <span class="crm-label">{{ __('app.location') }}</span>
         <select name="location_id" required class="crm-field" data-schedule-series-location>
+            <option value="">{{ __('app.choose_location') }}</option>
             @foreach ($locations as $location)
-                <option value="{{ $location->id }}" @selected((int) old('location_id', $scheduleSeries->location_id) === $location->id)>{{ $location->name }}</option>
+                <option value="{{ $location->id }}" @selected((int) old('location_id', $scheduleSeries->location_id) === $location->id)>{{ $location->name }}@unless ($location->is_active) · {{ __('app.inactive') }}@endunless</option>
             @endforeach
         </select>
         @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
@@ -11,6 +12,7 @@
     <label class="block">
         <span class="crm-label">{{ __('app.room') }}</span>
         <select name="room_id" required class="crm-field" data-schedule-series-room>
+            <option value="">{{ __('app.choose_room') }}</option>
             @foreach ($rooms as $room)
                 <option
                     value="{{ $room->id }}"

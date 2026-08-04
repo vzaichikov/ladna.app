@@ -30,6 +30,9 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.customer_class_passes') }}</h1>
+            @if ($hasMultipleWorkingLocations)
+                <x-ui.entity-scope-badge :label="__('app.account_wide')" class="mt-2" />
+            @endif
             <p class="crm-page-copy">{{ __('app.customer_class_passes_copy') }}</p>
         </div>
     </div>

@@ -19,13 +19,15 @@
 
     <nav class="flex gap-1 overflow-x-auto rounded-lg bg-stone-100 p-1" aria-label="{{ __('app.events') }}">
         @foreach (['upcoming', 'draft', 'past', 'cancelled'] as $value)
-            <a href="{{ route('dashboard.accounts.events.index', [$account, 'tab' => $value]) }}"
+            <a href="{{ route('dashboard.accounts.events.index', ['account' => $account, 'tab' => $value, ...$locationQuery]) }}"
                class="crm-tab whitespace-nowrap"
                aria-selected="{{ $tab === $value ? 'true' : 'false' }}">
                 {{ __('app.event_tab_'.$value) }}
             </a>
         @endforeach
     </nav>
+
+    @include('locations._working-filter', ['preserveQuery' => ['tab' => $tab]])
 
     <div class="grid gap-4 lg:grid-cols-2">
         @forelse ($events as $event)
@@ -35,6 +37,7 @@
                         <span class="{{ $event->status === \App\Enums\EventStatus::Published ? 'crm-status-active' : ($event->status === \App\Enums\EventStatus::Cancelled ? 'crm-status-danger' : 'crm-status-muted') }}">{{ __('app.event_status_'.$event->status->value) }}</span>
                         <h2 class="mt-1 text-xl font-semibold text-slate-950">{{ $event->title }}</h2>
                         <p class="mt-2 text-sm text-slate-500">{{ $event->starts_at->timezone($event->timezone)->format('d.m.Y H:i') }} · {{ $event->timezone }}</p>
+                        <p class="mt-1 text-sm font-medium text-slate-600">{{ $event->location?->name ?? $event->external_venue_name ?? __('app.location_unassigned') }}</p>
                     </div>
                     <x-ui.icon name="calendar-days" class="h-6 w-6 text-brand-600" />
                 </div>

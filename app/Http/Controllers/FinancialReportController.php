@@ -16,19 +16,26 @@ class FinancialReportController extends Controller
     ): View {
         [$startsAt, $endsAt] = $request->databaseRange();
         $epoch = $request->financeEpoch();
+        $filters = $request->filters();
+        $locations = $account->locations()->orderBy('name')->get();
+        $report = $reportData->forAccount(
+            $account,
+            $filters,
+            $startsAt,
+            $endsAt,
+            $epoch,
+        );
 
         return view('accounts.reports.finance.financial', [
             'account' => $account,
-            'filters' => $request->filters(),
-            'locations' => $account->locations()->orderBy('name')->get(),
+            'filters' => $filters,
+            'locations' => $locations,
             'epoch' => $epoch,
-            'report' => $reportData->forAccount(
-                $account,
-                $request->filters(),
-                $startsAt,
-                $endsAt,
-                $epoch,
-            ),
+            'report' => $report,
+            'reportView' => $request->reportView(),
+            'locationComparison' => $request->reportView() === 'compare'
+                ? $reportData->locationComparison($report, $locations)
+                : null,
         ]);
     }
 }

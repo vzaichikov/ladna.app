@@ -2,6 +2,7 @@
     $defaultTimezone = $account->timezone ?? config('app.timezone');
     $defaultStartsAt = now($defaultTimezone)->addHour()->startOfHour()->format('Y-m-d\TH:i');
     $singleLocation = $quickBookingLocations->count() === 1 ? $quickBookingLocations->first() : null;
+    $defaultManualLocationId = $singleLocation?->id ?? ($workingLocationId ?? null);
 @endphp
 
 @foreach ($manualClassOptions as $quickBookingOption)
@@ -78,8 +79,9 @@
                                 <label class="block">
                                     <span class="crm-label">{{ __('app.location') }}</span>
                                     <select name="location_id" required class="crm-field" data-quick-booking-location>
+                                        <option value="">{{ __('app.choose_location') }}</option>
                                         @foreach ($quickBookingLocations as $location)
-                                            <option value="{{ $location->id }}">{{ $location->name }}</option>
+                                            <option value="{{ $location->id }}" @selected((int) $defaultManualLocationId === $location->id)>{{ $location->name }}</option>
                                         @endforeach
                                     </select>
                                 </label>
@@ -88,6 +90,9 @@
                             <label class="block">
                                 <span class="crm-label">{{ __('app.room') }}</span>
                                 <select name="room_id" required class="crm-field" data-quick-booking-room>
+                                    @unless ($defaultManualLocationId)
+                                        <option value="">{{ __('app.choose_room') }}</option>
+                                    @endunless
                                     @foreach ($quickBookingRooms as $room)
                                         <option
                                             value="{{ $room->id }}"

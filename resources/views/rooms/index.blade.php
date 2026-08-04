@@ -22,6 +22,8 @@
         </div>
     </div>
 
+    @include('locations._working-filter')
+
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($rooms as $room)
             <div class="crm-row lg:grid-cols-[1fr_150px_140px_140px_auto] lg:items-center">

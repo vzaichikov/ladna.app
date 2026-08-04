@@ -8,14 +8,19 @@ use App\Http\Requests\UpdateWebsiteLeadStatusRequest;
 use App\Models\Account;
 use App\Models\WebsiteLead;
 use App\Support\QuickBookingOptions;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class WebsiteLeadController extends Controller
 {
-    public function index(Request $request, Account $account, QuickBookingOptions $quickBookingOptions): View
-    {
+    public function index(
+        Request $request,
+        Account $account,
+        QuickBookingOptions $quickBookingOptions,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('manageWebsiteLeads', $account);
 
         $status = WebsiteLeadStatus::tryFrom((string) $request->query('status'));
@@ -24,6 +29,7 @@ class WebsiteLeadController extends Controller
 
         return view('website-leads.index', [
             'account' => $account,
+            'hasMultipleWorkingLocations' => $workingLocationContext->locations($account)->count() > 1,
             'websiteLeads' => $account->websiteLeads()
                 ->with(['customer', 'classBooking.scheduledClass'])
                 ->when($status, fn ($query) => $query->where('status', $status->value))
@@ -45,6 +51,7 @@ class WebsiteLeadController extends Controller
             'quickBookingRooms' => $quickBookingData['rooms'],
             'quickBookingTrainers' => $quickBookingData['trainers'],
             'quickBookingActivityDirections' => $quickBookingData['activityDirections'],
+            'workingLocationId' => $workingLocationContext->formLocationId($account),
             'customerSearchUrl' => route('dashboard.accounts.customers.search', $account),
             'groupAvailabilityUrl' => route('dashboard.accounts.quick-bookings.group-availability', $account),
             'manualAvailabilityUrl' => route('dashboard.accounts.quick-bookings.manual-availability', $account),

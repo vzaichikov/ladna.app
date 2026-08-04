@@ -32,9 +32,9 @@
 
             return $label === $translationKey ? config('integrations.providers.'.$provider.'.label', $provider) : $label;
         };
-        $defaultCashLocationId = old('location_id', $locations->first()?->id);
-        $defaultExpenseLocationId = old('expense_location_id', old('location_id', $locations->first()?->id));
-        $defaultCashExpenseLocationId = old('cash_location_id', old('location_id', $locations->first()?->id));
+        $defaultCashLocationId = old('location_id', $workingLocationId);
+        $defaultExpenseLocationId = old('expense_location_id', old('location_id', $workingLocationId));
+        $defaultCashExpenseLocationId = old('cash_location_id', old('location_id', $workingLocationId));
         $defaultExpenseCategoryId = old('expense_category_id', $activeExpenseCategories->first()?->id);
         $defaultExpenseMethod = old('payment_method', \App\Models\StudioExpense::PaymentMethodCashdesk);
         $hasValue = static fn (mixed $value): bool => $value !== null && $value !== '';
@@ -484,7 +484,7 @@
                                 data-remaining-input="{{ $formatMoneyInput($payment->remainingRefundableAmountCents()) }}"
                                 data-currency="{{ $payment->currency }}"
                                 data-default-method="{{ $payment->isManualCashStudioPayment() ? \App\Models\CustomerPurchaseRefund::MethodCash : \App\Models\CustomerPurchaseRefund::MethodCashless }}"
-                                data-cash-location-id="{{ $payment->location_id ?? $locations->first()?->id }}"
+                                data-cash-location-id="{{ $payment->location_id ?? $workingLocationId }}"
                                 data-idempotency-key="{{ (string) \Illuminate\Support\Str::uuid() }}"
                             >
                                 <x-ui.icon name="undo-2" class="h-4 w-4" />
@@ -627,6 +627,7 @@
                     <label class="block sm:col-span-2" data-payment-refund-cash-location>
                         <span class="crm-label">{{ __('app.refund_cash_location') }}</span>
                         <select name="cash_location_id" class="crm-field min-h-11" data-payment-refund-cash-location-select>
+                            <option value="">{{ __('app.choose_location') }}</option>
                             @foreach ($locations as $location)
                                 <option value="{{ $location->id }}">{{ $location->name }}</option>
                             @endforeach
@@ -684,6 +685,7 @@
                                 <label class="block">
                                     <span class="crm-label">{{ __('app.location') }}</span>
                                     <select name="location_id" class="crm-field min-h-11" required>
+                                        <option value="">{{ __('app.choose_location') }}</option>
                                         @foreach ($locations as $location)
                                             <option value="{{ $location->id }}" @selected((int) $defaultCashLocationId === $location->id)>{{ $location->name }}</option>
                                         @endforeach
@@ -858,8 +860,9 @@
                         <label class="block">
                             <span class="crm-label">{{ __('app.location') }}</span>
                             <select name="location_id" class="crm-field min-h-11" required>
+                                <option value="">{{ __('app.choose_location') }}</option>
                                 @foreach ($locations as $location)
-                                    <option value="{{ $location->id }}">{{ $location->name }}</option>
+                                    <option value="{{ $location->id }}" @selected((int) $defaultCashLocationId === $location->id)>{{ $location->name }}</option>
                                 @endforeach
                             </select>
                         </label>

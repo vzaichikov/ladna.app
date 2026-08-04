@@ -21,7 +21,8 @@ class RoomPeopleCounterMaskController extends Controller
         return view('rooms.people-counter-mask', [
             'account' => $account,
             'room' => $room,
-            'snapshotUrl' => $room->people_counter_snapshot_path
+            'snapshotUrl' => is_string($room->people_counter_snapshot_path)
+                && Storage::disk('local')->exists($room->people_counter_snapshot_path)
                 ? route('dashboard.accounts.rooms.people-counter-mask.snapshot', [$account, $room])
                 : null,
         ]);

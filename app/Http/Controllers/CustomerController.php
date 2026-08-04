@@ -10,20 +10,25 @@ use App\Models\Account;
 use App\Models\Customer;
 use App\Support\ScheduleKindRegistry;
 use App\Support\TrialClassPassEligibility;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class CustomerController extends Controller
 {
-    public function index(Request $request, Account $account): View
-    {
+    public function index(
+        Request $request,
+        Account $account,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('manageClients', $account);
 
         $term = trim((string) $request->query('q', ''));
 
         return view('customers.index', [
             'account' => $account,
+            'hasMultipleWorkingLocations' => $workingLocationContext->locations($account)->count() > 1,
             'customers' => $account->customers()
                 ->withCount([
                     'classBookings' => fn ($query) => $query->notCorrectedRemoved(),
@@ -75,6 +80,7 @@ class CustomerController extends Controller
         Customer $customer,
         ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings,
         TrialClassPassEligibility $trialClassPassEligibility,
+        WorkingLocationContext $workingLocationContext,
     ): View {
         $this->ensureBelongsToAccount($account, $customer);
         $this->authorize('manageClients', $account);
@@ -152,6 +158,7 @@ class CustomerController extends Controller
             'classPassTab' => $classPassTab,
             'classPassPlans' => $classPassPlans,
             'locations' => $account->locations()->active()->orderBy('name')->get(),
+            'workingLocationId' => $workingLocationContext->formLocationId($account),
             'classPassBackfillPreview' => $classPassBackfillPreview,
             'manualTrialOverride' => $trialClassPassEligibility->evaluateManualOverride(
                 $account,

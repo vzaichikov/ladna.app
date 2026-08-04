@@ -12,6 +12,7 @@ use App\Support\Pwa\StudioPwaIconGenerator;
 use App\Support\ReservedPublicSlugs;
 use App\Support\SlugGenerator;
 use App\Support\StudioDashboardData;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -72,13 +73,20 @@ class AccountController extends Controller
             ->with('status', __('app.account_created'));
     }
 
-    public function show(Request $request, Account $account, StudioDashboardData $studioDashboardData): View
-    {
+    public function show(
+        Request $request,
+        Account $account,
+        StudioDashboardData $studioDashboardData,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('view', $account);
+        $workingLocation = $workingLocationContext->location($account);
 
         return view('accounts.show', [
             'account' => $account,
-            ...$studioDashboardData->forAccount($account, $request->user()),
+            'dashboardLocation' => $workingLocation,
+            'hasMultipleWorkingLocations' => $workingLocationContext->locations($account)->count() > 1,
+            ...$studioDashboardData->forAccount($account, $request->user(), $workingLocation?->id),
         ]);
     }
 

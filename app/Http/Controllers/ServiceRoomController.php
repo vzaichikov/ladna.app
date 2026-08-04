@@ -7,31 +7,45 @@ use App\Http\Requests\UpdateServiceRoomRequest;
 use App\Models\Account;
 use App\Models\ServiceRoom;
 use App\Support\SlugGenerator;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 class ServiceRoomController extends Controller
 {
-    public function index(Account $account): View
-    {
+    public function index(
+        Account $account,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('view', $account);
         $this->ensureRtspAllowed($account);
 
+        $selectedLocationId = $workingLocationContext->filterLocationId($account, includeInactive: true);
+
         return view('service-rooms.index', [
             'account' => $account,
-            'serviceRooms' => $account->serviceRooms()->with('location')->orderBy('name')->get(),
+            'locations' => $account->locations()->orderBy('name')->get(['id', 'name', 'is_active']),
+            'selectedLocationId' => $selectedLocationId,
+            'serviceRooms' => $account->serviceRooms()
+                ->with('location')
+                ->when($selectedLocationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
-    public function create(Account $account): View
+    public function create(Account $account, WorkingLocationContext $workingLocationContext): View
     {
         $this->authorize('update', $account);
         $this->ensureRtspAllowed($account);
 
         return view('service-rooms.create', [
             'account' => $account,
-            'serviceRoom' => new ServiceRoom(['is_active' => true]),
-            'locations' => $account->locations()->orderBy('name')->get(),
+            'serviceRoom' => new ServiceRoom([
+                'location_id' => $workingLocationContext->formLocationId($account),
+                'is_active' => true,
+            ]),
+            'locations' => $account->locations()->active()->orderBy('name')->get(),
         ]);
     }
 
@@ -66,7 +80,10 @@ class ServiceRoomController extends Controller
         return view('service-rooms.edit', [
             'account' => $account,
             'serviceRoom' => $serviceRoom,
-            'locations' => $account->locations()->orderBy('name')->get(),
+            'locations' => $account->locations()
+                ->where(fn ($query) => $query->active()->orWhere('locations.id', $serviceRoom->location_id))
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 

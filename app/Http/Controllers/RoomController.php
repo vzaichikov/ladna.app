@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateRoomRequest;
 use App\Models\Account;
 use App\Models\Room;
 use App\Support\SlugGenerator;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -14,30 +15,39 @@ use Illuminate\View\View;
 
 class RoomController extends Controller
 {
-    public function index(Account $account): View
-    {
+    public function index(
+        Account $account,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('view', $account);
+        $selectedLocationId = $workingLocationContext->filterLocationId($account, includeInactive: true);
 
         return view('rooms.index', [
             'account' => $account,
+            'locations' => $account->locations()->orderBy('name')->get(['id', 'name', 'is_active']),
+            'selectedLocationId' => $selectedLocationId,
             'rooms' => $account->rooms()
                 ->with([
                     'location',
                     'activityDirections' => fn ($query) => $query->orderBy('name'),
                 ])
+                ->when($selectedLocationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
                 ->orderBy('name')
                 ->get(),
         ]);
     }
 
-    public function create(Account $account): View
+    public function create(Account $account, WorkingLocationContext $workingLocationContext): View
     {
         $this->authorize('update', $account);
 
         return view('rooms.create', [
             'account' => $account,
-            'room' => new Room(['is_active' => true]),
-            'locations' => $account->locations()->orderBy('name')->get(),
+            'room' => new Room([
+                'location_id' => $workingLocationContext->formLocationId($account),
+                'is_active' => true,
+            ]),
+            'locations' => $account->locations()->active()->orderBy('name')->get(),
             'availableActivityDirections' => $account->activityDirections()->active()->orderBy('name')->get(),
             'selectedActivityDirectionIds' => [],
         ]);
@@ -90,7 +100,10 @@ class RoomController extends Controller
         return view('rooms.edit', [
             'account' => $account,
             'room' => $room,
-            'locations' => $account->locations()->orderBy('name')->get(),
+            'locations' => $account->locations()
+                ->where(fn ($query) => $query->active()->orWhere('locations.id', $room->location_id))
+                ->orderBy('name')
+                ->get(),
             'availableActivityDirections' => $availableActivityDirections,
             'selectedActivityDirectionIds' => $room->activityDirections->pluck('id')->all(),
         ]);

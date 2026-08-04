@@ -10,6 +10,7 @@ use App\Models\ExpenseCategory;
 use App\Models\Location;
 use App\Models\StudioExpense;
 use App\Support\DateTimePresenter;
+use App\Support\WorkingLocationContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -105,6 +106,9 @@ class AccountPaymentFilterRequest extends FormRequest
         $account = $this->route('account');
         $timezone = DateTimePresenter::accountTimezone($account instanceof Account ? $account : null);
         $today = CarbonImmutable::now($timezone);
+        $locationId = $this->query->has('location_id')
+            ? $this->input('location_id')
+            : ($account instanceof Account ? app(WorkingLocationContext::class)->selectedLocationId($account) : null);
 
         $this->merge([
             'date_from' => $this->input('date_from') ?: $today->toDateString(),
@@ -113,7 +117,7 @@ class AccountPaymentFilterRequest extends FormRequest
             'payment_method' => blank($this->input('payment_method')) ? null : $this->input('payment_method'),
             'status' => blank($this->input('status')) ? null : $this->input('status'),
             'provider' => blank($this->input('provider')) ? null : $this->input('provider'),
-            'location_id' => blank($this->input('location_id')) ? null : $this->input('location_id'),
+            'location_id' => blank($locationId) ? null : $locationId,
             'expense_category_id' => blank($this->input('expense_category_id')) ? null : $this->input('expense_category_id'),
             'expense_payment_method' => blank($this->input('expense_payment_method')) ? null : $this->input('expense_payment_method'),
             'expense_status' => blank($this->input('expense_status')) ? null : $this->input('expense_status'),

@@ -17,6 +17,8 @@
         </div>
     </div>
 
+    @include('locations._working-filter')
+
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($series as $scheduleSeries)
             <div class="crm-row lg:grid-cols-[1.1fr_1fr_1fr_1fr_auto] lg:items-center">

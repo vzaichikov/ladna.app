@@ -11,6 +11,7 @@ use App\Models\ClassPassPlan;
 use App\Models\ClassPassSegment;
 use App\Support\ScheduleKindRegistry;
 use App\Support\SlugGenerator;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,15 +22,24 @@ use Illuminate\View\View;
 
 class ClassPassPlanController extends Controller
 {
-    public function index(Request $request, Account $account): View
-    {
+    public function index(
+        Request $request,
+        Account $account,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->ensureCurrentUserOwns($account);
         $scheduleKindTabs = $this->scheduleKindTabs($account);
         $activeScheduleKindValue = $this->activeScheduleKindValue($account, $request->query('tab'));
         $activeSegmentValue = $this->activeSegmentValue($account, $activeScheduleKindValue, $request->query('segment'));
+        $workingLocationId = $workingLocationContext->selectedLocationId($account);
         $classPassPlans = $account->classPassPlans()
-            ->with(['classPassSegment', 'classTypes', 'trainerTypes', 'rooms'])
+            ->with(['classPassSegment', 'classTypes', 'trainerTypes', 'rooms.location'])
             ->where('schedule_kind', $activeScheduleKindValue)
+            ->when($workingLocationId, fn ($query, int $locationId) => $query->where(
+                fn ($query) => $query
+                    ->whereDoesntHave('rooms')
+                    ->orWhereHas('rooms', fn ($query) => $query->where('location_id', $locationId)),
+            ))
             ->when($activeSegmentValue === 'none', fn ($query) => $query->whereNull('class_pass_segment_id'))
             ->when(is_numeric($activeSegmentValue), fn ($query) => $query->where('class_pass_segment_id', (int) $activeSegmentValue))
             ->orderBy('sort_order')
@@ -44,6 +54,7 @@ class ClassPassPlanController extends Controller
             'classPassSegmentFilters' => $this->classPassSegmentFilters($account, $activeScheduleKindValue),
             'activeSegmentValue' => $activeSegmentValue,
             'classPassPlanGroups' => $this->classPassPlanGroups($classPassPlans),
+            'classPassPlanLocationLabels' => $this->classPassPlanLocationLabels($classPassPlans),
         ]);
     }
 
@@ -210,6 +221,29 @@ class ClassPassPlanController extends Controller
     private function copyName(string $name): string
     {
         return __('app.copy_prefix').' '.$name;
+    }
+
+    /**
+     * @param  Collection<int, ClassPassPlan>  $classPassPlans
+     * @return array<int, string>
+     */
+    private function classPassPlanLocationLabels(Collection $classPassPlans): array
+    {
+        return $classPassPlans->mapWithKeys(function (ClassPassPlan $classPassPlan): array {
+            if ($classPassPlan->rooms->isEmpty()) {
+                return [$classPassPlan->id => __('app.available_at_all_locations')];
+            }
+
+            $locationNames = $classPassPlan->rooms
+                ->pluck('location.name')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->implode(', ');
+
+            return [$classPassPlan->id => __('app.available_at_locations', ['locations' => $locationNames])];
+        })->all();
     }
 
     /**

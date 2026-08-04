@@ -10,6 +10,7 @@ use App\Http\Requests\SaveEventRequest;
 use App\Models\Account;
 use App\Models\Event;
 use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,10 +19,14 @@ use Illuminate\View\View;
 
 class EventController extends Controller
 {
-    public function index(Request $request, Account $account): View
-    {
+    public function index(
+        Request $request,
+        Account $account,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         abort_unless($request->user()?->can('manageEvents', $account) || $request->user()?->can('checkInEventTickets', $account), 403);
         $canManage = (bool) $request->user()?->can('manageEvents', $account);
+        $selectedLocationId = $workingLocationContext->filterLocationId($account, includeInactive: true);
         $tab = in_array($request->query('tab'), ['upcoming', 'draft', 'past', 'cancelled'], true)
             ? (string) $request->query('tab')
             : 'upcoming';
@@ -40,17 +45,32 @@ class EventController extends Controller
             ->when($tab === 'draft', fn ($query) => $query->where('status', EventStatus::Draft->value))
             ->when($tab === 'past', fn ($query) => $query->where('status', EventStatus::Published->value)->where('ends_at', '<', now()))
             ->when($tab === 'cancelled', fn ($query) => $query->whereIn('status', [EventStatus::Cancelled->value, EventStatus::Archived->value]))
+            ->when($selectedLocationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->orderBy($tab === 'past' ? 'starts_at' : 'starts_at', $tab === 'past' ? 'desc' : 'asc')
             ->paginate(20)
             ->withQueryString();
 
-        return view('events.index', compact('account', 'events', 'tab', 'canManage'));
+        return view('events.index', [
+            'account' => $account,
+            'events' => $events,
+            'tab' => $tab,
+            'canManage' => $canManage,
+            'locations' => $account->locations()->orderBy('name')->get(['id', 'name', 'is_active']),
+            'selectedLocationId' => $selectedLocationId,
+            'locationQuery' => $request->query->has('location_id')
+                ? ['location_id' => $request->query('location_id')]
+                : [],
+        ]);
     }
 
-    public function create(Request $request, Account $account): View
-    {
+    public function create(
+        Request $request,
+        Account $account,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         abort_unless($request->user()?->can('manageEvents', $account), 403);
         $event = new Event([
+            'location_id' => $workingLocationContext->formLocationId($account),
             'timezone' => $account->timezone ?? config('app.timezone'),
             'currency' => $account->default_currency,
             'starts_at' => now($account->timezone)->addWeek()->startOfHour(),
@@ -193,7 +213,14 @@ class EventController extends Controller
         return [
             'account' => $account,
             'event' => $event,
-            'locations' => $account->locations()->active()->with(['rooms' => fn ($query) => $query->active()->orderBy('name')])->orderBy('name')->get(),
+            'locations' => $account->locations()
+                ->where(fn ($query) => $query->active()->when(
+                    $event->location_id,
+                    fn ($query, int $locationId) => $query->orWhere('locations.id', $locationId),
+                ))
+                ->with(['rooms' => fn ($query) => $query->active()->orderBy('name')])
+                ->orderBy('name')
+                ->get(),
         ];
     }
 

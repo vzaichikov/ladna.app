@@ -68,6 +68,12 @@ class QuickBookingController extends Controller
 
         $validated = $request->validate([
             'date' => ['required', 'date_format:Y-m-d'],
+            'location_id' => [
+                'nullable',
+                Rule::exists((new Location)->getTable(), 'id')
+                    ->where('account_id', $account->id)
+                    ->where('is_active', true),
+            ],
         ]);
         $timezone = $account->timezone ?? config('app.timezone');
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i:s', $validated['date'].' 00:00:00', $timezone);
@@ -78,7 +84,7 @@ class QuickBookingController extends Controller
         ];
 
         $classes = $account->scheduledClasses()
-            ->with(['location', 'classType', 'trainer'])
+            ->with(['location', 'room', 'classType', 'trainer'])
             ->withCount([
                 'classBookings as active_bookings_count' => fn ($query) => $query
                     ->notCorrectedRemoved()
@@ -93,6 +99,7 @@ class QuickBookingController extends Controller
                 ->where('is_active', true)
                 ->where('schedule_kind', ScheduleKind::GroupClass->value))
             ->where('starts_at', '>=', now())
+            ->when($validated['location_id'] ?? null, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->orderBy('starts_at')
             ->get()
             ->filter(fn ($scheduledClass): bool => $this->availableSpots($scheduledClass) > 0)
@@ -102,6 +109,8 @@ class QuickBookingController extends Controller
                 'title' => $scheduledClass->title,
                 'class_type' => $scheduledClass->classType?->name,
                 'trainer' => $scheduledClass->trainer?->name ?? __('app.trainer_not_assigned'),
+                'location' => $scheduledClass->location?->name,
+                'room' => $scheduledClass->room?->name,
                 'available_spots' => $this->availableSpots($scheduledClass),
                 'capacity' => (int) ($scheduledClass->capacity ?? 0),
             ])

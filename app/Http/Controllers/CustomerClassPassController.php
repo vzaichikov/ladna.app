@@ -21,6 +21,7 @@ use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Support\ScheduleKindRegistry;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -30,8 +31,11 @@ use Illuminate\View\View;
 
 class CustomerClassPassController extends Controller
 {
-    public function index(Request $request, Account $account): View
-    {
+    public function index(
+        Request $request,
+        Account $account,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('manageCustomerClassPasses', $account);
 
         $term = trim((string) $request->query('q', ''));
@@ -83,6 +87,7 @@ class CustomerClassPassController extends Controller
 
         return view('customer-class-passes.index', [
             'account' => $account,
+            'hasMultipleWorkingLocations' => $workingLocationContext->locations($account)->count() > 1,
             'customerClassPasses' => $customerClassPasses,
             'state' => $state,
             'scheduleKind' => $scheduleKind,

@@ -38,7 +38,7 @@ class StudioDashboardData
      *     trainerDashboard?: array<string, mixed>
      * }
      */
-    public function forAccount(Account $account, User $user): array
+    public function forAccount(Account $account, User $user, ?int $locationId = null): array
     {
         $membership = $account->membershipFor($user);
         $timezone = $this->timezone($account);
@@ -53,7 +53,7 @@ class StudioDashboardData
                 'mode' => 'trainer',
                 'timezone' => $timezone,
                 'trainer' => $trainer,
-                'trainerDashboard' => $this->trainerDashboard($account, $trainer, $timezone),
+                'trainerDashboard' => $this->trainerDashboard($account, $trainer, $timezone, $locationId),
             ];
         }
 
@@ -61,22 +61,22 @@ class StudioDashboardData
             'mode' => 'owner',
             'timezone' => $timezone,
             'trainer' => null,
-            'ownerDashboard' => $this->ownerDashboard($account, $timezone),
+            'ownerDashboard' => $this->ownerDashboard($account, $timezone, $locationId),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function ownerDashboard(Account $account, string $timezone): array
+    private function ownerDashboard(Account $account, string $timezone, ?int $locationId): array
     {
         $now = CarbonImmutable::now($timezone);
         $todayStartsAt = $now->startOfDay();
         $todayEndsAt = $now->endOfDay();
         $outlookEndsAt = $todayStartsAt->addDays(self::OUTLOOK_DAYS - 1)->endOfDay();
 
-        $todayClasses = $this->visibleClasses($account, $todayStartsAt, $todayEndsAt);
-        $outlookClasses = $this->scheduledClasses($account, $todayStartsAt, $outlookEndsAt);
+        $todayClasses = $this->visibleClasses($account, $todayStartsAt, $todayEndsAt, $locationId);
+        $outlookClasses = $this->scheduledClasses($account, $todayStartsAt, $outlookEndsAt, $locationId);
         $todayScheduledClasses = $outlookClasses->filter(
             fn (ScheduledClass $scheduledClass): bool => $this->displayDateKey($scheduledClass, $timezone) === $todayStartsAt->toDateString(),
         )->values();
@@ -115,8 +115,8 @@ class StudioDashboardData
             'locationLoad' => $this->loadBy($outlookClasses, 'location_id', 'location'),
             'roomLoad' => $this->loadBy($outlookClasses, 'room_id', 'room'),
             'outlookDays' => $this->outlookDays($outlookClasses, $todayStartsAt, $timezone),
-            'activeTrainerSubstitutions' => $this->activeTrainerSubstitutions($account, $todayStartsAt),
-            'peopleCounterRooms' => $this->peopleCounterRooms($account),
+            'activeTrainerSubstitutions' => $this->activeTrainerSubstitutions($account, $todayStartsAt, $locationId),
+            'peopleCounterRooms' => $this->peopleCounterRooms($account, $locationId),
         ];
     }
 
@@ -214,7 +214,7 @@ class StudioDashboardData
     /**
      * @return array<string, mixed>
      */
-    private function trainerDashboard(Account $account, ?Trainer $trainer, string $timezone): array
+    private function trainerDashboard(Account $account, ?Trainer $trainer, string $timezone, ?int $locationId): array
     {
         $now = CarbonImmutable::now($timezone);
         $todayStartsAt = $now->startOfDay();
@@ -239,6 +239,7 @@ class StudioDashboardData
                     ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($trainer->id));
             })
             ->where('status', '!=', ScheduledClassStatus::Draft->value)
+            ->when($locationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->whereBetween('starts_at', $this->databaseRange($todayStartsAt, $weekEndsAt))
             ->orderBy('starts_at')
             ->get();
@@ -255,11 +256,16 @@ class StudioDashboardData
     /**
      * @return Collection<int, ScheduledClass>
      */
-    private function visibleClasses(Account $account, CarbonImmutable $startsAt, CarbonImmutable $endsAt): Collection
-    {
+    private function visibleClasses(
+        Account $account,
+        CarbonImmutable $startsAt,
+        CarbonImmutable $endsAt,
+        ?int $locationId,
+    ): Collection {
         return $account->scheduledClasses()
             ->with($this->classRelations())
             ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->when($locationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->whereBetween('starts_at', $this->databaseRange($startsAt, $endsAt))
             ->orderBy('starts_at')
             ->get();
@@ -268,11 +274,16 @@ class StudioDashboardData
     /**
      * @return Collection<int, ScheduledClass>
      */
-    private function scheduledClasses(Account $account, CarbonImmutable $startsAt, CarbonImmutable $endsAt): Collection
-    {
+    private function scheduledClasses(
+        Account $account,
+        CarbonImmutable $startsAt,
+        CarbonImmutable $endsAt,
+        ?int $locationId,
+    ): Collection {
         return $account->scheduledClasses()
             ->with($this->classRelations())
             ->where('status', ScheduledClassStatus::Scheduled->value)
+            ->when($locationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->whereBetween('starts_at', $this->databaseRange($startsAt, $endsAt))
             ->orderBy('starts_at')
             ->get();
@@ -406,11 +417,15 @@ class StudioDashboardData
     /**
      * @return Collection<int, mixed>
      */
-    private function activeTrainerSubstitutions(Account $account, CarbonImmutable $todayStartsAt): Collection
-    {
+    private function activeTrainerSubstitutions(
+        Account $account,
+        CarbonImmutable $todayStartsAt,
+        ?int $locationId,
+    ): Collection {
         return $account->trainerSubstitutions()
             ->with(['replacedTrainer:id,name', 'substituteTrainer:id,name', 'location:id,name', 'room:id,name'])
             ->whereDate('date_to', '>=', $todayStartsAt->toDateString())
+            ->when($locationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->orderBy('date_from')
             ->orderByDesc('created_at')
             ->take(8)
@@ -420,7 +435,7 @@ class StudioDashboardData
     /**
      * @return Collection<int, array{room: Room, location_name: ?string, timezone: string, sample: ?PeopleCounterSample, detected_count: ?int, captured_at: ?CarbonInterface, image_url: ?string}>
      */
-    private function peopleCounterRooms(Account $account): Collection
+    private function peopleCounterRooms(Account $account, ?int $locationId): Collection
     {
         if (! $account->allowsRtspCameras() || ! $account->peopleCounterEnabled()) {
             return collect();
@@ -431,6 +446,7 @@ class StudioDashboardData
         return $account->rooms()
             ->active()
             ->rtspEnabled()
+            ->when($locationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->with([
                 'location:id,account_id,name,timezone',
                 'latestSuccessfulPeopleCounterSample' => fn ($query) => $query->select([

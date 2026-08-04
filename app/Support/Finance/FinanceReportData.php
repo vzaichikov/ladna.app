@@ -9,6 +9,7 @@ use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\FinanceEpoch;
+use App\Models\Location;
 use App\Models\StudioCashEntry;
 use App\Models\StudioExpense;
 use Carbon\CarbonInterface;
@@ -46,7 +47,7 @@ class FinanceReportData
             ])
             ->when($filters['location_id'], fn (Builder $query, int $locationId): Builder => $query
                 ->whereHas('event', fn (Builder $query): Builder => $query->where('location_id', $locationId)))
-            ->with(['event:id,title,location_id'])
+            ->with(['event:id,title,location_id', 'event.location:id,name'])
             ->get();
         $purchaseRefunds = CustomerPurchaseRefund::query()
             ->whereBelongsTo($account)
@@ -60,7 +61,7 @@ class FinanceReportData
             ->whereBetween('refunded_at', [$startsAt, $endsAt])
             ->when($filters['location_id'], fn (Builder $query, int $locationId): Builder => $query
                 ->whereHas('event', fn (Builder $query): Builder => $query->where('location_id', $locationId)))
-            ->with(['event:id,title,location_id'])
+            ->with(['event:id,title,location_id', 'event.location:id,name'])
             ->get();
         $expenses = StudioExpense::query()
             ->whereBelongsTo($account)
@@ -116,6 +117,7 @@ class FinanceReportData
                         'occurred_at' => $purchase->effectiveOccurredAt(),
                         'label' => $purchase->customer?->name ?? $purchase->plan_name,
                         'details' => $purchase->plan_name,
+                        'location_id' => $purchase->location_id,
                         'location' => $purchase->location?->name,
                         'amount_cents' => (int) $purchase->amount_cents,
                         'currency' => (string) $purchase->currency,
@@ -124,7 +126,8 @@ class FinanceReportData
                         'occurred_at' => $order->paid_at ?? $order->created_at,
                         'label' => $order->buyer_name,
                         'details' => $order->event?->title,
-                        'location' => null,
+                        'location_id' => $order->event?->location_id,
+                        'location' => $order->event?->location?->name,
                         'amount_cents' => (int) $order->amount_cents,
                         'currency' => (string) $order->currency,
                     ]))
@@ -135,6 +138,7 @@ class FinanceReportData
                         'occurred_at' => $refund->effectiveOccurredAt(),
                         'label' => $refund->customerPurchase?->customer?->name,
                         'details' => $refund->reason,
+                        'location_id' => $refund->location_id,
                         'location' => $refund->location?->name,
                         'amount_cents' => (int) $refund->amount_cents,
                         'currency' => (string) $refund->currency,
@@ -143,7 +147,8 @@ class FinanceReportData
                         'occurred_at' => $order->refunded_at,
                         'label' => $order->buyer_name,
                         'details' => $order->event?->title,
-                        'location' => null,
+                        'location_id' => $order->event?->location_id,
+                        'location' => $order->event?->location?->name,
                         'amount_cents' => (int) $order->amount_cents,
                         'currency' => (string) $order->currency,
                     ]))
@@ -154,6 +159,7 @@ class FinanceReportData
                         'occurred_at' => $expense->occurred_at,
                         'label' => $expense->category?->name,
                         'details' => $expense->reason,
+                        'location_id' => $expense->expense_location_id,
                         'location' => $expense->expenseLocation?->name,
                         'amount_cents' => (int) $expense->amount_cents,
                         'currency' => (string) $expense->currency,
@@ -163,6 +169,52 @@ class FinanceReportData
                 'owner_deposits' => $this->cashEntryRows($ownerDeposits),
                 'owner_withdrawals' => $this->cashEntryRows($ownerWithdrawals),
             ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @param  Collection<int, Location>  $locations
+     * @return array{rows: array<int, array<string, mixed>>, overall: array<string, array<string, int>>}
+     */
+    public function locationComparison(array $report, Collection $locations): array
+    {
+        $rows = $locations->mapWithKeys(fn ($location): array => [
+            (string) $location->id => $this->emptyComparisonRow(
+                $location->id,
+                $location->name,
+                (bool) $location->is_active,
+            ),
+        ])->all();
+        $unassignedKey = 'unassigned';
+
+        foreach (['payments', 'refunds', 'expenses'] as $section) {
+            foreach ($report['sections'][$section] as $item) {
+                $key = $item['location_id'] === null ? $unassignedKey : (string) $item['location_id'];
+
+                if (! isset($rows[$key])) {
+                    $rows[$key] = $this->emptyComparisonRow(null, __('app.location_unassigned'), false);
+                }
+
+                $currency = strtoupper((string) $item['currency']);
+                $rows[$key]['totals'][$section][$currency] = (int) ($rows[$key]['totals'][$section][$currency] ?? 0)
+                    + (int) $item['amount_cents'];
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $row['totals']['operating_cash_result'] = $this->subtractTotals(
+                $this->subtractTotals($row['totals']['payments'], $row['totals']['refunds']),
+                $row['totals']['expenses'],
+            );
+        }
+        unset($row);
+
+        return [
+            'rows' => array_values($rows),
+            'overall' => collect($report['totals'])
+                ->only(['payments', 'refunds', 'expenses', 'operating_cash_result'])
+                ->all(),
         ];
     }
 
@@ -199,12 +251,31 @@ class FinanceReportData
                 'occurred_at' => $entry->occurred_at,
                 'label' => $entry->actor_name,
                 'details' => $entry->reason,
+                'location_id' => $entry->location_id,
                 'location' => $entry->location?->name,
                 'amount_cents' => (int) $entry->amount_cents,
                 'currency' => (string) $entry->currency,
             ])
             ->sortByDesc('occurred_at')
             ->values();
+    }
+
+    /**
+     * @return array{location_id: int|null, name: string, is_active: bool, totals: array<string, array<string, int>>}
+     */
+    private function emptyComparisonRow(?int $locationId, string $name, bool $isActive): array
+    {
+        return [
+            'location_id' => $locationId,
+            'name' => $name,
+            'is_active' => $isActive,
+            'totals' => [
+                'payments' => [],
+                'refunds' => [],
+                'expenses' => [],
+                'operating_cash_result' => [],
+            ],
+        ];
     }
 
     /**

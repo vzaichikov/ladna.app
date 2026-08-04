@@ -6,6 +6,9 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.activity_directions') }}</h1>
+            @if ($hasMultipleWorkingLocations)
+                <x-ui.entity-scope-badge :label="__('app.account_wide')" class="mt-2" />
+            @endif
             <p class="crm-page-copy">{{ __('app.activity_directions_copy') }}</p>
         </div>
         <x-ui.button :href="route('dashboard.accounts.activity-directions.create', $account)">

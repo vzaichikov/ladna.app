@@ -15,6 +15,7 @@
     </div>
 
     <form method="GET" action="{{ route('dashboard.accounts.scheduled-classes-history.index', $account) }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
+        <input type="hidden" name="filters_submitted" value="1">
         <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <label>
                 <span class="crm-label">{{ __('app.date_from') }}</span>
@@ -26,37 +27,43 @@
                 <input type="date" name="date_to" value="{{ $selectedDateTo }}" class="crm-field">
             </label>
 
-            <fieldset>
-                <legend class="crm-label">{{ __('app.filter_locations') }}</legend>
-                <div class="mt-2 flex flex-wrap gap-2">
-                    @foreach ($filterLocations as $location)
-                        <label @class([
-                            'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
-                            'border-brand-200 bg-brand-50 text-brand-700' => in_array($location->id, $selectedLocationIds, true),
-                            'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($location->id, $selectedLocationIds, true),
-                        ])>
-                            <input type="checkbox" name="locations[]" value="{{ $location->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($location->id, $selectedLocationIds, true))>
-                            <span>{{ $location->name }}</span>
-                        </label>
-                    @endforeach
-                </div>
-            </fieldset>
+            @if ($filterLocations->count() === 1)
+                <input type="hidden" name="locations[]" value="{{ $filterLocations->first()->id }}">
+            @elseif ($filterLocations->count() > 1)
+                <fieldset>
+                    <legend class="crm-label">{{ __('app.filter_locations') }}</legend>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach ($filterLocations as $location)
+                            <label @class([
+                                'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
+                                'border-brand-200 bg-brand-50 text-brand-700' => in_array($location->id, $selectedLocationIds, true),
+                                'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($location->id, $selectedLocationIds, true),
+                            ])>
+                                <input type="checkbox" name="locations[]" value="{{ $location->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($location->id, $selectedLocationIds, true))>
+                                <span>{{ $location->name }}@unless ($location->is_active) · {{ __('app.inactive') }}@endunless</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
+            @endif
 
-            <fieldset>
-                <legend class="crm-label">{{ __('app.filter_rooms') }}</legend>
-                <div class="mt-2 flex flex-wrap gap-2">
-                    @foreach ($filterRooms as $room)
-                        <label @class([
-                            'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
-                            'border-brand-200 bg-brand-50 text-brand-700' => in_array($room->id, $selectedRoomIds, true),
-                            'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($room->id, $selectedRoomIds, true),
-                        ])>
-                            <input type="checkbox" name="rooms[]" value="{{ $room->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($room->id, $selectedRoomIds, true))>
-                            <span>{{ $room->location?->name }} · {{ $room->name }}</span>
-                        </label>
-                    @endforeach
-                </div>
-            </fieldset>
+            @if ($filterRooms->isNotEmpty())
+                <fieldset>
+                    <legend class="crm-label">{{ __('app.filter_rooms') }}</legend>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        @foreach ($filterRooms as $room)
+                            <label @class([
+                                'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition',
+                                'border-brand-200 bg-brand-50 text-brand-700' => in_array($room->id, $selectedRoomIds, true),
+                                'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => ! in_array($room->id, $selectedRoomIds, true),
+                            ])>
+                                <input type="checkbox" name="rooms[]" value="{{ $room->id }}" class="size-4 rounded border-stone-300 text-brand-600 focus:ring-brand-500" @checked(in_array($room->id, $selectedRoomIds, true))>
+                                <span>{{ $room->location?->name }} · {{ $room->name }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
+            @endif
 
             @if ($filterTrainers->isNotEmpty())
                 <fieldset>

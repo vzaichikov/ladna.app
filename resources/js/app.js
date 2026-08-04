@@ -2557,7 +2557,12 @@ function renderGroupClassResults(container, classes) {
 
         const meta = document.createElement('span');
         meta.className = 'mt-1 block text-slate-500';
-        meta.textContent = `${scheduledClass.trainer} · ${scheduledClass.available_spots}/${scheduledClass.capacity}`;
+        meta.textContent = [
+            scheduledClass.location,
+            scheduledClass.room,
+            scheduledClass.trainer,
+            `${scheduledClass.available_spots}/${scheduledClass.capacity}`,
+        ].filter(Boolean).join(' · ');
 
         body.append(title, meta);
         label.append(radio, body);
@@ -2584,6 +2589,10 @@ function loadGroupClassAvailability(input) {
 
     const url = new URL(availabilityUrl, window.location.origin);
     url.searchParams.set('date', input.value);
+
+    if (input.dataset.locationId) {
+        url.searchParams.set('location_id', input.dataset.locationId);
+    }
 
     fetch(url, {
         headers: {

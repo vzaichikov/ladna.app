@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\FinanceEpoch;
 use App\Models\Location;
 use App\Support\DateTimePresenter;
+use App\Support\WorkingLocationContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -43,6 +44,7 @@ class FinancePeriodRequest extends FormRequest
                 Rule::exists((new Location)->getTable(), 'id')
                     ->where('account_id', $account instanceof Account ? $account->id : 0),
             ],
+            'view' => ['required', Rule::in(['summary', 'compare'])],
         ];
     }
 
@@ -83,6 +85,11 @@ class FinancePeriodRequest extends FormRequest
         return [$startsAt, $endsAt];
     }
 
+    public function reportView(): string
+    {
+        return (string) $this->validated('view');
+    }
+
     public function financeEpoch(): ?FinanceEpoch
     {
         $account = $this->route('account');
@@ -96,6 +103,14 @@ class FinancePeriodRequest extends FormRequest
         $timezone = DateTimePresenter::accountTimezone($account instanceof Account ? $account : null);
         $today = CarbonImmutable::now($timezone);
         $dateFrom = (string) ($this->input('date_from') ?: $today->startOfMonth()->toDateString());
+        $reportView = $this->routeIs('dashboard.accounts.reports.financial') && $this->input('view') === 'compare'
+            ? 'compare'
+            : 'summary';
+        $locationId = $reportView === 'compare'
+            ? null
+            : ($this->query->has('location_id')
+                ? $this->input('location_id')
+                : ($account instanceof Account ? app(WorkingLocationContext::class)->selectedLocationId($account) : null));
 
         if (
             $account instanceof Account
@@ -112,7 +127,8 @@ class FinancePeriodRequest extends FormRequest
         $this->merge([
             'date_from' => $dateFrom,
             'date_to' => $this->input('date_to') ?: $today->toDateString(),
-            'location_id' => blank($this->input('location_id')) ? null : $this->input('location_id'),
+            'location_id' => blank($locationId) ? null : $locationId,
+            'view' => $reportView,
         ]);
     }
 

@@ -7,6 +7,7 @@ use App\Enums\ClassBookingStatus;
 use App\Models\Account;
 use App\Models\Trainer;
 use App\Support\QuickBookingOptions;
+use App\Support\WorkingLocationContext;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
@@ -19,8 +20,12 @@ class ScheduledClassController extends Controller
 
     private const ISO_SUNDAY = 7;
 
-    public function __invoke(Request $request, Account $account, QuickBookingOptions $quickBookingOptions): View
-    {
+    public function __invoke(
+        Request $request,
+        Account $account,
+        QuickBookingOptions $quickBookingOptions,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('view', $account);
 
         $timezone = $account->timezone ?? config('app.timezone');
@@ -50,7 +55,14 @@ class ScheduledClassController extends Controller
             ->get(['id', 'name', 'is_active']);
         $quickBookingData = $quickBookingOptions->forAccount($account);
         $manualClassOptions = $quickBookingData['adminOneOffOptions'];
-        $selectedLocationIds = $this->selectedIds($request, 'locations', $filterLocations->pluck('id')->all());
+        $selectedLocationIds = $this->selectedLocationIds(
+            $request,
+            $filterLocations->pluck('id')->all(),
+            $workingLocationContext->selectedLocationId($account),
+        );
+        $filterRooms = $selectedLocationIds === []
+            ? $filterRooms
+            : $filterRooms->whereIn('location_id', $selectedLocationIds)->values();
         $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
         $currentTrainer = $this->currentTrainerFor($account, $request, $filterTrainers);
         $showOnlyMyClasses = $currentTrainer !== null && $request->boolean('only_my_classes');
@@ -109,6 +121,7 @@ class ScheduledClassController extends Controller
             'quickBookingRooms' => $quickBookingData['rooms'],
             'quickBookingTrainers' => $quickBookingData['trainers'],
             'quickBookingActivityDirections' => $quickBookingData['activityDirections'],
+            'workingLocationId' => $workingLocationContext->formLocationId($account),
             'selectedLocationIds' => $selectedLocationIds,
             'selectedRoomIds' => $selectedRoomIds,
             'selectedTrainerIds' => $selectedTrainerIds,
@@ -282,6 +295,21 @@ class ScheduledClassController extends Controller
     }
 
     /**
+     * @param  array<int, int>  $allowedIds
+     * @return array<int, int>
+     */
+    private function selectedLocationIds(Request $request, array $allowedIds, ?int $workingLocationId): array
+    {
+        if (! $request->query->has('filters_submitted') && ! $request->query->has('locations')) {
+            return $workingLocationId && in_array($workingLocationId, $allowedIds, true)
+                ? [$workingLocationId]
+                : [];
+        }
+
+        return $this->selectedIds($request, 'locations', $allowedIds);
+    }
+
+    /**
      * @param  Collection<int, Trainer>  $filterTrainers
      */
     private function currentTrainerFor(Account $account, Request $request, Collection $filterTrainers): ?Trainer
@@ -315,7 +343,7 @@ class ScheduledClassController extends Controller
         bool $showOnlyMyClasses,
         bool $showPassed,
     ): array {
-        $filters = [];
+        $filters = ['filters_submitted' => 1];
 
         if ($selectedLocationIds !== []) {
             $filters['locations'] = $selectedLocationIds;

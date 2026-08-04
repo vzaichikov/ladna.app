@@ -544,12 +544,17 @@ class PeopleCounterReportTest extends TestCase
         ]);
 
         Storage::disk('local')->put('people-counter/testing/snapshot.jpg', 'snapshot');
+        Storage::disk('local')->assertExists('people-counter/testing/snapshot.jpg');
+        $this->assertSame('people-counter/testing/snapshot.jpg', $room->refresh()->people_counter_snapshot_path);
+        $snapshotRoute = route('dashboard.accounts.rooms.people-counter-mask.snapshot', [$account, $room]);
 
-        $this->actingAs($owner)
+        $editResponse = $this->actingAs($owner)
             ->get(route('dashboard.accounts.rooms.people-counter-mask.edit', [$account, $room]))
             ->assertOk()
-            ->assertSee('data-people-counter-mask-editor', false)
-            ->assertSee(route('dashboard.accounts.rooms.people-counter-mask.snapshot', [$account, $room]), false);
+            ->assertViewHas('snapshotUrl', $snapshotRoute)
+            ->assertSee('data-people-counter-mask-editor', false);
+
+        $this->assertStringContainsString($snapshotRoute, $editResponse->getContent(), 'The existing snapshot must be rendered.');
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.rooms.people-counter-mask.update', [$account, $room]), [
@@ -574,6 +579,15 @@ class PeopleCounterReportTest extends TestCase
                 ],
             ],
         ], $room->refresh()->people_counter_mask_polygons);
+
+        Storage::disk('local')->delete('people-counter/testing/snapshot.jpg');
+        Storage::disk('local')->assertMissing('people-counter/testing/snapshot.jpg');
+
+        $this->get(route('dashboard.accounts.rooms.people-counter-mask.edit', [$account, $room]))
+            ->assertOk()
+            ->assertViewHas('snapshotUrl', null)
+            ->assertDontSee('data-people-counter-mask-editor', false)
+            ->assertDontSee('data-people-counter-mask-image', false);
     }
 
     private function scheduledClass(

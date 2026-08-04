@@ -11,6 +11,7 @@ use App\Support\ApplicationVersion;
 use App\Support\Mail\LadnaTransactionalTransport;
 use App\Support\Mail\MailDeliveryTransportResolver;
 use App\Support\SystemAppearance;
+use App\Support\WorkingLocationContext;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -30,7 +31,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->scoped(WorkingLocationContext::class);
     }
 
     /**
@@ -76,6 +77,23 @@ class AppServiceProvider extends ServiceProvider
                 ->with('systemAppearance', SystemAppearance::current())
                 ->with('applicationVersion', ApplicationVersion::current())
                 ->with('applicationRevision', ApplicationVersion::revision());
+
+            if ($view->name() !== 'layouts.app') {
+                return;
+            }
+
+            $account = $view->getData()['account'] ?? null;
+
+            if (! $account instanceof Account || ! $account->exists) {
+                return;
+            }
+
+            $workingLocationContext = $this->app->make(WorkingLocationContext::class);
+
+            $view
+                ->with('workingLocations', $workingLocationContext->locations($account))
+                ->with('workingLocation', $workingLocationContext->location($account))
+                ->with('workingLocationValue', $workingLocationContext->value($account));
         });
 
         RateLimiter::for('login', function (Request $request): Limit {

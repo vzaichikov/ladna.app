@@ -10,12 +10,13 @@ use App\Models\Account;
 use App\Models\ClassType;
 use App\Support\ScheduleKindRegistry;
 use App\Support\SlugGenerator;
+use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 class ClassTypeController extends Controller
 {
-    public function index(Account $account): View
+    public function index(Account $account, WorkingLocationContext $workingLocationContext): View
     {
         $this->authorize('view', $account);
         $scheduleKind = $this->currentScheduleKind();
@@ -23,6 +24,7 @@ class ClassTypeController extends Controller
 
         return view('class-types.index', [
             'account' => $account,
+            'hasMultipleWorkingLocations' => $workingLocationContext->locations($account)->count() > 1,
             'classTypes' => $account->classTypes()
                 ->with('activityDirection')
                 ->where('schedule_kind', $scheduleKind->value)

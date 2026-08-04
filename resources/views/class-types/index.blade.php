@@ -6,6 +6,9 @@
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="crm-page-title">{{ __('app.'.$scheduleKindDefinition['title_key']) }}</h1>
+            @if ($hasMultipleWorkingLocations)
+                <x-ui.entity-scope-badge :label="__('app.account_wide')" class="mt-2" />
+            @endif
             <p class="crm-page-copy">{{ __('app.'.$scheduleKindDefinition['copy_key']) }}</p>
         </div>
         <x-ui.button :href="route(\App\Support\ScheduleKindRegistry::routeName($scheduleKind, 'create'), $account)">

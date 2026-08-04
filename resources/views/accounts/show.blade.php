@@ -19,6 +19,13 @@
             <div class="crm-page-kicker">{{ $account->name }}</div>
             <h1 class="crm-page-title">{{ $pageTitle }}</h1>
             <p class="crm-page-copy">{{ $pageCopy }}</p>
+            @if ($hasMultipleWorkingLocations)
+                <x-ui.entity-scope-badge
+                    :label="$dashboardLocation ? __('app.operational_scope_location', ['location' => $dashboardLocation->name]) : __('app.all_locations')"
+                    variant="location"
+                    class="mt-2"
+                />
+            @endif
         </div>
         <div class="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm shadow-xs">
             <div class="font-semibold text-slate-950">{{ $now->translatedFormat('l, j F') }}</div>
@@ -118,7 +125,13 @@
             </x-ui.panel>
         @endif
     @else
-        <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        @if ($hasMultipleWorkingLocations)
+            <div class="mt-6 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <x-ui.entity-scope-badge :label="__('app.account_wide')" />
+                <span>{{ __('app.dashboard_mixed_scope_notice') }}</span>
+            </div>
+        @endif
+        <section class="{{ $hasMultipleWorkingLocations ? 'mt-3' : 'mt-6' }} grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <x-ui.metric :label="__('app.active_customer_passes')" :value="$ownerDashboard['metrics']['activePasses']" icon="class-pass-plans" accent="brand" />
             <x-ui.metric :label="__('app.customers')" :value="$ownerDashboard['metrics']['customers']" :meta="__('app.new_customers_7_days', ['count' => $ownerDashboard['metrics']['newCustomers']])" icon="accounts" />
             <x-ui.metric :label="__('app.open_website_leads')" :value="$ownerDashboard['metrics']['openLeads']" :meta="__('app.new_leads_today', ['count' => $ownerDashboard['metrics']['todayNewLeads']])" icon="website-leads" accent="emerald" />

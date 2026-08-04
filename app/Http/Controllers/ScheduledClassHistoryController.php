@@ -6,6 +6,7 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Support\ScheduleKindRegistry;
+use App\Support\WorkingLocationContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -15,16 +16,18 @@ use Throwable;
 
 class ScheduledClassHistoryController extends Controller
 {
-    public function __invoke(Request $request, Account $account): View
-    {
+    public function __invoke(
+        Request $request,
+        Account $account,
+        WorkingLocationContext $workingLocationContext,
+    ): View {
         $this->authorize('view', $account);
 
         $timezone = $account->timezone ?? config('app.timezone');
         [$selectedDateFrom, $selectedDateTo] = $this->selectedDateRange($request, $timezone);
         $filterLocations = $account->locations()
-            ->active()
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'is_active']);
         $filterRooms = $account->rooms()
             ->active()
             ->with('location:id,name')
@@ -48,7 +51,14 @@ class ScheduledClassHistoryController extends Controller
         $filterScheduleKinds = array_keys(ScheduleKindRegistry::all());
         $allowedLocationIds = $account->locations()->pluck('id')->all();
         $allowedTrainerIds = $account->trainers()->pluck('id')->all();
-        $selectedLocationIds = $this->selectedIds($request, 'locations', $allowedLocationIds);
+        $selectedLocationIds = $this->selectedLocationIds(
+            $request,
+            $allowedLocationIds,
+            $workingLocationContext->selectedLocationId($account),
+        );
+        $filterRooms = $selectedLocationIds === []
+            ? $filterRooms
+            : $filterRooms->whereIn('location_id', $selectedLocationIds)->values();
         $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
         $selectedTrainerIds = $this->selectedIds($request, 'trainers', $allowedTrainerIds);
         $selectedClassTypeIds = $this->selectedIds($request, 'class_types', $filterClassTypes->pluck('id')->all());
@@ -182,6 +192,21 @@ class ScheduledClassHistoryController extends Controller
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $allowedIds
+     * @return array<int, int>
+     */
+    private function selectedLocationIds(Request $request, array $allowedIds, ?int $workingLocationId): array
+    {
+        if (! $request->query->has('filters_submitted') && ! $request->query->has('locations')) {
+            return $workingLocationId && in_array($workingLocationId, $allowedIds, true)
+                ? [$workingLocationId]
+                : [];
+        }
+
+        return $this->selectedIds($request, 'locations', $allowedIds);
     }
 
     /**
