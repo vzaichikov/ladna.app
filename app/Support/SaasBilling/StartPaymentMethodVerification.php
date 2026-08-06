@@ -28,7 +28,7 @@ class StartPaymentMethodVerification
             throw new LogicException('Ladna billing v2 is disabled.');
         }
 
-        $lock = Cache::lock('saas-billing-v2:verification:'.$subscription->getKey(), 60);
+        $lock = Cache::lock('account-payment-method-verification:'.$subscription->account_id, 120);
 
         if (! $lock->get()) {
             throw new LogicException('Card verification is already being started.');

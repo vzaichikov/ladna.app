@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.124.0',
+                'date' => '2026-08-06',
+                'title' => 'Self-service payment method replacement',
+                'items' => ['Studio owners can now change or relink the saved card from either the SMS account or SaaS billing page. Ladna confirms the change, unlinks the previous Mono token, and verifies the new card for 0 UAH.', 'Replacing a card does not retry or create a payment. SMS auto top-up stays suspended until the new card is verified, while its thresholds and limits remain saved.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.123.0',
                 'date' => '2026-08-06',
                 'title' => 'Explicit trainer-overlap exceptions for one-off classes',
@@ -1080,6 +1087,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.124.0',
+                'date' => '2026-08-06',
+                'title' => 'Самостійна заміна способу оплати',
+                'items' => ['Власники студій тепер можуть змінити або повторно прив’язати збережену картку зі сторінки SMS-рахунку або оплати Ladna. Ladna підтверджує зміну, відв’язує попередній токен Mono та перевіряє нову картку за 0 грн.', 'Заміна картки не повторює і не створює платіж. Автопоповнення SMS залишається призупиненим до перевірки нової картки, а його пороги та ліміти зберігаються.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.123.0',
                 'date' => '2026-08-06',

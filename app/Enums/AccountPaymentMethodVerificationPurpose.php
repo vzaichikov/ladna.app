@@ -6,4 +6,5 @@ enum AccountPaymentMethodVerificationPurpose: string
 {
     case Subscription = 'subscription';
     case SmsTopUp = 'sms_top_up';
+    case PaymentMethodChange = 'payment_method_change';
 }

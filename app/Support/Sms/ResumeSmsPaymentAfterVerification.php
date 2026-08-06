@@ -38,6 +38,10 @@ class ResumeSmsPaymentAfterVerification
             return $this->chargeSubscription->execute($callback, $setting);
         }
 
+        if ($paymentMethod->verification_purpose !== AccountPaymentMethodVerificationPurpose::SmsTopUp) {
+            return null;
+        }
+
         $idempotencyKey = 'sms-top-up-after-verification:'.$paymentMethod->verification_reference;
         $existing = SmsTopUpPayment::query()->where('idempotency_key', $idempotencyKey)->first();
 

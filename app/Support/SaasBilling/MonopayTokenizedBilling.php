@@ -10,8 +10,12 @@ use App\Models\SmsTopUpPayment;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\Payments\PaymentCheckout;
 use App\Support\Payments\PaymentGatewayException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Throwable;
 
 class MonopayTokenizedBilling
 {
@@ -41,8 +45,12 @@ class MonopayTokenizedBilling
             ],
         ];
 
-        $response = $this->request($credentials)
-            ->post(self::BASE_URL.'/api/merchant/invoice/create', $payload);
+        try {
+            $response = $this->request($credentials)
+                ->post(self::BASE_URL.'/api/merchant/invoice/create', $payload);
+        } catch (Throwable) {
+            throw new PaymentGatewayException('Monopay card verification creation failed.');
+        }
 
         if (! $response->successful() || ! is_string($response->json('invoiceId')) || ! is_string($response->json('pageUrl'))) {
             throw new PaymentGatewayException('Monopay card verification creation failed.');
@@ -79,8 +87,12 @@ class MonopayTokenizedBilling
             'paymentType' => 'debit',
         ];
 
-        $response = $this->request($setting->readableCredentials())
-            ->post(self::BASE_URL.'/api/merchant/wallet/payment', $payload);
+        try {
+            $response = $this->request($setting->readableCredentials())
+                ->post(self::BASE_URL.'/api/merchant/wallet/payment', $payload);
+        } catch (Throwable) {
+            throw new PaymentGatewayException('Monopay token payment failed to start.');
+        }
 
         $responsePayload = $response->json();
 
@@ -100,13 +112,23 @@ class MonopayTokenizedBilling
             return;
         }
 
-        $response = $this->request($setting->readableCredentials())
-            ->withQueryParameters([
-                'cardToken' => $paymentMethod->provider_card_token,
-            ])
-            ->delete(self::BASE_URL.'/api/merchant/wallet/card');
+        try {
+            $response = $this->request($setting->readableCredentials())
+                ->withQueryParameters([
+                    'cardToken' => $paymentMethod->provider_card_token,
+                ])
+                ->delete(self::BASE_URL.'/api/merchant/wallet/card');
+        } catch (RequestException $exception) {
+            if ($exception->response->notFound() || $this->isTokenNotFound($exception->response)) {
+                return;
+            }
 
-        if (! $response->successful() && ! $response->notFound()) {
+            throw new PaymentGatewayException('Monopay token revocation failed.');
+        } catch (Throwable) {
+            throw new PaymentGatewayException('Monopay token revocation failed.');
+        }
+
+        if (! $response->successful() && ! $response->notFound() && ! $this->isTokenNotFound($response)) {
             throw new PaymentGatewayException('Monopay token revocation failed.');
         }
     }
@@ -114,14 +136,25 @@ class MonopayTokenizedBilling
     /**
      * @param  array<string, mixed>  $credentials
      */
-    private function request(array $credentials): PendingRequest
+    private function request(array $credentials, ?callable $retryWhen = null): PendingRequest
     {
+        $retryWhen ??= static fn (Throwable $exception): bool => $exception instanceof ConnectionException
+            || ($exception instanceof RequestException && (
+                $exception->response->status() === 429
+                || $exception->response->serverError()
+            ));
+
         return Http::withHeaders(['X-Token' => (string) ($credentials['api_token'] ?? '')])
             ->acceptJson()
             ->asJson()
             ->timeout(10)
             ->connectTimeout(3)
-            ->retry([100, 300]);
+            ->retry([100, 300], when: $retryWhen);
+    }
+
+    private function isTokenNotFound(Response $response): bool
+    {
+        return $response->status() === 400 && $response->json('errCode') === 'TOKEN_NOT_FOUND';
     }
 
     /**

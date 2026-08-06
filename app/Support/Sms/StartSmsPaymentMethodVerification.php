@@ -34,7 +34,7 @@ class StartSmsPaymentMethodVerification
             throw new LogicException('An account subscription is required to save a payment card.');
         }
 
-        $lock = Cache::lock('sms-payment-method-verification:'.$account->id, 60);
+        $lock = Cache::lock('account-payment-method-verification:'.$account->id, 120);
 
         if (! $lock->get()) {
             throw new LogicException('Card verification is already being started.');

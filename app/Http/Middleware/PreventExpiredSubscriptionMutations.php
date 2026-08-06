@@ -81,6 +81,7 @@ class PreventExpiredSubscriptionMutations
         }
 
         return str_starts_with($routeName, 'dashboard.accounts.tariff-payments.')
+            || $routeName === 'dashboard.accounts.payment-method.change'
             || str_starts_with($routeName, 'dashboard.accounts.owner-profile.');
     }
 }

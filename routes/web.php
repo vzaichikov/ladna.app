@@ -12,6 +12,7 @@ use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountNotificationSettingsController;
 use App\Http\Controllers\AccountOwnerProfileController;
 use App\Http\Controllers\AccountPaymentController;
+use App\Http\Controllers\AccountPaymentMethodController;
 use App\Http\Controllers\AccountQrLinksController;
 use App\Http\Controllers\AccountSmsAccountController;
 use App\Http\Controllers\AccountSmsAutoTopUpController;
@@ -430,6 +431,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             ->name('accounts.tariff-payments.cancel');
         Route::post('accounts/{account}/tariff-payments/subscription/resume', [AccountSubscriptionController::class, 'resume'])
             ->name('accounts.tariff-payments.resume');
+        Route::post('accounts/{account}/payment-method/change', AccountPaymentMethodController::class)
+            ->name('accounts.payment-method.change');
         Route::post('accounts/{account}/tariff-payments/locations/{location}/approve', [AccountSubscriptionController::class, 'approveLocation'])
             ->scopeBindings()
             ->name('accounts.tariff-payments.locations.approve');

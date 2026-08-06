@@ -112,12 +112,12 @@
             @endif
 
             <dl class="mt-5 space-y-3 text-sm">
-                <div>
-                    <dt class="text-slate-500">{{ __('app.saved_payment_method') }}</dt>
-                    <dd class="mt-1 font-semibold text-slate-950">
-                        {{ $paymentMethod?->isActive() ? trim(($paymentMethod->card_brand ? strtoupper($paymentMethod->card_brand).' ' : '').$paymentMethod->masked_pan) : __('app.not_set') }}
-                    </dd>
-                </div>
+                <x-ui.saved-payment-method
+                    :account="$account"
+                    :payment-method="$paymentMethod"
+                    return-to="sms_account"
+                    :can-change="! $platformView && ! $account->isReadOnlyDemo()"
+                />
             </dl>
         </x-ui.panel>
 

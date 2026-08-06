@@ -164,12 +164,12 @@
             <x-ui.panel padding="lg">
                 <h2 class="text-lg font-semibold text-slate-950">{{ __('app.payment_method_and_cancellation') }}</h2>
                 <dl class="mt-5 space-y-4 text-sm">
-                    <div>
-                        <dt class="text-slate-500">{{ __('app.saved_payment_method') }}</dt>
-                        <dd class="mt-1 font-semibold text-slate-950">
-                            {{ $paymentMethod?->isActive() ? trim(($paymentMethod->card_brand ? strtoupper($paymentMethod->card_brand).' ' : '').$paymentMethod->masked_pan) : __('app.not_set') }}
-                        </dd>
-                    </div>
+                    <x-ui.saved-payment-method
+                        :account="$account"
+                        :payment-method="$paymentMethod"
+                        return-to="tariff_payments"
+                        :can-change="! $account->isReadOnlyDemo()"
+                    />
                     <div>
                         <dt class="text-slate-500">{{ __('app.cancellation_rule') }}</dt>
                         <dd class="mt-1 text-slate-700">{{ __('app.cancellation_at_period_end_no_refund') }}</dd>
@@ -241,6 +241,18 @@
                     </form>
                 @endif
             </div>
+        </x-ui.panel>
+
+        <x-ui.panel padding="lg" class="mt-6">
+            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.payment_method') }}</h2>
+            <dl class="mt-5 text-sm">
+                <x-ui.saved-payment-method
+                    :account="$account"
+                    :payment-method="$paymentMethod"
+                    return-to="tariff_payments"
+                    :can-change="! $account->isReadOnlyDemo()"
+                />
+            </dl>
         </x-ui.panel>
     @endif
 
