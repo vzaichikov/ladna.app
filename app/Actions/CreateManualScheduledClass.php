@@ -36,6 +36,7 @@ class CreateManualScheduledClass
     {
         return DB::transaction(function () use ($account, $scheduleKind, $validated): ScheduledClass {
             $this->scheduleOccupancy->lockAccount($account);
+            $account->refresh();
 
             $location = $account->locations()->active()->whereKey($validated['location_id'])->firstOrFail();
             $room = $account->rooms()
@@ -81,15 +82,41 @@ class CreateManualScheduledClass
                 ->all();
 
             $this->scheduleOccupancy->lockResources($account, $room->id, $trainerIds);
-            $this->scheduleOccupancy->assertAvailable(
+            $this->scheduleOccupancy->assertRoomAvailable(
                 $account,
                 $room->id,
-                $trainerIds,
                 $databaseStartsAt,
                 $databaseEndsAt,
             );
 
+            $hasTrainerConflict = $this->scheduleOccupancy->hasTrainerConflict(
+                $account,
+                $trainerIds,
+                $databaseStartsAt,
+                $databaseEndsAt,
+            );
+            $allowsManualTrainerOverlap = $account->allowsManualTrainerOverlap();
+            $trainerOverlapConfirmed = $hasTrainerConflict
+                && $allowsManualTrainerOverlap
+                && (bool) ($validated['confirm_trainer_overlap'] ?? false);
+
+            if ($hasTrainerConflict && ! $trainerOverlapConfirmed) {
+                throw ValidationException::withMessages([
+                    ($allowsManualTrainerOverlap ? 'confirm_trainer_overlap' : 'starts_at') => $allowsManualTrainerOverlap
+                        ? __('app.confirm_trainer_overlap_warning')
+                        : __('app.manual_slot_unavailable'),
+                ]);
+            }
+
             $isCustomerBookable = (bool) $definition['customer_bookable'];
+            $metadata = [
+                'source' => 'manual',
+                'schedule_kind' => $scheduleKind->value,
+            ];
+
+            if ($trainerOverlapConfirmed) {
+                $metadata['trainer_overlap_confirmed'] = true;
+            }
 
             $scheduledClass = $account->scheduledClasses()->create([
                 'location_id' => $location->id,
@@ -114,10 +141,7 @@ class CreateManualScheduledClass
                     : null,
                 'is_generated' => false,
                 'is_manually_modified' => false,
-                'metadata' => [
-                    'source' => 'manual',
-                    'schedule_kind' => $scheduleKind->value,
-                ],
+                'metadata' => $metadata,
                 'is_public' => (bool) $definition['default_is_public'],
                 'status' => ScheduledClassStatus::Scheduled->value,
             ]);

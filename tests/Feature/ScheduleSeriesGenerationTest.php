@@ -62,6 +62,52 @@ class ScheduleSeriesGenerationTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_weekly_generation_keeps_same_trainer_classes_in_different_rooms(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-06 09:00:00', 'UTC'));
+
+        $account = Account::factory()->create([
+            'timezone' => 'UTC',
+            'schedule_generation_weeks' => 1,
+            'allow_manual_trainer_overlap' => true,
+        ]);
+        $location = Location::factory()->for($account)->create(['timezone' => 'UTC']);
+        $firstRoom = Room::factory()->for($account)->for($location)->create();
+        $secondRoom = Room::factory()->for($account)->for($location)->create();
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+            'default_duration_minutes' => 60,
+        ]);
+        $trainer = Trainer::factory()->for($account)->create();
+        $seriesAttributes = [
+            'weekday' => now('UTC')->isoWeekday(),
+            'start_time' => '14:00',
+            'start_date' => now('UTC')->toDateString(),
+        ];
+        $firstSeries = ScheduleSeries::factory()
+            ->for($account)
+            ->for($location)
+            ->for($firstRoom)
+            ->for($classType)
+            ->for($trainer)
+            ->create($seriesAttributes);
+        $secondSeries = ScheduleSeries::factory()
+            ->for($account)
+            ->for($location)
+            ->for($secondRoom)
+            ->for($classType)
+            ->for($trainer)
+            ->create($seriesAttributes);
+
+        $this->assertSame(2, app(GenerateScheduleOccurrences::class)->execute($firstSeries));
+        $this->assertSame(2, app(GenerateScheduleOccurrences::class)->execute($secondSeries));
+        $this->assertSame(2, ScheduledClass::whereBelongsTo($account)
+            ->where('starts_at', Carbon::parse('2026-08-06 14:00:00', 'UTC'))
+            ->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_class_type_defaults_are_used_when_series_has_no_override(): void
     {
         $account = Account::factory()->create();

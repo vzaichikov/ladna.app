@@ -135,6 +135,29 @@
                             />
                         @endif
 
+                        @if ($account->allowsManualTrainerOverlap())
+                            <div
+                                class="hidden rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950"
+                                data-manual-trainer-overlap-confirmation
+                            >
+                                <input type="hidden" name="confirm_trainer_overlap" value="0">
+                                <label class="flex min-w-0 items-start gap-3 text-sm font-medium">
+                                    <input
+                                        name="confirm_trainer_overlap"
+                                        type="checkbox"
+                                        value="1"
+                                        class="crm-checkbox mt-0.5"
+                                        data-manual-trainer-overlap-checkbox
+                                    >
+                                    <span class="min-w-0">
+                                        <span class="block font-semibold">{{ __('app.confirm_trainer_overlap') }}</span>
+                                        <span class="mt-0.5 block text-xs leading-5 text-amber-800">{{ __('app.confirm_trainer_overlap_warning') }}</span>
+                                    </span>
+                                </label>
+                                <div data-async-error-for="confirm_trainer_overlap"></div>
+                            </div>
+                        @endif
+
                         <div class="grid gap-4 sm:grid-cols-2">
                             <label class="block">
                                 <span class="crm-label">{{ __('app.start_time') }}</span>

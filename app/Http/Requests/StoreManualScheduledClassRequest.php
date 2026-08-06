@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\ScheduleKind;
+use App\Models\Account;
 use App\Models\ClassType;
 use App\Models\Location;
 use App\Models\Room;
@@ -48,6 +49,11 @@ class StoreManualScheduledClassRequest extends FormRequest
             'trainer_id' => ['nullable', Rule::exists((new Trainer)->getTable(), 'id')
                 ->where('account_id', $account?->id)
                 ->where('is_active', true)],
+            'confirm_trainer_overlap' => [
+                Rule::prohibitedIf(! ($account instanceof Account && $account->allowsManualTrainerOverlap())),
+                'sometimes',
+                'boolean',
+            ],
             'additional_trainer_ids' => [
                 Rule::prohibitedIf($scheduleKind !== ScheduleKind::InternalClass),
                 'sometimes',

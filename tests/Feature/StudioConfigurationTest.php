@@ -278,6 +278,8 @@ class StudioConfigurationTest extends TestCase
         $account = Account::factory()->create();
         $account->addOwner($owner);
 
+        $this->assertFalse($account->allowsManualTrainerOverlap());
+
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'schedule_view']))
             ->assertOk()
@@ -337,6 +339,8 @@ class StudioConfigurationTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.class_passes_and_classes'))
             ->assertSee(__('app.schedule_generation_policy'))
+            ->assertSee(__('app.manual_trainer_overlap_policy'))
+            ->assertSee(__('app.allow_manual_trainer_overlap'))
             ->assertSee(__('app.trainer_private_timeframes_policy'))
             ->assertSee(__('app.public_booking_policy'))
             ->assertSee(__('app.allow_guest_public_booking'));
@@ -360,6 +364,7 @@ class StudioConfigurationTest extends TestCase
                 ],
                 'schedule_generation_weeks' => '6',
                 'trainer_private_timeframes_enabled' => '1',
+                'allow_manual_trainer_overlap' => '1',
                 'trainer_private_timeframe_weeks' => '',
                 'allow_guest_public_booking' => '1',
             ])
@@ -370,6 +375,7 @@ class StudioConfigurationTest extends TestCase
         $this->assertTrue($account->allowsGuestPublicBooking());
         $this->assertSame(6, $account->scheduleGenerationWeeks());
         $this->assertTrue($account->trainerPrivateTimeframesEnabled());
+        $this->assertTrue($account->allowsManualTrainerOverlap());
         $this->assertNull($account->trainer_private_timeframe_weeks);
         $this->assertSame(6, $account->trainerPrivateTimeframeWeeks());
         $this->assertSame(PublicScheduleView::CalendarBooking, $account->publicScheduleView());
@@ -377,6 +383,37 @@ class StudioConfigurationTest extends TestCase
             PublicScheduleView::Classic->value(),
             PublicScheduleView::CalendarBooking->value(),
         ], $account->publicGroupBookingModalViewValues());
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'business',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+            ])
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', $account));
+
+        $this->assertTrue($account->fresh()->allowsManualTrainerOverlap());
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.update', $account), [
+                'brand_tab' => 'pass_rules',
+                'name' => $account->name,
+                'slug' => $account->slug,
+                'default_language' => 'uk',
+                'country_code' => 'UA',
+                'default_currency' => 'UAH',
+                'brand_color' => '#3B223F',
+                'timezone' => 'Europe/Kyiv',
+                'allow_manual_trainer_overlap' => '0',
+            ])
+            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'pass_rules']));
+
+        $this->assertFalse($account->fresh()->allowsManualTrainerOverlap());
     }
 
     public function test_brand_settings_persist_opening_hours(): void

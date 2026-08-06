@@ -643,6 +643,7 @@ function initTrainerMultiSelect(root = document) {
         const options = () => Array.from(valueSelect.options);
         const selectedOptions = () => options().filter((option) => option.selected);
         const mainTrainerId = () => mainTrainerSelect?.value ?? '';
+        const notifyValueChange = () => valueSelect.dispatchEvent(new Event('change', { bubbles: true }));
         const hideResults = () => {
             results.classList.add('hidden');
             results.innerHTML = '';
@@ -668,6 +669,7 @@ function initTrainerMultiSelect(root = document) {
                 remove.textContent = '×';
                 remove.addEventListener('click', () => {
                     option.selected = false;
+                    notifyValueChange();
                     renderSelected();
                     renderResults();
                     input.focus();
@@ -702,6 +704,7 @@ function initTrainerMultiSelect(root = document) {
                     button.textContent = option.textContent;
                     button.addEventListener('click', () => {
                         option.selected = true;
+                        notifyValueChange();
                         input.value = '';
                         renderSelected();
                         renderResults();
@@ -719,6 +722,7 @@ function initTrainerMultiSelect(root = document) {
 
             if (selectedMain?.selected) {
                 selectedMain.selected = false;
+                notifyValueChange();
             }
 
             renderSelected();
@@ -2216,7 +2220,56 @@ window.addEventListener('afterprint', () => {
     });
 });
 
+const manualTrainerOverlapAvailabilitySelector = [
+    '[name="location_id"]',
+    '[name="room_id"]',
+    '[name="class_type_id"]',
+    '[name="trainer_id"]',
+    '[name="additional_trainer_ids[]"]',
+    '[name="starts_at"]',
+    '[name="duration_minutes"]',
+].join(', ');
+
+function resetManualTrainerOverlapConfirmation(form) {
+    const confirmation = form?.querySelector('[data-manual-trainer-overlap-confirmation]');
+
+    if (!confirmation) {
+        return;
+    }
+
+    const wasVisible = !confirmation.classList.contains('hidden');
+    const checkbox = confirmation.querySelector('[data-manual-trainer-overlap-checkbox]');
+
+    confirmation.classList.add('hidden');
+
+    if (checkbox) {
+        checkbox.checked = false;
+        checkbox.removeAttribute('data-async-invalid');
+        checkbox.classList.remove('border-rose-300', 'focus:border-rose-500', 'focus:ring-rose-100');
+    }
+
+    confirmation.querySelectorAll('[data-async-error]').forEach((error) => error.remove());
+
+    if (wasVisible) {
+        const status = asyncStatusElement(form);
+
+        if (status) {
+            status.textContent = '';
+            status.classList.add('hidden');
+        }
+    }
+}
+
+function revealManualTrainerOverlapConfirmation(form, errors) {
+    if (!Object.prototype.hasOwnProperty.call(errors, 'confirm_trainer_overlap')) {
+        return;
+    }
+
+    form.querySelector('[data-manual-trainer-overlap-confirmation]')?.classList.remove('hidden');
+}
+
 function closeManualClassModal(modal) {
+    resetManualTrainerOverlapConfirmation(modal?.querySelector('form[data-manual-class-form]'));
     modal?.classList.add('hidden');
     modal?.classList.remove('flex');
 }
@@ -3455,6 +3508,15 @@ function initManualClassModals() {
         }
 
         modal.dataset.manualClassReady = 'true';
+        const form = modal.querySelector('form[data-manual-class-form]');
+        const resetTrainerOverlapWhenAvailabilityChanges = (event) => {
+            if (event.target instanceof Element && event.target.matches(manualTrainerOverlapAvailabilitySelector)) {
+                resetManualTrainerOverlapConfirmation(form);
+            }
+        };
+
+        form?.addEventListener('input', resetTrainerOverlapWhenAvailabilityChanges);
+        form?.addEventListener('change', resetTrainerOverlapWhenAvailabilityChanges);
         modal.addEventListener('click', (event) => {
             if (event.target === modal) {
                 closeManualClassModal(modal);
@@ -3475,6 +3537,7 @@ function initManualClassModals() {
                 return;
             }
 
+            resetManualTrainerOverlapConfirmation(modal.querySelector('form[data-manual-class-form]'));
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             updateQuickBookingRooms(modal.querySelector('form'));
@@ -4682,6 +4745,7 @@ async function submitAsyncForm(form) {
         }
 
         if (response.status === 422 && payload.errors) {
+            revealManualTrainerOverlapConfirmation(form, payload.errors);
             renderAsyncFormErrors(form, payload.errors);
             return;
         }

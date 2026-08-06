@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'public_offer_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'public_group_booking_modal_views', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'trainer_private_timeframe_weeks', 'payroll_cadence', 'payroll_anchor_date'])]
+#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'public_offer_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'public_group_booking_modal_views', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'allow_manual_trainer_overlap', 'trainer_private_timeframe_weeks', 'payroll_cadence', 'payroll_anchor_date'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -48,6 +48,7 @@ class Account extends Model
         'enable_telegram_alerts' => true,
         'enable_customer_notifications' => false,
         'trainer_private_timeframes_enabled' => false,
+        'allow_manual_trainer_overlap' => false,
         'payroll_cadence' => 'monthly',
     ];
 
@@ -82,6 +83,7 @@ class Account extends Model
             'enable_customer_notifications' => 'boolean',
             'schedule_generation_weeks' => 'integer',
             'trainer_private_timeframes_enabled' => 'boolean',
+            'allow_manual_trainer_overlap' => 'boolean',
             'trainer_private_timeframe_weeks' => 'integer',
             'payroll_cadence' => PayrollCadence::class,
             'payroll_anchor_date' => 'date',
@@ -427,6 +429,11 @@ class Account extends Model
     public function trainerPrivateTimeframesEnabled(): bool
     {
         return (bool) $this->trainer_private_timeframes_enabled;
+    }
+
+    public function allowsManualTrainerOverlap(): bool
+    {
+        return (bool) $this->allow_manual_trainer_overlap;
     }
 
     public static function defaultScheduleGenerationWeeks(): int

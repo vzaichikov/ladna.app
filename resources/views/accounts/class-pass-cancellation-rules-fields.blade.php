@@ -15,6 +15,7 @@
 <input type="hidden" name="class_pass_cancellation_rules_present" value="1">
 <input type="hidden" name="allow_guest_public_booking" value="0">
 <input type="hidden" name="trainer_private_timeframes_enabled" value="0">
+<input type="hidden" name="allow_manual_trainer_overlap" value="0">
 
 <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
     <legend class="crm-label px-1">{{ __('app.class_pass_rules_on_delete') }}</legend>
@@ -85,6 +86,25 @@
     </div>
 
     @error('class_pass_cancellation_rules') <span class="crm-help">{{ $message }}</span> @enderror
+</fieldset>
+
+<fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">
+    <legend class="crm-label px-1">{{ __('app.manual_trainer_overlap_policy') }}</legend>
+    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.manual_trainer_overlap_policy_help') }}</p>
+
+    <label class="mt-4 flex min-w-0 items-start gap-3 text-sm font-medium text-slate-700">
+        <input
+            name="allow_manual_trainer_overlap"
+            type="checkbox"
+            value="1"
+            @checked(old('allow_manual_trainer_overlap', $account->allow_manual_trainer_overlap))
+            class="crm-checkbox mt-0.5"
+        >
+        <span class="min-w-0">
+            <span class="block text-slate-950">{{ __('app.allow_manual_trainer_overlap') }}</span>
+            <span class="mt-0.5 block text-xs leading-5 text-slate-500">{{ __('app.allow_manual_trainer_overlap_help') }}</span>
+        </span>
+    </label>
 </fieldset>
 
 <fieldset class="rounded-lg border border-stone-200 bg-slate-50 p-4">

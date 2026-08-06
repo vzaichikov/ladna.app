@@ -72,6 +72,23 @@ class ScheduleOccupancy
         }
     }
 
+    public function assertRoomAvailable(
+        Account $account,
+        int $roomId,
+        CarbonInterface $startsAt,
+        CarbonInterface $endsAt,
+        ?int $exceptScheduledClassId = null,
+    ): void {
+        $this->assertAvailable(
+            $account,
+            $roomId,
+            [],
+            $startsAt,
+            $endsAt,
+            $exceptScheduledClassId,
+        );
+    }
+
     /**
      * @param  array<int, int>  $trainerIds
      */
@@ -90,6 +107,26 @@ class ScheduleOccupancy
 
         return $hasInternalClassConflict
             || ($roomId !== null && $this->hasEventRoomConflict($account, $roomId, $startsAt, $endsAt));
+    }
+
+    /**
+     * @param  array<int, int>  $trainerIds
+     */
+    public function hasTrainerConflict(
+        Account $account,
+        array $trainerIds,
+        CarbonInterface $startsAt,
+        CarbonInterface $endsAt,
+        ?int $exceptScheduledClassId = null,
+    ): bool {
+        return $this->conflictsQuery(
+            $account,
+            null,
+            $trainerIds,
+            $startsAt,
+            $endsAt,
+            $exceptScheduledClassId,
+        )->exists();
     }
 
     public function hasEventRoomConflict(

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.123.0',
+                'date' => '2026-08-06',
+                'title' => 'Explicit trainer-overlap exceptions for one-off classes',
+                'items' => ['Studios can now enable simultaneous one-off classes for the same trainer in different rooms from General settings. Ladna still requires an explicit confirmation for every trainer conflict, while an occupied room always remains unavailable.', 'The exception works for manually created group and closed classes, including additional trainers. Weekly schedule generation keeps its existing behavior.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.122.0',
                 'date' => '2026-08-04',
                 'title' => 'Focused workspaces for multi-location studios',
@@ -1073,6 +1080,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.123.0',
+                'date' => '2026-08-06',
+                'title' => 'Керовані винятки для одночасних занять тренера',
+                'items' => ['Студії тепер можуть увімкнути одночасні разові заняття одного тренера в різних залах у загальних налаштуваннях. Ladna все одно вимагає окремого підтвердження для кожного конфлікту тренера, а зайнятий зал завжди залишається недоступним.', 'Виняток працює для створених вручну групових і закритих занять, зокрема для додаткових тренерів. Генерація занять із тижневого розкладу зберігає чинну поведінку.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.122.0',
                 'date' => '2026-08-04',
