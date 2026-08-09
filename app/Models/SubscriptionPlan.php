@@ -98,6 +98,16 @@ class SubscriptionPlan extends Model
         return $this->hasMany(SubscriptionPlanSmsRateChange::class);
     }
 
+    public function festivalTariffPackages(): HasMany
+    {
+        return $this->hasMany(FestivalTariffPackage::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function festivalEditionPurchases(): HasMany
+    {
+        return $this->hasMany(FestivalEditionPurchase::class);
+    }
+
     public function currentPriceVersion(?CarbonInterface $at = null): ?SubscriptionPriceVersion
     {
         return $this->priceVersions()

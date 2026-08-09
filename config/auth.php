@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Customer;
+use App\Models\FestivalPortalUser;
 use App\Models\User;
 
 return [
@@ -48,6 +49,11 @@ return [
             'driver' => 'session',
             'provider' => 'customers',
         ],
+
+        'festival' => [
+            'driver' => 'session',
+            'provider' => 'festival_portal_users',
+        ],
     ],
 
     /*
@@ -76,6 +82,11 @@ return [
         'customers' => [
             'driver' => 'eloquent',
             'model' => Customer::class,
+        ],
+
+        'festival_portal_users' => [
+            'driver' => 'eloquent',
+            'model' => FestivalPortalUser::class,
         ],
 
         // 'users' => [

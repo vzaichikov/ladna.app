@@ -106,6 +106,7 @@ class SubscriptionPriceVersionController extends Controller
     ): View {
         $this->ensureBelongsToPlan($subscriptionPlan, $priceVersion);
         $priceVersion->load('tiers');
+        $subscriptionPlan->load('festivalTariffPackages');
 
         return view('platform.subscription-price-versions.preview', [
             'plan' => $subscriptionPlan,

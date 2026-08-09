@@ -121,6 +121,14 @@ class ScheduledTaskRegistry
                 'overlap_minutes' => 5,
             ],
             [
+                'key' => 'festival_notifications_dispatch',
+                'command' => 'festivals:dispatch-notifications --limit=100',
+                'expression' => '* * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_minute',
+                'description_key' => 'scheduled_task_festival_notifications_dispatch_description',
+                'overlap_minutes' => 5,
+            ],
+            [
                 'key' => 'account_activity_logs_prune',
                 'command' => 'account-activity-logs:prune',
                 'expression' => '0 0 * * *',

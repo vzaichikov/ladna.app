@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Payments;
 
+use App\Actions\Festivals\CompleteFestivalEditionPurchase;
+use App\Actions\Festivals\ResolveFestivalEditionPurchase;
 use App\Enums\IntegrationProvider;
 use App\Http\Controllers\Controller;
 use App\Support\Payments\InvalidPaymentCallbackException;
@@ -30,6 +32,8 @@ class SaasPaymentCallbackController extends Controller
         ResolveAccountSubscriptionPayment $resolvePayment,
         ResolveSmsTopUpPayment $resolveSmsTopUp,
         CompleteSmsTopUpPayment $completeSmsTopUp,
+        ResolveFestivalEditionPurchase $resolveFestivalPurchase,
+        CompleteFestivalEditionPurchase $completeFestivalPurchase,
         SaasPaymentCallbackLogger $logger,
     ): Response {
         if ($provider !== IntegrationProvider::Monopay->value) {
@@ -66,6 +70,18 @@ class SaasPaymentCallbackController extends Controller
                 $smsTopUp = $completeSmsTopUp->execute($smsTopUp, $callback);
                 $logger->log($smsTopUp, $provider, $orderId, $request, 'accepted', [
                     'status' => $smsTopUp->status->value,
+                ]);
+
+                return response('OK');
+            }
+
+            $festivalPurchase = $resolveFestivalPurchase->execute(IntegrationProvider::Monopay->value, $callback);
+
+            if ($festivalPurchase) {
+                $logger->log($festivalPurchase, $provider, $orderId, $request, 'received');
+                $festivalPurchase = $completeFestivalPurchase->execute($festivalPurchase, $callback);
+                $logger->log($festivalPurchase, $provider, $orderId, $request, 'accepted', [
+                    'status' => $festivalPurchase->status->value,
                 ]);
 
                 return response('OK');

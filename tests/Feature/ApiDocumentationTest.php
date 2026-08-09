@@ -20,6 +20,8 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('/api/v1/mobile/customer/profile/phone/send')
             ->assertSee('/api/v1/mobile/customer/profile/phone/verify')
             ->assertSee('/api/v1/website-leads')
+            ->assertSee('/api/v1/festival-payments/{provider}/callbacks')
+            ->assertSee('Receives a payment provider callback for a Festival performance charge or spectator admission order')
             ->assertSee('/mcp/ladna-studio')
             ->assertSee('describe-ladna-skills')
             ->assertSee('get-class-bookings-for-day')
@@ -76,6 +78,11 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./api/v1/website-leads.post.security.0.AccountBearerToken', [])
             ->assertJsonPath('paths./api/v1/website-leads.post.responses.402.$ref', '#/components/responses/SubscriptionExpired')
             ->assertJsonPath('paths./api/v1/website-leads.post.responses.423.$ref', '#/components/responses/DemoReadOnly')
+            ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.tags.0', 'Festival payments')
+            ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.security', [])
+            ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.parameters.0.name', 'provider')
+            ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.requestBody.content.application/json.schema.additionalProperties', true)
+            ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.responses.400.description', 'The callback signature, order identifier, amount, currency, or state is invalid.')
             ->assertJsonPath('paths./mcp/ladna-studio.post.tags.0', 'MCP')
             ->assertJsonPath('paths./mcp/ladna-studio.post.security.0.AccountBearerToken', [])
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.class_bookings_for_day.value.params.name', 'get-class-bookings-for-day')
@@ -164,5 +171,12 @@ class ApiDocumentationTest extends TestCase
         $this->assertContains('get-payroll-overview', $toolNames);
         $this->assertContains('get-events-overview', $toolNames);
         $this->assertContains('get-event-summary', $toolNames);
+    }
+
+    public function test_unknown_festival_payment_provider_matches_documented_not_found_response(): void
+    {
+        $this->postJson(route('api.v1.festival-payments.callbacks', ['provider' => 'not-configured']), [])
+            ->assertNotFound()
+            ->assertSeeText('Unsupported provider.');
     }
 }

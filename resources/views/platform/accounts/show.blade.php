@@ -70,6 +70,26 @@
         <x-ui.metric :label="__('app.subscription_plan')" :value="$account->subscription?->plan?->name ?? '-'" icon="payments" accent="emerald" />
     </section>
 
+    <x-ui.panel padding="lg" class="mt-6">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <div class="crm-page-kicker">{{ __('app.account_capabilities') }}</div>
+                <h2 class="mt-1 text-lg font-semibold text-slate-950">{{ __('app.festivals') }}</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600">{{ __('app.festival_capability_platform_help') }}</p>
+            </div>
+            <form method="POST" action="{{ route('platform.accounts.festival-capability.update', $account) }}" class="flex items-center gap-3">
+                @csrf
+                @method('PATCH')
+                <input type="hidden" name="enable_festivals" value="0">
+                <label class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                    <input name="enable_festivals" type="checkbox" value="1" @checked($account->enable_festivals) class="crm-checkbox">
+                    {{ __('app.enable_festivals') }}
+                </label>
+                <x-ui.button type="submit" size="sm">{{ __('app.save') }}</x-ui.button>
+            </form>
+        </div>
+    </x-ui.panel>
+
     @if ($account->subscription?->usesLocationBilling())
         <x-ui.panel padding="lg" class="mt-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

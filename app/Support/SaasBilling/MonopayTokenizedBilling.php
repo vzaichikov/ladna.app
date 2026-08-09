@@ -5,6 +5,7 @@ namespace App\Support\SaasBilling;
 use App\Enums\IntegrationProvider;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\AccountSubscriptionPaymentMethod;
+use App\Models\FestivalEditionPurchase;
 use App\Models\IntegrationSetting;
 use App\Models\SmsTopUpPayment;
 use App\Support\Payments\PaymentAmounts;
@@ -66,7 +67,7 @@ class MonopayTokenizedBilling
      * @return array{request: array<string, mixed>, response: array<string, mixed>}
      */
     public function charge(
-        AccountSubscriptionPayment|SmsTopUpPayment $payment,
+        AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase $payment,
         AccountSubscriptionPaymentMethod $paymentMethod,
         IntegrationSetting $setting,
         string $redirectUrl,
@@ -160,11 +161,13 @@ class MonopayTokenizedBilling
     /**
      * @return array<string, mixed>
      */
-    private function merchantPaymentInfo(AccountSubscriptionPayment|SmsTopUpPayment $payment): array
+    private function merchantPaymentInfo(AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase $payment): array
     {
-        $name = $payment instanceof SmsTopUpPayment
-            ? 'Ladna SMS credit'
-            : ($payment->plan_name_snapshot ?: $payment->plan?->name ?: 'Ladna SaaS');
+        $name = match (true) {
+            $payment instanceof SmsTopUpPayment => 'Ladna SMS credit',
+            $payment instanceof FestivalEditionPurchase => 'Ladna Festival · '.$payment->package_name_snapshot,
+            default => $payment->plan_name_snapshot ?: $payment->plan?->name ?: 'Ladna SaaS',
+        };
 
         return [
             'reference' => $payment->order_id,

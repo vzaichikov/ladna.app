@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'public_offer_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'public_group_booking_modal_views', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'allow_manual_trainer_overlap', 'trainer_private_timeframe_weeks', 'payroll_cadence', 'payroll_anchor_date'])]
+#[Fillable(['name', 'slug', 'status', 'mode', 'default_language', 'country_code', 'default_currency', 'logo_path', 'brand_color', 'studio_slogan', 'timezone', 'legal_entity_name', 'tax_id', 'support_instagram_url', 'support_telegram_url', 'support_viber_url', 'support_whatsapp_url', 'support_phone_url', 'support_secondary_phone_url', 'enabled_schedule_kinds', 'schedule_kind_colors', 'opening_hours', 'studio_rules_html', 'public_offer_html', 'class_pass_cancellation_rules', 'public_schedule_view', 'public_group_booking_modal_views', 'allow_guest_public_booking', 'allow_rtsp_cameras', 'enable_people_counter', 'enable_telegram_alerts', 'enable_customer_notifications', 'enable_festivals', 'schedule_generation_weeks', 'trainer_private_timeframes_enabled', 'allow_manual_trainer_overlap', 'trainer_private_timeframe_weeks', 'payroll_cadence', 'payroll_anchor_date'])]
 class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
@@ -47,6 +47,7 @@ class Account extends Model
         'enable_people_counter' => false,
         'enable_telegram_alerts' => true,
         'enable_customer_notifications' => false,
+        'enable_festivals' => false,
         'trainer_private_timeframes_enabled' => false,
         'allow_manual_trainer_overlap' => false,
         'payroll_cadence' => 'monthly',
@@ -81,6 +82,7 @@ class Account extends Model
             'enable_people_counter' => 'boolean',
             'enable_telegram_alerts' => 'boolean',
             'enable_customer_notifications' => 'boolean',
+            'enable_festivals' => 'boolean',
             'schedule_generation_weeks' => 'integer',
             'trainer_private_timeframes_enabled' => 'boolean',
             'allow_manual_trainer_overlap' => 'boolean',
@@ -653,6 +655,66 @@ class Account extends Model
     public function eventOrders(): HasMany
     {
         return $this->hasMany(EventOrder::class);
+    }
+
+    public function festivalSeries(): HasMany
+    {
+        return $this->hasMany(FestivalSeries::class);
+    }
+
+    public function festivalEditions(): HasMany
+    {
+        return $this->hasMany(FestivalEdition::class);
+    }
+
+    public function festivalEditionPurchases(): HasMany
+    {
+        return $this->hasMany(FestivalEditionPurchase::class);
+    }
+
+    public function festivalPortalUsers(): HasMany
+    {
+        return $this->hasMany(FestivalPortalUser::class);
+    }
+
+    public function festivalEntries(): HasMany
+    {
+        return $this->hasMany(FestivalEntry::class);
+    }
+
+    public function festivalParticipants(): HasMany
+    {
+        return $this->hasMany(FestivalParticipant::class);
+    }
+
+    public function festivalSubmissions(): HasMany
+    {
+        return $this->hasMany(FestivalSubmission::class);
+    }
+
+    public function festivalEntryRequirements(): HasMany
+    {
+        return $this->hasMany(FestivalEntryRequirement::class);
+    }
+
+    public function festivalCharges(): HasMany
+    {
+        return $this->hasMany(FestivalCharge::class);
+    }
+
+    public function festivalScheduleSlots(): HasMany
+    {
+        return $this->hasMany(FestivalScheduleSlot::class);
+    }
+
+    public function festivalScoreSheets(): HasMany
+    {
+        return $this->hasMany(FestivalScoreSheet::class);
+    }
+
+    public function festivalTickets(): HasMany
+    {
+        return $this->hasMany(FestivalTicket::class);
     }
 
     public function customerPurchaseCorrections(): HasMany

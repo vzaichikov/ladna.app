@@ -30,6 +30,23 @@
         background: var(--color-canvas);
     }
 
+    [data-workspace='festival'] {
+        --color-brand-50: #f5f8fc;
+        --color-brand-100: #d9e3ee;
+        --color-brand-500: #d9a441;
+        --color-brand-600: #23405f;
+        --color-brand-700: #10233f;
+        --color-violet-crm-50: #f5f8fc;
+        --color-violet-crm-100: #d9e3ee;
+        --color-violet-crm-500: #d9a441;
+        --color-violet-crm-600: #23405f;
+        --color-violet-crm-700: #10233f;
+        --color-ink-900: #10233f;
+        --color-ink-800: #23405f;
+        --color-canvas: #f4f7fa;
+        --shadow-crm: 0 16px 44px rgb(16 35 63 / 0.1);
+    }
+
     body {
         font-family: var(--app-font-family, 'Manrope'), ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
             'Segoe UI Symbol', 'Noto Color Emoji';
@@ -79,6 +96,7 @@
     }
 
     .crm-tab[aria-selected='true'],
+    .crm-tab[aria-current='page'],
     .customer-auth-tab[aria-selected='true'] {
         @apply bg-white text-slate-950 shadow-xs;
     }

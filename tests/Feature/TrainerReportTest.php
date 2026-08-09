@@ -58,12 +58,12 @@ class TrainerReportTest extends TestCase
             ->assertSee(__('app.finance'))
             ->assertSee(route('dashboard.accounts.reports.index', $account), false)
             ->assertSeeInOrder([
-                route('dashboard.accounts.events.index', $account),
                 route('dashboard.accounts.reports.index', $account),
                 route('dashboard.accounts.payments.index', $account),
                 route('dashboard.accounts.cash.index', $account),
                 route('dashboard.accounts.expenses.index', $account),
                 route('dashboard.accounts.payroll.index', $account),
+                route('dashboard.accounts.events.index', $account),
             ], false)
             ->assertDontSee(route('dashboard.accounts.reports.financial', $account), false)
             ->assertDontSee(route('dashboard.accounts.reports.earnings', $account), false)

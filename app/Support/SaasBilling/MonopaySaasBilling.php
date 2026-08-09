@@ -6,6 +6,7 @@ use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Models\AccountSubscriptionPayment;
+use App\Models\FestivalEditionPurchase;
 use App\Models\IntegrationSetting;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentAmounts;
@@ -31,7 +32,7 @@ class MonopaySaasBilling
             ->first();
     }
 
-    public function startOneTimePayment(AccountSubscriptionPayment $payment, IntegrationSetting $setting, string $redirectUrl): PaymentCheckout
+    public function startOneTimePayment(AccountSubscriptionPayment|FestivalEditionPurchase $payment, IntegrationSetting $setting, string $redirectUrl): PaymentCheckout
     {
         $credentials = $setting->readableCredentials();
         $payload = [
@@ -48,7 +49,7 @@ class MonopaySaasBilling
             $payload['qrId'] = (string) $credentials['qr_id'];
         }
 
-        if ($payment->payment_type === AccountSubscriptionPaymentType::DemoInitial) {
+        if ($payment instanceof AccountSubscriptionPayment && $payment->payment_type === AccountSubscriptionPaymentType::DemoInitial) {
             $payload['displayType'] = 'iframe';
         }
 
@@ -200,14 +201,18 @@ class MonopaySaasBilling
     /**
      * @return array<string, mixed>
      */
-    private function merchantPaymentInfo(AccountSubscriptionPayment $payment): array
+    private function merchantPaymentInfo(AccountSubscriptionPayment|FestivalEditionPurchase $payment): array
     {
+        $name = $payment instanceof FestivalEditionPurchase
+            ? 'Ladna Festival · '.$payment->package_name_snapshot
+            : ($payment->plan?->name ?? 'Ladna SaaS');
+
         return [
             'reference' => $payment->order_id,
-            'destination' => $payment->plan?->name ?? 'Ladna SaaS',
-            'comment' => $payment->plan?->name ?? 'Ladna SaaS',
+            'destination' => $name,
+            'comment' => $name,
             'basketOrder' => [[
-                'name' => $payment->plan?->name ?? 'Ladna SaaS',
+                'name' => $name,
                 'qty' => 1,
                 'sum' => $payment->amount_cents,
                 'total' => $payment->amount_cents,

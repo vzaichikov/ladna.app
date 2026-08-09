@@ -1,5 +1,8 @@
 @php
     $routeName = request()->route()?->getName() ?? '';
+    $festivalWorkspace = $festivalWorkspace ?? null;
+    $isFestivalWorkspace = is_array($festivalWorkspace) && ($festivalWorkspace['edition'] ?? null) instanceof \App\Models\FestivalEdition;
+    $festivalWorkspaceEdition = $isFestivalWorkspace ? $festivalWorkspace['edition'] : null;
     $candidateAccount = $account ?? null;
     $activeAccount = $candidateAccount instanceof \App\Models\Account && $candidateAccount->exists ? $candidateAccount : null;
     $showAccountNav = $activeAccount && str_starts_with($routeName, 'dashboard.accounts.');
@@ -72,6 +75,14 @@
     $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
     $canManageEvents = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageEvents);
     $canCheckInEventTickets = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::CheckInEventTickets);
+    $canViewFestivals = $showAccountNav && $activeAccount->enable_festivals && collect([
+        \App\Enums\StudioPermission::ManageFestivals,
+        \App\Enums\StudioPermission::ManageFestivalRegistrations,
+        \App\Enums\StudioPermission::ManageFestivalSchedule,
+        \App\Enums\StudioPermission::ManageFestivalFinance,
+        \App\Enums\StudioPermission::JudgeFestivals,
+        \App\Enums\StudioPermission::CheckInFestivalTickets,
+    ])->contains(fn ($permission) => $activeAccount->userCan($authUser, $permission));
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $assistantImageInferenceEnabled = $showAssistantWidget && \App\Models\PlatformAiSetting::imageInferenceEnabled();
@@ -173,12 +184,6 @@
             'icon' => 'class-pass-plans',
             'href' => route('dashboard.accounts.customer-class-passes.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.customer-class-passes.*'),
-        ]] : []),
-        ...($canManageEvents || $canCheckInEventTickets ? [[
-            'label' => __('app.events'),
-            'icon' => 'calendar-days',
-            'href' => route('dashboard.accounts.events.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.events.*'),
         ]] : []),
         ...($canViewReports || $canViewStudioFinancialReports ? [[
             'label' => __('app.reports'),
@@ -355,6 +360,21 @@
         ]] : []),
     ] : [];
 
+    $studioEventsNav = $showAccountNav ? [
+        ...($canManageEvents || $canCheckInEventTickets ? [[
+            'label' => __('app.events'),
+            'icon' => 'calendar-days',
+            'href' => route('dashboard.accounts.events.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.events.*'),
+        ]] : []),
+        ...($canViewFestivals ? [[
+            'label' => __('app.festivals'),
+            'icon' => 'trophy',
+            'href' => route('dashboard.accounts.festivals.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.festivals.*'),
+        ]] : []),
+    ] : [];
+
     $studioLogsNav = $showAccountNav ? [
         ...($canViewActivityLog ? [[
             'label' => __('app.account_activity_log'),
@@ -447,7 +467,7 @@
         <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
         <link rel="manifest" href="{{ route('pwa.manifest') }}">
         <link rel="apple-touch-icon" href="{{ asset('pwa/apple-touch-icon.png') }}">
-        <meta name="theme-color" content="#3B223F">
+        <meta name="theme-color" content="{{ $isFestivalWorkspace ? '#10233F' : '#3B223F' }}">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-title" content="{{ __('app.app_name') }}">
         <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -458,6 +478,7 @@
     </head>
     <body
         class="min-h-screen bg-canvas text-slate-950 antialiased"
+        data-workspace="{{ $isFestivalWorkspace ? 'festival' : 'studio' }}"
         data-phone-mask-error="{{ __('app.phone_mask_error') }}"
         data-phone-mask-no-results="{{ __('app.phone_mask_no_results') }}"
         data-phone-mask-search="{{ __('app.phone_mask_search') }}"
@@ -469,10 +490,20 @@
 
             <aside
                 data-sidebar
-                class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col overflow-y-auto bg-[#3B223F] bg-[linear-gradient(180deg,#3B223F_0%,#2B1731_58%,#3B223F_100%)] px-4 py-5 text-white shadow-2xl transition-transform duration-200 lg:translate-x-0"
+                class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col overflow-y-auto {{ $isFestivalWorkspace ? 'bg-[#10233F] bg-[linear-gradient(180deg,#10233F_0%,#0B172B_62%,#10233F_100%)]' : 'bg-[#3B223F] bg-[linear-gradient(180deg,#3B223F_0%,#2B1731_58%,#3B223F_100%)]' }} px-4 py-5 text-white shadow-2xl transition-transform duration-200 lg:translate-x-0"
             >
                 <div class="flex items-center justify-between gap-3 px-1">
-                    @if ($sidebarAccount)
+                    @if ($isFestivalWorkspace)
+                        <a href="{{ route('dashboard.accounts.festivals.index', $activeAccount) }}" class="flex min-w-0 items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-white/5">
+                            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-amber-300/15 text-amber-200 ring-1 ring-amber-200/25">
+                                <x-ui.icon name="trophy" class="h-6 w-6" />
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block truncate text-sm font-semibold leading-5 text-white">{{ $festivalWorkspaceEdition->title }}</span>
+                                <span class="mt-0.5 block truncate text-xs font-medium leading-4 text-slate-300">← {{ __('app.festival_workspace_back') }}</span>
+                            </span>
+                        </a>
+                    @elseif ($sidebarAccount)
                         <a href="{{ route('dashboard.accounts.show', $sidebarAccount) }}" class="flex min-w-0 items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-white/5">
                             <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[#FAF8F5] p-2 shadow-[0_10px_24px_rgba(20,10,24,0.22)] ring-1 ring-white/60">
                                 <img src="{{ $sidebarAccount->logoUrl() }}" alt="" class="max-h-full max-w-full object-contain">
@@ -497,6 +528,21 @@
                 </div>
 
                 <nav class="mt-8 space-y-7 text-sm font-medium">
+                    @if ($isFestivalWorkspace)
+                        @foreach ($festivalWorkspace['groups'] as $group)
+                            <div>
+                                <div class="px-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $group['label'] }}</div>
+                                <div class="mt-3 space-y-1">
+                                    @foreach ($group['items'] as $item)
+                                        <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-amber-200/20' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}" @if ($item['active']) aria-current="page" @endif>
+                                            <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-amber-300' : 'text-slate-400' }}" />
+                                            <span>{{ $item['label'] }}</span>
+                                        </a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    @else
                     @if ($primaryNav)
                         <div>
                             <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.platform') }}</div>
@@ -593,6 +639,20 @@
                         </div>
                     @endif
 
+                    @if ($studioEventsNav)
+                        <div>
+                            <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.events') }}</div>
+                            <div class="mt-3 space-y-1">
+                                @foreach ($studioEventsNav as $item)
+                                    <a href="{{ $item['href'] }}" class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition {{ $item['active'] ? 'bg-white/15 text-white ring-1 ring-white/10' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">
+                                        <x-ui.icon :name="$item['icon']" class="h-5 w-5 {{ $item['active'] ? 'text-brand-500' : 'text-slate-400' }}" />
+                                        <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
                     @if ($studioLogsNav)
                         <div>
                             <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.logs') }}</div>
@@ -605,6 +665,7 @@
                                 @endforeach
                             </div>
                         </div>
+                    @endif
                     @endif
                 </nav>
 
@@ -637,7 +698,12 @@
                         </div>
                     @endif
 
-                    @if ($sidebarAccount)
+                    @if ($isFestivalWorkspace)
+                        <a href="{{ route('dashboard.accounts.show', $activeAccount) }}" class="flex items-center gap-3 rounded-xl border border-white/10 bg-white/10 p-3 text-sm font-semibold text-white transition hover:bg-white/15">
+                            <x-ui.icon name="chevron-left" class="h-5 w-5 text-amber-300" />
+                            <span>{{ __('app.festival_workspace_back_to_studio') }}</span>
+                        </a>
+                    @elseif ($sidebarAccount)
                         <a href="{{ route('dashboard.index') }}" class="block rounded-xl border border-white/10 bg-white/10 p-3 transition hover:bg-white/15">
                             <x-ui.app-logo
                                 text-class="text-white"
@@ -677,7 +743,11 @@
                                 <x-ui.icon name="menu" class="h-5 w-5" />
                             </button>
                             <div class="hidden items-center gap-2 text-sm font-semibold text-slate-500 sm:flex">
-                                @if (request()->routeIs('dashboard.accounts.*') && $activeAccount)
+                                @if ($isFestivalWorkspace)
+                                    <span>{{ __('app.festivals') }}</span>
+                                    <x-ui.icon name="chevron-right" class="h-4 w-4 text-slate-300" />
+                                    <span class="text-slate-950">{{ $festivalWorkspaceEdition->title }}</span>
+                                @elseif (request()->routeIs('dashboard.accounts.*') && $activeAccount)
                                     <span>{{ __('app.workspace') }}</span>
                                     <x-ui.icon name="chevron-right" class="h-4 w-4 text-slate-300" />
                                     <span class="text-slate-950">{{ $activeAccount->name }}</span>
@@ -688,7 +758,7 @@
                         </div>
 
                         <div class="flex min-w-0 items-center gap-2 sm:gap-3">
-                            @if ($showAccountNav && isset($workingLocations) && $workingLocations->count() > 1)
+                            @if ($showAccountNav && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*'))
                                 <form method="POST" action="{{ route('dashboard.accounts.working-location.update', $activeAccount) }}" class="min-w-0">
                                     @csrf
                                     <input type="hidden" name="redirect_to" value="{{ request()->getRequestUri() }}">

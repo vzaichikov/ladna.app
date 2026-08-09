@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\CustomerPurchaseStatus;
 use App\Enums\EventOrderStatus;
+use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FiscalReceiptStatus;
 use App\Enums\SmsTopUpPaymentStatus;
 use App\Models\Account;
@@ -12,6 +13,7 @@ use App\Models\AccountSubscriptionPayment;
 use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
+use App\Models\FestivalEditionPurchase;
 use App\Models\SmsTopUpPayment;
 use App\Support\Fiscalization\FiscalReceiptService;
 use Illuminate\Console\Attributes\Description;
@@ -78,6 +80,26 @@ class FiscalizePayments extends Command
             ->lazyById()
             ->each(function (SmsTopUpPayment $payment) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {
                 [$result, $message] = $this->processPayment('sms-top-up', $payment, $fiscalReceipts);
+                $this->line($message);
+                $processed++;
+
+                match ($result) {
+                    'fiscalized' => $fiscalized++,
+                    'failed' => $failed++,
+                    default => $skipped++,
+                };
+            });
+
+        FestivalEditionPurchase::query()
+            ->whereIn('status', [FestivalEditionPurchaseStatus::Available->value, FestivalEditionPurchaseStatus::Redeemed->value])
+            ->where('amount_cents', '>', 0)
+            ->whereNotNull('paid_at')
+            ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
+            ->when($accountId === null, fn ($query) => $query->whereHas('account', fn ($query) => $query->operational()))
+            ->with(['account', 'fiscalReceipt'])
+            ->lazyById()
+            ->each(function (FestivalEditionPurchase $purchase) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {
+                [$result, $message] = $this->processPayment('festival', $purchase, $fiscalReceipts);
                 $this->line($message);
                 $processed++;
 
@@ -165,7 +187,7 @@ class FiscalizePayments extends Command
      */
     private function processPayment(
         string $kind,
-        AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder|SmsTopUpPayment $payment,
+        AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder|SmsTopUpPayment|FestivalEditionPurchase $payment,
         FiscalReceiptService $fiscalReceipts,
     ): array {
         if ($payment->fiscalReceipt?->isFiscalized()) {
@@ -183,6 +205,7 @@ class FiscalizePayments extends Command
             $payment instanceof CustomerPurchaseRefund => $fiscalReceipts->fiscalizeCustomerPurchaseRefund($payment),
             $payment instanceof EventOrder => $fiscalReceipts->fiscalizeEventOrder($payment),
             $payment instanceof SmsTopUpPayment => $fiscalReceipts->fiscalizeSmsTopUpPayment($payment),
+            $payment instanceof FestivalEditionPurchase => $fiscalReceipts->fiscalizeFestivalEditionPurchase($payment),
             default => $fiscalReceipts->fiscalizeAccountSubscriptionPayment($payment),
         };
 
@@ -201,12 +224,12 @@ class FiscalizePayments extends Command
         return ['skipped', "[{$kind}] #{$payment->id} {$this->paymentReference($payment)}: {$receipt->status->value}."];
     }
 
-    private function paymentReference(AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder|SmsTopUpPayment $payment): string
+    private function paymentReference(AccountSubscriptionPayment|CustomerPurchase|CustomerPurchaseRefund|EventOrder|SmsTopUpPayment|FestivalEditionPurchase $payment): string
     {
         if ($payment instanceof CustomerPurchaseRefund) {
             return ($payment->customerPurchase?->order_id ?? 'payment').'/refund-'.$payment->id;
         }
 
-        return $payment->order_id;
+        return (string) $payment->order_id;
     }
 }

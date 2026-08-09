@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\CompleteEventOrder;
 use App\Actions\CreateEventOrder;
+use App\Actions\Festivals\CompleteFestivalEditionPurchase;
 use App\Actions\Payments\CompleteCustomerPurchase;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\CustomerPurchaseStatus;
@@ -20,6 +21,8 @@ use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\Event;
 use App\Models\EventTicketType;
+use App\Models\FestivalEditionPurchase;
+use App\Models\FestivalTariffPackage;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\SmsTopUpPayment;
@@ -183,6 +186,44 @@ class FiscalizationTest extends TestCase
             && data_get($request->data(), 'goods.0.good.name') === __('app.sms_top_up_receipt_item')
             && data_get($request->data(), 'goods.0.good.price') === 5_000
             && data_get($request->data(), 'delivery.email') === 'sms-receipt-owner@example.com');
+    }
+
+    public function test_paid_festival_purchase_uses_platform_fiscalization_and_owner_delivery(): void
+    {
+        $this->enablePlatformFiscalization();
+        $account = Account::factory()->create();
+        $owner = User::factory()->create(['email' => 'festival-receipt-owner@example.com']);
+        $account->addOwner($owner);
+        $plan = SubscriptionPlan::factory()->create(['name' => 'Festival Studio']);
+        $package = FestivalTariffPackage::factory()->create([
+            'subscription_plan_id' => $plan->id,
+            'name' => 'Festival M '.str()->random(8),
+        ]);
+        $purchase = FestivalEditionPurchase::factory()->create([
+            'account_id' => $account->id,
+            'subscription_plan_id' => $plan->id,
+            'festival_tariff_package_id' => $package->id,
+            'created_by_user_id' => $owner->id,
+            'status' => 'payment_pending',
+            'package_name_snapshot' => 'M',
+            'amount_cents' => 300000,
+            'currency' => 'UAH',
+            'paid_at' => null,
+        ]);
+        $this->fakeCheckboxSuccess('FN-FESTIVAL-1');
+
+        $completed = app(CompleteFestivalEditionPurchase::class)->execute(
+            $purchase,
+            $this->paidCallback((string) $purchase->order_id, $purchase->amount_cents, $purchase->currency),
+        );
+        $receipt = $completed->fiscalReceipt()->firstOrFail();
+
+        $this->assertSame('available', $completed->status->value);
+        $this->assertSame(IntegrationScope::Platform, $receipt->scope_type);
+        $this->assertSame('FN-FESTIVAL-1', $receipt->fiscal_number);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'goods.0.good.name') === 'Ladna Festival · M'
+            && data_get($request->data(), 'delivery.email') === 'festival-receipt-owner@example.com');
     }
 
     public function test_paid_event_order_is_fiscalized_with_event_and_buyer_snapshots(): void

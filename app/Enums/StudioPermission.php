@@ -21,6 +21,12 @@ enum StudioPermission: string
     case ViewActivityLog = 'view_activity_log';
     case ManageEvents = 'manage_events';
     case CheckInEventTickets = 'check_in_event_tickets';
+    case ManageFestivals = 'manage_festivals';
+    case ManageFestivalRegistrations = 'manage_festival_registrations';
+    case ManageFestivalSchedule = 'manage_festival_schedule';
+    case ManageFestivalFinance = 'manage_festival_finance';
+    case JudgeFestivals = 'judge_festivals';
+    case CheckInFestivalTickets = 'check_in_festival_tickets';
     case InteractWithTelegramBot = 'interact_with_telegram_bot';
 
     public function labelKey(): string
@@ -58,6 +64,12 @@ enum StudioPermission: string
             self::ViewActivityLog => 'team_and_settings',
             self::ManageEvents,
             self::CheckInEventTickets,
+            self::ManageFestivals,
+            self::ManageFestivalRegistrations,
+            self::ManageFestivalSchedule,
+            self::ManageFestivalFinance,
+            self::JudgeFestivals,
+            self::CheckInFestivalTickets,
             self::InteractWithTelegramBot => 'events_and_tools',
         };
     }
@@ -78,8 +90,16 @@ enum StudioPermission: string
             self::CorrectClosedClasses,
             self::ManageStudioCashflow,
             self::ViewStudioFinancialReports,
-            self::ManageStudioPayroll => 'critical',
-            self::ManageStudioSettings, self::ManageTrainers, self::ManageCustomerClassPasses, self::IssueCustomerClassPasses, self::ManageEvents => 'high',
+            self::ManageStudioPayroll,
+            self::ManageFestivalFinance => 'critical',
+            self::ManageStudioSettings,
+            self::ManageTrainers,
+            self::ManageCustomerClassPasses,
+            self::IssueCustomerClassPasses,
+            self::ManageEvents,
+            self::ManageFestivals,
+            self::ManageFestivalRegistrations,
+            self::ManageFestivalSchedule => 'high',
             default => 'standard',
         };
     }

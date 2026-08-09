@@ -202,7 +202,7 @@ class AccountTenancyTest extends TestCase
     public function test_studio_owner_sidebar_prioritizes_daily_studio_work(): void
     {
         $owner = User::factory()->create();
-        $account = Account::factory()->create();
+        $account = Account::factory()->create(['enable_festivals' => true]);
         $account->addOwner($owner);
         $this->platformOwnerTelegramBot(['is_enabled' => false]);
 
@@ -236,6 +236,9 @@ class AccountTenancyTest extends TestCase
                 'Налаштування акаунта',
                 'Мій акаунт',
                 'Тариф та платежі',
+                'Події',
+                'Події',
+                'Фестивалі',
                 'Журнали',
                 'Журнал дій',
                 'Журнал SMS',

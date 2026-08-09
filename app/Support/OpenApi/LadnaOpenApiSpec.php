@@ -14,7 +14,7 @@ class LadnaOpenApiSpec
             'info' => [
                 'title' => 'Ladna API',
                 'version' => config('app.version', '1.0.0'),
-                'description' => 'Public schedule, public prices, native mobile app, website lead intake, and account-scoped MCP tools for Ladna studios.',
+                'description' => 'Public schedule, public prices, native mobile app, website lead intake, Festival payment callbacks, and account-scoped MCP tools for Ladna studios.',
             ],
             'servers' => [
                 [
@@ -31,6 +31,7 @@ class LadnaOpenApiSpec
                 ['name' => 'Mobile bookings'],
                 ['name' => 'Mobile customer'],
                 ['name' => 'Website leads'],
+                ['name' => 'Festival payments'],
                 ['name' => 'MCP'],
             ],
             'paths' => [
@@ -61,6 +62,7 @@ class LadnaOpenApiSpec
                 '/api/v1/mobile/customer/profile/phone/verify' => $this->mobileCustomerProfilePhoneOtpVerifyPath(),
                 '/api/v1/mobile/staff/customers' => $this->mobileStaffCustomersPath(),
                 '/api/v1/website-leads' => $this->websiteLeadPath(),
+                '/api/v1/festival-payments/{provider}/callbacks' => $this->festivalPaymentCallbackPath(),
                 '/mcp/ladna-studio' => $this->mcpStudioPath(),
             ],
             'components' => [
@@ -865,6 +867,74 @@ class LadnaOpenApiSpec
                     'phone' => '+380671112233',
                     'name' => 'Олена Коваль',
                     'source_page' => 'https://studio.example.com/trial',
+                ]),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function festivalPaymentCallbackPath(): array
+    {
+        return [
+            'post' => [
+                'tags' => ['Festival payments'],
+                'summary' => 'Receives a payment provider callback for a Festival performance charge or spectator admission order.',
+                'description' => 'This endpoint is called by the configured payment provider. The provider adapter validates its signature and resolves the account from the opaque Festival order identifier. Processing is idempotent and rejects unknown providers, accounts with Festivals disabled, amount or currency mismatches, and invalid signatures.',
+                'security' => [],
+                'parameters' => [
+                    [
+                        'name' => 'provider',
+                        'in' => 'path',
+                        'required' => true,
+                        'description' => 'Configured Ladna payment provider key.',
+                        'schema' => ['type' => 'string', 'example' => 'monopay'],
+                    ],
+                ],
+                'requestBody' => [
+                    'required' => true,
+                    'description' => 'Provider-specific signed callback payload. Fields vary by the configured gateway.',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => [
+                                'type' => 'object',
+                                'additionalProperties' => true,
+                            ],
+                            'example' => [
+                                'reference' => 'provider_order_reference',
+                                'status' => 'success',
+                            ],
+                        ],
+                        'application/x-www-form-urlencoded' => [
+                            'schema' => [
+                                'type' => 'object',
+                                'additionalProperties' => true,
+                            ],
+                        ],
+                    ],
+                ],
+                'responses' => [
+                    '200' => [
+                        'description' => 'Provider-specific acknowledgement. Repeated successful callbacks are acknowledged without duplicating payment or ticket state.',
+                        'content' => ['text/plain' => ['schema' => ['type' => 'string']]],
+                    ],
+                    '400' => [
+                        'description' => 'The callback signature, order identifier, amount, currency, or state is invalid.',
+                        'content' => ['text/plain' => ['schema' => ['type' => 'string']]],
+                    ],
+                    '404' => [
+                        'description' => 'The provider, Festival order, enabled account capability, or payment integration was not found.',
+                        'content' => ['text/plain' => ['schema' => ['type' => 'string']]],
+                    ],
+                    '500' => [
+                        'description' => 'The callback could not be processed and may be retried safely.',
+                        'content' => ['text/plain' => ['schema' => ['type' => 'string']]],
+                    ],
+                ],
+                'x-codeSamples' => $this->codeSamples('POST', '/api/v1/festival-payments/monopay/callbacks', [
+                    'reference' => 'provider_order_reference',
+                    'status' => 'success',
                 ]),
             ],
         ];

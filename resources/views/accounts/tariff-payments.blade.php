@@ -302,4 +302,29 @@
     @if ($payments->hasPages())
         <div class="mt-6">{{ $payments->links() }}</div>
     @endif
+
+    @if ($festivalPurchases->isNotEmpty())
+        <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+            <div class="border-b border-stone-100 p-5">
+                <h2 class="text-lg font-semibold text-slate-950">{{ __('app.festival_payment_history') }}</h2>
+            </div>
+            @foreach($festivalPurchases as $purchase)
+                <div class="crm-row lg:grid-cols-[minmax(0,1fr)_140px_170px_auto] lg:items-center">
+                    <div>
+                        <strong class="text-slate-950">{{ $purchase->tariff_name_snapshot }} · {{ $purchase->package_name_snapshot }}</strong>
+                        <p class="mt-1 text-sm text-slate-500">{{ $purchase->order_id }}@if($purchase->edition) · {{ $purchase->edition->title }}@endif</p>
+                    </div>
+                    <span class="font-semibold text-slate-700">{{ $formatMoney($purchase->amount_cents, $purchase->currency) }}</span>
+                    <span class="text-sm text-slate-500">{{ $purchase->paid_at?->timezone($timezone)->format('d.m.Y H:i') }}</span>
+                    <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+                        <span class="{{ $purchase->status === \App\Enums\FestivalEditionPurchaseStatus::PaymentReversed ? 'crm-status-danger' : 'crm-status-active' }}">{{ __('app.festival_purchase_status_'.$purchase->status->value) }}</span>
+                        @if($purchase->fiscalReceipt?->isFiscalized())
+                            <span class="crm-status-muted">{{ __('app.fiscal_status_fiscalized') }}</span>
+                        @endif
+                    </div>
+                </div>
+            @endforeach
+        </x-ui.panel>
+        @if($festivalPurchases->hasPages())<div class="mt-6">{{ $festivalPurchases->links() }}</div>@endif
+    @endif
 @endsection

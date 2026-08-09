@@ -38,6 +38,24 @@
         @endforeach
     </x-ui.panel>
 
+    <x-ui.panel padding="none" class="mt-6 overflow-hidden">
+        <div class="border-b border-stone-100 p-5">
+            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.festival_tariff_packages') }}</h2>
+            <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_tariff_packages_preview_help') }}</p>
+        </div>
+        @forelse($plan->festivalTariffPackages as $package)
+            <div class="crm-row lg:grid-cols-[120px_1fr_1fr_180px_auto] lg:items-center">
+                <strong class="text-slate-950">{{ $package->name }}</strong>
+                <span>{{ trans_choice('app.festival_participants_count', $package->max_participants, ['count' => $package->max_participants]) }}</span>
+                <span>{{ trans_choice('app.festival_tickets_count', $package->max_tickets, ['count' => $package->max_tickets]) }}</span>
+                <span class="font-semibold">{{ \App\Support\MoneyFormatter::format($package->price_cents, $package->currency) }}</span>
+                <span class="{{ $package->is_active ? 'crm-status-active' : 'crm-status-muted' }}">{{ $package->is_active ? __('app.active') : __('app.inactive') }}</span>
+            </div>
+        @empty
+            <x-ui.empty-state :title="__('app.no_festival_tariff_packages')" icon="trophy" class="m-5" />
+        @endforelse
+    </x-ui.panel>
+
     <div class="mt-6 flex flex-wrap gap-3">
         @if ($priceVersion->status === \App\Enums\SubscriptionPriceStatus::Draft)
             <form method="POST" action="{{ route('platform.subscription-plans.price-versions.publish', [$plan, $priceVersion]) }}">

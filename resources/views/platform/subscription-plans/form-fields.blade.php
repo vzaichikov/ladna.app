@@ -11,6 +11,55 @@
     </label>
 </div>
 
+@php
+    $packageRows = old('festival_packages', $festivalPackages->map(fn ($package) => [
+        'id' => data_get($package, 'id'),
+        'name' => data_get($package, 'name'),
+        'price_uah' => number_format((int) data_get($package, 'price_cents', 0) / 100, 2, '.', ''),
+        'max_participants' => data_get($package, 'max_participants'),
+        'max_tickets' => data_get($package, 'max_tickets'),
+        'is_active' => (bool) data_get($package, 'is_active', true),
+    ])->all());
+@endphp
+
+<section class="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4">
+    <div>
+        <h2 class="text-base font-semibold text-slate-950">{{ __('app.festival_tariff_packages') }}</h2>
+        <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('app.festival_tariff_packages_help') }}</p>
+    </div>
+    <div class="mt-4 space-y-3">
+        @foreach ($packageRows as $index => $package)
+            <div class="grid gap-3 rounded-lg border border-white bg-white p-3 shadow-xs sm:grid-cols-2 xl:grid-cols-[100px_150px_1fr_1fr_auto]">
+                @if (filled($package['id'] ?? null))
+                    <input type="hidden" name="festival_packages[{{ $index }}][id]" value="{{ $package['id'] }}">
+                @endif
+                <label>
+                    <span class="crm-label">{{ __('app.package') }}</span>
+                    <input name="festival_packages[{{ $index }}][name]" value="{{ $package['name'] }}" required class="crm-field">
+                </label>
+                <label>
+                    <span class="crm-label">{{ __('app.festival_package_price_uah') }}</span>
+                    <input name="festival_packages[{{ $index }}][price_uah]" type="number" min="0" step="0.01" value="{{ $package['price_uah'] }}" required class="crm-field">
+                </label>
+                <label>
+                    <span class="crm-label">{{ __('app.festival_participant_limit') }}</span>
+                    <input name="festival_packages[{{ $index }}][max_participants]" type="number" min="1" value="{{ $package['max_participants'] }}" required class="crm-field">
+                </label>
+                <label>
+                    <span class="crm-label">{{ __('app.festival_ticket_limit') }}</span>
+                    <input name="festival_packages[{{ $index }}][max_tickets]" type="number" min="1" value="{{ $package['max_tickets'] }}" required class="crm-field">
+                </label>
+                <label class="flex items-center gap-2 self-end pb-2 text-sm font-medium text-slate-700">
+                    <input type="hidden" name="festival_packages[{{ $index }}][is_active]" value="0">
+                    <input name="festival_packages[{{ $index }}][is_active]" type="checkbox" value="1" @checked($package['is_active']) class="crm-checkbox">
+                    {{ __('app.active') }}
+                </label>
+            </div>
+        @endforeach
+    </div>
+    @error('festival_packages') <span class="crm-help">{{ $message }}</span> @enderror
+</section>
+
 <label class="block">
     <span class="crm-label">{{ __('app.description') }}</span>
     <textarea name="description" rows="3" class="crm-field">{{ old('description', $plan->description) }}</textarea>

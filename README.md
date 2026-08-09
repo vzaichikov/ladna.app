@@ -70,3 +70,7 @@ vendor/bin/pint --dirty --format agent
 ## Current Product Notes
 
 Ladna is not yet a full production billing or payment system. Subscription plans, integration settings, customer auth, and booking flows exist as product foundations and are expected to keep evolving.
+
+## Festival Framework
+
+The standalone Festival domain, its reverse-engineered product background, fixed boundaries, and delivery checklist are documented in [`docs/festivals/README.md`](docs/festivals/README.md).

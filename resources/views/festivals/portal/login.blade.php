@@ -1,0 +1,7 @@
+@extends('layouts.public')
+
+@section('title', __('app.festival_portal').' - '.$account->name)
+
+@section('content')
+<main class="min-h-screen bg-canvas px-5 py-10"><div class="mx-auto max-w-lg"><x-ui.public-studio-header :account="$account" /><section class="mt-8 rounded-3xl border border-stone-200 bg-white p-6 shadow-crm sm:p-8"><p class="text-sm font-semibold text-brand-700">{{ $account->name }}</p><h1 class="mt-2 text-3xl font-semibold">{{ __('app.festival_portal') }}</h1><p class="mt-3 leading-7 text-slate-600">{{ __('app.festival_login_copy') }}</p>@if(session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif @if($errors->any())<div class="mt-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $errors->first() }}</div>@endif<form method="POST" action="{{ route('festival.login.request', $account->slug) }}" class="mt-6 space-y-4">@csrf<label><span class="crm-label">{{ __('app.email') }}</span><input type="email" name="email" value="{{ old('email') }}" required autocomplete="email" class="crm-field"></label><x-ui.button type="submit" size="lg" class="w-full">{{ __('app.festival_send_magic_link') }}</x-ui.button></form><a href="{{ route('public.festivals.index', $account->slug) }}" class="mt-5 inline-block text-sm font-semibold text-brand-700">← {{ __('app.festivals') }}</a></section></div></main>
+@endsection

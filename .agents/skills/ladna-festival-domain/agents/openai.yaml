@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Festival Domain"
+  short_description: "Build standalone Ladna Festival workflows"
+  default_prompt: "Use $ladna-festival-domain to change Ladna Festival behavior while preserving its isolated tenant and identity boundaries."

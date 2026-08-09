@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.125.0',
+                'date' => '2026-08-09',
+                'title' => 'Standalone Festival competition workspace',
+                'items' => ['Studios can now manage complete Festival competitions in a dedicated workspace with Series and editions, public pages, a separate participant portal, applications and requirements, schedules, judging and results, spectator tickets, secure QR admission, and organizer communication.', 'Festival administration has its own focused navigation and visual identity, while participant identities and competition data remain completely separate from studio Customers and ordinary Events.', 'Festival editions use prepaid tariff packages with fixed participant and guest-ticket limits. Studio owners can purchase a package with their saved Ladna card or hosted checkout, and authorized Festival managers can redeem an available package to create the edition.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.124.0',
                 'date' => '2026-08-06',
                 'title' => 'Self-service payment method replacement',
@@ -1087,6 +1094,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.125.0',
+                'date' => '2026-08-09',
+                'title' => 'Окремий простір для фестивальних змагань',
+                'items' => ['Студії можуть керувати повним циклом фестивальних змагань в окремому просторі: серіями та редакціями, публічними сторінками, незалежним кабінетом учасника, заявками й вимогами, розкладом, суддівством і результатами, глядацькими квитками, захищеним QR-входом та комунікацією організатора.', 'Адміністрування фестивалю отримало власну зрозумілу навігацію та візуальну ідентичність, а особи учасників і дані змагань повністю відокремлені від клієнтів студії та звичайних подій.', 'Редакції фестивалю створюються з передплачених тарифних пакетів із зафіксованими лімітами учасників і гостьових квитків. Власник студії може придбати пакет збереженою карткою Ladna або через платіжну сторінку, а уповноважений менеджер фестивалю — використати доступний пакет для створення редакції.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.124.0',
                 'date' => '2026-08-06',

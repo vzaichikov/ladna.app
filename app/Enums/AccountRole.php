@@ -30,6 +30,10 @@ enum AccountRole: string
                 StudioPermission::ManageTrainers,
                 StudioPermission::ManageEvents,
                 StudioPermission::CheckInEventTickets,
+                StudioPermission::ManageFestivals,
+                StudioPermission::ManageFestivalRegistrations,
+                StudioPermission::ManageFestivalSchedule,
+                StudioPermission::CheckInFestivalTickets,
                 StudioPermission::RecordCustomerPayments,
             ],
             self::Trainer => [
@@ -44,6 +48,7 @@ enum AccountRole: string
                 StudioPermission::ManageWebsiteLeads,
                 StudioPermission::MarkAttendance,
                 StudioPermission::CheckInEventTickets,
+                StudioPermission::CheckInFestivalTickets,
                 StudioPermission::RecordCustomerPayments,
             ],
         };

@@ -26,6 +26,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 This project has domain-specific skills available in `**/skills/**`. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
 
 - Activate `ladna-domain` for Ladna business-domain work: SaaS/studio/customer roles, tenancy, permissions, subscriptions, class passes, schedules, trainers, customers, bookings, or Charmpole demo data.
+- Activate `ladna-festival-domain` for any Festival framework work: Series and editions, Festival portal identities, participants, entries, categories, requirements, payments, schedules, judging, results, admission, QR, notifications, or Festival interfaces.
 - Activate `ladna-testing` for Ladna manual QA, browser/Playwright checks, screenshot capture, or rendered UI verification.
 - Activate `ladna-trello-card` only when the user explicitly asks to view, inspect, fix, or implement a specific Ladna Trello card. Do not activate it for ordinary development or generic bug discussions.
 - Activate `ladna-versioning` before every commit or push: update `VERSION` and `config/changelog.php` with the correct semantic version bump and release note for `/changelog.en.html` and `/changelog.ua.html`.

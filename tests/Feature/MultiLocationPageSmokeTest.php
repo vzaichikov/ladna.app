@@ -12,6 +12,16 @@ use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\Event;
+use App\Models\FestivalCategory;
+use App\Models\FestivalEdition;
+use App\Models\FestivalEditionPurchase;
+use App\Models\FestivalEntry;
+use App\Models\FestivalJudgeAssignment;
+use App\Models\FestivalPortalUser;
+use App\Models\FestivalRubric;
+use App\Models\FestivalScoreSheet;
+use App\Models\FestivalSeries;
+use App\Models\FestivalTariffPackage;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\SalaryModel;
@@ -41,13 +51,15 @@ class MultiLocationPageSmokeTest extends TestCase
 
         $classifiedRouteNames = [
             ...$this->accountOnlyHtmlRoutes(),
+            ...$this->accountWideHtmlRoutes(),
             ...array_keys($this->parameterizedHtmlRoutes()),
+            ...array_keys($this->parameterizedAccountWideHtmlRoutes()),
             ...$this->nonPageGetRoutes(),
             ...$this->legacyRedirectGetRoutes(),
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(101, $classifiedRouteNames);
+        $this->assertCount(116, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -74,6 +86,20 @@ class MultiLocationPageSmokeTest extends TestCase
                     $activeLocationCount > 1,
                 );
             }
+
+            foreach ($this->accountWideHtmlRoutes() as $routeName) {
+                $parameters = $routeName === 'dashboard.accounts.festivals.create'
+                    ? [$account, 'purchase' => $fixtures['festival_purchase']->id]
+                    : $account;
+                $this->assertPageRenders(route($routeName, $parameters), $routeName, false);
+            }
+
+            foreach ($this->parameterizedAccountWideHtmlRoutes() as $routeName => $fixtureKey) {
+                $parameters = $routeName === 'dashboard.accounts.festivals.score-sheets.edit'
+                    ? [$account, $fixtures['festival_edition'], $fixtures['festival_score_sheet']]
+                    : [$account, $fixtures[$fixtureKey]];
+                $this->assertPageRenders(route($routeName, $parameters), $routeName, false);
+            }
         }
     }
 
@@ -91,6 +117,7 @@ class MultiLocationPageSmokeTest extends TestCase
                 ScheduleKind::cases(),
             ),
             'trainer_private_timeframes_enabled' => true,
+            'enable_festivals' => true,
         ]);
         $account->addOwner($owner);
         $subscriptionPlan = SubscriptionPlan::factory()->create([
@@ -131,6 +158,36 @@ class MultiLocationPageSmokeTest extends TestCase
             ->for($classPassPlan)
             ->create(['issued_location_id' => $location->id]);
         $event = Event::factory()->published()->for($account)->create();
+        $festivalSeries = FestivalSeries::factory()->for($account)->create();
+        $festivalPackage = FestivalTariffPackage::factory()->create([
+            'subscription_plan_id' => $subscriptionPlan->id,
+            'name' => 'Smoke '.str()->random(8),
+        ]);
+        $festivalPurchase = FestivalEditionPurchase::factory()->create([
+            'account_id' => $account->id,
+            'subscription_plan_id' => $subscriptionPlan->id,
+            'festival_tariff_package_id' => $festivalPackage->id,
+            'created_by_user_id' => $owner->id,
+        ]);
+        $festivalEdition = FestivalEdition::factory()->for($festivalSeries)->create(['account_id' => $account->id]);
+        $festivalCategory = FestivalCategory::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
+        $festivalPortalUser = FestivalPortalUser::factory()->for($account)->create();
+        $festivalEntry = FestivalEntry::factory()->for($festivalCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $festivalEdition->id,
+            'festival_portal_user_id' => $festivalPortalUser->id,
+        ]);
+        $festivalJudgeAssignment = FestivalJudgeAssignment::factory()->for($festivalEdition)->for($owner)->create(['account_id' => $account->id]);
+        $festivalJudgeAssignment->categories()->attach($festivalCategory, ['account_id' => $account->id]);
+        $festivalRubric = FestivalRubric::factory()->for($festivalEdition)->create(['account_id' => $account->id, 'festival_category_id' => $festivalCategory->id]);
+        $festivalSection = $festivalRubric->sections()->create(['account_id' => $account->id, 'name' => 'Technique', 'weight' => 1]);
+        $festivalSection->criteria()->create(['account_id' => $account->id, 'name' => 'Execution', 'max_score' => 10, 'weight' => 1]);
+        $festivalScoreSheet = FestivalScoreSheet::query()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $festivalEntry->id,
+            'festival_judge_assignment_id' => $festivalJudgeAssignment->id,
+            'festival_rubric_id' => $festivalRubric->id,
+        ]);
         $salaryModel = SalaryModel::factory()->for($account)->create();
         $scheduleSeries = ScheduleSeries::factory()
             ->for($account)
@@ -149,6 +206,10 @@ class MultiLocationPageSmokeTest extends TestCase
             'customer_class_pass' => $customerClassPass,
             'customer' => $customer,
             'event' => $event,
+            'festival_edition' => $festivalEdition,
+            'festival_purchase' => $festivalPurchase,
+            'festival_series' => $festivalSeries,
+            'festival_score_sheet' => $festivalScoreSheet,
             'group_class_type' => $groupClassType,
             'internal_class_type' => $internalClassType,
             'location' => $location,
@@ -260,6 +321,18 @@ class MultiLocationPageSmokeTest extends TestCase
     }
 
     /**
+     * @return list<string>
+     */
+    private function accountWideHtmlRoutes(): array
+    {
+        return [
+            'dashboard.accounts.festivals.create',
+            'dashboard.accounts.festivals.index',
+            'dashboard.accounts.festivals.series.create',
+        ];
+    }
+
+    /**
      * @return array<string, string>
      */
     private function parameterizedHtmlRoutes(): array
@@ -290,6 +363,26 @@ class MultiLocationPageSmokeTest extends TestCase
     }
 
     /**
+     * @return array<string, string>
+     */
+    private function parameterizedAccountWideHtmlRoutes(): array
+    {
+        return [
+            'dashboard.accounts.festivals.applications' => 'festival_edition',
+            'dashboard.accounts.festivals.communication' => 'festival_edition',
+            'dashboard.accounts.festivals.edit' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.index' => 'festival_edition',
+            'dashboard.accounts.festivals.program' => 'festival_edition',
+            'dashboard.accounts.festivals.scanner' => 'festival_edition',
+            'dashboard.accounts.festivals.score-sheets.edit' => 'festival_score_sheet',
+            'dashboard.accounts.festivals.settings' => 'festival_edition',
+            'dashboard.accounts.festivals.show' => 'festival_edition',
+            'dashboard.accounts.festivals.tickets' => 'festival_edition',
+            'dashboard.accounts.festivals.series.edit' => 'festival_series',
+        ];
+    }
+
+    /**
      * @return list<string>
      */
     private function nonPageGetRoutes(): array
@@ -301,6 +394,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.customers.example',
             'dashboard.accounts.customers.export',
             'dashboard.accounts.customers.search',
+            'dashboard.accounts.festivals.submissions.download',
             'dashboard.accounts.people-counter-samples.image',
             'dashboard.accounts.quick-bookings.group-availability',
             'dashboard.accounts.quick-bookings.manual-availability',

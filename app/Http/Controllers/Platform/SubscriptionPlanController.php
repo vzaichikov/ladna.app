@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateSubscriptionPlanRequest;
 use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionPlanSmsRateChange;
 use App\Models\SubscriptionPriceVersion;
+use App\Support\Festivals\FestivalTariffDefaults;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
@@ -50,6 +51,7 @@ class SubscriptionPlanController extends Controller
                 'renewal_lead_days' => 2,
                 'is_active' => true,
             ]),
+            'festivalPackages' => collect(FestivalTariffDefaults::packages()),
         ]);
     }
 
@@ -62,9 +64,13 @@ class SubscriptionPlanController extends Controller
         $validated['requires_recurring_payment'] = $request->boolean('requires_recurring_payment');
         $validated['price_cents'] = PaymentAmounts::decimalToCents($validated['price_uah']);
         $validated['sms_segment_price_cents'] = $this->smsSegmentPriceCents($validated);
-        unset($validated['price_uah'], $validated['sms_segment_price_uah']);
+        $festivalPackages = $validated['festival_packages'] ?? FestivalTariffDefaults::packages();
+        unset($validated['price_uah'], $validated['sms_segment_price_uah'], $validated['festival_packages']);
 
-        SubscriptionPlan::create($validated);
+        DB::transaction(function () use ($validated, $festivalPackages): void {
+            $plan = SubscriptionPlan::create($validated);
+            $this->syncFestivalPackages($plan, $festivalPackages);
+        });
 
         return redirect()->route('platform.subscription-plans.index')
             ->with('status', __('app.subscription_plan_created'));
@@ -77,8 +83,13 @@ class SubscriptionPlanController extends Controller
 
     public function edit(SubscriptionPlan $subscriptionPlan): View
     {
+        $subscriptionPlan->load('festivalTariffPackages');
+
         return view('platform.subscription-plans.edit', [
             'plan' => $subscriptionPlan,
+            'festivalPackages' => $subscriptionPlan->festivalTariffPackages->isNotEmpty()
+                ? $subscriptionPlan->festivalTariffPackages
+                : collect(FestivalTariffDefaults::packages()),
         ]);
     }
 
@@ -91,12 +102,16 @@ class SubscriptionPlanController extends Controller
         $validated['requires_recurring_payment'] = $request->boolean('requires_recurring_payment');
         $validated['price_cents'] = PaymentAmounts::decimalToCents($validated['price_uah']);
         $validated['sms_segment_price_cents'] = $this->smsSegmentPriceCents($validated);
-        unset($validated['price_uah'], $validated['sms_segment_price_uah']);
+        $festivalPackages = $validated['festival_packages'] ?? null;
+        unset($validated['price_uah'], $validated['sms_segment_price_uah'], $validated['festival_packages']);
 
-        DB::transaction(function () use ($request, $subscriptionPlan, $validated): void {
+        DB::transaction(function () use ($request, $subscriptionPlan, $validated, $festivalPackages): void {
             $oldSmsSegmentPriceCents = $subscriptionPlan->sms_segment_price_cents;
 
             $subscriptionPlan->update($validated);
+            if ($festivalPackages !== null) {
+                $this->syncFestivalPackages($subscriptionPlan, $festivalPackages);
+            }
 
             if ($oldSmsSegmentPriceCents !== $subscriptionPlan->sms_segment_price_cents) {
                 SubscriptionPlanSmsRateChange::create([
@@ -119,12 +134,16 @@ class SubscriptionPlanController extends Controller
             || $subscriptionPlan->subscriptionPayments()->exists()
             || $subscriptionPlan->priceVersions()->exists()
             || $subscriptionPlan->smsRateChanges()->exists()
+            || $subscriptionPlan->festivalEditionPurchases()->exists()
         ) {
             return redirect()->route('platform.subscription-plans.index')
                 ->withErrors(['plan' => __('app.subscription_plan_in_use')]);
         }
 
-        $subscriptionPlan->delete();
+        DB::transaction(function () use ($subscriptionPlan): void {
+            $subscriptionPlan->festivalTariffPackages()->delete();
+            $subscriptionPlan->delete();
+        });
 
         return redirect()->route('platform.subscription-plans.index')
             ->with('status', __('app.subscription_plan_deleted'));
@@ -148,5 +167,32 @@ class SubscriptionPlanController extends Controller
         $amount = $validated['sms_segment_price_uah'] ?? null;
 
         return filled($amount) ? PaymentAmounts::decimalToCents($amount) : null;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $packages
+     */
+    private function syncFestivalPackages(SubscriptionPlan $plan, array $packages): void
+    {
+        foreach (array_values($packages) as $index => $package) {
+            $attributes = [
+                'name' => trim((string) $package['name']),
+                'price_cents' => isset($package['price_uah'])
+                    ? PaymentAmounts::decimalToCents($package['price_uah'])
+                    : (int) $package['price_cents'],
+                'currency' => $plan->currency,
+                'max_participants' => (int) $package['max_participants'],
+                'max_tickets' => (int) $package['max_tickets'],
+                'is_active' => filter_var($package['is_active'] ?? false, FILTER_VALIDATE_BOOL),
+                'sort_order' => ($index + 1) * 10,
+            ];
+
+            $packageId = isset($package['id']) ? (int) $package['id'] : null;
+            if ($packageId) {
+                $plan->festivalTariffPackages()->whereKey($packageId)->firstOrFail()->update($attributes);
+            } else {
+                $plan->festivalTariffPackages()->create($attributes);
+            }
+        }
     }
 }

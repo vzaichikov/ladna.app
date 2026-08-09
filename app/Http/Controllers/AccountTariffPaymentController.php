@@ -129,6 +129,13 @@ class AccountTariffPaymentController extends Controller
                 ->with('plan')
                 ->latest()
                 ->paginate(15),
+            'festivalPurchases' => $account->festivalEditionPurchases()
+                ->where('amount_cents', '>', 0)
+                ->whereNotNull('paid_at')
+                ->with(['edition', 'fiscalReceipt'])
+                ->latest('paid_at')
+                ->paginate(10, ['*'], 'festival_payments_page')
+                ->withQueryString(),
             'supportUrl' => SystemSetting::stringValue(SystemSetting::SupportUrlKey),
         ]);
     }

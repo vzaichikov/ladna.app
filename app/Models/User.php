@@ -73,6 +73,11 @@ class User extends Authenticatable
         return $this->hasMany(SubscriptionPlanSmsRateChange::class, 'actor_user_id');
     }
 
+    public function festivalEditionPurchases(): HasMany
+    {
+        return $this->hasMany(FestivalEditionPurchase::class, 'created_by_user_id');
+    }
+
     public function accounts(): BelongsToMany
     {
         return $this->belongsToMany(Account::class, 'account_memberships')

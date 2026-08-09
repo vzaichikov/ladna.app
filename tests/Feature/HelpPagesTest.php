@@ -97,6 +97,28 @@ class HelpPagesTest extends TestCase
         }
     }
 
+    public function test_festivals_help_explains_the_independent_competition_flow(): void
+    {
+        $this->get(route('help.show', 'festivals', false))
+            ->assertOk()
+            ->assertSee('Фестивалі та змагання', false)
+            ->assertSee('Події -&gt; Фестивалі', false)
+            ->assertSee('Серії фестивалів', false)
+            ->assertSee('сама створює публічну адресу', false)
+            ->assertSee('загальне меню студії змінюється на окреме меню фестивалю', false)
+            ->assertSee('Фестиваль живе окремо від Подій', false)
+            ->assertSee('не створює картки клієнтів студії', false)
+            ->assertSee('Кожна заміна музики, відео чи документа зберігається новою версією', false)
+            ->assertSee('два слоти, що перетинаються на одній сцені', false)
+            ->assertSee('кожен квиток отримує окремий захищений QR-код', false)
+            ->assertSee('assets/help/screenshots/festivals-workspace.png', false)
+            ->assertDontSee('tenant', false)
+            ->assertDontSee('callback', false)
+            ->assertDontSee('Customer', false)
+            ->assertDontSee('Event', false)
+            ->assertDontSee('CRM', false);
+    }
+
     public function test_help_screenshot_catalog_has_no_missing_or_duplicate_files(): void
     {
         $configuredPaths = $this->configuredScreenshotPaths();
@@ -289,7 +311,7 @@ class HelpPagesTest extends TestCase
     {
         $this->get(route('help.show', 'trainers', false))
             ->assertOk()
-            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-08-03', false)
+            ->assertSee('assets/help/screenshots/trainer-types.png?v=2026-08-09', false)
             ->assertSee('assets/help/screenshots/trainer-types.png', false)
             ->assertSee('assets/help/screenshots/trainer-editor.png', false)
             ->assertSee('assets/help/screenshots/trainer-private-timeframes.png', false)

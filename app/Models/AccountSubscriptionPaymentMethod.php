@@ -64,6 +64,11 @@ class AccountSubscriptionPaymentMethod extends Model
         );
     }
 
+    public function festivalEditionPurchases(): HasMany
+    {
+        return $this->hasMany(FestivalEditionPurchase::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === SubscriptionPaymentMethodStatus::Active

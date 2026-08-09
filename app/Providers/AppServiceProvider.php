@@ -4,14 +4,17 @@ namespace App\Providers;
 
 use App\Enums\StudioPermission;
 use App\Models\Account;
+use App\Models\FestivalEdition;
 use App\Models\Location;
 use App\Policies\AccountPolicy;
+use App\Policies\FestivalEditionPolicy;
 use App\Policies\LocationPolicy;
 use App\Support\ApplicationVersion;
 use App\Support\Mail\LadnaTransactionalTransport;
 use App\Support\Mail\MailDeliveryTransportResolver;
 use App\Support\SystemAppearance;
 use App\Support\WorkingLocationContext;
+use App\View\Composers\FestivalWorkspaceComposer;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -48,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         Model::preventLazyLoading(! app()->isProduction());
 
         Gate::policy(Account::class, AccountPolicy::class);
+        Gate::policy(FestivalEdition::class, FestivalEditionPolicy::class);
         Gate::policy(Location::class, LocationPolicy::class);
         Gate::before(fn ($user): ?bool => $user->isPlatformAdmin() ? true : null);
         Gate::define('accessPlatform', fn ($user): bool => $user->isPlatformAdmin());
@@ -69,6 +73,12 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manageStudioSettings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageStudioSettings));
         Gate::define('manageEvents', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageEvents));
         Gate::define('checkInEventTickets', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::CheckInEventTickets));
+        Gate::define('manageFestivals', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageFestivals));
+        Gate::define('manageFestivalRegistrations', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageFestivalRegistrations));
+        Gate::define('manageFestivalSchedule', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageFestivalSchedule));
+        Gate::define('manageFestivalFinance', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageFestivalFinance));
+        Gate::define('judgeFestivals', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::JudgeFestivals));
+        Gate::define('checkInFestivalTickets', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::CheckInFestivalTickets));
 
         Password::defaults(fn (): Password => Password::min(6));
 
@@ -95,6 +105,7 @@ class AppServiceProvider extends ServiceProvider
                 ->with('workingLocation', $workingLocationContext->location($account))
                 ->with('workingLocationValue', $workingLocationContext->value($account));
         });
+        View::composer('layouts.app', FestivalWorkspaceComposer::class);
 
         RateLimiter::for('login', function (Request $request): Limit {
             return Limit::perMinute(5)->by($request->string('email')->lower().'|'.$request->ip());
@@ -148,6 +159,22 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('event-scanner', function (Request $request): Limit {
+            return Limit::perMinute(120)->by((string) $request->user()?->id.'|'.$request->ip());
+        });
+
+        RateLimiter::for('festival-login', function (Request $request): Limit {
+            return Limit::perMinute(5)->by($request->string('email')->lower().'|'.$request->route('accountSlug').'|'.$request->ip());
+        });
+
+        RateLimiter::for('festival-login-consume', function (Request $request): Limit {
+            return Limit::perMinute(10)->by(hash('sha256', (string) $request->route('token')).'|'.$request->ip());
+        });
+
+        RateLimiter::for('festival-checkout', function (Request $request): Limit {
+            return Limit::perMinute(8)->by($request->string('buyer_email')->lower().'|'.$request->ip());
+        });
+
+        RateLimiter::for('festival-scanner', function (Request $request): Limit {
             return Limit::perMinute(120)->by((string) $request->user()?->id.'|'.$request->ip());
         });
 

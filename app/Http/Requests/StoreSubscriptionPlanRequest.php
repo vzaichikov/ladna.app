@@ -39,6 +39,12 @@ class StoreSubscriptionPlanRequest extends FormRequest
             'renewal_lead_days' => ['required', 'integer', 'min:0', 'max:30'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:32767'],
+            'festival_packages' => ['sometimes', 'array', 'min:1', 'max:20'],
+            'festival_packages.*.name' => ['required', 'string', 'max:100', 'distinct:ignore_case'],
+            'festival_packages.*.price_uah' => ['required', 'numeric', 'min:0', 'max:999999.99', 'decimal:0,2'],
+            'festival_packages.*.max_participants' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'festival_packages.*.max_tickets' => ['required', 'integer', 'min:1', 'max:10000000'],
+            'festival_packages.*.is_active' => ['nullable', 'boolean'],
         ];
     }
 }
