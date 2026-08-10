@@ -27,7 +27,7 @@ class FestivalPublicController extends Controller
     {
         $account = $this->account($request, $accountSlug);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)
-            ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media', 'stages', 'admissionTypes' => fn ($query) => $query->availableForSale(), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
+            ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'stages', 'admissionTypes' => fn ($query) => $query->availableForSale(), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
             ->firstOrFail();
         $providers = $gateways->availableSettingsFor($account);
 

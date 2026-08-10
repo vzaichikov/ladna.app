@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['account_id', 'festival_series_id', 'slug', 'title', 'status', 'registration_status', 'summary', 'description_html', 'rules_html', 'venue_name', 'venue_address', 'venue_map_url', 'venue_directions', 'timezone', 'currency', 'starts_at', 'ends_at', 'age_reference_date', 'registration_opens_at', 'registration_closes_at', 'published_at', 'completed_at', 'cancelled_at', 'archived_at'])]
+#[Fillable(['account_id', 'festival_series_id', 'slug', 'title', 'status', 'registration_status', 'summary', 'description_html', 'rules_html', 'venue_name', 'venue_address', 'venue_map_url', 'venue_directions', 'timezone', 'currency', 'starts_at', 'ends_at', 'age_reference_date', 'registration_opens_at', 'registration_closes_at', 'max_entries_per_participant', 'published_at', 'completed_at', 'cancelled_at', 'archived_at'])]
 class FestivalEdition extends Model
 {
     /** @use HasFactory<FestivalEditionFactory> */
@@ -32,6 +32,7 @@ class FestivalEdition extends Model
             'age_reference_date' => 'date',
             'registration_opens_at' => 'datetime',
             'registration_closes_at' => 'datetime',
+            'max_entries_per_participant' => 'integer',
             'published_at' => 'datetime',
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
@@ -77,9 +78,19 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalContentSection::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function festivalContentSections(): HasMany
+    {
+        return $this->sections();
+    }
+
     public function documents(): HasMany
     {
         return $this->hasMany(FestivalDocument::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function festivalDocuments(): HasMany
+    {
+        return $this->documents();
     }
 
     public function media(): HasMany
@@ -87,9 +98,14 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalMedia::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function festivalMedia(): HasMany
+    {
+        return $this->media();
+    }
+
     public function coverMedia(): HasOne
     {
-        return $this->hasOne(FestivalMedia::class)->where('is_cover', true)->latestOfMany();
+        return $this->hasOne(FestivalMedia::class)->where('is_cover', true)->where('is_active', true)->latestOfMany();
     }
 
     public function stages(): HasMany
@@ -97,14 +113,49 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalStage::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function festivalStages(): HasMany
+    {
+        return $this->stages();
+    }
+
     public function axes(): HasMany
     {
         return $this->hasMany(FestivalClassificationAxis::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function festivalClassificationAxes(): HasMany
+    {
+        return $this->axes();
+    }
+
     public function categories(): HasMany
     {
-        return $this->hasMany(FestivalCategory::class);
+        return $this->hasMany(FestivalCategory::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function workflows(): HasMany
+    {
+        return $this->hasMany(FestivalWorkflow::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function festivalWorkflows(): HasMany
+    {
+        return $this->workflows();
+    }
+
+    public function festivalRequirementDefinitions(): HasMany
+    {
+        return $this->hasMany(FestivalRequirementDefinition::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function festivalChargeDefinitions(): HasMany
+    {
+        return $this->hasMany(FestivalChargeDefinition::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function festivalRubrics(): HasMany
+    {
+        return $this->hasMany(FestivalRubric::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function festivalCategories(): HasMany
@@ -165,6 +216,11 @@ class FestivalEdition extends Model
     public function admissionTypes(): HasMany
     {
         return $this->hasMany(FestivalAdmissionType::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function festivalAdmissionTypes(): HasMany
+    {
+        return $this->admissionTypes();
     }
 
     public function ticketOrders(): HasMany

@@ -67,9 +67,11 @@ class FestivalFoundationTest extends TestCase
             'age_reference_date' => now()->addMonth()->toDateString(),
             'registration_opens_at' => now()->subDay()->format('Y-m-d H:i:s'),
             'registration_closes_at' => now()->addWeeks(2)->format('Y-m-d H:i:s'),
+            'max_entries_per_participant' => 2,
         ], $owner);
 
         $this->assertCount(1, $edition->stages);
+        $this->assertSame(2, $edition->max_entries_per_participant);
         $series->update(['defaults' => ['stages' => [['name' => 'Changed later']]]]);
         $this->assertSame('Main stage', $edition->stages()->firstOrFail()->name);
         $this->assertStringNotContainsString('<script', (string) $edition->description_html);

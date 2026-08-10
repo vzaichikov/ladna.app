@@ -14,7 +14,6 @@ class FestivalScoreSheetRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'lock_version' => ['required', 'integer', 'min:1'],
             'comments' => ['nullable', 'string', 'max:5000'],
             'scores' => ['required', 'array'],
             'scores.*.criterion_id' => ['required', 'integer', 'distinct'],

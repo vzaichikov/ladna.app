@@ -5,6 +5,7 @@ namespace App\Support\SaasBilling;
 use App\Enums\AccountRole;
 use App\Enums\SystemRole;
 use App\Models\Account;
+use App\Models\FestivalEntry;
 use App\Models\User;
 use App\Support\Ai\AiConversationImageCleaner;
 use Illuminate\Database\Eloquent\Collection;
@@ -23,6 +24,7 @@ class DeleteAccountWithOwnedUsers
         DB::transaction(function () use ($account): void {
             $ownedUsers = $this->ownedUsers($account);
 
+            FestivalEntry::query()->whereBelongsTo($account)->delete();
             $account->delete();
 
             $ownedUsers->each(fn (User $user): ?bool => $user->delete());

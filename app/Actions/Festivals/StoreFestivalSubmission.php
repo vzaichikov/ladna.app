@@ -3,10 +3,10 @@
 namespace App\Actions\Festivals;
 
 use App\Enums\FestivalRequirementStatus;
-use App\Enums\FestivalSubmissionStatus;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSubmission;
+use App\Support\Festivals\FestivalEntryWorkflowState;
 use App\Support\Festivals\MediaDurationProbe;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -19,12 +19,19 @@ class StoreFestivalSubmission
     public function __construct(
         private readonly MediaDurationProbe $durationProbe,
         private readonly FestivalActivityRecorder $activity,
+        private readonly FestivalEntryWorkflowState $workflowState,
     ) {}
 
     public function execute(FestivalEntryRequirement $requirement, FestivalPortalUser $portalUser, UploadedFile $file): FestivalSubmission
     {
-        $requirement->loadMissing(['entry.edition']);
+        $requirement->loadMissing(['entry.edition', 'entry.steps', 'entryStep']);
         abort_unless($requirement->account_id === $portalUser->account_id && $requirement->entry->festival_portal_user_id === $portalUser->id, 404);
+        abort_unless(($requirement->definition_snapshot['input_type'] ?? 'file') === 'file', 422);
+        if ($requirement->entryStep) {
+            $this->workflowState->assertMutable($requirement->entry, $requirement->entryStep);
+        } else {
+            abort_unless($requirement->entry->steps->isEmpty(), 409);
+        }
         $snapshot = $requirement->definition_snapshot;
         $mimeType = (string) ($file->getMimeType() ?: 'application/octet-stream');
         $extension = strtolower((string) ($file->guessExtension() ?: $file->getClientOriginalExtension()));
@@ -56,28 +63,44 @@ class StoreFestivalSubmission
 
         $path = $file->store("festivals/{$portalUser->account_id}/entries/{$requirement->festival_entry_id}", 'local');
 
+        $previousPath = null;
         try {
-            return DB::transaction(function () use ($requirement, $portalUser, $file, $path, $mimeType, $duration): FestivalSubmission {
-                $locked = FestivalEntryRequirement::query()->with('entry.edition')->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
-                $version = ((int) $locked->submissions()->max('version')) + 1;
-                $locked->submissions()->where('status', FestivalSubmissionStatus::Submitted->value)->update(['status' => FestivalSubmissionStatus::Superseded->value]);
-                $submission = $locked->submissions()->create([
+            $submission = DB::transaction(function () use ($requirement, $portalUser, $file, $path, $mimeType, $duration, &$previousPath): FestivalSubmission {
+                $locked = FestivalEntryRequirement::query()->with(['entry.edition', 'entry.steps', 'entryStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
+                if ($locked->entryStep) {
+                    $this->workflowState->assertMutable($locked->entry, $locked->entryStep);
+                } else {
+                    abort_unless($locked->entry->steps->isEmpty(), 409);
+                }
+                $current = $locked->submissions()->lockForUpdate()->first();
+                $previousPath = $current?->path;
+                $submission = $locked->submissions()->updateOrCreate([], [
                     'account_id' => $portalUser->account_id,
                     'festival_entry_id' => $locked->festival_entry_id,
                     'festival_portal_user_id' => $portalUser->id,
-                    'version' => $version,
                     'disk' => 'local',
                     'path' => $path,
                     'original_name' => $file->getClientOriginalName(),
                     'mime_type' => $mimeType,
                     'size_bytes' => $file->getSize(),
                     'duration_seconds' => $duration,
+                    'value_json' => null,
+                    'status' => 'submitted',
+                    'reviewed_by' => null,
+                    'reviewed_at' => null,
+                    'review_notes' => null,
                 ]);
                 $locked->forceFill(['status' => FestivalRequirementStatus::Submitted, 'reviewed_at' => null, 'reviewed_by' => null, 'review_notes' => null])->save();
-                $this->activity->record($submission, 'submission.uploaded', $locked->entry->edition, $portalUser, ['version' => $version]);
+                $this->activity->record($submission, 'submission.uploaded', $locked->entry->edition, $portalUser);
 
                 return $submission;
             }, 3);
+
+            if ($previousPath && $previousPath !== $path) {
+                Storage::disk('local')->delete($previousPath);
+            }
+
+            return $submission;
         } catch (Throwable $exception) {
             Storage::disk('local')->delete($path);
             throw $exception;

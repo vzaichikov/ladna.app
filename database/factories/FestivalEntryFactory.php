@@ -15,6 +15,6 @@ class FestivalEntryFactory extends Factory
 
     public function definition(): array
     {
-        return ['account_id' => fn (array $attributes) => FestivalCategory::findOrFail($attributes['festival_category_id'])->account_id, 'festival_edition_id' => fn (array $attributes) => FestivalCategory::findOrFail($attributes['festival_category_id'])->festival_edition_id, 'festival_portal_user_id' => fn (array $attributes) => FestivalPortalUser::factory()->create(['account_id' => FestivalCategory::findOrFail($attributes['festival_category_id'])->account_id])->id, 'festival_category_id' => FestivalCategory::factory(), 'code' => 'FE-'.Str::upper(Str::random(8)), 'performer_name' => fake()->name(), 'act_title' => fake()->sentence(3), 'status' => 'draft', 'qualification_status' => 'not_required'];
+        return ['account_id' => fn (array $attributes) => FestivalCategory::findOrFail($attributes['festival_category_id'])->account_id, 'festival_edition_id' => fn (array $attributes) => FestivalCategory::findOrFail($attributes['festival_category_id'])->festival_edition_id, 'festival_portal_user_id' => fn (array $attributes) => FestivalPortalUser::factory()->create(['account_id' => FestivalCategory::findOrFail($attributes['festival_category_id'])->account_id])->id, 'festival_category_id' => FestivalCategory::factory(), 'code' => 'FE-'.Str::upper(Str::random(8)), 'entry_name' => fake()->name(), 'act_title' => fake()->sentence(3), 'status' => 'draft', 'qualification_status' => 'not_required'];
     }
 }

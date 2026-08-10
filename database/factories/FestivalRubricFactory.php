@@ -13,6 +13,6 @@ class FestivalRubricFactory extends Factory
 
     public function definition(): array
     {
-        return ['account_id' => fn (array $attributes) => FestivalEdition::findOrFail($attributes['festival_edition_id'])->account_id, 'festival_edition_id' => FestivalEdition::factory(), 'name' => 'Main rubric', 'version' => 1, 'is_active' => true];
+        return ['account_id' => fn (array $attributes) => FestivalEdition::findOrFail($attributes['festival_edition_id'])->account_id, 'festival_edition_id' => FestivalEdition::factory(), 'name' => 'Main rubric', 'is_active' => true, 'sort_order' => 0];
     }
 }

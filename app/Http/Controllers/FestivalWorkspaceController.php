@@ -9,12 +9,10 @@ use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Models\Account;
 use App\Models\FestivalAnnouncement;
-use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationSetting;
-use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Support\Festivals\FestivalWorkspaceAccess;
@@ -36,7 +34,7 @@ class FestivalWorkspaceController extends Controller
             ->where('festival_edition_id', $festivalEdition->id)
             ->with('category.options.axis')
             ->withCount([
-                'requirements as blocking_requirements_count' => fn ($query) => $query->whereNotIn('status', [FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Waived->value]),
+                'requirements as blocking_requirements_count' => fn ($query) => $query->where('is_required', true)->whereNotIn('status', [FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Waived->value]),
                 'charges as blocking_charges_count' => fn ($query) => $query->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value]),
                 'scheduleSlots as performance_slots_count' => fn ($query) => $query->where('type', 'performance'),
             ])
@@ -44,11 +42,11 @@ class FestivalWorkspaceController extends Controller
             ->latest('id');
 
         if ($permissions['registrations']) {
-            $entriesQuery->with(['portalUser', 'participants', 'requirements.definition', 'requirements.submissions']);
+            $entriesQuery->with(['portalUser', 'participants', 'steps.requirements.definition', 'steps.requirements.submissions', 'requirements.definition', 'requirements.submissions']);
         }
 
         if ($permissions['finance']) {
-            $entriesQuery->with('charges.paymentAttempts');
+            $entriesQuery->with(['steps.charges.paymentAttempts', 'charges.paymentAttempts', 'chargeAdjustments']);
         }
 
         $entries = $entriesQuery->paginate(50)->withQueryString();
@@ -85,8 +83,8 @@ class FestivalWorkspaceController extends Controller
         $entries = FestivalEntry::query()
             ->where('festival_edition_id', $festivalEdition->id)
             ->whereIn('status', [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value, FestivalEntryStatus::Accepted->value])
-            ->orderBy('performer_name')
-            ->get(['id', 'festival_edition_id', 'code', 'performer_name']);
+            ->orderBy('entry_name')
+            ->get(['id', 'festival_edition_id', 'code', 'entry_name']);
 
         return view('festivals.staff.program', compact('account', 'festivalEdition', 'entries') + [
             'edition' => $festivalEdition,
@@ -172,30 +170,6 @@ class FestivalWorkspaceController extends Controller
             'notificationStatistics' => $notificationStatistics,
             'announcements' => FestivalAnnouncement::query()->where('festival_edition_id', $festivalEdition->id)->latest()->paginate(20, ['*'], 'announcements_page')->withQueryString(),
             'notifications' => FestivalNotification::query()->where('festival_edition_id', $festivalEdition->id)->latest()->paginate(30, ['*'], 'notifications_page')->withQueryString(),
-        ]);
-    }
-
-    public function settings(Request $request, Account $account, FestivalEdition $festivalEdition): View
-    {
-        $permissions = $this->permissions($request, $account, $festivalEdition);
-        abort_unless($permissions['manage'] || $permissions['finance'], 403);
-
-        if ($permissions['manage']) {
-            $festivalEdition->load(['axes.options', 'categories.options.axis', 'sections', 'documents', 'media']);
-        } else {
-            $festivalEdition->load('categories');
-        }
-
-        return view('festivals.staff.settings', [
-            'account' => $account,
-            'edition' => $festivalEdition,
-            'workspacePermissions' => $permissions,
-            'requirements' => $permissions['manage']
-                ? FestivalRequirementDefinition::query()->where('festival_edition_id', $festivalEdition->id)->with('category')->orderBy('sort_order')->get()
-                : collect(),
-            'chargeDefinitions' => $permissions['finance']
-                ? FestivalChargeDefinition::query()->where('festival_edition_id', $festivalEdition->id)->with('category')->orderBy('name')->get()
-                : collect(),
         ]);
     }
 

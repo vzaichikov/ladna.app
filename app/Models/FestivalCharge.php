@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'festival_entry_id', 'festival_charge_definition_id', 'code', 'kind', 'name', 'status', 'amount_cents', 'currency', 'definition_snapshot', 'due_at', 'paid_at', 'cancelled_at', 'refunded_at', 'approved_by', 'notes'])]
+#[Fillable(['account_id', 'festival_entry_id', 'festival_entry_step_id', 'festival_charge_definition_id', 'festival_entry_requirement_id', 'festival_submission_id', 'pricing_key', 'code', 'kind', 'name', 'status', 'amount_cents', 'currency', 'definition_snapshot', 'due_at', 'paid_at', 'cancelled_at', 'refunded_at', 'approved_by', 'notes'])]
 class FestivalCharge extends Model
 {
     protected $attributes = ['status' => 'pending'];
@@ -26,6 +26,21 @@ class FestivalCharge extends Model
     public function definition(): BelongsTo
     {
         return $this->belongsTo(FestivalChargeDefinition::class, 'festival_charge_definition_id');
+    }
+
+    public function entryStep(): BelongsTo
+    {
+        return $this->belongsTo(FestivalEntryStep::class, 'festival_entry_step_id');
+    }
+
+    public function sourceRequirement(): BelongsTo
+    {
+        return $this->belongsTo(FestivalEntryRequirement::class, 'festival_entry_requirement_id');
+    }
+
+    public function sourceSubmission(): BelongsTo
+    {
+        return $this->belongsTo(FestivalSubmission::class, 'festival_submission_id');
     }
 
     public function paymentAttempts(): HasMany

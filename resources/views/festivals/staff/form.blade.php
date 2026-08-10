@@ -22,6 +22,7 @@
             <label><span class="crm-label">{{ __('app.currency') }}</span><input name="currency" value="{{ old('currency', $edition->currency ?: $account->default_currency) }}" maxlength="3" required class="crm-field uppercase"></label>
             <label><span class="crm-label">{{ __('app.festival_registration_opens') }}</span><input type="datetime-local" name="registration_opens_at" value="{{ old('registration_opens_at', $edition->registration_opens_at?->timezone($timezone)->format('Y-m-d\TH:i')) }}" class="crm-field"></label>
             <label><span class="crm-label">{{ __('app.festival_registration_closes') }}</span><input type="datetime-local" name="registration_closes_at" value="{{ old('registration_closes_at', $edition->registration_closes_at?->timezone($timezone)->format('Y-m-d\TH:i')) }}" class="crm-field"></label>
+            <label><span class="crm-label">{{ __('app.festival_max_entries_per_participant') }}</span><input type="number" name="max_entries_per_participant" min="1" value="{{ old('max_entries_per_participant', $edition->max_entries_per_participant) }}" class="crm-field"><span class="mt-1 block text-xs text-slate-500">{{ __('app.festival_max_entries_help') }}</span></label>
             <label class="sm:col-span-2">
                 <span class="crm-label">{{ __('app.festival_hero_image') }}</span>
                 @if ($edition->exists && $edition->coverMedia?->url())

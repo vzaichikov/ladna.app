@@ -20,10 +20,6 @@ class NotReservedPublicSlug implements ValidationRule
             return;
         }
 
-        $message = trans('validation.reserved_public_slug');
-
-        $fail($message === 'validation.reserved_public_slug'
-            ? 'This public address is reserved for Ladna system pages.'
-            : $message);
+        $fail('validation.reserved_public_slug')->translate();
     }
 }

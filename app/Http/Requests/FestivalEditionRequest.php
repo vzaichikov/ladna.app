@@ -37,6 +37,7 @@ class FestivalEditionRequest extends FormRequest
             'age_reference_date' => ['required', 'date'],
             'registration_opens_at' => ['nullable', 'date'],
             'registration_closes_at' => ['nullable', 'date', 'after:registration_opens_at'],
+            'max_entries_per_participant' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

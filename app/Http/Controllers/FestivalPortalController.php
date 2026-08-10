@@ -17,7 +17,7 @@ class FestivalPortalController extends Controller
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $editions = FestivalEdition::query()->whereBelongsTo($account)->published()->with(['series', 'scheduleSlots' => fn ($query) => $query->whereNotNull('published_at')->whereHas('entry', fn ($query) => $query->where('festival_portal_user_id', $portalUser->id))->with(['stage', 'entry'])])->orderBy('starts_at')->get();
-        $entries = $portalUser->entries()->with(['edition', 'category', 'requirements', 'charges', 'result'])->latest()->get();
+        $entries = $portalUser->entries()->with(['edition', 'category', 'steps', 'requirements', 'charges', 'result'])->latest()->get();
         $notifications = FestivalNotification::query()->where('festival_portal_user_id', $portalUser->id)->latest()->limit(50)->get();
 
         return view('festivals.portal.dashboard', compact('account', 'portalUser', 'editions', 'entries', 'notifications'));

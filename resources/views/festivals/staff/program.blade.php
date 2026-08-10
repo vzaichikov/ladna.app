@@ -30,7 +30,7 @@
                                     <summary class="cursor-pointer list-none">
                                         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                             <div>
-                                                <strong>{{ $slot->entry->performer_name }}</strong>
+                                                <strong>{{ $slot->entry->entry_name }}</strong>
                                                 <span class="ml-2 text-sm text-slate-500">{{ $slot->entry->code }} · {{ $slot->type === \App\Enums\FestivalScheduleSlotType::Rehearsal ? __('app.festival_rehearsal') : __('app.performance') }}</span>
                                             </div>
                                             <div class="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -95,7 +95,7 @@
                         <span class="crm-label">{{ __('app.performance') }}</span>
                         <select name="festival_entry_id" required class="crm-field">
                             @foreach ($entries as $entry)
-                                <option value="{{ $entry->id }}">{{ $entry->code }} · {{ $entry->performer_name }}</option>
+                                <option value="{{ $entry->id }}">{{ $entry->code }} · {{ $entry->entry_name }}</option>
                             @endforeach
                         </select>
                     </label>

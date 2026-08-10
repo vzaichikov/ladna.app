@@ -76,6 +76,7 @@ class SaveFestivalEdition
                 'age_reference_date' => $input['age_reference_date'],
                 'registration_opens_at' => $this->utc($input['registration_opens_at'] ?? null, $timezone),
                 'registration_closes_at' => $this->utc($input['registration_closes_at'] ?? null, $timezone),
+                'max_entries_per_participant' => $input['max_entries_per_participant'] ?? null,
             ]);
 
             if ($edition->status === FestivalEditionStatus::Published && $oldStatus !== FestivalEditionStatus::Published) {

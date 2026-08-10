@@ -3,8 +3,9 @@
 namespace Tests\Feature;
 
 use App\Actions\Festivals\CompleteFestivalEditionPurchase;
+use App\Actions\Festivals\InitializeFestivalEntryWorkflow;
 use App\Actions\Festivals\StartFestivalEditionPurchasePayment;
-use App\Actions\Festivals\SubmitFestivalEntry;
+use App\Actions\Festivals\SubmitFestivalEntryStep;
 use App\Enums\AccountRole;
 use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\SubscriptionStatus;
@@ -314,12 +315,12 @@ class FestivalSaasBillingTest extends TestCase
 
         $first = $this->entryWithParticipant($account, $edition, $portalUser, $category, $firstParticipant);
         $second = $this->entryWithParticipant($account, $edition, $portalUser, $category, $firstParticipant);
-        app(SubmitFestivalEntry::class)->execute($first);
-        app(SubmitFestivalEntry::class)->execute($second);
+        $this->submitApplication($first);
+        $this->submitApplication($second);
 
         $overLimit = $this->entryWithParticipant($account, $edition, $portalUser, $category, $secondParticipant);
         try {
-            app(SubmitFestivalEntry::class)->execute($overLimit);
+            $this->submitApplication($overLimit);
             $this->fail('A second distinct participant should exceed the Festival package limit.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('participants', $exception->errors());
@@ -327,7 +328,8 @@ class FestivalSaasBillingTest extends TestCase
 
         $first->update(['status' => 'rejected']);
         $second->update(['status' => 'withdrawn']);
-        $this->assertSame('submitted', app(SubmitFestivalEntry::class)->execute($overLimit)->status->value);
+        $this->submitApplication($overLimit);
+        $this->assertSame('submitted', $overLimit->refresh()->status->value);
     }
 
     public function test_paid_purchase_prefers_active_tokenized_saas_card(): void
@@ -471,6 +473,12 @@ class FestivalSaasBillingTest extends TestCase
         ]]);
 
         return $entry;
+    }
+
+    private function submitApplication(FestivalEntry $entry): void
+    {
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
+        app(SubmitFestivalEntryStep::class)->execute($entry, $entry->steps->first());
     }
 
     private function platformMonopaySetting(): IntegrationSetting

@@ -102,7 +102,7 @@
                 @foreach ($upcomingSlots as $slot)
                     <div class="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <strong>{{ $slot->entry->performer_name }}</strong>
+                            <strong>{{ $slot->entry->entry_name }}</strong>
                             <span class="ml-2 text-sm text-slate-500">{{ $slot->stage->name }} · {{ $slot->type === \App\Enums\FestivalScheduleSlotType::Rehearsal ? __('app.festival_rehearsal') : __('app.performance') }}</span>
                         </div>
                         <time class="text-sm font-semibold text-slate-700">{{ $slot->starts_at->timezone($edition->timezone)->format('d.m H:i') }}</time>

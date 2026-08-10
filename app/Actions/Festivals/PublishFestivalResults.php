@@ -32,7 +32,7 @@ class PublishFestivalResults
                 ->lockForUpdate()
                 ->get();
 
-            if ($entries->isEmpty() || $entries->contains(fn (FestivalEntry $entry): bool => $entry->scoreSheets->isEmpty() || $entry->scoreSheets->contains(fn ($sheet): bool => $sheet->status !== FestivalScoreSheetStatus::Locked))) {
+            if ($entries->isEmpty() || $entries->contains(fn (FestivalEntry $entry): bool => $entry->scoreSheets->isEmpty() || $entry->scoreSheets->contains(fn ($sheet): bool => $sheet->status !== FestivalScoreSheetStatus::Submitted))) {
                 throw ValidationException::withMessages(['category' => __('app.festival_results_scores_incomplete')]);
             }
 
@@ -65,7 +65,7 @@ class PublishFestivalResults
                 ]);
                 $this->notifications->queueForEntry($entry, FestivalNotificationType::ResultsPublished, [
                     'subject' => __('app.festival_results_notification_subject'),
-                    'lines' => [__('app.festival_results_notification_copy', ['entry' => $entry->performer_name, 'rank' => $rank])],
+                    'lines' => [__('app.festival_results_notification_copy', ['entry' => $entry->entry_name, 'rank' => $rank])],
                     'action_url' => route('festival.portal.entries.show', [$edition->account->slug, $entry]),
                     'action_label' => __('app.festival_view_results'),
                 ], 'category:'.$category->id.':'.now()->toDateString());

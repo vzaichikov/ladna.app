@@ -37,8 +37,15 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.judging.index' => 'festival_tab_judging_results',
             'dashboard.accounts.festivals.tickets' => 'festival_tab_tickets_entrance',
             'dashboard.accounts.festivals.communication' => 'festival_tab_communication',
-            'dashboard.accounts.festivals.settings' => 'festival_tab_settings',
-            'dashboard.accounts.festivals.edit' => 'festival_tab_settings',
+            'dashboard.accounts.festivals.settings' => 'festival_settings_overview',
+            'dashboard.accounts.festivals.settings.directions' => 'festival_taxonomy_directions',
+            'dashboard.accounts.festivals.settings.classifications' => 'festival_classifications',
+            'dashboard.accounts.festivals.settings.categories' => 'festival_categories',
+            'dashboard.accounts.festivals.settings.workflows' => 'festival_registration_workflows',
+            'dashboard.accounts.festivals.settings.requirements' => 'festival_requirements',
+            'dashboard.accounts.festivals.settings.fees' => 'festival_fees',
+            'dashboard.accounts.festivals.settings.content' => 'festival_content_media',
+            'dashboard.accounts.festivals.edit' => 'festival_settings_overview',
             'dashboard.accounts.festivals.scanner' => 'festival_tab_tickets_entrance',
         ];
 
@@ -106,6 +113,8 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertSee('finance-buyer-secret@example.test')
             ->assertSee(__('app.festival_admission_revenue'));
         $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.settings', [$account, $edition]))->assertOk();
+        $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.settings.fees', [$account, $edition]))->assertOk();
+        $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]))->assertForbidden();
 
         $this->actingAs($checkInStaff)
             ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition]))
@@ -150,6 +159,13 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.tickets',
             'dashboard.accounts.festivals.communication',
             'dashboard.accounts.festivals.settings',
+            'dashboard.accounts.festivals.settings.directions',
+            'dashboard.accounts.festivals.settings.classifications',
+            'dashboard.accounts.festivals.settings.categories',
+            'dashboard.accounts.festivals.settings.workflows',
+            'dashboard.accounts.festivals.settings.requirements',
+            'dashboard.accounts.festivals.settings.fees',
+            'dashboard.accounts.festivals.settings.content',
             'dashboard.accounts.festivals.scanner',
         ] as $route) {
             $this->actingAs($owner)->get(route($route, [$account, $otherEdition]))->assertNotFound();
@@ -170,7 +186,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             'workflow' => 'direct',
             'min_members' => 1,
             'max_members' => 1,
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings', [$account, $edition]));
+        ])->assertRedirect(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]));
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.stages.store', [$account, $edition]), [
             'name' => 'Second stage',
@@ -196,6 +212,30 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->assertSame($edition->id, $category->festival_edition_id);
     }
 
+    public function test_settings_pages_render_localized_system_labels_and_inline_dependencies(): void
+    {
+        [$account, $edition] = $this->festival();
+        $account->update(['default_language' => 'uk']);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.classifications', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('Класифікації')
+            ->assertSee('Залежності')
+            ->assertSee('Формат виступу')
+            ->assertDontSee('Entry format');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.workflows', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('Перевірка заявки')
+            ->assertSee('Автоматично')
+            ->assertDontSee('Application review')
+            ->assertDontSee('>organizer<', false);
+    }
+
     /** @return array{Account, FestivalEdition, FestivalCategory} */
     private function festival(): array
     {
@@ -216,7 +256,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
             'festival_portal_user_id' => $portalUser->id,
-            'performer_name' => 'Performer Sentinel',
+            'entry_name' => 'Performer Sentinel',
             'status' => 'submitted',
             'submitted_at' => now(),
         ]);

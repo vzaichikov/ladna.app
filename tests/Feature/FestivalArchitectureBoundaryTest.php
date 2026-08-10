@@ -63,16 +63,8 @@ class FestivalArchitectureBoundaryTest extends TestCase
         $this->assertSame('api/v1/festival-payments/{provider}/callbacks', $festivalApiRoutes->first()->uri());
     }
 
-    public function test_durable_investigation_document_records_separation_and_phases_without_secrets(): void
+    public function test_repository_does_not_use_a_root_docs_directory(): void
     {
-        $document = file_get_contents(base_path('docs/festivals/README.md'));
-
-        $this->assertStringContainsString('Customer', $document);
-        $this->assertStringContainsString('Event', $document);
-        $this->assertStringContainsString('Observed', $document);
-        $this->assertStringContainsString('Inferred', $document);
-        $this->assertStringContainsString('Phase 6', $document);
-        $this->assertDoesNotMatchRegularExpression('/\b\d{12,}\b/', $document);
-        $this->assertDoesNotMatchRegularExpression('/(?:bot|telegram)[_-]?token\s*[:=]/i', $document);
+        $this->assertDirectoryDoesNotExist(base_path('docs'));
     }
 }

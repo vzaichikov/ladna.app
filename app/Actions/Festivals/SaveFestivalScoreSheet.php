@@ -3,8 +3,10 @@
 namespace App\Actions\Festivals;
 
 use App\Enums\FestivalScoreSheetStatus;
+use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalResult;
 use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalScoreSheet;
 use App\Models\User;
@@ -21,12 +23,6 @@ class SaveFestivalScoreSheet
         return DB::transaction(function () use ($sheet, $assignment, $input, $actor): FestivalScoreSheet {
             $sheet = FestivalScoreSheet::query()->with(['rubric.sections.criteria', 'entry.edition'])->whereKey($sheet->id)->lockForUpdate()->firstOrFail();
             abort_unless($sheet->festival_judge_assignment_id === $assignment->id && $assignment->is_active, 403);
-            abort_if($sheet->status === FestivalScoreSheetStatus::Locked, 409, __('app.festival_score_sheet_locked'));
-
-            if ($sheet->lock_version !== (int) $input['lock_version']) {
-                throw ValidationException::withMessages(['lock_version' => __('app.festival_score_sheet_changed')]);
-            }
-
             $criteria = $sheet->rubric->sections
                 ->flatMap(fn ($section) => $section->criteria->each(fn ($criterion) => $criterion->setRelation('section', $section)))
                 ->keyBy('id');
@@ -53,12 +49,15 @@ class SaveFestivalScoreSheet
             $sheet->forceFill([
                 'comments' => $input['comments'] ?? null,
                 'total_score' => round($total, 4),
-                'lock_version' => $sheet->lock_version + 1,
-                'status' => $submitted ? FestivalScoreSheetStatus::Locked : FestivalScoreSheetStatus::Draft,
+                'status' => $submitted ? FestivalScoreSheetStatus::Submitted : FestivalScoreSheetStatus::Draft,
                 'submitted_at' => $submitted ? now() : null,
-                'locked_at' => $submitted ? now() : null,
             ])->save();
-            $sheet->rubric->forceFill(['locked_at' => $sheet->rubric->locked_at ?? now()])->save();
+            FestivalResult::query()
+                ->whereIn('festival_entry_id', FestivalEntry::query()
+                    ->select('id')
+                    ->where('festival_edition_id', $sheet->entry->festival_edition_id)
+                    ->where('festival_category_id', $sheet->entry->festival_category_id))
+                ->delete();
             $this->activity->record($sheet, $submitted ? 'score_sheet.submitted' : 'score_sheet.saved', $sheet->entry->edition, $actor, ['total' => $sheet->total_score]);
 
             return $sheet->refresh()->load('scores');

@@ -9,17 +9,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_category_id', 'name', 'version', 'is_active', 'locked_at'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_category_id', 'name', 'is_active', 'sort_order'])]
 class FestivalRubric extends Model
 {
     /** @use HasFactory<FestivalRubricFactory> */
     use HasFactory;
 
-    protected $attributes = ['version' => 1, 'is_active' => true];
+    protected $attributes = ['is_active' => true, 'sort_order' => 0];
 
     protected function casts(): array
     {
-        return ['version' => 'integer', 'is_active' => 'boolean', 'locked_at' => 'datetime'];
+        return ['is_active' => 'boolean', 'sort_order' => 'integer'];
     }
 
     public function edition(): BelongsTo

@@ -2,12 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\InitializeFestivalEntryWorkflow;
 use App\Actions\Festivals\StoreFestivalSubmission;
-use App\Actions\Festivals\SubmitFestivalEntry;
+use App\Actions\Festivals\SubmitFestivalEntryStep;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalRequirementStatus;
-use App\Enums\FestivalSubmissionStatus;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Event;
@@ -35,7 +35,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_solo_and_group_rules_use_age_reference_date_and_submission_freezes_configuration(): void
+    public function test_entry_creation_snapshots_configuration_and_participant_ages(): void
     {
         Queue::fake();
         [$account, $edition, $portalUser] = $this->festival();
@@ -56,16 +56,18 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $entry = FestivalEntry::factory()->for($category)->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id, 'festival_portal_user_id' => $portalUser->id]);
         $entry->participants()->sync($participants->values()->mapWithKeys(fn ($participant, $index): array => [$participant->id => ['account_id' => $account->id, 'sort_order' => $index, 'age_snapshot' => $participant->date_of_birth->diffInYears($edition->age_reference_date), 'name_snapshot' => $participant->displayName()]])->all());
 
-        $submitted = app(SubmitFestivalEntry::class)->execute($entry);
+        $initialized = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
+        $category->update(['name' => 'Changed category', 'min_members' => 3]);
+        $requirement->update(['name' => 'Changed requirement']);
+        $chargeDefinition->update(['amount_cents' => 90000]);
+        $initialized->refresh()->load(['participants', 'requirements', 'charges']);
 
-        $this->assertSame(FestivalEntryStatus::Submitted, $submitted->status);
-        $this->assertSame('qualification', $submitted->category_snapshot['workflow']);
-        $this->assertSame([13, 15], $submitted->participants->pluck('pivot.age_snapshot')->sort()->values()->all());
-        $this->assertNotNull($category->refresh()->locked_at);
-        $this->assertNotNull($requirement->refresh()->locked_at);
-        $this->assertNotNull($chargeDefinition->refresh()->locked_at);
-        $this->assertSame('Qualification video', $submitted->requirements->first()->definition_snapshot['name']);
-        $this->assertSame(50000, $submitted->charges->first()->amount_cents);
+        $this->assertSame(FestivalEntryStatus::Draft, $initialized->status);
+        $this->assertSame($category->id, $initialized->category_snapshot['category_id']);
+        $this->assertSame(2, $initialized->category_snapshot['rules']['min_members']);
+        $this->assertSame([13, 15], $initialized->participants->pluck('pivot.age_snapshot')->sort()->values()->all());
+        $this->assertSame('Qualification video', $initialized->requirements->first()->definition_snapshot['name']);
+        $this->assertSame(50000, $initialized->charges->first()->amount_cents);
     }
 
     public function test_invalid_member_count_and_age_are_rejected(): void
@@ -76,29 +78,32 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $entry = FestivalEntry::factory()->for($category)->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id, 'festival_portal_user_id' => $portalUser->id]);
         $entry->participants()->sync([$participant->id => ['account_id' => $account->id, 'sort_order' => 0, 'age_snapshot' => 12, 'name_snapshot' => $participant->displayName()]]);
 
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
+
         $this->expectException(ValidationException::class);
-        app(SubmitFestivalEntry::class)->execute($entry);
+        app(SubmitFestivalEntryStep::class)->execute($entry, $entry->steps->first());
     }
 
-    public function test_private_submissions_keep_versions_and_enforce_portal_tenancy(): void
+    public function test_private_submission_replacement_keeps_only_current_file_and_enforces_portal_tenancy(): void
     {
         Storage::fake('local');
         [$account, $edition, $portalUser] = $this->festival();
         $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
         $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
-        FestivalRequirementDefinition::factory()->for($edition)->create(['account_id' => $account->id, 'type' => 'custom_document', 'allowed_extensions' => ['png'], 'allowed_mime_types' => ['image/png']]);
+        FestivalRequirementDefinition::factory()->for($edition)->create(['account_id' => $account->id, 'type' => 'custom_document', 'stage' => 'qualification', 'allowed_extensions' => ['png'], 'allowed_mime_types' => ['image/png']]);
         $entry = FestivalEntry::factory()->for($category)->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id, 'festival_portal_user_id' => $portalUser->id]);
         $entry->participants()->sync([$participant->id => ['account_id' => $account->id, 'sort_order' => 0, 'age_snapshot' => 18, 'name_snapshot' => $participant->displayName()]]);
-        $entry = app(SubmitFestivalEntry::class)->execute($entry);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
         $requirement = $entry->requirements->first();
 
         $first = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->image('proof.png'));
+        $firstPath = $first->path;
         $second = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->image('replacement.png'));
 
-        $this->assertSame(FestivalSubmissionStatus::Superseded, $first->refresh()->status);
-        $this->assertSame(2, $second->version);
+        $this->assertSame($first->id, $second->id);
+        $this->assertCount(1, $requirement->submissions()->get());
         $this->assertSame(FestivalRequirementStatus::Submitted, $requirement->refresh()->status);
-        Storage::disk('local')->assertExists($first->path);
+        Storage::disk('local')->assertMissing($firstPath);
         Storage::disk('local')->assertExists($second->path);
 
         $this->actingAs($portalUser, 'festival')->get(route('festival.portal.submissions.download', [$account->slug, $second]))->assertOk();
@@ -137,7 +142,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $this->actingAs($portalUser, 'festival')->post(route('festival.portal.entries.store', [$account->slug, $edition->slug]), [
             'festival_category_id' => $category->id,
             'participant_ids' => [$participant->id],
-            'performer_name' => 'Independent act',
+            'entry_name' => 'Independent act',
         ])->assertRedirect();
 
         $this->assertSame($customers, Customer::query()->count());

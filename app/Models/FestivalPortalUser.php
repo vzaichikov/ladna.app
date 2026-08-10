@@ -51,10 +51,7 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
     {
         return $this->registrant_type !== null
             && filled($this->first_name)
-            && filled($this->last_name)
-            && filled($this->phone)
-            && filled($this->city)
-            && filled($this->studio_name);
+            && filled($this->last_name);
     }
 
     public function account(): BelongsTo

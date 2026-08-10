@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.126.0',
+                'date' => '2026-08-10',
+                'title' => 'Configurable Festival registration and focused settings',
+                'items' => ['Festival organizers can now build ordered registration workflows with application, payment, technical-form, and summary steps. Categories select a workflow, while requirements and fees can be attached to the relevant step.', 'Festival settings are now split into focused pages for directions, classifications, categories, registration workflows, requirements, fees, and content. Each page explains the entity and its dependencies directly in the interface.', 'New entries preserve a snapshot of their category, workflow, requirements, and prices, so later organizer changes apply only to future entries. Current answers and judging corrections remain editable, while affected published results are safely withdrawn until recalculated.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.125.0',
                 'date' => '2026-08-09',
                 'title' => 'Standalone Festival competition workspace',
@@ -1094,6 +1101,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.126.0',
+                'date' => '2026-08-10',
+                'title' => 'Гнучка реєстрація та зрозумілі налаштування фестивалю',
+                'items' => ['Організатори фестивалю тепер можуть створювати впорядковані сценарії реєстрації з етапами заявки, оплати, технічної форми та підсумку. Категорія обирає сценарій, а вимоги й внески можна прив’язати до відповідного етапу.', 'Налаштування фестивалю розділено на окремі сторінки напрямків, класифікацій, категорій, сценаріїв реєстрації, вимог, внесків, контенту й медіа. Кожна сторінка пояснює сутність та її залежності безпосередньо в інтерфейсі.', 'Нові заявки зберігають знімок категорії, сценарію, вимог і цін, тому подальші зміни організатора діють лише для майбутніх заявок. Поточні відповіді та суддівські виправлення залишаються доступними для редагування, а пов’язані опубліковані результати безпечно знімаються до перерахунку.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.125.0',
                 'date' => '2026-08-09',

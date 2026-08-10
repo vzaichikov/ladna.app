@@ -73,4 +73,4 @@ Ladna is not yet a full production billing or payment system. Subscription plans
 
 ## Festival Framework
 
-The standalone Festival domain, its reverse-engineered product background, fixed boundaries, and delivery checklist are documented in [`docs/festivals/README.md`](docs/festivals/README.md).
+The standalone Festival domain keeps competition participants, entries, payments, schedules, judging, and admission separate from studio Customers and ordinary Events.

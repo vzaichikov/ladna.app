@@ -24,7 +24,6 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class FestivalOperationsAndJudgingTest extends TestCase
@@ -66,7 +65,7 @@ class FestivalOperationsAndJudgingTest extends TestCase
         $this->assertSame($payload, FestivalNotification::query()->firstOrFail()->payload);
     }
 
-    public function test_score_sheet_uses_assignment_boundaries_optimistic_locking_and_submission_lock(): void
+    public function test_score_sheet_uses_assignment_boundaries_and_remains_editable(): void
     {
         [$account, $edition, $portalUser, $category] = $this->festival();
         $judge = User::factory()->create();
@@ -75,17 +74,17 @@ class FestivalOperationsAndJudgingTest extends TestCase
         [$entry, $sheet, $criterion] = $this->sheet($account, $edition, $portalUser, $category, $assignment);
 
         $saved = app(SaveFestivalScoreSheet::class)->execute($sheet, $assignment, [
-            'lock_version' => 1,
             'comments' => 'Private judge note',
             'scores' => [['criterion_id' => $criterion->id, 'score' => 8.5, 'comment' => 'Private criterion note']],
         ], $judge);
-        $this->assertSame(2, $saved->lock_version);
+        $this->assertSame(FestivalScoreSheetStatus::Draft, $saved->status);
+        $this->assertSame('8.5000', $saved->total_score);
 
-        $this->expectException(ValidationException::class);
-        app(SaveFestivalScoreSheet::class)->execute($saved, $assignment, ['lock_version' => 1, 'scores' => [['criterion_id' => $criterion->id, 'score' => 9]]], $judge);
+        $resaved = app(SaveFestivalScoreSheet::class)->execute($saved, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 9]]], $judge);
+        $this->assertSame('9.0000', $resaved->total_score);
     }
 
-    public function test_submitted_score_sheet_is_locked_and_results_are_deterministic_with_private_comments(): void
+    public function test_submitted_score_sheet_can_be_reopened_and_invalidates_published_category_results(): void
     {
         Queue::fake();
         [$account, $edition, $portalUser, $category] = $this->festival();
@@ -93,27 +92,58 @@ class FestivalOperationsAndJudgingTest extends TestCase
         $assignment = FestivalJudgeAssignment::factory()->for($edition)->for($judge)->create(['account_id' => $account->id]);
         $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
         [$firstEntry, $firstSheet, $criterion] = $this->sheet($account, $edition, $portalUser, $category, $assignment);
-        $firstSheet = app(SaveFestivalScoreSheet::class)->execute($firstSheet, $assignment, ['lock_version' => 1, 'comments' => 'SECRET-JUDGE-COMMENT', 'scores' => [['criterion_id' => $criterion->id, 'score' => 9, 'comment' => 'SECRET-CRITERION-COMMENT']], 'submit' => true], $judge);
-        $this->assertSame(FestivalScoreSheetStatus::Locked, $firstSheet->status);
+        $firstSheet = app(SaveFestivalScoreSheet::class)->execute($firstSheet, $assignment, ['comments' => 'SECRET-JUDGE-COMMENT', 'scores' => [['criterion_id' => $criterion->id, 'score' => 9, 'comment' => 'SECRET-CRITERION-COMMENT']], 'submit' => true], $judge);
+        $this->assertSame(FestivalScoreSheetStatus::Submitted, $firstSheet->status);
 
         $secondPortal = FestivalPortalUser::factory()->for($account)->create();
         [$secondEntry, $secondSheet] = $this->sheet($account, $edition, $secondPortal, $category, $assignment, $firstSheet->rubric);
-        app(SaveFestivalScoreSheet::class)->execute($secondSheet, $assignment, ['lock_version' => 1, 'scores' => [['criterion_id' => $criterion->id, 'score' => 9]], 'submit' => true], $judge);
+        app(SaveFestivalScoreSheet::class)->execute($secondSheet, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 9]], 'submit' => true], $judge);
         FestivalPenalty::query()->create(['account_id' => $account->id, 'festival_entry_id' => $secondEntry->id, 'kind' => 'deduction', 'points' => 1, 'reason' => 'Time limit', 'created_by' => $judge->id]);
 
         app(PublishFestivalResults::class)->execute($edition, $category, $judge);
         $this->assertSame(1, $firstEntry->result()->firstOrFail()->rank);
         $this->assertSame(2, $secondEntry->result()->firstOrFail()->rank);
 
-        $this->get(route('public.festivals.show', [$account->slug, $edition->slug]))->assertOk()->assertSee($firstEntry->performer_name)->assertDontSee('SECRET-JUDGE-COMMENT')->assertDontSee('SECRET-CRITERION-COMMENT');
+        $this->get(route('public.festivals.show', [$account->slug, $edition->slug]))->assertOk()->assertSee($firstEntry->entry_name)->assertDontSee('SECRET-JUDGE-COMMENT')->assertDontSee('SECRET-CRITERION-COMMENT');
         $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entries.show', [$account->slug, $firstEntry]))->assertOk()->assertSee('SECRET-CRITERION-COMMENT');
 
-        try {
-            app(SaveFestivalScoreSheet::class)->execute($firstSheet->refresh(), $assignment, ['lock_version' => $firstSheet->lock_version, 'scores' => [['criterion_id' => $criterion->id, 'score' => 10]]], $judge);
-            $this->fail('Locked score sheet was edited.');
-        } catch (HttpException $exception) {
-            $this->assertSame(409, $exception->getStatusCode());
-        }
+        $reopened = app(SaveFestivalScoreSheet::class)->execute($firstSheet->refresh(), $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 10]]], $judge);
+        $this->assertSame(FestivalScoreSheetStatus::Draft, $reopened->status);
+        $this->assertNull($reopened->submitted_at);
+        $this->assertDatabaseMissing('festival_results', ['festival_entry_id' => $firstEntry->id]);
+        $this->assertDatabaseMissing('festival_results', ['festival_entry_id' => $secondEntry->id]);
+    }
+
+    public function test_rubric_update_resets_affected_score_sheets_and_results(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $category] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $judge = User::factory()->create();
+        $assignment = FestivalJudgeAssignment::factory()->for($edition)->for($judge)->create(['account_id' => $account->id]);
+        $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
+        [$entry, $sheet, $criterion] = $this->sheet($account, $edition, $portalUser, $category, $assignment);
+        app(SaveFestivalScoreSheet::class)->execute($sheet, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 9]], 'submit' => true], $judge);
+        app(PublishFestivalResults::class)->execute($edition, $category, $owner);
+
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.rubrics.update', [$account, $edition, $sheet->rubric]), [
+            'festival_category_id' => $category->id,
+            'name' => 'Updated rubric',
+            'sections' => [[
+                'name' => 'Artistry',
+                'weight' => 1,
+                'criteria' => [['name' => 'Composition', 'max_score' => 12, 'weight' => 1]],
+            ]],
+            'is_active' => 1,
+        ])->assertRedirect(route('dashboard.accounts.festivals.judging.index', [$account, $edition]))->assertSessionHasNoErrors();
+
+        $this->assertSame(FestivalScoreSheetStatus::Draft, $sheet->refresh()->status);
+        $this->assertSame('0.0000', $sheet->total_score);
+        $this->assertDatabaseMissing('festival_criterion_scores', ['festival_score_sheet_id' => $sheet->id]);
+        $this->assertDatabaseMissing('festival_results', ['festival_entry_id' => $entry->id]);
+        $this->assertDatabaseMissing('festival_rubric_criteria', ['id' => $criterion->id]);
+        $this->assertDatabaseHas('festival_rubric_criteria', ['name' => 'Composition', 'max_score' => 12]);
     }
 
     /** @return array{FestivalEntry, FestivalScoreSheet, FestivalRubricCriterion} */

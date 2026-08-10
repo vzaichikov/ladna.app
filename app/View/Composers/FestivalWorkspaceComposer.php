@@ -57,7 +57,14 @@ class FestivalWorkspaceComposer
             [
                 'label' => __('app.festival_workspace_group_settings'),
                 'items' => [
-                    $this->item('settings', 'dashboard.accounts.festivals.settings', 'festival_tab_settings', 'settings', $permissions['manage'] || $permissions['finance'], $active, $account, $edition),
+                    $this->item('settings', 'dashboard.accounts.festivals.settings', 'festival_settings_overview', 'settings', $permissions['manage'] || $permissions['finance'], $active, $account, $edition),
+                    $this->item('settings-directions', 'dashboard.accounts.festivals.settings.directions', 'festival_taxonomy_directions', 'settings', $permissions['manage'], $active, $account, $edition),
+                    $this->item('settings-classifications', 'dashboard.accounts.festivals.settings.classifications', 'festival_classifications', 'settings', $permissions['manage'], $active, $account, $edition),
+                    $this->item('settings-categories', 'dashboard.accounts.festivals.settings.categories', 'festival_categories', 'settings', $permissions['manage'], $active, $account, $edition),
+                    $this->item('settings-workflows', 'dashboard.accounts.festivals.settings.workflows', 'festival_registration_workflows', 'settings', $permissions['manage'], $active, $account, $edition),
+                    $this->item('settings-requirements', 'dashboard.accounts.festivals.settings.requirements', 'festival_requirements', 'settings', $permissions['manage'], $active, $account, $edition),
+                    $this->item('settings-fees', 'dashboard.accounts.festivals.settings.fees', 'festival_fees', 'settings', $permissions['finance'], $active, $account, $edition),
+                    $this->item('settings-content', 'dashboard.accounts.festivals.settings.content', 'festival_content_media', 'settings', $permissions['manage'], $active, $account, $edition),
                 ],
             ],
         ];
@@ -86,6 +93,13 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.judging.*', 'dashboard.accounts.festivals.score-sheets.*') => 'judging',
             request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.scanner*') => 'tickets',
             request()->routeIs('dashboard.accounts.festivals.communication') => 'communication',
+            request()->routeIs('dashboard.accounts.festivals.settings.directions') => 'settings-directions',
+            request()->routeIs('dashboard.accounts.festivals.settings.classifications') => 'settings-classifications',
+            request()->routeIs('dashboard.accounts.festivals.settings.categories') => 'settings-categories',
+            request()->routeIs('dashboard.accounts.festivals.settings.workflows') => 'settings-workflows',
+            request()->routeIs('dashboard.accounts.festivals.settings.requirements') => 'settings-requirements',
+            request()->routeIs('dashboard.accounts.festivals.settings.fees') => 'settings-fees',
+            request()->routeIs('dashboard.accounts.festivals.settings.content') => 'settings-content',
             request()->routeIs('dashboard.accounts.festivals.settings', 'dashboard.accounts.festivals.edit') => 'settings',
             default => 'overview',
         };

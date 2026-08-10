@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Festivals\FestivalActivityRecorder;
 use App\Actions\Festivals\SaveFestivalScoreSheet;
-use App\Enums\FestivalScoreSheetStatus;
+use App\Http\Requests\FestivalRubricRequest;
 use App\Http\Requests\FestivalScoreSheetRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalResult;
 use App\Models\FestivalRubric;
 use App\Models\FestivalScoreSheet;
 use App\Support\Festivals\FestivalWorkspaceAccess;
@@ -70,30 +70,62 @@ class FestivalJudgingController extends Controller
         return redirect()->route('dashboard.accounts.festivals.judging.index', [$account, $festivalEdition])->with('status', __('app.festival_judge_saved'));
     }
 
-    public function storeRubric(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
+    public function storeRubric(FestivalRubricRequest $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
-        abort_unless($request->user()?->can('manageFestivals', $account), 403);
-        $data = $request->validate([
-            'festival_category_id' => ['nullable', 'integer'], 'name' => ['required', 'string', 'max:255'],
-            'sections' => ['required', 'array', 'min:1'], 'sections.*.name' => ['required', 'string', 'max:255'],
-            'sections.*.weight' => ['required', 'numeric', 'gt:0'], 'sections.*.criteria' => ['required', 'array', 'min:1'],
-            'sections.*.criteria.*.name' => ['required', 'string', 'max:255'], 'sections.*.criteria.*.max_score' => ['required', 'numeric', 'gt:0'],
-            'sections.*.criteria.*.weight' => ['required', 'numeric', 'gt:0'],
-        ]);
-        if (isset($data['festival_category_id'])) {
-            abort_unless($festivalEdition->categories()->whereKey($data['festival_category_id'])->exists(), 422);
-        }
+        $data = $request->validated();
+        $this->assertRubricCategory($festivalEdition, $data['festival_category_id'] ?? null);
         DB::transaction(function () use ($account, $festivalEdition, $data): void {
-            $version = FestivalRubric::query()->where('festival_edition_id', $festivalEdition->id)->where('festival_category_id', $data['festival_category_id'] ?? null)->max('version') + 1;
-            $rubric = FestivalRubric::query()->create(['account_id' => $account->id, 'festival_edition_id' => $festivalEdition->id, 'festival_category_id' => $data['festival_category_id'] ?? null, 'name' => $data['name'], 'version' => $version]);
-            foreach ($data['sections'] as $sectionIndex => $sectionData) {
-                $section = $rubric->sections()->create(['account_id' => $account->id, 'name' => $sectionData['name'], 'weight' => $sectionData['weight'], 'sort_order' => $sectionIndex]);
-                foreach ($sectionData['criteria'] as $criterionIndex => $criterion) {
-                    $section->criteria()->create(['account_id' => $account->id, ...$criterion, 'sort_order' => $criterionIndex]);
-                }
-            }
+            $rubric = FestivalRubric::query()->create([
+                'account_id' => $account->id,
+                'festival_edition_id' => $festivalEdition->id,
+                'festival_category_id' => $data['festival_category_id'] ?? null,
+                'name' => $data['name'],
+                'is_active' => $data['is_active'] ?? true,
+                'sort_order' => ((int) FestivalRubric::query()->where('festival_edition_id', $festivalEdition->id)->max('sort_order')) + 10,
+            ]);
+            $this->replaceRubricStructure($rubric, $data['sections']);
         });
+
+        return redirect()->route('dashboard.accounts.festivals.judging.index', [$account, $festivalEdition])->with('status', __('app.festival_rubric_saved'));
+    }
+
+    public function updateRubric(FestivalRubricRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalRubric $festivalRubric): RedirectResponse
+    {
+        $this->assertRubric($account, $festivalEdition, $festivalRubric);
+        $data = $request->validated();
+        $this->assertRubricCategory($festivalEdition, $data['festival_category_id'] ?? null);
+
+        DB::transaction(function () use ($festivalRubric, $data): void {
+            $rubric = FestivalRubric::query()->whereKey($festivalRubric->id)->lockForUpdate()->firstOrFail();
+            $sheets = FestivalScoreSheet::query()->where('festival_rubric_id', $rubric->id)->with('entry')->lockForUpdate()->get();
+            $sheetIds = $sheets->modelKeys();
+            $categoryIds = $sheets->pluck('entry.festival_category_id')->filter()->unique()->values();
+
+            if ($sheetIds !== []) {
+                DB::table('festival_criterion_scores')->whereIn('festival_score_sheet_id', $sheetIds)->delete();
+                FestivalScoreSheet::query()->whereKey($sheetIds)->update([
+                    'status' => 'draft',
+                    'comments' => null,
+                    'total_score' => 0,
+                    'submitted_at' => null,
+                ]);
+            }
+            if ($categoryIds->isNotEmpty()) {
+                FestivalResult::query()->whereIn('festival_entry_id', FestivalEntry::query()->select('id')->whereIn('festival_category_id', $categoryIds))->delete();
+            }
+
+            $rubric->sections()->with('criteria')->get()->each(function ($section): void {
+                $section->criteria()->delete();
+                $section->delete();
+            });
+            $rubric->update([
+                'festival_category_id' => $data['festival_category_id'] ?? null,
+                'name' => $data['name'],
+                'is_active' => $data['is_active'] ?? false,
+            ]);
+            $this->replaceRubricStructure($rubric, $data['sections']);
+        }, 3);
 
         return redirect()->route('dashboard.accounts.festivals.judging.index', [$account, $festivalEdition])->with('status', __('app.festival_rubric_saved'));
     }
@@ -107,7 +139,7 @@ class FestivalJudgingController extends Controller
         DB::transaction(function () use ($festivalEdition, $assignments, &$created): void {
             foreach ($assignments as $assignment) {
                 foreach ($assignment->categories as $category) {
-                    $rubric = FestivalRubric::query()->where('festival_edition_id', $festivalEdition->id)->where('is_active', true)->where(fn ($query) => $query->where('festival_category_id', $category->id)->orWhereNull('festival_category_id'))->orderByRaw('festival_category_id is null')->latest('version')->first();
+                    $rubric = FestivalRubric::query()->where('festival_edition_id', $festivalEdition->id)->where('is_active', true)->where(fn ($query) => $query->where('festival_category_id', $category->id)->orWhereNull('festival_category_id'))->orderByRaw('festival_category_id is null')->orderBy('sort_order')->orderBy('id')->first();
                     if (! $rubric) {
                         continue;
                     }
@@ -159,18 +191,6 @@ class FestivalJudgingController extends Controller
         return back()->with('status', __('app.festival_score_saved'));
     }
 
-    public function unlock(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalScoreSheet $festivalScoreSheet, FestivalActivityRecorder $activity): RedirectResponse
-    {
-        $this->assertEdition($account, $festivalEdition);
-        abort_unless($festivalScoreSheet->entry()->where('festival_edition_id', $festivalEdition->id)->exists(), 404);
-        abort_unless($request->user()?->can('manageFestivals', $account), 403);
-        $data = $request->validate(['reason' => ['required', 'string', 'max:3000']]);
-        $festivalScoreSheet->forceFill(['status' => FestivalScoreSheetStatus::Draft, 'locked_at' => null, 'unlocked_by' => $request->user()->id, 'unlock_reason' => $data['reason'], 'lock_version' => $festivalScoreSheet->lock_version + 1])->save();
-        $activity->record($festivalScoreSheet, 'score_sheet.unlocked', $festivalEdition, $request->user(), ['reason' => $data['reason']]);
-
-        return back()->with('status', __('app.festival_score_unlocked'));
-    }
-
     private function sheetView(Account $account, FestivalEdition $edition, FestivalScoreSheet $sheet, FestivalJudgeAssignment $assignment, bool $guest): View
     {
         abort_unless($sheet->festival_judge_assignment_id === $assignment->id && $sheet->entry()->where('festival_edition_id', $edition->id)->exists(), 404);
@@ -202,5 +222,29 @@ class FestivalJudgingController extends Controller
     private function assertEdition(Account $account, FestivalEdition $edition): void
     {
         abort_unless($edition->account_id === $account->id, 404);
+    }
+
+    private function assertRubric(Account $account, FestivalEdition $edition, FestivalRubric $rubric): void
+    {
+        $this->assertEdition($account, $edition);
+        abort_unless($rubric->account_id === $account->id && $rubric->festival_edition_id === $edition->id, 404);
+    }
+
+    private function assertRubricCategory(FestivalEdition $edition, ?int $categoryId): void
+    {
+        if ($categoryId !== null) {
+            abort_unless($edition->categories()->whereKey($categoryId)->exists(), 422);
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $sections */
+    private function replaceRubricStructure(FestivalRubric $rubric, array $sections): void
+    {
+        foreach ($sections as $sectionIndex => $sectionData) {
+            $section = $rubric->sections()->create(['account_id' => $rubric->account_id, 'name' => $sectionData['name'], 'weight' => $sectionData['weight'], 'sort_order' => $sectionIndex]);
+            foreach ($sectionData['criteria'] as $criterionIndex => $criterion) {
+                $section->criteria()->create(['account_id' => $rubric->account_id, ...$criterion, 'sort_order' => $criterionIndex]);
+            }
+        }
     }
 }

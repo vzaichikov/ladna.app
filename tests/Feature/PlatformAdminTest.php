@@ -11,6 +11,11 @@ use App\Models\AiConversation;
 use App\Models\AiConversationMessage;
 use App\Models\AiConversationMessageAttachment;
 use App\Models\AiPendingAction;
+use App\Models\FestivalCategory;
+use App\Models\FestivalEdition;
+use App\Models\FestivalEntry;
+use App\Models\FestivalPortalUser;
+use App\Models\FestivalSeries;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\PlatformAiSetting;
 use App\Models\SubscriptionPlan;
@@ -941,6 +946,12 @@ class PlatformAdminTest extends TestCase
             ->for($message, 'message')
             ->create(['path' => 'ai-conversation-images/platform-account-deletion.webp']);
         Storage::disk('local')->put($attachment->path, 'private-image');
+        $edition = FestivalEdition::factory()->for(FestivalSeries::factory()->for($account))->create(['account_id' => $account->id]);
+        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $festivalEntry = FestivalEntry::factory()->for($category)->for(FestivalPortalUser::factory()->for($account), 'portalUser')->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+        ]);
 
         $this->actingAs($platformAdmin)
             ->delete(route('platform.accounts.destroy', $account))
@@ -953,5 +964,6 @@ class PlatformAdminTest extends TestCase
         $this->assertTrue($otherAccount->fresh()->isAccessibleBy($sharedOwner));
         Storage::disk('local')->assertMissing($attachment->path);
         $this->assertModelMissing($attachment);
+        $this->assertModelMissing($festivalEntry);
     }
 }

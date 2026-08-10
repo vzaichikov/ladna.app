@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_portal_user_id', 'festival_category_id', 'code', 'performer_name', 'act_title', 'act_description', 'coach_name_snapshot', 'studio_name_snapshot', 'comments', 'status', 'qualification_status', 'category_snapshot', 'submitted_at', 'reviewed_at', 'reviewed_by', 'review_notes', 'accepted_at', 'rejected_at', 'withdrawn_at'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_portal_user_id', 'festival_category_id', 'code', 'entry_name', 'act_title', 'act_description', 'coach_name_snapshot', 'studio_name_snapshot', 'comments', 'status', 'qualification_status', 'category_snapshot', 'registrant_snapshot', 'workflow_snapshot', 'submitted_at', 'reviewed_at', 'reviewed_by', 'review_notes', 'accepted_at', 'registration_completed_at', 'rejected_at', 'withdrawn_at'])]
 class FestivalEntry extends Model
 {
     /** @use HasFactory<FestivalEntryFactory> */
@@ -29,9 +29,12 @@ class FestivalEntry extends Model
             'status' => FestivalEntryStatus::class,
             'qualification_status' => FestivalQualificationStatus::class,
             'category_snapshot' => 'array',
+            'registrant_snapshot' => 'array',
+            'workflow_snapshot' => 'array',
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
             'accepted_at' => 'datetime',
+            'registration_completed_at' => 'datetime',
             'rejected_at' => 'datetime',
             'withdrawn_at' => 'datetime',
         ];
@@ -78,7 +81,22 @@ class FestivalEntry extends Model
 
     public function participants(): BelongsToMany
     {
-        return $this->belongsToMany(FestivalParticipant::class, 'festival_entry_participant')->withPivot(['account_id', 'sort_order', 'age_snapshot', 'name_snapshot'])->orderByPivot('sort_order');
+        return $this->belongsToMany(FestivalParticipant::class, 'festival_entry_participant')->withPivot(['account_id', 'sort_order', 'age_snapshot', 'name_snapshot', 'participant_snapshot'])->orderByPivot('sort_order');
+    }
+
+    public function steps(): HasMany
+    {
+        return $this->hasMany(FestivalEntryStep::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function festivalEntrySteps(): HasMany
+    {
+        return $this->steps();
+    }
+
+    public function chargeAdjustments(): HasMany
+    {
+        return $this->hasMany(FestivalChargeAdjustment::class);
     }
 
     public function requirements(): HasMany

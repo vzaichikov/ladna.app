@@ -75,7 +75,7 @@ class SaveFestivalScheduleSlot
                     $wasExisting ? FestivalNotificationType::ScheduleChanged : FestivalNotificationType::SchedulePublished,
                     [
                         'subject' => __('app.festival_schedule_notification_subject'),
-                        'lines' => [__('app.festival_schedule_notification_copy', ['entry' => $entry->performer_name])],
+                        'lines' => [__('app.festival_schedule_notification_copy', ['entry' => $entry->entry_name])],
                         'action_url' => route('festival.portal.entries.show', [$edition->account->slug, $entry]),
                         'action_label' => __('app.festival_view_schedule'),
                     ],

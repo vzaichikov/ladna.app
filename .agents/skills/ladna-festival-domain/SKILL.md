@@ -7,9 +7,9 @@ description: Use for any Ladna Festival framework work, including Festival Serie
 
 ## Start With The Canonical Model
 
-Read [docs/festivals/README.md](../../../docs/festivals/README.md) completely before changing Festival behavior. Treat it as the durable record of the EvolutionUA investigation, glossary, lifecycle, architectural decisions, delivered phases, and verification history.
+If `.codex/docs/festivals/README.md` exists, read it completely before changing Festival behavior. Treat it as local investigation and verification context that may be absent from a clean clone.
 
-If implementation and documentation disagree, verify current routes, models, migrations, policies, and tests. Resolve the discrepancy in the same change instead of preserving two competing domain descriptions.
+Treat the rules in this skill plus current routes, models, migrations, policies, and tests as the enforceable source of truth. If implementation and local documentation disagree, verify the code and tests before resolving the discrepancy.
 
 ## Preserve The Domain Boundary
 
@@ -51,7 +51,7 @@ If implementation and documentation disagree, verify current routes, models, mig
 6. Query only data that the current permission and screen need. Do not expose applicant contact data to check-in or judge roles, or Festival revenue to non-finance roles.
 7. Use transactions and row locks for inventory, scheduling collisions, payment state, score submission, and other concurrent mutations.
 8. Queue Festival notifications only after commit with immutable payloads, stable deduplication, retry safety, and delivery-time state revalidation.
-9. Update the affected sections and verification record in `docs/festivals/README.md` whenever Festival behavior changes.
+9. When `.codex/docs/festivals/README.md` exists, update its affected sections and verification record without making application behavior or tests depend on that ignored local file.
 
 ## Activate Adjacent Skills Deliberately
 

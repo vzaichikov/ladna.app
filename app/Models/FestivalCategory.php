@@ -11,13 +11,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'festival_edition_id', 'code', 'name', 'workflow', 'min_members', 'max_members', 'min_age', 'max_age', 'min_duration_seconds', 'max_duration_seconds', 'registration_closes_at', 'rule_snapshot', 'version', 'is_active', 'locked_at'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_workflow_id', 'code', 'name', 'workflow', 'min_members', 'max_members', 'min_age', 'max_age', 'min_duration_seconds', 'max_duration_seconds', 'registration_closes_at', 'rule_snapshot', 'is_active', 'sort_order'])]
 class FestivalCategory extends Model
 {
     /** @use HasFactory<FestivalCategoryFactory> */
     use HasFactory;
 
-    protected $attributes = ['workflow' => 'review', 'min_members' => 1, 'max_members' => 1, 'version' => 1, 'is_active' => true];
+    protected $attributes = ['workflow' => 'review', 'min_members' => 1, 'max_members' => 1, 'is_active' => true, 'sort_order' => 0];
 
     protected function casts(): array
     {
@@ -31,9 +31,8 @@ class FestivalCategory extends Model
             'max_duration_seconds' => 'integer',
             'registration_closes_at' => 'datetime',
             'rule_snapshot' => 'array',
-            'version' => 'integer',
             'is_active' => 'boolean',
-            'locked_at' => 'datetime',
+            'sort_order' => 'integer',
         ];
     }
 
@@ -45,6 +44,11 @@ class FestivalCategory extends Model
     public function edition(): BelongsTo
     {
         return $this->belongsTo(FestivalEdition::class, 'festival_edition_id');
+    }
+
+    public function registrationWorkflow(): BelongsTo
+    {
+        return $this->belongsTo(FestivalWorkflow::class, 'festival_workflow_id');
     }
 
     public function festivalEdition(): BelongsTo

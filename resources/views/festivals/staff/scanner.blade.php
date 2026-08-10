@@ -49,7 +49,7 @@
                     <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                         <div><strong>{{ $ticket->order?->buyer_name }}</strong><p class="mt-1 text-sm text-slate-500">{{ $ticket->admissionType?->name }} · <span class="font-mono">{{ $ticket->code }}</span></p></div>
                         <div class="flex items-center gap-2">
-                            <span class="{{ $ticket->status !== \App\Enums\FestivalTicketStatus::Valid ? 'crm-status-danger' : ($ticket->is_checked_in ? 'crm-status-active' : 'crm-status-muted') }}">{{ $ticket->status->value }} · {{ $ticket->is_checked_in ? __('app.festival_checked_in') : __('app.festival_not_checked_in') }}</span>
+                            <span class="{{ $ticket->status !== \App\Enums\FestivalTicketStatus::Valid ? 'crm-status-danger' : ($ticket->is_checked_in ? 'crm-status-active' : 'crm-status-muted') }}">{{ __('app.festival_ticket_status_'.$ticket->status->value) }} · {{ $ticket->is_checked_in ? __('app.festival_checked_in') : __('app.festival_not_checked_in') }}</span>
                             @if ($ticket->status === \App\Enums\FestivalTicketStatus::Valid)
                                 @if ($ticket->is_checked_in)
                                     <x-ui.button type="button" variant="secondary" size="sm" data-door-checkout data-checkout-url="{{ route('dashboard.accounts.festivals.scanner.check-out', [$account, $festivalEdition, $ticket]) }}">{{ __('app.festival_check_out') }}</x-ui.button>
