@@ -43,6 +43,10 @@ class FestivalSettingsManagementTest extends TestCase
             'technical_review_mode' => 'automatic',
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.workflows', [$account, $edition]));
         $workflow = FestivalWorkflow::query()->where('festival_edition_id', $edition->id)->where('name', 'Основна реєстрація')->with('steps')->firstOrFail();
+        $this->assertSame(
+            ['Заявка та кваліфікація', 'Оплата участі', 'Технічна анкета', 'Підсумок'],
+            $workflow->steps->pluck('title')->all(),
+        );
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.categories.store', [$account, $edition]), [
             'name' => 'Соло — кільце',

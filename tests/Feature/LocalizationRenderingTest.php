@@ -57,4 +57,19 @@ class LocalizationRenderingTest extends TestCase
             $this->assertStringContainsString('<span class="font-medium">30</span>', $html);
         }
     }
+
+    public function test_ukrainian_festival_copy_does_not_leak_english_terminology(): void
+    {
+        $festivalTranslations = collect(Lang::get('app', locale: 'uk'))
+            ->filter(fn (mixed $value, string $key): bool => str_starts_with($key, 'festival_') && is_string($value))
+            ->implode(' ');
+
+        foreach (['Pole Art', 'Aerial', 'staff', 'MVP', 'URL-посилання', 'MIME-типи', 'email'] as $englishTerm) {
+            $this->assertStringNotContainsString($englishTerm, $festivalTranslations);
+        }
+
+        $this->assertSame('Електронна пошта', Lang::get('app.email', locale: 'uk'));
+        $this->assertSame('Публічне вебпосилання', Lang::get('app.festival_input_url', locale: 'uk'));
+        $this->assertSame('Дозволені типи файлів', Lang::get('app.festival_allowed_mime_types', locale: 'uk'));
+    }
 }

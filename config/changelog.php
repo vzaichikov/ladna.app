@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.126.2',
+                'date' => '2026-08-10',
+                'title' => 'Consistent Ukrainian Festival terminology',
+                'items' => ['Ukrainian Festival settings now use natural Ukrainian wording for guidance, examples, file types, links, identifiers, and email labels.', 'System-created registration workflows from earlier Festival releases are localized for Ukrainian studios without changing organizer-customized wording or historical entry snapshots.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.126.1',
                 'date' => '2026-08-10',
                 'title' => 'Clearer Festival setup and settings',
@@ -1108,6 +1115,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.126.2',
+                'date' => '2026-08-10',
+                'title' => 'Послідовна українська термінологія фестивалю',
+                'items' => ['У налаштуваннях фестивалю пояснення, приклади, типи файлів, вебпосилання, ідентифікатори та назви полів електронної пошти тепер подано природною українською мовою.', 'Створені системою сценарії реєстрації з попередніх версій автоматично отримують українські назви для українськомовних студій без зміни власних формулювань організатора чи історичних знімків заявок.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.126.1',
                 'date' => '2026-08-10',
