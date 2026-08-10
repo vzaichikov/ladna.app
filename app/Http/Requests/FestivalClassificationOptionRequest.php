@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\Account;
+use App\Models\FestivalClassificationAxis;
 use App\Models\FestivalClassificationOption;
+use App\Support\FestivalCodeGenerator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -26,5 +28,25 @@ class FestivalClassificationOptionRequest extends FormRequest
             'label' => ['required', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $axis = $this->route('festivalClassificationAxis');
+        $option = $this->route('festivalClassificationOption');
+
+        if (! $axis instanceof FestivalClassificationAxis) {
+            return;
+        }
+
+        $this->merge([
+            'code' => $option instanceof FestivalClassificationOption
+                ? $option->code
+                : FestivalCodeGenerator::unique(
+                    (string) $this->input('label'),
+                    $axis->kind === 'direction' ? 'direction' : 'option',
+                    fn (string $candidate): bool => $axis->options()->where('code', $candidate)->exists(),
+                ),
+        ]);
     }
 }

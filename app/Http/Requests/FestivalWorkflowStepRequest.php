@@ -8,11 +8,32 @@ use App\Enums\FestivalWorkflowStepType;
 use App\Models\Account;
 use App\Models\FestivalWorkflow;
 use App\Models\FestivalWorkflowStep;
+use App\Support\FestivalCodeGenerator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class FestivalWorkflowStepRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $workflow = $this->route('festivalWorkflow');
+        $step = $this->route('festivalWorkflowStep');
+
+        if (! $workflow instanceof FestivalWorkflow) {
+            return;
+        }
+
+        $this->merge([
+            'code' => $step instanceof FestivalWorkflowStep
+                ? $step->code
+                : FestivalCodeGenerator::unique(
+                    (string) $this->input('title'),
+                    'step',
+                    fn (string $candidate): bool => $workflow->steps()->where('code', $candidate)->exists(),
+                ),
+        ]);
+    }
+
     public function authorize(): bool
     {
         $account = $this->route('account');

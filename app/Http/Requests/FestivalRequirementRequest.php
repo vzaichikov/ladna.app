@@ -6,6 +6,9 @@ use App\Enums\FestivalFieldScope;
 use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementType;
 use App\Models\Account;
+use App\Models\FestivalEdition;
+use App\Models\FestivalRequirementDefinition;
+use App\Support\FestivalCodeGenerator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -13,8 +16,28 @@ class FestivalRequirementRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
+        $edition = $this->route('festivalEdition');
+        $requirement = $this->route('festivalRequirementDefinition');
+        $existingOptions = collect($requirement instanceof FestivalRequirementDefinition ? $requirement->options : [])->values();
+        $existingOptionValues = $existingOptions->pluck('value')->filter()->map(fn (mixed $value): string => (string) $value);
+        $reservedOptionValues = $existingOptionValues->values()->all();
         $options = collect($this->input('options', []))
-            ->filter(fn (mixed $option): bool => is_array($option) && filled($option['value'] ?? null) && filled($option['label'] ?? null))
+            ->filter(fn (mixed $option): bool => is_array($option) && filled($option['label'] ?? null))
+            ->map(function (array $option) use ($existingOptionValues, &$reservedOptionValues): array {
+                $originalValue = (string) ($option['original_value'] ?? '');
+                $value = $existingOptionValues->contains($originalValue)
+                    ? $originalValue
+                    : FestivalCodeGenerator::unique(
+                        (string) $option['label'],
+                        'option',
+                        fn (): bool => false,
+                        $reservedOptionValues,
+                    );
+                $reservedOptionValues[] = $value;
+                unset($option['original_value']);
+
+                return [...$option, 'value' => $value];
+            })
             ->values()
             ->all();
         $optionPrices = collect($this->input('option_prices', []))
@@ -33,12 +56,24 @@ class FestivalRequirementRequest extends FormRequest
             ->values()
             ->all();
 
-        $this->merge([
+        $prepared = [
             'options' => $options,
             'option_prices' => $optionPrices,
             'allowed_extensions' => $list('allowed_extensions_text'),
             'allowed_mime_types' => $list('allowed_mime_types_text'),
-        ]);
+        ];
+
+        if ($edition instanceof FestivalEdition) {
+            $prepared['code'] = $requirement instanceof FestivalRequirementDefinition && filled($requirement->code)
+                ? $requirement->code
+                : FestivalCodeGenerator::unique(
+                    (string) $this->input('name'),
+                    'requirement',
+                    fn (string $candidate): bool => $edition->festivalRequirementDefinitions()->where('code', $candidate)->exists(),
+                );
+        }
+
+        $this->merge($prepared);
     }
 
     public function authorize(): bool
@@ -60,7 +95,7 @@ class FestivalRequirementRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'instructions' => ['nullable', 'string', 'max:5000'],
             'options' => ['sometimes', 'array'],
-            'options.*.value' => ['required', 'string', 'max:100'],
+            'options.*.value' => ['required', 'string', 'max:100', 'distinct'],
             'options.*.label' => ['required', 'string', 'max:255'],
             'options.*.price_cents' => ['nullable', 'integer', 'min:0'],
             'pricing_mode' => ['required', Rule::in(['none', 'flat_when_true', 'per_unit', 'option_prices'])],

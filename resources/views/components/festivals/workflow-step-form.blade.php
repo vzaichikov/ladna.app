@@ -1,7 +1,6 @@
 @props(['account', 'edition', 'workflow', 'step' => null])
 @php($editing = $step?->exists)
 <form method="POST" action="{{ $editing ? route('dashboard.accounts.festivals.workflow-steps.update', [$account, $edition, $workflow, $step]) : route('dashboard.accounts.festivals.workflow-steps.store', [$account, $edition, $workflow]) }}" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">@csrf @if($editing) @method('PUT') @endif
-    <label><span class="crm-label">{{ __('app.code') }}</span><input name="code" value="{{ old('code', $step?->code) }}" required class="crm-field"></label>
     <label><span class="crm-label">{{ __('app.title') }}</span><input name="title" value="{{ old('title', $step?->title) }}" required class="crm-field"></label>
     <label><span class="crm-label">{{ __('app.festival_step_type') }}</span><select name="type" class="crm-field">@foreach(\App\Enums\FestivalWorkflowStepType::cases() as $type)<option value="{{ $type->value }}" @selected(old('type', $step?->type?->value) === $type->value)>{{ __('app.festival_step_type_'.$type->value) }}</option>@endforeach</select></label>
     <label><span class="crm-label">{{ __('app.sort_order') }}</span><input type="number" min="0" max="10000" name="sort_order" value="{{ old('sort_order', $step?->sort_order ?? 10) }}" required class="crm-field"></label>

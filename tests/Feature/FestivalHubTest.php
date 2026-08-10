@@ -177,6 +177,35 @@ class FestivalHubTest extends TestCase
         $this->actingAs($otherOwner)->get(route('dashboard.accounts.festivals.series.edit', [$otherAccount, $series]))->assertNotFound();
     }
 
+    public function test_festival_create_and_edit_forms_group_fields_and_explain_each_section(): void
+    {
+        [$account, $owner, $series] = $this->ownerFestival();
+        $purchase = FestivalEditionPurchase::query()
+            ->whereBelongsTo($account)
+            ->where('status', 'available')
+            ->firstOrFail();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.create', ['account' => $account, 'purchase' => $purchase]))
+            ->assertOk()
+            ->assertSee(__('app.festival_identity'))
+            ->assertSee(__('app.festival_schedule_lifecycle'))
+            ->assertSee(__('app.festival_registration_settings'))
+            ->assertSee(__('app.festival_venue_access'))
+            ->assertSee(__('app.festival_public_content'))
+            ->assertSee(__('app.festival_series_field_help'))
+            ->assertSee(__('app.festival_rules_field_help'));
+
+        $edition = FestivalEdition::factory()->for($series)->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.edit', [$account, $edition]))
+            ->assertOk()
+            ->assertSee(__('app.festival_form_intro'))
+            ->assertSee(__('app.festival_registration_status_field_help'))
+            ->assertSee(__('app.festival_venue_directions_field_help'));
+    }
+
     public function test_judge_only_staff_see_only_their_assigned_festivals_on_the_hub(): void
     {
         [$account, , $series] = $this->ownerFestival();

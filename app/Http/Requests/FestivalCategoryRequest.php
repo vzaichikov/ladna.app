@@ -6,11 +6,32 @@ use App\Enums\FestivalCategoryWorkflow;
 use App\Models\Account;
 use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
+use App\Support\FestivalCodeGenerator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class FestivalCategoryRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $edition = $this->route('festivalEdition');
+        $category = $this->route('festivalCategory');
+
+        if (! $edition instanceof FestivalEdition) {
+            return;
+        }
+
+        $this->merge([
+            'code' => $category instanceof FestivalCategory
+                ? $category->code
+                : FestivalCodeGenerator::unique(
+                    (string) $this->input('name'),
+                    'category',
+                    fn (string $candidate): bool => $edition->categories()->where('code', $candidate)->exists(),
+                ),
+        ]);
+    }
+
     public function authorize(): bool
     {
         $account = $this->route('account');

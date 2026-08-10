@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.126.1',
+                'date' => '2026-08-10',
+                'title' => 'Clearer Festival setup and settings',
+                'items' => ['Festival edition forms now group identity, dates, registration, venue, and public content into focused sections with short guidance for every field.', 'Festival settings now use clearer high-contrast explanations and consistent right-aligned icon actions across directions, classifications, categories, workflows, requirements, fees, and content.', 'Internal Festival identifiers are generated automatically from organizer-visible names and remain stable after renaming, so organizers no longer see or enter technical codes, keys, or option values.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.126.0',
                 'date' => '2026-08-10',
                 'title' => 'Configurable Festival registration and focused settings',
@@ -1101,6 +1108,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.126.1',
+                'date' => '2026-08-10',
+                'title' => 'Зрозуміліше створення й налаштування фестивалю',
+                'items' => ['Форма фестивалю тепер розділяє назву, дати, реєстрацію, місце проведення та публічний контент на тематичні блоки з короткими поясненнями для кожного поля.', 'У всіх налаштуваннях фестивалю з’явилися контрастні пояснення та однакові кнопки дій з іконками праворуч — для напрямків, класифікацій, категорій, сценаріїв, вимог, внесків і контенту.', 'Внутрішні ідентифікатори фестивалю автоматично створюються з видимих назв і не змінюються після перейменування, тому організаторам більше не потрібно бачити чи вводити технічні коди, ключі або значення варіантів.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.126.0',
                 'date' => '2026-08-10',

@@ -5,11 +5,32 @@ namespace App\Http\Requests;
 use App\Models\Account;
 use App\Models\FestivalContentSection;
 use App\Models\FestivalEdition;
+use App\Support\FestivalCodeGenerator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class FestivalContentSectionRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $edition = $this->route('festivalEdition');
+        $section = $this->route('festivalContentSection');
+
+        if (! $edition instanceof FestivalEdition) {
+            return;
+        }
+
+        $this->merge([
+            'key' => $section instanceof FestivalContentSection
+                ? $section->key
+                : FestivalCodeGenerator::unique(
+                    (string) $this->input('title'),
+                    'section',
+                    fn (string $candidate): bool => $edition->sections()->where('key', $candidate)->exists(),
+                ),
+        ]);
+    }
+
     public function authorize(): bool
     {
         $account = $this->route('account');

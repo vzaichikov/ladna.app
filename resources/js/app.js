@@ -7007,6 +7007,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.addEventListener('click', (event) => {
+        const editToggle = event.target.closest('[data-festival-edit-toggle]');
+
+        if (editToggle) {
+            const editPanel = document.getElementById(editToggle.getAttribute('aria-controls'));
+
+            if (editPanel) {
+                const isOpening = editPanel.classList.contains('hidden');
+
+                editPanel.classList.toggle('hidden', !isOpening);
+                editPanel.classList.toggle('grid', isOpening);
+                editToggle.setAttribute('aria-expanded', String(isOpening));
+
+                if (isOpening) {
+                    editPanel.querySelector('input:not([type="hidden"]), select, textarea')?.focus();
+                }
+            }
+        }
+
         const selectAllButton = event.target.closest('[data-select-all-class-types]');
 
         if (!selectAllButton) {

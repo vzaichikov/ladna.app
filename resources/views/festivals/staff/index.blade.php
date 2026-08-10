@@ -152,7 +152,7 @@
                             @endif
                             <p class="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{{ __('app.festivals') }}: {{ $item->editions_count }}@if($item->organizer_name) · {{ $item->organizer_name }}@endif</p>
                         </div>
-                        <x-ui.button :href="route('dashboard.accounts.festivals.series.edit', [$account, $item])" variant="secondary">{{ __('app.edit') }}</x-ui.button>
+                        <x-ui.action-button :href="route('dashboard.accounts.festivals.series.edit', [$account, $item])" icon="edit" :label="__('app.edit')" />
                     </article>
                 @empty
                     <div class="p-6"><x-ui.empty-state icon="trophy">{{ __('app.festival_series_empty') }}</x-ui.empty-state></div>
