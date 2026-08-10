@@ -14,6 +14,7 @@ use App\Models\TelegramBotInstallation;
 use App\Models\TelegramBroadcastTarget;
 use App\Support\AccountActivityLogSettings;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\FoundersProgramSettings;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\Sms\SmsServiceSettings;
 use App\Support\SystemAppearance;
@@ -29,6 +30,7 @@ class SystemSettingsController extends Controller
     public function edit(
         SmsServiceSettings $smsSettings,
         CustomerAuthAvailability $customerAuthAvailability,
+        FoundersProgramSettings $foundersProgramSettings,
     ): View {
         $fontOptions = SystemAppearance::fontOptions();
         $ownerTelegramBotInstallation = TelegramBotInstallation::query()
@@ -44,6 +46,7 @@ class SystemSettingsController extends Controller
             'currentFontKey' => SystemAppearance::currentFontKey(),
             'previewFontsUrl' => SystemAppearance::googleFontsUrl($fontOptions),
             'supportUrl' => SystemSetting::stringValue(SystemSetting::SupportUrlKey),
+            'foundersProgram' => $foundersProgramSettings->current(),
             'activityLogEnabled' => AccountActivityLogSettings::enabled(),
             'activityLogRetentionDays' => AccountActivityLogSettings::retentionDays(),
             'activityLogMinRetentionDays' => AccountActivityLogSettings::MinRetentionDays,
@@ -80,12 +83,31 @@ class SystemSettingsController extends Controller
         UpdateSystemSettingsRequest $request,
         TelegramBroadcastTargetVerifier $targetVerifier,
         SmsServiceSettings $smsSettings,
+        FoundersProgramSettings $foundersProgramSettings,
     ): RedirectResponse {
         $validated = $request->validated();
 
-        $ownerTelegramBotInstallation = DB::transaction(function () use ($request, $validated, $smsSettings): TelegramBotInstallation {
+        $ownerTelegramBotInstallation = DB::transaction(function () use ($request, $validated, $smsSettings, $foundersProgramSettings): TelegramBotInstallation {
             SystemSetting::setValue(SystemAppearance::FontSettingKey, $validated['font_family']);
             SystemSetting::setValue(SystemSetting::SupportUrlKey, $validated['support_url'] ?? null);
+            if ($request->hasAny([
+                'founders_page_enabled',
+                'founders_banner_enabled',
+                'founders_remaining_studios',
+            ])) {
+                $currentFoundersProgram = $foundersProgramSettings->current();
+                $foundersProgramSettings->save(
+                    pageEnabled: $request->has('founders_page_enabled')
+                        ? $request->boolean('founders_page_enabled')
+                        : $currentFoundersProgram['page_enabled'],
+                    bannerEnabled: $request->has('founders_banner_enabled')
+                        ? $request->boolean('founders_banner_enabled')
+                        : $currentFoundersProgram['banner_enabled'],
+                    remainingStudios: isset($validated['founders_remaining_studios'])
+                        ? (int) $validated['founders_remaining_studios']
+                        : $currentFoundersProgram['remaining_studios'],
+                );
+            }
             AccountActivityLogSettings::setEnabled(
                 $request->has('activity_log_enabled')
                     ? $request->boolean('activity_log_enabled')

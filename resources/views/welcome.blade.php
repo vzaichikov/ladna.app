@@ -10,6 +10,7 @@
         $trustedStudios = collect($trustedStudios ?? []);
         $publicPricing = $publicPricing ?? null;
         $publicOwnerOnboardingAvailable = $publicOwnerOnboardingAvailable ?? false;
+        $foundersProgram = $foundersProgram ?? [];
         $primaryLabel = auth()->check()
             ? __('app.dashboard')
             : ($publicOwnerOnboardingAvailable ? __('app.onboarding.registration_cta') : $landing['hero_primary']);
@@ -19,6 +20,7 @@
         $headerAuthLabel = auth()->check() ? __('app.dashboard') : __('app.login');
         $homeHref = $currentLandingLocale === 'en' ? route('home.en') : route('home');
         $featuresHref = $currentLandingLocale === 'en' ? route('features.en') : route('features');
+        $foundersHref = $currentLandingLocale === 'en' ? route('founders.en') : route('founders');
         $primaryHref = auth()->check()
             ? route('dashboard.index')
             : ($publicOwnerOnboardingAvailable ? route('register') : route('demo.login', [], false));
@@ -39,6 +41,8 @@
     @endphp
 
     <main class="overflow-hidden bg-[#FAF8F5] text-[#2B2B2F]">
+        <x-marketing.founders-banner :program="$foundersProgram" :href="$foundersHref" />
+
         <section class="relative min-h-[88vh] px-5 pb-10 pt-5 sm:px-8 lg:min-h-[86vh] lg:px-10">
             <div class="absolute inset-0 overflow-hidden" aria-hidden="true">
                 <div class="absolute left-[-8rem] top-[-10rem] h-96 w-96 rounded-full bg-[#E7DDC9]/55 blur-3xl"></div>

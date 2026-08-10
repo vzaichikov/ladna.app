@@ -8,6 +8,7 @@ use App\Enums\VoiceRecognitionProvider;
 use App\Models\PlatformAiProviderCredential;
 use App\Models\TelegramBotInstallation;
 use App\Support\AccountActivityLogSettings;
+use App\Support\FoundersProgramSettings;
 use App\Support\SystemAppearance;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
@@ -34,6 +35,9 @@ class UpdateSystemSettingsRequest extends FormRequest
         return [
             'font_family' => ['required', Rule::in(array_keys(SystemAppearance::fontOptions()))],
             'support_url' => ['nullable', 'url', 'max:2048'],
+            'founders_page_enabled' => ['nullable', 'boolean'],
+            'founders_banner_enabled' => ['nullable', 'boolean'],
+            'founders_remaining_studios' => ['nullable', 'integer', 'min:0', 'max:'.FoundersProgramSettings::MaxRemainingStudios],
             'activity_log_enabled' => ['nullable', 'boolean'],
             'activity_log_retention_days' => ['nullable', 'integer', 'min:'.AccountActivityLogSettings::MinRetentionDays, 'max:'.AccountActivityLogSettings::MaxRetentionDays],
             'owner_ai_assistant_enabled' => ['nullable', 'boolean'],
@@ -65,6 +69,19 @@ class UpdateSystemSettingsRequest extends FormRequest
     public function after(): array
     {
         return [
+            function (Validator $validator): void {
+                if (! filter_var($this->input('founders_page_enabled', false), FILTER_VALIDATE_BOOLEAN)) {
+                    return;
+                }
+
+                if (blank($this->input('support_url'))) {
+                    $validator->errors()->add('support_url', __('founders.settings.support_url_required'));
+                }
+
+                if ((int) $this->input('founders_remaining_studios', 0) < FoundersProgramSettings::MinRemainingStudios) {
+                    $validator->errors()->add('founders_remaining_studios', __('founders.settings.remaining_studios_required'));
+                }
+            },
             function (Validator $validator): void {
                 $aiEnabled = filter_var($this->input('owner_ai_assistant_enabled', false), FILTER_VALIDATE_BOOLEAN);
                 $activeProvider = (string) $this->input('ai_active_provider', '');

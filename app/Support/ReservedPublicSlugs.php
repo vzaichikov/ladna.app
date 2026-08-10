@@ -18,6 +18,7 @@ class ReservedPublicSlugs
         'demo',
         'en',
         'features',
+        'founders',
         'help',
         'locale',
         'login',

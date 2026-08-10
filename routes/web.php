@@ -179,6 +179,8 @@ Route::get('/', [HomeController::class, 'ukrainian'])->name('home');
 Route::get('/en', [HomeController::class, 'english'])->name('home.en');
 Route::get('/features', [HomeController::class, 'featuresUkrainian'])->name('features');
 Route::get('/en/features', [HomeController::class, 'featuresEnglish'])->name('features.en');
+Route::get('/founders', [HomeController::class, 'foundersUkrainian'])->name('founders');
+Route::get('/en/founders', [HomeController::class, 'foundersEnglish'])->name('founders.en');
 
 Route::get('/changelog.en.html', [ChangelogController::class, 'english'])->name('changelog.en');
 Route::get('/changelog.ua.html', [ChangelogController::class, 'ukrainian'])->name('changelog.ua');

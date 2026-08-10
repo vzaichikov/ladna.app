@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerStudioAccess;
 use App\Support\DemoStudioFixture;
+use App\Support\FoundersProgramSettings;
 use App\Support\Onboarding\PublicOwnerOnboardingAvailability;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
 use App\Support\SaasBilling\PublicPricingPresenter;
@@ -26,6 +27,7 @@ class HomeController extends Controller
         private readonly CustomerStudioAccess $customerStudioAccess,
         private readonly PublicPricingPresenter $publicPricingPresenter,
         private readonly PublicOwnerOnboardingAvailability $ownerOnboardingAvailability,
+        private readonly FoundersProgramSettings $foundersProgramSettings,
     ) {}
 
     public function ukrainian(Request $request): View|RedirectResponse
@@ -46,6 +48,16 @@ class HomeController extends Controller
     public function featuresEnglish(Request $request): View|RedirectResponse
     {
         return $this->showFeatures($request, 'en');
+    }
+
+    public function foundersUkrainian(Request $request): View
+    {
+        return $this->showFounders($request, 'uk');
+    }
+
+    public function foundersEnglish(Request $request): View
+    {
+        return $this->showFounders($request, 'en');
     }
 
     public function app(Request $request): RedirectResponse
@@ -78,6 +90,19 @@ class HomeController extends Controller
 
         return view('features', [
             ...$this->marketingData(),
+            'trustedStudiosAvailable' => $this->trustedStudios()->isNotEmpty(),
+        ]);
+    }
+
+    private function showFounders(Request $request, string $locale): View
+    {
+        $this->setLocale($request, $locale);
+        $foundersProgram = $this->foundersProgramSettings->current();
+
+        abort_unless($foundersProgram['page_available'], 404);
+
+        return view('founders', [
+            ...$this->marketingData($foundersProgram),
             'trustedStudiosAvailable' => $this->trustedStudios()->isNotEmpty(),
         ]);
     }
@@ -150,7 +175,7 @@ class HomeController extends Controller
     }
 
     /**
-     * @return array{demoAvailable: bool, trustedStudios: Collection<int, Account>, publicPricing: array<string, mixed>|null, publicOwnerOnboardingAvailable: bool}
+     * @return array{demoAvailable: bool, trustedStudios: Collection<int, Account>, publicPricing: array<string, mixed>|null, publicOwnerOnboardingAvailable: bool, foundersProgram: array<string, mixed>}
      */
     private function landingData(): array
     {
@@ -161,9 +186,10 @@ class HomeController extends Controller
     }
 
     /**
-     * @return array{demoAvailable: bool, publicPricing: array<string, mixed>|null, publicOwnerOnboardingAvailable: bool}
+     * @param  array<string, mixed>|null  $foundersProgram
+     * @return array{demoAvailable: bool, publicPricing: array<string, mixed>|null, publicOwnerOnboardingAvailable: bool, foundersProgram: array<string, mixed>}
      */
-    private function marketingData(): array
+    private function marketingData(?array $foundersProgram = null): array
     {
         $demoAccount = Account::query()
             ->active()
@@ -174,6 +200,7 @@ class HomeController extends Controller
             'demoAvailable' => $demoAccount?->isReadOnlyDemo() ?? false,
             'publicPricing' => $this->publicPricingPresenter->current(),
             'publicOwnerOnboardingAvailable' => $this->ownerOnboardingAvailability->isAvailable(),
+            'foundersProgram' => $foundersProgram ?? $this->foundersProgramSettings->current(),
         ];
     }
 

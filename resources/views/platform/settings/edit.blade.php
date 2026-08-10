@@ -142,6 +142,47 @@
                         <span class="crm-help">{{ $message }}</span>
                     @enderror
                 </label>
+
+                <div class="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4 sm:p-5">
+                    <h3 class="text-base font-semibold text-slate-950">{{ __('founders.settings.title') }}</h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('founders.settings.copy') }}</p>
+
+                    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                        <label class="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4">
+                            <input type="hidden" name="founders_page_enabled" value="0">
+                            <input name="founders_page_enabled" type="checkbox" value="1" @checked((bool) old('founders_page_enabled', $foundersProgram['page_enabled'])) class="crm-checkbox mt-1">
+                            <span>
+                                <span class="block text-sm font-semibold text-slate-950">{{ __('founders.settings.page_enabled') }}</span>
+                                <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('founders.settings.page_enabled_hint') }}</span>
+                            </span>
+                        </label>
+
+                        <label class="flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4">
+                            <input type="hidden" name="founders_banner_enabled" value="0">
+                            <input name="founders_banner_enabled" type="checkbox" value="1" @checked((bool) old('founders_banner_enabled', $foundersProgram['banner_enabled'])) class="crm-checkbox mt-1">
+                            <span>
+                                <span class="block text-sm font-semibold text-slate-950">{{ __('founders.settings.banner_enabled') }}</span>
+                                <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('founders.settings.banner_enabled_hint') }}</span>
+                            </span>
+                        </label>
+
+                        <label class="block rounded-xl border border-stone-200 bg-white p-4 lg:col-span-2">
+                            <span class="crm-label">{{ __('founders.settings.remaining_studios') }}</span>
+                            <input
+                                name="founders_remaining_studios"
+                                type="number"
+                                min="0"
+                                max="{{ \App\Support\FoundersProgramSettings::MaxRemainingStudios }}"
+                                value="{{ old('founders_remaining_studios', $foundersProgram['remaining_studios']) }}"
+                                class="crm-field"
+                            >
+                            <span class="mt-2 block text-sm leading-6 text-slate-500">{{ __('founders.settings.remaining_studios_hint') }}</span>
+                            @error('founders_remaining_studios')
+                                <span class="crm-help">{{ $message }}</span>
+                            @enderror
+                        </label>
+                    </div>
+                </div>
             </section>
 
             <section

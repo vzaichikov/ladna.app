@@ -11,7 +11,7 @@ use SplFileInfo;
 class LocalizationCatalogTest extends TestCase
 {
     /** @var list<string> */
-    private const CATALOGS = ['app', 'features', 'pagination', 'validation'];
+    private const CATALOGS = ['app', 'features', 'founders', 'pagination', 'validation'];
 
     /** @var list<string> */
     private const LOCALES = ['en', 'uk'];
