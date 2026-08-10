@@ -147,6 +147,29 @@ class CustomerClassPassTest extends TestCase
         $this->assertSame(100000, (int) CustomerPurchase::whereBelongsTo($customerClassPass)->sum('amount_cents'));
     }
 
+    public function test_unpaid_manual_class_pass_does_not_show_fully_paid_message_to_user_without_payment_permission(): void
+    {
+        [, $account, $customer, $plan, , $location] = $this->passContext();
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute(
+            $account,
+            $customer,
+            $plan,
+            issuedLocation: $location,
+        );
+        $passManager = User::factory()->create();
+        $account->users()->attach($passManager->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => [StudioPermission::ManageCustomerClassPasses->value],
+        ]);
+
+        $this->actingAs($passManager)
+            ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertOk()
+            ->assertSee(__('app.class_pass_unpaid'))
+            ->assertDontSee(__('app.class_pass_fully_paid'))
+            ->assertDontSee(__('app.class_pass_record_payment'));
+    }
+
     public function test_online_purchase_payment_state_is_not_changed_by_pass_lifecycle_update(): void
     {
         [$owner, $account, $customer, $plan, , $location] = $this->passContext();

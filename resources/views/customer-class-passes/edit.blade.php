@@ -137,28 +137,30 @@
                     </div>
                 </div>
 
-                @if ($customerClassPass->source === 'manual' && $customerClassPass->remainingPaymentCents() > 0 && auth()->user()?->can('recordCustomerPayments', $account))
-                    <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.payments.store', [$account, $customerClassPass]) }}" class="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                        @csrf
-                        <label class="block">
-                            <span class="crm-label">{{ __('app.payment_location') }}</span>
-                            <select name="location_id" class="crm-field" required>
-                                @foreach ($locations as $location)
-                                    <option value="{{ $location->id }}" @selected((string) old('location_id', $customerClassPass->issued_location_id) === (string) $location->id)>{{ $location->name }}</option>
-                                @endforeach
-                            </select>
-                            @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
-                        </label>
-                        <label class="block">
-                            <span class="crm-label">{{ __('app.class_pass_payment_amount') }}</span>
-                            <input name="amount" value="{{ old('amount', $formatMoneyInput($customerClassPass->remainingPaymentCents())) }}" inputmode="decimal" class="crm-field" required>
-                            @error('amount') <span class="crm-help">{{ $message }}</span> @enderror
-                        </label>
-                        <x-ui.button type="submit">
-                            <x-ui.icon name="payments" class="h-4 w-4" />
-                            {{ __('app.class_pass_record_payment') }}
-                        </x-ui.button>
-                    </form>
+                @if ($customerClassPass->source === 'manual' && $customerClassPass->remainingPaymentCents() > 0)
+                    @can('recordCustomerPayments', $account)
+                        <form method="POST" action="{{ route('dashboard.accounts.customer-class-passes.payments.store', [$account, $customerClassPass]) }}" class="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                            @csrf
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.payment_location') }}</span>
+                                <select name="location_id" class="crm-field" required>
+                                    @foreach ($locations as $location)
+                                        <option value="{{ $location->id }}" @selected((string) old('location_id', $customerClassPass->issued_location_id) === (string) $location->id)>{{ $location->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('location_id') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                            <label class="block">
+                                <span class="crm-label">{{ __('app.class_pass_payment_amount') }}</span>
+                                <input name="amount" value="{{ old('amount', $formatMoneyInput($customerClassPass->remainingPaymentCents())) }}" inputmode="decimal" class="crm-field" required>
+                                @error('amount') <span class="crm-help">{{ $message }}</span> @enderror
+                            </label>
+                            <x-ui.button type="submit">
+                                <x-ui.icon name="payments" class="h-4 w-4" />
+                                {{ __('app.class_pass_record_payment') }}
+                            </x-ui.button>
+                        </form>
+                    @endcan
                 @elseif ($customerClassPass->source !== 'manual')
                     <div class="mt-5 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-slate-600">{{ __('app.class_pass_online_payment_locked') }}</div>
                 @else
