@@ -2,6 +2,7 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalPortalUser;
@@ -24,39 +25,39 @@ class StoreFestivalSubmission
 
     public function execute(FestivalEntryRequirement $requirement, FestivalPortalUser $portalUser, UploadedFile $file): FestivalSubmission
     {
-        $requirement->loadMissing(['entry.edition', 'entry.steps', 'entryStep']);
+        $requirement->load(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep']);
         abort_unless($requirement->account_id === $portalUser->account_id && $requirement->entry->festival_portal_user_id === $portalUser->id, 404);
-        abort_unless(($requirement->definition_snapshot['input_type'] ?? 'file') === 'file', 422);
+        abort_unless($requirement->definition->input_type === FestivalRequirementInputType::File, 422);
         if ($requirement->entryStep) {
             $this->workflowState->assertMutable($requirement->entry, $requirement->entryStep);
         } else {
             abort_unless($requirement->entry->steps->isEmpty(), 409);
         }
-        $snapshot = $requirement->definition_snapshot;
+        $definition = $requirement->definition;
         $mimeType = (string) ($file->getMimeType() ?: 'application/octet-stream');
         $extension = strtolower((string) ($file->guessExtension() ?: $file->getClientOriginalExtension()));
 
-        if ((int) ceil($file->getSize() / 1024) > (int) $snapshot['max_size_kb']) {
+        if ((int) ceil($file->getSize() / 1024) > $definition->max_size_kb) {
             throw ValidationException::withMessages(['file' => __('app.festival_file_too_large')]);
         }
 
-        $allowedMimes = array_map('strtolower', (array) ($snapshot['allowed_mime_types'] ?? []));
-        $allowedExtensions = array_map('strtolower', (array) ($snapshot['allowed_extensions'] ?? []));
+        $allowedMimes = array_map('strtolower', $definition->allowed_mime_types ?? []);
+        $allowedExtensions = array_map('strtolower', $definition->allowed_extensions ?? []);
         if (($allowedMimes !== [] && ! in_array(strtolower($mimeType), $allowedMimes, true))
             || ($allowedExtensions !== [] && ! in_array($extension, $allowedExtensions, true))) {
             throw ValidationException::withMessages(['file' => __('app.festival_file_type_invalid')]);
         }
 
         $duration = null;
-        if (($snapshot['min_duration_seconds'] ?? null) !== null || ($snapshot['max_duration_seconds'] ?? null) !== null) {
+        if ($definition->min_duration_seconds !== null || $definition->max_duration_seconds !== null) {
             try {
                 $duration = $this->durationProbe->seconds($file->getRealPath());
             } catch (Throwable) {
                 throw ValidationException::withMessages(['file' => __('app.festival_file_duration_unreadable')]);
             }
 
-            if (($snapshot['min_duration_seconds'] ?? null) !== null && $duration < $snapshot['min_duration_seconds']
-                || ($snapshot['max_duration_seconds'] ?? null) !== null && $duration > $snapshot['max_duration_seconds']) {
+            if ($definition->min_duration_seconds !== null && $duration < $definition->min_duration_seconds
+                || $definition->max_duration_seconds !== null && $duration > $definition->max_duration_seconds) {
                 throw ValidationException::withMessages(['file' => __('app.festival_file_duration_invalid')]);
             }
         }
@@ -66,7 +67,7 @@ class StoreFestivalSubmission
         $previousPath = null;
         try {
             $submission = DB::transaction(function () use ($requirement, $portalUser, $file, $path, $mimeType, $duration, &$previousPath): FestivalSubmission {
-                $locked = FestivalEntryRequirement::query()->with(['entry.edition', 'entry.steps', 'entryStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
+                $locked = FestivalEntryRequirement::query()->with(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
                 if ($locked->entryStep) {
                     $this->workflowState->assertMutable($locked->entry, $locked->entryStep);
                 } else {

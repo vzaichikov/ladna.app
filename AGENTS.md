@@ -37,6 +37,16 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
 - Check for existing components to reuse before writing a new one.
 
+## Planning and Business-Flow Simplicity
+
+- Prefer the smallest coherent design that satisfies the current, explicit requirements and follows the application's existing patterns.
+- Do not add or propose speculative snapshots, entity revisions, version histories, workflow engines, state machines, audit tables, abstraction layers, or infrastructure for possible future needs. Introduce them only when a current requirement, compliance constraint, or demonstrated failure mode makes them necessary.
+- Reuse and extend the existing data model and business flow before creating parallel concepts or additional sources of truth.
+- Keep optional future improvements separate from the implementation plan. They must not expand the baseline scope or acceptance criteria unless the user explicitly chooses them.
+- Before proposing a new entity, table, status, layer, or background process, identify the concrete current problem it solves and why the existing design cannot solve it simply. If that evidence is absent, leave it out.
+- Preserve existing audit and history semantics where they already matter, but do not introduce new history, snapshots, or revision systems by default.
+- When requirements are ambiguous, plan the simple default and state the assumption. Ask before adopting a materially more complex business flow.
+
 ## Verification Scripts
 
 - Do not create verification scripts or tinker when tests cover that functionality and prove they work. Unit and feature tests are more important.

@@ -37,7 +37,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_entry_creation_uses_live_category_while_preserving_existing_typed_field_and_price_records(): void
+    public function test_entry_creation_uses_live_category_and_typed_fields_while_preserving_charge_facts(): void
     {
         Queue::fake();
         [$account, $edition, $portalUser] = $this->festival();
@@ -55,20 +55,19 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $requirement = FestivalRequirementDefinition::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Qualification video', 'type' => 'qualification_video']);
         $chargeDefinition = FestivalChargeDefinition::factory()->for($edition)->create(['account_id' => $account->id, 'amount_cents' => 50000]);
         $entry = FestivalEntry::factory()->for($category)->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id, 'festival_portal_user_id' => $portalUser->id]);
-        $entry->participants()->sync($participants->values()->mapWithKeys(fn ($participant, $index): array => [$participant->id => ['account_id' => $account->id, 'sort_order' => $index, 'age_snapshot' => $participant->date_of_birth->diffInYears($edition->age_reference_date), 'name_snapshot' => $participant->displayName()]])->all());
+        $entry->participants()->sync($participants->values()->mapWithKeys(fn ($participant, $index): array => [$participant->id => ['account_id' => $account->id, 'sort_order' => $index]])->all());
 
         $initialized = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
         $category->update(['name' => 'Changed category', 'min_members' => 3]);
         $requirement->update(['name' => 'Changed requirement']);
         $chargeDefinition->update(['amount_cents' => 90000]);
-        $initialized->refresh()->load(['participants', 'requirements', 'charges']);
+        $initialized->refresh()->load(['category', 'participants', 'requirements.definition', 'charges']);
 
         $this->assertSame(FestivalEntryStatus::Draft, $initialized->status);
-        $this->assertNull($initialized->category_snapshot);
-        $this->assertSame('Changed category', $initialized->category->fresh()->name);
-        $this->assertSame(3, $initialized->category->fresh()->min_members);
-        $this->assertSame([13, 15], $initialized->participants->pluck('pivot.age_snapshot')->sort()->values()->all());
-        $this->assertSame('Qualification video', $initialized->requirements->first()->definition_snapshot['name']);
+        $this->assertSame('Changed category', $initialized->category->name);
+        $this->assertSame(3, $initialized->category->min_members);
+        $this->assertSame([13, 15], $initialized->participants->map(fn (FestivalParticipant $participant): int => $participant->ageOn($edition->age_reference_date))->sort()->values()->all());
+        $this->assertSame('Changed requirement', $initialized->requirements->first()->definition->name);
         $this->assertSame(50000, $initialized->charges->first()->amount_cents);
     }
 
@@ -92,8 +91,6 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $entry->participants()->sync([$participant->id => [
             'account_id' => $account->id,
             'sort_order' => 0,
-            'age_snapshot' => 18,
-            'name_snapshot' => $participant->displayName(),
         ]]);
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
         $category->update(['min_members' => 2]);
@@ -108,7 +105,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id, 'min_members' => 2, 'max_members' => 2, 'min_age' => 18]);
         $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id, 'date_of_birth' => $edition->age_reference_date->copy()->subYears(12)]);
         $entry = FestivalEntry::factory()->for($category)->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id, 'festival_portal_user_id' => $portalUser->id]);
-        $entry->participants()->sync([$participant->id => ['account_id' => $account->id, 'sort_order' => 0, 'age_snapshot' => 12, 'name_snapshot' => $participant->displayName()]]);
+        $entry->participants()->sync([$participant->id => ['account_id' => $account->id, 'sort_order' => 0]]);
 
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
 
@@ -167,8 +164,6 @@ class FestivalRegistrationWorkflowTest extends TestCase
             'entry_name' => 'Live category act',
         ])->assertRedirect();
         $entry = FestivalEntry::query()->where('festival_portal_user_id', $portalUser->id)->where('entry_name', 'Live category act')->firstOrFail();
-        $this->assertNull($entry->category_snapshot);
-
         $firstDirection->update(['name' => 'Updated Aerial']);
         $category->update(['name' => 'Updated Solo Hoop', 'requirements_html' => '<p>Current organizer conditions.</p>']);
 
@@ -199,7 +194,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
         FestivalRequirementDefinition::factory()->for($edition)->create(['account_id' => $account->id, 'type' => 'custom_document', 'stage' => 'qualification', 'allowed_extensions' => ['png'], 'allowed_mime_types' => ['image/png']]);
         $entry = FestivalEntry::factory()->for($category)->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id, 'festival_portal_user_id' => $portalUser->id]);
-        $entry->participants()->sync([$participant->id => ['account_id' => $account->id, 'sort_order' => 0, 'age_snapshot' => 18, 'name_snapshot' => $participant->displayName()]]);
+        $entry->participants()->sync([$participant->id => ['account_id' => $account->id, 'sort_order' => 0]]);
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
         $requirement = $entry->requirements->first();
 

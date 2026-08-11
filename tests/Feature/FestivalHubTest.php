@@ -247,6 +247,14 @@ class FestivalHubTest extends TestCase
             'title' => 'Foreign Festival Sentinel',
         ]);
         $purchases = FestivalEditionPurchase::query()->whereBelongsTo($account)->oldest('id')->get();
+        $foreignLinkedPackage = FestivalTariffPackage::factory()->create([
+            'subscription_plan_id' => $purchases[0]->subscription_plan_id,
+            'name' => 'Foreign-linked Purchase Sentinel',
+        ]);
+        $unlinkedPackage = FestivalTariffPackage::factory()->create([
+            'subscription_plan_id' => $purchases[0]->subscription_plan_id,
+            'name' => 'Unlinked Purchase Sentinel',
+        ]);
         $purchases[0]->forceFill([
             'status' => FestivalEditionPurchaseStatus::Redeemed,
             'festival_edition_id' => $linkedEdition->id,
@@ -263,16 +271,15 @@ class FestivalHubTest extends TestCase
         $purchases[2]->forceFill([
             'status' => FestivalEditionPurchaseStatus::Redeemed,
             'festival_edition_id' => $foreignEdition->id,
+            'festival_tariff_package_id' => $foreignLinkedPackage->id,
             'redeemed_at' => now(),
-            'package_name_snapshot' => 'Foreign-linked Purchase Sentinel',
             'created_at' => now()->addMinutes(2),
         ])->save();
         $unlinkedPurchase = FestivalEditionPurchase::factory()->create([
             'account_id' => $account->id,
             'subscription_plan_id' => $purchases[0]->subscription_plan_id,
-            'festival_tariff_package_id' => $purchases[0]->festival_tariff_package_id,
+            'festival_tariff_package_id' => $unlinkedPackage->id,
             'created_by_user_id' => $owner->id,
-            'package_name_snapshot' => 'Unlinked Purchase Sentinel',
             'festival_edition_id' => null,
             'created_at' => now()->addMinute(),
         ]);
@@ -295,7 +302,7 @@ class FestivalHubTest extends TestCase
             ->assertSee(route('dashboard.accounts.festivals.show', [$account, $reversedEdition]), false)
             ->assertSee('Foreign-linked Purchase Sentinel')
             ->assertDontSee($foreignEdition->title)
-            ->assertSee($unlinkedPurchase->package_name_snapshot)
+            ->assertSee($unlinkedPurchase->package->name)
             ->assertViewHas('festivalPurchases', fn ($festivalPurchases): bool => $festivalPurchases->hasPages()
                 && str_contains($festivalPurchases->url(2), 'tab=payments')
                 && str_contains($festivalPurchases->url(2), 'purchases_page=2'));

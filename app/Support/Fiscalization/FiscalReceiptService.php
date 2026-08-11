@@ -288,7 +288,9 @@ class FiscalReceiptService
         }
 
         if ($payment instanceof FestivalEditionPurchase) {
-            return Str::limit('Ladna Festival · '.$payment->package_name_snapshot, 128, '');
+            $payment->load('package');
+
+            return Str::limit('Ladna Festival · '.$payment->package->name, 128, '');
         }
 
         $payment->loadMissing('plan');

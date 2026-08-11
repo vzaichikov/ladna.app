@@ -4,6 +4,8 @@ namespace Database\Factories;
 
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
+use App\Models\FestivalWorkflow;
+use App\Models\FestivalWorkflowStep;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -21,12 +23,18 @@ class FestivalEntryStepFactory extends Factory
         return [
             'account_id' => fn (array $attributes) => FestivalEntry::findOrFail($attributes['festival_entry_id'])->account_id,
             'festival_entry_id' => FestivalEntry::factory(),
-            'code' => fake()->unique()->slug(2),
-            'type' => 'form',
-            'title' => fake()->sentence(3),
-            'sort_order' => 10,
-            'review_mode' => 'automatic',
-            'review_effect' => 'none',
+            'festival_workflow_step_id' => function (array $attributes): int {
+                $entry = FestivalEntry::query()->findOrFail($attributes['festival_entry_id']);
+                $workflow = FestivalWorkflow::factory()->create([
+                    'account_id' => $entry->account_id,
+                    'festival_edition_id' => $entry->festival_edition_id,
+                ]);
+
+                return FestivalWorkflowStep::factory()->create([
+                    'account_id' => $entry->account_id,
+                    'festival_workflow_id' => $workflow->id,
+                ])->id;
+            },
             'status' => 'draft',
         ];
     }

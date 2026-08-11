@@ -31,7 +31,7 @@ class FestivalAdmissionTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_inventory_holds_and_early_pricing_are_snapshotted_transactionally(): void
+    public function test_inventory_holds_and_early_pricing_preserve_transaction_facts(): void
     {
         [$account, $edition] = $this->festival();
         $type = FestivalAdmissionType::factory()->for($edition)->create([
@@ -105,13 +105,16 @@ class FestivalAdmissionTest extends TestCase
     {
         [$account, $edition] = $this->festival();
         $plan = SubscriptionPlan::factory()->create(['currency' => 'UAH']);
-        $package = FestivalTariffPackage::factory()->create(['subscription_plan_id' => $plan->id, 'name' => 'Global cap '.str()->random(8)]);
+        $package = FestivalTariffPackage::factory()->create([
+            'subscription_plan_id' => $plan->id,
+            'name' => 'Global cap '.str()->random(8),
+            'max_tickets' => 2,
+        ]);
         FestivalEditionPurchase::factory()->create([
             'account_id' => $account->id,
             'subscription_plan_id' => $plan->id,
             'festival_tariff_package_id' => $package->id,
             'festival_edition_id' => $edition->id,
-            'max_tickets' => 2,
         ]);
         $firstType = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 2]);
         $secondType = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 2]);

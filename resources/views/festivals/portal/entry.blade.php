@@ -57,7 +57,7 @@
                     @php $step = $state['step']; @endphp
                     <li>
                         <a href="{{ route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]) }}" class="block h-full rounded-xl border p-4 transition {{ $selectedStep?->is($step) ? 'border-brand-500 bg-brand-50' : 'border-stone-200 hover:border-brand-300' }} {{ !$state['available'] ? 'opacity-60' : '' }}">
-                            <div class="flex items-center gap-2"><span class="flex size-7 shrink-0 items-center justify-center rounded-full {{ $step->status === \App\Enums\FestivalEntryStepStatus::Approved ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700' }} text-xs font-bold">{{ $index + 1 }}</span><strong class="text-sm">{{ $step->title }}</strong></div>
+                            <div class="flex items-center gap-2"><span class="flex size-7 shrink-0 items-center justify-center rounded-full {{ $step->status === \App\Enums\FestivalEntryStepStatus::Approved ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700' }} text-xs font-bold">{{ $index + 1 }}</span><strong class="text-sm">{{ $step->workflowStep->title }}</strong></div>
                             <span class="mt-2 block text-xs text-slate-500">{{ __('app.festival_step_status_'.$step->status->value) }}</span>
                             @if($state['locked_reason'])<span class="mt-2 block text-xs text-amber-800">{{ $state['locked_reason'] }}</span>@endif
                         </a>
@@ -70,51 +70,53 @@
             @php $selectedState = $workflowStates->first(fn($state) => $state['step']->is($selectedStep)); @endphp
             <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div><p class="text-sm font-semibold text-brand-700">{{ __('app.festival_current_step') }}</p><h2 class="mt-1 text-2xl font-semibold">{{ $selectedStep->title }}</h2>@if($selectedStep->description)<p class="mt-2 max-w-3xl text-sm text-slate-600">{{ $selectedStep->description }}</p>@endif</div>
+                    <div><p class="text-sm font-semibold text-brand-700">{{ __('app.festival_current_step') }}</p><h2 class="mt-1 text-2xl font-semibold">{{ $selectedStep->workflowStep->title }}</h2>@if($selectedStep->workflowStep->description)<p class="mt-2 max-w-3xl text-sm text-slate-600">{{ $selectedStep->workflowStep->description }}</p>@endif</div>
                     <span class="self-start rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">{{ __('app.festival_step_status_'.$selectedStep->status->value) }}</span>
                 </div>
 
                 @if($selectedStep->status === \App\Enums\FestivalEntryStepStatus::ChangesRequested)
-                    <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong>{{ __('app.festival_review_comment') }}</strong><p class="mt-1 whitespace-pre-line">{{ $selectedStep->review_notes }}</p>@if($selectedStep->revision_due_at)<p class="mt-2 font-semibold">{{ __('app.festival_revision_due_at') }}: {{ $selectedStep->revision_due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }}</p>@endif</div>
+                    <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong>{{ __('app.festival_review_comment') }}</strong><p class="mt-1 whitespace-pre-line">{{ $selectedStep->review_notes }}</p>@if($selectedStep->correction_due_at)<p class="mt-2 font-semibold">{{ __('app.festival_correction_due_at') }}: {{ $selectedStep->correction_due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }}</p>@endif</div>
                 @elseif($selectedStep->review_notes)
                     <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{{ $selectedStep->review_notes }}</div>
                 @endif
 
-                @if($selectedStep->type === \App\Enums\FestivalWorkflowStepType::Application && $selectedState['mutable'])
-                    <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm"><div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><span>{{ $entry->entry_name }} · {{ $entry->participants->pluck('pivot.name_snapshot')->join(', ') }}</span><a href="{{ route('festival.portal.entries.edit', [$account->slug, $entry]) }}" class="font-semibold text-brand-700">{{ __('app.edit') }}</a></div></div>
+                @if($selectedStep->workflowStep->type === \App\Enums\FestivalWorkflowStepType::Application && $selectedState['mutable'])
+                    <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm"><div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><span>{{ $entry->entry_name }} · {{ $entry->participants->map->displayName()->join(', ') }}</span><a href="{{ route('festival.portal.entries.edit', [$account->slug, $entry]) }}" class="font-semibold text-brand-700">{{ __('app.edit') }}</a></div></div>
                 @endif
 
                 <div class="mt-6 space-y-4">
                     @foreach($selectedStep->requirements as $requirement)
                         @php
-                            $snapshot = $requirement->definition_snapshot;
-                            $inputType = \App\Enums\FestivalRequirementInputType::from($snapshot['input_type'] ?? 'file');
+                            $definition = $requirement->definition;
+                            $inputType = $definition->input_type;
+                            $subjectLabel = $requirement->participant?->displayName()
+                                ?? ($definition->subject_scope === \App\Enums\FestivalFieldScope::Registrant ? $portalUser->displayName() : $entry->entry_name);
                             $latest = $requirement->submissions->first();
                             $currentValue = $latest?->value_json['value'] ?? null;
                         @endphp
                         <article class="rounded-xl border border-stone-200 p-4">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><strong>{{ $snapshot['name'] }}</strong>@if(!empty($snapshot['subject_label']))<span class="ml-2 text-xs text-slate-500">{{ $snapshot['subject_label'] }}</span>@endif @if(!empty($snapshot['instructions']))<p class="mt-1 text-sm text-slate-600">{{ $snapshot['instructions'] }}</p>@endif</div><span class="text-xs font-semibold text-slate-500">{{ __('app.festival_requirement_status_'.$requirement->status->value) }}</span></div>
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><strong>{{ $definition->name }}</strong><span class="ml-2 text-xs text-slate-500">{{ $subjectLabel }}</span>@if($definition->instructions)<p class="mt-1 text-sm text-slate-600">{{ $definition->instructions }}</p>@endif</div><span class="text-xs font-semibold text-slate-500">{{ __('app.festival_requirement_status_'.$requirement->status->value) }}</span></div>
 
                             @if($selectedState['mutable'])
                                 @if($inputType === \App\Enums\FestivalRequirementInputType::File)
-                                    <form method="POST" enctype="multipart/form-data" action="{{ route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]) }}" class="mt-4 flex flex-col gap-2 sm:flex-row">@csrf<input type="file" name="file" @required($requirement->is_required) class="crm-field"><x-ui.button type="submit">{{ __('app.upload') }}</x-ui.button></form>
+                                    <form method="POST" enctype="multipart/form-data" action="{{ route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]) }}" class="mt-4 flex flex-col gap-2 sm:flex-row">@csrf<input type="file" name="file" @required($definition->is_required) class="crm-field"><x-ui.button type="submit">{{ __('app.upload') }}</x-ui.button></form>
                                 @else
                                     <form method="POST" action="{{ route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $selectedStep, $requirement]) }}" class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">@csrf
-                                        <label class="grow"><span class="sr-only">{{ $snapshot['name'] }}</span>
+                                        <label class="grow"><span class="sr-only">{{ $definition->name }}</span>
                                             @if($inputType === \App\Enums\FestivalRequirementInputType::LongText)
-                                                <textarea name="value" rows="4" @required($requirement->is_required) class="crm-field">{{ is_scalar($currentValue) ? $currentValue : '' }}</textarea>
+                                                <textarea name="value" rows="4" @required($definition->is_required) class="crm-field">{{ is_scalar($currentValue) ? $currentValue : '' }}</textarea>
                                             @elseif($inputType === \App\Enums\FestivalRequirementInputType::Boolean)
-                                                <select name="value" @required($requirement->is_required) class="crm-field"><option value="">{{ __('app.select') }}</option><option value="1" @selected($currentValue === true || $currentValue === 1 || $currentValue === '1')>{{ __('app.yes') }}</option><option value="0" @selected($currentValue === false || $currentValue === 0 || $currentValue === '0')>{{ __('app.no') }}</option></select>
+                                                <select name="value" @required($definition->is_required) class="crm-field"><option value="">{{ __('app.select') }}</option><option value="1" @selected($currentValue === true || $currentValue === 1 || $currentValue === '1')>{{ __('app.yes') }}</option><option value="0" @selected($currentValue === false || $currentValue === 0 || $currentValue === '0')>{{ __('app.no') }}</option></select>
                                             @elseif(in_array($inputType, [\App\Enums\FestivalRequirementInputType::SingleSelect, \App\Enums\FestivalRequirementInputType::MultiSelect], true))
-                                                <select name="value{{ $inputType === \App\Enums\FestivalRequirementInputType::MultiSelect ? '[]' : '' }}" @if($inputType === \App\Enums\FestivalRequirementInputType::MultiSelect) multiple @endif @required($requirement->is_required) class="crm-field">@foreach(($snapshot['options'] ?? []) as $option)<option value="{{ $option['value'] }}" @selected(collect(is_array($currentValue) ? $currentValue : [$currentValue])->contains($option['value']))>{{ $option['label'] }}</option>@endforeach</select>
+                                                <select name="value{{ $inputType === \App\Enums\FestivalRequirementInputType::MultiSelect ? '[]' : '' }}" @if($inputType === \App\Enums\FestivalRequirementInputType::MultiSelect) multiple @endif @required($definition->is_required) class="crm-field">@foreach(($definition->options ?? []) as $option)<option value="{{ $option['value'] }}" @selected(collect(is_array($currentValue) ? $currentValue : [$currentValue])->contains($option['value']))>{{ $option['label'] }}</option>@endforeach</select>
                                             @else
-                                                <input type="{{ $inputType === \App\Enums\FestivalRequirementInputType::Integer ? 'number' : ($inputType === \App\Enums\FestivalRequirementInputType::Url ? 'url' : 'text') }}" name="value" value="{{ is_scalar($currentValue) ? $currentValue : '' }}" @required($requirement->is_required) class="crm-field">
+                                                <input type="{{ $inputType === \App\Enums\FestivalRequirementInputType::Integer ? 'number' : ($inputType === \App\Enums\FestivalRequirementInputType::Url ? 'url' : 'text') }}" name="value" value="{{ is_scalar($currentValue) ? $currentValue : '' }}" @required($definition->is_required) class="crm-field">
                                             @endif
                                         </label><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
                                     </form>
                                 @endif
                             @elseif($inputType !== \App\Enums\FestivalRequirementInputType::File && $latest)
-                                <x-festivals.response-value :snapshot="$snapshot" :value="$currentValue" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm" />
+                                <x-festivals.response-value :definition="$definition" :value="$currentValue" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm" />
                             @endif
 
                             @if($latest?->path)
@@ -133,7 +135,7 @@
                 @endif
 
                 @if($selectedState['mutable'])
-                    <form method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6 flex justify-end">@csrf<x-ui.button type="submit" size="lg">{{ $selectedStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer ? __('app.submit') : __('app.continue') }}</x-ui.button></form>
+                    <form method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6 flex justify-end">@csrf<x-ui.button type="submit" size="lg">{{ $selectedStep->workflowStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer ? __('app.submit') : __('app.continue') }}</x-ui.button></form>
                 @endif
             </section>
         @endif

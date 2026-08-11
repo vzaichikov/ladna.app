@@ -54,7 +54,7 @@ class FestivalEntryController extends Controller
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $this->assertEntry($festivalEntry, $portalUser);
-        $festivalEntry->load(['edition', 'category.direction', 'participants', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section']);
+        $festivalEntry->load(['edition', 'category.direction', 'participants', 'steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section']);
         $providers = app(PaymentGatewayRegistry::class)->availableSettingsFor($account);
         $workflowStates = $workflowState->forEntry($festivalEntry);
         $selectedStep = $workflowState->current($festivalEntry) ?? $festivalEntry->steps->last();
@@ -185,19 +185,10 @@ class FestivalEntryController extends Controller
                 'account_id' => $edition->account_id, 'festival_edition_id' => $edition->id, 'festival_portal_user_id' => $portalUser->id,
                 'festival_category_id' => $category->id, 'code' => $entry->code ?? 'FEN-'.str()->upper(str()->random(12)),
                 'entry_name' => $data['entry_name'], 'act_title' => $data['act_title'] ?? null,
-                'act_description' => $data['act_description'] ?? null, 'coach_name_snapshot' => $portalUser->displayName(),
-                'studio_name_snapshot' => $portalUser->studio_name, 'comments' => $data['comments'] ?? null,
+                'act_description' => $data['act_description'] ?? null, 'comments' => $data['comments'] ?? null,
             ])->save();
             $sync = $participants->values()->mapWithKeys(fn (FestivalParticipant $participant, int $index): array => [$participant->id => [
                 'account_id' => $edition->account_id, 'sort_order' => $index,
-                'age_snapshot' => (int) $participant->date_of_birth->diffInYears($edition->age_reference_date),
-                'name_snapshot' => $participant->displayName(),
-                'participant_snapshot' => json_encode([
-                    'participant_id' => $participant->id,
-                    'name' => $participant->displayName(),
-                    'date_of_birth' => $participant->date_of_birth->toDateString(),
-                    'age' => (int) $participant->date_of_birth->diffInYears($edition->age_reference_date),
-                ], JSON_THROW_ON_ERROR),
             ]])->all();
             $entry->participants()->sync($sync);
             $entry->refresh()->load('participants');
@@ -213,7 +204,7 @@ class FestivalEntryController extends Controller
 
     private function assertBaseDetailsMutable(FestivalEntry $entry, FestivalEntryWorkflowState $workflowState): void
     {
-        $entry->loadMissing(['steps', 'edition']);
+        $entry->loadMissing(['steps.workflowStep', 'edition']);
         if ($entry->steps->isEmpty()) {
             abort_unless($entry->status === FestivalEntryStatus::Draft, 409);
 

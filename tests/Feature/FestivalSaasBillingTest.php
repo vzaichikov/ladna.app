@@ -93,20 +93,18 @@ class FestivalSaasBillingTest extends TestCase
         $this->assertTrue($account->refresh()->enable_festivals);
     }
 
-    public function test_platform_can_set_zero_price_and_deactivate_used_package_without_changing_snapshot(): void
+    public function test_platform_can_update_a_used_package_without_changing_the_paid_amount(): void
     {
         $admin = User::factory()->create(['system_role' => SystemRole::PlatformAdmin]);
         [$account, $owner, $package] = $this->festivalAccount();
         $plan = $package->plan;
+        $package->forceFill(['name' => 'Original S'])->save();
         $purchase = FestivalEditionPurchase::factory()->create([
             'account_id' => $account->id,
             'subscription_plan_id' => $plan->id,
             'festival_tariff_package_id' => $package->id,
             'created_by_user_id' => $owner->id,
-            'package_name_snapshot' => 'Original S',
             'amount_cents' => 150000,
-            'max_participants' => 100,
-            'max_tickets' => 300,
         ]);
 
         $this->actingAs($admin)->put(route('platform.subscription-plans.update', $plan), [
@@ -137,12 +135,13 @@ class FestivalSaasBillingTest extends TestCase
         $this->assertSame(0, $package->price_cents);
         $this->assertFalse($package->is_active);
         $this->assertSame(120, $package->max_participants);
-        $this->assertSame('Original S', $purchase->refresh()->package_name_snapshot);
+        $purchase->refresh()->load('package');
+        $this->assertSame('Free S', $purchase->package->name);
+        $this->assertSame(120, $purchase->package->max_participants);
         $this->assertSame(150000, $purchase->amount_cents);
-        $this->assertSame(100, $purchase->max_participants);
     }
 
-    public function test_only_owner_can_buy_and_zero_price_grants_snapshot_without_payment(): void
+    public function test_only_owner_can_buy_and_zero_price_grants_current_package_without_payment(): void
     {
         [$account, $owner, $package] = $this->festivalAccount(['price_cents' => 0]);
         $manager = User::factory()->create();
@@ -163,10 +162,10 @@ class FestivalSaasBillingTest extends TestCase
         $this->assertSame(0, $purchase->fiscalReceipts()->count());
 
         $package->update(['name' => 'Changed', 'max_participants' => 999, 'max_tickets' => 999]);
-        $purchase->refresh();
-        $this->assertNotSame($package->name, $purchase->package_name_snapshot);
-        $this->assertSame(100, $purchase->max_participants);
-        $this->assertSame(300, $purchase->max_tickets);
+        $purchase->refresh()->load('package');
+        $this->assertSame('Changed', $purchase->package->name);
+        $this->assertSame(999, $purchase->package->max_participants);
+        $this->assertSame(999, $purchase->package->max_tickets);
     }
 
     public function test_paid_purchase_checkout_returns_to_the_payments_tab(): void
@@ -325,9 +324,10 @@ class FestivalSaasBillingTest extends TestCase
         }
     }
 
-    public function test_admission_inventory_cannot_exceed_the_snapshotted_ticket_limit(): void
+    public function test_admission_inventory_cannot_exceed_the_current_package_ticket_limit(): void
     {
         [$account, $owner, $package] = $this->festivalAccount();
+        $package->forceFill(['max_tickets' => 2])->save();
         $series = FestivalSeries::factory()->for($account)->create();
         $edition = FestivalEdition::factory()->for($series)->create(['account_id' => $account->id]);
         FestivalEditionPurchase::factory()->create([
@@ -336,7 +336,6 @@ class FestivalSaasBillingTest extends TestCase
             'festival_tariff_package_id' => $package->id,
             'created_by_user_id' => $owner->id,
             'festival_edition_id' => $edition->id,
-            'max_tickets' => 2,
         ]);
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), [
@@ -352,6 +351,7 @@ class FestivalSaasBillingTest extends TestCase
     {
         Queue::fake();
         [$account, $owner, $package] = $this->festivalAccount();
+        $package->forceFill(['max_participants' => 1])->save();
         $series = FestivalSeries::factory()->for($account)->create();
         $edition = FestivalEdition::factory()->published()->for($series)->create(['account_id' => $account->id]);
         FestivalEditionPurchase::factory()->create([
@@ -360,7 +360,6 @@ class FestivalSaasBillingTest extends TestCase
             'festival_tariff_package_id' => $package->id,
             'created_by_user_id' => $owner->id,
             'festival_edition_id' => $edition->id,
-            'max_participants' => 1,
         ]);
         $portalUser = FestivalPortalUser::factory()->for($account)->create();
         $category = FestivalCategory::factory()->for($edition)->create([
@@ -524,8 +523,6 @@ class FestivalSaasBillingTest extends TestCase
         $entry->participants()->sync([$participant->id => [
             'account_id' => $account->id,
             'sort_order' => 0,
-            'age_snapshot' => 18,
-            'name_snapshot' => $participant->displayName(),
         ]]);
 
         return $entry;

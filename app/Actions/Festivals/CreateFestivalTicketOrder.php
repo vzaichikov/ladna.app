@@ -34,7 +34,7 @@ class CreateFestivalTicketOrder
         }
 
         return DB::transaction(function () use ($edition, $input, $portalUser): FestivalTicketOrder {
-            $purchase = FestivalEditionPurchase::query()->where('festival_edition_id', $edition->id)->lockForUpdate()->first();
+            $purchase = FestivalEditionPurchase::query()->with('package')->where('festival_edition_id', $edition->id)->lockForUpdate()->first();
             abort_if($purchase?->status === FestivalEditionPurchaseStatus::PaymentReversed, 423, __('app.festival_payment_reversed_readonly'));
             $requested = collect($input['items'])->keyBy('admission_type_id');
             $types = FestivalAdmissionType::query()
@@ -57,8 +57,8 @@ class CreateFestivalTicketOrder
                         ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])
                         ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
                     ->sum('quantity');
-                if ($heldQuantity + $requestedQuantity > $purchase->max_tickets) {
-                    throw ValidationException::withMessages(['items' => __('app.festival_ticket_limit_exceeded', ['limit' => $purchase->max_tickets])]);
+                if ($heldQuantity + $requestedQuantity > $purchase->package->max_tickets) {
+                    throw ValidationException::withMessages(['items' => __('app.festival_ticket_limit_exceeded', ['limit' => $purchase->package->max_tickets])]);
                 }
             }
 

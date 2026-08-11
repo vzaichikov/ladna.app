@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\FestivalParticipantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,6 +26,11 @@ class FestivalParticipant extends Model
         return collect([$this->last_name, $this->first_name, $this->patronymic])->filter()->join(' ');
     }
 
+    public function ageOn(CarbonInterface $date): int
+    {
+        return (int) $this->date_of_birth->diffInYears($date);
+    }
+
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
@@ -42,6 +48,6 @@ class FestivalParticipant extends Model
 
     public function entries(): BelongsToMany
     {
-        return $this->belongsToMany(FestivalEntry::class, 'festival_entry_participant')->withPivot(['account_id', 'sort_order', 'age_snapshot', 'name_snapshot']);
+        return $this->belongsToMany(FestivalEntry::class, 'festival_entry_participant')->withPivot(['account_id', 'sort_order']);
     }
 }

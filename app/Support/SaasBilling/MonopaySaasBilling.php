@@ -203,8 +203,12 @@ class MonopaySaasBilling
      */
     private function merchantPaymentInfo(AccountSubscriptionPayment|FestivalEditionPurchase $payment): array
     {
+        if ($payment instanceof FestivalEditionPurchase) {
+            $payment->load('package');
+        }
+
         $name = $payment instanceof FestivalEditionPurchase
-            ? 'Ladna Festival · '.$payment->package_name_snapshot
+            ? 'Ladna Festival · '.$payment->package->name
             : ($payment->plan?->name ?? 'Ladna SaaS');
 
         return [

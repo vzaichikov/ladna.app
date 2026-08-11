@@ -81,6 +81,43 @@ class FestivalArchitectureBoundaryTest extends TestCase
         $this->assertFileDoesNotExist(app_path('Models/FestivalClassificationOption.php'));
     }
 
+    public function test_festival_runtime_schema_uses_current_relations_without_snapshot_or_revision_columns(): void
+    {
+        $prohibitedColumns = [
+            'snapshot',
+            'version',
+            'lock_version',
+            'revision_due_at',
+        ];
+
+        foreach (Schema::getTableListing() as $table) {
+            if (! str_starts_with($table, 'festival_')) {
+                continue;
+            }
+
+            foreach (Schema::getColumnListing($table) as $column) {
+                $this->assertFalse(
+                    in_array($column, $prohibitedColumns, true) || str_ends_with($column, '_snapshot'),
+                    "{$table}.{$column} restores removed Festival history infrastructure",
+                );
+            }
+        }
+
+        $this->assertTrue(Schema::hasColumn('festival_entry_steps', 'correction_due_at'));
+
+        $stepIndexes = collect(Schema::getIndexes('festival_entry_steps'))->pluck('name');
+        $this->assertNotContains('festival_entry_step_code_unique', $stepIndexes);
+        $this->assertContains('festival_entry_workflow_step_unique', $stepIndexes);
+
+        $stepForeignKey = collect(Schema::getForeignKeys('festival_entry_steps'))
+            ->first(fn (array $foreignKey): bool => $foreignKey['columns'] === ['festival_workflow_step_id']);
+        $packageForeignKey = collect(Schema::getForeignKeys('festival_edition_purchases'))
+            ->first(fn (array $foreignKey): bool => $foreignKey['columns'] === ['festival_tariff_package_id']);
+
+        $this->assertSame('restrict', strtolower((string) $stepForeignKey['on_delete']));
+        $this->assertSame('restrict', strtolower((string) $packageForeignKey['on_delete']));
+    }
+
     public function test_repository_does_not_use_a_root_docs_directory(): void
     {
         $this->assertDirectoryDoesNotExist(base_path('docs'));

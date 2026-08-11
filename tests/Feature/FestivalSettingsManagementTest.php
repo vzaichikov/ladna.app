@@ -128,6 +128,28 @@ class FestivalSettingsManagementTest extends TestCase
         $this->assertTrue($workflow->refresh()->is_active);
     }
 
+    public function test_referenced_workflow_step_can_be_deactivated(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
+        $step = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+        FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $step->id,
+        ]);
+        FestivalChargeDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $step->id,
+        ]);
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.workflow-steps.toggle', [$account, $edition, $workflow, $step]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse($step->refresh()->is_active);
+    }
+
     public function test_direction_codes_are_collision_safe_stable_hidden_and_orderable(): void
     {
         [$account, $edition, $owner] = $this->festival();

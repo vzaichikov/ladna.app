@@ -311,7 +311,7 @@
             @foreach($festivalPurchases as $purchase)
                 <div class="crm-row lg:grid-cols-[minmax(0,1fr)_140px_170px_auto] lg:items-center">
                     <div>
-                        <strong class="text-slate-950">{{ $purchase->tariff_name_snapshot }} · {{ $purchase->package_name_snapshot }}</strong>
+                        <strong class="text-slate-950">{{ $purchase->package->plan->name }} · {{ $purchase->package->name }}</strong>
                         <p class="mt-1 text-sm text-slate-500">{{ $purchase->order_id }}@if($purchase->edition) · {{ $purchase->edition->title }}@endif</p>
                     </div>
                     <span class="font-semibold text-slate-700">{{ $formatMoney($purchase->amount_cents, $purchase->currency) }}</span>

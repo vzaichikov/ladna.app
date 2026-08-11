@@ -11,14 +11,14 @@ class RepriceFestivalResponse
 {
     public function execute(FestivalEntryRequirement $requirement, FestivalSubmission $submission): void
     {
-        $pricing = (array) ($requirement->definition_snapshot['pricing'] ?? []);
-        $mode = $pricing['mode'] ?? 'none';
-        if ($mode === 'none') {
-            return;
-        }
+        DB::transaction(function () use ($requirement, $submission): void {
+            $requirement = FestivalEntryRequirement::query()->with(['definition', 'entry.edition'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
+            $pricing = (array) ($requirement->definition->pricing ?? []);
+            $mode = $pricing['mode'] ?? 'none';
+            if ($mode === 'none') {
+                return;
+            }
 
-        DB::transaction(function () use ($requirement, $submission, $pricing, $mode): void {
-            $requirement = FestivalEntryRequirement::query()->with('entry.edition')->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
             $target = $this->targetAmount($mode, $pricing, $submission->value_json['value'] ?? null);
             $charges = $requirement->entry->charges()->where('festival_entry_requirement_id', $requirement->id)->lockForUpdate()->get();
             $paid = (int) $charges->where('status', FestivalChargeStatus::Paid)->sum('amount_cents');
@@ -37,10 +37,9 @@ class RepriceFestivalResponse
                     'pricing_key' => 'response:'.$submission->id,
                     'code' => 'FCH-'.str()->upper(str()->random(12)),
                     'kind' => 'response_price',
-                    'name' => $requirement->definition_snapshot['name'],
+                    'name' => $requirement->definition->name,
                     'amount_cents' => $target - $paid,
                     'currency' => $requirement->entry->edition->currency,
-                    'definition_snapshot' => ['pricing' => $pricing, 'target_amount_cents' => $target, 'paid_amount_cents' => $paid],
                 ]);
             } elseif ($target < $paid) {
                 $requirement->entry->chargeAdjustments()->firstOrCreate(
@@ -54,7 +53,6 @@ class RepriceFestivalResponse
                         'status' => 'pending',
                         'amount_cents' => $paid - $target,
                         'currency' => $requirement->entry->edition->currency,
-                        'snapshot' => ['pricing' => $pricing, 'target_amount_cents' => $target, 'paid_amount_cents' => $paid],
                     ],
                 );
             }

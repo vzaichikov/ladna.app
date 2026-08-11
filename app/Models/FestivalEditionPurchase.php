@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-#[Fillable(['account_id', 'subscription_plan_id', 'festival_tariff_package_id', 'account_subscription_payment_method_id', 'created_by_user_id', 'festival_edition_id', 'provider', 'status', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'amount_cents', 'currency', 'tariff_name_snapshot', 'package_name_snapshot', 'max_participants', 'max_tickets', 'idempotency_key', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'cancelled_at', 'expired_at', 'reversed_at', 'redeemed_at'])]
+#[Fillable(['account_id', 'subscription_plan_id', 'festival_tariff_package_id', 'account_subscription_payment_method_id', 'created_by_user_id', 'festival_edition_id', 'provider', 'status', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'amount_cents', 'currency', 'idempotency_key', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'cancelled_at', 'expired_at', 'reversed_at', 'redeemed_at'])]
 #[Hidden(['gateway_checkout_payload', 'last_callback_payload'])]
 class FestivalEditionPurchase extends Model
 {
@@ -26,8 +26,6 @@ class FestivalEditionPurchase extends Model
         return [
             'status' => FestivalEditionPurchaseStatus::class,
             'amount_cents' => 'integer',
-            'max_participants' => 'integer',
-            'max_tickets' => 'integer',
             'gateway_checkout_payload' => 'encrypted:array',
             'last_callback_payload' => 'encrypted:array',
             'started_at' => 'datetime',

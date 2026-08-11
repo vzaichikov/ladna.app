@@ -35,7 +35,9 @@ class FestivalWorkspaceController extends Controller
             ->where('festival_edition_id', $festivalEdition->id)
             ->with('category.direction')
             ->withCount([
-                'requirements as blocking_requirements_count' => fn ($query) => $query->where('is_required', true)->whereNotIn('status', [FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Waived->value]),
+                'requirements as blocking_requirements_count' => fn ($query) => $query
+                    ->whereHas('definition', fn ($query) => $query->where('is_required', true))
+                    ->whereNotIn('status', [FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Waived->value]),
                 'charges as blocking_charges_count' => fn ($query) => $query->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value]),
                 'scheduleSlots as performance_slots_count' => fn ($query) => $query->where('type', 'performance'),
             ])
@@ -43,7 +45,7 @@ class FestivalWorkspaceController extends Controller
             ->latest('id');
 
         if ($permissions['registrations']) {
-            $entriesQuery->with(['portalUser', 'participants', 'steps.requirements.definition', 'steps.requirements.submissions', 'requirements.definition', 'requirements.submissions']);
+            $entriesQuery->with(['portalUser', 'participants', 'steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'requirements.definition', 'requirements.participant', 'requirements.submissions']);
         }
 
         if ($permissions['finance']) {

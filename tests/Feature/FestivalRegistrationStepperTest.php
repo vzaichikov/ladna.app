@@ -16,8 +16,10 @@ use App\Enums\StudioPermission;
 use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Models\Account;
 use App\Models\FestivalCategory;
+use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
+use App\Models\FestivalEntryStep;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalRequirementDefinition;
@@ -36,11 +38,11 @@ class FestivalRegistrationStepperTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_response_component_formats_frozen_typed_values_safely(): void
+    public function test_response_component_formats_current_typed_values_safely(): void
     {
         $render = fn (string $inputType, mixed $value, array $options = []): string => Blade::render(
-            '<x-festivals.response-value :snapshot="$snapshot" :value="$value" />',
-            ['snapshot' => ['input_type' => $inputType, 'options' => $options], 'value' => $value],
+            '<x-festivals.response-value :definition="$definition" :value="$value" />',
+            ['definition' => new FestivalRequirementDefinition(['input_type' => $inputType, 'options' => $options]), 'value' => $value],
         );
 
         $this->assertStringContainsString('Short answer', $render('short_text', 'Short answer'));
@@ -81,7 +83,7 @@ class FestivalRegistrationStepperTest extends TestCase
             'allowed_mime_types' => ['image/png'],
         ])->save();
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Review response entry'));
-        $applicationStep = $entry->steps->firstWhere('code', 'application');
+        $applicationStep = $this->step($entry, 'application');
         $urlRequirement = $applicationStep->requirements->firstWhere('festival_requirement_definition_id', $urlDefinition->id);
         $fileRequirement = $applicationStep->requirements->firstWhere('festival_requirement_definition_id', $fileDefinition->id);
 
@@ -123,7 +125,7 @@ class FestivalRegistrationStepperTest extends TestCase
             ], false);
     }
 
-    public function test_four_step_registration_supports_revisions_priced_answers_and_completion(): void
+    public function test_four_step_registration_supports_corrections_priced_answers_and_completion(): void
     {
         Queue::fake();
         [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
@@ -134,10 +136,10 @@ class FestivalRegistrationStepperTest extends TestCase
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
 
         $this->assertCount(4, $entry->steps);
-        $application = $entry->steps->firstWhere('code', 'application');
-        $payment = $entry->steps->firstWhere('code', 'participation_payment');
-        $technical = $entry->steps->firstWhere('code', 'technical_form');
-        $summary = $entry->steps->firstWhere('code', 'summary');
+        $application = $this->step($entry, 'application');
+        $payment = $this->step($entry, 'participation_payment');
+        $technical = $this->step($entry, 'technical_form');
+        $summary = $this->step($entry, 'summary');
         $this->assertSame($applicationDefinition->id, $application->requirements->first()->festival_requirement_definition_id);
         $technicalRequirement = $technical->requirements->firstWhere('festival_requirement_definition_id', $technicalDefinition->id);
 
@@ -160,7 +162,7 @@ class FestivalRegistrationStepperTest extends TestCase
             ->actingAs($reviewer, 'web')->patch(route('dashboard.accounts.festivals.entry-steps.review', [$account, $edition, $entry, $application]), [
                 'decision' => 'request_changes',
                 'comment' => 'Replace the video link.',
-                'revision_due_at' => now()->addDay()->toDateTimeString(),
+                'correction_due_at' => now()->addDay()->toDateTimeString(),
             ])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame(FestivalEntryStepStatus::ChangesRequested, $application->refresh()->status);
 
@@ -191,6 +193,128 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertSame(FestivalEntryStepStatus::Approved, $summary->refresh()->status);
     }
 
+    public function test_existing_progress_keeps_its_workflow_while_new_configuration_initializes_only_new_entries(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $existingEntry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Existing entry'),
+        );
+        $existingStep = $this->step($existingEntry, 'application');
+        $existingStep->forceFill(['status' => FestivalEntryStepStatus::Submitted])->save();
+        $originalWorkflowStepIds = $existingEntry->steps->pluck('festival_workflow_step_id')->sort()->values();
+
+        $lateStep = $workflow->steps()->create([
+            'account_id' => $account->id,
+            'code' => 'late_details',
+            'type' => 'form',
+            'title' => 'Late details',
+            'sort_order' => 35,
+            'review_mode' => 'automatic',
+            'review_effect' => 'none',
+            'is_active' => true,
+        ]);
+        $lateRequirement = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $lateStep->id,
+            'code' => 'late-note',
+            'type' => 'custom_document',
+            'subject_scope' => 'entry',
+            'input_type' => 'short_text',
+            'name' => 'Late note',
+            'is_active' => true,
+        ]);
+        $lateCharge = FestivalChargeDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $lateStep->id,
+            'kind' => 'late_fee',
+            'name' => 'Late fee',
+            'amount_cents' => 1500,
+        ]);
+
+        $existingEntry = app(InitializeFestivalEntryWorkflow::class)->execute($existingEntry->refresh());
+        $this->assertSame($originalWorkflowStepIds->all(), $existingEntry->steps->pluck('festival_workflow_step_id')->sort()->values()->all());
+        $this->assertSame(FestivalEntryStepStatus::Submitted, $existingStep->refresh()->status);
+        $this->assertFalse($existingEntry->requirements()->where('festival_requirement_definition_id', $lateRequirement->id)->exists());
+        $this->assertFalse($existingEntry->charges()->where('festival_charge_definition_id', $lateCharge->id)->exists());
+
+        $newEntry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'New configuration entry'),
+        );
+        $this->assertTrue($newEntry->steps->contains('festival_workflow_step_id', $lateStep->id));
+        $this->assertTrue($newEntry->requirements()->where('festival_requirement_definition_id', $lateRequirement->id)->exists());
+        $this->assertTrue($newEntry->charges()->where('festival_charge_definition_id', $lateCharge->id)->exists());
+
+        $lateStep->forceFill(['is_active' => false])->save();
+        $afterDeactivation = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'After deactivation entry'),
+        );
+        $this->assertFalse($afterDeactivation->steps->contains('festival_workflow_step_id', $lateStep->id));
+        $this->assertFalse($afterDeactivation->requirements()->where('festival_requirement_definition_id', $lateRequirement->id)->exists());
+        $this->assertFalse($afterDeactivation->charges()->where('festival_charge_definition_id', $lateCharge->id)->exists());
+        $this->assertTrue($newEntry->steps()->where('festival_workflow_step_id', $lateStep->id)->exists());
+
+        $replacementWorkflow = app(ProvisionFestivalWorkflow::class)->execute($edition, 'Replacement registration');
+        $category->forceFill(['festival_workflow_id' => $replacementWorkflow->id])->save();
+        $existingEntry = app(InitializeFestivalEntryWorkflow::class)->execute($existingEntry->refresh());
+        $this->assertSame($originalWorkflowStepIds->all(), $existingEntry->steps->pluck('festival_workflow_step_id')->sort()->values()->all());
+
+        $replacementEntry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Replacement workflow entry'),
+        );
+        $this->assertSame(
+            $replacementWorkflow->steps->pluck('id')->sort()->values()->all(),
+            $replacementEntry->steps->pluck('festival_workflow_step_id')->sort()->values()->all(),
+        );
+    }
+
+    public function test_current_workflow_and_requirement_configuration_applies_to_existing_progress(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $definition = $this->requirement($edition, $workflow, 'technical_form', 'helpers', 'integer');
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Current configuration entry'),
+        );
+        $entry->steps()
+            ->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))
+            ->update(['status' => FestivalEntryStepStatus::Approved->value]);
+        $entry->load('steps.workflowStep', 'steps.requirements.definition');
+        $technicalStep = $this->step($entry, 'technical_form');
+        $requirement = $technicalStep->requirements->firstWhere('festival_requirement_definition_id', $definition->id);
+        $workflowStep = $technicalStep->workflowStep;
+
+        $workflowStep->forceFill(['title' => 'Current technical details'])->save();
+        $definition->forceFill([
+            'name' => 'Current helper package',
+            'input_type' => 'single_select',
+            'options' => [
+                ['value' => 'basic', 'label' => 'Basic'],
+                ['value' => 'extended', 'label' => 'Extended'],
+            ],
+            'pricing' => [
+                'mode' => 'option_prices',
+                'prices' => ['basic' => 2500, 'extended' => 6000],
+            ],
+        ])->save();
+
+        try {
+            app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 'removed-option');
+            $this->fail('The current requirement options must reject removed values.');
+        } catch (ValidationException) {
+            $this->assertCount(0, $requirement->submissions()->get());
+        }
+
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 'extended');
+
+        $this->assertSame('Current technical details', $technicalStep->refresh()->workflowStep->title);
+        $this->assertSame('Current helper package', $requirement->refresh()->definition->name);
+        $this->assertDatabaseHas('festival_charges', [
+            'festival_entry_id' => $entry->id,
+            'festival_entry_requirement_id' => $requirement->id,
+            'name' => 'Current helper package',
+            'amount_cents' => 6000,
+        ]);
+    }
+
     public function test_per_participant_entry_limit_is_enforced_atomically_on_first_step_submission(): void
     {
         Queue::fake();
@@ -199,12 +323,12 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->requirement($edition, $workflow, 'application', 'selection-video', 'url');
 
         $first = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'First entry'));
-        $firstStep = $first->steps->firstWhere('code', 'application');
+        $firstStep = $this->step($first, 'application');
         app(StoreFestivalResponse::class)->execute($firstStep->requirements->first(), $portalUser, 'https://video.example/one');
         app(SubmitFestivalEntryStep::class)->execute($first, $firstStep);
 
         $second = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Second entry'));
-        $secondStep = $second->steps->firstWhere('code', 'application');
+        $secondStep = $this->step($second, 'application');
         app(StoreFestivalResponse::class)->execute($secondStep->requirements->first(), $portalUser, 'https://video.example/two');
 
         try {
@@ -223,9 +347,11 @@ class FestivalRegistrationStepperTest extends TestCase
         [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
         $this->requirement($edition, $workflow, 'technical_form', 'helpers', 'integer', ['mode' => 'per_unit', 'unit_amount_cents' => 1000]);
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Priced entry'));
-        $entry->steps()->whereIn('code', ['application', 'participation_payment'])->update(['status' => FestivalEntryStepStatus::Approved->value]);
-        $entry->load('steps.requirements');
-        $technical = $entry->steps->firstWhere('code', 'technical_form');
+        $entry->steps()
+            ->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))
+            ->update(['status' => FestivalEntryStepStatus::Approved->value]);
+        $entry->load('steps.workflowStep', 'steps.requirements.definition');
+        $technical = $this->step($entry, 'technical_form');
         $requirement = $technical->requirements->first();
 
         $first = app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 3);
@@ -283,10 +409,13 @@ class FestivalRegistrationStepperTest extends TestCase
         $entry->participants()->sync([$participant->id => [
             'account_id' => $account->id,
             'sort_order' => 0,
-            'age_snapshot' => $participant->date_of_birth->diffInYears($edition->age_reference_date),
-            'name_snapshot' => $participant->displayName(),
         ]]);
 
         return $entry;
+    }
+
+    private function step(FestivalEntry $entry, string $code): FestivalEntryStep
+    {
+        return $entry->steps->first(fn (FestivalEntryStep $step): bool => $step->workflowStep->code === $code);
     }
 }

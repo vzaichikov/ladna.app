@@ -1,11 +1,11 @@
 @props([
-    'snapshot' => [],
+    'definition',
     'value' => null,
 ])
 
 @php
-    $inputType = \App\Enums\FestivalRequirementInputType::tryFrom((string) ($snapshot['input_type'] ?? ''));
-    $optionLabels = collect($snapshot['options'] ?? [])
+    $inputType = $definition->input_type;
+    $optionLabels = collect($definition->options ?? [])
         ->filter(fn (mixed $option): bool => is_array($option) && array_key_exists('value', $option) && array_key_exists('label', $option))
         ->mapWithKeys(fn (array $option): array => [(string) $option['value'] => (string) $option['label']]);
     $isEmpty = $value === null || $value === '' || $value === [];

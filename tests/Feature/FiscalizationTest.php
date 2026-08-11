@@ -205,7 +205,6 @@ class FiscalizationTest extends TestCase
             'festival_tariff_package_id' => $package->id,
             'created_by_user_id' => $owner->id,
             'status' => 'payment_pending',
-            'package_name_snapshot' => 'M',
             'amount_cents' => 300000,
             'currency' => 'UAH',
             'paid_at' => null,
@@ -222,7 +221,7 @@ class FiscalizationTest extends TestCase
         $this->assertSame(IntegrationScope::Platform, $receipt->scope_type);
         $this->assertSame('FN-FESTIVAL-1', $receipt->fiscal_number);
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
-            && data_get($request->data(), 'goods.0.good.name') === 'Ladna Festival · M'
+            && data_get($request->data(), 'goods.0.good.name') === 'Ladna Festival · '.$package->name
             && data_get($request->data(), 'delivery.email') === 'festival-receipt-owner@example.com');
     }
 

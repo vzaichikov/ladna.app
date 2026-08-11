@@ -12,7 +12,7 @@
         <header>
             <p class="text-sm font-semibold text-brand-700">{{ $edition->title }}</p>
             <h1 class="mt-1 text-4xl font-semibold">{{ $sheet->entry->entry_name }}</h1>
-            <p class="mt-2 text-slate-600">{{ $sheet->entry->participants->pluck('pivot.name_snapshot')->join(', ') }}</p>
+            <p class="mt-2 text-slate-600">{{ $sheet->entry->participants->map->displayName()->join(', ') }}</p>
         </header>
 
         @if (session('status'))

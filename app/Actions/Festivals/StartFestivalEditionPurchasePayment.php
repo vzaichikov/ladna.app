@@ -38,7 +38,7 @@ class StartFestivalEditionPurchasePayment
         }
 
         try {
-            $purchase->refresh()->loadMissing('paymentMethod');
+            $purchase->refresh()->load(['package', 'paymentMethod']);
             if ($purchase->gateway_invoice_id) {
                 return $purchase->checkoutUrl();
             }

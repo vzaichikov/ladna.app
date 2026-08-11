@@ -163,9 +163,13 @@ class MonopayTokenizedBilling
      */
     private function merchantPaymentInfo(AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase $payment): array
     {
+        if ($payment instanceof FestivalEditionPurchase) {
+            $payment->load('package');
+        }
+
         $name = match (true) {
             $payment instanceof SmsTopUpPayment => 'Ladna SMS credit',
-            $payment instanceof FestivalEditionPurchase => 'Ladna Festival · '.$payment->package_name_snapshot,
+            $payment instanceof FestivalEditionPurchase => 'Ladna Festival · '.$payment->package->name,
             default => $payment->plan_name_snapshot ?: $payment->plan?->name ?: 'Ladna SaaS',
         };
 

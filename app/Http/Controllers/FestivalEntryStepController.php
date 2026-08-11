@@ -61,7 +61,7 @@ class FestivalEntryStepController extends Controller
     {
         abort_unless($festivalEdition->account_id === $account->id && $festivalEntry->festival_edition_id === $festivalEdition->id && $festivalEntryStep->festival_entry_id === $festivalEntry->id, 404);
         $data = $request->validated();
-        $review->execute($festivalEntryStep, $request->user(), $data['decision'], $data['comment'] ?? null, $data['revision_due_at'] ?? null, $data['requirement_notes'] ?? []);
+        $review->execute($festivalEntryStep, $request->user(), $data['decision'], $data['comment'] ?? null, $data['correction_due_at'] ?? null, $data['requirement_notes'] ?? []);
 
         return back()->with('status', __('app.festival_step_reviewed'));
     }
@@ -69,7 +69,7 @@ class FestivalEntryStepController extends Controller
     /** @return array<int, string> */
     private function entryRelations(): array
     {
-        return ['edition', 'category.direction', 'participants', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section'];
+        return ['edition', 'category.direction', 'participants', 'steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section'];
     }
 
     /** @return array{Account, FestivalPortalUser} */

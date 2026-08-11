@@ -32,10 +32,10 @@ class SubmitFestivalEntryStep
     public function execute(FestivalEntry $entry, FestivalEntryStep $step): FestivalEntryStep
     {
         return DB::transaction(function () use ($entry, $step): FestivalEntryStep {
-            $purchase = FestivalEditionPurchase::query()->where('festival_edition_id', $entry->festival_edition_id)->lockForUpdate()->first();
+            $purchase = FestivalEditionPurchase::query()->with('package')->where('festival_edition_id', $entry->festival_edition_id)->lockForUpdate()->first();
             abort_if($purchase?->status === FestivalEditionPurchaseStatus::PaymentReversed, 423, __('app.festival_payment_reversed_readonly'));
 
-            $entry = FestivalEntry::query()->with(['edition', 'participants', 'portalUser', 'steps'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $entry = FestivalEntry::query()->with(['edition', 'participants', 'portalUser', 'steps.workflowStep'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
             $category = FestivalCategory::query()
                 ->whereKey($entry->festival_category_id)
                 ->where('account_id', $entry->account_id)
@@ -43,30 +43,30 @@ class SubmitFestivalEntryStep
                 ->lockForUpdate()
                 ->firstOrFail();
             $entry->setRelation('category', $category);
-            $step = FestivalEntryStep::query()->with(['requirements.submissions', 'charges'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
+            $step = FestivalEntryStep::query()->with(['workflowStep', 'requirements.definition', 'requirements.submissions', 'charges'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
             $this->workflowState->assertMutable($entry, $step);
             $this->assertRequirementsComplete($step);
             $this->assertChargesPaid($step);
 
-            if ($step->type === FestivalWorkflowStepType::Application) {
+            if ($step->workflowStep->type === FestivalWorkflowStepType::Application) {
                 $this->submitApplication($entry, $purchase);
             }
 
-            $automatic = $step->review_mode === FestivalWorkflowReviewMode::Automatic;
+            $automatic = $step->workflowStep->review_mode === FestivalWorkflowReviewMode::Automatic;
             $step->forceFill([
                 'status' => $automatic ? FestivalEntryStepStatus::Approved : FestivalEntryStepStatus::Submitted,
                 'submitted_at' => now(),
                 'reviewed_at' => $automatic ? now() : null,
                 'reviewed_by' => null,
                 'review_notes' => null,
-                'revision_due_at' => null,
+                'correction_due_at' => null,
             ])->save();
 
             if ($automatic) {
                 $step->requirements()->where('status', FestivalRequirementStatus::Submitted->value)->update(['status' => FestivalRequirementStatus::Accepted->value, 'reviewed_at' => now()]);
             }
 
-            if ($step->type === FestivalWorkflowStepType::Summary && $automatic) {
+            if ($step->workflowStep->type === FestivalWorkflowStepType::Summary && $automatic) {
                 $entry->forceFill([
                     'status' => FestivalEntryStatus::Accepted,
                     'accepted_at' => now(),
@@ -77,7 +77,7 @@ class SubmitFestivalEntryStep
                 $entry->forceFill(['status' => FestivalEntryStatus::UnderReview])->save();
             }
 
-            $this->activity->record($step, 'entry_step.submitted', $entry->edition, $entry->portalUser, ['step' => $step->code]);
+            $this->activity->record($step, 'entry_step.submitted', $entry->edition, $entry->portalUser, ['step' => $step->workflowStep->code]);
 
             return $step->refresh();
         }, 3);
@@ -86,8 +86,8 @@ class SubmitFestivalEntryStep
     private function assertRequirementsComplete(FestivalEntryStep $step): void
     {
         $missing = $step->requirements
-            ->where('is_required', true)
-            ->contains(fn ($requirement): bool => ! in_array($requirement->status, [FestivalRequirementStatus::Submitted, FestivalRequirementStatus::Accepted, FestivalRequirementStatus::Waived], true));
+            ->contains(fn ($requirement): bool => $requirement->definition->is_required
+                && ! in_array($requirement->status, [FestivalRequirementStatus::Submitted, FestivalRequirementStatus::Accepted, FestivalRequirementStatus::Waived], true));
 
         if ($missing) {
             throw ValidationException::withMessages(['step' => __('app.festival_step_requirements_incomplete')]);
@@ -113,7 +113,7 @@ class SubmitFestivalEntryStep
 
         $entry->forceFill([
             'status' => FestivalEntryStatus::Submitted,
-            'qualification_status' => $entry->steps->firstWhere('review_effect', FestivalWorkflowReviewEffect::Qualification) ? FestivalQualificationStatus::Pending : FestivalQualificationStatus::NotRequired,
+            'qualification_status' => $entry->steps->contains(fn (FestivalEntryStep $step): bool => $step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification) ? FestivalQualificationStatus::Pending : FestivalQualificationStatus::NotRequired,
             'submitted_at' => $entry->submitted_at ?? now(),
         ])->save();
 
@@ -158,8 +158,8 @@ class SubmitFestivalEntryStep
             ->merge($participantIds)
             ->unique();
 
-        if ($distinctIds->count() > $purchase->max_participants) {
-            throw ValidationException::withMessages(['participants' => __('app.festival_participant_limit_exceeded', ['limit' => $purchase->max_participants])]);
+        if ($distinctIds->count() > $purchase->package->max_participants) {
+            throw ValidationException::withMessages(['participants' => __('app.festival_participant_limit_exceeded', ['limit' => $purchase->package->max_participants])]);
         }
     }
 }

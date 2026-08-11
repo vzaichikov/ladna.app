@@ -8,14 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'festival_entry_id', 'festival_entry_step_id', 'festival_charge_definition_id', 'festival_entry_requirement_id', 'festival_submission_id', 'pricing_key', 'code', 'kind', 'name', 'status', 'amount_cents', 'currency', 'definition_snapshot', 'due_at', 'paid_at', 'cancelled_at', 'refunded_at', 'approved_by', 'notes'])]
+#[Fillable(['account_id', 'festival_entry_id', 'festival_entry_step_id', 'festival_charge_definition_id', 'festival_entry_requirement_id', 'festival_submission_id', 'pricing_key', 'code', 'kind', 'name', 'status', 'amount_cents', 'currency', 'due_at', 'paid_at', 'cancelled_at', 'refunded_at', 'approved_by', 'notes'])]
 class FestivalCharge extends Model
 {
     protected $attributes = ['status' => 'pending'];
 
     protected function casts(): array
     {
-        return ['status' => FestivalChargeStatus::class, 'amount_cents' => 'integer', 'definition_snapshot' => 'array', 'due_at' => 'datetime', 'paid_at' => 'datetime', 'cancelled_at' => 'datetime', 'refunded_at' => 'datetime'];
+        return ['status' => FestivalChargeStatus::class, 'amount_cents' => 'integer', 'due_at' => 'datetime', 'paid_at' => 'datetime', 'cancelled_at' => 'datetime', 'refunded_at' => 'datetime'];
     }
 
     public function entry(): BelongsTo

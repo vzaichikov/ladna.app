@@ -83,9 +83,9 @@
                             <section>
                                 <h3 class="font-semibold text-slate-950">{{ __('app.festival_application_review') }}</h3>
                                 @if($currentStep)
-                                    <div class="mt-3 rounded-xl border border-stone-200 bg-white p-4"><p class="text-xs font-semibold text-brand-700">{{ __('app.festival_current_step') }}</p><strong class="mt-1 block">{{ $currentStep->title }}</strong><span class="mt-1 block text-xs text-slate-500">{{ __('app.festival_step_status_'.$currentStep->status->value) }}</span>@if($currentStep->review_notes)<p class="mt-2 whitespace-pre-line text-sm text-slate-600">{{ $currentStep->review_notes }}</p>@endif</div>
+                                    <div class="mt-3 rounded-xl border border-stone-200 bg-white p-4"><p class="text-xs font-semibold text-brand-700">{{ __('app.festival_current_step') }}</p><strong class="mt-1 block">{{ $currentStep->workflowStep->title }}</strong><span class="mt-1 block text-xs text-slate-500">{{ __('app.festival_step_status_'.$currentStep->status->value) }}</span>@if($currentStep->review_notes)<p class="mt-2 whitespace-pre-line text-sm text-slate-600">{{ $currentStep->review_notes }}</p>@endif</div>
                                     @if($currentStep->status === \App\Enums\FestivalEntryStepStatus::Submitted)
-                                        <form method="POST" action="{{ route('dashboard.accounts.festivals.entry-steps.review', [$account, $edition, $entry, $currentStep]) }}" class="mt-3 grid gap-3 sm:grid-cols-2">@csrf @method('PATCH')<label><span class="crm-label">{{ __('app.status') }}</span><select name="decision" class="crm-field"><option value="approve">{{ __('app.festival_review_approve') }}</option><option value="request_changes">{{ __('app.festival_review_request_changes') }}</option><option value="reject_entry">{{ __('app.festival_review_reject_entry') }}</option></select></label><label><span class="crm-label">{{ __('app.festival_revision_due_at') }}</span><input type="datetime-local" name="revision_due_at" class="crm-field"></label><label class="sm:col-span-2"><span class="crm-label">{{ __('app.festival_review_comment') }}</span><textarea name="comment" rows="3" class="crm-field"></textarea></label><div class="sm:col-span-2"><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button></div></form>
+                                        <form method="POST" action="{{ route('dashboard.accounts.festivals.entry-steps.review', [$account, $edition, $entry, $currentStep]) }}" class="mt-3 grid gap-3 sm:grid-cols-2">@csrf @method('PATCH')<label><span class="crm-label">{{ __('app.status') }}</span><select name="decision" class="crm-field"><option value="approve">{{ __('app.festival_review_approve') }}</option><option value="request_changes">{{ __('app.festival_review_request_changes') }}</option><option value="reject_entry">{{ __('app.festival_review_reject_entry') }}</option></select></label><label><span class="crm-label">{{ __('app.festival_correction_due_at') }}</span><input type="datetime-local" name="correction_due_at" class="crm-field"></label><label class="sm:col-span-2"><span class="crm-label">{{ __('app.festival_review_comment') }}</span><textarea name="comment" rows="3" class="crm-field"></textarea></label><div class="sm:col-span-2"><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button></div></form>
                                     @endif
                                 @else
                                     <p class="mt-3 rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{{ __('app.festival_registration_complete') }}</p>
@@ -100,7 +100,7 @@
                                         <div class="rounded-lg border border-stone-200 bg-white p-3">
                                             <div class="flex flex-wrap items-center justify-between gap-2">
                                                 <div>
-                                                    <strong class="text-sm">{{ $requirement->definition_snapshot['name'] ?? $requirement->definition?->name }}</strong>
+                                                    <strong class="text-sm">{{ $requirement->definition->name }}</strong>
                                                     <span class="ml-2 text-xs text-slate-500">{{ __('app.festival_requirement_status_'.$requirement->status->value) }}</span>
                                                 </div>
                                                 @if ($latestSubmission?->path)
@@ -108,7 +108,7 @@
                                                 @endif
                                             </div>
                                             @if ($latestSubmission && ! $latestSubmission->path)
-                                                <x-festivals.response-value :snapshot="$requirement->definition_snapshot" :value="$latestSubmission->value_json['value'] ?? null" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm text-slate-700" />
+                                                <x-festivals.response-value :definition="$requirement->definition" :value="$latestSubmission->value_json['value'] ?? null" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm text-slate-700" />
                                             @endif
                                             <form method="POST" action="{{ route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]) }}" class="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                                                 @csrf

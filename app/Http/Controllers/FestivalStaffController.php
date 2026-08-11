@@ -94,7 +94,7 @@ class FestivalStaffController extends Controller
                 : collect();
             $festivalPurchases = FestivalEditionPurchase::query()
                 ->whereBelongsTo($account)
-                ->with(['edition' => fn ($query) => $query->whereBelongsTo($account)])
+                ->with(['package.plan', 'edition' => fn ($query) => $query->whereBelongsTo($account)])
                 ->latest()
                 ->paginate(10, ['*'], 'purchases_page')
                 ->withQueryString();
@@ -290,9 +290,9 @@ class FestivalStaffController extends Controller
             'sales_starts_at' => ['nullable', 'date'], 'sales_ends_at' => ['nullable', 'date', 'after:sales_starts_at'],
         ]);
         DB::transaction(function () use ($festivalEdition, $account, $data): void {
-            $purchase = FestivalEditionPurchase::query()->where('festival_edition_id', $festivalEdition->id)->lockForUpdate()->first();
-            if ($purchase && $festivalEdition->admissionTypes()->sum('inventory') + (int) $data['inventory'] > $purchase->max_tickets) {
-                throw ValidationException::withMessages(['inventory' => __('app.festival_ticket_inventory_limit_exceeded', ['limit' => $purchase->max_tickets])]);
+            $purchase = FestivalEditionPurchase::query()->with('package')->where('festival_edition_id', $festivalEdition->id)->lockForUpdate()->first();
+            if ($purchase && $festivalEdition->admissionTypes()->sum('inventory') + (int) $data['inventory'] > $purchase->package->max_tickets) {
+                throw ValidationException::withMessages(['inventory' => __('app.festival_ticket_inventory_limit_exceeded', ['limit' => $purchase->package->max_tickets])]);
             }
             $festivalEdition->admissionTypes()->create(['account_id' => $account->id, ...$data]);
         }, 3);

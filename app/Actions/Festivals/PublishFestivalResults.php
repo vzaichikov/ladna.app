@@ -60,7 +60,6 @@ class PublishFestivalResults
                     'medal' => match ($rank) {
                         1 => 'gold', 2 => 'silver', 3 => 'bronze', default => null
                     },
-                    'details_snapshot' => ['judge_total' => $row['judge_total'], 'penalties' => $row['penalties'], 'score_sheet_ids' => $entry->scoreSheets->pluck('id')->all()],
                     'published_at' => now(),
                 ]);
                 $this->notifications->queueForEntry($entry, FestivalNotificationType::ResultsPublished, [

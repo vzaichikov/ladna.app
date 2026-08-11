@@ -8,14 +8,12 @@ use App\Http\Requests\FestivalMoveRequest;
 use App\Http\Requests\FestivalWorkflowStepRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
-use App\Models\FestivalEntryStep;
 use App\Models\FestivalWorkflow;
 use App\Models\FestivalWorkflowStep;
 use App\Support\Festivals\FestivalSettingsOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class FestivalWorkflowStepController extends Controller
@@ -100,14 +98,6 @@ class FestivalWorkflowStepController extends Controller
     {
         $this->authorizeManager($request, $account);
         $this->assertStep($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep);
-        $referenced = $festivalWorkflowStep->requirementDefinitions()->exists()
-            || $festivalWorkflowStep->chargeDefinitions()->exists()
-            || FestivalEntryStep::query()->where('festival_workflow_step_id', $festivalWorkflowStep->id)->exists();
-
-        if ($festivalWorkflowStep->is_active && $referenced) {
-            throw ValidationException::withMessages(['step' => __('app.festival_workflow_step_dependency_block')]);
-        }
-
         $festivalWorkflowStep->update(['is_active' => ! $festivalWorkflowStep->is_active]);
 
         return back()->with('status', __('app.festival_status_saved'));

@@ -142,8 +142,8 @@
                     @foreach($festivalPurchases as $purchase)
                         <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                             <div class="min-w-0">
-                                <strong class="text-slate-950">{{ $purchase->tariff_name_snapshot }} · {{ $purchase->package_name_snapshot }}</strong>
-                                <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_package_limits', ['participants' => $purchase->max_participants, 'tickets' => $purchase->max_tickets]) }} · {{ \App\Support\MoneyFormatter::format($purchase->amount_cents, $purchase->currency) }}</p>
+                                <strong class="text-slate-950">{{ $purchase->package->plan->name }} · {{ $purchase->package->name }}</strong>
+                                <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_package_limits', ['participants' => $purchase->package->max_participants, 'tickets' => $purchase->package->max_tickets]) }} · {{ \App\Support\MoneyFormatter::format($purchase->amount_cents, $purchase->currency) }}</p>
                                 @if ($purchase->edition)
                                     <p class="mt-2 break-words text-sm text-slate-500">
                                         {{ __('app.festival_linked_edition') }}:

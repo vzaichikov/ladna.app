@@ -20,7 +20,7 @@ class FestivalEntryStepReviewRequest extends FormRequest
         return [
             'decision' => ['required', Rule::in(['approve', 'request_changes', 'reject_entry'])],
             'comment' => ['nullable', 'required_if:decision,request_changes,reject_entry', 'string', 'max:5000'],
-            'revision_due_at' => ['nullable', 'required_if:decision,request_changes', 'date', 'after:now'],
+            'correction_due_at' => ['nullable', 'required_if:decision,request_changes', 'date', 'after:now'],
             'requirement_notes' => ['sometimes', 'array'],
             'requirement_notes.*' => ['nullable', 'string', 'max:2000'],
         ];

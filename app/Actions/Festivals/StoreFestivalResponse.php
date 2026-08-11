@@ -21,14 +21,14 @@ class StoreFestivalResponse
 
     public function execute(FestivalEntryRequirement $requirement, FestivalPortalUser $portalUser, mixed $value): FestivalSubmission
     {
-        $requirement->loadMissing(['entry.edition', 'entry.steps', 'entryStep']);
+        $requirement->load(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep']);
         abort_unless($requirement->account_id === $portalUser->account_id && $requirement->entry->festival_portal_user_id === $portalUser->id, 404);
-        abort_unless(FestivalRequirementInputType::from((string) $requirement->definition_snapshot['input_type']) !== FestivalRequirementInputType::File, 422);
+        abort_unless($requirement->definition->input_type !== FestivalRequirementInputType::File, 422);
         $this->workflowState->assertMutable($requirement->entry, $requirement->entryStep);
         $value = $this->validatedValue($requirement, $value);
 
         $submission = DB::transaction(function () use ($requirement, $portalUser, $value): FestivalSubmission {
-            $locked = FestivalEntryRequirement::query()->with(['entry.edition', 'entry.steps', 'entryStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
+            $locked = FestivalEntryRequirement::query()->with(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
             $this->workflowState->assertMutable($locked->entry, $locked->entryStep);
             $submission = $locked->submissions()->updateOrCreate([], [
                 'account_id' => $portalUser->account_id,
@@ -59,8 +59,8 @@ class StoreFestivalResponse
 
     private function validatedValue(FestivalEntryRequirement $requirement, mixed $value): mixed
     {
-        $type = FestivalRequirementInputType::from((string) $requirement->definition_snapshot['input_type']);
-        $options = collect($requirement->definition_snapshot['options'] ?? [])->pluck('value')->map(fn ($option): string => (string) $option)->all();
+        $type = $requirement->definition->input_type;
+        $options = collect($requirement->definition->options ?? [])->pluck('value')->map(fn ($option): string => (string) $option)->all();
         $rules = match ($type) {
             FestivalRequirementInputType::ShortText => ['nullable', 'string', 'max:255'],
             FestivalRequirementInputType::LongText => ['nullable', 'string', 'max:10000'],
@@ -71,7 +71,7 @@ class StoreFestivalResponse
             FestivalRequirementInputType::MultiSelect => ['nullable', 'array'],
             FestivalRequirementInputType::File => [],
         };
-        if ($requirement->is_required) {
+        if ($requirement->definition->is_required) {
             $rules[0] = 'required';
         }
         $validated = Validator::make(['value' => $value], ['value' => $rules])->validate();

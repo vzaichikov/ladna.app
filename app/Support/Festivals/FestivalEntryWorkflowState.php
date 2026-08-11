@@ -14,7 +14,7 @@ class FestivalEntryWorkflowState
      */
     public function forEntry(FestivalEntry $entry): Collection
     {
-        $entry->loadMissing('steps');
+        $entry->loadMissing('steps.workflowStep');
         $priorApproved = true;
         $states = collect();
 
@@ -23,11 +23,11 @@ class FestivalEntryWorkflowState
 
             if (! $priorApproved) {
                 $lockedReason = __('app.festival_step_locked_previous');
-            } elseif ($step->opens_at?->isFuture()) {
-                $lockedReason = __('app.festival_step_locked_until', ['date' => $step->opens_at->timezone($entry->edition->timezone)->format('d.m.Y H:i')]);
-            } elseif ($step->status === FestivalEntryStepStatus::ChangesRequested && $step->revision_due_at?->isPast()) {
-                $lockedReason = __('app.festival_step_revision_expired');
-            } elseif ($step->due_at?->isPast() && $step->status === FestivalEntryStepStatus::Draft) {
+            } elseif ($step->workflowStep->opens_at?->isFuture()) {
+                $lockedReason = __('app.festival_step_locked_until', ['date' => $step->workflowStep->opens_at->timezone($entry->edition->timezone)->format('d.m.Y H:i')]);
+            } elseif ($step->status === FestivalEntryStepStatus::ChangesRequested && $step->correction_due_at?->isPast()) {
+                $lockedReason = __('app.festival_step_correction_expired');
+            } elseif ($step->workflowStep->due_at?->isPast() && $step->status === FestivalEntryStepStatus::Draft) {
                 $lockedReason = __('app.festival_step_deadline_expired');
             } elseif ($step->status === FestivalEntryStepStatus::Rejected) {
                 $lockedReason = __('app.festival_step_rejected');
