@@ -14,11 +14,7 @@
     data-check-out-reason="{{ __('app.event_check_out_reason_prompt') }}"
 >
     <header>
-        <a href="{{ route('dashboard.accounts.events.index', $account) }}" class="crm-page-kicker inline-flex items-center gap-1 transition hover:text-brand-700">
-            <span aria-hidden="true">←</span>
-            {{ __('app.events') }}
-        </a>
-        <h1 class="crm-page-title mt-2">{{ $event->title }}</h1>
+        <h1 class="crm-page-title">{{ $event->title }}</h1>
         <p class="crm-page-copy">{{ __('app.event_scanner_online_only') }}</p>
     </header>
 

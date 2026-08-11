@@ -4,18 +4,13 @@
 
 @section('content')
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-            <p class="crm-page-kicker">{{ __('app.festival_tab_tickets_entrance') }}</p>
-            <h2 class="mt-1 text-2xl font-semibold text-slate-950">{{ __('app.festival_tickets_title') }}</h2>
-            <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_tickets_copy') }}</p>
-        </div>
-        @if ($workspacePermissions['ticket_check_in'])
-            <x-ui.button :href="route('dashboard.accounts.festivals.scanner', [$account, $edition])">
-                <x-ui.icon name="qr-code" class="h-4 w-4" /> {{ __('app.festival_open_scanner') }}
-            </x-ui.button>
-        @endif
-    </div>
+    <x-ui.page-header :title="__('app.festival_tickets_title')" :copy="__('app.festival_tickets_copy')">
+        <x-slot:actions>
+            @if ($workspacePermissions['ticket_check_in'])
+                <x-ui.button :href="route('dashboard.accounts.festivals.scanner', [$account, $edition])"><x-ui.icon name="qr-code" class="h-4 w-4" /> {{ __('app.festival_open_scanner') }}</x-ui.button>
+            @endif
+        </x-slot:actions>
+    </x-ui.page-header>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @if ($workspacePermissions['finance'])

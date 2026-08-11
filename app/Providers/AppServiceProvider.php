@@ -14,6 +14,7 @@ use App\Support\Mail\LadnaTransactionalTransport;
 use App\Support\Mail\MailDeliveryTransportResolver;
 use App\Support\SystemAppearance;
 use App\Support\WorkingLocationContext;
+use App\View\Composers\AppBreadcrumbComposer;
 use App\View\Composers\FestivalWorkspaceComposer;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -105,6 +106,7 @@ class AppServiceProvider extends ServiceProvider
                 ->with('workingLocation', $workingLocationContext->location($account))
                 ->with('workingLocationValue', $workingLocationContext->value($account));
         });
+        View::composer('layouts.app', AppBreadcrumbComposer::class);
         View::composer('layouts.app', FestivalWorkspaceComposer::class);
 
         RateLimiter::for('login', function (Request $request): Limit {

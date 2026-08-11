@@ -4,7 +4,6 @@
 
 @section('content')
     <div>
-        <div class="crm-page-kicker">{{ __('app.platform') }}</div>
         <h1 class="crm-page-title">{{ __('app.edit') }} {{ $account->name }}</h1>
     </div>
 

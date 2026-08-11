@@ -208,6 +208,11 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalJudgeAssignment::class);
     }
 
+    public function festivalJudgeAssignments(): HasMany
+    {
+        return $this->judgeAssignments();
+    }
+
     public function festivalTickets(): HasMany
     {
         return $this->hasMany(FestivalTicket::class);

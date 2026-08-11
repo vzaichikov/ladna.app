@@ -4,14 +4,13 @@
 
 @section('content')
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
-    <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-            <p class="crm-page-kicker">{{ __('app.festival_tab_settings') }}</p>
-            <h1 class="crm-page-title mt-2">{{ __('app.festival_settings_overview') }}</h1>
-            <p class="crm-page-copy">{{ __('app.festival_settings_overview_copy') }}</p>
-        </div>
-        @if($permissions['manage'])<x-ui.button :href="route('dashboard.accounts.festivals.edit', [$account, $edition])" variant="secondary">{{ __('app.festival_edit_edition_details') }}</x-ui.button>@endif
-    </header>
+    <x-ui.page-header :title="__('app.festival_settings_overview')" :copy="__('app.festival_settings_overview_copy')">
+        <x-slot:actions>
+            @if ($permissions['manage'])
+                <x-ui.button :href="route('dashboard.accounts.festivals.edit', [$account, $edition])" variant="secondary">{{ __('app.festival_edit_edition_details') }}</x-ui.button>
+            @endif
+        </x-slot:actions>
+    </x-ui.page-header>
 
     <x-festivals.settings-help :title="__('app.festival_settings_structure_title')" :description="__('app.festival_settings_structure_copy')" :dependencies="[__('app.festival_taxonomy_directions'), __('app.festival_categories'), __('app.festival_registration_workflows'), __('app.festival_registration_fields'), __('app.festival_fees')]" />
 

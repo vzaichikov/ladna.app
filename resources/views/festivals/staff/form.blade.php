@@ -5,11 +5,7 @@
 @section('content')
 @php($timezone = old('timezone', $edition->timezone ?: ($account->timezone ?: config('app.timezone'))))
 <div class="mx-auto max-w-5xl space-y-6">
-    <header>
-        <a href="{{ route('dashboard.accounts.festivals.index', $account) }}" class="crm-page-kicker">← {{ __('app.festivals') }}</a>
-        <h1 class="crm-page-title mt-2">{{ $edition->exists ? $edition->title : __('app.festival_edition_create') }}</h1>
-        <p class="crm-page-copy">{{ __('app.festival_form_intro') }}</p>
-    </header>
+    <x-ui.page-header :title="$edition->exists ? $edition->title : __('app.festival_edition_create')" :copy="__('app.festival_form_intro')" />
 
     @if ($errors->any())
         <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">

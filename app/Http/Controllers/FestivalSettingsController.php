@@ -31,57 +31,16 @@ class FestivalSettingsController extends Controller
         return view('festivals.staff.settings.overview', compact('account', 'festivalEdition', 'permissions', 'counts') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
     }
 
-    public function directions(Request $request, Account $account, FestivalEdition $festivalEdition): View
-    {
-        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
-        $directions = $festivalEdition->directions()->withCount('categories')->get();
-
-        return view('festivals.staff.settings.directions', compact('account', 'directions', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
-    }
-
-    public function categories(Request $request, Account $account, FestivalEdition $festivalEdition): View
-    {
-        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
-        $festivalEdition->load([
-            'categories' => fn ($query) => $query->with(['direction', 'registrationWorkflow'])->withCount('entries'),
-        ]);
-
-        return view('festivals.staff.settings.categories', compact('account', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
-    }
-
-    public function workflows(Request $request, Account $account, FestivalEdition $festivalEdition): View
-    {
-        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
-        $festivalEdition->load(['workflows' => fn ($query) => $query->with(['steps' => fn ($steps) => $steps->withCount(['requirementDefinitions', 'chargeDefinitions'])])->withCount('categories')]);
-
-        return view('festivals.staff.settings.workflows', compact('account', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
-    }
-
-    public function requirements(Request $request, Account $account, FestivalEdition $festivalEdition): View
-    {
-        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
-        $festivalEdition->load(['categories', 'workflows.steps']);
-        $requirements = FestivalRequirementDefinition::query()->where('festival_edition_id', $festivalEdition->id)->with(['category', 'workflowStep.workflow'])->orderBy('sort_order')->orderBy('id')->get();
-
-        return view('festivals.staff.settings.requirements', compact('account', 'requirements', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
-    }
-
-    public function fees(Request $request, Account $account, FestivalEdition $festivalEdition): View
-    {
-        $permissions = $this->permissions($request, $account, $festivalEdition);
-        abort_unless($permissions['finance'], 403);
-        $festivalEdition->load(['categories', 'workflows.steps']);
-        $fees = FestivalChargeDefinition::query()->where('festival_edition_id', $festivalEdition->id)->with(['category', 'workflowStep.workflow'])->orderBy('sort_order')->orderBy('id')->get();
-
-        return view('festivals.staff.settings.fees', compact('account', 'fees', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
-    }
-
     public function content(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
         $permissions = $this->managerPermissions($request, $account, $festivalEdition);
-        $festivalEdition->load(['sections', 'documents', 'media']);
+        $counts = [
+            'sections' => $festivalEdition->sections()->count(),
+            'documents' => $festivalEdition->documents()->count(),
+            'media' => $festivalEdition->media()->count(),
+        ];
 
-        return view('festivals.staff.settings.content', compact('account', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
+        return view('festivals.staff.settings.content', compact('account', 'permissions', 'counts') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
     }
 
     /** @return array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} */

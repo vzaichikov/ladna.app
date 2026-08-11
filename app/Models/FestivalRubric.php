@@ -41,4 +41,9 @@ class FestivalRubric extends Model
     {
         return $this->hasMany(FestivalRubricSection::class)->orderBy('sort_order')->orderBy('id');
     }
+
+    public function scoreSheets(): HasMany
+    {
+        return $this->hasMany(FestivalScoreSheet::class);
+    }
 }

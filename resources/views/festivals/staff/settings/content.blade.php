@@ -4,43 +4,31 @@
 
 @section('content')
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
-    <header><p class="crm-page-kicker">{{ __('app.festival_tab_settings') }}</p><h1 class="crm-page-title mt-2">{{ __('app.festival_content_media') }}</h1><p class="crm-page-copy">{{ __('app.festival_content_page_copy') }}</p></header>
-    <x-festivals.settings-help :title="__('app.festival_content_help_title')" :description="__('app.festival_content_help_copy')" :dependencies="[__('app.festival_content_sections'), __('app.festival_public_page')]" />
+    <x-ui.page-header :title="__('app.festival_content_media')" :copy="__('app.festival_content_page_copy')" />
 
-    <section class="space-y-4">
-        <div><h2 class="text-xl font-semibold">{{ __('app.festival_content_sections') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_content_sections_copy') }}</p></div>
-        @foreach($edition->sections as $section)
-            @php($sectionEditId = 'festival-content-section-edit-'.$section->id)
-            <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
-                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><h3 class="font-semibold">{{ $section->title }}</h3><p class="mt-1 text-xs text-slate-500">{{ __('app.festival_visibility_'.$section->visibility) }}</p></div><x-festivals.settings-actions :active="$section->is_active" :toggle-route="route('dashboard.accounts.festivals.content.toggle', [$account, $edition, $section])" :move-route="route('dashboard.accounts.festivals.content.move', [$account, $edition, $section])" :edit-target="$sectionEditId" /></div>
-                <form id="{{ $sectionEditId }}" method="POST" action="{{ route('dashboard.accounts.festivals.content.update', [$account, $edition, $section]) }}" class="mt-4 hidden gap-3 rounded-xl bg-stone-50 p-4 sm:grid-cols-2">@csrf @method('PUT')<input name="title" value="{{ $section->title }}" required class="crm-field" aria-label="{{ __('app.title') }}"><select name="visibility" class="crm-field">@foreach(['public', 'portal', 'staff'] as $visibility)<option value="{{ $visibility }}" @selected($section->visibility === $visibility)>{{ __('app.festival_visibility_'.$visibility) }}</option>@endforeach</select><input type="hidden" name="is_active" value="{{ $section->is_active ? 1 : 0 }}"><textarea name="body_html" rows="5" class="crm-field sm:col-span-2" aria-label="{{ __('app.content') }}">{{ $section->body_html }}</textarea><div class="sm:col-span-2"><x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" />{{ __('app.save') }}</x-ui.button></div></form>
-            </article>
-        @endforeach
-        <details class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm"><summary class="cursor-pointer text-lg font-semibold">{{ __('app.festival_add_content_section') }}</summary><form method="POST" action="{{ route('dashboard.accounts.festivals.content.store', [$account, $edition]) }}" class="mt-4 grid gap-3 sm:grid-cols-2">@csrf<input name="title" required placeholder="{{ __('app.title') }}" class="crm-field"><select name="visibility" class="crm-field">@foreach(['public', 'portal', 'staff'] as $visibility)<option value="{{ $visibility }}">{{ __('app.festival_visibility_'.$visibility) }}</option>@endforeach</select><textarea name="body_html" rows="5" placeholder="{{ __('app.content') }}" class="crm-field sm:col-span-2"></textarea><div class="sm:col-span-2"><x-ui.button type="submit">{{ __('app.add') }}</x-ui.button></div></form></details>
-    </section>
+    <x-festivals.settings-help
+        :title="__('app.festival_content_help_title')"
+        :description="__('app.festival_content_help_copy')"
+        :dependencies="[__('app.festival_content_sections'), __('app.festival_documents'), __('app.festival_media'), __('app.festival_public_page')]"
+    />
 
-    <section class="space-y-4">
-        <div><h2 class="text-xl font-semibold">{{ __('app.festival_documents') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_documents_crud_copy') }}</p></div>
-        @foreach($edition->documents as $document)
-            @php($documentEditId = 'festival-document-edit-'.$document->id)
-            <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
-                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><h3 class="font-semibold">{{ $document->title }}</h3><p class="mt-1 text-xs text-slate-500">{{ __('app.festival_document_kind_'.$document->kind) }} · {{ __('app.festival_visibility_'.$document->visibility) }} · {{ $document->original_name }}</p></div><x-festivals.settings-actions :active="$document->is_active" :toggle-route="route('dashboard.accounts.festivals.documents.toggle', [$account, $edition, $document])" :move-route="route('dashboard.accounts.festivals.documents.move', [$account, $edition, $document])" :edit-target="$documentEditId" /></div>
-                <form id="{{ $documentEditId }}" method="POST" enctype="multipart/form-data" action="{{ route('dashboard.accounts.festivals.documents.update', [$account, $edition, $document]) }}" class="mt-4 hidden gap-3 rounded-xl bg-stone-50 p-4 sm:grid-cols-2 lg:grid-cols-4">@csrf @method('PUT')<input name="title" value="{{ $document->title }}" required class="crm-field" aria-label="{{ __('app.title') }}"><select name="kind" class="crm-field">@foreach(['rules', 'schedule', 'guide', 'document'] as $kind)<option value="{{ $kind }}" @selected($document->kind === $kind)>{{ __('app.festival_document_kind_'.$kind) }}</option>@endforeach</select><select name="visibility" class="crm-field">@foreach(['public', 'portal', 'staff'] as $visibility)<option value="{{ $visibility }}" @selected($document->visibility === $visibility)>{{ __('app.festival_visibility_'.$visibility) }}</option>@endforeach</select><input type="file" name="file" class="crm-field"><input type="hidden" name="is_active" value="{{ $document->is_active ? 1 : 0 }}"><div class="lg:col-span-4"><x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" />{{ __('app.save') }}</x-ui.button></div></form>
-            </article>
+    @php($cards = [
+        ['sections', 'festival_content_sections', 'festival_content_sections_copy', 'file-text'],
+        ['documents', 'festival_documents', 'festival_documents_crud_copy', 'files'],
+        ['media', 'festival_media', 'festival_media_crud_copy', 'images'],
+    ])
+    <div class="grid gap-4 md:grid-cols-3">
+        @foreach ($cards as [$page, $label, $copy, $icon])
+            <a href="{{ route('dashboard.accounts.festivals.settings.content.'.$page, [$account, $edition]) }}" class="group rounded-xl border border-stone-200 bg-white p-5 shadow-crm transition hover:-translate-y-0.5 hover:border-brand-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
+                <div class="flex items-start justify-between gap-4">
+                    <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-crm-100 text-brand-700"><x-ui.icon :name="$icon" class="h-5 w-5" /></span>
+                    <span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{{ $counts[$page] }}</span>
+                </div>
+                <h2 class="mt-4 text-lg font-semibold text-slate-950">{{ __('app.'.$label) }}</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600">{{ __('app.'.$copy) }}</p>
+                <span class="mt-4 inline-flex text-sm font-semibold text-brand-700 group-hover:text-brand-800">{{ __('app.open') }} →</span>
+            </a>
         @endforeach
-        <details class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm"><summary class="cursor-pointer text-lg font-semibold">{{ __('app.festival_add_document') }}</summary><form method="POST" enctype="multipart/form-data" action="{{ route('dashboard.accounts.festivals.documents.store', [$account, $edition]) }}" class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">@csrf<input name="title" required placeholder="{{ __('app.title') }}" class="crm-field"><select name="kind" class="crm-field">@foreach(['rules', 'schedule', 'guide', 'document'] as $kind)<option value="{{ $kind }}">{{ __('app.festival_document_kind_'.$kind) }}</option>@endforeach</select><select name="visibility" class="crm-field">@foreach(['public', 'portal', 'staff'] as $visibility)<option value="{{ $visibility }}">{{ __('app.festival_visibility_'.$visibility) }}</option>@endforeach</select><input type="file" name="file" required class="crm-field"><div class="lg:col-span-4"><x-ui.button type="submit">{{ __('app.add') }}</x-ui.button></div></form></details>
-    </section>
-
-    <section class="space-y-4">
-        <div><h2 class="text-xl font-semibold">{{ __('app.festival_media') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_media_crud_copy') }}</p></div>
-        @foreach($edition->media as $media)
-            @php($mediaEditId = 'festival-media-edit-'.$media->id)
-            <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
-                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><h3 class="font-semibold">{{ __('app.festival_media_kind_'.$media->kind) }}@if($media->is_cover) · {{ __('app.festival_cover') }}@endif</h3><a href="{{ $media->external_url }}" class="mt-1 block break-all text-xs text-brand-700" rel="noopener noreferrer">{{ $media->external_url }}</a></div><x-festivals.settings-actions :active="$media->is_active" :toggle-route="route('dashboard.accounts.festivals.media.toggle', [$account, $edition, $media])" :move-route="route('dashboard.accounts.festivals.media.move', [$account, $edition, $media])" :edit-target="$mediaEditId" /></div>
-                <form id="{{ $mediaEditId }}" method="POST" action="{{ route('dashboard.accounts.festivals.media.update', [$account, $edition, $media]) }}" class="mt-4 hidden gap-3 rounded-xl bg-stone-50 p-4 sm:grid-cols-2">@csrf @method('PUT')<select name="kind" class="crm-field"><option value="image" @selected($media->kind === 'image')>{{ __('app.festival_media_kind_image') }}</option><option value="video" @selected($media->kind === 'video')>{{ __('app.festival_media_kind_video') }}</option></select><input type="url" name="external_url" value="{{ $media->external_url }}" required class="crm-field"><input name="alt_text" value="{{ $media->alt_text }}" placeholder="{{ __('app.festival_alt_text') }}" class="crm-field"><input name="caption" value="{{ $media->caption }}" placeholder="{{ __('app.caption') }}" class="crm-field"><input type="hidden" name="is_active" value="{{ $media->is_active ? 1 : 0 }}"><input type="hidden" name="is_cover" value="0"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_cover" value="1" @checked($media->is_cover)>{{ __('app.festival_cover') }}</label><div class="sm:col-span-2"><x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" />{{ __('app.save') }}</x-ui.button></div></form>
-            </article>
-        @endforeach
-        <details class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm"><summary class="cursor-pointer text-lg font-semibold">{{ __('app.festival_add_media') }}</summary><form method="POST" action="{{ route('dashboard.accounts.festivals.media.store', [$account, $edition]) }}" class="mt-4 grid gap-3 sm:grid-cols-2">@csrf<select name="kind" class="crm-field"><option value="image">{{ __('app.festival_media_kind_image') }}</option><option value="video">{{ __('app.festival_media_kind_video') }}</option></select><input type="url" name="external_url" required placeholder="https://" class="crm-field"><input name="alt_text" placeholder="{{ __('app.festival_alt_text') }}" class="crm-field"><input name="caption" placeholder="{{ __('app.caption') }}" class="crm-field"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_cover" value="1">{{ __('app.festival_cover') }}</label><div class="sm:col-span-2"><x-ui.button type="submit">{{ __('app.add') }}</x-ui.button></div></form></details>
-    </section>
+    </div>
 </x-festivals.staff.workspace>
 @endsection

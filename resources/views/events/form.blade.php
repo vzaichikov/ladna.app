@@ -15,11 +15,7 @@
 <div class="mx-auto max-w-6xl space-y-6">
     <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-            <a href="{{ route('dashboard.accounts.events.index', $account) }}" class="crm-page-kicker inline-flex items-center gap-1 transition hover:text-brand-700">
-                <span aria-hidden="true">←</span>
-                {{ __('app.events') }}
-            </a>
-            <h1 class="crm-page-title mt-2">{{ $event->exists ? $event->title : __('app.event_create') }}</h1>
+            <h1 class="crm-page-title">{{ $event->exists ? $event->title : __('app.event_create') }}</h1>
             <p class="crm-page-copy">{{ __('app.event_form_intro') }}</p>
         </div>
         @if ($event->exists)

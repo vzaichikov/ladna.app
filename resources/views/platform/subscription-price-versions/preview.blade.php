@@ -6,7 +6,6 @@
     @php($formatMoney = fn (int $cents): string => \App\Support\MoneyFormatter::format($cents, $priceVersion->currency))
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <div class="crm-page-kicker">{{ $plan->name }}</div>
             <h1 class="crm-page-title">{{ __('app.price_version_number', ['version' => $priceVersion->version]) }}</h1>
             <p class="crm-page-copy">{{ __('app.price_version_preview_copy') }}</p>
         </div>

@@ -13,15 +13,23 @@ use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\Event;
 use App\Models\FestivalCategory;
+use App\Models\FestivalChargeDefinition;
+use App\Models\FestivalContentSection;
+use App\Models\FestivalDirection;
+use App\Models\FestivalDocument;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
+use App\Models\FestivalMedia;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalRubric;
 use App\Models\FestivalScoreSheet;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTariffPackage;
+use App\Models\FestivalWorkflow;
+use App\Models\FestivalWorkflowStep;
 use App\Models\Location;
 use App\Models\Room;
 use App\Models\SalaryModel;
@@ -59,7 +67,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(124, $classifiedRouteNames);
+        $this->assertCount(153, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -95,11 +103,7 @@ class MultiLocationPageSmokeTest extends TestCase
             }
 
             foreach ($this->parameterizedAccountWideHtmlRoutes() as $routeName => $fixtureKey) {
-                $parameters = match ($routeName) {
-                    'dashboard.accounts.festivals.score-sheets.edit' => [$account, $fixtures['festival_edition'], $fixtures['festival_score_sheet']],
-                    'dashboard.accounts.festivals.categories.edit' => [$account, $fixtures['festival_edition'], $fixtures['festival_category']],
-                    default => [$account, $fixtures[$fixtureKey]],
-                };
+                $parameters = $this->accountWideRouteParameters($routeName, $fixtureKey, $fixtures);
                 $this->assertPageRenders(route($routeName, $parameters), $routeName, false);
             }
         }
@@ -172,7 +176,45 @@ class MultiLocationPageSmokeTest extends TestCase
             'created_by_user_id' => $owner->id,
         ]);
         $festivalEdition = FestivalEdition::factory()->for($festivalSeries)->create(['account_id' => $account->id]);
-        $festivalCategory = FestivalCategory::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
+        $festivalDirection = FestivalDirection::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
+        $festivalWorkflow = FestivalWorkflow::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
+        $festivalWorkflowStep = FestivalWorkflowStep::factory()->for($festivalWorkflow, 'workflow')->create(['account_id' => $account->id]);
+        $festivalCategory = FestivalCategory::factory()->for($festivalEdition)->for($festivalDirection)->create([
+            'account_id' => $account->id,
+            'festival_workflow_id' => $festivalWorkflow->id,
+        ]);
+        $festivalRequirement = FestivalRequirementDefinition::factory()->for($festivalEdition)->create([
+            'account_id' => $account->id,
+            'festival_category_id' => $festivalCategory->id,
+            'festival_workflow_step_id' => $festivalWorkflowStep->id,
+        ]);
+        $festivalFee = FestivalChargeDefinition::factory()->for($festivalEdition)->create([
+            'account_id' => $account->id,
+            'festival_category_id' => $festivalCategory->id,
+            'festival_workflow_step_id' => $festivalWorkflowStep->id,
+        ]);
+        $festivalContentSection = FestivalContentSection::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $festivalEdition->id,
+            'key' => 'smoke-section',
+            'title' => 'Smoke section',
+        ]);
+        $festivalDocument = FestivalDocument::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $festivalEdition->id,
+            'title' => 'Smoke document',
+            'path' => 'festivals/smoke.pdf',
+            'original_name' => 'smoke.pdf',
+            'mime_type' => 'application/pdf',
+            'size_bytes' => 10,
+        ]);
+        $festivalMedia = FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $festivalEdition->id,
+            'kind' => 'image',
+            'external_url' => 'https://example.test/festival-smoke.jpg',
+            'caption' => 'Smoke media',
+        ]);
         $festivalPortalUser = FestivalPortalUser::factory()->for($account)->create();
         $festivalEntry = FestivalEntry::factory()->for($festivalCategory)->create([
             'account_id' => $account->id,
@@ -210,9 +252,19 @@ class MultiLocationPageSmokeTest extends TestCase
             'event' => $event,
             'festival_edition' => $festivalEdition,
             'festival_category' => $festivalCategory,
+            'festival_content_section' => $festivalContentSection,
+            'festival_direction' => $festivalDirection,
+            'festival_document' => $festivalDocument,
             'festival_purchase' => $festivalPurchase,
+            'festival_fee' => $festivalFee,
+            'festival_media' => $festivalMedia,
+            'festival_requirement' => $festivalRequirement,
             'festival_series' => $festivalSeries,
+            'festival_judge_assignment' => $festivalJudgeAssignment,
+            'festival_rubric' => $festivalRubric,
             'festival_score_sheet' => $festivalScoreSheet,
+            'festival_workflow' => $festivalWorkflow,
+            'festival_workflow_step' => $festivalWorkflowStep,
             'group_class_type' => $groupClassType,
             'internal_class_type' => $internalClassType,
             'location' => $location,
@@ -244,6 +296,7 @@ class MultiLocationPageSmokeTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode(), $routeName);
         $this->assertStringContainsString('text/html', (string) $response->headers->get('Content-Type'), $routeName);
+        $this->assertStringContainsString('data-app-breadcrumbs', $response->getContent(), $routeName);
 
         if ($expectsLocationSelector) {
             $this->assertStringContainsString('name="location_context"', $response->getContent(), $routeName);
@@ -251,6 +304,29 @@ class MultiLocationPageSmokeTest extends TestCase
             $this->assertStringNotContainsString('name="location_context"', $response->getContent(), $routeName);
             $this->assertStringNotContainsString(__('app.account_wide'), $response->getContent(), $routeName);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $fixtures
+     * @return list<mixed>
+     */
+    private function accountWideRouteParameters(string $routeName, string $fixtureKey, array $fixtures): array
+    {
+        if ($routeName === 'dashboard.accounts.festivals.series.edit') {
+            return [$fixtures['account'], $fixtures['festival_series']];
+        }
+
+        $parameters = [$fixtures['account'], $fixtures['festival_edition']];
+
+        if ($routeName === 'dashboard.accounts.festivals.workflow-steps.edit') {
+            return [...$parameters, $fixtures['festival_workflow'], $fixtures['festival_workflow_step']];
+        }
+
+        if ($fixtureKey !== 'festival_edition') {
+            $parameters[] = $fixtures[$fixtureKey];
+        }
+
+        return $parameters;
     }
 
     /**
@@ -374,15 +450,42 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.applications' => 'festival_edition',
             'dashboard.accounts.festivals.communication' => 'festival_edition',
             'dashboard.accounts.festivals.edit' => 'festival_edition',
-            'dashboard.accounts.festivals.judging.index' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.judges.index' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.judges.create' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.judges.edit' => 'festival_judge_assignment',
+            'dashboard.accounts.festivals.judging.criteria.index' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.criteria.create' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.criteria.edit' => 'festival_rubric',
+            'dashboard.accounts.festivals.judging.score-sheets.index' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.score-sheets.edit' => 'festival_score_sheet',
+            'dashboard.accounts.festivals.judging.results.index' => 'festival_edition',
             'dashboard.accounts.festivals.program' => 'festival_edition',
             'dashboard.accounts.festivals.scanner' => 'festival_edition',
-            'dashboard.accounts.festivals.score-sheets.edit' => 'festival_score_sheet',
             'dashboard.accounts.festivals.settings' => 'festival_edition',
             'dashboard.accounts.festivals.settings.categories' => 'festival_edition',
             'dashboard.accounts.festivals.categories.create' => 'festival_edition',
             'dashboard.accounts.festivals.categories.edit' => 'festival_category',
+            'dashboard.accounts.festivals.directions.create' => 'festival_edition',
+            'dashboard.accounts.festivals.directions.edit' => 'festival_direction',
+            'dashboard.accounts.festivals.workflows.create' => 'festival_edition',
+            'dashboard.accounts.festivals.workflows.edit' => 'festival_workflow',
+            'dashboard.accounts.festivals.workflow-steps.index' => 'festival_workflow',
+            'dashboard.accounts.festivals.workflow-steps.create' => 'festival_workflow',
+            'dashboard.accounts.festivals.workflow-steps.edit' => 'festival_workflow_step',
+            'dashboard.accounts.festivals.requirements.create' => 'festival_edition',
+            'dashboard.accounts.festivals.requirements.edit' => 'festival_requirement',
+            'dashboard.accounts.festivals.charge-definitions.create' => 'festival_edition',
+            'dashboard.accounts.festivals.charge-definitions.edit' => 'festival_fee',
             'dashboard.accounts.festivals.settings.content' => 'festival_edition',
+            'dashboard.accounts.festivals.settings.content.sections' => 'festival_edition',
+            'dashboard.accounts.festivals.content.create' => 'festival_edition',
+            'dashboard.accounts.festivals.content.edit' => 'festival_content_section',
+            'dashboard.accounts.festivals.settings.content.documents' => 'festival_edition',
+            'dashboard.accounts.festivals.documents.create' => 'festival_edition',
+            'dashboard.accounts.festivals.documents.edit' => 'festival_document',
+            'dashboard.accounts.festivals.settings.content.media' => 'festival_edition',
+            'dashboard.accounts.festivals.media.create' => 'festival_edition',
+            'dashboard.accounts.festivals.media.edit' => 'festival_media',
             'dashboard.accounts.festivals.settings.directions' => 'festival_edition',
             'dashboard.accounts.festivals.settings.fees' => 'festival_edition',
             'dashboard.accounts.festivals.settings.requirements' => 'festival_edition',
@@ -427,6 +530,8 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.class-types.edit',
             'dashboard.accounts.class-types.index',
             'dashboard.accounts.edit',
+            'dashboard.accounts.festivals.judging.index',
+            'dashboard.accounts.festivals.score-sheets.edit',
             'dashboard.accounts.studio-settings.index',
         ];
     }

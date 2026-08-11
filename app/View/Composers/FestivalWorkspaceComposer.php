@@ -51,7 +51,10 @@ class FestivalWorkspaceComposer
             [
                 'label' => __('app.festival_workspace_group_judges'),
                 'items' => [
-                    $this->item('judging', 'dashboard.accounts.festivals.judging.index', 'festival_tab_judging_results', 'trophy', $permissions['judging'], $active, $account, $edition),
+                    $this->item('judging-judges', 'dashboard.accounts.festivals.judging.judges.index', 'festival_judges', 'users', $permissions['manage'], $active, $account, $edition),
+                    $this->item('judging-criteria', 'dashboard.accounts.festivals.judging.criteria.index', 'festival_criteria', 'list-checks', $permissions['manage'], $active, $account, $edition),
+                    $this->item('judging-score-sheets', 'dashboard.accounts.festivals.judging.score-sheets.index', 'festival_score_sheets', 'clipboard-check', $permissions['judging'], $active, $account, $edition),
+                    $this->item('judging-results', 'dashboard.accounts.festivals.judging.results.index', 'festival_results', 'trophy', $permissions['manage'], $active, $account, $edition),
                 ],
             ],
             [
@@ -89,15 +92,18 @@ class FestivalWorkspaceComposer
         return match (true) {
             request()->routeIs('dashboard.accounts.festivals.applications') => 'applications',
             request()->routeIs('dashboard.accounts.festivals.program') => 'program',
-            request()->routeIs('dashboard.accounts.festivals.judging.*', 'dashboard.accounts.festivals.score-sheets.*') => 'judging',
+            request()->routeIs('dashboard.accounts.festivals.judging.judges.*') => 'judging-judges',
+            request()->routeIs('dashboard.accounts.festivals.judging.criteria.*') => 'judging-criteria',
+            request()->routeIs('dashboard.accounts.festivals.judging.score-sheets.*', 'dashboard.accounts.festivals.score-sheets.*') => 'judging-score-sheets',
+            request()->routeIs('dashboard.accounts.festivals.judging.results.*') => 'judging-results',
             request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.scanner*') => 'tickets',
             request()->routeIs('dashboard.accounts.festivals.communication') => 'communication',
-            request()->routeIs('dashboard.accounts.festivals.settings.directions') => 'settings-directions',
+            request()->routeIs('dashboard.accounts.festivals.settings.directions', 'dashboard.accounts.festivals.directions.*') => 'settings-directions',
             request()->routeIs('dashboard.accounts.festivals.settings.categories', 'dashboard.accounts.festivals.categories.*') => 'settings-categories',
-            request()->routeIs('dashboard.accounts.festivals.settings.workflows') => 'settings-workflows',
-            request()->routeIs('dashboard.accounts.festivals.settings.requirements') => 'settings-requirements',
-            request()->routeIs('dashboard.accounts.festivals.settings.fees') => 'settings-fees',
-            request()->routeIs('dashboard.accounts.festivals.settings.content') => 'settings-content',
+            request()->routeIs('dashboard.accounts.festivals.settings.workflows', 'dashboard.accounts.festivals.workflows.*', 'dashboard.accounts.festivals.workflow-steps.*') => 'settings-workflows',
+            request()->routeIs('dashboard.accounts.festivals.settings.requirements', 'dashboard.accounts.festivals.requirements.*') => 'settings-requirements',
+            request()->routeIs('dashboard.accounts.festivals.settings.fees', 'dashboard.accounts.festivals.charge-definitions.*') => 'settings-fees',
+            request()->routeIs('dashboard.accounts.festivals.settings.content', 'dashboard.accounts.festivals.settings.content.*', 'dashboard.accounts.festivals.content.*', 'dashboard.accounts.festivals.documents.*', 'dashboard.accounts.festivals.media.*') => 'settings-content',
             request()->routeIs('dashboard.accounts.festivals.settings', 'dashboard.accounts.festivals.edit') => 'settings',
             default => 'overview',
         };

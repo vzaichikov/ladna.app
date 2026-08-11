@@ -16,12 +16,6 @@
             <h1 class="crm-page-title">{{ __('app.trainer_private_timeframes') }}</h1>
             <p class="crm-page-copy">{{ $trainer->name }} · {{ $account->name }}</p>
         </div>
-        @if ($adminMode)
-            <x-ui.button :href="route('dashboard.accounts.trainers.edit', [$account, $trainer])" variant="secondary">
-                <x-ui.icon name="arrow-left" class="h-4 w-4" />
-                {{ __('app.back') }}
-            </x-ui.button>
-        @endif
     </div>
 
     <div class="mt-4 flex flex-wrap gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">

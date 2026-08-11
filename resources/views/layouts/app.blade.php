@@ -738,23 +738,11 @@
 
                 <header class="sticky top-0 z-20 border-b border-stone-200/80 bg-white/90 backdrop-blur">
                     <div class="flex min-h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-                        <div class="flex items-center gap-3">
+                        <div class="flex min-w-0 flex-1 items-center gap-3">
                             <button type="button" data-sidebar-open class="rounded-lg border border-stone-200 bg-white p-2 text-slate-700 shadow-xs transition hover:bg-brand-50 lg:hidden">
                                 <x-ui.icon name="menu" class="h-5 w-5" />
                             </button>
-                            <div class="hidden items-center gap-2 text-sm font-semibold text-slate-500 sm:flex">
-                                @if ($isFestivalWorkspace)
-                                    <span>{{ __('app.festivals') }}</span>
-                                    <x-ui.icon name="chevron-right" class="h-4 w-4 text-slate-300" />
-                                    <span class="text-slate-950">{{ $festivalWorkspaceEdition->title }}</span>
-                                @elseif (request()->routeIs('dashboard.accounts.*') && $activeAccount)
-                                    <span>{{ __('app.workspace') }}</span>
-                                    <x-ui.icon name="chevron-right" class="h-4 w-4 text-slate-300" />
-                                    <span class="text-slate-950">{{ $activeAccount->name }}</span>
-                                @else
-                                    <span>{{ __('app.app_name') }}</span>
-                                @endif
-                            </div>
+                            <x-ui.breadcrumbs :items="$breadcrumbs" class="flex-1" />
                         </div>
 
                         <div class="flex min-w-0 items-center gap-2 sm:gap-3">

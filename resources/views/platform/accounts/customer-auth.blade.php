@@ -5,7 +5,6 @@
 @section('content')
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <div class="crm-page-kicker">{{ __('app.platform') }}</div>
             <h1 class="crm-page-title">{{ __('app.studio_capabilities_settings') }}</h1>
             <p class="crm-page-copy">{{ $account->name }} · {{ __('app.studio_capabilities_settings_copy') }}</p>
         </div>

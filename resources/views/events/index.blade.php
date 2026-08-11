@@ -6,7 +6,6 @@
 <div class="space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <p class="crm-page-kicker">{{ $account->name }}</p>
             <h1 class="crm-page-title mt-1">{{ __('app.events') }}</h1>
             <p class="crm-page-copy">{{ __('app.events_intro') }}</p>
         </div>

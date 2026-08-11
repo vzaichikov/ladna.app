@@ -4,11 +4,7 @@
 
 @section('content')
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
-    <div>
-        <p class="crm-page-kicker">{{ __('app.festival_tab_communication') }}</p>
-        <h2 class="mt-1 text-2xl font-semibold text-slate-950">{{ __('app.festival_communication_title') }}</h2>
-        <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_communication_copy') }}</p>
-    </div>
+    <x-ui.page-header :title="__('app.festival_communication_title')" :copy="__('app.festival_communication_copy')" />
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">

@@ -5,7 +5,6 @@
 @section('content')
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-            <div class="crm-page-kicker">{{ __('app.platform') }}</div>
             <h1 class="crm-page-title">{{ __('app.subscription_plans') }}</h1>
         </div>
         <x-ui.button :href="route('platform.subscription-plans.create')">

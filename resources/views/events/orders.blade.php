@@ -5,11 +5,7 @@
 @section('content')
 <div class="space-y-6">
     <header>
-        <a href="{{ route('dashboard.accounts.events.edit', [$account, $event]) }}" class="crm-page-kicker inline-flex items-center gap-1 transition hover:text-brand-700">
-            <span aria-hidden="true">←</span>
-            {{ $event->title }}
-        </a>
-        <h1 class="crm-page-title mt-2">{{ __('app.event_orders') }}</h1>
+        <h1 class="crm-page-title">{{ __('app.event_orders') }}</h1>
         <p class="crm-page-copy">{{ __('app.event_orders_help') }}</p>
     </header>
     @if ($urgentRefundsCount > 0)

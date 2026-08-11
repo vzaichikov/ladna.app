@@ -3,7 +3,6 @@
 @section('title', __('app.create_subscription_plan').' - '.__('app.platform'))
 
 @section('content')
-    <div class="crm-page-kicker">{{ __('app.platform') }}</div>
     <h1 class="crm-page-title">{{ __('app.create_subscription_plan') }}</h1>
 
     <form method="POST" action="{{ route('platform.subscription-plans.store') }}" class="mt-6 max-w-2xl space-y-5 rounded-xl border border-stone-200 bg-white p-6 shadow-crm">

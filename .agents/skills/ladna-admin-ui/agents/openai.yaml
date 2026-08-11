@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ladna Admin UI"
+  short_description: "Standard CRUD pages and clickable breadcrumbs"
+  default_prompt: "Use $ladna-admin-ui to build a consistent Ladna CRUD page with semantic breadcrumbs."

@@ -7,15 +7,58 @@ use App\Http\Requests\FestivalMoveRequest;
 use App\Models\Account;
 use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\Model;
+use App\Support\Festivals\FestivalSettingsOrder;
+use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class FestivalDirectionController extends Controller
 {
+    public function __construct(
+        private readonly FestivalWorkspaceAccess $workspaceAccess,
+        private readonly FestivalSettingsOrder $settingsOrder,
+    ) {}
+
+    public function index(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
+        $filters = [
+            'q' => $request->string('q')->trim()->toString(),
+            'status' => in_array($request->query('status'), ['active', 'inactive'], true) ? $request->query('status') : '',
+        ];
+
+        $directions = $festivalEdition->directions()
+            ->withCount('categories')
+            ->when($filters['q'] !== '', fn ($query) => $query->where('name', 'like', '%'.$filters['q'].'%'))
+            ->when($filters['status'] !== '', fn ($query) => $query->where('is_active', $filters['status'] === 'active'))
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('festivals.staff.settings.directions', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'directions' => $directions,
+            'filters' => $filters,
+            'hasFilters' => $filters['q'] !== '' || $filters['status'] !== '',
+            'workspacePermissions' => $permissions,
+        ]);
+    }
+
+    public function create(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
+
+        return view('festivals.staff.settings.direction-form', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'direction' => new FestivalDirection(['is_active' => true]),
+            'workspacePermissions' => $permissions,
+        ]);
+    }
+
     public function store(FestivalDirectionRequest $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
@@ -24,10 +67,23 @@ class FestivalDirectionController extends Controller
             'account_id' => $account->id,
             ...$data,
             'is_active' => $data['is_active'] ?? true,
-            'sort_order' => ((int) $festivalEdition->directions()->max('sort_order')) + 10,
+            'sort_order' => $this->settingsOrder->next($festivalEdition->directions()),
         ]);
 
-        return back()->with('status', __('app.festival_direction_saved'));
+        return $this->redirect($account, $festivalEdition);
+    }
+
+    public function edit(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalDirection $festivalDirection): View
+    {
+        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
+        $this->assertDirection($account, $festivalEdition, $festivalDirection);
+
+        return view('festivals.staff.settings.direction-form', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'direction' => $festivalDirection,
+            'workspacePermissions' => $permissions,
+        ]);
     }
 
     public function update(FestivalDirectionRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalDirection $festivalDirection): RedirectResponse
@@ -42,7 +98,7 @@ class FestivalDirectionController extends Controller
             $direction->update([...$data, 'is_active' => $isActive]);
         }, 3);
 
-        return back()->with('status', __('app.festival_direction_saved'));
+        return $this->redirect($account, $festivalEdition);
     }
 
     public function toggle(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalDirection $festivalDirection): RedirectResponse
@@ -64,7 +120,7 @@ class FestivalDirectionController extends Controller
     {
         $this->authorizeManager($request, $account);
         $this->assertDirection($account, $festivalEdition, $festivalDirection);
-        $this->moveWithin($festivalDirection, $festivalEdition->directions()->get(), $request->validated('direction'));
+        $this->settingsOrder->move($festivalDirection, $festivalEdition->directions(), $request->validated('direction'));
 
         return back()->with('status', __('app.festival_order_saved'));
     }
@@ -76,27 +132,14 @@ class FestivalDirectionController extends Controller
         }
     }
 
-    /** @param Collection<int, Model> $directions */
-    private function moveWithin(Model $direction, Collection $directions, string $move): void
+    /** @return array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} */
+    private function managerPermissions(Request $request, Account $account, FestivalEdition $edition): array
     {
-        DB::transaction(function () use ($direction, $directions, $move): void {
-            $directions = $directions->sortBy([['sort_order', 'asc'], ['id', 'asc']])->values();
-            foreach ($directions as $index => $item) {
-                $item->forceFill(['sort_order' => ($index + 1) * 10])->save();
-            }
+        $this->assertEdition($account, $edition);
+        $permissions = $this->workspaceAccess->permissions($request->user(), $account, $edition);
+        abort_unless($permissions['manage'], 403);
 
-            $index = $directions->search(fn (Model $item): bool => $item->is($direction));
-            $targetIndex = $move === 'up' ? $index - 1 : $index + 1;
-
-            if ($index === false || ! $directions->has($targetIndex)) {
-                return;
-            }
-
-            $target = $directions[$targetIndex];
-            $currentOrder = $directions[$index]->sort_order;
-            $directions[$index]->update(['sort_order' => $target->sort_order]);
-            $target->update(['sort_order' => $currentOrder]);
-        });
+        return $permissions;
     }
 
     private function authorizeManager(Request $request, Account $account): void
@@ -113,5 +156,11 @@ class FestivalDirectionController extends Controller
     {
         $this->assertEdition($account, $edition);
         abort_unless($direction->account_id === $account->id && $direction->festival_edition_id === $edition->id, 404);
+    }
+
+    private function redirect(Account $account, FestivalEdition $edition): RedirectResponse
+    {
+        return redirect()->route('dashboard.accounts.festivals.settings.directions', [$account, $edition])
+            ->with('status', __('app.festival_direction_saved'));
     }
 }

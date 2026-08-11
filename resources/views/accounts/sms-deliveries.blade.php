@@ -9,7 +9,6 @@
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <div class="crm-page-kicker">{{ $account->name }}</div>
             <h1 class="crm-page-title">{{ __('app.sms_delivery_log') }}</h1>
             <p class="crm-page-copy">{{ __('app.sms_delivery_log_copy') }}</p>
         </div>

@@ -15,7 +15,6 @@
                     <img src="{{ $account->logoUrl() }}" alt="" class="max-h-11 max-w-11 object-contain">
                 </span>
                 <div>
-                    <div class="crm-page-kicker">{{ __('app.platform') }}</div>
                     <div class="flex flex-wrap items-center gap-2">
                         <h1 class="crm-page-title">{{ $account->name }}</h1>
                         @if ($account->isReadOnlyDemo())

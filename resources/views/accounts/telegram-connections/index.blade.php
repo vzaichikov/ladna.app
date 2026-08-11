@@ -36,10 +36,6 @@
             <h1 class="crm-page-title">{{ __('app.telegram_customer_connection_manager') }}</h1>
             <p class="crm-page-copy">{{ __('app.telegram_customer_connection_manager_copy', ['studio' => $account->name]) }}</p>
         </div>
-        <x-ui.button :href="route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram'])" variant="secondary" class="self-start">
-            <x-ui.icon name="arrow-left" class="h-4 w-4" />
-            {{ __('app.telegram_back_to_bot_settings') }}
-        </x-ui.button>
     </div>
 
     @if (! $installation?->token_last_four)

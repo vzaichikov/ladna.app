@@ -20,6 +20,37 @@ class FestivalCategoryController extends Controller
 {
     public function __construct(private readonly FestivalWorkspaceAccess $workspaceAccess) {}
 
+    public function index(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
+        $filters = [
+            'q' => $request->string('q')->trim()->toString(),
+            'status' => in_array($request->query('status'), ['active', 'inactive'], true) ? $request->query('status') : '',
+            'direction' => $request->integer('direction'),
+            'workflow' => $request->integer('workflow'),
+        ];
+        $categories = $festivalEdition->categories()
+            ->with(['direction', 'registrationWorkflow'])
+            ->withCount('entries')
+            ->when($filters['q'] !== '', fn ($query) => $query->where('name', 'like', '%'.$filters['q'].'%'))
+            ->when($filters['status'] !== '', fn ($query) => $query->where('is_active', $filters['status'] === 'active'))
+            ->when($filters['direction'] > 0, fn ($query) => $query->where('festival_direction_id', $filters['direction']))
+            ->when($filters['workflow'] > 0, fn ($query) => $query->where('festival_workflow_id', $filters['workflow']))
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('festivals.staff.settings.categories', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'categories' => $categories,
+            'directions' => $festivalEdition->directions()->get(['id', 'name']),
+            'workflows' => $festivalEdition->workflows()->get(['id', 'name']),
+            'filters' => $filters,
+            'hasFilters' => $filters['q'] !== '' || $filters['status'] !== '' || $filters['direction'] > 0 || $filters['workflow'] > 0,
+            'workspacePermissions' => $permissions,
+        ]);
+    }
+
     public function create(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
         $permissions = $this->managerPermissions($request, $account, $festivalEdition);

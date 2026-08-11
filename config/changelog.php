@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.128.0',
+                'date' => '2026-08-11',
+                'title' => 'Focused Festival management and judging',
+                'items' => ['Festival configuration now uses focused, searchable pages for directions, categories, registration workflows and steps, registration fields, fees, content sections, documents, and media, with consistent filters, ordering, and actions.', 'Judging is now split into Judges, Criteria, Score sheets, and Results. Managers prepare sheets and publish generated rankings without seeing another judge’s private scores, while assigned judges see only their own work.', 'Authenticated Ladna workspaces now use consistent responsive breadcrumbs, and the Festival help guide reflects the updated management flow.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.127.0',
                 'date' => '2026-08-11',
                 'title' => 'Simpler Festival directions and categories',
@@ -1122,6 +1129,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.128.0',
+                'date' => '2026-08-11',
+                'title' => 'Окремі сторінки керування та суддівства фестивалю',
+                'items' => ['Налаштування фестивалю тепер мають окремі сторінки з пошуком для напрямків, категорій, сценаріїв і кроків реєстрації, полів реєстрації, внесків, розділів контенту, документів та медіа — зі спільними фільтрами, порядком і діями.', 'Суддівство розділено на Суддів, Критерії, Суддівські листи та Результати. Менеджери готують листи й публікують сформований рейтинг, не отримуючи доступу до приватних оцінок інших суддів, а призначені судді бачать лише власну роботу.', 'В авторизованих просторах Ladna з’явилися послідовні адаптивні навігаційні ланцюжки, а довідка фестивалю відображає оновлений процес керування.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.127.0',
                 'date' => '2026-08-11',

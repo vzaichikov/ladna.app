@@ -127,7 +127,7 @@ class FestivalOperationsAndJudgingTest extends TestCase
         app(SaveFestivalScoreSheet::class)->execute($sheet, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 9]], 'submit' => true], $judge);
         app(PublishFestivalResults::class)->execute($edition, $category, $owner);
 
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.rubrics.update', [$account, $edition, $sheet->rubric]), [
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.judging.criteria.update', [$account, $edition, $sheet->rubric]), [
             'festival_category_id' => $category->id,
             'name' => 'Updated rubric',
             'sections' => [[
@@ -136,7 +136,7 @@ class FestivalOperationsAndJudgingTest extends TestCase
                 'criteria' => [['name' => 'Composition', 'max_score' => 12, 'weight' => 1]],
             ]],
             'is_active' => 1,
-        ])->assertRedirect(route('dashboard.accounts.festivals.judging.index', [$account, $edition]))->assertSessionHasNoErrors();
+        ])->assertRedirect(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]))->assertSessionHasNoErrors();
 
         $this->assertSame(FestivalScoreSheetStatus::Draft, $sheet->refresh()->status);
         $this->assertSame('0.0000', $sheet->total_score);

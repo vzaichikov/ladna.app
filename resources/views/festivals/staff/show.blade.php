@@ -29,8 +29,7 @@
     </header>
     <section>
         <div>
-            <p class="crm-page-kicker">{{ __('app.festival_tab_overview') }}</p>
-            <h2 class="mt-1 text-2xl font-semibold text-slate-950">{{ __('app.festival_overview_title') }}</h2>
+            <h2 class="text-2xl font-semibold text-slate-950">{{ __('app.festival_overview_title') }}</h2>
             <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_overview_copy') }}</p>
         </div>
 

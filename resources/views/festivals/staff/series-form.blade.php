@@ -4,10 +4,7 @@
 
 @section('content')
 <div class="mx-auto max-w-4xl space-y-6">
-    <header>
-        <a href="{{ route('dashboard.accounts.festivals.index', ['account' => $account, 'tab' => 'series']) }}" class="crm-page-kicker">← {{ __('app.festival_series_tab') }}</a>
-        <h1 class="crm-page-title mt-2">{{ $series->exists ? __('app.festival_series_edit') : __('app.festival_series_create') }}</h1>
-    </header>
+    <x-ui.page-header :title="$series->exists ? __('app.festival_series_edit') : __('app.festival_series_create')" />
 
     @if ($errors->any())
         <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">

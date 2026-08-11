@@ -14,11 +14,7 @@
         data-request-error="{{ __('app.festival_scanner_request_failed') }}"
         data-check-out-reason="{{ __('app.festival_check_out_reason_prompt') }}"
     >
-        <div>
-            <a href="{{ route('dashboard.accounts.festivals.tickets', [$account, $festivalEdition]) }}" class="crm-page-kicker">← {{ __('app.festival_tab_tickets_entrance') }}</a>
-            <h2 class="mt-2 text-2xl font-semibold text-slate-950">{{ __('app.festival_scanner') }}</h2>
-            <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_scanner_online_only') }}</p>
-        </div>
+        <x-ui.page-header :title="__('app.festival_scanner')" :copy="__('app.festival_scanner_online_only')" />
 
         <section class="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
             <div class="overflow-hidden rounded-2xl border border-stone-200 bg-slate-950 shadow-crm">

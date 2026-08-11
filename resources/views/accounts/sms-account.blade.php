@@ -25,15 +25,12 @@
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <div class="crm-page-kicker">{{ $account->name }}</div>
             <h1 class="crm-page-title">{{ __('app.sms_account') }}</h1>
             <p class="crm-page-copy">{{ __('app.sms_account_copy') }}</p>
         </div>
-        @if ($platformView)
-            <x-ui.button :href="route('platform.accounts.show', $account)" variant="secondary">{{ __('app.back') }}</x-ui.button>
-        @else
+        @unless ($platformView)
             <x-ui.button :href="route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging'])" variant="secondary">{{ __('app.sms_settings') }}</x-ui.button>
-        @endif
+        @endunless
     </div>
 
     @if (! $serviceEnabled)

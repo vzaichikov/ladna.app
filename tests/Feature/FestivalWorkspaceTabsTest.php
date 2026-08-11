@@ -35,17 +35,32 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.show' => 'festival_tab_overview',
             'dashboard.accounts.festivals.applications' => 'festival_tab_applications',
             'dashboard.accounts.festivals.program' => 'festival_tab_program',
-            'dashboard.accounts.festivals.judging.index' => 'festival_tab_judging_results',
+            'dashboard.accounts.festivals.judging.judges.index' => 'festival_judges',
+            'dashboard.accounts.festivals.judging.judges.create' => 'festival_judges',
+            'dashboard.accounts.festivals.judging.criteria.index' => 'festival_criteria',
+            'dashboard.accounts.festivals.judging.criteria.create' => 'festival_criteria',
+            'dashboard.accounts.festivals.judging.score-sheets.index' => 'festival_score_sheets',
+            'dashboard.accounts.festivals.judging.results.index' => 'festival_results',
             'dashboard.accounts.festivals.tickets' => 'festival_tab_tickets_entrance',
             'dashboard.accounts.festivals.communication' => 'festival_tab_communication',
             'dashboard.accounts.festivals.settings' => 'festival_settings_overview',
             'dashboard.accounts.festivals.settings.directions' => 'festival_taxonomy_directions',
+            'dashboard.accounts.festivals.directions.create' => 'festival_taxonomy_directions',
             'dashboard.accounts.festivals.settings.categories' => 'festival_categories',
             'dashboard.accounts.festivals.categories.create' => 'festival_categories',
             'dashboard.accounts.festivals.settings.workflows' => 'festival_registration_workflows',
+            'dashboard.accounts.festivals.workflows.create' => 'festival_registration_workflows',
             'dashboard.accounts.festivals.settings.requirements' => 'festival_registration_fields',
+            'dashboard.accounts.festivals.requirements.create' => 'festival_registration_fields',
             'dashboard.accounts.festivals.settings.fees' => 'festival_fees',
+            'dashboard.accounts.festivals.charge-definitions.create' => 'festival_fees',
             'dashboard.accounts.festivals.settings.content' => 'festival_content_media',
+            'dashboard.accounts.festivals.settings.content.sections' => 'festival_content_media',
+            'dashboard.accounts.festivals.content.create' => 'festival_content_media',
+            'dashboard.accounts.festivals.settings.content.documents' => 'festival_content_media',
+            'dashboard.accounts.festivals.documents.create' => 'festival_content_media',
+            'dashboard.accounts.festivals.settings.content.media' => 'festival_content_media',
+            'dashboard.accounts.festivals.media.create' => 'festival_content_media',
             'dashboard.accounts.festivals.edit' => 'festival_settings_overview',
             'dashboard.accounts.festivals.scanner' => 'festival_tab_tickets_entrance',
         ];
@@ -58,13 +73,13 @@ class FestivalWorkspaceTabsTest extends TestCase
                 ->assertSee(__('app.festival_workspace_back'))
                 ->assertSee(__('app.festival_workspace_back_to_studio'))
                 ->assertDontSee(__('app.my_studio'));
-            $this->assertSame(1, substr_count($response->getContent(), 'aria-current="page"'), $route);
+            $this->assertSame(2, substr_count($response->getContent(), 'aria-current="page"'), $route);
         }
 
         $category = $edition->categories()->firstOrFail();
         $editResponse = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]));
         $editResponse->assertOk()->assertSee(__('app.festival_categories'));
-        $this->assertSame(1, substr_count($editResponse->getContent(), 'aria-current="page"'));
+        $this->assertSame(2, substr_count($editResponse->getContent(), 'aria-current="page"'));
     }
 
     public function test_workflow_routes_enforce_permission_specific_data_boundaries(): void
@@ -208,9 +223,11 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($judge)
             ->get(route('dashboard.accounts.festivals.show', [$account, $edition]))
             ->assertOk()
-            ->assertSee(__('app.festival_tab_judging_results'))
+            ->assertSee(__('app.festival_score_sheets'))
             ->assertDontSee(__('app.festival_tab_applications'));
-        $this->actingAs($judge)->get(route('dashboard.accounts.festivals.judging.index', [$account, $edition]))->assertOk();
+        $this->actingAs($judge)
+            ->get(route('dashboard.accounts.festivals.judging.index', [$account, $edition]))
+            ->assertRedirect(route('dashboard.accounts.festivals.judging.score-sheets.index', [$account, $edition]));
     }
 
     public function test_each_workflow_is_not_found_for_an_edition_from_another_account(): void
@@ -225,16 +242,30 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.applications',
             'dashboard.accounts.festivals.program',
             'dashboard.accounts.festivals.judging.index',
+            'dashboard.accounts.festivals.judging.judges.index',
+            'dashboard.accounts.festivals.judging.criteria.index',
+            'dashboard.accounts.festivals.judging.score-sheets.index',
+            'dashboard.accounts.festivals.judging.results.index',
             'dashboard.accounts.festivals.tickets',
             'dashboard.accounts.festivals.communication',
             'dashboard.accounts.festivals.settings',
             'dashboard.accounts.festivals.settings.directions',
+            'dashboard.accounts.festivals.directions.create',
             'dashboard.accounts.festivals.settings.categories',
             'dashboard.accounts.festivals.categories.create',
             'dashboard.accounts.festivals.settings.workflows',
+            'dashboard.accounts.festivals.workflows.create',
             'dashboard.accounts.festivals.settings.requirements',
+            'dashboard.accounts.festivals.requirements.create',
             'dashboard.accounts.festivals.settings.fees',
+            'dashboard.accounts.festivals.charge-definitions.create',
             'dashboard.accounts.festivals.settings.content',
+            'dashboard.accounts.festivals.settings.content.sections',
+            'dashboard.accounts.festivals.content.create',
+            'dashboard.accounts.festivals.settings.content.documents',
+            'dashboard.accounts.festivals.documents.create',
+            'dashboard.accounts.festivals.settings.content.media',
+            'dashboard.accounts.festivals.media.create',
             'dashboard.accounts.festivals.scanner',
         ] as $route) {
             $this->actingAs($owner)->get(route($route, [$account, $otherEdition]))->assertNotFound();
@@ -302,7 +333,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertDontSee('Registration fields');
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.settings.workflows', [$account, $edition]))
+            ->get(route('dashboard.accounts.festivals.workflows.create', [$account, $edition]))
             ->assertOk()
             ->assertSee('Перевірка заявки')
             ->assertSee('Автоматично')
