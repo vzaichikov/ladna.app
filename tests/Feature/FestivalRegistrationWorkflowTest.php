@@ -7,7 +7,9 @@ use App\Actions\Festivals\StoreFestivalSubmission;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
+use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalRequirementStatus;
+use App\Enums\FestivalRequirementType;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Event;
@@ -16,12 +18,14 @@ use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
+use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalSeries;
 use App\Support\Festivals\FestivalPaymentService;
+use App\Support\Festivals\MediaDurationProbe;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -31,6 +35,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Mockery\MockInterface;
+use RuntimeException;
 use Tests\TestCase;
 
 class FestivalRegistrationWorkflowTest extends TestCase
@@ -213,6 +219,127 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $this->actingAs($otherPortalUser, 'festival')->get(route('festival.portal.submissions.download', [$account->slug, $second]))->assertNotFound();
     }
 
+    public function test_music_submission_uses_category_duration_bounds_and_accepts_exact_boundaries(): void
+    {
+        Storage::fake('local');
+        [, $portalUser, $requirement] = $this->fileRequirement(
+            ['min_duration_seconds' => 150, 'max_duration_seconds' => 195],
+        );
+
+        foreach ([149, 196] as $duration) {
+            $this->mockMediaDuration($duration);
+
+            try {
+                app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('music.mp3'));
+                $this->fail("Music lasting {$duration} seconds should have been rejected.");
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('file', $exception->errors());
+            }
+        }
+
+        $this->assertCount(0, $requirement->submissions()->get());
+        $this->assertSame([], Storage::disk('local')->allFiles());
+
+        $this->mockMediaDuration(150);
+        $minimum = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('minimum.mp3'));
+        $this->assertSame(150, $minimum->duration_seconds);
+
+        $this->mockMediaDuration(180);
+        $middle = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('middle.mp3'));
+        $this->assertSame($minimum->id, $middle->id);
+        $this->assertSame(180, $middle->duration_seconds);
+        Storage::disk('local')->assertMissing($minimum->path);
+        Storage::disk('local')->assertExists($middle->path);
+
+        $this->mockMediaDuration(195);
+        $maximum = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('maximum.mp3'));
+        $this->assertSame($middle->id, $maximum->id);
+        $this->assertSame(195, $maximum->duration_seconds);
+        Storage::disk('local')->assertMissing($middle->path);
+        Storage::disk('local')->assertExists($maximum->path);
+    }
+
+    public function test_music_submission_uses_current_category_duration_after_an_edit(): void
+    {
+        Storage::fake('local');
+        [$category, $portalUser, $requirement] = $this->fileRequirement(
+            ['min_duration_seconds' => 150, 'max_duration_seconds' => 195],
+        );
+        $category->update(['max_duration_seconds' => 210]);
+        $this->mockMediaDuration(200);
+
+        $submission = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('music.mp3'));
+
+        $this->assertSame(200, $submission->duration_seconds);
+        Storage::disk('local')->assertExists($submission->path);
+    }
+
+    public function test_music_definition_duration_bounds_override_category_bounds_independently(): void
+    {
+        Storage::fake('local');
+        [, $minimumPortalUser, $minimumRequirement] = $this->fileRequirement(
+            ['min_duration_seconds' => 150, 'max_duration_seconds' => 195],
+            ['min_duration_seconds' => 160],
+        );
+        $this->mockMediaDuration(155);
+
+        try {
+            app(StoreFestivalSubmission::class)->execute($minimumRequirement, $minimumPortalUser, UploadedFile::fake()->create('minimum.mp3'));
+            $this->fail('The explicit Music minimum should override the category minimum.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('file', $exception->errors());
+        }
+
+        [, $maximumPortalUser, $maximumRequirement] = $this->fileRequirement(
+            ['min_duration_seconds' => 150, 'max_duration_seconds' => 195],
+            ['max_duration_seconds' => 180],
+        );
+        $this->mockMediaDuration(185);
+
+        try {
+            app(StoreFestivalSubmission::class)->execute($maximumRequirement, $maximumPortalUser, UploadedFile::fake()->create('maximum.mp3'));
+            $this->fail('The explicit Music maximum should override the category maximum.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('file', $exception->errors());
+        }
+    }
+
+    public function test_music_submission_rejects_unreadable_duration_when_category_has_bounds(): void
+    {
+        Storage::fake('local');
+        [, $portalUser, $requirement] = $this->fileRequirement(
+            ['min_duration_seconds' => 150, 'max_duration_seconds' => 195],
+        );
+        $this->mockMediaDuration(new RuntimeException('Unreadable media.'));
+
+        try {
+            app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('music.mp3'));
+            $this->fail('Unreadable Music duration should have been rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('file', $exception->errors());
+        }
+
+        $this->assertCount(0, $requirement->submissions()->get());
+        $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
+    public function test_non_music_submission_does_not_inherit_category_duration_bounds(): void
+    {
+        Storage::fake('local');
+        [, $portalUser, $requirement] = $this->fileRequirement(
+            ['min_duration_seconds' => 150, 'max_duration_seconds' => 195],
+            ['type' => FestivalRequirementType::CustomDocument->value],
+        );
+        $this->mock(MediaDurationProbe::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('seconds');
+        });
+
+        $submission = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('document.pdf'));
+
+        $this->assertNull($submission->duration_seconds);
+        Storage::disk('local')->assertExists($submission->path);
+    }
+
     public function test_payment_callback_is_idempotent_and_rejects_wrong_amount(): void
     {
         Queue::fake();
@@ -265,5 +392,59 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $portalUser = FestivalPortalUser::factory()->for($account)->create();
 
         return [$account, $edition, $portalUser];
+    }
+
+    /**
+     * @param  array<string, mixed>  $categoryAttributes
+     * @param  array<string, mixed>  $definitionAttributes
+     * @return array{FestivalCategory, FestivalPortalUser, FestivalEntryRequirement}
+     */
+    private function fileRequirement(array $categoryAttributes, array $definitionAttributes = []): array
+    {
+        [$account, $edition, $portalUser] = $this->festival();
+        $category = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            ...$categoryAttributes,
+        ]);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
+        $definition = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'type' => FestivalRequirementType::Music->value,
+            'allowed_extensions' => [],
+            'allowed_mime_types' => [],
+            'min_duration_seconds' => null,
+            'max_duration_seconds' => null,
+            ...$definitionAttributes,
+        ]);
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+        ]);
+        $entry->participants()->sync([$participant->id => ['account_id' => $account->id, 'sort_order' => 0]]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
+        $entry->steps()
+            ->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))
+            ->update(['status' => FestivalEntryStepStatus::Approved->value]);
+        $requirement = $entry->requirements->firstWhere('festival_requirement_definition_id', $definition->id);
+
+        $this->assertInstanceOf(FestivalEntryRequirement::class, $requirement);
+
+        return [$category, $portalUser, $requirement];
+    }
+
+    private function mockMediaDuration(int|RuntimeException $result): void
+    {
+        $this->mock(MediaDurationProbe::class, function (MockInterface $mock) use ($result): void {
+            $expectation = $mock->shouldReceive('seconds')->once();
+
+            if ($result instanceof RuntimeException) {
+                $expectation->andThrow($result);
+
+                return;
+            }
+
+            $expectation->andReturn($result);
+        });
     }
 }
