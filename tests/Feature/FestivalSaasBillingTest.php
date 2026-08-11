@@ -169,6 +169,63 @@ class FestivalSaasBillingTest extends TestCase
         $this->assertSame(300, $purchase->max_tickets);
     }
 
+    public function test_paid_purchase_checkout_returns_to_the_payments_tab(): void
+    {
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'festival-return-invoice',
+                'pageUrl' => 'https://pay.example/festival-return-invoice',
+            ]),
+        ]);
+        [$account, $owner, $package] = $this->festivalAccount();
+        $this->platformMonopaySetting();
+        $paymentsUrl = route('dashboard.accounts.festivals.index', [
+            'account' => $account,
+            'tab' => 'payments',
+        ]);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.purchases.store', $account), [
+            'festival_tariff_package_id' => $package->id,
+            'idempotency_key' => (string) Str::uuid(),
+        ])->assertRedirect('https://pay.example/festival-return-invoice');
+
+        Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
+            && $request['redirectUrl'] === $paymentsUrl);
+    }
+
+    public function test_pending_tokenized_purchase_falls_back_to_the_payments_tab(): void
+    {
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/wallet/payment' => Http::response([
+                'invoiceId' => 'festival-pending-return-invoice',
+                'status' => 'processing',
+            ]),
+        ]);
+        [$account, $owner, $package] = $this->festivalAccount();
+        $this->platformMonopaySetting();
+        $subscription = $account->subscription()->firstOrFail();
+        AccountSubscriptionPaymentMethod::factory()->create([
+            'account_id' => $account->id,
+            'account_subscription_id' => $subscription->id,
+            'provider_card_token' => 'festival-pending-card-token',
+            'status' => 'active',
+            'verified_at' => now(),
+        ]);
+        $paymentsUrl = route('dashboard.accounts.festivals.index', [
+            'account' => $account,
+            'tab' => 'payments',
+        ]);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.purchases.store', $account), [
+            'festival_tariff_package_id' => $package->id,
+            'idempotency_key' => (string) Str::uuid(),
+        ])->assertRedirect($paymentsUrl)
+            ->assertSessionHas('status', __('app.festival_payment_pending'));
+
+        Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/wallet/payment'
+            && $request['redirectUrl'] === $paymentsUrl);
+    }
+
     public function test_purchase_availability_requires_current_non_demo_subscription_and_accepts_grace(): void
     {
         $access = app(FestivalSaasAccess::class);

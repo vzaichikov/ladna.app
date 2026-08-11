@@ -29,7 +29,10 @@ class FestivalEditionPurchaseController extends Controller
         }
 
         try {
-            $checkoutUrl = $startPayment->execute($purchase, route('dashboard.accounts.festivals.index', $account));
+            $checkoutUrl = $startPayment->execute($purchase, route('dashboard.accounts.festivals.index', [
+                'account' => $account,
+                'tab' => 'payments',
+            ]));
         } catch (Throwable $exception) {
             $purchase->forceFill([
                 'status' => FestivalEditionPurchaseStatus::PaymentFailed,
@@ -47,6 +50,9 @@ class FestivalEditionPurchaseController extends Controller
 
         return $checkoutUrl
             ? redirect()->away($checkoutUrl)
-            : redirect()->route('dashboard.accounts.festivals.index', $account)->with('status', __('app.festival_payment_pending'));
+            : redirect()->route('dashboard.accounts.festivals.index', [
+                'account' => $account,
+                'tab' => 'payments',
+            ])->with('status', __('app.festival_payment_pending'));
     }
 }

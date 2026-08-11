@@ -24,76 +24,20 @@
     </header>
 
     @if ($canManage)
-        <nav class="flex gap-1 overflow-x-auto rounded-xl bg-stone-100 p-1" aria-label="{{ __('app.festival_workspace_navigation') }}">
-            <a href="{{ route('dashboard.accounts.festivals.index', ['account' => $account, 'tab' => 'festivals']) }}" class="crm-tab shrink-0" @if ($tab === 'festivals') aria-current="page" @endif>{{ __('app.festivals') }}</a>
-            <a href="{{ route('dashboard.accounts.festivals.index', ['account' => $account, 'tab' => 'series']) }}" class="crm-tab shrink-0" @if ($tab === 'series') aria-current="page" @endif>{{ __('app.festival_series_tab') }}</a>
+        <nav class="grid grid-cols-3 gap-1 rounded-xl bg-stone-100 p-1" aria-label="{{ __('app.festival_workspace_navigation') }}">
+            <a href="{{ route('dashboard.accounts.festivals.index', ['account' => $account, 'tab' => 'festivals']) }}" class="crm-tab min-w-0 text-center leading-5" @if ($tab === 'festivals') aria-current="page" @endif>{{ __('app.festivals') }}</a>
+            <a href="{{ route('dashboard.accounts.festivals.index', ['account' => $account, 'tab' => 'series']) }}" class="crm-tab min-w-0 text-center leading-5" @if ($tab === 'series') aria-current="page" @endif>{{ __('app.festival_series_tab') }}</a>
+            <a href="{{ route('dashboard.accounts.festivals.index', ['account' => $account, 'tab' => 'payments']) }}" class="crm-tab min-w-0 text-center leading-5" @if ($tab === 'payments') aria-current="page" @endif>{{ __('app.festival_payments_tariffs_tab') }}</a>
         </nav>
     @endif
 
+    @if ($canManage && in_array($tab, ['festivals', 'payments'], true) && ! $hasActiveSeries)
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+            <strong>{{ __('app.festival_series_required') }}</strong>
+        </div>
+    @endif
+
     @if ($tab === 'festivals')
-        @if ($canManage && ! $hasActiveSeries)
-            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
-                <strong>{{ __('app.festival_series_required') }}</strong>
-            </div>
-        @endif
-
-        @if ($canManage)
-            <section class="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 shadow-xs">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <div class="crm-page-kicker">{{ __('app.festival_prepaid_access') }}</div>
-                        <h2 class="mt-1 text-xl font-semibold text-slate-950">{{ __('app.festival_entitlements') }}</h2>
-                        <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('app.festival_entitlements_help') }}</p>
-                    </div>
-                    @unless($isOwner)
-                        <span class="crm-status-warning">{{ __('app.festival_owner_payment_required') }}</span>
-                    @endunless
-                </div>
-
-                @if ($isOwner && $festivalPackages->isNotEmpty())
-                    <div class="mt-5 grid gap-3 md:grid-cols-3">
-                        @foreach($festivalPackages as $package)
-                            <form method="POST" action="{{ route('dashboard.accounts.festivals.purchases.store', $account) }}" class="rounded-xl border border-white bg-white p-4 shadow-xs">
-                                @csrf
-                                <input type="hidden" name="festival_tariff_package_id" value="{{ $package->id }}">
-                                <input type="hidden" name="idempotency_key" value="{{ (string) str()->uuid() }}">
-                                <div class="flex items-start justify-between gap-3">
-                                    <strong class="text-2xl text-slate-950">{{ $package->name }}</strong>
-                                    <span class="font-semibold text-indigo-700">{{ \App\Support\MoneyFormatter::format($package->price_cents, $package->currency) }}</span>
-                                </div>
-                                <p class="mt-3 text-sm text-slate-600">{{ __('app.festival_package_limits', ['participants' => $package->max_participants, 'tickets' => $package->max_tickets]) }}</p>
-                                <x-ui.button type="submit" class="mt-4 w-full">{{ $package->price_cents === 0 ? __('app.get_entitlement') : __('app.buy_festival') }}</x-ui.button>
-                            </form>
-                        @endforeach
-                    </div>
-                @elseif($isOwner)
-                    <p class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{{ __('app.festival_purchase_unavailable') }}</p>
-                @endif
-
-                @if ($festivalPurchases?->isNotEmpty())
-                    <div class="mt-5 divide-y divide-indigo-100 overflow-hidden rounded-xl border border-indigo-100 bg-white">
-                        @foreach($festivalPurchases as $purchase)
-                            <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <strong class="text-slate-950">{{ $purchase->tariff_name_snapshot }} · {{ $purchase->package_name_snapshot }}</strong>
-                                    <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_package_limits', ['participants' => $purchase->max_participants, 'tickets' => $purchase->max_tickets]) }} · {{ \App\Support\MoneyFormatter::format($purchase->amount_cents, $purchase->currency) }}</p>
-                                </div>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <span class="{{ in_array($purchase->status, [\App\Enums\FestivalEditionPurchaseStatus::Available, \App\Enums\FestivalEditionPurchaseStatus::Redeemed], true) ? 'crm-status-active' : (in_array($purchase->status, [\App\Enums\FestivalEditionPurchaseStatus::PaymentStarted, \App\Enums\FestivalEditionPurchaseStatus::PaymentPending], true) ? 'crm-status-scheduled' : 'crm-status-danger') }}">{{ __('app.festival_purchase_status_'.$purchase->status->value) }}</span>
-                                    @if ($purchase->status === \App\Enums\FestivalEditionPurchaseStatus::Available && $hasActiveSeries)
-                                        <x-ui.button :href="route('dashboard.accounts.festivals.create', [$account, 'purchase' => $purchase->id])" size="sm">{{ __('app.continue_festival_creation') }}</x-ui.button>
-                                    @elseif ($isOwner && $purchase->status === \App\Enums\FestivalEditionPurchaseStatus::PaymentPending && $purchase->checkoutUrl())
-                                        <x-ui.button :href="$purchase->checkoutUrl()" size="sm">{{ __('app.continue_payment') }}</x-ui.button>
-                                    @endif
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                    @if($festivalPurchases->hasPages())<div class="mt-4">{{ $festivalPurchases->links() }}</div>@endif
-                @endif
-            </section>
-        @endif
-
         <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             @forelse ($editions as $edition)
                 @php($coverUrl = $edition->coverMedia?->url())
@@ -136,7 +80,7 @@
         </div>
 
         {{ $editions->links() }}
-    @else
+    @elseif ($tab === 'series')
         <section class="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-crm">
             <div class="divide-y divide-stone-100">
                 @forelse ($series as $item)
@@ -160,6 +104,67 @@
         </section>
 
         {{ $series->links() }}
+    @else
+        <section class="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 shadow-xs">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <div class="crm-page-kicker">{{ __('app.festival_prepaid_access') }}</div>
+                    <h2 class="mt-1 text-xl font-semibold text-slate-950">{{ __('app.festival_entitlements') }}</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('app.festival_entitlements_help') }}</p>
+                </div>
+                @unless($isOwner)
+                    <span class="crm-status-warning">{{ __('app.festival_owner_payment_required') }}</span>
+                @endunless
+            </div>
+
+            @if ($isOwner && $festivalPackages->isNotEmpty())
+                <div class="mt-5 grid gap-3 md:grid-cols-3">
+                    @foreach($festivalPackages as $package)
+                        <form method="POST" action="{{ route('dashboard.accounts.festivals.purchases.store', $account) }}" class="rounded-xl border border-white bg-white p-4 shadow-xs">
+                            @csrf
+                            <input type="hidden" name="festival_tariff_package_id" value="{{ $package->id }}">
+                            <input type="hidden" name="idempotency_key" value="{{ (string) str()->uuid() }}">
+                            <div class="flex items-start justify-between gap-3">
+                                <strong class="text-2xl text-slate-950">{{ $package->name }}</strong>
+                                <span class="font-semibold text-indigo-700">{{ \App\Support\MoneyFormatter::format($package->price_cents, $package->currency) }}</span>
+                            </div>
+                            <p class="mt-3 text-sm text-slate-600">{{ __('app.festival_package_limits', ['participants' => $package->max_participants, 'tickets' => $package->max_tickets]) }}</p>
+                            <x-ui.button type="submit" class="mt-4 w-full">{{ $package->price_cents === 0 ? __('app.get_entitlement') : __('app.buy_festival') }}</x-ui.button>
+                        </form>
+                    @endforeach
+                </div>
+            @elseif($isOwner)
+                <p class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{{ __('app.festival_purchase_unavailable') }}</p>
+            @endif
+
+            @if ($festivalPurchases->isNotEmpty())
+                <div class="mt-5 divide-y divide-indigo-100 overflow-hidden rounded-xl border border-indigo-100 bg-white">
+                    @foreach($festivalPurchases as $purchase)
+                        <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="min-w-0">
+                                <strong class="text-slate-950">{{ $purchase->tariff_name_snapshot }} · {{ $purchase->package_name_snapshot }}</strong>
+                                <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_package_limits', ['participants' => $purchase->max_participants, 'tickets' => $purchase->max_tickets]) }} · {{ \App\Support\MoneyFormatter::format($purchase->amount_cents, $purchase->currency) }}</p>
+                                @if ($purchase->edition)
+                                    <p class="mt-2 break-words text-sm text-slate-500">
+                                        {{ __('app.festival_linked_edition') }}:
+                                        <a href="{{ route('dashboard.accounts.festivals.show', [$account, $purchase->edition]) }}" class="font-semibold text-brand-700 hover:text-brand-800">{{ $purchase->edition->title }}</a>
+                                    </p>
+                                @endif
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="{{ in_array($purchase->status, [\App\Enums\FestivalEditionPurchaseStatus::Available, \App\Enums\FestivalEditionPurchaseStatus::Redeemed], true) ? 'crm-status-active' : (in_array($purchase->status, [\App\Enums\FestivalEditionPurchaseStatus::PaymentStarted, \App\Enums\FestivalEditionPurchaseStatus::PaymentPending], true) ? 'crm-status-scheduled' : 'crm-status-danger') }}">{{ __('app.festival_purchase_status_'.$purchase->status->value) }}</span>
+                                @if ($purchase->status === \App\Enums\FestivalEditionPurchaseStatus::Available && $hasActiveSeries)
+                                    <x-ui.button :href="route('dashboard.accounts.festivals.create', [$account, 'purchase' => $purchase->id])" size="sm">{{ __('app.continue_festival_creation') }}</x-ui.button>
+                                @elseif ($isOwner && $purchase->status === \App\Enums\FestivalEditionPurchaseStatus::PaymentPending && $purchase->checkoutUrl())
+                                    <x-ui.button :href="$purchase->checkoutUrl()" size="sm">{{ __('app.continue_payment') }}</x-ui.button>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                @if($festivalPurchases->hasPages())<div class="mt-4">{{ $festivalPurchases->links() }}</div>@endif
+            @endif
+        </section>
     @endif
 </div>
 @endsection

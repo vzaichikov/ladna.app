@@ -104,6 +104,8 @@ class HelpPagesTest extends TestCase
             ->assertSee('Фестивалі та змагання', false)
             ->assertSee('Події -&gt; Фестивалі', false)
             ->assertSee('Серії фестивалів', false)
+            ->assertSee('Оплати й тарифи', false)
+            ->assertSee('біля використаного пакета видно назву створеного фестивалю', false)
             ->assertSee('сама створює публічну адресу', false)
             ->assertSee('загальне меню студії змінюється на окреме меню фестивалю', false)
             ->assertSee('Фестиваль живе окремо від Подій', false)

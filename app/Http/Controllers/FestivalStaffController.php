@@ -44,19 +44,22 @@ class FestivalStaffController extends Controller
     public function index(Request $request, Account $account, FestivalSaasAccess $saasAccess): View
     {
         $this->authorizeAccess($request, $account);
-        $account->loadMissing('subscription.plan');
-        $tab = in_array($request->query('tab'), ['festivals', 'series'], true)
-            ? (string) $request->query('tab')
-            : 'festivals';
         $canManage = (bool) $request->user()?->can('manageFestivals', $account);
         $isOwner = $account->isOwnedBy($request->user());
-        $canPurchaseFestival = $isOwner && $saasAccess->canPurchase($account);
+        $requestedTab = $request->query('tab');
+        $tab = in_array($requestedTab, ['festivals', 'series', 'payments'], true)
+            ? (string) $requestedTab
+            : ($canManage && ! $account->festivalEditions()->exists() ? 'payments' : 'festivals');
 
-        abort_if($tab === 'series' && ! $canManage, 403);
+        abort_if(in_array($tab, ['series', 'payments'], true) && ! $canManage, 403);
 
         $editions = null;
         $series = null;
-        $hasActiveSeries = null;
+        $festivalPackages = collect();
+        $festivalPurchases = null;
+        $hasActiveSeries = $canManage && in_array($tab, ['festivals', 'payments'], true)
+            ? FestivalSeries::query()->whereBelongsTo($account)->where('is_active', true)->exists()
+            : null;
 
         if ($tab === 'festivals') {
             $hasNonJudgeAccess = collect([
@@ -77,16 +80,23 @@ class FestivalStaffController extends Controller
                 ->latest('starts_at')
                 ->paginate(12, ['*'], 'festivals_page')
                 ->withQueryString();
-            $hasActiveSeries = $canManage && FestivalSeries::query()
-                ->whereBelongsTo($account)
-                ->where('is_active', true)
-                ->exists();
-        } else {
+        } elseif ($tab === 'series') {
             $series = FestivalSeries::query()
                 ->whereBelongsTo($account)
                 ->withCount('editions')
                 ->orderBy('name')
                 ->paginate(30, ['*'], 'series_page')
+                ->withQueryString();
+        } else {
+            $canPurchaseFestival = $isOwner && $saasAccess->canPurchase($account);
+            $festivalPackages = $canPurchaseFestival
+                ? $account->subscription?->plan?->festivalTariffPackages()->where('is_active', true)->get() ?? collect()
+                : collect();
+            $festivalPurchases = FestivalEditionPurchase::query()
+                ->whereBelongsTo($account)
+                ->with(['edition' => fn ($query) => $query->whereBelongsTo($account)])
+                ->latest()
+                ->paginate(10, ['*'], 'purchases_page')
                 ->withQueryString();
         }
 
@@ -98,12 +108,8 @@ class FestivalStaffController extends Controller
             'editions' => $editions,
             'hasActiveSeries' => $hasActiveSeries,
             'isOwner' => $isOwner,
-            'festivalPackages' => $canPurchaseFestival
-                ? $account->subscription?->plan?->festivalTariffPackages()->where('is_active', true)->get() ?? collect()
-                : collect(),
-            'festivalPurchases' => $canManage
-                ? FestivalEditionPurchase::query()->whereBelongsTo($account)->with(['plan', 'fiscalReceipt'])->latest()->paginate(10, ['*'], 'purchases_page')->withQueryString()
-                : null,
+            'festivalPackages' => $festivalPackages,
+            'festivalPurchases' => $festivalPurchases,
         ]);
     }
 
