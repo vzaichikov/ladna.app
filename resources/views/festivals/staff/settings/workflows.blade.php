@@ -5,7 +5,7 @@
 @section('content')
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <header><p class="crm-page-kicker">{{ __('app.festival_tab_settings') }}</p><h1 class="crm-page-title mt-2">{{ __('app.festival_registration_workflows') }}</h1><p class="crm-page-copy">{{ __('app.festival_workflows_page_copy') }}</p></header>
-    <x-festivals.settings-help :title="__('app.festival_workflows_help_title')" :description="__('app.festival_workflows_help_copy')" :dependencies="[__('app.festival_registration_workflows'), __('app.festival_categories'), __('app.festival_requirements'), __('app.festival_fees'), __('app.festival_entries')]" />
+    <x-festivals.settings-help :title="__('app.festival_workflows_help_title')" :description="__('app.festival_workflows_help_copy')" :dependencies="[__('app.festival_registration_workflows'), __('app.festival_categories'), __('app.festival_registration_fields'), __('app.festival_fees'), __('app.festival_entries')]" />
     <div class="space-y-5">
         @foreach($edition->workflows as $workflow)
             @php($workflowEditId = 'festival-workflow-edit-'.$workflow->id)

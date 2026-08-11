@@ -34,7 +34,7 @@ class FestivalEntryController extends Controller
 
         return view('festivals.portal.entry-form', [
             'account' => $account, 'portalUser' => $portalUser, 'edition' => $edition, 'entry' => new FestivalEntry,
-            'categories' => $edition->categories()->where('is_active', true)->with('options.axis')->orderBy('name')->get(),
+            'categories' => $edition->categories()->where('is_active', true)->with('direction')->get()->sortBy([['direction.sort_order', 'asc'], ['sort_order', 'asc'], ['id', 'asc']])->values(),
             'participants' => $portalUser->participants()->whereNull('archived_at')->orderBy('last_name')->get(),
         ]);
     }
@@ -54,7 +54,7 @@ class FestivalEntryController extends Controller
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $this->assertEntry($festivalEntry, $portalUser);
-        $festivalEntry->load(['edition', 'category.options.axis', 'participants', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section']);
+        $festivalEntry->load(['edition', 'category.direction', 'participants', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section']);
         $providers = app(PaymentGatewayRegistry::class)->availableSettingsFor($account);
         $workflowStates = $workflowState->forEntry($festivalEntry);
         $selectedStep = $workflowState->current($festivalEntry) ?? $festivalEntry->steps->last();
@@ -70,12 +70,13 @@ class FestivalEntryController extends Controller
         $edition = $festivalEntry->edition;
 
         return view('festivals.portal.entry-form', [
-            'account' => $account, 'portalUser' => $portalUser, 'edition' => $edition, 'entry' => $festivalEntry->load('participants'),
+            'account' => $account, 'portalUser' => $portalUser, 'edition' => $edition, 'entry' => $festivalEntry->load(['participants', 'category.direction']),
             'categories' => $edition->categories()
-                ->where(fn ($query) => $query->where('is_active', true)->orWhereKey($festivalEntry->festival_category_id))
-                ->with('options.axis')
-                ->orderBy('name')
-                ->get(),
+                ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $festivalEntry->festival_category_id))
+                ->with('direction')
+                ->get()
+                ->sortBy([['direction.sort_order', 'asc'], ['sort_order', 'asc'], ['id', 'asc']])
+                ->values(),
             'participants' => $portalUser->participants()->whereNull('archived_at')->orderBy('last_name')->get(),
         ]);
     }
@@ -137,25 +138,43 @@ class FestivalEntryController extends Controller
     private function saveDraft(FestivalEntryRequest $request, FestivalEdition $edition, FestivalPortalUser $portalUser, FestivalRuleRegistry $rules, ?FestivalEntry $entry = null): FestivalEntry
     {
         $data = $request->validated();
-        $usesSnapshot = $entry?->exists && $entry->steps()->exists();
-        if ($usesSnapshot && $entry->festival_category_id !== (int) $data['festival_category_id']) {
-            throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_locked_after_start')]);
-        }
-        $category = FestivalCategory::query()
-            ->whereKey($data['festival_category_id'])
-            ->where('festival_edition_id', $edition->id)
-            ->where('account_id', $portalUser->account_id)
-            ->when(! $usesSnapshot, fn ($query) => $query->where('is_active', true))
-            ->firstOrFail();
-        $participants = FestivalParticipant::query()->where('festival_portal_user_id', $portalUser->id)->where('account_id', $portalUser->account_id)->whereNull('archived_at')->whereKey($data['participant_ids'])->get();
-        if ($participants->count() !== count($data['participant_ids'])) {
-            throw ValidationException::withMessages(['participant_ids' => __('app.festival_participant_invalid')]);
-        }
-        if (! $usesSnapshot) {
-            $rules->validateEntry($edition, $category, $participants, ! $entry?->submitted_at);
-        }
 
-        return DB::transaction(function () use ($entry, $edition, $portalUser, $category, $participants, $data, $rules, $usesSnapshot): FestivalEntry {
+        return DB::transaction(function () use ($entry, $edition, $portalUser, $rules, $data): FestivalEntry {
+            $entry = $entry?->exists
+                ? FestivalEntry::query()
+                    ->whereKey($entry->id)
+                    ->where('festival_edition_id', $edition->id)
+                    ->where('festival_portal_user_id', $portalUser->id)
+                    ->where('account_id', $portalUser->account_id)
+                    ->lockForUpdate()
+                    ->firstOrFail()
+                : null;
+            $workflowInitialized = $entry?->steps()->exists() ?? false;
+
+            if ($workflowInitialized && $entry->festival_category_id !== (int) $data['festival_category_id']) {
+                throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_locked_after_start')]);
+            }
+
+            $category = FestivalCategory::query()
+                ->whereKey($data['festival_category_id'])
+                ->where('festival_edition_id', $edition->id)
+                ->where('account_id', $portalUser->account_id)
+                ->when(! $workflowInitialized, fn ($query) => $query->where('is_active', true))
+                ->lockForUpdate()
+                ->firstOrFail();
+            $participants = FestivalParticipant::query()
+                ->where('festival_portal_user_id', $portalUser->id)
+                ->where('account_id', $portalUser->account_id)
+                ->whereNull('archived_at')
+                ->whereKey($data['participant_ids'])
+                ->get();
+
+            if ($participants->count() !== count($data['participant_ids'])) {
+                throw ValidationException::withMessages(['participant_ids' => __('app.festival_participant_invalid')]);
+            }
+
+            $rules->validateEntry($edition, $category, $participants, ! $entry?->submitted_at);
+
             $portalUser->forceFill([
                 'phone' => $data['profile_phone'] ?? $portalUser->phone,
                 'city' => $data['profile_city'] ?? $portalUser->city,
@@ -182,10 +201,6 @@ class FestivalEntryController extends Controller
             ]])->all();
             $entry->participants()->sync($sync);
             $entry->refresh()->load('participants');
-
-            if ($usesSnapshot) {
-                $rules->validateEntrySnapshot($edition, $entry, ! $entry->submitted_at);
-            }
 
             return $entry;
         }, 3);

@@ -13,15 +13,14 @@
         @if($permissions['manage'])<x-ui.button :href="route('dashboard.accounts.festivals.edit', [$account, $edition])" variant="secondary">{{ __('app.festival_edit_edition_details') }}</x-ui.button>@endif
     </header>
 
-    <x-festivals.settings-help :title="__('app.festival_settings_structure_title')" :description="__('app.festival_settings_structure_copy')" :dependencies="[__('app.festival_taxonomy_directions'), __('app.festival_classifications'), __('app.festival_categories'), __('app.festival_registration_workflows'), __('app.festival_requirements'), __('app.festival_fees')]" />
+    <x-festivals.settings-help :title="__('app.festival_settings_structure_title')" :description="__('app.festival_settings_structure_copy')" :dependencies="[__('app.festival_taxonomy_directions'), __('app.festival_categories'), __('app.festival_registration_workflows'), __('app.festival_registration_fields'), __('app.festival_fees')]" />
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         @php($cards = [
             ['directions', 'festival_taxonomy_directions', 'festival_directions_card_copy', $permissions['manage']],
-            ['classifications', 'festival_classifications', 'festival_classifications_card_copy', $permissions['manage']],
             ['categories', 'festival_categories', 'festival_categories_card_copy', $permissions['manage']],
             ['workflows', 'festival_registration_workflows', 'festival_workflows_card_copy', $permissions['manage']],
-            ['requirements', 'festival_requirements', 'festival_requirements_card_copy', $permissions['manage']],
+            ['requirements', 'festival_registration_fields', 'festival_registration_fields_card_copy', $permissions['manage']],
             ['fees', 'festival_fees', 'festival_fees_card_copy', $permissions['finance']],
             ['content', 'festival_content_media', 'festival_content_card_copy', $permissions['manage']],
         ])

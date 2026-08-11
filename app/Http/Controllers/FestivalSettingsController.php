@@ -20,8 +20,7 @@ class FestivalSettingsController extends Controller
         abort_unless($permissions['manage'] || $permissions['finance'], 403);
 
         $counts = [
-            'directions' => $permissions['manage'] ? $festivalEdition->axes()->where('kind', 'direction')->withCount('options')->get()->sum('options_count') : null,
-            'classifications' => $permissions['manage'] ? $festivalEdition->axes()->where('kind', '!=', 'direction')->count() : null,
+            'directions' => $permissions['manage'] ? $festivalEdition->directions()->count() : null,
             'categories' => $permissions['manage'] ? $festivalEdition->categories()->count() : null,
             'workflows' => $permissions['manage'] ? $festivalEdition->workflows()->count() : null,
             'requirements' => $permissions['manage'] ? FestivalRequirementDefinition::query()->where('festival_edition_id', $festivalEdition->id)->count() : null,
@@ -35,26 +34,16 @@ class FestivalSettingsController extends Controller
     public function directions(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
         $permissions = $this->managerPermissions($request, $account, $festivalEdition);
-        $axes = $festivalEdition->axes()->where('kind', 'direction')->with(['options' => fn ($query) => $query->withCount('categories')])->get();
+        $directions = $festivalEdition->directions()->withCount('categories')->get();
 
-        return view('festivals.staff.settings.directions', compact('account', 'axes', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
-    }
-
-    public function classifications(Request $request, Account $account, FestivalEdition $festivalEdition): View
-    {
-        $permissions = $this->managerPermissions($request, $account, $festivalEdition);
-        $axes = $festivalEdition->axes()->where('kind', '!=', 'direction')->with(['options' => fn ($query) => $query->withCount('categories')])->get();
-
-        return view('festivals.staff.settings.classifications', compact('account', 'axes', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
+        return view('festivals.staff.settings.directions', compact('account', 'directions', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);
     }
 
     public function categories(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
         $permissions = $this->managerPermissions($request, $account, $festivalEdition);
         $festivalEdition->load([
-            'categories' => fn ($query) => $query->with(['options.axis', 'registrationWorkflow'])->withCount('entries'),
-            'axes.options',
-            'workflows',
+            'categories' => fn ($query) => $query->with(['direction', 'registrationWorkflow'])->withCount('entries'),
         ]);
 
         return view('festivals.staff.settings.categories', compact('account', 'permissions') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);

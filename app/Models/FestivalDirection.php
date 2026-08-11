@@ -2,19 +2,24 @@
 
 namespace App\Models;
 
+use Database\Factories\FestivalDirectionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'festival_edition_id', 'code', 'name', 'kind', 'is_required', 'is_active', 'sort_order'])]
-class FestivalClassificationAxis extends Model
+#[Fillable(['account_id', 'festival_edition_id', 'code', 'name', 'is_active', 'sort_order'])]
+class FestivalDirection extends Model
 {
-    protected $attributes = ['kind' => 'custom', 'is_required' => true, 'is_active' => true, 'sort_order' => 0];
+    /** @use HasFactory<FestivalDirectionFactory> */
+    use HasFactory;
+
+    protected $attributes = ['is_active' => true, 'sort_order' => 0];
 
     protected function casts(): array
     {
-        return ['is_required' => 'boolean', 'is_active' => 'boolean', 'sort_order' => 'integer'];
+        return ['is_active' => 'boolean', 'sort_order' => 'integer'];
     }
 
     public function account(): BelongsTo
@@ -32,13 +37,8 @@ class FestivalClassificationAxis extends Model
         return $this->edition();
     }
 
-    public function options(): HasMany
+    public function categories(): HasMany
     {
-        return $this->hasMany(FestivalClassificationOption::class)->orderBy('sort_order')->orderBy('id');
-    }
-
-    public function festivalClassificationOptions(): HasMany
-    {
-        return $this->options();
+        return $this->hasMany(FestivalCategory::class)->orderBy('sort_order')->orderBy('id');
     }
 }

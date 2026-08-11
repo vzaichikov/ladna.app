@@ -13,6 +13,7 @@ use App\Models\Customer;
 use App\Models\Event;
 use App\Models\FestivalCategory;
 use App\Models\FestivalChargeDefinition;
+use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalParticipant;
@@ -24,6 +25,7 @@ use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
@@ -35,7 +37,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_entry_creation_snapshots_configuration_and_participant_ages(): void
+    public function test_entry_creation_uses_live_category_while_preserving_existing_typed_field_and_price_records(): void
     {
         Queue::fake();
         [$account, $edition, $portalUser] = $this->festival();
@@ -45,7 +47,6 @@ class FestivalRegistrationWorkflowTest extends TestCase
             'max_members' => 3,
             'min_age' => 12,
             'max_age' => 17,
-            'workflow' => 'qualification',
         ]);
         $participants = collect([
             FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id, 'date_of_birth' => $edition->age_reference_date->copy()->subYears(13)]),
@@ -63,11 +64,42 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $initialized->refresh()->load(['participants', 'requirements', 'charges']);
 
         $this->assertSame(FestivalEntryStatus::Draft, $initialized->status);
-        $this->assertSame($category->id, $initialized->category_snapshot['category_id']);
-        $this->assertSame(2, $initialized->category_snapshot['rules']['min_members']);
+        $this->assertNull($initialized->category_snapshot);
+        $this->assertSame('Changed category', $initialized->category->fresh()->name);
+        $this->assertSame(3, $initialized->category->fresh()->min_members);
         $this->assertSame([13, 15], $initialized->participants->pluck('pivot.age_snapshot')->sort()->values()->all());
         $this->assertSame('Qualification video', $initialized->requirements->first()->definition_snapshot['name']);
         $this->assertSame(50000, $initialized->charges->first()->amount_cents);
+    }
+
+    public function test_category_rule_edits_apply_to_an_existing_entry(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival();
+        $category = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'min_members' => 1,
+            'max_members' => 2,
+        ]);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'date_of_birth' => $edition->age_reference_date->copy()->subYears(15),
+        ]);
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+        ]);
+        $entry->participants()->sync([$participant->id => [
+            'account_id' => $account->id,
+            'sort_order' => 0,
+            'age_snapshot' => 18,
+            'name_snapshot' => $participant->displayName(),
+        ]]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
+        $category->update(['min_members' => 2]);
+
+        $this->expectException(ValidationException::class);
+        app(SubmitFestivalEntryStep::class)->execute($entry, $entry->steps->first());
     }
 
     public function test_invalid_member_count_and_age_are_rejected(): void
@@ -82,6 +114,81 @@ class FestivalRegistrationWorkflowTest extends TestCase
 
         $this->expectException(ValidationException::class);
         app(SubmitFestivalEntryStep::class)->execute($entry, $entry->steps->first());
+    }
+
+    public function test_applicant_category_cards_are_grouped_by_direction_and_show_live_requirements(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival();
+        $firstDirection = FestivalDirection::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Aerial',
+            'code' => 'aerial-one',
+            'sort_order' => 10,
+        ]);
+        $secondDirection = FestivalDirection::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Aerial',
+            'code' => 'aerial-two',
+            'sort_order' => 20,
+        ]);
+        $category = FestivalCategory::factory()->for($edition)->for($firstDirection)->create([
+            'account_id' => $account->id,
+            'name' => 'Solo Hoop',
+            'requirements_html' => '<p>Bring a certified hoop.</p>',
+            'registration_closes_at' => CarbonImmutable::parse('2026-09-15 12:30', 'Europe/Kyiv')->utc(),
+            'min_members' => 1,
+            'max_members' => 1,
+            'min_age' => 12,
+            'max_age' => 18,
+        ]);
+        FestivalCategory::factory()->for($edition)->for($secondDirection)->create([
+            'account_id' => $account->id,
+            'name' => 'Solo Silks',
+            'requirements_html' => null,
+        ]);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'date_of_birth' => $edition->age_reference_date->copy()->subYears(15),
+        ]);
+
+        $createPage = $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entries.create', [$account->slug, $edition->slug]));
+        $createPage->assertOk()
+            ->assertSee('type="radio" name="festival_category_id"', false)
+            ->assertDontSee('<select name="festival_category_id"', false)
+            ->assertSee('Solo Hoop')
+            ->assertSee('Bring a certified hoop.', false)
+            ->assertSee(__('app.festival_category_deadline_value', ['date' => '15.09.2026 12:30', 'timezone' => 'Europe/Kyiv']))
+            ->assertSee(__('app.festival_category_requirements_none'));
+        $this->assertSame(2, substr_count($createPage->getContent(), '<legend class="text-base font-semibold text-slate-950">Aerial</legend>'));
+
+        $this->actingAs($portalUser, 'festival')->post(route('festival.portal.entries.store', [$account->slug, $edition->slug]), [
+            'festival_category_id' => $category->id,
+            'participant_ids' => [$participant->id],
+            'entry_name' => 'Live category act',
+        ])->assertRedirect();
+        $entry = FestivalEntry::query()->where('festival_portal_user_id', $portalUser->id)->where('entry_name', 'Live category act')->firstOrFail();
+        $this->assertNull($entry->category_snapshot);
+
+        $firstDirection->update(['name' => 'Updated Aerial']);
+        $category->update(['name' => 'Updated Solo Hoop', 'requirements_html' => '<p>Current organizer conditions.</p>']);
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entries.edit', [$account->slug, $entry]))
+            ->assertOk()
+            ->assertSee('Updated Aerial')
+            ->assertSee('Updated Solo Hoop')
+            ->assertSee('Current organizer conditions.', false)
+            ->assertSee(__('app.festival_category_deadline_value', ['date' => '15.09.2026 12:30', 'timezone' => 'Europe/Kyiv']))
+            ->assertDontSee('Bring a certified hoop.')
+            ->assertSee('type="hidden" name="festival_category_id"', false)
+            ->assertDontSee('type="radio" name="festival_category_id"', false);
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entries.show', [$account->slug, $entry]))
+            ->assertOk()
+            ->assertSee('Current organizer conditions.', false)
+            ->assertSee(__('app.festival_category_deadline_value', ['date' => '15.09.2026 12:30', 'timezone' => 'Europe/Kyiv']))
+            ->assertDontSee('Bring a certified hoop.');
     }
 
     public function test_private_submission_replacement_keeps_only_current_file_and_enforces_portal_tenancy(): void
@@ -155,7 +262,11 @@ class FestivalRegistrationWorkflowTest extends TestCase
     {
         $account = Account::factory()->create(['enable_festivals' => true]);
         $series = FestivalSeries::factory()->for($account)->create();
-        $edition = FestivalEdition::factory()->published()->for($series)->create(['account_id' => $account->id, 'age_reference_date' => now()->addMonth()->toDateString()]);
+        $edition = FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'age_reference_date' => now()->addMonth()->toDateString(),
+            'timezone' => 'Europe/Kyiv',
+        ]);
         $portalUser = FestivalPortalUser::factory()->for($account)->create();
 
         return [$account, $edition, $portalUser];

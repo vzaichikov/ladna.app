@@ -118,14 +118,14 @@ class FestivalEdition extends Model
         return $this->stages();
     }
 
-    public function axes(): HasMany
+    public function directions(): HasMany
     {
-        return $this->hasMany(FestivalClassificationAxis::class)->orderBy('sort_order')->orderBy('id');
+        return $this->hasMany(FestivalDirection::class)->orderBy('sort_order')->orderBy('id');
     }
 
-    public function festivalClassificationAxes(): HasMany
+    public function festivalDirections(): HasMany
     {
-        return $this->axes();
+        return $this->directions();
     }
 
     public function categories(): HasMany

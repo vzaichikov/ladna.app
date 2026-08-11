@@ -9,6 +9,8 @@ use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Models\Account;
 use App\Models\FestivalAnnouncement;
+use App\Models\FestivalCategory;
+use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalNotification;
@@ -18,7 +20,6 @@ use App\Models\FestivalTicketOrderItem;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class FestivalWorkspaceController extends Controller
@@ -32,7 +33,7 @@ class FestivalWorkspaceController extends Controller
 
         $entriesQuery = FestivalEntry::query()
             ->where('festival_edition_id', $festivalEdition->id)
-            ->with('category.options.axis')
+            ->with('category.direction')
             ->withCount([
                 'requirements as blocking_requirements_count' => fn ($query) => $query->where('is_required', true)->whereNotIn('status', [FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Waived->value]),
                 'charges as blocking_charges_count' => fn ($query) => $query->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value]),
@@ -57,9 +58,23 @@ class FestivalWorkspaceController extends Controller
             ->pluck('aggregate', 'status');
         $categories = $festivalEdition->categories()
             ->withCount('entries')
-            ->with('options.axis')
+            ->with('direction')
             ->orderBy('name')
             ->get();
+        $entryTable = (new FestivalEntry)->getTable();
+        $categoryTable = (new FestivalCategory)->getTable();
+        $directionTable = (new FestivalDirection)->getTable();
+        $directionStatistics = FestivalEntry::query()
+            ->where($entryTable.'.festival_edition_id', $festivalEdition->id)
+            ->leftJoin($categoryTable, $categoryTable.'.id', '=', $entryTable.'.festival_category_id')
+            ->leftJoin($directionTable, $directionTable.'.id', '=', $categoryTable.'.festival_direction_id')
+            ->whereNotNull($directionTable.'.name')
+            ->select($directionTable.'.name as label')
+            ->selectRaw('count(*) as aggregate')
+            ->groupBy($directionTable.'.code', $directionTable.'.name')
+            ->orderBy('label')
+            ->get()
+            ->map(fn ($row): array => ['label' => (string) $row->label, 'count' => (int) $row->aggregate]);
 
         return view('festivals.staff.applications', [
             'account' => $account,
@@ -68,7 +83,7 @@ class FestivalWorkspaceController extends Controller
             'entries' => $entries,
             'entryStatistics' => $entryStatistics,
             'categoryStatistics' => $categories->map(fn ($category): array => ['label' => $category->name, 'count' => $category->entries_count]),
-            'axisStatistics' => $this->axisStatistics($categories),
+            'directionStatistics' => $directionStatistics,
         ]);
     }
 
@@ -181,27 +196,5 @@ class FestivalWorkspaceController extends Controller
         abort_unless($edition->account_id === $account->id, 404);
 
         return $this->workspaceAccess->permissions($request->user(), $account, $edition);
-    }
-
-    /**
-     * @param  Collection<int, mixed>  $categories
-     * @return Collection<int, array{axis: string, label: string, count: int}>
-     */
-    private function axisStatistics(Collection $categories): Collection
-    {
-        return $categories
-            ->flatMap(fn ($category) => $category->options->map(fn ($option): array => [
-                'axis' => $option->axis->name,
-                'label' => $option->label,
-                'count' => $category->entries_count,
-            ]))
-            ->groupBy(fn (array $row): string => $row['axis'].'|'.$row['label'])
-            ->map(fn (Collection $rows): array => [
-                'axis' => $rows->first()['axis'],
-                'label' => $rows->first()['label'],
-                'count' => $rows->sum('count'),
-            ])
-            ->sortBy([['axis', 'asc'], ['label', 'asc']])
-            ->values();
     }
 }

@@ -251,7 +251,7 @@ class FestivalRegistrationStepperTest extends TestCase
         $portalUser = FestivalPortalUser::factory()->for($account)->create();
         $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
         $workflow = app(ProvisionFestivalWorkflow::class)->execute($edition, 'QA registration');
-        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id, 'festival_workflow_id' => $workflow->id, 'workflow' => 'qualification']);
+        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id, 'festival_workflow_id' => $workflow->id]);
 
         return [$account, $edition, $portalUser, $participant, $category, $workflow];
     }

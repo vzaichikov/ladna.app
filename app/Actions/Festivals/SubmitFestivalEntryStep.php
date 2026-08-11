@@ -11,6 +11,7 @@ use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalWorkflowReviewEffect;
 use App\Enums\FestivalWorkflowReviewMode;
 use App\Enums\FestivalWorkflowStepType;
+use App\Models\FestivalCategory;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
@@ -34,7 +35,14 @@ class SubmitFestivalEntryStep
             $purchase = FestivalEditionPurchase::query()->where('festival_edition_id', $entry->festival_edition_id)->lockForUpdate()->first();
             abort_if($purchase?->status === FestivalEditionPurchaseStatus::PaymentReversed, 423, __('app.festival_payment_reversed_readonly'));
 
-            $entry = FestivalEntry::query()->with(['edition', 'category.options.axis', 'participants', 'portalUser', 'steps'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $entry = FestivalEntry::query()->with(['edition', 'participants', 'portalUser', 'steps'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $category = FestivalCategory::query()
+                ->whereKey($entry->festival_category_id)
+                ->where('account_id', $entry->account_id)
+                ->where('festival_edition_id', $entry->festival_edition_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $entry->setRelation('category', $category);
             $step = FestivalEntryStep::query()->with(['requirements.submissions', 'charges'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
             $this->workflowState->assertMutable($entry, $step);
             $this->assertRequirementsComplete($step);
@@ -97,7 +105,7 @@ class SubmitFestivalEntryStep
     private function submitApplication(FestivalEntry $entry, ?FestivalEditionPurchase $purchase): void
     {
         $firstSubmission = $entry->submitted_at === null;
-        $this->rules->validateEntrySnapshot($entry->edition, $entry, $firstSubmission);
+        $this->rules->validateEntry($entry->edition, $entry->category, $entry->participants, $firstSubmission);
 
         if ($firstSubmission) {
             $this->assertParticipantLimits($entry, $purchase);

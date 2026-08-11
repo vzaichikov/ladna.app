@@ -1,4 +1,4 @@
-@props(['toggleRoute', 'moveRoute', 'active', 'editTarget' => null])
+@props(['toggleRoute', 'moveRoute', 'active', 'editTarget' => null, 'editRoute' => null])
 
 <div {{ $attributes->class(['flex flex-wrap items-center justify-end gap-2']) }}>
     <form method="POST" action="{{ $moveRoute }}">
@@ -13,7 +13,13 @@
         <input type="hidden" name="direction" value="down">
         <x-ui.action-button type="submit" icon="arrow-down" :label="__('app.move_down')" />
     </form>
-    @if ($editTarget)
+    @if ($editRoute)
+        <x-ui.action-button
+            :href="$editRoute"
+            icon="edit"
+            :label="__('app.edit')"
+        />
+    @elseif ($editTarget)
         <x-ui.action-button
             type="button"
             icon="edit"

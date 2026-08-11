@@ -11,15 +11,12 @@ use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalQualificationStatus;
 use App\Enums\FestivalRequirementStatus;
-use App\Http\Requests\FestivalCategoryRequest;
 use App\Http\Requests\FestivalChargeDefinitionRequest;
 use App\Http\Requests\FestivalEditionRequest;
 use App\Http\Requests\FestivalRequirementRequest;
 use App\Models\Account;
-use App\Models\FestivalCategory;
 use App\Models\FestivalCharge;
 use App\Models\FestivalChargeDefinition;
-use App\Models\FestivalClassificationAxis;
 use App\Models\FestivalContentSection;
 use App\Models\FestivalDocument;
 use App\Models\FestivalEdition;
@@ -192,25 +189,6 @@ class FestivalStaffController extends Controller
         return redirect()->route('dashboard.accounts.festivals.show', [$account, $festivalEdition])->with('status', __('app.festival_edition_saved'));
     }
 
-    public function storeCategory(FestivalCategoryRequest $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
-    {
-        $this->assertEdition($account, $festivalEdition);
-        abort_unless($request->user()?->can('manageFestivals', $account), 403);
-        $data = $request->validated();
-        if (isset($data['festival_workflow_id'])) {
-            abort_unless($festivalEdition->workflows()->whereKey($data['festival_workflow_id'])->exists(), 422);
-        }
-        $category = FestivalCategory::query()->updateOrCreate(
-            ['festival_edition_id' => $festivalEdition->id, 'code' => $data['code']],
-            ['account_id' => $account->id, ...$data, 'is_active' => $data['is_active'] ?? true],
-        );
-        $options = $festivalEdition->axes()->with('options')->get()->flatMap->options->whereIn('id', $data['option_ids'] ?? []);
-        abort_unless($options->count() === count($data['option_ids'] ?? []), 422);
-        $category->options()->sync($options->mapWithKeys(fn ($option): array => [$option->id => ['account_id' => $account->id]])->all());
-
-        return redirect()->route('dashboard.accounts.festivals.settings.categories', [$account, $festivalEdition])->with('status', __('app.festival_category_saved'));
-    }
-
     public function storeRequirement(FestivalRequirementRequest $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
@@ -257,26 +235,6 @@ class FestivalStaffController extends Controller
         $festivalEdition->stages()->create(['account_id' => $account->id, ...$data]);
 
         return redirect()->route('dashboard.accounts.festivals.program', [$account, $festivalEdition])->with('status', __('app.festival_stage_saved'));
-    }
-
-    public function storeAxis(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
-    {
-        $this->assertEdition($account, $festivalEdition);
-        abort_unless($request->user()?->can('manageFestivals', $account), 403);
-        $data = $request->validate([
-            'code' => ['required', 'alpha_dash:ascii', 'max:100'], 'name' => ['required', 'string', 'max:255'],
-            'kind' => ['required', Rule::in(['direction', 'style', 'age', 'level', 'entry_format', 'custom'])],
-            'options' => ['required', 'array', 'min:1'], 'options.*.code' => ['required', 'alpha_dash:ascii', 'max:100'],
-            'options.*.label' => ['required', 'string', 'max:255'],
-        ]);
-        DB::transaction(function () use ($account, $festivalEdition, $data): void {
-            $axis = FestivalClassificationAxis::query()->create(['account_id' => $account->id, 'festival_edition_id' => $festivalEdition->id, 'code' => $data['code'], 'name' => $data['name'], 'kind' => $data['kind']]);
-            foreach ($data['options'] as $index => $option) {
-                $axis->options()->create(['account_id' => $account->id, 'festival_edition_id' => $festivalEdition->id, ...$option, 'sort_order' => $index]);
-            }
-        });
-
-        return redirect()->route('dashboard.accounts.festivals.settings', [$account, $festivalEdition])->with('status', __('app.festival_axis_saved'));
     }
 
     public function storeContent(Request $request, Account $account, FestivalEdition $festivalEdition, StudioRulesHtmlSanitizer $sanitizer): RedirectResponse

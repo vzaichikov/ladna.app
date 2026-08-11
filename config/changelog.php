@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.127.0',
+                'date' => '2026-08-11',
+                'title' => 'Simpler Festival directions and categories',
+                'items' => ['Festival settings now use simple Directions and Categories: every category belongs to one direction, and the Classification builder has been removed.', 'Categories are created and edited on focused pages with grouped participation, performance, registration, deadline, and formatted-requirement settings. Applicants choose accessible category cards grouped by direction.', 'Existing entries always show and validate the category’s current direction, limits, deadline, and requirements. Typed questions and uploads keep their behavior under the clearer Registration fields name.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.126.2',
                 'date' => '2026-08-10',
                 'title' => 'Consistent Ukrainian Festival terminology',
@@ -1115,6 +1122,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.127.0',
+                'date' => '2026-08-11',
+                'title' => 'Простіші напрямки та категорії фестивалю',
+                'items' => ['У налаштуваннях фестивалю залишилися прості Напрямки й Категорії: кожна категорія належить до одного напрямку, а конструктор класифікацій прибрано.', 'Категорії створюються й редагуються на окремих сторінках із тематичними блоками для умов участі, виступу, реєстрації, строку та форматованих вимог. Заявники обирають доступні картки категорій, згруповані за напрямками.', 'Створені заявки завжди показують і перевіряють актуальні напрямок, обмеження, строк і вимоги категорії. Типізовані питання та файли працюють як раніше під зрозумілішою назвою «Поля реєстрації».'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.126.2',
                 'date' => '2026-08-10',

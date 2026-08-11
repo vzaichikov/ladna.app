@@ -25,7 +25,12 @@
                         && $entry->blocking_requirements_count === 0
                         && $entry->blocking_charges_count === 0
                         && $entry->performance_slots_count > 0;
-                    $currentStep = $entry->steps->first(fn($step) => $step->status !== \App\Enums\FestivalEntryStepStatus::Approved);
+                    $currentStep = $workspacePermissions['registrations']
+                        ? $entry->steps->first(fn($step) => $step->status !== \App\Enums\FestivalEntryStepStatus::Approved)
+                        : null;
+                    $category = $entry->category;
+                    $categoryName = $entry->category->name;
+                    $directionName = $entry->category->direction->name;
                 @endphp
                 <details class="rounded-xl border border-stone-200 bg-slate-50/70 p-4">
                     <summary class="cursor-pointer list-none">
@@ -39,7 +44,7 @@
                                     </span>
                                 </div>
                                 <strong class="mt-2 block truncate text-lg text-slate-950">{{ $entry->entry_name }}</strong>
-                                <span class="text-sm text-slate-500">{{ $entry->category->name }}</span>
+                                <span class="text-sm text-slate-500">{{ $directionName }} · {{ $categoryName }}</span>
                                 @if ($workspacePermissions['registrations'])
                                     <span class="text-sm text-slate-500"> · {{ $entry->portalUser->email }}</span>
                                 @endif
@@ -53,6 +58,31 @@
                     </summary>
 
                     <div class="mt-5 grid gap-5 border-t border-stone-200 pt-5 xl:grid-cols-2">
+                        <section class="rounded-xl border border-stone-200 bg-white p-4 xl:col-span-2">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ $directionName }}</p>
+                            <h3 class="mt-1 font-semibold text-slate-950">{{ $categoryName }}</h3>
+                            <dl class="mt-3 flex flex-wrap gap-2 text-xs text-slate-700">
+                                <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $category->min_members, 'max' => $category->max_members]) }}</dd></div>
+                                @if($category->min_age !== null || $category->max_age !== null)
+                                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_age_limits') }}</dt><dd>{{ __('app.festival_age_range', ['min' => $category->min_age ?? '—', 'max' => $category->max_age ?? '—']) }}</dd></div>
+                                @endif
+                                @if($category->min_duration_seconds !== null || $category->max_duration_seconds !== null)
+                                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_performance_duration') }}</dt><dd>{{ __('app.festival_duration_range', ['min' => $category->min_duration_seconds ?? '—', 'max' => $category->max_duration_seconds ?? '—']) }}</dd></div>
+                                @endif
+                                @if($category->registration_closes_at)
+                                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_registration_closes_at') }}</dt><dd>{{ __('app.festival_category_deadline_value', ['date' => $category->registration_closes_at->timezone($edition->timezone)->format('d.m.Y H:i'), 'timezone' => $edition->timezone]) }}</dd></div>
+                                @endif
+                            </dl>
+                            <div class="mt-4 border-t border-stone-200 pt-4">
+                                <h4 class="text-sm font-semibold text-slate-950">{{ __('app.festival_category_requirements') }}</h4>
+                                @if($category->requirements_html)
+                                    <div class="prose prose-slate mt-2 max-w-none text-sm">{!! $category->requirements_html !!}</div>
+                                @else
+                                    <p class="mt-2 text-sm text-slate-500">{{ __('app.festival_category_requirements_none') }}</p>
+                                @endif
+                            </div>
+                        </section>
+
                         @if ($workspacePermissions['registrations'])
                             <section>
                                 <h3 class="font-semibold text-slate-950">{{ __('app.festival_application_review') }}</h3>
@@ -166,10 +196,10 @@
                 </dl>
             </div>
             <div>
-                <h3 class="font-semibold">{{ __('app.festival_entries_by_axis') }}</h3>
+                <h3 class="font-semibold">{{ __('app.festival_entries_by_direction') }}</h3>
                 <dl class="mt-2 space-y-2">
-                    @foreach ($axisStatistics as $row)
-                        <div class="flex justify-between rounded-lg bg-slate-50 px-3 py-2"><dt><span class="text-xs text-slate-500">{{ $row['axis'] }}</span><br>{{ $row['label'] }}</dt><dd class="font-semibold">{{ $row['count'] }}</dd></div>
+                    @foreach ($directionStatistics as $row)
+                        <div class="flex justify-between rounded-lg bg-slate-50 px-3 py-2"><dt>{{ $row['label'] }}</dt><dd class="font-semibold">{{ $row['count'] }}</dd></div>
                     @endforeach
                 </dl>
             </div>

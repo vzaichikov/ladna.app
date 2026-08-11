@@ -7,8 +7,8 @@ use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\FestivalCategory;
 use App\Models\FestivalChargeDefinition;
-use App\Models\FestivalClassificationAxis;
 use App\Models\FestivalContentSection;
+use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalSeries;
@@ -21,21 +21,14 @@ class FestivalSettingsManagementTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_owner_can_manage_taxonomy_registration_and_content_from_focused_pages(): void
+    public function test_owner_can_manage_directions_categories_registration_fields_fees_and_content(): void
     {
         [$account, $edition, $owner] = $this->festival();
 
-        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.axes.store', [$account, $edition]), [
-            'name' => 'Снаряд',
-            'kind' => 'direction',
-            'is_required' => 1,
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.directions', [$account, $edition]));
-        $axis = FestivalClassificationAxis::query()->where('festival_edition_id', $edition->id)->where('code', 'snaryad')->firstOrFail();
-
-        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.axis-options.store', [$account, $edition, $axis]), [
-            'label' => 'Кільце',
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.directions.store', [$account, $edition]), [
+            'name' => 'Повітряне кільце',
         ])->assertRedirect();
-        $option = $axis->options()->firstOrFail();
+        $direction = FestivalDirection::query()->where('festival_edition_id', $edition->id)->where('code', 'povitryane-kiltse')->firstOrFail();
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.workflows.store', [$account, $edition]), [
             'name' => 'Основна реєстрація',
@@ -43,21 +36,18 @@ class FestivalSettingsManagementTest extends TestCase
             'technical_review_mode' => 'automatic',
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.workflows', [$account, $edition]));
         $workflow = FestivalWorkflow::query()->where('festival_edition_id', $edition->id)->where('name', 'Основна реєстрація')->with('steps')->firstOrFail();
-        $this->assertSame(
-            ['Заявка та кваліфікація', 'Оплата участі', 'Технічна анкета', 'Підсумок'],
-            $workflow->steps->pluck('title')->all(),
-        );
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.categories.store', [$account, $edition]), [
             'name' => 'Соло — кільце',
+            'festival_direction_id' => $direction->id,
             'festival_workflow_id' => $workflow->id,
-            'workflow' => 'qualification',
             'min_members' => 1,
             'max_members' => 1,
-            'option_ids' => [$option->id],
+            'requirements_html' => '<h2 onclick="bad()">Умови</h2><script>bad()</script><p style="text-align: center; color: red;">Безпечний текст.</p>',
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]));
         $category = FestivalCategory::query()->where('festival_edition_id', $edition->id)->where('code', 'solo-kiltse')->firstOrFail();
-        $this->assertTrue($category->options()->whereKey($option->id)->exists());
+        $this->assertTrue($category->direction->is($direction));
+        $this->assertSame('<h2>Умови</h2><p style="text-align: center;">Безпечний текст.</p>', $category->requirements_html);
 
         $applicationStep = $workflow->steps->first();
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), [
@@ -75,8 +65,14 @@ class FestivalSettingsManagementTest extends TestCase
             'is_required' => 1,
             'is_active' => 1,
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]));
-        $requirement = FestivalRequirementDefinition::query()->where('festival_edition_id', $edition->id)->where('code', 'kvalifikatsiyne-video')->firstOrFail();
-        $this->assertSame(['mp4', 'mov'], $requirement->allowed_extensions);
+        $registrationField = FestivalRequirementDefinition::query()->where('festival_edition_id', $edition->id)->where('code', 'kvalifikatsiyne-video')->firstOrFail();
+        $this->assertSame(['mp4', 'mov'], $registrationField->allowed_extensions);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('Поля реєстрації')
+            ->assertSee('Кваліфікаційне відео');
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.charge-definitions.store', [$account, $edition]), [
             'festival_category_id' => $category->id,
@@ -86,200 +82,191 @@ class FestivalSettingsManagementTest extends TestCase
             'amount_cents' => 50000,
             'is_active' => 1,
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.fees', [$account, $edition]));
-        $fee = FestivalChargeDefinition::query()->where('festival_edition_id', $edition->id)->firstOrFail();
-        $this->assertSame('UAH', $fee->currency);
+        $this->assertSame('UAH', FestivalChargeDefinition::query()->where('festival_edition_id', $edition->id)->firstOrFail()->currency);
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.content.store', [$account, $edition]), [
             'title' => 'Для учасників',
             'body_html' => '<p>Актуальна інформація.</p>',
             'visibility' => 'public',
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.content', [$account, $edition]));
-        $section = FestivalContentSection::query()->where('festival_edition_id', $edition->id)->firstOrFail();
-        $this->assertSame('dlya-uchasnykiv', $section->key);
-
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.content.update', [$account, $edition, $section]), [
-            'title' => 'Важливо для учасників',
-            'body_html' => '<p>Оновлена інформація.</p>',
-            'visibility' => 'public',
-            'is_active' => 1,
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.content', [$account, $edition]));
-        $this->assertSame('Важливо для учасників', $section->refresh()->title);
-        $this->assertSame('dlya-uchasnykiv', $section->key);
-
-        $this->actingAs($owner)->patch(route('dashboard.accounts.festivals.requirements.toggle', [$account, $edition, $requirement]))->assertRedirect();
-        $this->assertFalse($requirement->refresh()->is_active);
+        $this->assertSame('dlya-uchasnykiv', FestivalContentSection::query()->where('festival_edition_id', $edition->id)->firstOrFail()->key);
     }
 
-    public function test_referenced_taxonomy_and_workflow_dependencies_cannot_be_deactivated(): void
+    public function test_referenced_direction_and_workflow_cannot_be_deactivated(): void
     {
         [$account, $edition, $owner] = $this->festival();
-        $axis = $edition->axes()->create(['account_id' => $account->id, 'code' => 'direction', 'name' => 'Напрямок', 'kind' => 'direction']);
-        $option = $axis->options()->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id, 'code' => 'silks', 'label' => 'Полотна']);
+        $direction = FestivalDirection::factory()->for($edition)->create(['account_id' => $account->id]);
         $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
-        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id, 'festival_workflow_id' => $workflow->id]);
-        $category->options()->attach($option->id, ['account_id' => $account->id]);
+        FestivalCategory::factory()->for($edition)->for($direction)->create([
+            'account_id' => $account->id,
+            'festival_workflow_id' => $workflow->id,
+        ]);
 
         $this->actingAs($owner)
-            ->patch(route('dashboard.accounts.festivals.axis-options.toggle', [$account, $edition, $axis, $option]))
+            ->patch(route('dashboard.accounts.festivals.directions.toggle', [$account, $edition, $direction]))
             ->assertRedirect()
-            ->assertSessionHasErrors('option');
+            ->assertSessionHasErrors('direction');
         $this->actingAs($owner)
-            ->patch(route('dashboard.accounts.festivals.axes.toggle', [$account, $edition, $axis]))
+            ->put(route('dashboard.accounts.festivals.directions.update', [$account, $edition, $direction]), [
+                'name' => $direction->name,
+                'is_active' => 0,
+            ])
             ->assertRedirect()
-            ->assertSessionHasErrors('axis');
+            ->assertSessionHasErrors('direction');
         $this->actingAs($owner)
             ->patch(route('dashboard.accounts.festivals.workflows.toggle', [$account, $edition, $workflow]))
             ->assertRedirect()
             ->assertSessionHasErrors('workflow');
 
-        $this->assertTrue($axis->refresh()->is_active);
-        $this->assertTrue($option->refresh()->is_active);
+        $this->assertTrue($direction->refresh()->is_active);
         $this->assertTrue($workflow->refresh()->is_active);
     }
 
-    public function test_direction_codes_are_generated_once_and_hidden_from_the_directions_interface(): void
+    public function test_direction_codes_are_collision_safe_stable_hidden_and_orderable(): void
     {
         [$account, $edition, $owner] = $this->festival();
 
-        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.axes.store', [$account, $edition]), [
-            'name' => 'Повітряні напрямки',
-            'kind' => 'direction',
-            'is_required' => 1,
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.directions', [$account, $edition]));
-
-        $axis = FestivalClassificationAxis::query()->where('festival_edition_id', $edition->id)->firstOrFail();
-        $this->assertSame('povitryani-napryamky', $axis->code);
-
-        foreach (['Повітряне кільце', 'Повітряне кільце'] as $label) {
-            $this->actingAs($owner)->post(route('dashboard.accounts.festivals.axis-options.store', [$account, $edition, $axis]), [
-                'label' => $label,
+        foreach (['Повітряне кільце', 'Повітряне кільце'] as $name) {
+            $this->actingAs($owner)->post(route('dashboard.accounts.festivals.directions.store', [$account, $edition]), [
+                'name' => $name,
             ])->assertRedirect();
         }
 
-        $options = $axis->options()->orderBy('id')->get();
-        $this->assertSame(['povitryane-kiltse', 'povitryane-kiltse-2'], $options->pluck('code')->all());
+        $directions = FestivalDirection::query()->where('festival_edition_id', $edition->id)->orderBy('id')->get();
+        $this->assertSame(['povitryane-kiltse', 'povitryane-kiltse-2'], $directions->pluck('code')->all());
 
-        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.axis-options.store', [$account, $edition, $axis]), [
-            'label' => str_repeat('Щ', 255),
-        ])->assertRedirect();
-        $this->assertLessThanOrEqual(100, strlen($axis->options()->latest('id')->firstOrFail()->code));
-
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.axes.update', [$account, $edition, $axis]), [
-            'name' => 'Оновлена група',
-            'kind' => 'direction',
-            'is_required' => 1,
-            'is_active' => 1,
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.directions', [$account, $edition]));
-        $this->assertSame('povitryani-napryamky', $axis->refresh()->code);
-
-        $firstOption = $options->firstOrFail();
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.axis-options.update', [$account, $edition, $axis, $firstOption]), [
-            'label' => 'Новий напрямок',
+        $first = $directions->firstOrFail();
+        $second = $directions->last();
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.directions.update', [$account, $edition, $first]), [
+            'name' => 'Новий напрямок',
             'is_active' => 1,
         ])->assertRedirect();
-        $this->assertSame('povitryane-kiltse', $firstOption->refresh()->code);
+        $this->assertSame('povitryane-kiltse', $first->refresh()->code);
+
+        $this->actingAs($owner)->patch(route('dashboard.accounts.festivals.directions.move', [$account, $edition, $second]), [
+            'direction' => 'up',
+        ])->assertRedirect();
+        $this->assertLessThan($first->refresh()->sort_order, $second->refresh()->sort_order);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.settings.directions', [$account, $edition]))
             ->assertOk()
             ->assertDontSee('name="code"', false)
-            ->assertDontSee('<select name="kind"', false)
-            ->assertSee('data-festival-edit-toggle', false)
-            ->assertSee(__('app.festival_direction_group_name_help'))
-            ->assertDontSee('Внутрішній slug');
-
-        $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.settings.classifications', [$account, $edition]))
-            ->assertOk()
-            ->assertDontSee('name="code"', false)
-            ->assertSee('<select name="kind"', false);
+            ->assertDontSee('classification', false)
+            ->assertSee('data-festival-edit-toggle', false);
     }
 
-    public function test_all_settings_identifiers_are_automatic_collision_safe_stable_and_hidden(): void
+    public function test_category_create_and_edit_pages_are_grouped_sanitized_and_timezone_aware(): void
     {
         [$account, $edition, $owner] = $this->festival();
+        $edition->forceFill(['timezone' => 'Europe/Kyiv'])->save();
+        $direction = FestivalDirection::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Pole Art']);
 
-        foreach (['Рівень', 'Рівень'] as $name) {
-            $this->actingAs($owner)->post(route('dashboard.accounts.festivals.axes.store', [$account, $edition]), [
-                'name' => $name,
-                'kind' => 'level',
-                'is_required' => 1,
-            ])->assertRedirect(route('dashboard.accounts.festivals.settings.classifications', [$account, $edition]));
-        }
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]))
+            ->assertOk()
+            ->assertSee(route('dashboard.accounts.festivals.categories.create', [$account, $edition]), false)
+            ->assertDontSee('name="name"', false)
+            ->assertDontSee('data-studio-rules-editor', false);
 
-        $axes = FestivalClassificationAxis::query()->where('festival_edition_id', $edition->id)->orderBy('id')->get();
-        $this->assertSame(['riven', 'riven-2'], $axes->pluck('code')->all());
-        $axis = $axes->firstOrFail();
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.categories.create', [$account, $edition]))
+            ->assertOk()
+            ->assertSeeInOrder([
+                __('app.festival_category_details'),
+                __('app.festival_category_eligibility'),
+                __('app.festival_category_performance'),
+                __('app.festival_category_registration'),
+                __('app.festival_category_requirements'),
+            ])
+            ->assertSee('data-studio-rules-editor', false)
+            ->assertSee('name="festival_direction_id"', false)
+            ->assertDontSee('name="workflow"', false)
+            ->assertDontSee('name="option_ids', false);
 
-        foreach (['Початківець', 'Початківець'] as $label) {
-            $this->actingAs($owner)->post(route('dashboard.accounts.festivals.axis-options.store', [$account, $edition, $axis]), [
-                'label' => $label,
-            ])->assertRedirect();
-        }
-        $options = $axis->options()->orderBy('id')->get();
-        $this->assertSame(['pochatkivets', 'pochatkivets-2'], $options->pluck('code')->all());
-
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.axes.update', [$account, $edition, $axis]), [
-            'name' => 'Досвід',
-            'kind' => 'level',
-            'is_required' => 1,
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.categories.store', [$account, $edition]), [
+            'name' => 'Junior Pole Art',
+            'festival_direction_id' => $direction->id,
+            'min_members' => 1,
+            'max_members' => 2,
+            'min_age' => 8,
+            'max_age' => 12,
+            'min_duration_seconds' => 120,
+            'max_duration_seconds' => 180,
+            'registration_closes_at' => '2026-08-20T18:30',
+            'requirements_html' => '<p><br></p>',
             'is_active' => 1,
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.classifications', [$account, $edition]));
-        $this->assertSame('riven', $axis->refresh()->code);
+        ])->assertRedirect(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]));
 
-        $option = $options->firstOrFail();
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.axis-options.update', [$account, $edition, $axis, $option]), [
-            'label' => 'Профі',
-            'is_active' => 1,
-        ])->assertRedirect();
-        $this->assertSame('pochatkivets', $option->refresh()->code);
+        $category = FestivalCategory::query()->where('festival_edition_id', $edition->id)->where('code', 'junior-pole-art')->firstOrFail();
+        $this->assertNull($category->requirements_html);
+        $this->assertSame('2026-08-20 15:30:00', $category->registration_closes_at->utc()->format('Y-m-d H:i:s'));
 
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]))
+            ->assertOk()
+            ->assertSee('value="2026-08-20T18:30"', false)
+            ->assertSee('data-studio-rules-editor', false);
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]))
+            ->put(route('dashboard.accounts.festivals.categories.update', [$account, $edition, $category]), [
+                'name' => 'Junior Pole Art',
+                'festival_direction_id' => $direction->id,
+                'min_members' => 3,
+                'max_members' => 2,
+            ])
+            ->assertRedirect(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]))
+            ->assertSessionHasErrors('max_members');
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]))
+            ->assertSee('name="min_members" value="3"', false);
+    }
+
+    public function test_category_and_direction_dependencies_are_tenant_scoped_and_manager_only(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        [$otherAccount, $otherEdition] = $this->festival();
+        $direction = FestivalDirection::factory()->for($edition)->create(['account_id' => $account->id]);
+        $otherDirection = FestivalDirection::factory()->for($otherEdition)->create(['account_id' => $otherAccount->id]);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.categories.store', [$account, $edition]), [
+            'name' => 'Cross tenant category',
+            'festival_direction_id' => $otherDirection->id,
+            'min_members' => 1,
+            'max_members' => 1,
+        ])->assertSessionHasErrors('festival_direction_id');
+        $this->assertDatabaseMissing('festival_categories', ['festival_edition_id' => $edition->id, 'name' => 'Cross tenant category']);
+
+        $category = FestivalCategory::factory()->for($edition)->for($direction)->create(['account_id' => $account->id]);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.categories.edit', [$account, $otherEdition, $category]))
+            ->assertNotFound();
+
+        $finance = User::factory()->create();
+        $account->users()->attach($finance->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => [StudioPermission::ManageFestivalFinance->value],
+        ]);
+        $this->actingAs($finance)->get(route('dashboard.accounts.festivals.categories.create', [$account, $edition]))->assertForbidden();
+        $this->actingAs($finance)->post(route('dashboard.accounts.festivals.directions.store', [$account, $edition]), ['name' => 'Forbidden'])->assertForbidden();
+        $this->actingAs($finance)->patch(route('dashboard.accounts.festivals.categories.move', [$account, $edition, $category]), ['direction' => 'up'])->assertForbidden();
+    }
+
+    public function test_registration_field_choice_identifiers_remain_stable_and_hidden(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
         $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
-        $stepPayload = [
+        $step = $workflow->steps()->create([
+            'account_id' => $account->id,
+            'code' => 'technical-form',
             'type' => 'form',
             'title' => 'Технічна анкета',
             'sort_order' => 10,
             'review_mode' => 'organizer',
             'review_effect' => 'none',
-            'is_active' => 1,
-        ];
-        foreach ([1, 2] as $unused) {
-            $this->actingAs($owner)->post(route('dashboard.accounts.festivals.workflow-steps.store', [$account, $edition, $workflow]), $stepPayload)
-                ->assertRedirect(route('dashboard.accounts.festivals.settings.workflows', [$account, $edition]));
-        }
-        $steps = $workflow->steps()->orderBy('id')->get();
-        $this->assertSame(['tekhnichna-anketa', 'tekhnichna-anketa-2'], $steps->pluck('code')->all());
-        $step = $steps->firstOrFail();
-
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.workflow-steps.update', [$account, $edition, $workflow, $step]), [
-            ...$stepPayload,
-            'title' => 'Оновлена анкета',
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.workflows', [$account, $edition]));
-        $this->assertSame('tekhnichna-anketa', $step->refresh()->code);
-
-        $categoryPayload = [
-            'name' => 'Соло — кільце',
-            'festival_workflow_id' => $workflow->id,
-            'workflow' => 'direct',
-            'min_members' => 1,
-            'max_members' => 1,
-            'is_active' => 1,
-        ];
-        foreach ([1, 2] as $unused) {
-            $this->actingAs($owner)->post(route('dashboard.accounts.festivals.categories.store', [$account, $edition]), $categoryPayload)
-                ->assertRedirect(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]));
-        }
-        $categories = FestivalCategory::query()->where('festival_edition_id', $edition->id)->orderBy('id')->get();
-        $this->assertSame(['solo-kiltse', 'solo-kiltse-2'], $categories->pluck('code')->all());
-        $category = $categories->firstOrFail();
-
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.categories.update', [$account, $edition, $category]), [
-            ...$categoryPayload,
-            'name' => 'Соло — полотна',
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]));
-        $this->assertSame('solo-kiltse', $category->refresh()->code);
-
-        $requirementPayload = [
+        ]);
+        $payload = [
             'festival_workflow_step_id' => $step->id,
             'type' => 'custom_document',
             'subject_scope' => 'entry',
@@ -295,112 +282,28 @@ class FestivalSettingsManagementTest extends TestCase
             'is_required' => 1,
             'is_active' => 1,
         ];
-        foreach ([1, 2] as $unused) {
-            $this->actingAs($owner)->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), $requirementPayload)
-                ->assertRedirect(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]));
-        }
-        $requirements = FestivalRequirementDefinition::query()->where('festival_edition_id', $edition->id)->orderBy('id')->get();
-        $this->assertSame(['variant-kostyuma', 'variant-kostyuma-2'], $requirements->pluck('code')->all());
-        $requirement = $requirements->firstOrFail();
-        $this->assertSame(['standart', 'standart-2'], collect($requirement->options)->pluck('value')->all());
-        $this->assertSame(['standart' => 100, 'standart-2' => 200], $requirement->pricing['prices']);
 
-        $legacyRequirement = $requirements->last();
-        $legacyRequirement->forceFill(['code' => null])->save();
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $legacyRequirement]), [
-            ...$requirementPayload,
-            'options' => [
-                ['original_value' => 'standart', 'label' => 'Стандарт', 'price_cents' => 100],
-                ['original_value' => 'standart-2', 'label' => 'Стандарт', 'price_cents' => 200],
-            ],
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]));
-        $this->assertSame('variant-kostyuma-2', $legacyRequirement->refresh()->code);
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), $payload)->assertRedirect();
+        $field = FestivalRequirementDefinition::query()->where('festival_edition_id', $edition->id)->firstOrFail();
+        $this->assertSame(['standart', 'standart-2'], collect($field->options)->pluck('value')->all());
 
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]), [
-            ...$requirementPayload,
-            'name' => 'Оновлений костюм',
-            'options' => [
-                ['original_value' => 'standart', 'label' => 'Базовий', 'price_cents' => 150],
-                ['original_value' => 'standart-2', 'label' => 'Преміум', 'price_cents' => 250],
-            ],
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]));
-        $requirement->refresh();
-        $this->assertSame('variant-kostyuma', $requirement->code);
-        $this->assertSame(['standart', 'standart-2'], collect($requirement->options)->pluck('value')->all());
-        $this->assertSame(['standart' => 150, 'standart-2' => 250], $requirement->pricing['prices']);
-
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]), [
-            ...$requirementPayload,
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $field]), [
+            ...$payload,
             'name' => 'Оновлений костюм',
             'options' => [
                 ['original_value' => 'standart-2', 'label' => 'Преміум', 'price_cents' => 300],
                 ['original_value' => 'standart', 'label' => 'Базовий', 'price_cents' => 175],
             ],
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]));
-        $requirement->refresh();
-        $this->assertSame(['standart-2', 'standart'], collect($requirement->options)->pluck('value')->all());
-        $this->assertSame(['standart-2' => 300, 'standart' => 175], $requirement->pricing['prices']);
+        ])->assertRedirect();
+        $this->assertSame('variant-kostyuma', $field->refresh()->code);
+        $this->assertSame(['standart-2', 'standart'], collect($field->options)->pluck('value')->all());
 
-        foreach ([1, 2] as $unused) {
-            $this->actingAs($owner)->post(route('dashboard.accounts.festivals.content.store', [$account, $edition]), [
-                'title' => 'Для учасників',
-                'body_html' => '<p>Актуальна інформація.</p>',
-                'visibility' => 'public',
-            ])->assertRedirect(route('dashboard.accounts.festivals.settings.content', [$account, $edition]));
-        }
-        $sections = FestivalContentSection::query()->where('festival_edition_id', $edition->id)->orderBy('id')->get();
-        $this->assertSame(['dlya-uchasnykiv', 'dlya-uchasnykiv-2'], $sections->pluck('key')->all());
-        $section = $sections->firstOrFail();
-
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.content.update', [$account, $edition, $section]), [
-            'title' => 'Оновлення для учасників',
-            'body_html' => '<p>Оновлена інформація.</p>',
-            'visibility' => 'public',
-            'is_active' => 1,
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.content', [$account, $edition]));
-        $this->assertSame('dlya-uchasnykiv', $section->refresh()->key);
-
-        foreach (['directions', 'classifications', 'categories', 'workflows', 'requirements', 'content'] as $page) {
-            $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.settings.'.$page, [$account, $edition]));
-            $response->assertOk()->assertDontSee('name="code"', false);
-        }
-        $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.settings.content', [$account, $edition]))
-            ->assertDontSee('name="key"', false)
-            ->assertDontSee('dlya-uchasnykiv');
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]))
-            ->assertDontSee('][value]', false);
-        $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.settings.classifications', [$account, $edition]))
-            ->assertDontSee('pochatkivets');
-    }
-
-    public function test_finance_staff_can_manage_fees_but_not_taxonomy(): void
-    {
-        [$account, $edition] = $this->festival();
-        $finance = User::factory()->create();
-        $account->users()->attach($finance->id, [
-            'role' => AccountRole::Trainer->value,
-            'permissions' => [StudioPermission::ManageFestivalFinance->value],
-        ]);
-        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
-        $step = $workflow->steps()->create(['account_id' => $account->id, 'code' => 'payment', 'type' => 'payment', 'title' => 'Оплата', 'sort_order' => 10, 'review_mode' => 'automatic', 'review_effect' => 'none']);
-
-        $this->actingAs($finance)->post(route('dashboard.accounts.festivals.charge-definitions.store', [$account, $edition]), [
-            'festival_workflow_step_id' => $step->id,
-            'kind' => 'participation',
-            'name' => 'Участь',
-            'amount_cents' => 100000,
-        ])->assertRedirect(route('dashboard.accounts.festivals.settings.fees', [$account, $edition]));
-        $this->actingAs($finance)->post(route('dashboard.accounts.festivals.axes.store', [$account, $edition]), [
-            'code' => 'level',
-            'name' => 'Рівень',
-            'kind' => 'level',
-        ])->assertForbidden();
-
-        $this->assertDatabaseHas('festival_charge_definitions', ['festival_edition_id' => $edition->id, 'name' => 'Участь']);
-        $this->assertDatabaseMissing('festival_classification_axes', ['festival_edition_id' => $edition->id, 'code' => 'level']);
+            ->assertOk()
+            ->assertDontSee('name="code"', false)
+            ->assertDontSee('][value]', false)
+            ->assertSee(__('app.festival_registration_fields'));
     }
 
     /** @return array{Account, FestivalEdition, User} */

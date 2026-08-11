@@ -9,6 +9,7 @@ use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
 use App\Models\FestivalCharge;
 use App\Models\FestivalChargeDefinition;
+use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
@@ -39,10 +40,10 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.communication' => 'festival_tab_communication',
             'dashboard.accounts.festivals.settings' => 'festival_settings_overview',
             'dashboard.accounts.festivals.settings.directions' => 'festival_taxonomy_directions',
-            'dashboard.accounts.festivals.settings.classifications' => 'festival_classifications',
             'dashboard.accounts.festivals.settings.categories' => 'festival_categories',
+            'dashboard.accounts.festivals.categories.create' => 'festival_categories',
             'dashboard.accounts.festivals.settings.workflows' => 'festival_registration_workflows',
-            'dashboard.accounts.festivals.settings.requirements' => 'festival_requirements',
+            'dashboard.accounts.festivals.settings.requirements' => 'festival_registration_fields',
             'dashboard.accounts.festivals.settings.fees' => 'festival_fees',
             'dashboard.accounts.festivals.settings.content' => 'festival_content_media',
             'dashboard.accounts.festivals.edit' => 'festival_settings_overview',
@@ -59,6 +60,11 @@ class FestivalWorkspaceTabsTest extends TestCase
                 ->assertDontSee(__('app.my_studio'));
             $this->assertSame(1, substr_count($response->getContent(), 'aria-current="page"'), $route);
         }
+
+        $category = $edition->categories()->firstOrFail();
+        $editResponse = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]));
+        $editResponse->assertOk()->assertSee(__('app.festival_categories'));
+        $this->assertSame(1, substr_count($editResponse->getContent(), 'aria-current="page"'));
     }
 
     public function test_workflow_routes_enforce_permission_specific_data_boundaries(): void
@@ -125,6 +131,69 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($checkInStaff)->get(route('dashboard.accounts.festivals.scanner', [$account, $edition]))->assertOk();
     }
 
+    public function test_applications_reports_current_directions_by_stable_identity_and_shows_live_category_rules(): void
+    {
+        [$account, $edition, $firstCategory] = $this->festivalWithEntry();
+        $registrationStaff = $this->staff($account, [StudioPermission::ManageFestivalRegistrations]);
+        $firstDirection = $firstCategory->direction()->firstOrFail();
+        $firstDirection->update(['name' => 'Shared direction', 'code' => 'shared-one']);
+        $secondDirection = FestivalDirection::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Shared direction',
+            'code' => 'shared-two',
+        ]);
+        $secondCategory = FestivalCategory::factory()->for($edition)->for($secondDirection)->create([
+            'account_id' => $account->id,
+            'name' => 'Second category',
+        ]);
+        $secondPortalUser = FestivalPortalUser::factory()->for($account)->create();
+        FestivalEntry::factory()->for($secondCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $secondPortalUser->id,
+            'entry_name' => 'Second act',
+        ]);
+
+        $duplicateLabels = $this->actingAs($registrationStaff)
+            ->get(route('dashboard.accounts.festivals.applications', [$account, $edition]));
+
+        $duplicateLabels->assertOk();
+        $this->assertSame([
+            ['label' => 'Shared direction', 'count' => 1],
+            ['label' => 'Shared direction', 'count' => 1],
+        ], $duplicateLabels->viewData('directionStatistics')->values()->all());
+
+        $movedDirection = FestivalDirection::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Moved direction',
+            'code' => 'moved-direction',
+        ]);
+        $categoryDeadline = now()->addWeek()->startOfMinute();
+        $firstCategory->update([
+            'festival_direction_id' => $movedDirection->id,
+            'requirements_html' => '<p>Live staff condition.</p>',
+            'min_members' => 2,
+            'max_members' => 4,
+            'registration_closes_at' => $categoryDeadline,
+        ]);
+
+        $currentRules = $this->actingAs($registrationStaff)
+            ->get(route('dashboard.accounts.festivals.applications', [$account, $edition]));
+
+        $currentRules->assertOk()
+            ->assertSee('Moved direction')
+            ->assertSee('Live staff condition.', false)
+            ->assertSee(__('app.festival_participants_range', ['min' => 2, 'max' => 4]))
+            ->assertSee(__('app.festival_category_deadline_value', [
+                'date' => $categoryDeadline->timezone($edition->timezone)->format('d.m.Y H:i'),
+                'timezone' => $edition->timezone,
+            ]));
+        $this->assertSame([
+            ['label' => 'Moved direction', 'count' => 1],
+            ['label' => 'Shared direction', 'count' => 1],
+        ], $currentRules->viewData('directionStatistics')->values()->all());
+    }
+
     public function test_staff_judge_requires_an_active_assignment_for_the_edition(): void
     {
         [$account, $edition, $category] = $this->festival();
@@ -160,8 +229,8 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.communication',
             'dashboard.accounts.festivals.settings',
             'dashboard.accounts.festivals.settings.directions',
-            'dashboard.accounts.festivals.settings.classifications',
             'dashboard.accounts.festivals.settings.categories',
+            'dashboard.accounts.festivals.categories.create',
             'dashboard.accounts.festivals.settings.workflows',
             'dashboard.accounts.festivals.settings.requirements',
             'dashboard.accounts.festivals.settings.fees',
@@ -183,7 +252,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.categories.store', [$account, $edition]), [
             'code' => 'new-category',
             'name' => 'New category',
-            'workflow' => 'direct',
+            'festival_direction_id' => $category->festival_direction_id,
             'min_members' => 1,
             'max_members' => 1,
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]));
@@ -212,7 +281,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->assertSame($edition->id, $category->festival_edition_id);
     }
 
-    public function test_settings_pages_render_localized_system_labels_and_inline_dependencies(): void
+    public function test_settings_pages_render_localized_system_labels_and_registration_fields_copy(): void
     {
         [$account, $edition] = $this->festival();
         $account->update(['default_language' => 'uk']);
@@ -220,12 +289,17 @@ class FestivalWorkspaceTabsTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.settings.classifications', [$account, $edition]))
+            ->get(route('dashboard.accounts.festivals.settings.directions', [$account, $edition]))
             ->assertOk()
-            ->assertSee('Класифікації')
+            ->assertSee('Напрямки')
             ->assertSee('Залежності')
-            ->assertSee('Формат виступу')
-            ->assertDontSee('Entry format');
+            ->assertDontSee('Класифікації');
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('Поля реєстрації')
+            ->assertDontSee('Registration fields');
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.settings.workflows', [$account, $edition]))
@@ -241,7 +315,10 @@ class FestivalWorkspaceTabsTest extends TestCase
     {
         $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
         $series = FestivalSeries::factory()->for($account)->create();
-        $edition = FestivalEdition::factory()->published()->for($series)->create(['account_id' => $account->id]);
+        $edition = FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'timezone' => 'Europe/Kyiv',
+        ]);
         $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
 
         return [$account, $edition, $category];

@@ -308,7 +308,6 @@ class FestivalSaasBillingTest extends TestCase
         $portalUser = FestivalPortalUser::factory()->for($account)->create();
         $category = FestivalCategory::factory()->for($edition)->create([
             'account_id' => $account->id,
-            'workflow' => 'review',
         ]);
         $firstParticipant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
         $secondParticipant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);

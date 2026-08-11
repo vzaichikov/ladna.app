@@ -69,7 +69,7 @@ class FestivalEntryStepController extends Controller
     /** @return array<int, string> */
     private function entryRelations(): array
     {
-        return ['edition', 'category.options.axis', 'participants', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section'];
+        return ['edition', 'category.direction', 'participants', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section'];
     }
 
     /** @return array{Account, FestivalPortalUser} */

@@ -1,11 +1,11 @@
 @extends('layouts.app')
 
-@section('title', __('app.festival_requirements').' - '.$edition->title)
+@section('title', __('app.festival_registration_fields').' - '.$edition->title)
 
 @section('content')
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
-    <header><p class="crm-page-kicker">{{ __('app.festival_tab_settings') }}</p><h1 class="crm-page-title mt-2">{{ __('app.festival_requirements') }}</h1><p class="crm-page-copy">{{ __('app.festival_requirements_page_copy') }}</p></header>
-    <x-festivals.settings-help :title="__('app.festival_requirements_help_title')" :description="__('app.festival_requirements_help_copy')" :dependencies="[__('app.festival_registration_workflows'), __('app.festival_categories'), __('app.festival_requirements'), __('app.festival_entries')]" />
+    <header><p class="crm-page-kicker">{{ __('app.festival_tab_settings') }}</p><h1 class="crm-page-title mt-2">{{ __('app.festival_registration_fields') }}</h1><p class="crm-page-copy">{{ __('app.festival_registration_fields_page_copy') }}</p></header>
+    <x-festivals.settings-help :title="__('app.festival_registration_fields_help_title')" :description="__('app.festival_registration_fields_help_copy')" :dependencies="[__('app.festival_registration_workflows'), __('app.festival_categories'), __('app.festival_registration_fields'), __('app.festival_entries')]" />
     <div class="space-y-4">
         @foreach($requirements as $requirement)
             @php($requirementEditId = 'festival-requirement-edit-'.$requirement->id)
@@ -20,6 +20,6 @@
             </article>
         @endforeach
     </div>
-    <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm"><h2 class="text-lg font-semibold">{{ __('app.festival_add_requirement') }}</h2><div class="mt-4"><x-festivals.requirement-form :$account :$edition /></div></section>
+    <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm"><h2 class="text-lg font-semibold">{{ __('app.festival_add_registration_field') }}</h2><div class="mt-4"><x-festivals.requirement-form :$account :$edition /></div></section>
 </x-festivals.staff.workspace>
 @endsection

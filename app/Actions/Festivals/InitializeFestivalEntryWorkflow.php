@@ -19,13 +19,19 @@ class InitializeFestivalEntryWorkflow
     public function execute(FestivalEntry $entry): FestivalEntry
     {
         return DB::transaction(function () use ($entry): FestivalEntry {
-            $entry = FestivalEntry::query()->with(['edition', 'category.options.axis', 'category.registrationWorkflow.steps', 'participants', 'portalUser'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $entry = FestivalEntry::query()->with(['edition', 'category.direction', 'category.registrationWorkflow.steps', 'participants', 'portalUser'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
 
             if ($entry->steps()->exists()) {
                 return $entry->load(['steps.requirements.submissions', 'steps.charges']);
             }
 
-            $category = FestivalCategory::query()->with(['options.axis', 'registrationWorkflow.steps'])->whereKey($entry->festival_category_id)->lockForUpdate()->firstOrFail();
+            $category = FestivalCategory::query()
+                ->with(['direction', 'registrationWorkflow.steps'])
+                ->whereKey($entry->festival_category_id)
+                ->where('account_id', $entry->account_id)
+                ->where('festival_edition_id', $entry->festival_edition_id)
+                ->lockForUpdate()
+                ->firstOrFail();
             $entry->setRelation('category', $category);
             $workflow = $category->registrationWorkflow;
             if (! $workflow) {
@@ -67,25 +73,12 @@ class InitializeFestivalEntryWorkflow
                     'name' => $workflow->name,
                     'steps' => $workflow->steps->map->only(['id', 'code', 'type', 'title', 'description', 'sort_order', 'review_mode', 'review_effect', 'opens_at', 'due_at', 'config'])->values()->all(),
                 ],
-                'category_snapshot' => [
-                    'category_id' => $category->id,
-                    'code' => $category->code,
-                    'name' => $category->name,
-                    'registration_closes_at' => $category->registration_closes_at?->toIso8601String(),
-                    'rules' => $category->only(['min_members', 'max_members', 'min_age', 'max_age', 'min_duration_seconds', 'max_duration_seconds']),
-                    'classification' => $category->options->map(fn ($option): array => [
-                        'axis' => $option->axis->name,
-                        'axis_code' => $option->axis->code,
-                        'option' => $option->label,
-                        'option_code' => $option->code,
-                    ])->values()->all(),
-                ],
             ])->save();
 
             $this->createRequirements($entry, $runtimeSteps);
             $this->createCharges($entry, $runtimeSteps);
 
-            return $entry->refresh()->load(['steps.requirements.submissions', 'steps.charges', 'participants', 'edition', 'category']);
+            return $entry->refresh()->load(['steps.requirements.submissions', 'steps.charges', 'participants', 'edition', 'category.direction']);
         }, 3);
     }
 

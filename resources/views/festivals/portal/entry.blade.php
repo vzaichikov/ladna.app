@@ -6,11 +6,16 @@
 <main class="min-h-screen bg-canvas px-4 py-6 sm:px-5 sm:py-8">
     <div class="mx-auto max-w-6xl">
         @include('festivals.portal._nav')
+        @php
+            $categoryName = $entry->category->name;
+            $directionName = $entry->category->direction->name;
+            $categoryRequirementsHtml = $entry->category->requirements_html;
+        @endphp
         <header class="mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
                 <p class="font-mono text-sm text-slate-500">{{ $entry->code }}</p>
                 <h1 class="mt-1 text-3xl font-semibold sm:text-4xl">{{ $entry->entry_name }}</h1>
-                <p class="mt-2 text-slate-600">{{ $entry->edition->title }} · {{ $entry->category->name }}</p>
+                <p class="mt-2 text-slate-600">{{ $entry->edition->title }} · {{ $directionName }} · {{ $categoryName }}</p>
             </div>
             @if ($entry->registration_completed_at)
                 <span class="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800">{{ __('app.festival_registration_complete') }}</span>
@@ -20,7 +25,32 @@
         @if (session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
         @if ($errors->any())<div class="mt-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $errors->first() }}</div>@endif
 
-        <section class="mt-7 rounded-2xl border border-stone-200 bg-white p-4 shadow-crm sm:p-6">
+        <section class="mt-7 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+            <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ $directionName }}</p>
+            <h2 class="mt-1 text-xl font-semibold text-slate-950">{{ $categoryName }}</h2>
+            <dl class="mt-3 flex flex-wrap gap-2 text-xs text-slate-700">
+                <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $entry->category->min_members, 'max' => $entry->category->max_members]) }}</dd></div>
+                @if($entry->category->min_age !== null || $entry->category->max_age !== null)
+                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_age_limits') }}</dt><dd>{{ __('app.festival_age_range', ['min' => $entry->category->min_age ?? '—', 'max' => $entry->category->max_age ?? '—']) }}</dd></div>
+                @endif
+                @if($entry->category->min_duration_seconds !== null || $entry->category->max_duration_seconds !== null)
+                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_performance_duration') }}</dt><dd>{{ __('app.festival_duration_range', ['min' => $entry->category->min_duration_seconds ?? '—', 'max' => $entry->category->max_duration_seconds ?? '—']) }}</dd></div>
+                @endif
+                @if($entry->category->registration_closes_at)
+                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_registration_closes_at') }}</dt><dd>{{ __('app.festival_category_deadline_value', ['date' => $entry->category->registration_closes_at->timezone($entry->edition->timezone)->format('d.m.Y H:i'), 'timezone' => $entry->edition->timezone]) }}</dd></div>
+                @endif
+            </dl>
+            <div class="mt-4 border-t border-stone-200 pt-4">
+                <h3 class="text-sm font-semibold text-slate-950">{{ __('app.festival_category_requirements') }}</h3>
+                @if($categoryRequirementsHtml)
+                    <div class="prose prose-slate mt-2 max-w-none text-sm">{!! $categoryRequirementsHtml !!}</div>
+                @else
+                    <p class="mt-2 text-sm text-slate-500">{{ __('app.festival_category_requirements_none') }}</p>
+                @endif
+            </div>
+        </section>
+
+        <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-4 shadow-crm sm:p-6">
             <div class="flex items-center justify-between gap-3"><h2 class="text-xl font-semibold">{{ __('app.festival_registration_progress') }}</h2><span class="text-sm text-slate-500">{{ $entry->steps->where('status', App\Enums\FestivalEntryStepStatus::Approved)->count() }}/{{ $entry->steps->count() }}</span></div>
             <ol class="mt-5 grid gap-3 md:grid-cols-4">
                 @foreach($workflowStates as $index => $state)
