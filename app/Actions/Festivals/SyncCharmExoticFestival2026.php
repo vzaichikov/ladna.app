@@ -62,8 +62,8 @@ class SyncCharmExoticFestival2026
         bool $allowProduction = false,
         bool $preserveExistingIdentity = false,
     ): array {
-        if (app()->environment('production') && ! $allowProduction) {
-            throw new RuntimeException('Production synchronization requires the explicit confirmation flag.');
+        if (app()->environment('production') && (! $allowProduction || ! $preserveExistingIdentity)) {
+            throw new RuntimeException('Production synchronization requires explicit confirmation and preservation of the existing Festival identity.');
         }
 
         if (! app()->environment(['local', 'testing', 'production'])) {

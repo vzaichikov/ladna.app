@@ -276,6 +276,19 @@ class CharmExoticFestivalImportTest extends TestCase
         }
     }
 
+    public function test_production_execution_requires_existing_identity_preservation(): void
+    {
+        [$account, $edition] = $this->targetEdition();
+        App::detectEnvironment(fn (): string => 'production');
+
+        try {
+            app(SyncCharmExoticFestival2026::class)->execute($account->id, $edition->id, true, false);
+            $this->fail('Production synchronization must preserve the existing Festival identity.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('preservation', $exception->getMessage());
+        }
+    }
+
     public function test_import_refuses_an_edition_with_admission_configuration(): void
     {
         [$account, $edition] = $this->targetEdition();
