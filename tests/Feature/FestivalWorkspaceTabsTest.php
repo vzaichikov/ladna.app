@@ -14,6 +14,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalRubric;
 use App\Models\FestivalSeries;
 use App\Models\FestivalStage;
 use App\Models\FestivalTicketOrder;
@@ -73,13 +74,47 @@ class FestivalWorkspaceTabsTest extends TestCase
                 ->assertSee(__('app.festival_workspace_back'))
                 ->assertSee(__('app.festival_workspace_back_to_studio'))
                 ->assertDontSee(__('app.my_studio'));
-            $this->assertSame(2, substr_count($response->getContent(), 'aria-current="page"'), $route);
+            $expectedCurrentItems = $route === 'dashboard.accounts.festivals.edit' ? 3 : 2;
+            $this->assertSame($expectedCurrentItems, substr_count($response->getContent(), 'aria-current="page"'), $route);
         }
 
         $category = $edition->categories()->firstOrFail();
         $editResponse = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]));
         $editResponse->assertOk()->assertSee(__('app.festival_categories'));
         $this->assertSame(2, substr_count($editResponse->getContent(), 'aria-current="page"'));
+    }
+
+    public function test_overview_links_total_categories_criteria_and_judges_for_managers(): void
+    {
+        [$account, $edition] = $this->festival();
+        FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $rubric = FestivalRubric::factory()->for($edition)->create(['account_id' => $account->id]);
+        $section = $rubric->sections()->create(['account_id' => $account->id, 'name' => 'Technique']);
+        $section->criteria()->createMany([
+            ['account_id' => $account->id, 'name' => 'Control', 'max_score' => 10],
+            ['account_id' => $account->id, 'name' => 'Lines', 'max_score' => 10],
+        ]);
+        FestivalJudgeAssignment::factory()->count(2)->for($edition)->create(['account_id' => $account->id]);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.show', [$account, $edition]));
+
+        $response->assertOk()
+            ->assertViewHas('festivalCriteriaCount', 2)
+            ->assertSee(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]), false)
+            ->assertSee(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]), false)
+            ->assertSee(route('dashboard.accounts.festivals.judging.judges.index', [$account, $edition]), false);
+        $this->assertSame(2, $response->viewData('edition')->categories_count);
+        $this->assertSame(2, $response->viewData('edition')->judge_assignments_count);
+
+        $registrationStaff = $this->staff($account, [StudioPermission::ManageFestivalRegistrations]);
+        $this->actingAs($registrationStaff)
+            ->get(route('dashboard.accounts.festivals.show', [$account, $edition]))
+            ->assertOk()
+            ->assertDontSee(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]), false)
+            ->assertDontSee(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]), false)
+            ->assertDontSee(route('dashboard.accounts.festivals.judging.judges.index', [$account, $edition]), false);
     }
 
     public function test_workflow_routes_enforce_permission_specific_data_boundaries(): void

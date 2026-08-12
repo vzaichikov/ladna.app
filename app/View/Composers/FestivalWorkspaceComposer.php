@@ -38,6 +38,7 @@ class FestivalWorkspaceComposer
                 'label' => __('app.festival_workspace_group_festival'),
                 'items' => [
                     $this->item('overview', 'dashboard.accounts.festivals.show', 'festival_tab_overview', 'dashboard', true, $active, $account, $edition),
+                    $this->item('users', 'dashboard.accounts.festivals.users.index', 'festival_users', 'users', $permissions['registrations'] || $permissions['manage'], $active, $account, $edition),
                 ],
             ],
             [
@@ -98,6 +99,7 @@ class FestivalWorkspaceComposer
     private function activeItem(): string
     {
         return match (true) {
+            request()->routeIs('dashboard.accounts.festivals.users.*') => 'users',
             request()->routeIs('dashboard.accounts.festivals.applications') => 'applications',
             request()->routeIs('dashboard.accounts.festivals.program') => 'program',
             request()->routeIs('dashboard.accounts.festivals.judging.judges.*') => 'judging-judges',

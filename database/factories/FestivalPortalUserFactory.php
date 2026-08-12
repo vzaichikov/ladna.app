@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\FestivalPortalRole;
 use App\Models\Account;
 use App\Models\FestivalPortalUser;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -15,6 +16,23 @@ class FestivalPortalUserFactory extends Factory
     {
         $email = fake()->unique()->safeEmail();
 
-        return ['account_id' => Account::factory(), 'registrant_type' => 'coach', 'first_name' => fake()->firstName(), 'last_name' => fake()->lastName(), 'email' => $email, 'email_normalized' => mb_strtolower($email), 'phone' => fake()->e164PhoneNumber(), 'city' => fake()->city(), 'studio_name' => fake()->company(), 'locale' => 'uk', 'email_verified_at' => now()];
+        $phone = fake()->unique()->e164PhoneNumber();
+
+        return ['account_id' => Account::factory(), 'role' => FestivalPortalRole::Registrant, 'is_active' => true, 'registrant_type' => 'coach', 'first_name' => fake()->firstName(), 'last_name' => fake()->lastName(), 'email' => $email, 'email_normalized' => mb_strtolower($email), 'password' => 'secret', 'phone' => $phone, 'phone_normalized' => $phone, 'city' => fake()->city(), 'studio_name' => fake()->company(), 'locale' => 'uk', 'email_verified_at' => now()];
+    }
+
+    public function judge(): static
+    {
+        return $this->state(fn (): array => [
+            'role' => FestivalPortalRole::Judge,
+            'registrant_type' => null,
+            'city' => null,
+            'studio_name' => null,
+        ]);
+    }
+
+    public function inactive(): static
+    {
+        return $this->state(fn (): array => ['is_active' => false]);
     }
 }

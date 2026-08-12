@@ -48,7 +48,7 @@
                             <select name="festival_portal_user_id" class="crm-field">
                                 <option value="">{{ __('app.festival_choose_guest_judge') }}</option>
                                 @foreach ($portalUsers as $portalUser)
-                                    <option value="{{ $portalUser->id }}" @selected((int) old('festival_portal_user_id') === $portalUser->id)>{{ $portalUser->displayName() }} · {{ $portalUser->email }}</option>
+                                    <option value="{{ $portalUser->id }}" @selected((int) old('festival_portal_user_id', $assignment->festival_portal_user_id) === $portalUser->id)>{{ $portalUser->displayName() }} · {{ $portalUser->email }}</option>
                                 @endforeach
                             </select>
                             @error('festival_portal_user_id') <span class="crm-help">{{ $message }}</span> @enderror

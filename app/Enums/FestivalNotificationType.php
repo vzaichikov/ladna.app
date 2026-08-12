@@ -4,7 +4,6 @@ namespace App\Enums;
 
 enum FestivalNotificationType: string
 {
-    case MagicLink = 'magic_link';
     case EntrySubmitted = 'entry_submitted';
     case EntryReviewed = 'entry_reviewed';
     case RequirementDue = 'requirement_due';

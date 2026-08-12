@@ -1,4 +1,4 @@
-@extends('layouts.public')
+@extends('layouts.public', ['hideAppFooter' => true])
 
 @section('title', __('app.festival_judging').' - '.$edition->title)
 

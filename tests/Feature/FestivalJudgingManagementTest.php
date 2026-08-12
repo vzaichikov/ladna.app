@@ -49,6 +49,7 @@ class FestivalJudgingManagementTest extends TestCase
         $judge = $this->staffJudge($account);
         $assignment = FestivalJudgeAssignment::factory()->for($edition)->for($judge)->create(['account_id' => $account->id]);
         $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
+        $judgeRubric = FestivalRubric::factory()->for($edition)->create(['account_id' => $account->id]);
 
         $this->actingAs($judge)
             ->get(route('dashboard.accounts.festivals.judging.index', [$account, $edition]))
@@ -62,6 +63,9 @@ class FestivalJudgingManagementTest extends TestCase
         ] as $routeName) {
             $this->actingAs($judge)->get(route($routeName, [$account, $edition]))->assertForbidden();
         }
+        $this->actingAs($judge)
+            ->delete(route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $judgeRubric]))
+            ->assertForbidden();
 
         $assignment->update(['is_active' => false]);
         $this->actingAs($judge)->get(route('dashboard.accounts.festivals.judging.index', [$account, $edition]))->assertForbidden();
@@ -137,7 +141,7 @@ class FestivalJudgingManagementTest extends TestCase
         ])->assertRedirect($judgeCreateUrl)->assertSessionHasErrors(['user_id', 'category_ids']);
         $this->actingAs($owner)->get($judgeCreateUrl)->assertOk();
 
-        $portalJudge = FestivalPortalUser::factory()->for($account)->create();
+        $portalJudge = FestivalPortalUser::factory()->for($account)->judge()->create();
         $this->actingAs($owner)->from($judgeCreateUrl)->post(route('dashboard.accounts.festivals.judging.judges.store', [$account, $edition]), [
             'user_id' => 0,
             'festival_portal_user_id' => $portalJudge->id,
@@ -283,6 +287,139 @@ class FestivalJudgingManagementTest extends TestCase
         $this->assertDatabaseMissing('festival_rubric_criteria', ['id' => $criterion->id]);
     }
 
+    public function test_rubric_editor_saves_multiple_sections_and_fully_deletes_an_unlinked_rubric_with_confirmation(): void
+    {
+        [$account, $edition, $category] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.judging.criteria.create', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('data-festival-rubric-editor', false)
+            ->assertSee('data-add-rubric-section', false)
+            ->assertSee('data-remove-rubric-section', false)
+            ->assertSee('data-add-rubric-criterion', false)
+            ->assertSee('data-remove-rubric-criterion', false);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.judging.criteria.store', [$account, $edition]), [
+            'festival_category_id' => $category->id,
+            'name' => 'Complete judging rubric',
+            'sections' => [
+                [
+                    'name' => 'Technique',
+                    'weight' => 1,
+                    'contribution' => 'award',
+                    'criteria' => [
+                        ['name' => 'Execution', 'max_score' => 10, 'weight' => 1],
+                        ['name' => 'Difficulty', 'max_score' => 5, 'weight' => 2],
+                    ],
+                ],
+                [
+                    'name' => 'Penalties',
+                    'weight' => 1,
+                    'contribution' => 'deduction',
+                    'criteria' => [
+                        ['name' => 'Protocol violation', 'max_score' => 3, 'weight' => 1],
+                    ],
+                ],
+            ],
+            'is_active' => 1,
+        ])->assertRedirect(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]))
+            ->assertSessionHasNoErrors();
+
+        $rubric = FestivalRubric::query()
+            ->where('festival_edition_id', $edition->id)
+            ->where('name', 'Complete judging rubric')
+            ->with('sections.criteria')
+            ->firstOrFail();
+        $this->assertSame([0, 1], $rubric->sections->pluck('sort_order')->all());
+        $this->assertSame([0, 1], $rubric->sections->first()->criteria->pluck('sort_order')->all());
+        $this->assertSame(['Technique', 'Penalties'], $rubric->sections->pluck('name')->all());
+        $this->assertSame(['Execution', 'Difficulty'], $rubric->sections->first()->criteria->pluck('name')->all());
+
+        $destroyRoute = route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $rubric]);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('action="'.$destroyRoute.'"', false)
+            ->assertSee('data-confirm-delete', false)
+            ->assertSee(__('app.festival_delete_rubric_confirm_title'));
+
+        $sectionIds = $rubric->sections->modelKeys();
+        $criterionIds = $rubric->sections->flatMap(fn ($section) => $section->criteria)->pluck('id')->all();
+
+        $this->actingAs($owner)->delete($destroyRoute)
+            ->assertRedirect(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]))
+            ->assertSessionHas('status', __('app.festival_rubric_deleted'));
+
+        $this->assertModelMissing($rubric);
+        $this->assertDatabaseMissing('festival_rubric_sections', ['id' => $sectionIds[0]]);
+        $this->assertDatabaseMissing('festival_rubric_criteria', ['id' => $criterionIds[0]]);
+    }
+
+    public function test_rubric_deletion_is_hidden_and_rejected_for_score_sheets_or_any_judge_assignment(): void
+    {
+        [$account, $edition, $category] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $judge = $this->staffJudge($account);
+        $assignment = FestivalJudgeAssignment::factory()->for($edition)->for($judge)->create([
+            'account_id' => $account->id,
+            'is_active' => false,
+        ]);
+        $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
+
+        $assignedRubric = FestivalRubric::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_category_id' => $category->id,
+            'name' => 'Assigned rubric',
+        ]);
+        $assignedSection = $assignedRubric->sections()->create(['account_id' => $account->id, 'name' => 'Technique', 'weight' => 1]);
+        $assignedSection->criteria()->create(['account_id' => $account->id, 'name' => 'Execution', 'max_score' => 10, 'weight' => 1]);
+        $assignment->rubricSections()->attach($assignedSection->id, ['account_id' => $account->id]);
+
+        $scoreRubric = FestivalRubric::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_category_id' => $category->id,
+            'name' => 'Scored rubric',
+        ]);
+        $scoreSection = $scoreRubric->sections()->create(['account_id' => $account->id, 'name' => 'Artistry', 'weight' => 1]);
+        $scoreSection->criteria()->create(['account_id' => $account->id, 'name' => 'Expression', 'max_score' => 10, 'weight' => 1]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+        ]);
+        FestivalScoreSheet::query()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $entry->id,
+            'festival_judge_assignment_id' => $assignment->id,
+            'festival_rubric_id' => $scoreRubric->id,
+        ]);
+
+        $assignedDestroyRoute = route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $assignedRubric]);
+        $scoreDestroyRoute = route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $scoreRubric]);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]))
+            ->assertOk()
+            ->assertDontSee('action="'.$assignedDestroyRoute.'"', false)
+            ->assertDontSee('action="'.$scoreDestroyRoute.'"', false);
+
+        $this->actingAs($owner)->delete($assignedDestroyRoute)
+            ->assertRedirect(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]))
+            ->assertSessionHasErrors('festival_rubric');
+        $this->actingAs($owner)->delete($scoreDestroyRoute)
+            ->assertRedirect(route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]))
+            ->assertSessionHasErrors('festival_rubric');
+
+        $this->assertModelExists($assignedRubric);
+        $this->assertModelExists($assignedSection);
+        $this->assertModelExists($scoreRubric);
+        $this->assertModelExists($scoreSection);
+    }
+
     public function test_score_sheet_pages_and_legacy_redirect_never_expose_another_judges_private_scores(): void
     {
         [$account, $edition, $category] = $this->festival();
@@ -374,10 +511,12 @@ class FestivalJudgingManagementTest extends TestCase
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.judges.index', [$account, $otherEdition]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.judges.edit', [$account, $edition, $otherAssignment]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.criteria.edit', [$account, $edition, $otherRubric]))->assertNotFound();
+        $this->actingAs($owner)->delete(route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $otherRubric]))->assertNotFound();
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $otherCategory]))->assertNotFound();
 
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.judges.edit', [$account, $edition, $sameAccountAssignment]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.criteria.edit', [$account, $edition, $sameAccountRubric]))->assertNotFound();
+        $this->actingAs($owner)->delete(route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $sameAccountRubric]))->assertNotFound();
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $sameAccountCategory]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.score-sheets.edit', [$account, $edition, $sameAccountSheet]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.score-sheets.edit', [$account, $edition, $sameAccountSheet]))->assertNotFound();
@@ -386,7 +525,7 @@ class FestivalJudgingManagementTest extends TestCase
     public function test_guest_judge_portal_routes_continue_to_list_edit_and_save_the_guests_own_sheet(): void
     {
         [$account, $edition, $category] = $this->festival();
-        $portalJudge = FestivalPortalUser::factory()->for($account)->create();
+        $portalJudge = FestivalPortalUser::factory()->for($account)->judge()->create();
         $assignment = FestivalJudgeAssignment::query()->create([
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,

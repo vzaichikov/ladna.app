@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\FestivalPortalRole;
 use App\Models\Account;
 use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
@@ -67,7 +68,7 @@ class StoreFestivalJudgeAssignmentRequest extends FormRequest
                 $validator->errors()->add('user_id', __('app.festival_judge_identity_duplicate'));
             }
 
-            if ($portalUserId !== null && ! FestivalPortalUser::query()->whereBelongsTo($account)->whereKey($portalUserId)->exists()) {
+            if ($portalUserId !== null && ! FestivalPortalUser::query()->whereBelongsTo($account)->forRole(FestivalPortalRole::Judge)->active()->whereKey($portalUserId)->exists()) {
                 $validator->errors()->add('festival_portal_user_id', __('app.festival_judge_guest_invalid'));
             }
 

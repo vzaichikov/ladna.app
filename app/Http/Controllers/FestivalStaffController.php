@@ -23,21 +23,20 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryRequirement;
-use App\Models\FestivalMedia;
 use App\Models\FestivalRequirementDefinition;
+use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalSeries;
 use App\Models\FestivalWorkflowStep;
+use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalSaasAccess;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\StudioRulesHtmlSanitizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Throwable;
 
 class FestivalStaffController extends Controller
 {
@@ -131,7 +130,6 @@ class FestivalStaffController extends Controller
         abort_unless($request->user()?->can('manageFestivals', $account), 403);
         $purchase = FestivalEditionPurchase::query()->whereBelongsTo($account)->findOrFail($request->integer('festival_purchase_id'));
         $edition = $redeem->execute($account, $purchase, $request->validated(), $request->user());
-        $this->storeHeroImage($request, $account, $edition);
 
         return redirect()->route('dashboard.accounts.festivals.show', [$account, $edition])->with('status', __('app.festival_edition_saved'));
     }
@@ -143,6 +141,10 @@ class FestivalStaffController extends Controller
         abort_unless($workspaceAccess->canAccessWorkspace($permissions), 403);
         $festivalEdition->load('series')->loadCount(['entries', 'scheduleSlots', 'tickets']);
 
+        if ($permissions['manage']) {
+            $festivalEdition->loadCount(['categories', 'judgeAssignments']);
+        }
+
         $upcomingSlots = ($permissions['schedule'] || $permissions['judging'])
             ? $festivalEdition->scheduleSlots()->where('ends_at', '>=', now())->with(['stage', 'entry'])->orderBy('starts_at')->limit(6)->get()
             : collect();
@@ -152,6 +154,11 @@ class FestivalStaffController extends Controller
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
             'upcomingSlots' => $upcomingSlots,
+            'festivalCriteriaCount' => $permissions['manage']
+                ? FestivalRubricCriterion::query()
+                    ->whereHas('section.rubric', fn ($query) => $query->where('festival_edition_id', $festivalEdition->id))
+                    ->count()
+                : null,
             'entriesAwaitingReview' => $permissions['registrations']
                 ? FestivalEntry::query()->where('festival_edition_id', $festivalEdition->id)->whereIn('status', [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value])->count()
                 : null,
@@ -167,16 +174,25 @@ class FestivalStaffController extends Controller
         ]);
     }
 
-    public function edit(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    public function edit(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalLandingRegistry $landingRegistry): View
     {
         $this->assertEdition($account, $festivalEdition);
         abort_unless($request->user()?->can('manageFestivals', $account), 403);
 
         $festivalEdition->load('coverMedia');
+        $activeTab = in_array($request->query('tab'), ['details', 'branding'], true)
+            ? (string) $request->query('tab')
+            : 'details';
 
         return view('festivals.staff.form', [
             'account' => $account,
             'edition' => $festivalEdition,
+            'activeTab' => $activeTab,
+            'festivalLandingTemplates' => $landingRegistry->availableTemplates($account),
+            'festivalLandingPalettes' => $landingRegistry->palettes(),
+            'effectiveLandingTemplateKey' => $landingRegistry->effectiveTemplateKey($festivalEdition, $account),
+            'effectiveLandingPaletteKey' => $landingRegistry->effectivePaletteKey($festivalEdition),
+            'selectedLandingTemplateIsAvailable' => $landingRegistry->isTemplateAvailable($account, $festivalEdition->landing_template),
             'series' => FestivalSeries::query()
                 ->whereBelongsTo($account)
                 ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $festivalEdition->festival_series_id))
@@ -190,7 +206,6 @@ class FestivalStaffController extends Controller
         $this->assertEdition($account, $festivalEdition);
         abort_unless($request->user()?->can('manageFestivals', $account), 403);
         $festivalEdition = $save->execute($account, $request->validated(), $request->user(), $festivalEdition);
-        $this->storeHeroImage($request, $account, $festivalEdition);
 
         return redirect()->route('dashboard.accounts.festivals.show', [$account, $festivalEdition])->with('status', __('app.festival_edition_saved'));
     }
@@ -366,54 +381,5 @@ class FestivalStaffController extends Controller
     private function assertEdition(Account $account, FestivalEdition $edition): void
     {
         abort_unless($edition->account_id === $account->id, 404);
-    }
-
-    private function storeHeroImage(FestivalEditionRequest $request, Account $account, FestivalEdition $edition): void
-    {
-        if (! $request->hasFile('hero_image')) {
-            return;
-        }
-
-        $path = $request->file('hero_image')->store("festival-media/{$account->id}/{$edition->id}", 'public');
-        $oldPaths = collect();
-
-        try {
-            DB::transaction(function () use ($account, $edition, $path, &$oldPaths): void {
-                $previousCovers = FestivalMedia::query()
-                    ->where('festival_edition_id', $edition->id)
-                    ->where('is_cover', true)
-                    ->lockForUpdate()
-                    ->get();
-
-                $oldPaths = $previousCovers
-                    ->filter(fn (FestivalMedia $media): bool => $media->disk === 'public' && filled($media->path))
-                    ->pluck('path');
-
-                FestivalMedia::query()
-                    ->where('festival_edition_id', $edition->id)
-                    ->where('is_cover', true)
-                    ->update(['is_cover' => false]);
-
-                FestivalMedia::query()->create([
-                    'account_id' => $account->id,
-                    'festival_edition_id' => $edition->id,
-                    'kind' => 'image',
-                    'disk' => 'public',
-                    'path' => $path,
-                    'alt_text' => $edition->title,
-                    'is_cover' => true,
-                ]);
-
-                $previousCovers
-                    ->filter(fn (FestivalMedia $media): bool => filled($media->path))
-                    ->each->delete();
-            });
-        } catch (Throwable $throwable) {
-            Storage::disk('public')->delete($path);
-
-            throw $throwable;
-        }
-
-        $oldPaths->each(fn (string $oldPath): bool => Storage::disk('public')->delete($oldPath));
     }
 }

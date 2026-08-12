@@ -16,7 +16,7 @@ class FestivalArchitectureBoundaryTest extends TestCase
     public function test_festival_schema_contains_no_customer_or_event_foreign_keys(): void
     {
         $tables = [
-            'festival_series', 'festival_editions', 'festival_portal_users', 'festival_participants',
+            'festival_series', 'festival_editions', 'festival_portal_users', 'festival_otp_challenges', 'festival_participants',
             'festival_directions', 'festival_categories', 'festival_entries', 'festival_charges', 'festival_payment_attempts',
             'festival_schedule_slots', 'festival_score_sheets', 'festival_ticket_orders', 'festival_tickets',
         ];
@@ -61,6 +61,17 @@ class FestivalArchitectureBoundaryTest extends TestCase
 
         $this->assertCount(1, $festivalApiRoutes);
         $this->assertSame('api/v1/festival-payments/{provider}/callbacks', $festivalApiRoutes->first()->uri());
+    }
+
+    public function test_festival_authentication_has_no_magic_link_runtime_or_storage(): void
+    {
+        $this->assertFalse(Schema::hasTable('festival_login_tokens'));
+        $this->assertTrue(Schema::hasTable('festival_otp_challenges'));
+        $this->assertFileDoesNotExist(app_path('Actions/Festivals/FestivalMagicLink.php'));
+        $this->assertFileDoesNotExist(app_path('Models/FestivalLoginToken.php'));
+        $this->assertFalse(app('router')->getRoutes()->hasNamedRoute('festival.login.request'));
+        $this->assertFalse(app('router')->getRoutes()->hasNamedRoute('festival.login.consume'));
+        $this->assertFileExists(app_path('Mail/FestivalPortalMail.php'));
     }
 
     public function test_live_classification_feature_and_legacy_category_columns_are_absent(): void

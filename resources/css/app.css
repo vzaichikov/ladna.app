@@ -54,7 +54,179 @@
     }
 }
 
+@layer base {
+    .festival-theme[data-festival-palette='general'] {
+        --festival-page: #faf8f5;
+        --festival-surface: #ffffff;
+        --festival-text: #2b2b2f;
+        --festival-muted-text: #64748b;
+        --festival-primary: #3b223f;
+        --festival-primary-text: #ffffff;
+        --festival-accent: #a78ab9;
+        --festival-accent-text: #2b1731;
+        --festival-border: #e7ddc9;
+    }
+
+    .festival-theme[data-festival-palette='editorial_blush'] {
+        --festival-page: #fff9f5;
+        --festival-surface: #ffffff;
+        --festival-text: #252128;
+        --festival-muted-text: #6e6168;
+        --festival-primary: #3b223f;
+        --festival-primary-text: #ffffff;
+        --festival-accent: #c12e61;
+        --festival-accent-text: #ffffff;
+        --festival-border: #e7d6d4;
+    }
+
+    .festival-theme[data-festival-palette='velvet_theatre'] {
+        --festival-page: #1c1018;
+        --festival-surface: #2a1721;
+        --festival-text: #fff8ee;
+        --festival-muted-text: #d5bcc4;
+        --festival-primary: #8e1837;
+        --festival-primary-text: #ffffff;
+        --festival-accent: #d9ae62;
+        --festival-accent-text: #25140d;
+        --festival-border: #4a2a35;
+    }
+
+    .festival-theme[data-festival-palette='electric_stage'] {
+        --festival-page: #16131d;
+        --festival-surface: #211b2b;
+        --festival-text: #fff9f1;
+        --festival-muted-text: #cbc2d6;
+        --festival-primary: #e50072;
+        --festival-primary-text: #ffffff;
+        --festival-accent: #9b83d6;
+        --festival-accent-text: #18121f;
+        --festival-border: #3b3149;
+    }
+
+    .festival-theme[data-festival-palette='midnight_gold'] {
+        --festival-page: #0f1c2e;
+        --festival-surface: #17283f;
+        --festival-text: #fff7e6;
+        --festival-muted-text: #c1cbd8;
+        --festival-primary: #c7933e;
+        --festival-primary-text: #1c160b;
+        --festival-accent: #e6c777;
+        --festival-accent-text: #1c160b;
+        --festival-border: #314967;
+    }
+
+    .festival-theme {
+        --color-brand-50: var(--festival-page);
+        --color-brand-100: var(--festival-border);
+        --color-brand-500: var(--festival-accent);
+        --color-brand-600: var(--festival-primary);
+        --color-brand-700: var(--festival-primary);
+        --color-violet-crm-50: var(--festival-page);
+        --color-violet-crm-100: var(--festival-border);
+        --color-violet-crm-500: var(--festival-accent);
+        --color-violet-crm-600: var(--festival-primary);
+        --color-violet-crm-700: var(--festival-primary);
+        --color-canvas: var(--festival-page);
+        min-height: 100vh;
+        background-color: var(--festival-page);
+        color: var(--festival-text);
+    }
+}
+
 @layer components {
+    .festival-page {
+        background-color: var(--festival-page);
+        color: var(--festival-text);
+    }
+
+    .festival-surface {
+        background-color: var(--festival-surface);
+        color: var(--festival-text);
+    }
+
+    .festival-text,
+    .festival-primary-text {
+        color: var(--festival-text);
+    }
+
+    .festival-primary-text {
+        color: var(--festival-primary);
+    }
+
+    .festival-muted {
+        color: var(--festival-muted-text);
+    }
+
+    .festival-border {
+        border-color: var(--festival-border);
+    }
+
+    .festival-accent-surface {
+        background-color: var(--festival-accent);
+        color: var(--festival-accent-text);
+    }
+
+    .festival-theme .bg-brand-600 {
+        color: var(--festival-primary-text);
+    }
+
+    .festival-theme .festival-primary-button {
+        background-color: var(--festival-primary) !important;
+        color: var(--festival-primary-text) !important;
+    }
+
+    .festival-theme .festival-secondary-button {
+        border-color: var(--festival-border) !important;
+        background-color: var(--festival-surface) !important;
+        color: var(--festival-text) !important;
+    }
+
+    .festival-theme .festival-ghost-button {
+        color: var(--festival-muted-text) !important;
+    }
+
+    .festival-theme .crm-field {
+        border-color: var(--festival-border);
+        background-color: var(--festival-surface);
+        color: var(--festival-text);
+    }
+
+    .festival-theme .crm-field::placeholder {
+        color: var(--festival-muted-text);
+    }
+
+    .festival-prose {
+        --tw-prose-body: var(--festival-text);
+        --tw-prose-headings: var(--festival-text);
+        --tw-prose-lead: var(--festival-muted-text);
+        --tw-prose-links: var(--festival-primary);
+        --tw-prose-bold: var(--festival-text);
+        --tw-prose-counters: var(--festival-muted-text);
+        --tw-prose-bullets: var(--festival-accent);
+        --tw-prose-hr: var(--festival-border);
+        --tw-prose-quotes: var(--festival-text);
+        --tw-prose-quote-borders: var(--festival-accent);
+        --tw-prose-captions: var(--festival-muted-text);
+        --tw-prose-code: var(--festival-text);
+        --tw-prose-th-borders: var(--festival-border);
+        --tw-prose-td-borders: var(--festival-border);
+    }
+
+    .festival-theme .festival-footer {
+        border-color: var(--festival-border);
+        background-color: var(--festival-page);
+        color: var(--festival-muted-text);
+    }
+
+    .festival-footer a,
+    .festival-footer .text-slate-950 {
+        color: var(--festival-text);
+    }
+
+    .festival-footer .text-slate-500 {
+        color: var(--festival-muted-text);
+    }
+
     .crm-focus {
         @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
     }

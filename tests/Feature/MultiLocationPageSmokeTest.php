@@ -22,6 +22,7 @@ use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalMedia;
+use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalRubric;
@@ -67,7 +68,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(156, $classifiedRouteNames);
+        $this->assertCount(162, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -216,6 +217,10 @@ class MultiLocationPageSmokeTest extends TestCase
             'caption' => 'Smoke media',
         ]);
         $festivalPortalUser = FestivalPortalUser::factory()->for($account)->create();
+        $festivalParticipant = FestivalParticipant::factory()->create([
+            'account_id' => $account->id,
+            'festival_portal_user_id' => $festivalPortalUser->id,
+        ]);
         $festivalEntry = FestivalEntry::factory()->for($festivalCategory)->create([
             'account_id' => $account->id,
             'festival_edition_id' => $festivalEdition->id,
@@ -258,6 +263,8 @@ class MultiLocationPageSmokeTest extends TestCase
             'festival_purchase' => $festivalPurchase,
             'festival_fee' => $festivalFee,
             'festival_media' => $festivalMedia,
+            'festival_participant' => $festivalParticipant,
+            'festival_portal_user' => $festivalPortalUser,
             'festival_requirement' => $festivalRequirement,
             'festival_series' => $festivalSeries,
             'festival_judge_assignment' => $festivalJudgeAssignment,
@@ -317,6 +324,17 @@ class MultiLocationPageSmokeTest extends TestCase
         }
 
         $parameters = [$fixtures['account'], $fixtures['festival_edition']];
+
+        if ($routeName === 'dashboard.accounts.festivals.users.create') {
+            return [...$parameters, 'registrant'];
+        }
+
+        if (in_array($routeName, [
+            'dashboard.accounts.festivals.users.participants.edit',
+            'dashboard.accounts.festivals.users.participants.archive',
+        ], true)) {
+            return [...$parameters, $fixtures['festival_portal_user'], $fixtures['festival_participant']];
+        }
 
         if ($routeName === 'dashboard.accounts.festivals.workflow-steps.edit') {
             return [...$parameters, $fixtures['festival_workflow'], $fixtures['festival_workflow_step']];
@@ -494,6 +512,12 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.settings.workflows' => 'festival_edition',
             'dashboard.accounts.festivals.show' => 'festival_edition',
             'dashboard.accounts.festivals.tickets' => 'festival_edition',
+            'dashboard.accounts.festivals.users.create' => 'festival_edition',
+            'dashboard.accounts.festivals.users.edit' => 'festival_portal_user',
+            'dashboard.accounts.festivals.users.index' => 'festival_edition',
+            'dashboard.accounts.festivals.users.participants.archive' => 'festival_participant',
+            'dashboard.accounts.festivals.users.participants.create' => 'festival_portal_user',
+            'dashboard.accounts.festivals.users.participants.edit' => 'festival_participant',
             'dashboard.accounts.festivals.series.edit' => 'festival_series',
         ];
     }

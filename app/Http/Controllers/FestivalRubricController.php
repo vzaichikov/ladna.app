@@ -16,6 +16,7 @@ use App\Models\FestivalScoreSheet;
 use App\Support\Festivals\FestivalJudgingCriteria;
 use App\Support\Festivals\FestivalSettingsOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,7 @@ class FestivalRubricController extends Controller
         ];
 
         $rubrics = $festivalEdition->festivalRubrics()
-            ->with(['category', 'sections' => fn ($query) => $query->withCount('criteria')])
+            ->with(['category', 'sections' => fn ($query) => $query->withCount(['criteria', 'judgeAssignments'])])
             ->withCount('scoreSheets')
             ->when($filters['q'] !== '', fn ($query) => $query->where('name', 'like', '%'.$filters['q'].'%'))
             ->when($filters['status'] !== '', fn ($query) => $query->where('is_active', $filters['status'] === 'active'))
@@ -61,6 +62,11 @@ class FestivalRubricController extends Controller
             $rubric->setAttribute(
                 'uncovered_section_names',
                 $this->judgingCriteria->uncoveredSections($rubric, $applicableAssignments)->pluck('name')->all(),
+            );
+            $rubric->setAttribute(
+                'can_delete',
+                $rubric->score_sheets_count === 0
+                    && $rubric->sections->every(fn (FestivalRubricSection $section): bool => $section->judge_assignments_count === 0),
             );
         });
 
@@ -190,6 +196,41 @@ class FestivalRubricController extends Controller
         }, 3);
 
         return back()->with('status', __('app.festival_status_saved'));
+    }
+
+    public function destroy(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalRubric $festivalRubric): RedirectResponse
+    {
+        $this->managerPermissions($request, $account, $festivalEdition);
+        $this->assertRubric($account, $festivalEdition, $festivalRubric);
+
+        try {
+            $deleted = DB::transaction(function () use ($account, $festivalEdition, $festivalRubric): bool {
+                $edition = FestivalEdition::query()->whereKey($festivalEdition->id)->lockForUpdate()->firstOrFail();
+                $this->assertEdition($account, $edition);
+                $rubric = FestivalRubric::query()->whereKey($festivalRubric->id)->lockForUpdate()->firstOrFail();
+                $this->assertRubric($account, $edition, $rubric);
+
+                if ($rubric->scoreSheets()->exists() || $rubric->sections()->whereHas('judgeAssignments')->exists()) {
+                    return false;
+                }
+
+                return (bool) $rubric->delete();
+            }, 3);
+        } catch (QueryException $exception) {
+            if (($exception->errorInfo[0] ?? null) !== '23000') {
+                throw $exception;
+            }
+
+            $deleted = false;
+        }
+
+        if (! $deleted) {
+            return $this->redirect($account, $festivalEdition)
+                ->withErrors(['festival_rubric' => __('app.festival_rubric_delete_linked')]);
+        }
+
+        return redirect()->route('dashboard.accounts.festivals.judging.criteria.index', [$account, $festivalEdition])
+            ->with('status', __('app.festival_rubric_deleted'));
     }
 
     public function move(FestivalMoveRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalRubric $festivalRubric): RedirectResponse

@@ -8,7 +8,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpdateCustomerAuthSettingsRequest extends FormRequest
+class UpdateStudioPossibilitiesRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -16,6 +16,8 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
     }
 
     /**
+     * Get the validation rules that apply to the request.
+     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
@@ -38,10 +40,8 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
         ];
     }
 
-    /**
-     * @return array{allow_otp: bool, sms_sending_mode: string, sms_provider: ?string}
-     */
-    public function payload(): array
+    /** @return array{allow_otp: bool, sms_sending_mode: string, sms_provider: ?string} */
+    public function customerAuthenticationPayload(): array
     {
         $mode = SmsSendingMode::from((string) $this->validated('sms_sending_mode'));
 
@@ -54,9 +54,7 @@ class UpdateCustomerAuthSettingsRequest extends FormRequest
         ];
     }
 
-    /**
-     * @return array{allow_rtsp_cameras: bool, enable_people_counter: bool, enable_customer_notifications: bool}
-     */
+    /** @return array{allow_rtsp_cameras: bool, enable_people_counter: bool, enable_customer_notifications: bool} */
     public function accountFeaturePayload(): array
     {
         return [

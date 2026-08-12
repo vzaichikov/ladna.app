@@ -285,6 +285,10 @@ final class AppBreadcrumbs
             return $base;
         }
 
+        if (Str::startsWith($routeName, 'dashboard.accounts.festivals.users.')) {
+            return $this->festivalUsers($request, $routeName, $account, $edition, $base);
+        }
+
         if (Str::startsWith($routeName, 'dashboard.accounts.festivals.judging.')) {
             return $this->festivalJudging($request, $routeName, $account, $edition, $base);
         }
@@ -317,6 +321,47 @@ final class AppBreadcrumbs
         }
 
         return $this->festivalSettings($request, $routeName, $account, $edition, $base);
+    }
+
+    /**
+     * @param  array<int, array{label: string, href?: string}>  $base
+     * @return array<int, array{label: string, href?: string}>
+     */
+    private function festivalUsers(Request $request, string $routeName, Account $account, FestivalEdition $edition, array $base): array
+    {
+        $indexRoute = route('dashboard.accounts.festivals.users.index', [$account, $edition]);
+        $users = $this->item(__('app.festival_users'), $indexRoute);
+
+        if ($routeName === 'dashboard.accounts.festivals.users.index') {
+            return [...$base, $this->item(__('app.festival_users'))];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.users.create') {
+            return [...$base, $users, $this->item(__('app.festival_add_user'))];
+        }
+
+        $portalUser = $this->modelParameter($request, 'festivalPortalUser');
+        $portalUserItem = $this->item(
+            $this->modelLabel($portalUser, __('app.festival_user')),
+            route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser]),
+        );
+
+        if ($routeName === 'dashboard.accounts.festivals.users.edit') {
+            return [...$base, $users, $this->item($this->modelLabel($portalUser, __('app.festival_user')))];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.users.participants.create') {
+            return [...$base, $users, $portalUserItem, $this->item(__('app.festival_add_participant'))];
+        }
+
+        $participant = $this->modelParameter($request, 'festivalParticipant');
+        $participantLabel = $this->modelLabel($participant, __('app.festival_participant'));
+
+        return match ($routeName) {
+            'dashboard.accounts.festivals.users.participants.edit' => [...$base, $users, $portalUserItem, $this->item(__('app.breadcrumb_edit_item', ['item' => $participantLabel]))],
+            'dashboard.accounts.festivals.users.participants.archive' => [...$base, $users, $portalUserItem, $this->item(__('app.archive').' '.$participantLabel)],
+            default => throw new LogicException("No Festival user breadcrumb definition exists for route [{$routeName}]."),
+        };
     }
 
     /**
@@ -648,7 +693,7 @@ final class AppBreadcrumbs
             $accountItem = $this->item($account->name, route('platform.accounts.show', $account));
             $labels = [
                 'platform.accounts.edit' => 'app.edit',
-                'platform.accounts.customer-auth.edit' => 'app.customer_authentication',
+                'platform.accounts.studio-possibilities.edit' => 'app.studio_capabilities_settings',
                 'platform.accounts.sms-account.show' => 'app.sms_account',
             ];
 
@@ -832,6 +877,14 @@ final class AppBreadcrumbs
 
             if (is_string($value) && trim($value) !== '') {
                 return $value;
+            }
+        }
+
+        if (method_exists($model, 'displayName')) {
+            $displayName = $model->displayName();
+
+            if (is_string($displayName) && trim($displayName) !== '') {
+                return $displayName;
             }
         }
 

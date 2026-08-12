@@ -2,103 +2,188 @@
 
 namespace Tests\Feature;
 
-use App\Actions\Festivals\FestivalMagicLink;
-use App\Mail\FestivalPortalMail;
+use App\Enums\FestivalPortalRole;
 use App\Models\Account;
 use App\Models\Customer;
-use App\Models\FestivalLoginToken;
 use App\Models\FestivalPortalUser;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class FestivalPortalAuthenticationTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_magic_link_is_hashed_one_time_account_bound_and_creates_no_customer(): void
+    public function test_participant_email_login_self_registers_an_incomplete_profile_without_creating_a_customer(): void
     {
-        Mail::fake();
         $account = Account::factory()->create(['enable_festivals' => true]);
         $customerCount = Customer::query()->count();
 
-        app(FestivalMagicLink::class)->issue($account, ' Coach@Example.COM ', '127.0.0.1');
+        $this->post(route('festival.login.email', $account->slug), [
+            'email' => ' New.Participant@Example.COM ',
+            'password' => 'secret1',
+        ])->assertRedirect(route('festival.portal.dashboard', $account->slug));
 
-        $portalUser = FestivalPortalUser::query()->whereBelongsTo($account)->firstOrFail();
-        $token = FestivalLoginToken::query()->whereBelongsTo($account)->firstOrFail();
-        $this->assertSame('coach@example.com', $portalUser->email_normalized);
-        $this->assertSame(64, strlen($token->token_hash));
+        $portalUser = FestivalPortalUser::query()
+            ->whereBelongsTo($account)
+            ->where('email_normalized', 'new.participant@example.com')
+            ->firstOrFail();
+
+        $this->assertSame(FestivalPortalRole::Registrant, $portalUser->role);
+        $this->assertTrue($portalUser->is_active);
+        $this->assertTrue(Hash::check('secret1', (string) $portalUser->password));
+        $this->assertNotSame('secret1', $portalUser->password);
         $this->assertSame($customerCount, Customer::query()->count());
-
-        $mail = null;
-        Mail::assertQueued(FestivalPortalMail::class, function (FestivalPortalMail $queued) use (&$mail): bool {
-            $mail = $queued;
-
-            return true;
-        });
-        $url = $mail->actionUrl;
-        $rawToken = basename(parse_url($url, PHP_URL_PATH));
-        $this->assertNotSame($rawToken, $token->token_hash);
-
-        $this->get($url)->assertRedirect(route('festival.portal.dashboard', $account->slug));
         $this->assertAuthenticatedAs($portalUser, 'festival');
 
-        $this->post(route('festival.portal.logout', $account->slug))->assertRedirect(route('festival.login', $account->slug));
-        $this->get($url)->assertSessionHasErrors('token');
+        $this->get(route('festival.portal.dashboard', $account->slug))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug));
     }
 
-    public function test_same_email_has_separate_festival_identities_in_different_accounts(): void
+    public function test_participant_and_judge_email_logins_use_existing_role_specific_profiles(): void
     {
-        Mail::fake();
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $participant = FestivalPortalUser::factory()->for($account)->create([
+            'email' => 'participant@example.com',
+            'email_normalized' => 'participant@example.com',
+            'password' => 'participant-secret',
+        ]);
+        $judge = FestivalPortalUser::factory()->for($account)->judge()->create([
+            'email' => 'judge@example.com',
+            'email_normalized' => 'judge@example.com',
+            'password' => 'judge-secret',
+        ]);
+
+        $this->post(route('festival.login.email', $account->slug), [
+            'email' => 'PARTICIPANT@example.com',
+            'password' => 'participant-secret',
+        ])->assertRedirect(route('festival.portal.dashboard', $account->slug));
+        $this->assertAuthenticatedAs($participant, 'festival');
+
+        $this->post(route('festival.portal.logout', $account->slug))
+            ->assertRedirect(route('festival.login', $account->slug));
+
+        $this->post(route('festival.judge.login.email', $account->slug), [
+            'email' => 'judge@example.com',
+            'password' => 'judge-secret',
+        ])->assertRedirect(route('festival.portal.judge.dashboard', $account->slug));
+        $this->assertAuthenticatedAs($judge, 'festival');
+
+        $this->post(route('festival.portal.logout', $account->slug))
+            ->assertRedirect(route('festival.judge.login', $account->slug));
+    }
+
+    public function test_unknown_judge_and_passwordless_existing_profile_cannot_be_claimed(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        FestivalPortalUser::factory()->for($account)->create([
+            'email' => 'passwordless@example.com',
+            'email_normalized' => 'passwordless@example.com',
+            'password' => null,
+        ]);
+
+        $this->from(route('festival.judge.login', $account->slug))
+            ->post(route('festival.judge.login.email', $account->slug), [
+                'email' => 'unknown-judge@example.com',
+                'password' => 'secret1',
+            ])
+            ->assertRedirect(route('festival.judge.login', $account->slug))
+            ->assertSessionHasErrors('email');
+
+        $this->from(route('festival.login', $account->slug))
+            ->post(route('festival.login.email', $account->slug), [
+                'email' => 'passwordless@example.com',
+                'password' => 'secret1',
+            ])
+            ->assertRedirect(route('festival.login', $account->slug))
+            ->assertSessionHasErrors('email');
+
+        $this->assertDatabaseMissing('festival_portal_users', [
+            'account_id' => $account->id,
+            'email_normalized' => 'unknown-judge@example.com',
+        ]);
+        $this->assertGuest('festival');
+    }
+
+    public function test_same_email_remains_account_scoped_and_cross_account_sessions_are_rejected(): void
+    {
         $first = Account::factory()->create(['enable_festivals' => true]);
         $second = Account::factory()->create(['enable_festivals' => true]);
-        app(FestivalMagicLink::class)->issue($first, 'same@example.com', '127.0.0.1');
-        app(FestivalMagicLink::class)->issue($second, 'same@example.com', '127.0.0.1');
+
+        foreach ([$first, $second] as $account) {
+            $this->post(route('festival.login.email', $account->slug), [
+                'email' => 'same@example.com',
+                'password' => 'secret1',
+            ])->assertRedirect(route('festival.portal.dashboard', $account->slug));
+            auth('festival')->logout();
+        }
 
         $this->assertSame(2, FestivalPortalUser::query()->where('email_normalized', 'same@example.com')->count());
-        $this->assertNotSame($first->festivalPortalUsers()->firstOrFail()->id, $second->festivalPortalUsers()->firstOrFail()->id);
-    }
+        $firstUser = $first->festivalPortalUsers()->firstOrFail();
 
-    public function test_expired_magic_link_and_suspended_account_are_rejected(): void
-    {
-        Mail::fake();
-        $account = Account::factory()->create(['enable_festivals' => true]);
-        app(FestivalMagicLink::class)->issue($account, 'expired@example.com', '127.0.0.1');
-        $token = FestivalLoginToken::query()->whereBelongsTo($account)->firstOrFail();
-        $token->update(['expires_at' => now()->subMinute()]);
-        $account->update(['status' => 'suspended']);
-        $this->get(route('festival.login', $account->slug))->assertNotFound();
-        $account->update(['status' => 'active']);
-
-        $this->expectException(ValidationException::class);
-        app(FestivalMagicLink::class)->consume($account, 'not-the-hashed-token');
-    }
-
-    public function test_incomplete_profile_is_gated_and_cross_account_session_returns_not_found(): void
-    {
-        $account = Account::factory()->create(['enable_festivals' => true]);
-        $other = Account::factory()->create(['enable_festivals' => true]);
-        $portalUser = FestivalPortalUser::factory()->for($account)->create(['registrant_type' => null, 'phone' => null]);
-
-        $this->actingAs($portalUser, 'festival')
-            ->get(route('festival.portal.dashboard', $account->slug))
-            ->assertRedirect(route('festival.portal.profile.edit', $account->slug));
-
-        $this->actingAs($portalUser, 'festival')
-            ->get(route('festival.portal.dashboard', $other->slug))
+        $this->actingAs($firstUser, 'festival')
+            ->get(route('festival.portal.dashboard', $second->slug))
             ->assertNotFound();
     }
 
-    public function test_magic_link_request_is_throttled_with_generic_response(): void
+    public function test_inactive_profiles_are_rejected_on_every_authenticated_request(): void
     {
-        Mail::fake();
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->inactive()->create();
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.dashboard', $account->slug))
+            ->assertRedirect(route('festival.login', $account->slug))
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest('festival');
+    }
+
+    public function test_public_pages_expose_separate_participant_and_judge_entry_points(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
+
+        $this->get(route('festival.login', $account->slug))
+            ->assertOk()
+            ->assertSee(__('app.festival_participant_login'))
+            ->assertSee(route('festival.judge.login', $account->slug), false)
+            ->assertDontSee(route('api-docs.show'), false)
+            ->assertDontSee(route('changelog.en'), false);
+
+        $this->get(route('festival.judge.login', $account->slug))
+            ->assertOk()
+            ->assertSee(__('app.festival_judge_login'))
+            ->assertSee(route('festival.login', $account->slug), false)
+            ->assertDontSee(route('api-docs.show'), false)
+            ->assertDontSee(route('changelog.en'), false);
+    }
+
+    public function test_magic_link_runtime_and_routes_are_removed(): void
+    {
+        $this->assertFalse(Schema::hasTable('festival_login_tokens'));
+        $this->assertTrue(Schema::hasTable('festival_otp_challenges'));
+        $this->assertFileDoesNotExist(app_path('Actions/Festivals/FestivalMagicLink.php'));
+        $this->assertFileDoesNotExist(app_path('Models/FestivalLoginToken.php'));
+        $this->assertFalse(app('router')->getRoutes()->hasNamedRoute('festival.login.request'));
+        $this->assertFalse(app('router')->getRoutes()->hasNamedRoute('festival.login.consume'));
+        $this->assertFileExists(app_path('Mail/FestivalPortalMail.php'));
+    }
+
+    public function test_email_login_is_rate_limited_per_account_and_identity(): void
+    {
         $account = Account::factory()->create(['enable_festivals' => true]);
 
         foreach (range(1, 5) as $attempt) {
-            $this->post(route('festival.login.request', $account->slug), ['email' => 'rate@example.com'])->assertRedirect();
+            $this->post(route('festival.judge.login.email', $account->slug), [
+                'email' => 'rate-limited-judge@example.com',
+                'password' => 'secret1',
+            ])->assertSessionHasErrors('email');
         }
 
-        $this->post(route('festival.login.request', $account->slug), ['email' => 'rate@example.com'])->assertTooManyRequests();
+        $this->post(route('festival.judge.login.email', $account->slug), [
+            'email' => 'rate-limited-judge@example.com',
+            'password' => 'secret1',
+        ])->assertTooManyRequests();
     }
 }

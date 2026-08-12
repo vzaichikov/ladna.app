@@ -657,12 +657,12 @@ class CustomerAuthFlowTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($platformAdmin)
-            ->put(route('platform.accounts.customer-auth.update', $account), [
+            ->put(route('platform.accounts.studio-possibilities.update', $account), [
                 'allow_otp' => '1',
                 'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
                 'sms_provider' => 'smsclub',
             ])
-            ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
+            ->assertRedirect(route('platform.accounts.studio-possibilities.edit', $account));
 
         $setting = $account->customerAuthSetting()->firstOrFail();
         $this->assertTrue($setting->allow_otp);
@@ -670,7 +670,7 @@ class CustomerAuthFlowTest extends TestCase
         $this->assertSame('smsclub', $setting->sms_provider);
 
         $this->actingAs($platformAdmin)
-            ->get(route('platform.accounts.customer-auth.edit', $account))
+            ->get(route('platform.accounts.studio-possibilities.edit', $account))
             ->assertOk()
             ->assertSee(__('app.studio_capabilities_settings'), false)
             ->assertSee(__('app.studio_capabilities_features_title'), false)
@@ -694,7 +694,7 @@ class CustomerAuthFlowTest extends TestCase
             ->assertSee(__('app.studio_capabilities_short'), false);
 
         $this->actingAs($owner)
-            ->get(route('platform.accounts.customer-auth.edit', $account))
+            ->get(route('platform.accounts.studio-possibilities.edit', $account))
             ->assertForbidden();
     }
 
@@ -704,7 +704,7 @@ class CustomerAuthFlowTest extends TestCase
         $account = Account::factory()->create();
 
         $this->actingAs($platformAdmin)
-            ->put(route('platform.accounts.customer-auth.update', $account), [
+            ->put(route('platform.accounts.studio-possibilities.update', $account), [
                 'allow_otp' => '1',
                 'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
                 'sms_provider' => null,
@@ -712,7 +712,7 @@ class CustomerAuthFlowTest extends TestCase
             ->assertSessionHasErrors('sms_provider');
 
         $this->actingAs($platformAdmin)
-            ->put(route('platform.accounts.customer-auth.update', $account), [
+            ->put(route('platform.accounts.studio-possibilities.update', $account), [
                 'allow_otp' => '0',
                 'enable_customer_notifications' => '1',
                 'sms_sending_mode' => SmsSendingMode::LadnaService->value,

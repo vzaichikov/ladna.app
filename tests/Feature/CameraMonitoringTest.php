@@ -69,7 +69,7 @@ class CameraMonitoringTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($platformAdmin)
-            ->put(route('platform.accounts.customer-auth.update', $account), [
+            ->put(route('platform.accounts.studio-possibilities.update', $account), [
                 'allow_otp' => '1',
                 'allow_rtsp_cameras' => '1',
                 'enable_people_counter' => '1',
@@ -77,7 +77,7 @@ class CameraMonitoringTest extends TestCase
                 'sms_sending_mode' => SmsSendingMode::Disabled->value,
                 'sms_provider' => null,
             ])
-            ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
+            ->assertRedirect(route('platform.accounts.studio-possibilities.edit', $account));
 
         $account->refresh();
 
@@ -86,7 +86,7 @@ class CameraMonitoringTest extends TestCase
         $this->assertFalse($account->enable_telegram_alerts);
 
         $this->actingAs($platformAdmin)
-            ->get(route('platform.accounts.customer-auth.edit', $account))
+            ->get(route('platform.accounts.studio-possibilities.edit', $account))
             ->assertOk()
             ->assertSee(__('app.enable_customer_otp_tariff'), false)
             ->assertSee(__('app.enable_rtsp_camera_support'), false)
@@ -96,7 +96,7 @@ class CameraMonitoringTest extends TestCase
         $account->update(['enable_telegram_alerts' => true]);
 
         $this->actingAs($platformAdmin)
-            ->put(route('platform.accounts.customer-auth.update', $account), [
+            ->put(route('platform.accounts.studio-possibilities.update', $account), [
                 'allow_otp' => '0',
                 'allow_rtsp_cameras' => '0',
                 'enable_people_counter' => '0',
@@ -104,12 +104,12 @@ class CameraMonitoringTest extends TestCase
                 'sms_sending_mode' => SmsSendingMode::Disabled->value,
                 'sms_provider' => null,
             ])
-            ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
+            ->assertRedirect(route('platform.accounts.studio-possibilities.edit', $account));
 
         $this->assertTrue($account->fresh()->enable_telegram_alerts);
 
         $this->actingAs($owner)
-            ->put(route('platform.accounts.customer-auth.update', $account), [
+            ->put(route('platform.accounts.studio-possibilities.update', $account), [
                 'allow_rtsp_cameras' => '0',
                 'enable_people_counter' => '0',
                 'enable_telegram_alerts' => '1',

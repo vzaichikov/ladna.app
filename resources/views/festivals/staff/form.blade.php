@@ -7,6 +7,17 @@
 <div class="mx-auto max-w-5xl space-y-6">
     <x-ui.page-header :title="$edition->exists ? $edition->title : __('app.festival_edition_create')" :copy="__('app.festival_form_intro')" />
 
+    @if ($edition->exists)
+        <nav class="grid gap-1 rounded-lg bg-stone-100 p-1 sm:inline-grid sm:grid-flow-col" aria-label="{{ __('app.festival_edition_settings_tabs') }}">
+            <a href="{{ route('dashboard.accounts.festivals.edit', [$account, $edition, 'tab' => 'details']) }}" class="crm-tab justify-start sm:justify-center" @if (($activeTab ?? 'details') === 'details') aria-current="page" @endif>
+                {{ __('app.festival_details') }}
+            </a>
+            <a href="{{ route('dashboard.accounts.festivals.edit', [$account, $edition, 'tab' => 'branding']) }}" class="crm-tab justify-start sm:justify-center" @if (($activeTab ?? 'details') === 'branding') aria-current="page" @endif>
+                {{ __('app.festival_branding') }}
+            </a>
+        </nav>
+    @endif
+
     @if ($errors->any())
         <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
             <ul class="list-disc space-y-1 pl-5">
@@ -17,7 +28,93 @@
         </div>
     @endif
 
-    <form method="POST" enctype="multipart/form-data" action="{{ $edition->exists ? route('dashboard.accounts.festivals.update', [$account, $edition]) : route('dashboard.accounts.festivals.store', $account) }}" class="space-y-6">
+    @if ($edition->exists && ($activeTab ?? 'details') === 'branding')
+        <form method="POST" enctype="multipart/form-data" action="{{ route('dashboard.accounts.festivals.branding.update', [$account, $edition]) }}" class="space-y-6">
+            @csrf
+            @method('PUT')
+
+            @unless ($selectedLandingTemplateIsAvailable)
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                    <strong class="block">{{ __('app.festival_landing_template_unavailable_title') }}</strong>
+                    {{ __('app.festival_landing_template_unavailable_copy', ['template' => $edition->landing_template]) }}
+                </div>
+            @endunless
+
+            <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+                <div class="border-b border-stone-100 pb-5">
+                    <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_landing_template') }}</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.festival_landing_template_help') }}</p>
+                </div>
+                <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                    @php($oldLandingTemplate = old('landing_template'))
+                    @foreach ($festivalLandingTemplates as $templateKey => $template)
+                        @php($templateChecked = $oldLandingTemplate !== null
+                            ? $oldLandingTemplate === $templateKey
+                            : $selectedLandingTemplateIsAvailable && $edition->landing_template === $templateKey)
+                        <x-festivals.landing-template-card
+                            :template-key="$templateKey"
+                            :template="$template"
+                            name="landing_template"
+                            :checked="$templateChecked"
+                            :effective="$effectiveLandingTemplateKey === $templateKey"
+                        />
+                    @endforeach
+                </div>
+                @error('landing_template') <span class="crm-help">{{ $message }}</span> @enderror
+            </section>
+
+            <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+                <div class="border-b border-stone-100 pb-5">
+                    <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_landing_palette') }}</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.festival_landing_palette_help') }}</p>
+                </div>
+                <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($festivalLandingPalettes as $paletteKey => $palette)
+                        @php($paletteChecked = old('landing_palette', $effectiveLandingPaletteKey) === $paletteKey)
+                        <label @class([
+                            'cursor-pointer rounded-xl border bg-white p-4 transition hover:border-violet-crm-500',
+                            'border-violet-crm-500 ring-2 ring-violet-crm-100' => $paletteChecked,
+                            'border-stone-200' => ! $paletteChecked,
+                        ])>
+                            <span class="flex items-center gap-3">
+                                <input type="radio" name="landing_palette" value="{{ $paletteKey }}" class="crm-radio" @checked($paletteChecked)>
+                                <span class="font-semibold text-slate-950">{{ __($palette['name_key']) }}</span>
+                            </span>
+                            <svg class="mt-4 h-10 w-full overflow-hidden rounded-lg border border-stone-200" viewBox="0 0 {{ count($palette['swatches']) }} 1" preserveAspectRatio="none" aria-hidden="true">
+                                @foreach ($palette['swatches'] as $swatch)
+                                    <rect x="{{ $loop->index }}" y="0" width="1" height="1" fill="{{ $swatch }}" />
+                                @endforeach
+                            </svg>
+                        </label>
+                    @endforeach
+                </div>
+                @error('landing_palette') <span class="crm-help">{{ $message }}</span> @enderror
+            </section>
+
+            <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+                <div class="border-b border-stone-100 pb-5">
+                    <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_hero_image') }}</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.festival_hero_image_help') }}</p>
+                </div>
+                @if ($edition->coverMedia?->url())
+                    <img src="{{ $edition->coverMedia->url() }}" alt="" class="mt-5 aspect-video w-full rounded-xl border border-stone-200 object-cover">
+                @endif
+                <label class="mt-5 block">
+                    <span class="crm-label">{{ __('app.festival_hero_image_replace') }}</span>
+                    <input type="file" name="hero_image" accept="image/jpeg,image/png,image/webp" class="crm-field">
+                    @error('hero_image') <span class="crm-help">{{ $message }}</span> @enderror
+                </label>
+            </section>
+
+            <div class="flex justify-end rounded-xl border border-stone-200 bg-white p-4 shadow-crm">
+                <x-ui.button type="submit" size="lg">
+                    <x-ui.icon name="save" class="h-4 w-4" />
+                    {{ __('app.save') }}
+                </x-ui.button>
+            </div>
+        </form>
+    @else
+    <form method="POST" action="{{ $edition->exists ? route('dashboard.accounts.festivals.update', [$account, $edition]) : route('dashboard.accounts.festivals.store', $account) }}" class="space-y-6">
         @csrf
         @if ($edition->exists)
             @method('PUT')
@@ -53,15 +150,6 @@
                     <textarea name="summary" rows="3" maxlength="500" class="crm-field">{{ old('summary', $edition->summary) }}</textarea>
                     <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_summary_field_help') }}</span>
                     @error('summary') <span class="crm-help">{{ $message }}</span> @enderror
-                </label>
-                <label class="block sm:col-span-2">
-                    <span class="crm-label">{{ __('app.festival_hero_image') }}</span>
-                    @if ($edition->exists && $edition->coverMedia?->url())
-                        <img src="{{ $edition->coverMedia->url() }}" alt="" class="mt-2 aspect-[16/7] w-full rounded-xl object-cover">
-                    @endif
-                    <input type="file" name="hero_image" accept="image/jpeg,image/png,image/webp" class="crm-field">
-                    <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_hero_image_help') }}</span>
-                    @error('hero_image') <span class="crm-help">{{ $message }}</span> @enderror
                 </label>
             </div>
         </section>
@@ -193,13 +281,13 @@
             <div class="mt-5 grid gap-5">
                 <label class="block">
                     <span class="crm-label">{{ __('app.description') }}</span>
-                    <textarea name="description_html" rows="8" class="crm-field">{{ old('description_html', $edition->description_html) }}</textarea>
+                    <textarea name="description_html" rows="8" class="crm-field" data-studio-rules-editor data-editor-height="300">{{ old('description_html', $edition->description_html) }}</textarea>
                     <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_description_field_help') }}</span>
                     @error('description_html') <span class="crm-help">{{ $message }}</span> @enderror
                 </label>
                 <label class="block">
                     <span class="crm-label">{{ __('app.festival_rules') }}</span>
-                    <textarea name="rules_html" rows="8" class="crm-field">{{ old('rules_html', $edition->rules_html) }}</textarea>
+                    <textarea name="rules_html" rows="8" class="crm-field" data-studio-rules-editor data-editor-height="300">{{ old('rules_html', $edition->rules_html) }}</textarea>
                     <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_rules_field_help') }}</span>
                     @error('rules_html') <span class="crm-help">{{ $message }}</span> @enderror
                 </label>
@@ -213,5 +301,6 @@
             </x-ui.button>
         </div>
     </form>
+    @endif
 </div>
 @endsection

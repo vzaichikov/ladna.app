@@ -1,0 +1,4 @@
+interface:
+  display_name: "Festival Landing Design"
+  short_description: "Create safe Festival templates and palettes"
+  default_prompt: "Use $ladna-festival-landing-design to add or refine a Festival landing template or colour palette."

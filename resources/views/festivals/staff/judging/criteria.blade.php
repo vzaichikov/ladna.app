@@ -41,6 +41,10 @@
         </label>
     </x-ui.filter-bar>
 
+    @error('festival_rubric')
+        <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{{ $message }}</div>
+    @enderror
+
     <x-ui.panel padding="none" class="overflow-hidden">
         @forelse ($rubrics as $rubric)
             @php($globalIndex = ($rubrics->firstItem() ?? 1) + $loop->index)
@@ -67,6 +71,10 @@
                     :show-ordering="! $hasFilters"
                     :can-move-up="$globalIndex > 1"
                     :can-move-down="$globalIndex < $rubrics->total()"
+                    :delete-route="$rubric->can_delete ? route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $rubric]) : null"
+                    :delete-label="__('app.festival_delete_rubric')"
+                    :delete-confirm-title="__('app.festival_delete_rubric_confirm_title')"
+                    :delete-confirm-body="__('app.festival_delete_rubric_confirm_body')"
                 />
             </div>
         @empty

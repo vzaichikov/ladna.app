@@ -70,7 +70,7 @@ class StudioSmsSender
             'provider' => $providerSetting?->provider->value,
             'status' => SmsDeliveryStatus::Pending,
             'recipient_phone' => $phone,
-            'message_preview' => $purpose === SmsDeliveryPurpose::CustomerOtp
+            'message_preview' => $purpose->isAuthenticationOtp()
                 ? null
                 : Str::limit($message, 255, ''),
             'idempotency_key' => $idempotencyKey,
@@ -109,14 +109,14 @@ class StudioSmsSender
             return $this->failWithoutReservation($delivery, 'sms_provider_unavailable', 'SMS provider is unavailable.');
         }
 
-        if ($purpose === SmsDeliveryPurpose::CustomerOtp && $this->otpLimitExceeded($account)) {
+        if ($purpose->isAuthenticationOtp() && $this->otpLimitExceeded($account)) {
             return $this->failWithoutReservation($delivery, 'otp_account_limit_reached', 'Account OTP sending limit reached.');
         }
 
         $estimatedAmountCents = (int) ($segmentPriceCents ?? 0) * max(1, $estimate->segments);
 
         if ($mode === SmsSendingMode::LadnaService && ! $this->wallets->reserve($delivery, $estimatedAmountCents)) {
-            if ($purpose === SmsDeliveryPurpose::CustomerOtp) {
+            if ($purpose->isAuthenticationOtp()) {
                 return $this->failWithoutReservation(
                     $delivery,
                     'insufficient_sms_credit',
@@ -230,7 +230,7 @@ class StudioSmsSender
             ])->save();
         }
 
-        if ($purpose === SmsDeliveryPurpose::CustomerOtp) {
+        if ($purpose->isAuthenticationOtp()) {
             $this->hitOtpLimits($account);
         }
 

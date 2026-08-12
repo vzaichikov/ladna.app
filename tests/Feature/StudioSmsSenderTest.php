@@ -97,6 +97,29 @@ class StudioSmsSenderTest extends TestCase
         $this->assertSame(1_000 - ($expectedSegments * 100), $wallet->refresh()->balance_cents);
     }
 
+    public function test_festival_otp_uses_the_same_sensitive_preview_and_credit_rules_as_customer_otp(): void
+    {
+        [$account, $wallet] = $this->ladnaAccount(balanceCents: 1_000, segmentPriceCents: 100);
+        Http::fake([
+            'https://im.smsclub.mobi/sms/send' => Http::response([
+                'success_request' => ['info' => ['festival-otp-id' => '+380501112233']],
+            ]),
+        ]);
+
+        $result = app(StudioSmsSender::class)->send(
+            $account,
+            '+380501112233',
+            'Festival code: 123456',
+            SmsDeliveryPurpose::FestivalOtp,
+        );
+
+        $this->assertTrue($result->accepted());
+        $this->assertSame(SmsDeliveryPurpose::FestivalOtp, $result->delivery->purpose);
+        $this->assertNull($result->delivery->message_preview);
+        $this->assertSame(100, $result->delivery->amount_cents);
+        $this->assertSame(900, $wallet->refresh()->balance_cents);
+    }
+
     public function test_ambiguous_provider_timeout_holds_the_reservation_and_is_not_retried(): void
     {
         [$account, $wallet] = $this->ladnaAccount(balanceCents: 1_000, segmentPriceCents: 100);

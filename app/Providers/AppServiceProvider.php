@@ -165,11 +165,11 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('festival-login', function (Request $request): Limit {
-            return Limit::perMinute(5)->by($request->string('email')->lower().'|'.$request->route('accountSlug').'|'.$request->ip());
+            return Limit::perMinute(5)->by($request->string('email')->lower().$request->string('phone').'|'.$request->route('accountSlug').'|'.$request->ip());
         });
 
-        RateLimiter::for('festival-login-consume', function (Request $request): Limit {
-            return Limit::perMinute(10)->by(hash('sha256', (string) $request->route('token')).'|'.$request->ip());
+        RateLimiter::for('festival-otp', function (Request $request): Limit {
+            return Limit::perMinute(3)->by($request->string('phone').'|'.$request->route('accountSlug').'|'.$request->ip());
         });
 
         RateLimiter::for('festival-checkout', function (Request $request): Limit {

@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalRegistrantType;
 use Database\Factories\FestivalPortalUserFactory;
 use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,20 +16,27 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 
-#[Fillable(['account_id', 'registrant_type', 'first_name', 'last_name', 'patronymic', 'email', 'email_normalized', 'phone', 'city', 'studio_name', 'instagram_url', 'telegram_user_id', 'avatar_path', 'locale', 'email_verified_at', 'last_login_at'])]
-#[Hidden(['remember_token', 'telegram_user_id'])]
+#[Fillable(['account_id', 'role', 'is_active', 'registrant_type', 'first_name', 'last_name', 'patronymic', 'email', 'email_normalized', 'password', 'google_id', 'phone', 'phone_normalized', 'city', 'studio_name', 'instagram_url', 'telegram_user_id', 'avatar_path', 'locale', 'email_verified_at', 'phone_verified_at', 'last_login_at'])]
+#[Hidden(['password', 'remember_token', 'telegram_user_id', 'google_id'])]
 class FestivalPortalUser extends Authenticatable implements HasLocalePreference
 {
     /** @use HasFactory<FestivalPortalUserFactory> */
     use HasFactory, Notifiable;
 
-    protected $attributes = ['locale' => 'uk'];
+    protected $attributes = [
+        'is_active' => true,
+        'locale' => 'uk',
+    ];
 
     protected function casts(): array
     {
         return [
+            'role' => FestivalPortalRole::class,
+            'is_active' => 'boolean',
             'registrant_type' => FestivalRegistrantType::class,
+            'password' => 'hashed',
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
         ];
     }
@@ -44,14 +53,34 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
 
     public function displayName(): string
     {
-        return collect([$this->first_name, $this->last_name])->filter()->join(' ') ?: $this->email;
+        return collect([$this->first_name, $this->last_name])->filter()->join(' ') ?: ($this->email ?: $this->phone ?: __('app.festival_user'));
     }
 
     public function profileIsComplete(): bool
     {
+        if ($this->role === FestivalPortalRole::Judge) {
+            return filled($this->first_name)
+                && filled($this->last_name)
+                && filled($this->email);
+        }
+
         return $this->registrant_type !== null
             && filled($this->first_name)
-            && filled($this->last_name);
+            && filled($this->last_name)
+            && filled($this->email)
+            && filled($this->phone)
+            && filled($this->city)
+            && filled($this->studio_name);
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeForRole(Builder $query, FestivalPortalRole $role): Builder
+    {
+        return $query->where('role', $role->value);
     }
 
     public function account(): BelongsTo
@@ -62,6 +91,11 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
     public function participants(): HasMany
     {
         return $this->hasMany(FestivalParticipant::class);
+    }
+
+    public function festivalParticipants(): HasMany
+    {
+        return $this->participants();
     }
 
     public function entries(): HasMany

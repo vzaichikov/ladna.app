@@ -83,7 +83,7 @@ class FestivalSaasBillingTest extends TestCase
         ])->assertRedirect(route('platform.accounts.show', $account));
         $this->assertTrue($account->refresh()->enable_festivals);
 
-        $this->actingAs($admin)->put(route('platform.accounts.customer-auth.update', $account), [
+        $this->actingAs($admin)->put(route('platform.accounts.studio-possibilities.update', $account), [
             'allow_otp' => 1,
             'allow_rtsp_cameras' => 0,
             'enable_people_counter' => 0,

@@ -46,7 +46,7 @@
                     </span>
                 </div>
                 <x-ui.action-button :href="route('dashboard.accounts.show', $account)" icon="arrow-right" :label="__('app.dashboard')" />
-                <x-ui.action-button :href="route('platform.accounts.customer-auth.edit', $account)" icon="sliders-horizontal" :label="__('app.studio_capabilities_short')" />
+                <x-ui.action-button :href="route('platform.accounts.studio-possibilities.edit', $account)" icon="sliders-horizontal" :label="__('app.studio_capabilities_short')" />
             </div>
         @empty
             <x-ui.empty-state :title="__('app.no_accounts')" icon="accounts" class="m-5" />

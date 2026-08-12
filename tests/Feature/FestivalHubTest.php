@@ -371,7 +371,9 @@ class FestivalHubTest extends TestCase
             ->assertSee(__('app.festival_venue_access'))
             ->assertSee(__('app.festival_public_content'))
             ->assertSee(__('app.festival_series_field_help'))
-            ->assertSee(__('app.festival_rules_field_help'));
+            ->assertSee(__('app.festival_rules_field_help'))
+            ->assertDontSee('name="hero_image"', false)
+            ->assertDontSee(__('app.festival_branding'));
 
         $edition = FestivalEdition::factory()->for($series)->create(['account_id' => $account->id]);
 
@@ -379,8 +381,17 @@ class FestivalHubTest extends TestCase
             ->get(route('dashboard.accounts.festivals.edit', [$account, $edition]))
             ->assertOk()
             ->assertSee(__('app.festival_form_intro'))
+            ->assertSee(__('app.festival_details'))
+            ->assertSee(__('app.festival_branding'))
             ->assertSee(__('app.festival_registration_status_field_help'))
-            ->assertSee(__('app.festival_venue_directions_field_help'));
+            ->assertSee(__('app.festival_venue_directions_field_help'))
+            ->assertDontSee('name="hero_image"', false)
+            ->assertSeeInOrder([
+                'name="description_html"',
+                'data-studio-rules-editor',
+                'name="rules_html"',
+                'data-studio-rules-editor',
+            ], false);
     }
 
     public function test_judge_only_staff_see_only_their_assigned_festivals_on_the_hub(): void
@@ -415,18 +426,20 @@ class FestivalHubTest extends TestCase
         [$account, $owner, $series] = $this->ownerFestival();
         $edition = FestivalEdition::factory()->for($series)->create(['account_id' => $account->id]);
 
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.update', [$account, $edition]), $this->editionData($series, [
-            'title' => $edition->title,
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.branding.update', [$account, $edition]), [
+            'landing_template' => 'general',
+            'landing_palette' => 'general',
             'hero_image' => UploadedFile::fake()->image('first-cover.png', 1600, 900),
-        ]))->assertRedirect();
+        ])->assertRedirect();
 
         $firstCover = $edition->coverMedia()->firstOrFail();
         Storage::disk('public')->assertExists($firstCover->path);
 
-        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.update', [$account, $edition]), $this->editionData($series, [
-            'title' => $edition->title,
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.branding.update', [$account, $edition]), [
+            'landing_template' => 'general',
+            'landing_palette' => 'general',
             'hero_image' => UploadedFile::fake()->image('second-cover.jpg', 1600, 900),
-        ]))->assertRedirect();
+        ])->assertRedirect();
 
         $secondCover = $edition->coverMedia()->firstOrFail();
         $this->assertNotSame($firstCover->path, $secondCover->path);
@@ -434,12 +447,14 @@ class FestivalHubTest extends TestCase
         Storage::disk('public')->assertExists($secondCover->path);
         $this->assertSame(1, $edition->media()->where('is_cover', true)->count());
 
-        $this->actingAs($owner)->from(route('dashboard.accounts.festivals.edit', [$account, $edition]))
-            ->put(route('dashboard.accounts.festivals.update', [$account, $edition]), $this->editionData($series, [
-                'title' => $edition->title,
+        $brandingUrl = route('dashboard.accounts.festivals.edit', [$account, $edition, 'tab' => 'branding']);
+        $this->actingAs($owner)->from($brandingUrl)
+            ->put(route('dashboard.accounts.festivals.branding.update', [$account, $edition]), [
+                'landing_template' => 'general',
+                'landing_palette' => 'general',
                 'hero_image' => UploadedFile::fake()->create('unsafe.svg', 10, 'image/svg+xml'),
-            ]))
-            ->assertRedirect(route('dashboard.accounts.festivals.edit', [$account, $edition]))
+            ])
+            ->assertRedirect($brandingUrl)
             ->assertSessionHasErrors('hero_image');
         Storage::disk('public')->assertExists($secondCover->path);
         $this->assertSame($secondCover->id, $edition->coverMedia()->firstOrFail()->id);

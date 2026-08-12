@@ -7,6 +7,7 @@ use App\Enums\FestivalTicketStatus;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalTicketOrder;
+use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalQrToken;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Http\Request;
@@ -23,15 +24,23 @@ class FestivalPublicController extends Controller
         return view('festivals.public.index', compact('account', 'editions'));
     }
 
-    public function show(Request $request, string $accountSlug, string $editionSlug, PaymentGatewayRegistry $gateways): View
-    {
+    public function show(
+        Request $request,
+        string $accountSlug,
+        string $editionSlug,
+        PaymentGatewayRegistry $gateways,
+        FestivalLandingRegistry $landingRegistry,
+    ): View {
         $account = $this->account($request, $accountSlug);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)
             ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'stages', 'admissionTypes' => fn ($query) => $query->availableForSale(), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
             ->firstOrFail();
         $providers = $gateways->availableSettingsFor($account);
+        $landingTemplateKey = $landingRegistry->effectiveTemplateKey($edition, $account);
+        $landingPaletteKey = $landingRegistry->effectivePaletteKey($edition);
+        $landingTemplate = $landingRegistry->template($landingTemplateKey);
 
-        return view('festivals.public.show', compact('account', 'edition', 'providers'));
+        return view($landingTemplate['view'], compact('account', 'edition', 'providers', 'landingTemplateKey', 'landingPaletteKey'));
     }
 
     public function order(Request $request, string $accountSlug, string $accessToken, FestivalQrToken $qr): View

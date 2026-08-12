@@ -25,7 +25,7 @@ class CustomerNotificationSettingsTest extends TestCase
         ]);
 
         $this->actingAs($platformAdmin)
-            ->put(route('platform.accounts.customer-auth.update', $account), [
+            ->put(route('platform.accounts.studio-possibilities.update', $account), [
                 'allow_otp' => '0',
                 'allow_rtsp_cameras' => '0',
                 'enable_people_counter' => '0',
@@ -34,7 +34,7 @@ class CustomerNotificationSettingsTest extends TestCase
                 'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
                 'sms_provider' => 'smsclub',
             ])
-            ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
+            ->assertRedirect(route('platform.accounts.studio-possibilities.edit', $account));
 
         $account->refresh();
         $settings = $account->customerAuthSetting()->firstOrFail();
@@ -45,7 +45,7 @@ class CustomerNotificationSettingsTest extends TestCase
         $this->assertSame('smsclub', $settings->sms_provider);
         $this->assertDatabaseHas('account_activity_logs', [
             'account_id' => $account->id,
-            'route_name' => 'platform.accounts.customer-auth.update',
+            'route_name' => 'platform.accounts.studio-possibilities.update',
             'actor_user_id' => $platformAdmin->id,
         ]);
     }

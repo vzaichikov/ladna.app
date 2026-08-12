@@ -44,10 +44,7 @@
                                 ?: ($isCustomerRelated ? $delivery->resolved_customer_name : null);
                             $recipientId = $delivery->notification_customer_id
                                 ?: ($isCustomerRelated ? $delivery->resolved_customer_id : null);
-                            $isOtp = in_array($delivery->purpose, [
-                                \App\Enums\SmsDeliveryPurpose::CustomerOtp,
-                                \App\Enums\SmsDeliveryPurpose::UserOtp,
-                            ], true);
+                            $isOtp = $delivery->purpose->isAuthenticationOtp();
                             $message = $delivery->notification_text ?: $delivery->message_preview;
                         @endphp
 

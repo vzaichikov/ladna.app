@@ -6875,6 +6875,107 @@ function initTrialClassPassOverrideForms(root = document) {
     });
 }
 
+function renameFestivalRubricStructure(form) {
+    const sections = Array.from(form.querySelectorAll('[data-festival-rubric-section]'));
+    const sectionLabelTemplate = form.dataset.sectionLabelTemplate || 'Section __NUMBER__';
+
+    sections.forEach((section, sectionIndex) => {
+        const sectionLabel = section.querySelector('[data-festival-rubric-section-label]');
+
+        if (sectionLabel) {
+            sectionLabel.textContent = sectionLabelTemplate.replace('__NUMBER__', String(sectionIndex + 1));
+        }
+
+        section.querySelectorAll('[data-section-field]').forEach((field) => {
+            field.name = `sections[${sectionIndex}][${field.dataset.sectionField}]`;
+        });
+
+        const criteria = Array.from(section.querySelectorAll('[data-festival-rubric-criterion]'));
+
+        criteria.forEach((criterion, criterionIndex) => {
+            criterion.querySelectorAll('[data-criterion-field]').forEach((field) => {
+                field.name = `sections[${sectionIndex}][criteria][${criterionIndex}][${field.dataset.criterionField}]`;
+            });
+
+            const removeCriterionButton = criterion.querySelector('[data-remove-rubric-criterion]');
+
+            if (removeCriterionButton) {
+                removeCriterionButton.disabled = criteria.length === 1;
+            }
+        });
+
+        const removeSectionButton = section.querySelector('[data-remove-rubric-section]');
+
+        if (removeSectionButton) {
+            removeSectionButton.disabled = sections.length === 1;
+        }
+    });
+}
+
+function initFestivalRubricEditors(root = document) {
+    root.querySelectorAll('[data-festival-rubric-editor]').forEach((form) => {
+        const sectionsContainer = form.querySelector('[data-festival-rubric-sections]');
+        const sectionTemplate = form.querySelector('[data-festival-rubric-section-template]');
+        const criterionTemplate = form.querySelector('[data-festival-rubric-criterion-template]');
+
+        if (!sectionsContainer || !sectionTemplate || !criterionTemplate) {
+            return;
+        }
+
+        form.addEventListener('click', (event) => {
+            const addSectionButton = event.target.closest('[data-add-rubric-section]');
+
+            if (addSectionButton) {
+                const section = sectionTemplate.content.cloneNode(true);
+
+                sectionsContainer.append(section);
+                renameFestivalRubricStructure(form);
+                createIcons({ icons });
+                sectionsContainer.lastElementChild?.querySelector('[data-section-field="name"]')?.focus();
+
+                return;
+            }
+
+            const addCriterionButton = event.target.closest('[data-add-rubric-criterion]');
+
+            if (addCriterionButton) {
+                const section = addCriterionButton.closest('[data-festival-rubric-section]');
+                const criteriaContainer = section?.querySelector('[data-festival-rubric-criteria]');
+
+                if (!criteriaContainer) {
+                    return;
+                }
+
+                criteriaContainer.append(criterionTemplate.content.cloneNode(true));
+                renameFestivalRubricStructure(form);
+                createIcons({ icons });
+                criteriaContainer.lastElementChild?.querySelector('[data-criterion-field="name"]')?.focus();
+
+                return;
+            }
+
+            const removeSectionButton = event.target.closest('[data-remove-rubric-section]');
+
+            if (removeSectionButton && sectionsContainer.querySelectorAll('[data-festival-rubric-section]').length > 1) {
+                removeSectionButton.closest('[data-festival-rubric-section]')?.remove();
+                renameFestivalRubricStructure(form);
+
+                return;
+            }
+
+            const removeCriterionButton = event.target.closest('[data-remove-rubric-criterion]');
+            const criteriaContainer = removeCriterionButton?.closest('[data-festival-rubric-criteria]');
+
+            if (removeCriterionButton && criteriaContainer?.querySelectorAll('[data-festival-rubric-criterion]').length > 1) {
+                removeCriterionButton.closest('[data-festival-rubric-criterion]')?.remove();
+                renameFestivalRubricStructure(form);
+            }
+        });
+
+        renameFestivalRubricStructure(form);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initEventScanner();
     initEventForms();
@@ -6925,6 +7026,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initIntegrationForms();
     initSmsSendingSettings();
     initTrialClassPassOverrideForms();
+    initFestivalRubricEditors();
     syncPublicLegalReturnUrls();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {

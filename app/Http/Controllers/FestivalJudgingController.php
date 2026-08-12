@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Festivals\SaveFestivalScoreSheet;
 use App\Actions\Festivals\UnlockFestivalScoreSheet;
 use App\Enums\FestivalEntryStatus;
+use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalScoreSheetStatus;
 use App\Http\Requests\FestivalScoreSheetRequest;
 use App\Http\Requests\UnlockFestivalScoreSheetRequest;
@@ -240,7 +241,7 @@ class FestivalJudgingController extends Controller
     {
         $account = $request->attributes->get('festivalAccount');
         $portalUser = $request->user('festival');
-        abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser && $portalUser->account_id === $account->id, 404);
+        abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser && $portalUser->account_id === $account->id && $portalUser->role === FestivalPortalRole::Judge && $portalUser->is_active, 404);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->where('slug', $editionSlug)->firstOrFail();
         $assignment = FestivalJudgeAssignment::query()->where('festival_edition_id', $edition->id)->where('festival_portal_user_id', $portalUser->id)->where('is_active', true)->firstOrFail();
 

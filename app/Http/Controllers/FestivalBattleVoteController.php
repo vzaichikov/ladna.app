@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Festivals\RecordFestivalBattleJudgeVote;
 use App\Enums\FestivalBattleMatchStatus;
+use App\Enums\FestivalPortalRole;
 use App\Http\Requests\FestivalBattleJudgeVoteRequest;
 use App\Models\Account;
 use App\Models\FestivalBattleJudgeVote;
@@ -117,7 +118,7 @@ class FestivalBattleVoteController extends Controller
     {
         $account = $request->attributes->get('festivalAccount');
         $portalUser = $request->user('festival');
-        abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser && $portalUser->account_id === $account->id, 404);
+        abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser && $portalUser->account_id === $account->id && $portalUser->role === FestivalPortalRole::Judge && $portalUser->is_active, 404);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->where('slug', $editionSlug)->firstOrFail();
         $assignment = FestivalJudgeAssignment::query()
             ->where('account_id', $account->id)

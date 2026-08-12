@@ -31,7 +31,7 @@
                         {{ __('app.edit') }}
                     </x-ui.button>
                 @endunless
-                <x-ui.button :href="route('platform.accounts.customer-auth.edit', $account)" variant="secondary">
+                <x-ui.button :href="route('platform.accounts.studio-possibilities.edit', $account)" variant="secondary">
                     <x-ui.icon name="sliders-horizontal" class="h-4 w-4" />
                     {{ __('app.studio_capabilities_settings') }}
                 </x-ui.button>

@@ -13,7 +13,17 @@
         </x-ui.button>
     </div>
 
-    <form method="POST" action="{{ route('platform.accounts.customer-auth.update', $account) }}" data-sms-sending-settings class="mt-6 max-w-6xl space-y-5">
+    <nav class="mt-6 grid max-w-3xl gap-1 rounded-lg bg-stone-100 p-1 sm:inline-grid sm:grid-flow-col" aria-label="{{ __('app.studio_possibilities_tabs') }}">
+        <a href="{{ route('platform.accounts.studio-possibilities.edit', [$account, 'tab' => 'capabilities']) }}" class="crm-tab justify-start sm:justify-center" @if ($activeTab === 'capabilities') aria-current="page" @endif>
+            {{ __('app.capabilities_and_sms') }}
+        </a>
+        <a href="{{ route('platform.accounts.studio-possibilities.edit', [$account, 'tab' => 'festival-templates']) }}" class="crm-tab justify-start sm:justify-center" @if ($activeTab === 'festival-templates') aria-current="page" @endif>
+            {{ __('app.festival_landing_templates') }}
+        </a>
+    </nav>
+
+    @if ($activeTab === 'capabilities')
+    <form method="POST" action="{{ route('platform.accounts.studio-possibilities.update', $account) }}" data-sms-sending-settings class="mt-6 max-w-6xl space-y-5">
         @csrf
         @method('PUT')
 
@@ -119,4 +129,44 @@
             {{ __('app.save') }}
         </x-ui.button>
     </form>
+    @else
+        <form method="POST" action="{{ route('platform.accounts.studio-possibilities.festival-templates.update', $account) }}" class="mt-6 max-w-6xl space-y-5">
+            @csrf
+            @method('PUT')
+
+            @unless ($account->enable_festivals)
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                    <strong class="block">{{ __('app.festival_access_disabled') }}</strong>
+                    {{ __('app.festival_template_grants_while_disabled') }}
+                </div>
+            @endunless
+
+            <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+                <div class="border-b border-stone-100 pb-5">
+                    <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_landing_templates') }}</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.festival_landing_template_grants_help') }}</p>
+                </div>
+                <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($festivalLandingTemplates as $templateKey => $template)
+                        @php($isGeneral = $templateKey === \App\Support\Festivals\FestivalLandingRegistry::DEFAULT_TEMPLATE)
+                        <x-festivals.landing-template-card
+                            :template-key="$templateKey"
+                            :template="$template"
+                            name="festival_landing_templates[]"
+                            type="checkbox"
+                            :checked="$isGeneral || in_array($templateKey, old('festival_landing_templates', $allowedFestivalLandingTemplateKeys), true)"
+                            :disabled="$isGeneral"
+                        />
+                    @endforeach
+                </div>
+                @error('festival_landing_templates') <span class="crm-help">{{ $message }}</span> @enderror
+                @error('festival_landing_templates.*') <span class="crm-help">{{ $message }}</span> @enderror
+            </section>
+
+            <x-ui.button type="submit">
+                <x-ui.icon name="save" class="h-4 w-4" />
+                {{ __('app.save') }}
+            </x-ui.button>
+        </form>
+    @endif
 @endsection

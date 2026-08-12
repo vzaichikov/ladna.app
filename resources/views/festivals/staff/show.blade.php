@@ -42,6 +42,29 @@
                 <span class="text-sm text-slate-500">{{ __('app.festival_program_slots') }}</span>
                 <strong class="mt-1 block text-2xl">{{ $edition->schedule_slots_count }}</strong>
             </div>
+            @if ($workspacePermissions['manage'])
+                <a href="{{ route('dashboard.accounts.festivals.settings.categories', [$account, $edition]) }}" class="group rounded-2xl border border-transparent bg-white p-5 shadow-crm transition hover:-translate-y-0.5 hover:border-brand-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
+                    <span class="text-sm text-slate-500 group-hover:text-brand-700">{{ __('app.festival_categories') }}</span>
+                    <span class="mt-1 flex items-center justify-between gap-3">
+                        <strong class="text-2xl text-slate-950">{{ $edition->categories_count }}</strong>
+                        <x-ui.icon name="arrow-right" class="h-4 w-4 text-brand-600 transition group-hover:translate-x-0.5" />
+                    </span>
+                </a>
+                <a href="{{ route('dashboard.accounts.festivals.judging.criteria.index', [$account, $edition]) }}" class="group rounded-2xl border border-transparent bg-white p-5 shadow-crm transition hover:-translate-y-0.5 hover:border-brand-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
+                    <span class="text-sm text-slate-500 group-hover:text-brand-700">{{ __('app.festival_criteria') }}</span>
+                    <span class="mt-1 flex items-center justify-between gap-3">
+                        <strong class="text-2xl text-slate-950">{{ $festivalCriteriaCount }}</strong>
+                        <x-ui.icon name="arrow-right" class="h-4 w-4 text-brand-600 transition group-hover:translate-x-0.5" />
+                    </span>
+                </a>
+                <a href="{{ route('dashboard.accounts.festivals.judging.judges.index', [$account, $edition]) }}" class="group rounded-2xl border border-transparent bg-white p-5 shadow-crm transition hover:-translate-y-0.5 hover:border-brand-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
+                    <span class="text-sm text-slate-500 group-hover:text-brand-700">{{ __('app.festival_judges') }}</span>
+                    <span class="mt-1 flex items-center justify-between gap-3">
+                        <strong class="text-2xl text-slate-950">{{ $edition->judge_assignments_count }}</strong>
+                        <x-ui.icon name="arrow-right" class="h-4 w-4 text-brand-600 transition group-hover:translate-x-0.5" />
+                    </span>
+                </a>
+            @endif
             @if ($workspacePermissions['finance'] || $workspacePermissions['ticket_check_in'])
                 <div class="rounded-2xl bg-white p-5 shadow-crm">
                     <span class="text-sm text-slate-500">{{ __('app.festival_tickets_issued') }}</span>

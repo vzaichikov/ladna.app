@@ -6,6 +6,10 @@
     'showOrdering' => true,
     'canMoveUp' => true,
     'canMoveDown' => true,
+    'deleteRoute' => null,
+    'deleteLabel' => null,
+    'deleteConfirmTitle' => null,
+    'deleteConfirmBody' => null,
 ])
 
 <div {{ $attributes->class(['flex flex-wrap items-center justify-end gap-2']) }}>
@@ -36,4 +40,19 @@
             :label="$active ? __('app.deactivate') : __('app.activate')"
         />
     </form>
+
+    @if ($deleteRoute)
+        <form
+            method="POST"
+            action="{{ $deleteRoute }}"
+            data-confirm-delete
+            @if ($deleteConfirmTitle) data-confirm-title="{{ $deleteConfirmTitle }}" @endif
+            @if ($deleteConfirmBody) data-confirm-body="{{ $deleteConfirmBody }}" @endif
+            @if ($deleteLabel) data-confirm-accept="{{ $deleteLabel }}" @endif
+        >
+            @csrf
+            @method('DELETE')
+            <x-ui.action-button type="submit" variant="danger" icon="trash" :label="$deleteLabel ?: __('app.delete')" />
+        </form>
+    @endif
 </div>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalScoreSheetStatus;
 use App\Http\Requests\StoreFestivalJudgeAssignmentRequest;
 use App\Http\Requests\UpdateFestivalJudgeAssignmentRequest;
@@ -60,8 +61,17 @@ class FestivalJudgeAssignmentController extends Controller
     public function create(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
         $permissions = $this->managerPermissions($request, $account, $festivalEdition);
+        $preselectedPortalUser = FestivalPortalUser::query()
+            ->whereBelongsTo($account)
+            ->forRole(FestivalPortalRole::Judge)
+            ->active()
+            ->find($request->integer('festival_portal_user_id'));
 
-        return $this->formView($account, $festivalEdition, new FestivalJudgeAssignment(['is_active' => true]), $permissions);
+        return $this->formView($account, $festivalEdition, new FestivalJudgeAssignment([
+            'festival_portal_user_id' => $preselectedPortalUser?->id,
+            'display_name' => $preselectedPortalUser?->displayName(),
+            'is_active' => true,
+        ]), $permissions);
     }
 
     public function store(StoreFestivalJudgeAssignmentRequest $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
@@ -72,6 +82,20 @@ class FestivalJudgeAssignmentController extends Controller
         DB::transaction(function () use ($account, $festivalEdition, $data): void {
             FestivalEdition::query()->whereKey($festivalEdition->id)->lockForUpdate()->firstOrFail();
             $identityColumn = isset($data['user_id']) ? 'user_id' : 'festival_portal_user_id';
+
+            if ($identityColumn === 'festival_portal_user_id') {
+                $guestJudge = FestivalPortalUser::query()
+                    ->whereBelongsTo($account)
+                    ->forRole(FestivalPortalRole::Judge)
+                    ->active()
+                    ->whereKey($data['festival_portal_user_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $guestJudge) {
+                    throw ValidationException::withMessages(['festival_portal_user_id' => __('app.festival_judge_guest_invalid')]);
+                }
+            }
 
             if (FestivalJudgeAssignment::query()->where('festival_edition_id', $festivalEdition->id)->where($identityColumn, $data[$identityColumn])->exists()) {
                 throw ValidationException::withMessages([$identityColumn => __('app.festival_judge_identity_duplicate')]);
@@ -167,7 +191,7 @@ class FestivalJudgeAssignmentController extends Controller
                 ->orderBy('id')
                 ->get(),
             'staffUsers' => $account->users()->orderBy('name')->orderBy('email')->get(['users.id', 'users.name', 'users.email']),
-            'portalUsers' => FestivalPortalUser::query()->whereBelongsTo($account)->orderBy('first_name')->orderBy('last_name')->orderBy('email')->get(),
+            'portalUsers' => FestivalPortalUser::query()->whereBelongsTo($account)->forRole(FestivalPortalRole::Judge)->active()->orderBy('first_name')->orderBy('last_name')->orderBy('email')->get(),
             'workspacePermissions' => $permissions,
         ]);
     }

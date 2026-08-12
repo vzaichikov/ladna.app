@@ -132,12 +132,12 @@ class SmsSendingSettingsTest extends TestCase
         $account = Account::factory()->create();
 
         $this->actingAs($platformAdmin)
-            ->put(route('platform.accounts.customer-auth.update', $account), [
+            ->put(route('platform.accounts.studio-possibilities.update', $account), [
                 'allow_otp' => '1',
                 'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
                 'sms_provider' => 'sendpulse',
             ])
-            ->assertRedirect(route('platform.accounts.customer-auth.edit', $account));
+            ->assertRedirect(route('platform.accounts.studio-possibilities.edit', $account));
 
         $this->assertDatabaseHas('customer_auth_settings', [
             'account_id' => $account->id,
@@ -147,7 +147,7 @@ class SmsSendingSettingsTest extends TestCase
         ]);
 
         $this->actingAs($platformAdmin)
-            ->get(route('platform.accounts.customer-auth.edit', $account))
+            ->get(route('platform.accounts.studio-possibilities.edit', $account))
             ->assertOk()
             ->assertSee('name="sms_sending_mode"', false)
             ->assertSee('name="sms_provider"', false)

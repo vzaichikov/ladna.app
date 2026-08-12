@@ -1,8 +1,15 @@
+@php($portalUser = $portalUser ?? request()->user('festival'))
+@php($isJudge = $portalUser?->role === \App\Enums\FestivalPortalRole::Judge)
 <nav class="flex flex-wrap items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3 shadow-crm" aria-label="{{ __('app.festival_portal') }}">
-    <a href="{{ route('festival.portal.dashboard', $account->slug) }}" class="crm-tab">{{ __('app.festival_calendar') }}</a>
-    <a href="{{ route('festival.portal.participants.index', $account->slug) }}" class="crm-tab">{{ __('app.festival_participants') }}</a>
-    <a href="{{ route('festival.portal.profile.edit', $account->slug) }}" class="crm-tab">{{ __('app.profile') }}</a>
-    @if(isset($edition) && request()->routeIs('festival.portal.judging.*', 'festival.portal.battle-votes.*'))
+    @if ($isJudge)
+        <a href="{{ route('festival.portal.judge.dashboard', $account->slug) }}" class="crm-tab">{{ __('app.festival_judge_cabinet') }}</a>
+        <a href="{{ route('festival.portal.judge.profile.edit', $account->slug) }}" class="crm-tab">{{ __('app.profile') }}</a>
+    @else
+        <a href="{{ route('festival.portal.dashboard', $account->slug) }}" class="crm-tab">{{ __('app.festival_calendar') }}</a>
+        <a href="{{ route('festival.portal.participants.index', $account->slug) }}" class="crm-tab">{{ __('app.festival_participants') }}</a>
+        <a href="{{ route('festival.portal.profile.edit', $account->slug) }}" class="crm-tab">{{ __('app.profile') }}</a>
+    @endif
+    @if($isJudge && isset($edition) && request()->routeIs('festival.portal.judging.*', 'festival.portal.battle-votes.*'))
         <a href="{{ route('festival.portal.judging.index', [$account->slug, $edition->slug]) }}" class="crm-tab">{{ __('app.festival_judging') }}</a>
         <a href="{{ route('festival.portal.battle-votes.index', [$account->slug, $edition->slug]) }}" class="crm-tab">{{ __('app.festival_battle_voting') }}</a>
     @endif

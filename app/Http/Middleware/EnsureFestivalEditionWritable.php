@@ -16,6 +16,10 @@ class EnsureFestivalEditionWritable
 
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->routeIs('dashboard.accounts.festivals.users.*')) {
+            return $next($request);
+        }
+
         if ($request->isMethodSafe()) {
             return $next($request);
         }
