@@ -11,6 +11,7 @@
 
     <x-ui.panel class="max-w-4xl">
         @php($selectedCategories = collect(old('category_ids', $assignment->exists ? $assignment->categories->modelKeys() : []))->map(fn ($id) => (int) $id)->all())
+        @php($selectedSections = collect(old('section_ids', $assignment->exists ? $assignment->rubricSections->modelKeys() : []))->map(fn ($id) => (int) $id)->all())
         <form method="POST" action="{{ $assignment->exists ? route('dashboard.accounts.festivals.judging.judges.update', [$account, $edition, $assignment]) : route('dashboard.accounts.festivals.judging.judges.store', [$account, $edition]) }}" class="space-y-6">
             @csrf
             @if ($assignment->exists)
@@ -75,6 +76,28 @@
                 </div>
                 @error('category_ids') <span class="crm-help">{{ $message }}</span> @enderror
                 @error('category_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
+            </fieldset>
+
+            <fieldset>
+                <legend class="crm-label">{{ __('app.festival_judge_sections') }}</legend>
+                <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_judge_sections_copy') }}</p>
+                <div class="mt-3 space-y-3">
+                    @foreach ($rubrics as $rubric)
+                        <div class="rounded-xl border border-stone-200 p-4">
+                            <p class="font-semibold text-slate-950">{{ $rubric->name }} · {{ $rubric->category?->name ?? __('app.festival_all_categories') }}</p>
+                            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                                @foreach ($rubric->sections as $section)
+                                    <label class="flex items-center gap-2 text-sm text-slate-700">
+                                        <input type="checkbox" name="section_ids[]" value="{{ $section->id }}" @checked(in_array($section->id, $selectedSections, true)) class="crm-checkbox">
+                                        {{ $section->name }} · {{ __('app.festival_rubric_'.$section->contribution->value) }}
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                @error('section_ids') <span class="crm-help">{{ $message }}</span> @enderror
+                @error('section_ids.*') <span class="crm-help">{{ $message }}</span> @enderror
             </fieldset>
 
             <div class="flex flex-wrap gap-x-6 gap-y-3">

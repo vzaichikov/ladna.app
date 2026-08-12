@@ -35,12 +35,9 @@
                 </div>
                 <span class="w-fit rounded-full px-2.5 py-1 text-xs font-semibold {{ $published ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-600' }}">{{ $published ? __('app.published') : __('app.festival_unpublished') }}</span>
                 <p class="text-sm text-slate-500">{{ trans_choice('app.festival_published_result_usage_count', $category->published_results_count, ['count' => $category->published_results_count]) }}</p>
-                <form method="POST" action="{{ route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $category]) }}">
-                    @csrf
-                    <x-ui.button type="submit" size="sm" variant="secondary">
-                        {{ $published ? __('app.festival_republish') : __('app.publish') }}
-                    </x-ui.button>
-                </form>
+                <x-ui.button :href="route('dashboard.accounts.festivals.judging.results.preview', [$account, $edition, $category])" size="sm" variant="secondary">
+                    {{ $published ? __('app.festival_review_and_republish') : __('app.festival_preview_results') }}
+                </x-ui.button>
             </div>
         @empty
             <x-ui.empty-state :title="$hasFilters ? __('app.no_data') : __('app.festival_results_categories_empty')" icon="trophy" class="m-5">

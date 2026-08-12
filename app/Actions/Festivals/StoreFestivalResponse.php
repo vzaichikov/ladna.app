@@ -10,6 +10,7 @@ use App\Models\FestivalSubmission;
 use App\Support\Festivals\FestivalEntryWorkflowState;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class StoreFestivalResponse
 {
@@ -80,6 +81,28 @@ class StoreFestivalResponse
             Validator::make($validated, ['value.*' => ['string', 'in:'.implode(',', $options)]])->validate();
         }
 
+        if ($type === FestivalRequirementInputType::Url && filled($validated['value'] ?? null)) {
+            $this->validateUrlHost($requirement, (string) $validated['value']);
+        }
+
         return $validated['value'] ?? null;
+    }
+
+    private function validateUrlHost(FestivalEntryRequirement $requirement, string $value): void
+    {
+        $allowedHosts = collect(data_get($requirement->definition->validation, 'allowed_hosts', []))
+            ->map(fn (mixed $host): string => mb_strtolower(trim((string) $host, '.')))
+            ->filter();
+
+        if ($allowedHosts->isEmpty()) {
+            return;
+        }
+
+        $host = mb_strtolower((string) parse_url($value, PHP_URL_HOST));
+        $allowed = $allowedHosts->contains(fn (string $candidate): bool => $host === $candidate || str_ends_with($host, '.'.$candidate));
+
+        if (! $allowed) {
+            throw ValidationException::withMessages(['value' => __('validation.url')]);
+        }
     }
 }

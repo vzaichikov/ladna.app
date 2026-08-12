@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Festivals\ReassignFestivalEntryCategory;
 use App\Actions\Festivals\ReviewFestivalEntryStep;
 use App\Actions\Festivals\StoreFestivalResponse;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
+use App\Http\Requests\FestivalEntryCategoryReassignmentRequest;
 use App\Http\Requests\FestivalEntryStepRequest;
 use App\Http\Requests\FestivalEntryStepReviewRequest;
 use App\Models\Account;
@@ -64,6 +66,16 @@ class FestivalEntryStepController extends Controller
         $review->execute($festivalEntryStep, $request->user(), $data['decision'], $data['comment'] ?? null, $data['correction_due_at'] ?? null, $data['requirement_notes'] ?? []);
 
         return back()->with('status', __('app.festival_step_reviewed'));
+    }
+
+    public function reassignCategory(FestivalEntryCategoryReassignmentRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, ReassignFestivalEntryCategory $reassign): RedirectResponse
+    {
+        abort_unless($festivalEdition->account_id === $account->id && $festivalEntry->festival_edition_id === $festivalEdition->id, 404);
+        $data = $request->validated();
+        $category = $festivalEdition->categories()->whereKey($data['festival_category_id'])->firstOrFail();
+        $reassign->execute($festivalEntry, $category, $request->user(), $data['reason']);
+
+        return back()->with('status', __('app.festival_category_reassigned'));
     }
 
     /** @return array<int, string> */

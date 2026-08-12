@@ -142,6 +142,16 @@ class FestivalChargeDefinitionController extends Controller
             ->whereKey($data['festival_workflow_step_id'])
             ->whereHas('workflow', fn ($query) => $query->where('festival_edition_id', $edition->id))
             ->exists(), 422);
+        if ($data['pricing_mode'] === 'fixed') {
+            $data['included_members'] = null;
+            $data['additional_member_amount_cents'] = null;
+        }
+        if ($data['due_policy'] === 'fixed') {
+            $data['due_days_after_approval'] = null;
+            $data['due_hard_cap_at'] = null;
+        } else {
+            $data['due_at'] = null;
+        }
         unset($data['sort_order']);
 
         return $data;

@@ -28,6 +28,8 @@ class FestivalCategoryFactory extends Factory
             'name' => Str::title($name),
             'min_members' => 1,
             'max_members' => 1,
+            'competition_format' => 'scored',
+            'minimum_entries_to_run' => 1,
             'is_active' => true,
             'sort_order' => 0,
         ];

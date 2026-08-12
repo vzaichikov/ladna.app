@@ -116,6 +116,12 @@
         <x-ui.field-error name="allowed_mime_types.*" />
     </label>
     <label>
+        <span class="crm-label">{{ __('app.festival_allowed_url_hosts') }}</span>
+        <input name="allowed_hosts_text" value="{{ old('allowed_hosts_text', collect(data_get($requirement?->validation, 'allowed_hosts', []))->join(', ')) }}" placeholder="youtube.com, instagram.com" class="crm-field">
+        <x-ui.field-error name="allowed_hosts" />
+        <x-ui.field-error name="allowed_hosts.*" />
+    </label>
+    <label>
         <span class="crm-label">{{ __('app.minimum_duration_seconds') }}</span>
         <input type="number" min="1" name="min_duration_seconds" value="{{ old('min_duration_seconds', $requirement?->min_duration_seconds) }}" class="crm-field">
         <x-ui.field-error name="min_duration_seconds" />

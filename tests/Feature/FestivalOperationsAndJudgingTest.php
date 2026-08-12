@@ -6,6 +6,7 @@ use App\Actions\Festivals\FestivalNotificationOutbox;
 use App\Actions\Festivals\PublishFestivalResults;
 use App\Actions\Festivals\SaveFestivalScheduleSlot;
 use App\Actions\Festivals\SaveFestivalScoreSheet;
+use App\Actions\Festivals\UnlockFestivalScoreSheet;
 use App\Enums\FestivalScoreSheetStatus;
 use App\Models\Account;
 use App\Models\FestivalCategory;
@@ -84,7 +85,7 @@ class FestivalOperationsAndJudgingTest extends TestCase
         $this->assertSame('9.0000', $resaved->total_score);
     }
 
-    public function test_submitted_score_sheet_can_be_reopened_and_invalidates_published_category_results(): void
+    public function test_submitted_score_sheet_requires_audited_staff_unlock_before_correction(): void
     {
         Queue::fake();
         [$account, $edition, $portalUser, $category] = $this->festival();
@@ -107,11 +108,28 @@ class FestivalOperationsAndJudgingTest extends TestCase
         $this->get(route('public.festivals.show', [$account->slug, $edition->slug]))->assertOk()->assertSee($firstEntry->entry_name)->assertDontSee('SECRET-JUDGE-COMMENT')->assertDontSee('SECRET-CRITERION-COMMENT');
         $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entries.show', [$account->slug, $firstEntry]))->assertOk()->assertSee('SECRET-CRITERION-COMMENT');
 
-        $reopened = app(SaveFestivalScoreSheet::class)->execute($firstSheet->refresh(), $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 10]]], $judge);
+        try {
+            app(SaveFestivalScoreSheet::class)->execute($firstSheet->refresh(), $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 10]]], $judge);
+            $this->fail('Submitted score sheet was changed without a staff unlock.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('scores', $exception->errors());
+        }
+
+        $manager = User::factory()->create();
+        $reopened = app(UnlockFestivalScoreSheet::class)->execute($firstSheet->refresh(), $manager, 'Penalty judge corrected a protocol deduction.');
         $this->assertSame(FestivalScoreSheetStatus::Draft, $reopened->status);
         $this->assertNull($reopened->submitted_at);
         $this->assertDatabaseMissing('festival_results', ['festival_entry_id' => $firstEntry->id]);
         $this->assertDatabaseMissing('festival_results', ['festival_entry_id' => $secondEntry->id]);
+        $this->assertDatabaseHas('festival_activity_logs', [
+            'subject_type' => FestivalScoreSheet::class,
+            'subject_id' => $firstSheet->id,
+            'action' => 'score_sheet.unlocked',
+        ]);
+
+        $corrected = app(SaveFestivalScoreSheet::class)->execute($reopened, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 10]], 'submit' => true], $judge);
+        $this->assertSame('10.0000', $corrected->total_score);
+        $this->assertSame(FestivalScoreSheetStatus::Submitted, $corrected->status);
     }
 
     public function test_rubric_update_resets_affected_score_sheets_and_results(): void

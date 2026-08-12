@@ -346,8 +346,14 @@ class FestivalStaffController extends Controller
         abort_unless($festivalCharge->entry()->where('festival_edition_id', $festivalEdition->id)->exists(), 404);
         abort_unless($request->user()?->can('manageFestivalFinance', $account), 403);
         $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])], 'notes' => ['nullable', 'string', 'max:5000']]);
-        $festivalCharge->forceFill(['status' => $data['decision'] === 'approve' ? 'paid' : 'failed', 'paid_at' => $data['decision'] === 'approve' ? now() : null, 'approved_by' => $request->user()->id, 'notes' => $data['notes'] ?? null])->save();
-        $activity->record($festivalCharge, 'charge.manual_reviewed', $festivalEdition, $request->user(), $data);
+        DB::transaction(function () use ($festivalCharge, $data, $request, $activity, $festivalEdition): void {
+            $charge = FestivalCharge::query()->whereKey($festivalCharge->id)->lockForUpdate()->firstOrFail();
+            if ($data['decision'] === 'approve' && $charge->due_at?->isPast()) {
+                throw ValidationException::withMessages(['decision' => __('app.festival_step_deadline_expired')]);
+            }
+            $charge->forceFill(['status' => $data['decision'] === 'approve' ? 'paid' : 'failed', 'paid_at' => $data['decision'] === 'approve' ? now() : null, 'approved_by' => $request->user()->id, 'notes' => $data['notes'] ?? null])->save();
+            $activity->record($charge, 'charge.manual_reviewed', $festivalEdition, $request->user(), $data);
+        }, 3);
 
         return redirect()->route('dashboard.accounts.festivals.applications', [$account, $festivalEdition])->with('status', __('app.festival_charge_reviewed'));
     }

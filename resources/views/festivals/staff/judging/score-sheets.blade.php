@@ -56,17 +56,36 @@
 
     <x-ui.panel padding="none" class="overflow-hidden">
         @forelse ($sheets as $sheet)
-            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_180px_150px_auto] lg:items-center">
+            @php($ownsSheet = $assignment?->id === $sheet->festival_judge_assignment_id)
+            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_180px_170px_minmax(12rem,auto)] lg:items-center">
                 <div class="min-w-0">
-                    <h2 class="truncate font-semibold text-slate-950">{{ $sheet->entry->entry_name }}</h2>
-                    <p class="mt-1 text-sm text-slate-500">{{ $sheet->rubric->name }}</p>
+                    <h2 class="truncate font-semibold text-slate-950">
+                        {{ $ownsSheet ? $sheet->entry->entry_name : __('app.festival_private_score_sheet_label', ['id' => $sheet->id]) }}
+                    </h2>
+                    <p class="mt-1 text-sm text-slate-500">{{ $sheet->rubric->name }} · {{ $sheet->assignment->display_name }}</p>
                 </div>
                 <p class="text-sm text-slate-600">{{ $sheet->entry->category->name }}</p>
                 <div>
                     <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $sheet->status->value === 'submitted' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' }}">{{ __('app.festival_score_sheet_status_'.$sheet->status->value) }}</span>
-                    <p class="mt-2 text-xs text-slate-500">{{ __('app.festival_score_total', ['score' => $sheet->total_score]) }}</p>
+                    @if($ownsSheet || ! $workspacePermissions['manage'])
+                        <p class="mt-2 text-xs text-slate-500">{{ __('app.festival_score_total', ['score' => $sheet->total_score]) }}</p>
+                    @endif
                 </div>
-                <x-ui.action-button :href="route('dashboard.accounts.festivals.judging.score-sheets.edit', [$account, $edition, $sheet])" icon="edit" :label="__('app.edit')" />
+                @if($ownsSheet && $sheet->status->value === 'draft')
+                    <x-ui.action-button :href="route('dashboard.accounts.festivals.judging.score-sheets.edit', [$account, $edition, $sheet])" icon="edit" :label="__('app.edit')" />
+                @elseif($workspacePermissions['manage'] && $sheet->status->value === 'submitted')
+                    <form method="POST" action="{{ route('dashboard.accounts.festivals.judging.score-sheets.unlock', [$account, $edition, $sheet]) }}" class="flex flex-col gap-2 sm:flex-row">
+                        @csrf
+                        @method('PATCH')
+                        <label class="min-w-0 flex-1">
+                            <span class="sr-only">{{ __('app.festival_unlock_reason') }}</span>
+                            <input name="reason" required minlength="3" maxlength="2000" class="crm-field" placeholder="{{ __('app.festival_unlock_reason') }}">
+                        </label>
+                        <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.festival_unlock_scores') }}</x-ui.button>
+                    </form>
+                @else
+                    <span class="text-sm text-slate-500">{{ __('app.festival_score_sheet_locked') }}</span>
+                @endif
             </div>
         @empty
             <x-ui.empty-state :title="$hasFilters ? __('app.no_data') : __('app.festival_score_sheets_empty')" icon="clipboard-check" class="m-5">

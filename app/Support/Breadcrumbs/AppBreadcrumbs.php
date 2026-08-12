@@ -382,6 +382,24 @@ final class AppBreadcrumbs
             return [...$base, $this->item(__('app.festival_results'))];
         }
 
+        if ($routeName === 'dashboard.accounts.festivals.judging.results.preview') {
+            $category = $this->modelParameter($request, 'festivalCategory');
+
+            return [
+                ...$base,
+                $this->item(__('app.festival_results'), route('dashboard.accounts.festivals.judging.results.index', [$account, $edition])),
+                $this->item($this->modelLabel($category, __('app.festival_category'))),
+            ];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.judging.battles.index') {
+            return [...$base, $this->item(__('app.festival_battles'))];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.judging.battle-votes.index') {
+            return [...$base, $this->item(__('app.festival_battle_voting'))];
+        }
+
         throw new LogicException("No Festival judging breadcrumb definition exists for route [{$routeName}].");
     }
 

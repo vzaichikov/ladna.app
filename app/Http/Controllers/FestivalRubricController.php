@@ -10,12 +10,16 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalResult;
 use App\Models\FestivalRubric;
+use App\Models\FestivalRubricCriterion;
+use App\Models\FestivalRubricSection;
 use App\Models\FestivalScoreSheet;
+use App\Support\Festivals\FestivalJudgingCriteria;
 use App\Support\Festivals\FestivalSettingsOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class FestivalRubricController extends Controller
@@ -23,6 +27,7 @@ class FestivalRubricController extends Controller
     public function __construct(
         private readonly FestivalWorkspaceAccess $workspaceAccess,
         private readonly FestivalSettingsOrder $settingsOrder,
+        private readonly FestivalJudgingCriteria $judgingCriteria,
     ) {}
 
     public function index(Request $request, Account $account, FestivalEdition $festivalEdition): View
@@ -44,6 +49,20 @@ class FestivalRubricController extends Controller
             ->when($filters['category_id'], fn ($query, int $id) => $query->where('festival_category_id', $id))
             ->paginate(20)
             ->withQueryString();
+        $assignments = $festivalEdition->judgeAssignments()
+            ->where('is_active', true)
+            ->with(['categories', 'rubricSections'])
+            ->get();
+        $rubrics->getCollection()->each(function (FestivalRubric $rubric) use ($assignments): void {
+            $applicableAssignments = $rubric->festival_category_id === null
+                ? $assignments
+                : $assignments->filter(fn ($assignment): bool => $assignment->categories->contains('id', $rubric->festival_category_id));
+            $rubric->loadMissing('sections.criteria');
+            $rubric->setAttribute(
+                'uncovered_section_names',
+                $this->judgingCriteria->uncoveredSections($rubric, $applicableAssignments)->pluck('name')->all(),
+            );
+        });
 
         return view('festivals.staff.judging.criteria', [
             'account' => $account,
@@ -83,7 +102,7 @@ class FestivalRubricController extends Controller
                 'is_active' => $data['is_active'] ?? true,
                 'sort_order' => $this->settingsOrder->next($festivalEdition->festivalRubrics()),
             ]);
-            $this->replaceRubricStructure($rubric, $data['sections']);
+            $this->syncRubricStructure($rubric, $data['sections']);
         }, 3);
 
         return $this->redirect($account, $festivalEdition);
@@ -113,6 +132,20 @@ class FestivalRubricController extends Controller
         DB::transaction(function () use ($account, $festivalEdition, $festivalRubric, $data): void {
             $rubric = FestivalRubric::query()->whereKey($festivalRubric->id)->lockForUpdate()->firstOrFail();
             $this->assertRubric($account, $festivalEdition, $rubric);
+            $rubric->load('sections.criteria');
+            $existingSectionIds = $rubric->sections->modelKeys();
+            $submittedSectionIds = collect($data['sections'])->pluck('id')->filter()->map(fn (mixed $id): int => (int) $id)->all();
+            $removedSectionIds = array_values(array_diff($existingSectionIds, $submittedSectionIds));
+
+            if ($removedSectionIds !== [] && DB::table('festival_judge_assignment_rubric_section')->whereIn('festival_rubric_section_id', $removedSectionIds)->exists()) {
+                throw ValidationException::withMessages(['sections' => __('app.festival_rubric_assigned_section_delete')]);
+            }
+
+            if ((int) $rubric->festival_category_id !== (int) ($data['festival_category_id'] ?? 0)
+                && DB::table('festival_judge_assignment_rubric_section')->whereIn('festival_rubric_section_id', $existingSectionIds)->exists()) {
+                throw ValidationException::withMessages(['festival_category_id' => __('app.festival_rubric_assigned_category_change')]);
+            }
+
             $sheets = FestivalScoreSheet::query()->where('festival_rubric_id', $rubric->id)->with('entry')->lockForUpdate()->get();
             $sheetIds = $sheets->modelKeys();
             $categoryIds = $sheets->pluck('entry.festival_category_id')->filter()->unique()->values();
@@ -134,16 +167,12 @@ class FestivalRubricController extends Controller
                 )->delete();
             }
 
-            $rubric->sections()->with('criteria')->get()->each(function ($section): void {
-                $section->criteria()->delete();
-                $section->delete();
-            });
             $rubric->update([
                 'festival_category_id' => $data['festival_category_id'] ?? null,
                 'name' => $data['name'],
                 'is_active' => $data['is_active'] ?? false,
             ]);
-            $this->replaceRubricStructure($rubric, $data['sections']);
+            $this->syncRubricStructure($rubric, $data['sections']);
         }, 3);
 
         return $this->redirect($account, $festivalEdition);
@@ -201,24 +230,40 @@ class FestivalRubricController extends Controller
     }
 
     /** @param array<int, array<string, mixed>> $sections */
-    private function replaceRubricStructure(FestivalRubric $rubric, array $sections): void
+    private function syncRubricStructure(FestivalRubric $rubric, array $sections): void
     {
+        $retainedSectionIds = [];
+
         foreach ($sections as $sectionIndex => $sectionData) {
-            $section = $rubric->sections()->create([
-                'account_id' => $rubric->account_id,
+            $section = isset($sectionData['id'])
+                ? FestivalRubricSection::query()->where('festival_rubric_id', $rubric->id)->findOrFail((int) $sectionData['id'])
+                : new FestivalRubricSection(['account_id' => $rubric->account_id, 'festival_rubric_id' => $rubric->id]);
+            $section->fill([
                 'name' => $sectionData['name'],
                 'weight' => $sectionData['weight'],
+                'contribution' => $sectionData['contribution'],
                 'sort_order' => $sectionIndex,
-            ]);
+            ])->save();
+            $retainedSectionIds[] = $section->id;
+            $retainedCriterionIds = [];
 
-            foreach ($sectionData['criteria'] as $criterionIndex => $criterion) {
-                $section->criteria()->create([
-                    'account_id' => $rubric->account_id,
-                    ...$criterion,
+            foreach ($sectionData['criteria'] as $criterionIndex => $criterionData) {
+                $criterion = isset($criterionData['id'])
+                    ? FestivalRubricCriterion::query()->where('festival_rubric_section_id', $section->id)->findOrFail((int) $criterionData['id'])
+                    : new FestivalRubricCriterion(['account_id' => $rubric->account_id, 'festival_rubric_section_id' => $section->id]);
+                $criterion->fill([
+                    'name' => $criterionData['name'],
+                    'max_score' => $criterionData['max_score'],
+                    'weight' => $criterionData['weight'],
                     'sort_order' => $criterionIndex,
-                ]);
+                ])->save();
+                $retainedCriterionIds[] = $criterion->id;
             }
+
+            $section->criteria()->whereNotIn('id', $retainedCriterionIds)->delete();
         }
+
+        $rubric->sections()->whereNotIn('id', $retainedSectionIds)->delete();
     }
 
     private function redirect(Account $account, FestivalEdition $edition): RedirectResponse

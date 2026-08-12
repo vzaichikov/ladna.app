@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.129.0',
+                'date' => '2026-08-12',
+                'title' => 'Specialist Festival judging and knockout battles',
+                'items' => ['Festival categories can now use scored or knockout formats with minimum entrant requirements, submission-age rules, duplicate-track protection, roster pricing, and approval-relative payment deadlines.', 'Organizers can assign judges to specific rubric sections, use structured deductions, reopen submitted sheets for audited corrections, preview results, and record reasoned jury ordering for exact ties.', 'Exotic Battles now supports randomized single-elimination brackets, judge and audience voting with a 50/50 result, byes, tie decisions, and automatic winner advancement.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.128.0',
                 'date' => '2026-08-11',
                 'title' => 'Focused Festival management and judging',
@@ -1129,6 +1136,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.129.0',
+                'date' => '2026-08-12',
+                'title' => 'Спеціалізоване суддівство фестивалів і батли на вибування',
+                'items' => ['Фестивальні категорії тепер підтримують бальне оцінювання або формат на вибування, мінімальну кількість учасниць, перевірку віку на момент заявки, захист від повтору треків, оплату за складом і строки після відбору.', 'Організатори можуть призначати суддів на окремі розділи протоколу, застосовувати структуровані штрафи, відкривати здані листи для аудійованих виправлень, переглядати результати та фіксувати обґрунтований порядок журі за точної нічиєї.', 'Exotic Battles отримали випадкову турнірну сітку, голоси суддів і глядачів із результатом 50/50, автоматичні проходи, рішення за нічиєї та автоматичне просування переможниці.'],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.128.0',
                 'date' => '2026-08-11',

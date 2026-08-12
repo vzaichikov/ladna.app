@@ -77,6 +77,33 @@
                                     <p class="mt-2 text-sm text-slate-500">{{ __('app.festival_category_requirements_none') }}</p>
                                 @endif
                             </div>
+                            @if($workspacePermissions['registrations'] && $entry->qualification_status === \App\Enums\FestivalQualificationStatus::Passed)
+                                @php($reassignmentCategories = $categories->where('is_active', true)->where('festival_workflow_id', $category->festival_workflow_id)->where('id', '!=', $category->id))
+                                @if($reassignmentCategories->isNotEmpty())
+                                    <form method="POST" action="{{ route('dashboard.accounts.festivals.entries.reassign-category', [$account, $edition, $entry]) }}" class="mt-4 grid gap-3 border-t border-stone-200 pt-4 sm:grid-cols-2">
+                                        @csrf
+                                        @method('PATCH')
+                                        <div class="sm:col-span-2">
+                                            <h4 class="text-sm font-semibold text-slate-950">{{ __('app.festival_reassign_category') }}</h4>
+                                            <p class="mt-1 text-xs text-slate-500">{{ __('app.festival_reassignment_copy') }}</p>
+                                        </div>
+                                        <label>
+                                            <span class="crm-label">{{ __('app.festival_target_category') }}</span>
+                                            <select name="festival_category_id" class="crm-field" required>
+                                                <option value="">{{ __('app.select_option') }}</option>
+                                                @foreach($reassignmentCategories as $reassignmentCategory)
+                                                    <option value="{{ $reassignmentCategory->id }}">{{ $reassignmentCategory->name }}</option>
+                                                @endforeach
+                                            </select>
+                                        </label>
+                                        <label>
+                                            <span class="crm-label">{{ __('app.festival_reassignment_reason') }}</span>
+                                            <input name="reason" class="crm-field" maxlength="1000" required>
+                                        </label>
+                                        <div class="sm:col-span-2"><x-ui.button type="submit" size="sm" variant="secondary">{{ __('app.festival_reassign_category') }}</x-ui.button></div>
+                                    </form>
+                                @endif
+                            @endif
                         </section>
 
                         @if ($workspacePermissions['registrations'])

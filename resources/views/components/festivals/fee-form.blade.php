@@ -28,6 +28,25 @@
         <x-ui.field-error name="amount_cents" />
     </label>
     <label>
+        <span class="crm-label">{{ __('app.festival_charge_pricing_mode') }}</span>
+        <select name="pricing_mode" class="crm-field">
+            @foreach (\App\Enums\FestivalChargePricingMode::cases() as $mode)
+                <option value="{{ $mode->value }}" @selected(old('pricing_mode', $fee?->pricing_mode?->value ?? 'fixed') === $mode->value)>{{ __('app.festival_charge_pricing_mode_'.$mode->value) }}</option>
+            @endforeach
+        </select>
+        <x-ui.field-error name="pricing_mode" />
+    </label>
+    <label>
+        <span class="crm-label">{{ __('app.festival_charge_included_members') }}</span>
+        <input type="number" min="1" max="100" name="included_members" value="{{ old('included_members', $fee?->included_members) }}" class="crm-field">
+        <x-ui.field-error name="included_members" />
+    </label>
+    <label>
+        <span class="crm-label">{{ __('app.festival_charge_additional_member_amount') }}</span>
+        <input type="number" min="0" name="additional_member_amount_cents" value="{{ old('additional_member_amount_cents', $fee?->additional_member_amount_cents) }}" class="crm-field">
+        <x-ui.field-error name="additional_member_amount_cents" />
+    </label>
+    <label>
         <span class="crm-label">{{ __('app.festival_category') }}</span>
         <select name="festival_category_id" class="crm-field">
             <option value="">{{ __('app.all') }}</option>
@@ -52,6 +71,25 @@
         <span class="crm-label">{{ __('app.festival_due_at') }}</span>
         <input type="datetime-local" name="due_at" value="{{ old('due_at', $fee?->due_at?->format('Y-m-d\TH:i')) }}" class="crm-field">
         <x-ui.field-error name="due_at" />
+    </label>
+    <label>
+        <span class="crm-label">{{ __('app.festival_charge_due_policy') }}</span>
+        <select name="due_policy" class="crm-field">
+            @foreach (\App\Enums\FestivalChargeDuePolicy::cases() as $policy)
+                <option value="{{ $policy->value }}" @selected(old('due_policy', $fee?->due_policy?->value ?? 'fixed') === $policy->value)>{{ __('app.festival_charge_due_policy_'.$policy->value) }}</option>
+            @endforeach
+        </select>
+        <x-ui.field-error name="due_policy" />
+    </label>
+    <label>
+        <span class="crm-label">{{ __('app.festival_charge_due_days_after_approval') }}</span>
+        <input type="number" min="0" max="365" name="due_days_after_approval" value="{{ old('due_days_after_approval', $fee?->due_days_after_approval) }}" class="crm-field">
+        <x-ui.field-error name="due_days_after_approval" />
+    </label>
+    <label>
+        <span class="crm-label">{{ __('app.festival_charge_due_hard_cap') }}</span>
+        <input type="datetime-local" name="due_hard_cap_at" value="{{ old('due_hard_cap_at', $fee?->due_hard_cap_at?->format('Y-m-d\TH:i')) }}" class="crm-field">
+        <x-ui.field-error name="due_hard_cap_at" />
     </label>
     <div class="pb-3">
         <label class="flex items-center gap-2 pt-8 text-sm">

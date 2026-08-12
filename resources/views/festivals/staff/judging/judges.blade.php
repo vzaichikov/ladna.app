@@ -62,7 +62,10 @@
                         @endif
                     </p>
                 </div>
-                <p class="text-sm text-slate-600">{{ $assignment->categories->pluck('name')->join(', ') }}</p>
+                <div class="text-sm text-slate-600">
+                    <p>{{ $assignment->categories->pluck('name')->join(', ') }}</p>
+                    <p class="mt-1 text-xs text-slate-500">{{ $assignment->rubricSections->isEmpty() ? __('app.festival_all_sections_legacy') : trans_choice('app.festival_judge_section_usage_count', $assignment->rubricSections->count(), ['count' => $assignment->rubricSections->count()]) }}</p>
+                </div>
                 <p class="text-sm text-slate-500">{{ trans_choice('app.festival_score_sheet_usage_count', $assignment->score_sheets_count, ['count' => $assignment->score_sheets_count]) }}</p>
                 <div class="flex flex-wrap items-center justify-end gap-2">
                     <x-ui.action-button :href="route('dashboard.accounts.festivals.judging.judges.edit', [$account, $edition, $assignment])" icon="edit" :label="__('app.edit')" />

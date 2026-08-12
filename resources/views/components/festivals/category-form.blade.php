@@ -51,6 +51,20 @@
         </div>
         <div class="mt-5 grid gap-5 sm:grid-cols-2">
             <label>
+                <span class="crm-label">{{ __('app.festival_competition_format') }}</span>
+                <select name="competition_format" required class="crm-field">
+                    @foreach (\App\Enums\FestivalCompetitionFormat::cases() as $format)
+                        <option value="{{ $format->value }}" @selected(old('competition_format', $category?->competition_format?->value ?? 'scored') === $format->value)>{{ __('app.festival_competition_format_'.$format->value) }}</option>
+                    @endforeach
+                </select>
+                @error('competition_format') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            <label>
+                <span class="crm-label">{{ __('app.festival_minimum_entries_to_run') }}</span>
+                <input type="number" min="1" max="10000" name="minimum_entries_to_run" value="{{ old('minimum_entries_to_run', $category?->minimum_entries_to_run ?? 1) }}" required class="crm-field">
+                @error('minimum_entries_to_run') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            <label>
                 <span class="crm-label">{{ __('app.minimum_members') }}</span>
                 <input type="number" min="1" max="100" name="min_members" value="{{ old('min_members', $category?->min_members ?? 1) }}" required class="crm-field">
                 @error('min_members') <span class="crm-help">{{ $message }}</span> @enderror

@@ -67,7 +67,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(153, $classifiedRouteNames);
+        $this->assertCount(156, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -456,6 +456,8 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.judging.criteria.index' => 'festival_edition',
             'dashboard.accounts.festivals.judging.criteria.create' => 'festival_edition',
             'dashboard.accounts.festivals.judging.criteria.edit' => 'festival_rubric',
+            'dashboard.accounts.festivals.judging.battle-votes.index' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.battles.index' => 'festival_edition',
             'dashboard.accounts.festivals.judging.score-sheets.index' => 'festival_edition',
             'dashboard.accounts.festivals.judging.score-sheets.edit' => 'festival_score_sheet',
             'dashboard.accounts.festivals.judging.results.index' => 'festival_edition',
@@ -509,6 +511,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.customers.export',
             'dashboard.accounts.customers.search',
             'dashboard.accounts.festivals.submissions.download',
+            'dashboard.accounts.festivals.judging.results.preview',
             'dashboard.accounts.people-counter-samples.image',
             'dashboard.accounts.quick-bookings.group-availability',
             'dashboard.accounts.quick-bookings.manual-availability',

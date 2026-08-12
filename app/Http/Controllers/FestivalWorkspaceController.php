@@ -83,6 +83,7 @@ class FestivalWorkspaceController extends Controller
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
             'entries' => $entries,
+            'categories' => $categories,
             'entryStatistics' => $entryStatistics,
             'categoryStatistics' => $categories->map(fn ($category): array => ['label' => $category->name, 'count' => $category->entries_count]),
             'directionStatistics' => $directionStatistics,

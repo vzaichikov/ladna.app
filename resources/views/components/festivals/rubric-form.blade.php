@@ -5,9 +5,12 @@
     $editing = $rubric->exists;
     $defaultSections = $editing
         ? $rubric->sections->map(fn ($section) => [
+            'id' => $section->id,
             'name' => $section->name,
             'weight' => $section->weight,
+            'contribution' => $section->contribution->value,
             'criteria' => $section->criteria->map(fn ($criterion) => [
+                'id' => $criterion->id,
                 'name' => $criterion->name,
                 'max_score' => $criterion->max_score,
                 'weight' => $criterion->weight,
@@ -16,6 +19,7 @@
         : [[
             'name' => __('app.festival_technique'),
             'weight' => 1,
+            'contribution' => 'award',
             'criteria' => [[
                 'name' => __('app.festival_execution'),
                 'max_score' => 10,
@@ -55,7 +59,10 @@
             @php($section = is_array($section) ? $section : [])
             <fieldset class="space-y-4 rounded-xl border border-stone-200 p-4">
                 <legend class="px-2 text-sm font-semibold text-slate-950">{{ __('app.festival_rubric_section_number', ['number' => $loop->iteration]) }}</legend>
-                <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                @if (isset($section['id']))
+                    <input type="hidden" name="sections[{{ $sectionIndex }}][id]" value="{{ $section['id'] }}">
+                @endif
+                <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_11rem]">
                     <label>
                         <span class="crm-label">{{ __('app.festival_rubric_section') }}</span>
                         <input name="sections[{{ $sectionIndex }}][name]" value="{{ $section['name'] ?? '' }}" maxlength="255" required class="crm-field">
@@ -66,12 +73,23 @@
                         <input type="number" min="0.01" step="0.01" name="sections[{{ $sectionIndex }}][weight]" value="{{ $section['weight'] ?? 1 }}" required class="crm-field">
                         @error('sections.'.$sectionIndex.'.weight') <span class="crm-help">{{ $message }}</span> @enderror
                     </label>
+                    <label>
+                        <span class="crm-label">{{ __('app.festival_rubric_contribution') }}</span>
+                        <select name="sections[{{ $sectionIndex }}][contribution]" required class="crm-field">
+                            <option value="award" @selected(($section['contribution'] ?? 'award') === 'award')>{{ __('app.festival_rubric_award') }}</option>
+                            <option value="deduction" @selected(($section['contribution'] ?? 'award') === 'deduction')>{{ __('app.festival_rubric_deduction') }}</option>
+                        </select>
+                        @error('sections.'.$sectionIndex.'.contribution') <span class="crm-help">{{ $message }}</span> @enderror
+                    </label>
                 </div>
 
                 <div class="space-y-3">
                     @foreach (is_array($section['criteria'] ?? null) ? $section['criteria'] : [] as $criterionIndex => $criterion)
                         @php($criterion = is_array($criterion) ? $criterion : [])
                         <div class="grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_8rem_8rem]">
+                            @if (isset($criterion['id']))
+                                <input type="hidden" name="sections[{{ $sectionIndex }}][criteria][{{ $criterionIndex }}][id]" value="{{ $criterion['id'] }}">
+                            @endif
                             <label>
                                 <span class="crm-label">{{ __('app.festival_rubric_criterion') }}</span>
                                 <input name="sections[{{ $sectionIndex }}][criteria][{{ $criterionIndex }}][name]" value="{{ $criterion['name'] ?? '' }}" maxlength="255" required class="crm-field">

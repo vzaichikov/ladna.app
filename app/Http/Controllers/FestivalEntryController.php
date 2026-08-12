@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Festivals\InitializeFestivalEntryWorkflow;
+use App\Actions\Festivals\RepriceFestivalEntryCharges;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
 use App\Enums\FestivalEntryStatus;
 use App\Http\Requests\FestivalEntryRequest;
@@ -81,12 +82,12 @@ class FestivalEntryController extends Controller
         ]);
     }
 
-    public function update(FestivalEntryRequest $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalRuleRegistry $rules, FestivalEntryWorkflowState $workflowState): RedirectResponse
+    public function update(FestivalEntryRequest $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalRuleRegistry $rules, FestivalEntryWorkflowState $workflowState, RepriceFestivalEntryCharges $repriceCharges): RedirectResponse
     {
         [, $portalUser] = $this->context($request, $accountSlug);
         $this->assertEntry($festivalEntry, $portalUser);
         $this->assertBaseDetailsMutable($festivalEntry, $workflowState);
-        $this->saveDraft($request, $festivalEntry->edition, $portalUser, $rules, $festivalEntry);
+        $this->saveDraft($request, $festivalEntry->edition, $portalUser, $rules, $festivalEntry, $repriceCharges);
 
         return redirect()->route('festival.portal.entries.show', [$accountSlug, $festivalEntry])->with('status', __('app.festival_entry_draft_saved'));
     }
@@ -107,7 +108,14 @@ class FestivalEntryController extends Controller
         [, $portalUser] = $this->context($request, $accountSlug);
         $this->assertEntry($festivalEntry, $portalUser);
         abort_unless(! in_array($festivalEntry->status, [FestivalEntryStatus::Withdrawn, FestivalEntryStatus::Rejected], true), 409);
-        $festivalEntry->forceFill(['status' => FestivalEntryStatus::Withdrawn, 'withdrawn_at' => now()])->save();
+        $festivalEntry->forceFill([
+            'status' => FestivalEntryStatus::Withdrawn,
+            'withdrawn_at' => now(),
+            'track_artist' => null,
+            'track_title' => null,
+            'normalized_track_key' => null,
+            'track_reserved_at' => null,
+        ])->save();
 
         return back()->with('status', __('app.festival_entry_withdrawn'));
     }
@@ -127,6 +135,8 @@ class FestivalEntryController extends Controller
 
         try {
             $checkout = $payments->startCharge($festivalCharge, $data['provider']);
+        } catch (ValidationException $exception) {
+            throw $exception;
         } catch (Throwable $exception) {
             report($exception);
             throw ValidationException::withMessages(['provider' => __('app.payment_start_failed')]);
@@ -135,11 +145,11 @@ class FestivalEntryController extends Controller
         return $checkout->isRedirect() ? redirect()->away($checkout->url) : view('payments.redirect-form', compact('account', 'checkout'));
     }
 
-    private function saveDraft(FestivalEntryRequest $request, FestivalEdition $edition, FestivalPortalUser $portalUser, FestivalRuleRegistry $rules, ?FestivalEntry $entry = null): FestivalEntry
+    private function saveDraft(FestivalEntryRequest $request, FestivalEdition $edition, FestivalPortalUser $portalUser, FestivalRuleRegistry $rules, ?FestivalEntry $entry = null, ?RepriceFestivalEntryCharges $repriceCharges = null): FestivalEntry
     {
         $data = $request->validated();
 
-        return DB::transaction(function () use ($entry, $edition, $portalUser, $rules, $data): FestivalEntry {
+        return DB::transaction(function () use ($entry, $edition, $portalUser, $rules, $data, $repriceCharges): FestivalEntry {
             $entry = $entry?->exists
                 ? FestivalEntry::query()
                     ->whereKey($entry->id)
@@ -173,7 +183,19 @@ class FestivalEntryController extends Controller
                 throw ValidationException::withMessages(['participant_ids' => __('app.festival_participant_invalid')]);
             }
 
-            $rules->validateEntry($edition, $category, $participants, ! $entry?->submitted_at);
+            $participantIdsChanged = $entry && collect($entry->participants()->pluck('festival_participants.id')->all())->sort()->values()->all()
+                !== collect($data['participant_ids'])->map(fn (mixed $id): int => (int) $id)->sort()->values()->all();
+            if ($participantIdsChanged) {
+                $rosterCharges = $entry->charges()
+                    ->whereHas('definition', fn ($query) => $query->where('pricing_mode', 'roster'))
+                    ->lockForUpdate()
+                    ->get();
+                if ($rosterCharges->contains(fn (FestivalCharge $charge): bool => $charge->paymentAttempts()->exists())) {
+                    throw ValidationException::withMessages(['participant_ids' => __('app.festival_roster_locked_after_checkout')]);
+                }
+            }
+
+            $rules->validateEntry($edition, $category, $participants, ! $entry?->submitted_at, $entry?->submitted_at ?? now(), (bool) $entry?->submitted_at);
 
             $portalUser->forceFill([
                 'phone' => $data['profile_phone'] ?? $portalUser->phone,
@@ -192,6 +214,7 @@ class FestivalEntryController extends Controller
             ]])->all();
             $entry->participants()->sync($sync);
             $entry->refresh()->load('participants');
+            $repriceCharges?->execute($entry);
 
             return $entry;
         }, 3);

@@ -17,6 +17,7 @@ class ReviewFestivalEntryStep
     public function __construct(
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalNotificationOutbox $notifications,
+        private readonly ActivateFestivalParticipationCharges $activateParticipationCharges,
     ) {}
 
     /** @param array<string, string> $requirementNotes */
@@ -50,6 +51,7 @@ class ReviewFestivalEntryStep
                 $step->forceFill(['status' => FestivalEntryStepStatus::Approved, 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_notes' => $comment, 'correction_due_at' => null])->save();
                 if ($step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification) {
                     $step->entry->forceFill(['qualification_status' => FestivalQualificationStatus::Passed, 'status' => FestivalEntryStatus::UnderReview])->save();
+                    $this->activateParticipationCharges->execute($step->entry, $step->reviewed_at ?? now());
                 }
             } elseif ($decision === 'request_changes') {
                 $step->forceFill(['status' => FestivalEntryStepStatus::ChangesRequested, 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_notes' => $comment, 'correction_due_at' => $correctionDueAt])->save();
@@ -75,6 +77,10 @@ class ReviewFestivalEntryStep
                     'reviewed_at' => now(),
                     'reviewed_by' => $reviewer->id,
                     'review_notes' => $comment,
+                    'track_artist' => null,
+                    'track_title' => null,
+                    'normalized_track_key' => null,
+                    'track_reserved_at' => null,
                 ])->save();
             }
 

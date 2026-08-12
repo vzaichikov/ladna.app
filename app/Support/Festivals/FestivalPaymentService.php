@@ -23,6 +23,7 @@ use App\Support\Payments\PaymentGatewayException;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class FestivalPaymentService
 {
@@ -34,35 +35,51 @@ class FestivalPaymentService
 
     public function startCharge(FestivalCharge $charge, string $provider): PaymentCheckout
     {
-        $charge->loadMissing(['entry.portalUser', 'entry.edition.account']);
-        $setting = $this->setting($charge->entry->edition->account, $provider);
-        $attempt = FestivalPaymentAttempt::query()->create([
-            'account_id' => $charge->account_id,
-            'festival_charge_id' => $charge->id,
-            'provider' => $provider,
-            'order_id' => 'FCHP-'.Str::upper(Str::random(18)),
-            'amount_cents' => $charge->amount_cents,
-            'currency' => $charge->currency,
-            'expires_at' => now()->addMinutes(30),
-        ]);
-        $charge->forceFill(['status' => FestivalChargeStatus::PaymentPending])->save();
-        $gateway = $this->gateways->get($provider);
-        $checkout = $gateway->start(new PaymentCheckoutRequest(
-            reference: $attempt->order_id,
-            amountCents: $attempt->amount_cents,
-            currency: $attempt->currency,
-            description: $charge->name,
-            buyerName: $charge->entry->portalUser->displayName(),
-            buyerEmail: $charge->entry->portalUser->email,
-            buyerPhone: $charge->entry->portalUser->phone,
-            locale: $charge->entry->portalUser->locale,
-            returnUrl: route('festival.portal.entries.show', [$charge->entry->edition->account->slug, $charge->entry]),
-            callbackUrl: route('api.v1.festival-payments.callbacks', $gateway->provider()->value),
-            expiresAt: $attempt->expires_at,
-        ), $setting);
-        $attempt->forceFill(['gateway_checkout_payload' => $checkout->gatewayPayload])->save();
+        return DB::transaction(function () use ($charge, $provider): PaymentCheckout {
+            $charge = FestivalCharge::query()->with(['entry.portalUser', 'entry.edition.account'])->whereKey($charge->id)->lockForUpdate()->firstOrFail();
+            if ($charge->due_at?->isPast()) {
+                throw ValidationException::withMessages(['provider' => __('app.festival_step_deadline_expired')]);
+            }
+            if (! in_array($charge->status, [FestivalChargeStatus::Pending, FestivalChargeStatus::Failed], true)) {
+                throw ValidationException::withMessages(['provider' => __('app.festival_step_payment_required')]);
+            }
+            if ($charge->paymentAttempts()->where('status', FestivalPaymentStatus::Pending->value)->where('expires_at', '>', now())->exists()) {
+                throw ValidationException::withMessages(['provider' => __('app.festival_payment_already_pending')]);
+            }
 
-        return $checkout;
+            $setting = $this->setting($charge->entry->edition->account, $provider);
+            $expiresAt = now()->addMinutes(30);
+            if ($charge->due_at && $charge->due_at->lessThan($expiresAt)) {
+                $expiresAt = $charge->due_at;
+            }
+            $attempt = FestivalPaymentAttempt::query()->create([
+                'account_id' => $charge->account_id,
+                'festival_charge_id' => $charge->id,
+                'provider' => $provider,
+                'order_id' => 'FCHP-'.Str::upper(Str::random(18)),
+                'amount_cents' => $charge->amount_cents,
+                'currency' => $charge->currency,
+                'expires_at' => $expiresAt,
+            ]);
+            $charge->forceFill(['status' => FestivalChargeStatus::PaymentPending])->save();
+            $gateway = $this->gateways->get($provider);
+            $checkout = $gateway->start(new PaymentCheckoutRequest(
+                reference: $attempt->order_id,
+                amountCents: $attempt->amount_cents,
+                currency: $attempt->currency,
+                description: $charge->name,
+                buyerName: $charge->entry->portalUser->displayName(),
+                buyerEmail: $charge->entry->portalUser->email,
+                buyerPhone: $charge->entry->portalUser->phone,
+                locale: $charge->entry->portalUser->locale,
+                returnUrl: route('festival.portal.entries.show', [$charge->entry->edition->account->slug, $charge->entry]),
+                callbackUrl: route('api.v1.festival-payments.callbacks', $gateway->provider()->value),
+                expiresAt: $attempt->expires_at,
+            ), $setting);
+            $attempt->forceFill(['gateway_checkout_payload' => $checkout->gatewayPayload])->save();
+
+            return $checkout;
+        }, 3);
     }
 
     public function startOrder(FestivalTicketOrder $order): PaymentCheckout
@@ -116,7 +133,7 @@ class FestivalPaymentService
             ])->save();
 
             if ($status === FestivalPaymentStatus::Paid) {
-                $late = $attempt->expires_at?->isPast() || $attempt->charge->cancelled_at !== null;
+                $late = $attempt->expires_at?->isPast() || $attempt->charge->due_at?->isPast() || $attempt->charge->cancelled_at !== null;
                 $attempt->charge->forceFill([
                     'status' => $late ? FestivalChargeStatus::PaidRequiresRefund : FestivalChargeStatus::Paid,
                     'paid_at' => $callback->paidAt ?? now(),

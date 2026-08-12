@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\FestivalScoreSheetStatus;
 use App\Http\Requests\StoreFestivalJudgeAssignmentRequest;
 use App\Http\Requests\UpdateFestivalJudgeAssignmentRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalResult;
+use App\Models\FestivalRubric;
+use App\Models\FestivalRubricSection;
+use App\Models\FestivalScoreSheet;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,7 +36,7 @@ class FestivalJudgeAssignmentController extends Controller
         ];
 
         $assignments = $festivalEdition->judgeAssignments()
-            ->with(['user', 'portalUser', 'categories'])
+            ->with(['user', 'portalUser', 'categories', 'rubricSections'])
             ->withCount('scoreSheets')
             ->when($filters['q'] !== '', fn ($query) => $query->where('display_name', 'like', '%'.$filters['q'].'%'))
             ->when($filters['status'] !== '', fn ($query) => $query->where('is_active', $filters['status'] === 'active'))
@@ -81,6 +86,7 @@ class FestivalJudgeAssignmentController extends Controller
                 'is_active' => $data['is_active'] ?? true,
             ]);
             $this->syncCategories($assignment, $account, $data['category_ids']);
+            $this->syncSections($assignment, $account, $data['category_ids'], $data['section_ids'] ?? null);
         }, 3);
 
         return $this->redirect($account, $festivalEdition);
@@ -90,7 +96,7 @@ class FestivalJudgeAssignmentController extends Controller
     {
         $permissions = $this->managerPermissions($request, $account, $festivalEdition);
         $this->assertAssignment($account, $festivalEdition, $festivalJudgeAssignment);
-        $festivalJudgeAssignment->load(['user', 'portalUser', 'categories']);
+        $festivalJudgeAssignment->load(['user', 'portalUser', 'categories', 'rubricSections']);
 
         return $this->formView($account, $festivalEdition, $festivalJudgeAssignment, $permissions);
     }
@@ -108,7 +114,21 @@ class FestivalJudgeAssignmentController extends Controller
                 'is_head_judge' => $data['is_head_judge'] ?? false,
                 'is_active' => $data['is_active'] ?? false,
             ]);
+            $oldCategoryIds = $assignment->categories()->pluck('festival_categories.id')->all();
+            $oldSectionIds = $assignment->rubricSections()->pluck('festival_rubric_sections.id')->all();
             $this->syncCategories($assignment, $account, $data['category_ids']);
+            $this->syncSections($assignment, $account, $data['category_ids'], $data['section_ids'] ?? null);
+
+            sort($oldCategoryIds);
+            sort($oldSectionIds);
+            $newCategoryIds = $assignment->categories()->pluck('festival_categories.id')->all();
+            $newSectionIds = $assignment->rubricSections()->pluck('festival_rubric_sections.id')->all();
+            sort($newCategoryIds);
+            sort($newSectionIds);
+
+            if ($oldCategoryIds !== $newCategoryIds || $oldSectionIds !== $newSectionIds) {
+                $this->invalidateAssignmentScores($assignment, $festivalEdition);
+            }
         }, 3);
 
         return $this->redirect($account, $festivalEdition);
@@ -123,6 +143,7 @@ class FestivalJudgeAssignmentController extends Controller
             $assignment = FestivalJudgeAssignment::query()->whereKey($festivalJudgeAssignment->id)->lockForUpdate()->firstOrFail();
             $this->assertAssignment($account, $festivalEdition, $assignment);
             $assignment->update(['is_active' => ! $assignment->is_active]);
+            $this->invalidateAssignmentScores($assignment, $festivalEdition);
         }, 3);
 
         return back()->with('status', __('app.festival_status_saved'));
@@ -138,6 +159,13 @@ class FestivalJudgeAssignmentController extends Controller
             'edition' => $edition,
             'assignment' => $assignment,
             'categories' => $edition->categories()->get(),
+            'rubrics' => FestivalRubric::query()
+                ->where('festival_edition_id', $edition->id)
+                ->where('is_active', true)
+                ->with(['category', 'sections'])
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get(),
             'staffUsers' => $account->users()->orderBy('name')->orderBy('email')->get(['users.id', 'users.name', 'users.email']),
             'portalUsers' => FestivalPortalUser::query()->whereBelongsTo($account)->orderBy('first_name')->orderBy('last_name')->orderBy('email')->get(),
             'workspacePermissions' => $permissions,
@@ -148,6 +176,52 @@ class FestivalJudgeAssignmentController extends Controller
     private function syncCategories(FestivalJudgeAssignment $assignment, Account $account, array $categoryIds): void
     {
         $assignment->categories()->sync(collect($categoryIds)->mapWithKeys(fn (int|string $categoryId): array => [(int) $categoryId => ['account_id' => $account->id]])->all());
+    }
+
+    /**
+     * @param  array<int, int|string>  $categoryIds
+     * @param  array<int, int|string>|null  $sectionIds
+     */
+    private function syncSections(FestivalJudgeAssignment $assignment, Account $account, array $categoryIds, ?array $sectionIds): void
+    {
+        $eligibleSections = FestivalRubricSection::query()
+            ->where('account_id', $account->id)
+            ->whereHas('rubric', fn ($query) => $query
+                ->where('festival_edition_id', $assignment->festival_edition_id)
+                ->where('is_active', true)
+                ->where(fn ($rubricQuery) => $rubricQuery->whereNull('festival_category_id')->orWhereIn('festival_category_id', $categoryIds)));
+        $selectedIds = $sectionIds === null
+            ? $eligibleSections->pluck('id')
+            : $eligibleSections->whereKey($sectionIds)->pluck('id');
+
+        $assignment->rubricSections()->sync(
+            $selectedIds->mapWithKeys(fn (int $sectionId): array => [$sectionId => ['account_id' => $account->id]])->all(),
+        );
+    }
+
+    private function invalidateAssignmentScores(FestivalJudgeAssignment $assignment, FestivalEdition $edition): void
+    {
+        $sheets = FestivalScoreSheet::query()->where('festival_judge_assignment_id', $assignment->id)->with('entry')->lockForUpdate()->get();
+        $sheetIds = $sheets->modelKeys();
+
+        if ($sheetIds !== []) {
+            DB::table('festival_criterion_scores')->whereIn('festival_score_sheet_id', $sheetIds)->delete();
+            FestivalScoreSheet::query()->whereKey($sheetIds)->update([
+                'status' => FestivalScoreSheetStatus::Draft->value,
+                'comments' => null,
+                'total_score' => 0,
+                'submitted_at' => null,
+            ]);
+        }
+
+        $categoryIds = $sheets->pluck('entry.festival_category_id')->filter()->unique();
+
+        if ($categoryIds->isNotEmpty()) {
+            FestivalResult::query()->whereIn(
+                'festival_entry_id',
+                $edition->entries()->select('id')->whereIn('festival_category_id', $categoryIds),
+            )->delete();
+        }
     }
 
     /** @return array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} */

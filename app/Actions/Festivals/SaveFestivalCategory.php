@@ -66,6 +66,8 @@ class SaveFestivalCategory
                 'max_age' => $input['max_age'] ?? null,
                 'min_duration_seconds' => $input['min_duration_seconds'] ?? null,
                 'max_duration_seconds' => $input['max_duration_seconds'] ?? null,
+                'competition_format' => $input['competition_format'],
+                'minimum_entries_to_run' => $input['minimum_entries_to_run'],
                 'registration_closes_at' => $this->utc($input['registration_closes_at'] ?? null, $edition->timezone),
                 'requirements_html' => $this->htmlSanitizer->sanitize($input['requirements_html'] ?? null),
                 'is_active' => $input['is_active'] ?? ($category->exists ? $category->is_active : true),

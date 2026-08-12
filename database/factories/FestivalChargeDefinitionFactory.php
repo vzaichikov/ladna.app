@@ -13,6 +13,6 @@ class FestivalChargeDefinitionFactory extends Factory
 
     public function definition(): array
     {
-        return ['account_id' => fn (array $attributes) => FestivalEdition::findOrFail($attributes['festival_edition_id'])->account_id, 'festival_edition_id' => FestivalEdition::factory(), 'kind' => 'participation', 'name' => 'Participation fee', 'amount_cents' => 100000, 'currency' => 'UAH', 'is_active' => true];
+        return ['account_id' => fn (array $attributes) => FestivalEdition::findOrFail($attributes['festival_edition_id'])->account_id, 'festival_edition_id' => FestivalEdition::factory(), 'kind' => 'participation', 'name' => 'Participation fee', 'amount_cents' => 100000, 'pricing_mode' => 'fixed', 'due_policy' => 'fixed', 'currency' => 'UAH', 'is_active' => true];
     }
 }

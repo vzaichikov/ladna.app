@@ -29,7 +29,12 @@
 
             @foreach ($sheet->rubric->sections as $section)
                 <section class="rounded-2xl border border-stone-200 bg-white p-6 shadow-crm">
-                    <h2 class="text-xl font-semibold">{{ $section->name }}</h2>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h2 class="text-xl font-semibold">{{ $section->name }}</h2>
+                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $section->contribution->value === 'deduction' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700' }}">
+                            {{ __('app.festival_rubric_'.$section->contribution->value) }}
+                        </span>
+                    </div>
                     <div class="mt-4 space-y-4">
                         @foreach ($section->criteria as $criterion)
                             @php($existing = $sheet->scores->firstWhere('festival_rubric_criterion_id', $criterion->id))

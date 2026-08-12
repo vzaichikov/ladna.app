@@ -30,6 +30,8 @@ class FestivalCategoryRequest extends FormRequest
                     'category',
                     fn (string $candidate): bool => $edition->categories()->where('code', $candidate)->exists(),
                 ),
+            'competition_format' => $this->input('competition_format', $category instanceof FestivalCategory ? $category->competition_format->value : 'scored'),
+            'minimum_entries_to_run' => $this->input('minimum_entries_to_run', $category instanceof FestivalCategory ? $category->minimum_entries_to_run : 1),
         ]);
     }
 
@@ -70,6 +72,8 @@ class FestivalCategoryRequest extends FormRequest
             'max_age' => ['nullable', 'integer', 'gte:min_age', 'max:100'],
             'min_duration_seconds' => ['nullable', 'integer', 'min:1'],
             'max_duration_seconds' => ['nullable', 'integer', 'gte:min_duration_seconds'],
+            'competition_format' => ['required', Rule::in(['scored', 'knockout'])],
+            'minimum_entries_to_run' => ['required', 'integer', 'min:1', 'max:10000'],
             'registration_closes_at' => ['nullable', 'date'],
             'requirements_html' => ['nullable', 'string', 'max:100000'],
             'is_active' => ['sometimes', 'boolean'],

@@ -61,6 +61,11 @@ class FestivalRequirementRequest extends FormRequest
             'option_prices' => $optionPrices,
             'allowed_extensions' => $list('allowed_extensions_text'),
             'allowed_mime_types' => $list('allowed_mime_types_text'),
+            'allowed_hosts' => collect($list('allowed_hosts_text'))
+                ->map(fn (string $host): string => mb_strtolower(trim($host, ". \t\n\r\0\x0B")))
+                ->filter()
+                ->values()
+                ->all(),
         ];
 
         if ($edition instanceof FestivalEdition) {
@@ -108,6 +113,8 @@ class FestivalRequirementRequest extends FormRequest
             'allowed_extensions.*' => ['string', 'max:20', 'regex:/^[a-zA-Z0-9]+$/'],
             'allowed_mime_types' => ['sometimes', 'array'],
             'allowed_mime_types.*' => ['string', 'max:150'],
+            'allowed_hosts' => ['sometimes', 'array'],
+            'allowed_hosts.*' => ['string', 'max:255', 'regex:/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/'],
             'max_size_kb' => ['required', 'integer', 'min:1', 'max:102400'],
             'min_duration_seconds' => ['nullable', 'integer', 'min:1'],
             'max_duration_seconds' => ['nullable', 'integer', 'gte:min_duration_seconds'],

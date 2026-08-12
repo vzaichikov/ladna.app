@@ -147,9 +147,10 @@ class FestivalRequirementController extends Controller
             'option_prices' => ['mode' => 'option_prices', 'prices' => $data['option_prices'] ?? []],
             default => ['mode' => 'none'],
         };
-        unset($data['pricing_mode'], $data['price_amount_cents'], $data['option_prices'], $data['sort_order']);
+        $validation = ['allowed_hosts' => $data['allowed_hosts'] ?? []];
+        unset($data['pricing_mode'], $data['price_amount_cents'], $data['option_prices'], $data['allowed_hosts'], $data['sort_order']);
 
-        return [...$data, 'pricing' => $pricing];
+        return [...$data, 'pricing' => $pricing, 'validation' => $validation];
     }
 
     /** @param array<string, mixed> $data */

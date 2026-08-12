@@ -53,6 +53,9 @@
                         @endunless
                     </div>
                     <p class="mt-1 text-sm text-slate-500">{{ $rubric->category?->name ?? __('app.festival_all_categories') }}</p>
+                    @if ($rubric->uncovered_section_names !== [])
+                        <p class="mt-2 text-sm font-medium text-amber-700">{{ __('app.festival_uncovered_sections', ['sections' => implode(', ', $rubric->uncovered_section_names)]) }}</p>
+                    @endif
                 </div>
                 <p class="text-sm text-slate-500">{{ trans_choice('app.festival_rubric_section_usage_count', $rubric->sections->count(), ['count' => $rubric->sections->count()]) }} · {{ trans_choice('app.festival_criterion_usage_count', $rubric->sections->sum('criteria_count'), ['count' => $rubric->sections->sum('criteria_count')]) }}</p>
                 <p class="text-sm text-slate-500">{{ trans_choice('app.festival_score_sheet_usage_count', $rubric->score_sheets_count, ['count' => $rubric->score_sheets_count]) }}</p>

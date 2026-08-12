@@ -4,6 +4,7 @@ namespace App\View\Composers;
 
 use App\Models\Account;
 use App\Models\FestivalEdition;
+use App\Models\FestivalJudgeAssignment;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\View\View;
 
@@ -25,6 +26,11 @@ class FestivalWorkspaceComposer
 
         $edition->loadMissing('series');
         $permissions = $this->workspaceAccess->permissions(request()->user(), $account, $edition);
+        $hasJudgeAssignment = FestivalJudgeAssignment::query()
+            ->where('festival_edition_id', $edition->id)
+            ->where('user_id', request()->user()?->id)
+            ->where('is_active', true)
+            ->exists();
         $active = $this->activeItem();
 
         $groups = [
@@ -54,6 +60,8 @@ class FestivalWorkspaceComposer
                     $this->item('judging-judges', 'dashboard.accounts.festivals.judging.judges.index', 'festival_judges', 'users', $permissions['manage'], $active, $account, $edition),
                     $this->item('judging-criteria', 'dashboard.accounts.festivals.judging.criteria.index', 'festival_criteria', 'list-checks', $permissions['manage'], $active, $account, $edition),
                     $this->item('judging-score-sheets', 'dashboard.accounts.festivals.judging.score-sheets.index', 'festival_score_sheets', 'clipboard-check', $permissions['judging'], $active, $account, $edition),
+                    $this->item('judging-battle-votes', 'dashboard.accounts.festivals.judging.battle-votes.index', 'festival_battle_voting', 'check-circle', $hasJudgeAssignment, $active, $account, $edition),
+                    $this->item('judging-battles', 'dashboard.accounts.festivals.judging.battles.index', 'festival_battles', 'git-branch', $permissions['manage'], $active, $account, $edition),
                     $this->item('judging-results', 'dashboard.accounts.festivals.judging.results.index', 'festival_results', 'trophy', $permissions['manage'], $active, $account, $edition),
                 ],
             ],
@@ -95,6 +103,8 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.judging.judges.*') => 'judging-judges',
             request()->routeIs('dashboard.accounts.festivals.judging.criteria.*') => 'judging-criteria',
             request()->routeIs('dashboard.accounts.festivals.judging.score-sheets.*', 'dashboard.accounts.festivals.score-sheets.*') => 'judging-score-sheets',
+            request()->routeIs('dashboard.accounts.festivals.judging.battle-votes.*') => 'judging-battle-votes',
+            request()->routeIs('dashboard.accounts.festivals.judging.battles.*') => 'judging-battles',
             request()->routeIs('dashboard.accounts.festivals.judging.results.*') => 'judging-results',
             request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.scanner*') => 'tickets',
             request()->routeIs('dashboard.accounts.festivals.communication') => 'communication',

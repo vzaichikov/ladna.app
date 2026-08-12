@@ -3,24 +3,29 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Festivals\SaveFestivalScoreSheet;
+use App\Actions\Festivals\UnlockFestivalScoreSheet;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalScoreSheetStatus;
 use App\Http\Requests\FestivalScoreSheetRequest;
+use App\Http\Requests\UnlockFestivalScoreSheetRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalPortalUser;
-use App\Models\FestivalRubric;
 use App\Models\FestivalScoreSheet;
+use App\Support\Festivals\FestivalJudgingCriteria;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class FestivalJudgingController extends Controller
 {
+    public function __construct(private readonly FestivalJudgingCriteria $judgingCriteria) {}
+
     public function index(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkspaceAccess $workspaceAccess): RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
@@ -47,16 +52,21 @@ class FestivalJudgingController extends Controller
                 ->where('is_active', true)
                 ->first()
             : null;
-        $categories = $assignment?->categories()->orderBy('sort_order')->orderBy('id')->get() ?? collect();
+        $categories = $permissions['manage']
+            ? $festivalEdition->categories()->orderBy('sort_order')->orderBy('id')->get()
+            : ($assignment?->categories()->orderBy('sort_order')->orderBy('id')->get() ?? collect());
         $categoryId = $request->integer('category_id');
         $filters = [
-            'q' => $request->string('q')->trim()->toString(),
+            'q' => $permissions['manage'] ? '' : $request->string('q')->trim()->toString(),
             'status' => in_array($request->query('status'), array_column(FestivalScoreSheetStatus::cases(), 'value'), true) ? $request->query('status') : '',
             'category_id' => $categories->contains('id', $categoryId) ? $categoryId : null,
         ];
 
-        $sheets = ($assignment?->scoreSheets() ?? FestivalScoreSheet::query()->whereRaw('1 = 0'))
-            ->with(['entry.category', 'rubric'])
+        $sheetQuery = $permissions['manage']
+            ? FestivalScoreSheet::query()->whereHas('entry', fn ($query) => $query->where('festival_edition_id', $festivalEdition->id))
+            : ($assignment?->scoreSheets() ?? FestivalScoreSheet::query()->whereRaw('1 = 0'));
+        $sheets = $sheetQuery
+            ->with(['entry.category', 'rubric', 'assignment'])
             ->when($filters['q'] !== '', fn ($query) => $query->whereHas('entry', fn ($entryQuery) => $entryQuery->where('entry_name', 'like', '%'.$filters['q'].'%')))
             ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
             ->when($filters['category_id'], fn ($query, int $id) => $query->whereHas('entry', fn ($entryQuery) => $entryQuery->where('festival_category_id', $id)))
@@ -81,30 +91,50 @@ class FestivalJudgingController extends Controller
     {
         $this->assertEdition($account, $festivalEdition);
         abort_unless($request->user()?->can('manageFestivals', $account), 403);
-        $assignments = FestivalJudgeAssignment::query()
-            ->where('festival_edition_id', $festivalEdition->id)
-            ->where('is_active', true)
-            ->with('categories')
-            ->get();
         $created = 0;
 
-        DB::transaction(function () use ($festivalEdition, $assignments, &$created): void {
-            foreach ($assignments as $assignment) {
-                foreach ($assignment->categories as $category) {
-                    $rubric = FestivalRubric::query()
-                        ->where('festival_edition_id', $festivalEdition->id)
-                        ->where('is_active', true)
-                        ->where(fn ($query) => $query->where('festival_category_id', $category->id)->orWhereNull('festival_category_id'))
-                        ->orderByRaw('festival_category_id is null')
-                        ->orderBy('sort_order')
-                        ->orderBy('id')
-                        ->first();
+        DB::transaction(function () use ($festivalEdition, &$created): void {
+            FestivalEdition::query()->whereKey($festivalEdition->id)->lockForUpdate()->firstOrFail();
 
-                    if (! $rubric) {
+            foreach ($festivalEdition->categories()->get() as $category) {
+                $entries = FestivalEntry::query()
+                    ->where('festival_category_id', $category->id)
+                    ->where('status', FestivalEntryStatus::Accepted->value)
+                    ->lockForUpdate()
+                    ->get();
+
+                if ($entries->isEmpty()) {
+                    continue;
+                }
+
+                if ($entries->count() < $category->minimum_entries_to_run) {
+                    throw ValidationException::withMessages([
+                        'category' => __('app.festival_category_minimum_entries_required', ['minimum' => $category->minimum_entries_to_run]),
+                    ]);
+                }
+
+                $rubric = $this->judgingCriteria->rubricForCategory($festivalEdition, $category);
+
+                if (! $rubric) {
+                    continue;
+                }
+
+                $rubric->load('sections.criteria');
+                $assignments = $this->judgingCriteria->activeAssignments($category);
+                $uncoveredSections = $this->judgingCriteria->uncoveredSections($rubric, $assignments);
+
+                if ($uncoveredSections->isNotEmpty()) {
+                    throw ValidationException::withMessages([
+                        'category' => __('app.festival_results_criteria_uncovered', ['sections' => $uncoveredSections->pluck('name')->join(', ')]),
+                    ]);
+                }
+
+                foreach ($assignments as $assignment) {
+                    if ($this->judgingCriteria->sectionsFor($assignment, $rubric)->isEmpty()) {
                         continue;
                     }
 
-                    foreach (FestivalEntry::query()->where('festival_category_id', $category->id)->where('status', FestivalEntryStatus::Accepted->value)->get() as $entry) {
+                    foreach ($entries as $entry) {
                         $sheet = FestivalScoreSheet::query()->firstOrCreate(
                             [
                                 'festival_entry_id' => $entry->id,
@@ -148,6 +178,15 @@ class FestivalJudgingController extends Controller
         return back()->with('status', __('app.festival_score_saved'));
     }
 
+    public function unlockStaff(UnlockFestivalScoreSheetRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalScoreSheet $festivalScoreSheet, UnlockFestivalScoreSheet $unlock): RedirectResponse
+    {
+        $this->assertEdition($account, $festivalEdition);
+        abort_unless($festivalScoreSheet->account_id === $account->id && $festivalScoreSheet->entry()->where('festival_edition_id', $festivalEdition->id)->exists(), 404);
+        $unlock->execute($festivalScoreSheet, $request->user(), (string) $request->validated('reason'));
+
+        return back()->with('status', __('app.festival_score_unlocked'));
+    }
+
     public function guestIndex(Request $request, string $accountSlug, string $editionSlug): View
     {
         [$account, $edition, $assignment] = $this->guestAssignment($request, $accountSlug, $editionSlug);
@@ -174,6 +213,7 @@ class FestivalJudgingController extends Controller
     {
         $this->assertOwnedSheet($edition, $sheet, $assignment);
         $sheet->load(['entry.participants', 'rubric.sections.criteria', 'scores']);
+        $sheet->rubric->setRelation('sections', $this->judgingCriteria->sectionsFor($assignment, $sheet->rubric));
 
         return view('festivals.shared.score-sheet', compact('account', 'edition', 'sheet', 'assignment', 'guest'));
     }

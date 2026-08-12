@@ -2,8 +2,10 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalChargeDuePolicy;
 use App\Enums\FestivalFieldScope;
 use App\Enums\FestivalRequirementStatus;
+use App\Enums\FestivalWorkflowReviewEffect;
 use App\Models\FestivalCategory;
 use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalEntry;
@@ -14,7 +16,10 @@ use Illuminate\Support\Facades\DB;
 
 class InitializeFestivalEntryWorkflow
 {
-    public function __construct(private readonly ProvisionFestivalWorkflow $provisionWorkflow) {}
+    public function __construct(
+        private readonly ProvisionFestivalWorkflow $provisionWorkflow,
+        private readonly FestivalChargeDefinitionResolver $chargeResolver,
+    ) {}
 
     public function execute(FestivalEntry $entry): FestivalEntry
     {
@@ -51,7 +56,8 @@ class InitializeFestivalEntryWorkflow
             }
 
             $this->createRequirements($entry, $runtimeSteps);
-            $this->createCharges($entry, $runtimeSteps);
+            $hasQualification = $workflow->steps->contains(fn ($step): bool => $step->review_effect === FestivalWorkflowReviewEffect::Qualification);
+            $this->createCharges($entry, $runtimeSteps, $hasQualification);
 
             return $entry->refresh()->load(['steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'steps.charges', 'participants', 'edition', 'category.direction']);
         }, 3);
@@ -107,7 +113,7 @@ class InitializeFestivalEntryWorkflow
     }
 
     /** @param Collection<int, FestivalEntryStep> $runtimeSteps */
-    private function createCharges(FestivalEntry $entry, Collection $runtimeSteps): void
+    private function createCharges(FestivalEntry $entry, Collection $runtimeSteps, bool $hasQualification): void
     {
         $definitions = FestivalChargeDefinition::query()
             ->where('festival_edition_id', $entry->festival_edition_id)
@@ -117,6 +123,10 @@ class InitializeFestivalEntryWorkflow
             ->get();
 
         foreach ($definitions as $definition) {
+            if ($hasQualification && $definition->kind === 'participation' && $definition->due_policy === FestivalChargeDuePolicy::ApprovalRelative) {
+                continue;
+            }
+
             $fallbackCode = match ($definition->kind) {
                 'qualification' => 'application',
                 'participation' => 'participation_payment',
@@ -129,6 +139,7 @@ class InitializeFestivalEntryWorkflow
             $step ??= $runtimeSteps->first(fn (FestivalEntryStep $candidate): bool => $candidate->workflowStep->code === $fallbackCode)
                 ?? $runtimeSteps->first();
 
+            $amount = $this->chargeResolver->amount($definition, $entry);
             $entry->charges()->create([
                 'account_id' => $entry->account_id,
                 'festival_entry_step_id' => $step?->id,
@@ -136,11 +147,11 @@ class InitializeFestivalEntryWorkflow
                 'code' => 'FCH-'.str()->upper(str()->random(12)),
                 'kind' => $definition->kind,
                 'name' => $definition->name,
-                'amount_cents' => $definition->amount_cents,
+                'amount_cents' => $amount,
                 'currency' => $definition->currency,
-                'due_at' => $definition->due_at,
-                'status' => $definition->amount_cents === 0 ? 'paid' : 'pending',
-                'paid_at' => $definition->amount_cents === 0 ? now() : null,
+                'due_at' => $this->chargeResolver->dueAt($definition),
+                'status' => $amount === 0 ? 'paid' : 'pending',
+                'paid_at' => $amount === 0 ? now() : null,
             ]);
         }
     }

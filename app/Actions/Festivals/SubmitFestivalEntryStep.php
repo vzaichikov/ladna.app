@@ -27,6 +27,7 @@ class SubmitFestivalEntryStep
         private readonly FestivalRuleRegistry $rules,
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalNotificationOutbox $notifications,
+        private readonly ReserveFestivalEntryTrack $reserveTrack,
     ) {}
 
     public function execute(FestivalEntry $entry, FestivalEntryStep $step): FestivalEntryStep
@@ -47,6 +48,8 @@ class SubmitFestivalEntryStep
             $this->workflowState->assertMutable($entry, $step);
             $this->assertRequirementsComplete($step);
             $this->assertChargesPaid($step);
+
+            $this->reserveTrack->execute($entry, $step);
 
             if ($step->workflowStep->type === FestivalWorkflowStepType::Application) {
                 $this->submitApplication($entry, $purchase);
@@ -105,7 +108,7 @@ class SubmitFestivalEntryStep
     private function submitApplication(FestivalEntry $entry, ?FestivalEditionPurchase $purchase): void
     {
         $firstSubmission = $entry->submitted_at === null;
-        $this->rules->validateEntry($entry->edition, $entry->category, $entry->participants, $firstSubmission);
+        $this->rules->validateEntry($entry->edition, $entry->category, $entry->participants, $firstSubmission, $entry->submitted_at ?? now());
 
         if ($firstSubmission) {
             $this->assertParticipantLimits($entry, $purchase);

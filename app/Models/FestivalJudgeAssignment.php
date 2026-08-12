@@ -48,6 +48,13 @@ class FestivalJudgeAssignment extends Model
         return $this->belongsToMany(FestivalCategory::class, 'festival_category_judge_assignment')->withPivot('account_id');
     }
 
+    public function rubricSections(): BelongsToMany
+    {
+        return $this->belongsToMany(FestivalRubricSection::class, 'festival_judge_assignment_rubric_section')
+            ->withPivot('account_id')
+            ->withTimestamps();
+    }
+
     public function scoreSheets(): HasMany
     {
         return $this->hasMany(FestivalScoreSheet::class);

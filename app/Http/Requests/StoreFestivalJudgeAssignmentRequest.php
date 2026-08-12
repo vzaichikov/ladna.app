@@ -7,8 +7,10 @@ use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalRubricSection;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Validator;
 
 class StoreFestivalJudgeAssignmentRequest extends FormRequest
@@ -33,6 +35,8 @@ class StoreFestivalJudgeAssignmentRequest extends FormRequest
             'display_name' => ['required', 'string', 'max:255'],
             'category_ids' => ['required', 'array', 'min:1'],
             'category_ids.*' => ['integer', 'distinct'],
+            'section_ids' => ['sometimes', 'array', 'min:1'],
+            'section_ids.*' => ['integer', 'distinct'],
             'is_head_judge' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ];
@@ -81,6 +85,30 @@ class StoreFestivalJudgeAssignmentRequest extends FormRequest
             if ($categoryCount !== $categoryIds->count()) {
                 $validator->errors()->add('category_ids', __('app.festival_judge_categories_invalid'));
             }
+
+            $this->validateSections($validator, $account, $edition, $categoryIds);
         }];
+    }
+
+    /** @param Collection<int, int> $categoryIds */
+    private function validateSections(Validator $validator, Account $account, FestivalEdition $edition, $categoryIds): void
+    {
+        if (! $this->has('section_ids')) {
+            return;
+        }
+
+        $sectionIds = collect($this->input('section_ids', []))->map(fn (mixed $id): int => (int) $id)->unique()->values();
+        $sectionCount = FestivalRubricSection::query()
+            ->where('account_id', $account->id)
+            ->whereHas('rubric', fn ($query) => $query
+                ->where('festival_edition_id', $edition->id)
+                ->where('is_active', true)
+                ->where(fn ($rubricQuery) => $rubricQuery->whereNull('festival_category_id')->orWhereIn('festival_category_id', $categoryIds)))
+            ->whereKey($sectionIds)
+            ->count();
+
+        if ($sectionCount !== $sectionIds->count()) {
+            $validator->errors()->add('section_ids', __('app.festival_judge_sections_invalid'));
+        }
     }
 }

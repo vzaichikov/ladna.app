@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_portal_user_id', 'festival_category_id', 'code', 'entry_name', 'act_title', 'act_description', 'comments', 'status', 'qualification_status', 'submitted_at', 'reviewed_at', 'reviewed_by', 'review_notes', 'accepted_at', 'registration_completed_at', 'rejected_at', 'withdrawn_at'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_portal_user_id', 'festival_category_id', 'code', 'entry_name', 'act_title', 'act_description', 'track_artist', 'track_title', 'normalized_track_key', 'track_reserved_at', 'comments', 'status', 'qualification_status', 'submitted_at', 'reviewed_at', 'reviewed_by', 'review_notes', 'accepted_at', 'registration_completed_at', 'rejected_at', 'withdrawn_at'])]
 class FestivalEntry extends Model
 {
     /** @use HasFactory<FestivalEntryFactory> */
@@ -29,6 +29,7 @@ class FestivalEntry extends Model
             'status' => FestivalEntryStatus::class,
             'qualification_status' => FestivalQualificationStatus::class,
             'submitted_at' => 'datetime',
+            'track_reserved_at' => 'datetime',
             'reviewed_at' => 'datetime',
             'accepted_at' => 'datetime',
             'registration_completed_at' => 'datetime',
