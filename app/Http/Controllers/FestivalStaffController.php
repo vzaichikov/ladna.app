@@ -30,7 +30,9 @@ use App\Models\FestivalWorkflowStep;
 use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalSaasAccess;
 use App\Support\Festivals\FestivalWorkspaceAccess;
+use App\Support\Payments\PaymentAmounts;
 use App\Support\StudioRulesHtmlSanitizer;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -146,7 +148,7 @@ class FestivalStaffController extends Controller
         }
 
         $upcomingSlots = ($permissions['schedule'] || $permissions['judging'])
-            ? $festivalEdition->scheduleSlots()->where('ends_at', '>=', now())->with(['stage', 'entry'])->orderBy('starts_at')->limit(6)->get()
+            ? $festivalEdition->scheduleSlots()->whereNotNull('festival_entry_id')->where('ends_at', '>=', now())->with(['stage', 'entry'])->orderBy('starts_at')->limit(6)->get()
             : collect();
 
         return view('festivals.staff.show', [
@@ -179,7 +181,7 @@ class FestivalStaffController extends Controller
         $this->assertEdition($account, $festivalEdition);
         abort_unless($request->user()?->can('manageFestivals', $account), 403);
 
-        $festivalEdition->load('coverMedia');
+        $festivalEdition->load(['coverMedia', 'mobileCoverMedia']);
         $activeTab = in_array($request->query('tab'), ['details', 'branding'], true)
             ? (string) $request->query('tab')
             : 'details';
@@ -219,16 +221,25 @@ class FestivalStaffController extends Controller
             abort_unless($festivalEdition->categories()->whereKey($data['festival_category_id'])->exists(), 422);
         }
         FestivalWorkflowStep::query()->whereKey($data['festival_workflow_step_id'])->whereHas('workflow', fn ($query) => $query->where('festival_edition_id', $festivalEdition->id))->firstOrFail();
+        $options = collect($data['options'] ?? [])->map(fn (array $option): array => [
+            'value' => $option['value'],
+            'label' => $option['label'],
+        ])->all();
+        $optionPrices = collect($data['options'] ?? [])
+            ->filter(fn (array $option): bool => filled($option['price'] ?? null))
+            ->mapWithKeys(fn (array $option): array => [$option['value'] => (int) PaymentAmounts::decimalToCents($option['price'])])
+            ->all();
+        $amountCents = (int) PaymentAmounts::decimalToCents($data['price_amount'] ?? 0);
         $pricing = match ($data['pricing_mode']) {
-            'flat_when_true' => ['mode' => 'flat_when_true', 'amount_cents' => (int) ($data['price_amount_cents'] ?? 0)],
-            'per_unit' => ['mode' => 'per_unit', 'unit_amount_cents' => (int) ($data['price_amount_cents'] ?? 0)],
-            'option_prices' => ['mode' => 'option_prices', 'prices' => $data['option_prices'] ?? []],
+            'flat_when_true' => ['mode' => 'flat_when_true', 'amount_cents' => $amountCents],
+            'per_unit' => ['mode' => 'per_unit', 'unit_amount_cents' => $amountCents],
+            'option_prices' => ['mode' => 'option_prices', 'prices' => $optionPrices],
             default => ['mode' => 'none'],
         };
-        unset($data['pricing_mode'], $data['price_amount_cents'], $data['option_prices']);
+        unset($data['pricing_mode'], $data['price_amount']);
         FestivalRequirementDefinition::query()->updateOrCreate(
             ['festival_edition_id' => $festivalEdition->id, 'festival_category_id' => $data['festival_category_id'] ?? null, 'code' => $data['code']],
-            ['account_id' => $account->id, ...$data, 'pricing' => $pricing, 'is_required' => $data['is_required'] ?? true, 'is_active' => $data['is_active'] ?? true],
+            ['account_id' => $account->id, ...$data, 'options' => $options, 'pricing' => $pricing, 'is_required' => $data['is_required'] ?? true, 'is_active' => $data['is_active'] ?? true],
         );
 
         return redirect()->route('dashboard.accounts.festivals.settings.requirements', [$account, $festivalEdition])->with('status', __('app.festival_requirement_saved'));
@@ -243,19 +254,14 @@ class FestivalStaffController extends Controller
             abort_unless($festivalEdition->categories()->whereKey($data['festival_category_id'])->exists(), 422);
         }
         abort_unless(FestivalWorkflowStep::query()->whereKey($data['festival_workflow_step_id'])->whereHas('workflow', fn ($query) => $query->where('festival_edition_id', $festivalEdition->id))->exists(), 422);
-        FestivalChargeDefinition::query()->create(['account_id' => $account->id, 'festival_edition_id' => $festivalEdition->id, ...$data, 'currency' => $festivalEdition->currency, 'is_active' => $data['is_active'] ?? true]);
+        $data['amount_cents'] = (int) PaymentAmounts::decimalToCents($data['amount']);
+        $data['additional_member_amount_cents'] = filled($data['additional_member_amount'] ?? null)
+            ? (int) PaymentAmounts::decimalToCents($data['additional_member_amount'])
+            : null;
+        unset($data['amount'], $data['additional_member_amount']);
+        FestivalChargeDefinition::query()->create(['account_id' => $account->id, 'festival_edition_id' => $festivalEdition->id, ...$data, 'currency' => strtoupper($account->default_currency), 'is_active' => $data['is_active'] ?? true]);
 
         return redirect()->route('dashboard.accounts.festivals.settings.fees', [$account, $festivalEdition])->with('status', __('app.festival_charge_saved'));
-    }
-
-    public function storeStage(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
-    {
-        $this->assertEdition($account, $festivalEdition);
-        abort_unless($request->user()?->can('manageFestivalSchedule', $account), 403);
-        $data = $request->validate(['name' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string', 'max:3000']]);
-        $festivalEdition->stages()->create(['account_id' => $account->id, ...$data]);
-
-        return redirect()->route('dashboard.accounts.festivals.program', [$account, $festivalEdition])->with('status', __('app.festival_stage_saved'));
     }
 
     public function storeContent(Request $request, Account $account, FestivalEdition $festivalEdition, StudioRulesHtmlSanitizer $sanitizer): RedirectResponse
@@ -293,28 +299,6 @@ class FestivalStaffController extends Controller
         return redirect()->route('dashboard.accounts.festivals.settings', [$account, $festivalEdition])->with('status', __('app.festival_media_saved'));
     }
 
-    public function storeAdmission(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
-    {
-        $this->assertEdition($account, $festivalEdition);
-        abort_unless($request->user()?->can('manageFestivalFinance', $account), 403);
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string', 'max:3000'],
-            'inventory' => ['required', 'integer', 'min:1'], 'price_cents' => ['required', 'integer', 'min:0'],
-            'early_bird_price_cents' => ['nullable', 'integer', 'min:0'], 'early_bird_ends_at' => ['nullable', 'date'],
-            'early_bird_quota' => ['nullable', 'integer', 'min:1'], 'max_per_order' => ['required', 'integer', 'min:1', 'max:20'],
-            'sales_starts_at' => ['nullable', 'date'], 'sales_ends_at' => ['nullable', 'date', 'after:sales_starts_at'],
-        ]);
-        DB::transaction(function () use ($festivalEdition, $account, $data): void {
-            $purchase = FestivalEditionPurchase::query()->with('package')->where('festival_edition_id', $festivalEdition->id)->lockForUpdate()->first();
-            if ($purchase && $festivalEdition->admissionTypes()->sum('inventory') + (int) $data['inventory'] > $purchase->package->max_tickets) {
-                throw ValidationException::withMessages(['inventory' => __('app.festival_ticket_inventory_limit_exceeded', ['limit' => $purchase->package->max_tickets])]);
-            }
-            $festivalEdition->admissionTypes()->create(['account_id' => $account->id, ...$data]);
-        }, 3);
-
-        return redirect()->route('dashboard.accounts.festivals.tickets', [$account, $festivalEdition])->with('status', __('app.festival_admission_saved'));
-    }
-
     public function reviewEntry(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, FestivalActivityRecorder $activity, FestivalNotificationOutbox $notifications): RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
@@ -337,14 +321,17 @@ class FestivalStaffController extends Controller
         return redirect()->route('dashboard.accounts.festivals.applications', [$account, $festivalEdition])->with('status', __('app.festival_entry_reviewed'));
     }
 
-    public function reviewRequirement(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntryRequirement $festivalEntryRequirement, FestivalActivityRecorder $activity): RedirectResponse
+    public function reviewRequirement(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntryRequirement $festivalEntryRequirement, FestivalActivityRecorder $activity): JsonResponse|RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
         abort_unless($festivalEntryRequirement->entry()->where('festival_edition_id', $festivalEdition->id)->exists(), 404);
         abort_unless($request->user()?->can('manageFestivalRegistrations', $account), 403);
         $data = $request->validate(['status' => ['required', Rule::in([FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Rejected->value, FestivalRequirementStatus::Waived->value])], 'review_notes' => ['nullable', 'string', 'max:5000']]);
         DB::transaction(function () use ($festivalEntryRequirement, $request, $data, $activity, $festivalEdition): void {
-            $requirement = FestivalEntryRequirement::query()->whereKey($festivalEntryRequirement->id)->lockForUpdate()->firstOrFail();
+            $requirement = FestivalEntryRequirement::query()->with(['definition', 'submissions'])->whereKey($festivalEntryRequirement->id)->lockForUpdate()->firstOrFail();
+            if ($data['status'] === FestivalRequirementStatus::Accepted->value && ! $requirement->hasSubmittedResponse()) {
+                throw ValidationException::withMessages(['status' => __('app.festival_requirement_response_missing')]);
+            }
             $requirement->forceFill([...$data, 'reviewed_by' => $request->user()->id, 'reviewed_at' => now()])->save();
             if ($submission = $requirement->submissions()->first()) {
                 $submission->forceFill(['status' => $data['status'] === 'accepted' ? 'accepted' : ($data['status'] === 'rejected' ? 'rejected' : $submission->status), 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'review_notes' => $data['review_notes'] ?? null])->save();
@@ -352,17 +339,39 @@ class FestivalStaffController extends Controller
             $activity->record($requirement, 'requirement.reviewed', $festivalEdition, $request->user(), $data);
         });
 
-        return redirect()->route('dashboard.accounts.festivals.applications', [$account, $festivalEdition])->with('status', __('app.festival_requirement_reviewed'));
+        if ($request->expectsJson()) {
+            $festivalEntryRequirement->refresh()->load(['definition', 'submissions']);
+
+            return response()->json([
+                'message' => __('app.festival_requirement_reviewed'),
+                'fragment_html' => view('festivals.staff._application-requirement-review', [
+                    'account' => $account,
+                    'edition' => $festivalEdition,
+                    'requirement' => $festivalEntryRequirement,
+                ])->render(),
+            ]);
+        }
+
+        return back()->with('status', __('app.festival_requirement_reviewed'));
     }
 
-    public function approveManualCharge(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalCharge $festivalCharge, FestivalActivityRecorder $activity): RedirectResponse
+    public function approveManualCharge(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalCharge $festivalCharge, FestivalActivityRecorder $activity): JsonResponse|RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
         abort_unless($festivalCharge->entry()->where('festival_edition_id', $festivalEdition->id)->exists(), 404);
         abort_unless($request->user()?->can('manageFestivalFinance', $account), 403);
         $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])], 'notes' => ['nullable', 'string', 'max:5000']]);
         DB::transaction(function () use ($festivalCharge, $data, $request, $activity, $festivalEdition): void {
-            $charge = FestivalCharge::query()->whereKey($festivalCharge->id)->lockForUpdate()->firstOrFail();
+            $entry = FestivalEntry::query()
+                ->whereKey($festivalCharge->festival_entry_id)
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $charge = FestivalCharge::query()
+                ->whereKey($festivalCharge->id)
+                ->where('festival_entry_id', $entry->id)
+                ->lockForUpdate()
+                ->firstOrFail();
             if ($data['decision'] === 'approve' && $charge->due_at?->isPast()) {
                 throw ValidationException::withMessages(['decision' => __('app.festival_step_deadline_expired')]);
             }
@@ -370,7 +379,20 @@ class FestivalStaffController extends Controller
             $activity->record($charge, 'charge.manual_reviewed', $festivalEdition, $request->user(), $data);
         }, 3);
 
-        return redirect()->route('dashboard.accounts.festivals.applications', [$account, $festivalEdition])->with('status', __('app.festival_charge_reviewed'));
+        if ($request->expectsJson()) {
+            $festivalCharge->refresh()->load('paymentAttempts');
+
+            return response()->json([
+                'message' => __('app.festival_charge_reviewed'),
+                'fragment_html' => view('festivals.staff._application-charge-review', [
+                    'account' => $account,
+                    'edition' => $festivalEdition,
+                    'charge' => $festivalCharge,
+                ])->render(),
+            ]);
+        }
+
+        return back()->with('status', __('app.festival_charge_reviewed'));
     }
 
     private function authorizeAccess(Request $request, Account $account): void

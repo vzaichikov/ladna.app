@@ -44,7 +44,7 @@ Choose the smallest useful presentation:
 - Link Edit to the dedicated edit route.
 - Keep activate/deactivate and ordering as small POST/PATCH forms with CSRF protection and server authorization.
 - Disable impossible first/last moves.
-- Hide ordering controls whenever any filter is active so a user cannot reorder relative to hidden records.
+- Hide ordering controls whenever filters conceal records from the active ordering scope. A relationship filter may define an explicit ordering scope only when the endpoint validates that scope and preserves the positions of records outside it; keep ordering hidden when any additional filter conceals peers inside that scope.
 - Do not add Delete unless the existing domain explicitly supports safe deletion. Preserve deactivation and history rules.
 
 ## Create And Edit Forms

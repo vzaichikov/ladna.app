@@ -34,13 +34,25 @@ class ReviewFestivalEntryStep
         }
 
         return DB::transaction(function () use ($step, $reviewer, $decision, $comment, $correctionDueAt, $requirementNotes): FestivalEntryStep {
-            $step = FestivalEntryStep::query()->with(['workflowStep', 'entry.edition', 'entry.portalUser', 'entry.steps.workflowStep', 'requirements'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
+            $step = FestivalEntryStep::query()->with(['workflowStep', 'entry.edition', 'entry.portalUser', 'entry.steps.workflowStep', 'requirements.definition', 'requirements.submissions'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
             abort_unless($step->status === FestivalEntryStepStatus::Submitted, 409);
+
+            if ($decision === 'approve' && $step->requirements->contains(
+                fn ($requirement): bool => $requirement->definition?->is_required
+                    && $requirement->status !== FestivalRequirementStatus::Waived
+                    && ! $requirement->hasSubmittedResponse(),
+            )) {
+                throw ValidationException::withMessages(['decision' => __('app.festival_step_requirements_incomplete')]);
+            }
 
             foreach ($step->requirements as $requirement) {
                 $note = $requirementNotes[(string) $requirement->id] ?? null;
                 $requirement->forceFill([
-                    'status' => $decision === 'approve' ? FestivalRequirementStatus::Accepted : $requirement->status,
+                    'status' => $decision === 'approve'
+                        && $requirement->status !== FestivalRequirementStatus::Waived
+                        && $requirement->hasSubmittedResponse()
+                        ? FestivalRequirementStatus::Accepted
+                        : $requirement->status,
                     'reviewed_by' => $reviewer->id,
                     'reviewed_at' => now(),
                     'review_notes' => filled($note) ? $note : $requirement->review_notes,

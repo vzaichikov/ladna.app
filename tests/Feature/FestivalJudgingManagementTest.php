@@ -539,10 +539,12 @@ class FestivalJudgingManagementTest extends TestCase
         $this->actingAs($portalJudge, 'festival')
             ->get(route('festival.portal.judging.index', [$account->slug, $edition->slug]))
             ->assertOk()
+            ->assertSee('max-w-6xl', false)
             ->assertSee('GUEST PRIVATE PERFORMANCE');
         $this->actingAs($portalJudge, 'festival')
             ->get(route('festival.portal.judging.edit', [$account->slug, $edition->slug, $sheet]))
             ->assertOk()
+            ->assertSee('max-w-6xl', false)
             ->assertSee('GUEST PRIVATE PERFORMANCE');
         $this->actingAs($portalJudge, 'festival')
             ->put(route('festival.portal.judging.update', [$account->slug, $edition->slug, $sheet]), [

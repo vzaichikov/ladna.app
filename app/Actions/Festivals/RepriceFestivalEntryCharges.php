@@ -15,7 +15,7 @@ class RepriceFestivalEntryCharges
     public function execute(FestivalEntry $entry): void
     {
         DB::transaction(function () use ($entry): void {
-            $entry = FestivalEntry::query()->with('participants')->whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $entry = FestivalEntry::query()->with(['account', 'participants'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
             $charges = FestivalCharge::query()
                 ->with('definition')
                 ->where('festival_entry_id', $entry->id)
@@ -31,6 +31,7 @@ class RepriceFestivalEntryCharges
 
                 $charge->forceFill([
                     'amount_cents' => $this->resolver->amount($charge->definition, $entry),
+                    'currency' => strtoupper($entry->account->default_currency),
                     'status' => FestivalChargeStatus::Pending,
                 ])->save();
             }

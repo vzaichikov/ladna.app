@@ -23,9 +23,9 @@
         <x-ui.field-error name="kind" />
     </label>
     <label>
-        <span class="crm-label">{{ __('app.amount_cents') }}</span>
-        <input type="number" min="0" name="amount_cents" value="{{ old('amount_cents', $fee?->amount_cents) }}" required class="crm-field">
-        <x-ui.field-error name="amount_cents" />
+        <span class="crm-label">{{ __('app.festival_amount', ['currency' => $account->default_currency]) }}</span>
+        <input type="number" min="0" max="999999.99" step="0.01" inputmode="decimal" name="amount" value="{{ old('amount', $fee?->amount_cents === null ? null : \App\Support\Payments\PaymentAmounts::centsToDecimalString($fee->amount_cents)) }}" required class="crm-field">
+        <x-ui.field-error name="amount" />
     </label>
     <label>
         <span class="crm-label">{{ __('app.festival_charge_pricing_mode') }}</span>
@@ -42,9 +42,9 @@
         <x-ui.field-error name="included_members" />
     </label>
     <label>
-        <span class="crm-label">{{ __('app.festival_charge_additional_member_amount') }}</span>
-        <input type="number" min="0" name="additional_member_amount_cents" value="{{ old('additional_member_amount_cents', $fee?->additional_member_amount_cents) }}" class="crm-field">
-        <x-ui.field-error name="additional_member_amount_cents" />
+        <span class="crm-label">{{ __('app.festival_charge_additional_member_amount', ['currency' => $account->default_currency]) }}</span>
+        <input type="number" min="0" max="999999.99" step="0.01" inputmode="decimal" name="additional_member_amount" value="{{ old('additional_member_amount', $fee?->additional_member_amount_cents === null ? null : \App\Support\Payments\PaymentAmounts::centsToDecimalString($fee->additional_member_amount_cents)) }}" class="crm-field">
+        <x-ui.field-error name="additional_member_amount" />
     </label>
     <label>
         <span class="crm-label">{{ __('app.festival_category') }}</span>

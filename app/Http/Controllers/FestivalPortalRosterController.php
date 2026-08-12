@@ -39,6 +39,7 @@ class FestivalPortalRosterController extends Controller
     {
         $permissions = $this->context($request, $account, $festivalEdition, $festivalPortalUser);
         $this->assertParticipant($festivalPortalUser, $festivalParticipant);
+        abort_if($festivalParticipant->is_profile_owner, 409);
 
         return $this->formView($account, $festivalEdition, $festivalPortalUser, $festivalParticipant, $permissions);
     }
@@ -47,6 +48,7 @@ class FestivalPortalRosterController extends Controller
     {
         $this->context($request, $account, $festivalEdition, $festivalPortalUser);
         $this->assertParticipant($festivalPortalUser, $festivalParticipant);
+        abort_if($festivalParticipant->is_profile_owner, 409);
         $festivalParticipant->update($request->validated());
 
         return $this->redirect($account, $festivalEdition, $festivalPortalUser);
@@ -56,6 +58,7 @@ class FestivalPortalRosterController extends Controller
     {
         $permissions = $this->context($request, $account, $festivalEdition, $festivalPortalUser);
         $this->assertParticipant($festivalPortalUser, $festivalParticipant);
+        abort_if($festivalParticipant->is_profile_owner, 409);
         $festivalParticipant->loadCount('entries');
 
         return view('festivals.staff.users.participant-archive', [
@@ -71,6 +74,7 @@ class FestivalPortalRosterController extends Controller
     {
         $this->context($request, $account, $festivalEdition, $festivalPortalUser);
         $this->assertParticipant($festivalPortalUser, $festivalParticipant);
+        abort_if($festivalParticipant->is_profile_owner, 409);
         abort_if($festivalParticipant->entries()->where('status', '!=', 'draft')->exists(), 409, __('app.festival_participant_archive_block'));
         $festivalParticipant->forceFill(['archived_at' => now()])->save();
 

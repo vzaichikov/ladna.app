@@ -17,10 +17,11 @@ class FestivalSettingsController extends Controller
     public function overview(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
-        abort_unless($permissions['manage'] || $permissions['finance'], 403);
+        abort_unless($permissions['manage'] || $permissions['schedule'] || $permissions['finance'], 403);
 
         $counts = [
             'directions' => $permissions['manage'] ? $festivalEdition->directions()->count() : null,
+            'stages' => $permissions['schedule'] ? $festivalEdition->stages()->count() : null,
             'categories' => $permissions['manage'] ? $festivalEdition->categories()->count() : null,
             'workflows' => $permissions['manage'] ? $festivalEdition->workflows()->count() : null,
             'requirements' => $permissions['manage'] ? FestivalRequirementDefinition::query()->where('festival_edition_id', $festivalEdition->id)->count() : null,

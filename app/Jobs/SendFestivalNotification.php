@@ -2,14 +2,23 @@
 
 namespace App\Jobs;
 
+use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
+use App\Enums\FestivalTicketOrderStatus;
+use App\Enums\SmsDeliveryPurpose;
 use App\Mail\FestivalPortalMail;
 use App\Models\Account;
 use App\Models\FestivalNotification;
+use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalTicketOrder;
+use App\Support\PhoneNumberNormalizer;
+use App\Support\Sms\SmsAutoTopUpService;
+use App\Support\Sms\StudioSmsSender;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
 use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Throwable;
 
 class SendFestivalNotification implements ShouldQueue
@@ -23,18 +32,30 @@ class SendFestivalNotification implements ShouldQueue
 
     public function __construct(public readonly int $notificationId) {}
 
-    public function handle(): void
+    public function handle(StudioSmsSender $smsSender, SmsAutoTopUpService $autoTopUp, PhoneNumberNormalizer $phones): void
     {
         $notification = FestivalNotification::query()->whereKey($this->notificationId)->first();
 
-        if (! $notification || $notification->status === FestivalNotificationStatus::Sent || $notification->status === FestivalNotificationStatus::Cancelled) {
+        if (! $notification || in_array($notification->status, [FestivalNotificationStatus::Sent, FestivalNotificationStatus::Cancelled, FestivalNotificationStatus::WaitingForSmsCredit], true)) {
             return;
         }
 
         $account = Account::active()->whereKey($notification->account_id)->where('enable_festivals', true)->first();
-        $portalUser = FestivalPortalUser::query()->whereKey($notification->festival_portal_user_id)->where('account_id', $notification->account_id)->first();
-        if (! $account || ! $portalUser || $portalUser->email !== $notification->recipient_email) {
-            $notification->forceFill(['status' => FestivalNotificationStatus::Cancelled, 'cancelled_at' => now(), 'failure_reason' => 'recipient_state_changed'])->save();
+        if (! $account) {
+            $this->cancel($notification, 'account_state_changed');
+
+            return;
+        }
+
+        $locale = $this->recipientLocale($notification);
+        if ($locale === null) {
+            $this->cancel($notification, 'recipient_state_changed');
+
+            return;
+        }
+
+        if ($notification->channel === FestivalNotificationChannel::Sms && ! $this->smsStillEnabled($notification)) {
+            $this->cancel($notification, 'festival_sms_scenario_disabled');
 
             return;
         }
@@ -42,19 +63,176 @@ class SendFestivalNotification implements ShouldQueue
         $notification->forceFill(['status' => FestivalNotificationStatus::Sending, 'attempts' => $notification->attempts + 1])->save();
 
         try {
+            if ($notification->channel === FestivalNotificationChannel::Sms) {
+                $this->sendSms($notification, $account, $smsSender, $autoTopUp, $phones);
+
+                return;
+            }
+
             $payload = $notification->payload;
+            $actionLabel = isset($payload['action_label']) ? (string) $payload['action_label'] : null;
+            $actionUrl = isset($payload['action_url']) ? (string) $payload['action_url'] : null;
+            if ($notification->festival_ticket_order_id) {
+                $order = FestivalTicketOrder::query()
+                    ->whereKey($notification->festival_ticket_order_id)
+                    ->where('account_id', $notification->account_id)
+                    ->where('festival_edition_id', $notification->festival_edition_id)
+                    ->where('status', FestivalTicketOrderStatus::Paid->value)
+                    ->where('buyer_email', $notification->recipient_email)
+                    ->first();
+                if (! $order) {
+                    $this->cancel($notification, 'recipient_state_changed');
+
+                    return;
+                }
+                $actionLabel = __('app.festival_open_tickets', locale: $locale);
+                $actionUrl = route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);
+            }
             Mail::to($notification->recipient_email)->send(new FestivalPortalMail(
-                subjectLine: (string) ($payload['subject'] ?? __('app.festival_notification_subject', locale: $portalUser->locale)),
-                greeting: (string) ($payload['greeting'] ?? __('app.festival_notification_greeting', ['name' => $portalUser->displayName()], $portalUser->locale)),
-                lines: array_values(array_map('strval', (array) ($payload['lines'] ?? [__('app.festival_notification_copy', locale: $portalUser->locale)]))),
-                actionLabel: isset($payload['action_label']) ? (string) $payload['action_label'] : null,
-                actionUrl: isset($payload['action_url']) ? (string) $payload['action_url'] : null,
-                messageLocale: $portalUser->locale,
+                subjectLine: (string) ($notification->subject ?? __('app.festival_notification_subject', locale: $locale)),
+                greeting: (string) ($payload['greeting'] ?? __('app.festival_notification_greeting', ['name' => $notification->recipient_name], $locale)),
+                lines: array_values(array_map('strval', (array) ($payload['lines'] ?? [$notification->text]))),
+                actionLabel: $actionLabel,
+                actionUrl: $actionUrl,
+                messageLocale: $locale,
             ));
-            $notification->forceFill(['status' => FestivalNotificationStatus::Sent, 'sent_at' => now(), 'failure_reason' => null])->save();
+            $this->markSent($notification);
         } catch (Throwable $exception) {
             $notification->forceFill(['status' => FestivalNotificationStatus::Failed, 'failed_at' => now(), 'failure_reason' => str($exception->getMessage())->limit(1000)])->save();
             throw $exception;
         }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $notification = FestivalNotification::query()->whereKey($this->notificationId)->first();
+        if (! $notification || in_array($notification->status, [FestivalNotificationStatus::Sent, FestivalNotificationStatus::Cancelled, FestivalNotificationStatus::WaitingForSmsCredit], true)) {
+            return;
+        }
+
+        $notification->forceFill([
+            'status' => FestivalNotificationStatus::Failed,
+            'failed_at' => now(),
+            'failure_reason' => str($exception?->getMessage() ?: 'festival_notification_delivery_failed')->limit(1000),
+        ])->save();
+    }
+
+    private function sendSms(FestivalNotification $notification, Account $account, StudioSmsSender $smsSender, SmsAutoTopUpService $autoTopUp, PhoneNumberNormalizer $phones): void
+    {
+        $phone = $phones->normalize($notification->recipient_phone, $account->country_code ?? 'UA');
+        if (! $phones->isValid($phone, $account->country_code ?? 'UA')) {
+            $this->cancel($notification, 'festival_recipient_phone_missing_or_invalid');
+
+            return;
+        }
+
+        $result = $smsSender->send(
+            account: $account,
+            phone: $phone,
+            message: (string) $notification->text,
+            purpose: SmsDeliveryPurpose::FestivalNotification,
+            source: $notification,
+            idempotencyKey: 'festival-notification:'.$notification->id.':attempt:'.$notification->attempts,
+        );
+
+        if ($result->waitingForCredit()) {
+            $notification->forceFill([
+                'status' => FestivalNotificationStatus::WaitingForSmsCredit,
+                'failure_reason' => 'waiting_for_sms_credit',
+                'failed_at' => null,
+            ])->save();
+            $autoTopUp->attempt($account);
+
+            return;
+        }
+
+        if ($result->unknown()) {
+            $notification->forceFill([
+                'status' => FestivalNotificationStatus::Failed,
+                'failure_reason' => 'sms_delivery_outcome_unknown',
+                'failed_at' => now(),
+            ])->save();
+
+            return;
+        }
+
+        if (! $result->accepted()) {
+            $reason = $result->delivery->error_code ?: $result->message ?: 'festival_sms_send_failed';
+            $notification->forceFill([
+                'status' => FestivalNotificationStatus::Failed,
+                'failure_reason' => $reason,
+                'failed_at' => now(),
+            ])->save();
+
+            if (in_array($result->delivery->error_code, ['sms_provider_rejected'], true)) {
+                throw new RuntimeException($reason);
+            }
+
+            return;
+        }
+
+        $this->markSent($notification);
+    }
+
+    private function recipientLocale(FestivalNotification $notification): ?string
+    {
+        if ($notification->festival_portal_user_id) {
+            $portalUser = FestivalPortalUser::query()
+                ->whereKey($notification->festival_portal_user_id)
+                ->where('account_id', $notification->account_id)
+                ->where('is_active', true)
+                ->first();
+
+            if (! $portalUser || $portalUser->email !== $notification->recipient_email) {
+                return null;
+            }
+
+            return $portalUser->locale;
+        }
+
+        if ($notification->festival_ticket_order_id) {
+            $order = FestivalTicketOrder::query()
+                ->whereKey($notification->festival_ticket_order_id)
+                ->where('account_id', $notification->account_id)
+                ->where('festival_edition_id', $notification->festival_edition_id)
+                ->where('status', FestivalTicketOrderStatus::Paid->value)
+                ->first();
+
+            if (! $order || $order->buyer_email !== $notification->recipient_email) {
+                return null;
+            }
+
+            return $order->locale;
+        }
+
+        return null;
+    }
+
+    private function smsStillEnabled(FestivalNotification $notification): bool
+    {
+        return FestivalNotificationSetting::query()
+            ->where('account_id', $notification->account_id)
+            ->where('type', $notification->type->value)
+            ->where('send_sms', true)
+            ->exists();
+    }
+
+    private function markSent(FestivalNotification $notification): void
+    {
+        $notification->forceFill([
+            'status' => FestivalNotificationStatus::Sent,
+            'sent_at' => now(),
+            'failed_at' => null,
+            'failure_reason' => null,
+        ])->save();
+    }
+
+    private function cancel(FestivalNotification $notification, string $reason): void
+    {
+        $notification->forceFill([
+            'status' => FestivalNotificationStatus::Cancelled,
+            'cancelled_at' => now(),
+            'failure_reason' => $reason,
+        ])->save();
     }
 }

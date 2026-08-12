@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -41,5 +42,26 @@ class FestivalEntryRequirement extends Model
     public function submissions(): HasMany
     {
         return $this->hasMany(FestivalSubmission::class)->latest('id');
+    }
+
+    public function hasSubmittedResponse(): bool
+    {
+        $definition = $this->relationLoaded('definition')
+            ? $this->definition
+            : $this->definition()->first();
+        $submission = $this->relationLoaded('submissions')
+            ? $this->submissions->first()
+            : $this->submissions()->first();
+
+        if (! $definition || ! $submission) {
+            return false;
+        }
+
+        if ($definition->input_type === FestivalRequirementInputType::File) {
+            return filled($submission->disk) && filled($submission->path);
+        }
+
+        return is_array($submission->value_json)
+            && array_key_exists('value', $submission->value_json);
     }
 }

@@ -341,7 +341,7 @@ class FestivalSaasBillingTest extends TestCase
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), [
             'name' => 'Guests',
             'inventory' => 3,
-            'price_cents' => 0,
+            'price' => '0.00',
             'max_per_order' => 2,
         ])->assertSessionHasErrors('inventory');
         $this->assertSame(0, $edition->admissionTypes()->count());

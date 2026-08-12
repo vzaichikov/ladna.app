@@ -12,11 +12,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 
-#[Fillable(['account_id', 'role', 'is_active', 'registrant_type', 'first_name', 'last_name', 'patronymic', 'email', 'email_normalized', 'password', 'google_id', 'phone', 'phone_normalized', 'city', 'studio_name', 'instagram_url', 'telegram_user_id', 'avatar_path', 'locale', 'email_verified_at', 'phone_verified_at', 'last_login_at'])]
+#[Fillable(['account_id', 'role', 'is_active', 'registrant_type', 'first_name', 'last_name', 'patronymic', 'stage_name', 'email', 'email_normalized', 'password', 'google_id', 'phone', 'phone_normalized', 'city', 'studio_name', 'instagram_url', 'telegram_user_id', 'avatar_path', 'locale', 'email_verified_at', 'phone_verified_at', 'last_login_at'])]
 #[Hidden(['password', 'remember_token', 'telegram_user_id', 'google_id'])]
 class FestivalPortalUser extends Authenticatable implements HasLocalePreference
 {
@@ -56,6 +57,13 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
         return collect([$this->first_name, $this->last_name])->filter()->join(' ') ?: ($this->email ?: $this->phone ?: __('app.festival_user'));
     }
 
+    public function suggestedEntryName(): string
+    {
+        return filled($this->stage_name)
+            ? $this->stage_name
+            : collect([$this->first_name, $this->last_name])->filter()->join(' ');
+    }
+
     public function profileIsComplete(): bool
     {
         if ($this->role === FestivalPortalRole::Judge) {
@@ -69,8 +77,10 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
             && filled($this->last_name)
             && filled($this->email)
             && filled($this->phone)
+            && $this->phone_verified_at !== null
             && filled($this->city)
-            && filled($this->studio_name);
+            && filled($this->studio_name)
+            && ($this->registrant_type !== FestivalRegistrantType::AdultAthlete || $this->profileParticipant()->whereNull('archived_at')->exists());
     }
 
     public function scopeActive(Builder $query): Builder
@@ -96,6 +106,11 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
     public function festivalParticipants(): HasMany
     {
         return $this->participants();
+    }
+
+    public function profileParticipant(): HasOne
+    {
+        return $this->hasOne(FestivalParticipant::class)->where('is_profile_owner', true);
     }
 
     public function entries(): HasMany

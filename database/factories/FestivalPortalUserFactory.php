@@ -18,7 +18,7 @@ class FestivalPortalUserFactory extends Factory
 
         $phone = fake()->unique()->e164PhoneNumber();
 
-        return ['account_id' => Account::factory(), 'role' => FestivalPortalRole::Registrant, 'is_active' => true, 'registrant_type' => 'coach', 'first_name' => fake()->firstName(), 'last_name' => fake()->lastName(), 'email' => $email, 'email_normalized' => mb_strtolower($email), 'password' => 'secret', 'phone' => $phone, 'phone_normalized' => $phone, 'city' => fake()->city(), 'studio_name' => fake()->company(), 'locale' => 'uk', 'email_verified_at' => now()];
+        return ['account_id' => Account::factory(), 'role' => FestivalPortalRole::Registrant, 'is_active' => true, 'registrant_type' => 'coach', 'first_name' => fake()->firstName(), 'last_name' => fake()->lastName(), 'email' => $email, 'email_normalized' => mb_strtolower($email), 'password' => 'secret', 'phone' => $phone, 'phone_normalized' => $phone, 'city' => fake()->city(), 'studio_name' => fake()->company(), 'locale' => 'uk', 'email_verified_at' => now(), 'phone_verified_at' => now()];
     }
 
     public function judge(): static

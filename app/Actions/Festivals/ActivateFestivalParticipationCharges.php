@@ -16,7 +16,7 @@ class ActivateFestivalParticipationCharges
     public function execute(FestivalEntry $entry, CarbonInterface $approvedAt): void
     {
         DB::transaction(function () use ($entry, $approvedAt): void {
-            $entry = FestivalEntry::query()->with(['participants', 'steps.workflowStep'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $entry = FestivalEntry::query()->with(['account', 'participants', 'steps.workflowStep'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
             $definitions = FestivalChargeDefinition::query()
                 ->where('festival_edition_id', $entry->festival_edition_id)
                 ->where('kind', 'participation')
@@ -55,7 +55,7 @@ class ActivateFestivalParticipationCharges
                     'kind' => $definition->kind,
                     'name' => $definition->name,
                     'amount_cents' => $amount,
-                    'currency' => $definition->currency,
+                    'currency' => strtoupper($entry->account->default_currency),
                     'due_at' => $this->resolver->dueAt($definition, $approvedAt),
                     'status' => $amount === 0 ? FestivalChargeStatus::Paid : FestivalChargeStatus::Pending,
                     'paid_at' => $amount === 0 ? now() : null,
@@ -63,7 +63,8 @@ class ActivateFestivalParticipationCharges
                 ];
 
                 if ($charge) {
-                    if (! in_array($charge->status, [FestivalChargeStatus::Pending, FestivalChargeStatus::Failed, FestivalChargeStatus::Cancelled], true)) {
+                    if (! in_array($charge->status, [FestivalChargeStatus::Pending, FestivalChargeStatus::Failed, FestivalChargeStatus::Cancelled], true)
+                        || $charge->paymentAttempts()->exists()) {
                         continue;
                     }
                     $charge->forceFill($values)->save();

@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 #[Fillable(['account_id', 'festival_edition_id', 'festival_portal_user_id', 'provider', 'order_id', 'status', 'buyer_name', 'buyer_email', 'buyer_phone', 'locale', 'amount_cents', 'currency', 'access_token_encrypted', 'access_token_hash', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'expires_at', 'paid_at', 'failed_at', 'terms_accepted_at', 'terms_hash', 'refunded_by', 'refunded_at', 'refund_reason'])]
 #[Hidden(['access_token_encrypted', 'access_token_hash', 'gateway_checkout_payload', 'last_callback_payload'])]
@@ -64,5 +66,15 @@ class FestivalTicketOrder extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(FestivalTicket::class);
+    }
+
+    public function fiscalReceipts(): MorphMany
+    {
+        return $this->morphMany(FiscalReceipt::class, 'payment');
+    }
+
+    public function fiscalReceipt(): MorphOne
+    {
+        return $this->morphOne(FiscalReceipt::class, 'payment')->latestOfMany();
     }
 }

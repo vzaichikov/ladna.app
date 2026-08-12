@@ -104,6 +104,19 @@
                     <input type="file" name="hero_image" accept="image/jpeg,image/png,image/webp" class="crm-field">
                     @error('hero_image') <span class="crm-help">{{ $message }}</span> @enderror
                 </label>
+
+                <div class="mt-6 border-t border-stone-100 pt-6">
+                    <h3 class="text-base font-semibold text-slate-950">{{ __('app.festival_mobile_hero_image') }}</h3>
+                    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.festival_mobile_hero_image_help') }}</p>
+                    @if ($edition->mobileCoverMedia?->url())
+                        <img src="{{ $edition->mobileCoverMedia->url() }}" alt="" class="mt-5 aspect-[9/16] max-h-[32rem] w-full rounded-xl border border-stone-200 object-cover sm:w-auto">
+                    @endif
+                    <label class="mt-5 block">
+                        <span class="crm-label">{{ __('app.festival_mobile_hero_image_replace') }}</span>
+                        <input type="file" name="mobile_hero_image" accept="image/jpeg,image/png,image/webp" class="crm-field">
+                        @error('mobile_hero_image') <span class="crm-help">{{ $message }}</span> @enderror
+                    </label>
+                </div>
             </section>
 
             <div class="flex justify-end rounded-xl border border-stone-200 bg-white p-4 shadow-crm">
@@ -193,12 +206,6 @@
                     <input type="date" name="age_reference_date" value="{{ old('age_reference_date', $edition->age_reference_date?->format('Y-m-d')) }}" required class="crm-field">
                     <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_age_reference_field_help') }}</span>
                     @error('age_reference_date') <span class="crm-help">{{ $message }}</span> @enderror
-                </label>
-                <label class="block">
-                    <span class="crm-label">{{ __('app.currency') }}</span>
-                    <input name="currency" value="{{ old('currency', $edition->currency ?: $account->default_currency) }}" maxlength="3" required class="crm-field uppercase" autocomplete="off">
-                    <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_currency_field_help') }}</span>
-                    @error('currency') <span class="crm-help">{{ $message }}</span> @enderror
                 </label>
             </div>
         </section>

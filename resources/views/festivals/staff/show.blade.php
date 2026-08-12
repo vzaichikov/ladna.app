@@ -15,7 +15,7 @@
             <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
                 <span class="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">{{ __('app.festival_status_'.$edition->status->value) }}</span>
                 <span class="rounded-full bg-brand-50 px-3 py-1.5 text-brand-700">{{ __('app.festival_registration_'.$edition->registration_status->value) }}</span>
-                <span class="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">{{ $edition->timezone }} · {{ $edition->currency }}</span>
+                <span class="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">{{ $edition->timezone }} · {{ $account->default_currency }}</span>
             </div>
         </div>
         <div class="flex flex-wrap gap-2">

@@ -6,6 +6,7 @@
     'showOrdering' => true,
     'canMoveUp' => true,
     'canMoveDown' => true,
+    'moveParameters' => [],
     'deleteRoute' => null,
     'deleteLabel' => null,
     'deleteConfirmTitle' => null,
@@ -18,12 +19,18 @@
             @csrf
             @method('PATCH')
             <input type="hidden" name="direction" value="up">
+            @foreach ($moveParameters as $name => $value)
+                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+            @endforeach
             <x-ui.action-button type="submit" icon="arrow-up" :label="__('app.move_up')" :disabled="! $canMoveUp" />
         </form>
         <form method="POST" action="{{ $moveRoute }}">
             @csrf
             @method('PATCH')
             <input type="hidden" name="direction" value="down">
+            @foreach ($moveParameters as $name => $value)
+                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+            @endforeach
             <x-ui.action-button type="submit" icon="arrow-down" :label="__('app.move_down')" :disabled="! $canMoveDown" />
         </form>
     @endif

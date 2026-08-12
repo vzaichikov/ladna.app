@@ -96,7 +96,7 @@ class CreateFestivalTicketOrder
                 'buyer_phone' => $input['buyer_phone'] ?? null,
                 'locale' => $portalUser?->locale ?? app()->getLocale(),
                 'amount_cents' => $amount,
-                'currency' => $edition->currency,
+                'currency' => strtoupper($edition->account->default_currency),
                 'access_token_encrypted' => $accessToken,
                 'access_token_hash' => hash('sha256', $accessToken),
                 'expires_at' => now()->addMinutes(30),

@@ -30,7 +30,6 @@ class FestivalEditionRequest extends FormRequest
             'venue_map_url' => ['nullable', 'url:http,https', 'max:2048'],
             'venue_directions' => ['nullable', 'string', 'max:5000'],
             'timezone' => ['required', 'timezone:all'],
-            'currency' => ['required', 'string', 'size:3'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', 'after:starts_at'],
             'age_reference_date' => ['required', 'date'],

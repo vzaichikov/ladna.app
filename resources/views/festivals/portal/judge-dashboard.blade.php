@@ -1,4 +1,4 @@
-@extends('layouts.public', ['hideAppFooter' => true])
+@extends('layouts.festival-portal')
 
 @section('title', __('app.festival_judge_cabinet').' - '.$account->name)
 
@@ -6,7 +6,7 @@
 <main class="min-h-screen bg-canvas px-4 py-6 sm:px-5 sm:py-8">
     <div class="mx-auto max-w-6xl">
         @include('festivals.portal._nav')
-        <header class="mt-8"><p class="text-sm font-semibold text-brand-700">{{ $account->name }}</p><h1 class="mt-1 text-3xl font-semibold sm:text-4xl">{{ __('app.festival_judge_cabinet') }}</h1><p class="mt-2 text-slate-600">{{ __('app.festival_judge_cabinet_copy', ['name' => $portalUser->displayName()]) }}</p></header>
+        <header class="mt-8"><h1 class="text-3xl font-semibold sm:text-4xl">{{ __('app.festival_judge_cabinet') }}</h1><p class="mt-2 text-slate-600">{{ __('app.festival_judge_cabinet_copy', ['name' => $portalUser->displayName()]) }}</p></header>
         @if(session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
         <section class="mt-7 grid gap-4 md:grid-cols-2">
             @forelse ($assignments as $assignment)

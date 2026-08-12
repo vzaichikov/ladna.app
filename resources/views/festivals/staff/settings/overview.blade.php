@@ -12,10 +12,11 @@
         </x-slot:actions>
     </x-ui.page-header>
 
-    <x-festivals.settings-help :title="__('app.festival_settings_structure_title')" :description="__('app.festival_settings_structure_copy')" :dependencies="[__('app.festival_taxonomy_directions'), __('app.festival_categories'), __('app.festival_registration_workflows'), __('app.festival_registration_fields'), __('app.festival_fees')]" />
+    <x-festivals.settings-help :title="__('app.festival_settings_structure_title')" :description="__('app.festival_settings_structure_copy')" :dependencies="[__('app.festival_scenes'), __('app.festival_taxonomy_directions'), __('app.festival_categories'), __('app.festival_registration_workflows'), __('app.festival_registration_fields'), __('app.festival_fees')]" />
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         @php($cards = [
+            ['stages', 'festival_scenes', 'festival_scenes_card_copy', $permissions['schedule']],
             ['directions', 'festival_taxonomy_directions', 'festival_directions_card_copy', $permissions['manage']],
             ['categories', 'festival_categories', 'festival_categories_card_copy', $permissions['manage']],
             ['workflows', 'festival_registration_workflows', 'festival_workflows_card_copy', $permissions['manage']],

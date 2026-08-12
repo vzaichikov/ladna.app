@@ -33,12 +33,14 @@
                 <label><span class="crm-label">{{ __('app.first_name') }}</span><input name="first_name" value="{{ old('first_name', $portalUser->first_name) }}" required class="crm-field">@error('first_name')<span class="crm-help">{{ $message }}</span>@enderror</label>
                 <label><span class="crm-label">{{ __('app.last_name') }}</span><input name="last_name" value="{{ old('last_name', $portalUser->last_name) }}" required class="crm-field">@error('last_name')<span class="crm-help">{{ $message }}</span>@enderror</label>
                 <label><span class="crm-label">{{ __('app.patronymic') }}</span><input name="patronymic" value="{{ old('patronymic', $portalUser->patronymic) }}" class="crm-field">@error('patronymic')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                <label><span class="crm-label">{{ __('app.festival_stage_name') }}</span><input name="stage_name" value="{{ old('stage_name', $portalUser->stage_name) }}" class="crm-field">@error('stage_name')<span class="crm-help">{{ $message }}</span>@enderror</label>
                 <label><span class="crm-label">{{ __('app.email') }}</span><input type="email" name="email" value="{{ old('email', $portalUser->email) }}" required class="crm-field">@error('email')<span class="crm-help">{{ $message }}</span>@enderror</label>
                 <label><span class="crm-label">{{ __('app.phone') }}</span><input name="phone" value="{{ old('phone', $portalUser->phone) }}" @required(! $isJudge) class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}">@error('phone')<span class="crm-help">{{ $message }}</span>@enderror</label>
                 <label><span class="crm-label">{{ __('app.language') }}</span><select name="locale" class="crm-field"><option value="uk" @selected(old('locale', $portalUser->locale) === 'uk')>Українська</option><option value="en" @selected(old('locale', $portalUser->locale) === 'en')>English</option></select></label>
 
                 @unless ($isJudge)
-                    <label><span class="crm-label">{{ __('app.festival_profile_type') }}</span><select name="registrant_type" required class="crm-field">@foreach (\App\Enums\FestivalRegistrantType::cases() as $type)<option value="{{ $type->value }}" @selected(old('registrant_type', $portalUser->registrant_type?->value) === $type->value)>{{ __('app.festival_registrant_'.$type->value) }}</option>@endforeach</select>@error('registrant_type')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                    <label><span class="crm-label">{{ __('app.festival_profile_type') }}</span><select name="registrant_type" required class="crm-field" data-festival-registrant-type>@foreach (\App\Enums\FestivalRegistrantType::selectableCases($portalUser->registrant_type) as $type)<option value="{{ $type->value }}" @selected(old('registrant_type', $portalUser->registrant_type?->value) === $type->value)>{{ __('app.festival_registrant_'.$type->value) }}</option>@endforeach</select>@error('registrant_type')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                    <label><span class="crm-label">{{ __('app.date_of_birth') }}<span class="text-rose-600 {{ old('registrant_type', $portalUser->registrant_type?->value) === 'adult_athlete' ? '' : 'hidden' }}" data-participant-required-marker>*</span></span><input type="date" name="date_of_birth" value="{{ old('date_of_birth', $portalUser->profileParticipant?->date_of_birth?->format('Y-m-d')) }}" @required(old('registrant_type', $portalUser->registrant_type?->value) === 'adult_athlete') class="crm-field" data-participant-required-input>@error('date_of_birth')<span class="crm-help">{{ $message }}</span>@enderror</label>
                     <label><span class="crm-label">{{ __('app.city') }}</span><input name="city" value="{{ old('city', $portalUser->city) }}" required class="crm-field">@error('city')<span class="crm-help">{{ $message }}</span>@enderror</label>
                     <label><span class="crm-label">{{ __('app.festival_studio_school') }}</span><input name="studio_name" value="{{ old('studio_name', $portalUser->studio_name) }}" required class="crm-field">@error('studio_name')<span class="crm-help">{{ $message }}</span>@enderror</label>
                     <label><span class="crm-label">Instagram</span><input type="url" name="instagram_url" value="{{ old('instagram_url', $portalUser->instagram_url) }}" class="crm-field">@error('instagram_url')<span class="crm-help">{{ $message }}</span>@enderror</label>
@@ -68,9 +70,16 @@
             <x-ui.panel padding="none" class="overflow-hidden">
                 @forelse ($portalUser->participants as $participant)
                     <div class="crm-row lg:grid-cols-[minmax(0,1fr)_160px_auto] lg:items-center">
-                        <div><p class="font-semibold text-slate-950">{{ $participant->displayName() }}</p><p class="mt-1 text-sm text-slate-500">{{ $participant->date_of_birth->format('d.m.Y') }}</p></div>
+                        <div><p class="font-semibold text-slate-950">{{ $participant->displayName() }}</p><p class="mt-1 text-sm text-slate-500">{{ $participant->date_of_birth->format('d.m.Y') }}@if($participant->is_profile_owner) · {{ __('app.festival_profile') }}@endif</p></div>
                         <div class="text-sm text-slate-500">{{ trans_choice('app.festival_entries_usage_count', $participant->entries_count, ['count' => $participant->entries_count]) }}@if($participant->archived_at)<span class="mt-1 block">{{ __('app.archived') }}</span>@endif</div>
-                        <div class="flex justify-end gap-2"><x-ui.action-button :href="route('dashboard.accounts.festivals.users.participants.edit', [$account, $edition, $portalUser, $participant])" :label="__('app.edit')" />@unless($participant->archived_at)<x-ui.action-button :href="route('dashboard.accounts.festivals.users.participants.archive', [$account, $edition, $portalUser, $participant])" icon="archive" :label="__('app.archive')" />@endunless</div>
+                        <div class="flex justify-end gap-2">
+                            @unless($participant->is_profile_owner)
+                                <x-ui.action-button :href="route('dashboard.accounts.festivals.users.participants.edit', [$account, $edition, $portalUser, $participant])" :label="__('app.edit')" />
+                                @unless($participant->archived_at)
+                                    <x-ui.action-button :href="route('dashboard.accounts.festivals.users.participants.archive', [$account, $edition, $portalUser, $participant])" icon="archive" :label="__('app.archive')" />
+                                @endunless
+                            @endunless
+                        </div>
                     </div>
                 @empty
                     <x-ui.empty-state :title="__('app.festival_participants_empty')" icon="users" class="m-5" />

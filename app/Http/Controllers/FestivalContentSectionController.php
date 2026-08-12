@@ -109,6 +109,16 @@ class FestivalContentSectionController extends Controller
         return back()->with('status', __('app.festival_order_saved'));
     }
 
+    public function destroy(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalContentSection $festivalContentSection): RedirectResponse
+    {
+        $this->managerPermissions($request, $account, $festivalEdition);
+        $this->assertSection($account, $festivalEdition, $festivalContentSection);
+        $festivalContentSection->delete();
+
+        return redirect()->route('dashboard.accounts.festivals.settings.content.sections', [$account, $festivalEdition])
+            ->with('status', __('app.festival_content_deleted'));
+    }
+
     /**
      * @param  array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool}  $permissions
      */

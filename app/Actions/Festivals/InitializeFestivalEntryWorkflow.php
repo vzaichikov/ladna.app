@@ -24,7 +24,7 @@ class InitializeFestivalEntryWorkflow
     public function execute(FestivalEntry $entry): FestivalEntry
     {
         return DB::transaction(function () use ($entry): FestivalEntry {
-            $entry = FestivalEntry::query()->with(['edition', 'category.direction', 'category.registrationWorkflow.steps', 'participants', 'portalUser'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
+            $entry = FestivalEntry::query()->with(['account', 'edition', 'category.direction', 'category.registrationWorkflow.steps', 'participants', 'portalUser'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
 
             if ($entry->steps()->exists()) {
                 return $entry->load(['steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'steps.charges']);
@@ -148,7 +148,7 @@ class InitializeFestivalEntryWorkflow
                 'kind' => $definition->kind,
                 'name' => $definition->name,
                 'amount_cents' => $amount,
-                'currency' => $definition->currency,
+                'currency' => strtoupper($entry->account->default_currency),
                 'due_at' => $this->chargeResolver->dueAt($definition),
                 'status' => $amount === 0 ? 'paid' : 'pending',
                 'paid_at' => $amount === 0 ? now() : null,

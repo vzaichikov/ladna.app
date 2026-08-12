@@ -80,15 +80,15 @@
     }
 
     .festival-theme[data-festival-palette='velvet_theatre'] {
-        --festival-page: #1c1018;
-        --festival-surface: #2a1721;
-        --festival-text: #fff8ee;
-        --festival-muted-text: #d5bcc4;
-        --festival-primary: #8e1837;
+        --festival-page: #120203;
+        --festival-surface: #210305;
+        --festival-text: #fff5ee;
+        --festival-muted-text: #d8b7b3;
+        --festival-primary: #9e0e17;
         --festival-primary-text: #ffffff;
         --festival-accent: #d9ae62;
         --festival-accent-text: #25140d;
-        --festival-border: #4a2a35;
+        --festival-border: #571317;
     }
 
     .festival-theme[data-festival-palette='electric_stage'] {
@@ -225,6 +225,720 @@
 
     .festival-footer .text-slate-500 {
         color: var(--festival-muted-text);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] {
+        background: var(--festival-page);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .festival-velvet {
+        overflow: clip;
+        background:
+            radial-gradient(circle at 82% 18%, color-mix(in srgb, var(--festival-primary) 22%, transparent), transparent 31rem),
+            var(--festival-page);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-shell {
+        width: min(100% - 2.5rem, 82rem);
+        margin-inline: auto;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero {
+        position: relative;
+        min-height: 51rem;
+        overflow: hidden;
+        background: #080406;
+        color: #fff8ee;
+        isolation: isolate;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-media,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-fallback,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-shade {
+        position: absolute;
+        inset: 0;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-media {
+        z-index: -3;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-fallback {
+        z-index: -3;
+        background:
+            radial-gradient(circle at 72% 38%, color-mix(in srgb, var(--festival-primary) 64%, transparent), transparent 22rem),
+            linear-gradient(115deg, #050304 0%, #17080d 54%, #050304 100%);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-shade {
+        z-index: -2;
+        background:
+            linear-gradient(90deg, rgb(0 0 0 / 0.94) 0%, rgb(0 0 0 / 0.72) 34%, rgb(0 0 0 / 0.12) 68%, rgb(0 0 0 / 0.28) 100%),
+            linear-gradient(180deg, rgb(0 0 0 / 0.48) 0%, transparent 25%, transparent 68%, rgb(0 0 0 / 0.88) 100%);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-inner {
+        display: flex;
+        min-height: 51rem;
+        width: min(100% - 3rem, 88rem);
+        margin-inline: auto;
+        flex-direction: column;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 2rem;
+        border-bottom: 1px solid rgb(217 174 98 / 0.26);
+        padding-block: 1.5rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-studio-link {
+        display: inline-flex;
+        min-width: 0;
+        align-items: center;
+        gap: 0.85rem;
+        color: #fff8ee;
+        text-decoration: none;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-studio-mark {
+        display: flex;
+        width: 2.8rem;
+        height: 2.8rem;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgb(217 174 98 / 0.5);
+        background: rgb(0 0 0 / 0.45);
+        padding: 0.45rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-studio-name {
+        display: block;
+        overflow: hidden;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 1.15rem;
+        letter-spacing: 0.18em;
+        line-height: 1.15;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-studio-slogan {
+        display: block;
+        margin-top: 0.3rem;
+        color: #d9ae62;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-nav {
+        display: flex;
+        align-items: center;
+        gap: clamp(1.25rem, 3vw, 2.8rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-nav a {
+        color: #f4ddc4;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition: color 180ms ease;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-nav a:hover,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-nav a:focus-visible {
+        color: #d9ae62;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-content {
+        display: flex;
+        width: min(100%, 45rem);
+        flex: 1;
+        flex-direction: column;
+        justify-content: center;
+        padding-block: 5rem 6.5rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero h1 {
+        max-width: 12ch;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: clamp(3.35rem, 7vw, 6.8rem);
+        font-weight: 400;
+        letter-spacing: -0.045em;
+        line-height: 0.9;
+        text-wrap: balance;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-summary {
+        max-width: 37rem;
+        margin-top: 1.75rem;
+        color: #eadac8;
+        font-size: clamp(1rem, 1.6vw, 1.2rem);
+        line-height: 1.75;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.85rem;
+        margin-top: 2rem;
+        color: #e8c98c;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem;
+        margin-top: 2.4rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-button {
+        display: inline-flex;
+        min-height: 3.3rem;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        padding: 0.9rem 1.5rem;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        line-height: 1.2;
+        text-align: center;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-button:hover {
+        transform: translateY(-2px);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-button:focus-visible,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-text-link:focus-visible,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-studio-link:focus-visible {
+        outline: 2px solid #fff8ee;
+        outline-offset: 4px;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-button-primary {
+        border-color: var(--festival-primary);
+        background: var(--festival-primary);
+        color: var(--festival-primary-text);
+        box-shadow: 0 1rem 2.5rem color-mix(in srgb, var(--festival-primary) 34%, transparent);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-button-primary:hover {
+        border-color: color-mix(in srgb, var(--festival-primary) 72%, white);
+        background: color-mix(in srgb, var(--festival-primary) 82%, white);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-button-outline {
+        border-color: rgb(217 174 98 / 0.68);
+        background: rgb(0 0 0 / 0.25);
+        color: #fff8ee;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-button-outline:hover {
+        background: rgb(217 174 98 / 0.14);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-link {
+        display: inline-flex;
+        align-self: center;
+        align-items: center;
+        gap: 0.8rem;
+        margin-bottom: 1.7rem;
+        color: #d9ae62;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.26em;
+        text-decoration: none;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-link span {
+        width: 2.8rem;
+        height: 1px;
+        background: currentColor;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-facts {
+        border-block: 1px solid var(--festival-border);
+        background: color-mix(in srgb, var(--festival-surface) 88%, transparent);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid > div {
+        position: relative;
+        min-width: 0;
+        padding: 1.65rem clamp(1rem, 2.5vw, 2rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid > div + div {
+        border-left: 1px solid var(--festival-border);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid p {
+        color: var(--festival-accent);
+        font-size: 0.58rem;
+        font-weight: 800;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid strong,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid a {
+        display: block;
+        margin-top: 0.45rem;
+        overflow-wrap: anywhere;
+        color: var(--festival-text);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 1.05rem;
+        font-weight: 400;
+        line-height: 1.25;
+        text-decoration: none;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid small {
+        display: block;
+        margin-top: 0.3rem;
+        color: var(--festival-muted-text);
+        font-size: 0.7rem;
+        line-height: 1.45;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-body {
+        display: grid;
+        gap: 1.5rem;
+        padding-block: clamp(3.5rem, 8vw, 7rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-story {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(13rem, 0.7fr) minmax(0, 1.3fr);
+        gap: clamp(2rem, 7vw, 7rem);
+        overflow: hidden;
+        border-block: 1px solid var(--festival-border);
+        padding-block: clamp(2.5rem, 6vw, 5rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-section-heading,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-story > .velvet-prose {
+        position: relative;
+        z-index: 1;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-section-heading p,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-admission-copy > p {
+        color: var(--festival-accent);
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-section-heading h2,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-admission-copy h2 {
+        margin-top: 0.9rem;
+        color: var(--festival-accent);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: clamp(2.3rem, 5vw, 4.5rem);
+        font-weight: 400;
+        letter-spacing: -0.035em;
+        line-height: 1;
+        text-wrap: balance;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-prose {
+        font-size: 0.96rem;
+        line-height: 1.8;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-prose :where(h2) {
+        margin-top: 2em;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 1.55rem;
+        font-weight: 400;
+        letter-spacing: -0.02em;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-content-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        overflow: hidden;
+        border: 1px solid var(--festival-border);
+        background: var(--festival-border);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-card {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        background:
+            linear-gradient(145deg, color-mix(in srgb, var(--festival-surface) 96%, var(--festival-primary)), var(--festival-surface));
+        padding: clamp(1.5rem, 4vw, 2.7rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-card::after {
+        position: absolute;
+        right: -2rem;
+        bottom: -3.5rem;
+        width: 9rem;
+        height: 9rem;
+        border: 1px solid color-mix(in srgb, var(--festival-accent) 18%, transparent);
+        border-radius: 50%;
+        content: '';
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-card h2 {
+        max-width: 18ch;
+        color: var(--festival-accent);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: clamp(1.75rem, 3vw, 2.6rem);
+        font-weight: 400;
+        line-height: 1.05;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-copy-list {
+        position: relative;
+        z-index: 1;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-copy-list p + p {
+        margin-top: 0.15rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-panel {
+        border: 1px solid var(--festival-border);
+        background: color-mix(in srgb, var(--festival-surface) 94%, transparent);
+        padding: clamp(1.5rem, 5vw, 3.5rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-rules {
+        display: grid;
+        grid-template-columns: minmax(12rem, 0.55fr) minmax(0, 1.45fr);
+        gap: clamp(2rem, 6vw, 6rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-panel-title h2 {
+        color: var(--festival-accent);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: clamp(2rem, 4vw, 3.5rem);
+        font-weight: 400;
+        line-height: 1;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-table {
+        margin-top: 2rem;
+        border-collapse: collapse;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-table th {
+        color: var(--festival-muted-text);
+        font-size: 0.62rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-table tr {
+        border-bottom: 1px solid var(--festival-border);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-admission {
+        display: grid;
+        grid-template-columns: minmax(15rem, 0.75fr) minmax(0, 1.25fr);
+        gap: clamp(2rem, 7vw, 7rem);
+        border-block: 1px solid var(--festival-border);
+        padding-block: clamp(2.5rem, 6vw, 5rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-ticket-form {
+        border: 1px solid var(--festival-border);
+        background: var(--festival-surface);
+        padding: clamp(1.25rem, 4vw, 2.4rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-ticket-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 5rem;
+        align-items: center;
+        gap: 1rem;
+        border-bottom: 1px solid var(--festival-border);
+        padding-block: 1rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-ticket-row:first-child {
+        padding-top: 0;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-ticket-row strong,
+    .festival-theme[data-festival-template='velvet_night'] .velvet-ticket-row small {
+        display: block;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-ticket-row small {
+        margin-top: 0.25rem;
+        color: var(--festival-muted-text);
+        font-size: 0.75rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-ticket-row .crm-field {
+        margin-top: 0;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-provider-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border: 1px solid var(--festival-border);
+        padding: 0.8rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-text-link {
+        display: inline-block;
+        color: var(--festival-accent);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-top {
+        position: fixed;
+        right: calc(1rem + env(safe-area-inset-right));
+        bottom: calc(1rem + env(safe-area-inset-bottom));
+        z-index: 30;
+        display: inline-flex;
+        width: 3rem;
+        height: 3rem;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgb(217 174 98 / 0.72);
+        border-radius: 50%;
+        background: rgb(18 2 3 / 0.9);
+        color: #d9ae62;
+        box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 0.34);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(0.75rem);
+        pointer-events: none;
+        cursor: pointer;
+        backdrop-filter: blur(10px);
+        transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-top[hidden] {
+        display: none;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-top[data-visible='true'] {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-top:hover {
+        border-color: #d9ae62;
+        background: #d9ae62;
+        color: #25140d;
+        transform: translateY(-2px);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-top:focus-visible {
+        outline: 2px solid #fff8ee;
+        outline-offset: 4px;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .festival-footer {
+        border-color: var(--festival-border);
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .festival-footer [data-public-studio-footer-identity] {
+        color: #fff8ee;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .festival-footer [data-public-studio-footer-mark] {
+        border-color: rgb(217 174 98 / 0.5);
+        border-radius: 0;
+        background: rgb(0 0 0 / 0.45);
+        box-shadow: none;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .festival-footer [data-public-studio-footer-name] {
+        color: #fff8ee;
+        font-family: Georgia, 'Times New Roman', serif;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .festival-footer [data-public-studio-footer-slogan] {
+        color: #d9ae62;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-footer-login {
+        display: inline-flex;
+        min-height: 2.6rem;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgb(217 174 98 / 0.58);
+        padding: 0.65rem 1rem;
+        color: #fff8ee;
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        line-height: 1.2;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition: background-color 180ms ease, border-color 180ms ease;
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-footer-login:hover {
+        border-color: #d9ae62;
+        background: rgb(217 174 98 / 0.12);
+    }
+
+    @media (max-width: 767px) {
+        .festival-theme[data-festival-template='velvet_night'] .velvet-shell,
+        .festival-theme[data-festival-template='velvet_night'] .velvet-hero-inner {
+            width: min(100% - 2rem, 82rem);
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-hero,
+        .festival-theme[data-festival-template='velvet_night'] .velvet-hero-inner {
+            min-height: 46rem;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-hero-shade {
+            background:
+                linear-gradient(180deg, rgb(0 0 0 / 0.76) 0%, rgb(0 0 0 / 0.14) 27%, rgb(0 0 0 / 0.2) 50%, rgb(0 0 0 / 0.94) 88%),
+                linear-gradient(90deg, rgb(0 0 0 / 0.42), transparent 50%, rgb(0 0 0 / 0.34));
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-header {
+            padding-block: 1rem;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-nav {
+            display: none;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-studio-name {
+            font-size: 0.95rem;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-hero-content {
+            justify-content: flex-end;
+            padding-block: 7rem 4rem;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-hero h1 {
+            max-width: 11ch;
+            font-size: clamp(2.7rem, 13vw, 4.2rem);
+            line-height: 0.94;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-summary {
+            display: -webkit-box;
+            overflow: hidden;
+            font-size: 0.92rem;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-hero-meta {
+            gap: 0.55rem;
+            font-size: 0.6rem;
+            letter-spacing: 0.1em;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            width: min(100%, 25rem);
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-link {
+            display: none;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid > div {
+            min-height: 7.5rem;
+            padding: 1.35rem 1rem;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid > div:nth-child(3) {
+            border-left: 0;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid > div:nth-child(n + 3) {
+            border-top: 1px solid var(--festival-border);
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid strong,
+        .festival-theme[data-festival-template='velvet_night'] .velvet-facts-grid a {
+            font-size: 0.9rem;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-story,
+        .festival-theme[data-festival-template='velvet_night'] .velvet-rules,
+        .festival-theme[data-festival-template='velvet_night'] .velvet-admission {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1.8rem;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-content-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .festival-theme[data-festival-template='velvet_night'] .velvet-button,
+        .festival-theme[data-festival-template='velvet_night'] .velvet-nav a,
+        .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-top {
+            transition: none;
+        }
+
+        .festival-theme[data-festival-template='velvet_night'] .velvet-button:hover,
+        .festival-theme[data-festival-template='velvet_night'] .velvet-scroll-top:hover {
+            transform: none;
+        }
     }
 
     .crm-focus {

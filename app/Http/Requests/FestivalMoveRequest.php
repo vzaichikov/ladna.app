@@ -14,6 +14,9 @@ class FestivalMoveRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['direction' => ['required', Rule::in(['up', 'down'])]];
+        return [
+            'direction' => ['required', Rule::in(['up', 'down'])],
+            'ordering_scope' => ['nullable', Rule::in(['workflow_step'])],
+        ];
     }
 }

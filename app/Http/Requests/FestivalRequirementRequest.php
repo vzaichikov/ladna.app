@@ -40,15 +40,6 @@ class FestivalRequirementRequest extends FormRequest
             })
             ->values()
             ->all();
-        $optionPrices = collect($this->input('option_prices', []))
-            ->filter(fn (mixed $amount, mixed $key): bool => filled($key) && filled($amount))
-            ->all();
-        foreach ($options as $option) {
-            if (filled($option['price_cents'] ?? null)) {
-                $optionPrices[$option['value']] = $option['price_cents'];
-            }
-        }
-
         $list = fn (string $key): array => collect(preg_split('/[,\n]+/', (string) $this->input($key), -1, PREG_SPLIT_NO_EMPTY))
             ->map(fn (string $value): string => trim($value))
             ->filter()
@@ -58,7 +49,6 @@ class FestivalRequirementRequest extends FormRequest
 
         $prepared = [
             'options' => $options,
-            'option_prices' => $optionPrices,
             'allowed_extensions' => $list('allowed_extensions_text'),
             'allowed_mime_types' => $list('allowed_mime_types_text'),
             'allowed_hosts' => collect($list('allowed_hosts_text'))
@@ -102,11 +92,9 @@ class FestivalRequirementRequest extends FormRequest
             'options' => ['sometimes', 'array'],
             'options.*.value' => ['required', 'string', 'max:100', 'distinct'],
             'options.*.label' => ['required', 'string', 'max:255'],
-            'options.*.price_cents' => ['nullable', 'integer', 'min:0'],
+            'options.*.price' => ['nullable', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'pricing_mode' => ['required', Rule::in(['none', 'flat_when_true', 'per_unit', 'option_prices'])],
-            'price_amount_cents' => ['nullable', 'integer', 'min:0'],
-            'option_prices' => ['sometimes', 'array'],
-            'option_prices.*' => ['integer', 'min:0'],
+            'price_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'stage' => ['required', Rule::in(['qualification', 'final'])],
             'due_at' => ['nullable', 'date'],
             'allowed_extensions' => ['sometimes', 'array'],

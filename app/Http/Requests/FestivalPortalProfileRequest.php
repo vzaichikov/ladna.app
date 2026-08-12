@@ -29,27 +29,34 @@ class FestivalPortalProfileRequest extends FormRequest
             'role' => ['prohibited'],
             'account_id' => ['prohibited'],
             'google_id' => ['prohibited'],
-            'registrant_type' => [Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)],
+            'registrant_type' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser?->registrant_type))],
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'patronymic' => ['nullable', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'email_normalized' => [
+            'stage_name' => ['nullable', 'string', 'max:255'],
+            'date_of_birth' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant && $this->input('registrant_type') === FestivalRegistrantType::AdultAthlete->value), 'nullable', 'date', 'before_or_equal:today'],
+            'email' => [
                 'required',
+                'email',
+                'max:255',
                 Rule::unique((new FestivalPortalUser)->getTable(), 'email_normalized')
                     ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0))
                     ->ignore($portalUser?->id ?? 0),
             ],
-            'phone' => [Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:50'],
-            'phone_normalized' => [
+            'email_normalized' => ['required'],
+            'phone' => [
+                Rule::requiredIf($role === FestivalPortalRole::Registrant),
                 'nullable',
+                'string',
+                'max:50',
                 Rule::unique((new FestivalPortalUser)->getTable(), 'phone_normalized')
                     ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0))
                     ->ignore($portalUser?->id ?? 0),
             ],
-            'city' => [Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
-            'studio_name' => [Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
-            'instagram_url' => ['nullable', 'url:http,https', 'max:2048'],
+            'phone_normalized' => ['nullable'],
+            'city' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
+            'studio_name' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
+            'instagram_url' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), 'nullable', 'url:http,https', 'max:2048'],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
         ];

@@ -6,6 +6,7 @@ use App\Actions\Festivals\ReassignFestivalEntryCategory;
 use App\Actions\Festivals\ReviewFestivalEntryStep;
 use App\Actions\Festivals\StoreFestivalResponse;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
+use App\Enums\FestivalEntryStepStatus;
 use App\Http\Requests\FestivalEntryCategoryReassignmentRequest;
 use App\Http\Requests\FestivalEntryStepRequest;
 use App\Http\Requests\FestivalEntryStepReviewRequest;
@@ -17,6 +18,7 @@ use App\Models\FestivalEntryStep;
 use App\Models\FestivalPortalUser;
 use App\Support\Festivals\FestivalEntryWorkflowState;
 use App\Support\Payments\PaymentGatewayRegistry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -40,12 +42,29 @@ class FestivalEntryStepController extends Controller
         ]);
     }
 
-    public function storeResponse(FestivalEntryStepRequest $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryStep $festivalEntryStep, FestivalEntryRequirement $festivalEntryRequirement, StoreFestivalResponse $store): RedirectResponse
+    public function storeResponse(FestivalEntryStepRequest $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryStep $festivalEntryStep, FestivalEntryRequirement $festivalEntryRequirement, StoreFestivalResponse $store): JsonResponse|RedirectResponse
     {
         [, $portalUser] = $this->portalContext($request, $accountSlug);
         $this->assertPortalEntry($festivalEntry, $festivalEntryStep, $portalUser);
         abort_unless($festivalEntryRequirement->festival_entry_step_id === $festivalEntryStep->id, 404);
         $store->execute($festivalEntryRequirement, $portalUser, $request->input('value'));
+
+        if ($request->expectsJson()) {
+            $festivalEntryRequirement->refresh()->load(['definition', 'participant', 'submissions']);
+
+            return response()->json([
+                'message' => __('app.festival_response_saved'),
+                'requirement_id' => $festivalEntryRequirement->id,
+                'requirement_html' => view('festivals.portal._requirement-card', [
+                    'account' => $request->attributes->get('festivalAccount'),
+                    'portalUser' => $portalUser,
+                    'entry' => $festivalEntry,
+                    'selectedStep' => $festivalEntryStep,
+                    'selectedState' => ['mutable' => true],
+                    'requirement' => $festivalEntryRequirement,
+                ])->render(),
+            ]);
+        }
 
         return back()->with('status', __('app.festival_response_saved'));
     }
@@ -59,21 +78,77 @@ class FestivalEntryStepController extends Controller
         return redirect()->route('festival.portal.entries.show', [$accountSlug, $festivalEntry])->with('status', __('app.festival_step_submitted'));
     }
 
-    public function review(FestivalEntryStepReviewRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, FestivalEntryStep $festivalEntryStep, ReviewFestivalEntryStep $review): RedirectResponse
+    public function review(FestivalEntryStepReviewRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, FestivalEntryStep $festivalEntryStep, ReviewFestivalEntryStep $review): JsonResponse|RedirectResponse
     {
         abort_unless($festivalEdition->account_id === $account->id && $festivalEntry->festival_edition_id === $festivalEdition->id && $festivalEntryStep->festival_entry_id === $festivalEntry->id, 404);
         $data = $request->validated();
         $review->execute($festivalEntryStep, $request->user(), $data['decision'], $data['comment'] ?? null, $data['correction_due_at'] ?? null, $data['requirement_notes'] ?? []);
 
+        if ($request->expectsJson()) {
+            $festivalEntry->refresh()->load('steps.workflowStep');
+            $currentStep = $festivalEntry->steps->first(
+                fn (FestivalEntryStep $step): bool => $step->status !== FestivalEntryStepStatus::Approved,
+            );
+            $fragments = [
+                view('festivals.staff._application-step-review', [
+                    'account' => $account,
+                    'edition' => $festivalEdition,
+                    'entry' => $festivalEntry,
+                    'currentStep' => $currentStep,
+                ])->render(),
+            ];
+
+            if ($request->user()?->can('manageFestivalFinance', $account)) {
+                $festivalEntry->load('charges.paymentAttempts');
+                $fragments[] = view('festivals.staff._application-charges', [
+                    'account' => $account,
+                    'edition' => $festivalEdition,
+                    'entry' => $festivalEntry,
+                ])->render();
+            }
+
+            return response()->json([
+                'message' => __('app.festival_step_reviewed'),
+                'fragments_html' => $fragments,
+            ]);
+        }
+
         return back()->with('status', __('app.festival_step_reviewed'));
     }
 
-    public function reassignCategory(FestivalEntryCategoryReassignmentRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, ReassignFestivalEntryCategory $reassign): RedirectResponse
+    public function reassignCategory(FestivalEntryCategoryReassignmentRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, ReassignFestivalEntryCategory $reassign): JsonResponse|RedirectResponse
     {
         abort_unless($festivalEdition->account_id === $account->id && $festivalEntry->festival_edition_id === $festivalEdition->id, 404);
         $data = $request->validated();
         $category = $festivalEdition->categories()->whereKey($data['festival_category_id'])->firstOrFail();
-        $reassign->execute($festivalEntry, $category, $request->user(), $data['reason']);
+        $festivalEntry = $reassign->execute($festivalEntry, $category, $request->user(), $data['reason']);
+
+        if ($request->expectsJson()) {
+            $festivalEntry->load('category.direction');
+            $fragments = [
+                view('festivals.staff._application-category-review', [
+                    'account' => $account,
+                    'edition' => $festivalEdition,
+                    'entry' => $festivalEntry,
+                    'categories' => $festivalEdition->categories()->with('direction')->orderBy('name')->get(),
+                    'canManageRegistrations' => true,
+                ])->render(),
+            ];
+
+            if ($request->user()?->can('manageFestivalFinance', $account)) {
+                $festivalEntry->load('charges.paymentAttempts');
+                $fragments[] = view('festivals.staff._application-charges', [
+                    'account' => $account,
+                    'edition' => $festivalEdition,
+                    'entry' => $festivalEntry,
+                ])->render();
+            }
+
+            return response()->json([
+                'message' => __('app.festival_category_reassigned'),
+                'fragments_html' => $fragments,
+            ]);
+        }
 
         return back()->with('status', __('app.festival_category_reassigned'));
     }

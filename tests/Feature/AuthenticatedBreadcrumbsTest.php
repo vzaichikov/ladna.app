@@ -13,6 +13,7 @@ use App\Models\FestivalPortalUser;
 use App\Models\FestivalRubric;
 use App\Models\FestivalScoreSheet;
 use App\Models\FestivalSeries;
+use App\Models\FestivalStage;
 use App\Models\Location;
 use App\Models\Trainer;
 use App\Models\User;
@@ -59,6 +60,7 @@ class AuthenticatedBreadcrumbsTest extends TestCase
             'account_id' => $account->id,
             'name' => 'Junior silk',
         ]);
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Main scene']);
         $document = FestivalDocument::query()->create([
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
@@ -137,6 +139,19 @@ class AuthenticatedBreadcrumbsTest extends TestCase
             'Categories',
             'Add: Category',
         ], array_column($this->breadcrumbItems($categoryCreate), 'label'));
+
+        foreach ([
+            'dashboard.accounts.festivals.settings.stages' => ['Festivals', $edition->title, 'Settings', 'Scenes'],
+            'dashboard.accounts.festivals.stages.create' => ['Festivals', $edition->title, 'Settings', 'Scenes', 'Add: Scene'],
+            'dashboard.accounts.festivals.stages.edit' => ['Festivals', $edition->title, 'Settings', 'Scenes', 'Edit: Main scene'],
+        ] as $routeName => $expectedLabels) {
+            $parameters = $routeName === 'dashboard.accounts.festivals.stages.edit'
+                ? [$account, $edition, $stage]
+                : [$account, $edition];
+            $response = $this->withSession(['locale' => 'en'])->actingAs($owner)->get(route($routeName, $parameters));
+            $response->assertOk();
+            $this->assertSame($expectedLabels, array_column($this->breadcrumbItems($response), 'label'));
+        }
 
         $documentEdit = $this->withSession(['locale' => 'en'])
             ->actingAs($owner)

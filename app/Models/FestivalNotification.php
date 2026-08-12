@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'festival_portal_user_id', 'festival_edition_id', 'festival_entry_id', 'type', 'channel', 'status', 'recipient_email', 'recipient_name', 'dedupe_key', 'payload', 'attempts', 'available_at', 'sent_at', 'failed_at', 'cancelled_at', 'failure_reason'])]
+#[Fillable(['account_id', 'festival_portal_user_id', 'festival_edition_id', 'festival_entry_id', 'festival_ticket_order_id', 'type', 'channel', 'status', 'recipient_email', 'recipient_phone', 'recipient_name', 'subject', 'text', 'dedupe_key', 'payload', 'attempts', 'available_at', 'sent_at', 'failed_at', 'cancelled_at', 'failure_reason'])]
 class FestivalNotification extends Model
 {
     protected $attributes = ['channel' => 'email', 'status' => 'pending', 'attempts' => 0];
@@ -17,6 +18,7 @@ class FestivalNotification extends Model
     {
         return [
             'type' => FestivalNotificationType::class,
+            'channel' => FestivalNotificationChannel::class,
             'status' => FestivalNotificationStatus::class,
             'payload' => 'array',
             'attempts' => 'integer',
@@ -25,6 +27,11 @@ class FestivalNotification extends Model
             'failed_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
     }
 
     public function portalUser(): BelongsTo
@@ -40,5 +47,10 @@ class FestivalNotification extends Model
     public function entry(): BelongsTo
     {
         return $this->belongsTo(FestivalEntry::class, 'festival_entry_id');
+    }
+
+    public function ticketOrder(): BelongsTo
+    {
+        return $this->belongsTo(FestivalTicketOrder::class, 'festival_ticket_order_id');
     }
 }

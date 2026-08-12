@@ -2,16 +2,14 @@
 
 namespace App\Mail;
 
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class FestivalPortalMail extends Mailable implements ShouldQueue
+class FestivalPortalMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /** @param array<int, string> $lines */
     public function __construct(
@@ -23,7 +21,6 @@ class FestivalPortalMail extends Mailable implements ShouldQueue
         public readonly string $messageLocale = 'uk',
     ) {
         $this->locale($messageLocale);
-        $this->afterCommit();
     }
 
     public function envelope(): Envelope

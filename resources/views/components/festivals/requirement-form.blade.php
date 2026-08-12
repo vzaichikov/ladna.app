@@ -3,7 +3,7 @@
 @php
     $editing = $requirement?->exists;
     $pricing = $requirement?->pricing ?? ['mode' => 'none'];
-    $options = collect($requirement?->options ?? [])->pad(3, ['value' => '', 'label' => ''])->take(3);
+    $options = collect(old('options', $requirement?->options ?? []))->pad(3, ['value' => '', 'label' => ''])->take(3);
 @endphp
 
 <form method="POST" action="{{ $editing ? route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]) : route('dashboard.accounts.festivals.requirements.store', [$account, $edition]) }}" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -89,9 +89,9 @@
         <x-ui.field-error name="pricing_mode" />
     </label>
     <label>
-        <span class="crm-label">{{ __('app.amount_cents') }}</span>
-        <input type="number" name="price_amount_cents" min="0" value="{{ old('price_amount_cents', $pricing['amount_cents'] ?? $pricing['unit_amount_cents'] ?? null) }}" class="crm-field">
-        <x-ui.field-error name="price_amount_cents" />
+        <span class="crm-label">{{ __('app.festival_amount', ['currency' => $account->default_currency]) }}</span>
+        <input type="number" name="price_amount" min="0" max="999999.99" step="0.01" inputmode="decimal" value="{{ old('price_amount', isset($pricing['amount_cents']) || isset($pricing['unit_amount_cents']) ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) ($pricing['amount_cents'] ?? $pricing['unit_amount_cents'])) : null) }}" class="crm-field">
+        <x-ui.field-error name="price_amount" />
     </label>
     <label>
         <span class="crm-label">{{ __('app.festival_max_file_kb') }}</span>
@@ -145,8 +145,8 @@
                         <x-ui.field-error :name="'options.'.$index.'.label'" />
                     </div>
                     <div>
-                        <input type="number" min="0" name="options[{{ $index }}][price_cents]" value="{{ data_get($pricing, 'prices.'.($option['value'] ?? '')) }}" placeholder="{{ __('app.amount_cents') }}" class="crm-field">
-                        <x-ui.field-error :name="'options.'.$index.'.price_cents'" />
+                        <input type="number" min="0" max="999999.99" step="0.01" inputmode="decimal" name="options[{{ $index }}][price]" value="{{ old('options.'.$index.'.price', data_get($pricing, 'prices.'.($option['value'] ?? '')) === null ? null : \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) data_get($pricing, 'prices.'.($option['value'] ?? '')))) }}" placeholder="{{ __('app.festival_amount', ['currency' => $account->default_currency]) }}" class="crm-field">
+                        <x-ui.field-error :name="'options.'.$index.'.price'" />
                     </div>
                 </div>
             @endforeach

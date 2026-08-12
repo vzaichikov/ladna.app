@@ -12,6 +12,7 @@ use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\Event;
+use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
 use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalContentSection;
@@ -28,6 +29,7 @@ use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalRubric;
 use App\Models\FestivalScoreSheet;
 use App\Models\FestivalSeries;
+use App\Models\FestivalStage;
 use App\Models\FestivalTariffPackage;
 use App\Models\FestivalWorkflow;
 use App\Models\FestivalWorkflowStep;
@@ -68,7 +70,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(162, $classifiedRouteNames);
+        $this->assertCount(171, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -177,6 +179,8 @@ class MultiLocationPageSmokeTest extends TestCase
             'created_by_user_id' => $owner->id,
         ]);
         $festivalEdition = FestivalEdition::factory()->for($festivalSeries)->create(['account_id' => $account->id]);
+        $festivalStage = FestivalStage::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
+        $festivalAdmissionType = FestivalAdmissionType::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
         $festivalDirection = FestivalDirection::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
         $festivalWorkflow = FestivalWorkflow::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
         $festivalWorkflowStep = FestivalWorkflowStep::factory()->for($festivalWorkflow, 'workflow')->create(['account_id' => $account->id]);
@@ -225,6 +229,9 @@ class MultiLocationPageSmokeTest extends TestCase
             'account_id' => $account->id,
             'festival_edition_id' => $festivalEdition->id,
             'festival_portal_user_id' => $festivalPortalUser->id,
+            'status' => 'accepted',
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
         ]);
         $festivalJudgeAssignment = FestivalJudgeAssignment::factory()->for($festivalEdition)->for($owner)->create(['account_id' => $account->id]);
         $festivalJudgeAssignment->categories()->attach($festivalCategory, ['account_id' => $account->id]);
@@ -256,6 +263,8 @@ class MultiLocationPageSmokeTest extends TestCase
             'customer' => $customer,
             'event' => $event,
             'festival_edition' => $festivalEdition,
+            'festival_entry' => $festivalEntry,
+            'festival_admission_type' => $festivalAdmissionType,
             'festival_category' => $festivalCategory,
             'festival_content_section' => $festivalContentSection,
             'festival_direction' => $festivalDirection,
@@ -270,6 +279,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'festival_judge_assignment' => $festivalJudgeAssignment,
             'festival_rubric' => $festivalRubric,
             'festival_score_sheet' => $festivalScoreSheet,
+            'festival_stage' => $festivalStage,
             'festival_workflow' => $festivalWorkflow,
             'festival_workflow_step' => $festivalWorkflowStep,
             'group_class_type' => $groupClassType,
@@ -466,6 +476,9 @@ class MultiLocationPageSmokeTest extends TestCase
     {
         return [
             'dashboard.accounts.festivals.applications' => 'festival_edition',
+            'dashboard.accounts.festivals.applications.show' => 'festival_entry',
+            'dashboard.accounts.festivals.admission-types.create' => 'festival_edition',
+            'dashboard.accounts.festivals.admission-types.edit' => 'festival_admission_type',
             'dashboard.accounts.festivals.communication' => 'festival_edition',
             'dashboard.accounts.festivals.edit' => 'festival_edition',
             'dashboard.accounts.festivals.judging.judges.index' => 'festival_edition',
@@ -480,8 +493,13 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.judging.score-sheets.edit' => 'festival_score_sheet',
             'dashboard.accounts.festivals.judging.results.index' => 'festival_edition',
             'dashboard.accounts.festivals.program' => 'festival_edition',
+            'dashboard.accounts.festivals.performances' => 'festival_edition',
+            'dashboard.accounts.festivals.performances.show' => 'festival_entry',
             'dashboard.accounts.festivals.scanner' => 'festival_edition',
             'dashboard.accounts.festivals.settings' => 'festival_edition',
+            'dashboard.accounts.festivals.settings.stages' => 'festival_edition',
+            'dashboard.accounts.festivals.stages.create' => 'festival_edition',
+            'dashboard.accounts.festivals.stages.edit' => 'festival_stage',
             'dashboard.accounts.festivals.settings.categories' => 'festival_edition',
             'dashboard.accounts.festivals.categories.create' => 'festival_edition',
             'dashboard.accounts.festivals.categories.edit' => 'festival_category',
@@ -535,6 +553,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.customers.export',
             'dashboard.accounts.customers.search',
             'dashboard.accounts.festivals.submissions.download',
+            'dashboard.accounts.festivals.submissions.view',
             'dashboard.accounts.festivals.judging.results.preview',
             'dashboard.accounts.people-counter-samples.image',
             'dashboard.accounts.quick-bookings.group-availability',

@@ -293,8 +293,41 @@ final class AppBreadcrumbs
             return $this->festivalJudging($request, $routeName, $account, $edition, $base);
         }
 
+        if (Str::startsWith($routeName, 'dashboard.accounts.festivals.admission-types.')) {
+            $tickets = $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+
+            if ($routeName === 'dashboard.accounts.festivals.admission-types.create') {
+                return [...$base, $tickets, $this->item(__('app.festival_add_admission_type'))];
+            }
+
+            $admissionType = $this->modelParameter($request, 'festivalAdmissionType');
+
+            return [...$base, $tickets, $this->item(__('app.breadcrumb_edit_item', ['item' => $this->modelLabel($admissionType, __('app.festival_ticket_type'))]))];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.applications.show') {
+            $entry = $this->modelParameter($request, 'festivalEntry');
+
+            return [
+                ...$base,
+                $this->item(__('app.festival_tab_applications'), route('dashboard.accounts.festivals.applications', [$account, $edition])),
+                $this->item($this->modelLabel($entry, __('app.festival_application'))),
+            ];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.performances.show') {
+            $entry = $this->modelParameter($request, 'festivalEntry');
+
+            return [
+                ...$base,
+                $this->item(__('app.festival_tab_performances'), route('dashboard.accounts.festivals.performances', [$account, $edition])),
+                $this->item($this->modelLabel($entry, __('app.festival_performance'))),
+            ];
+        }
+
         $workspaceLabels = [
             'dashboard.accounts.festivals.applications' => 'app.festival_tab_applications',
+            'dashboard.accounts.festivals.performances' => 'app.festival_tab_performances',
             'dashboard.accounts.festivals.program' => 'app.festival_tab_program',
             'dashboard.accounts.festivals.tickets' => 'app.festival_tickets',
             'dashboard.accounts.festivals.communication' => 'app.festival_tab_communication',
@@ -462,6 +495,14 @@ final class AppBreadcrumbs
 
         $settings = $this->item(__('app.festival_tab_settings'), $settingsRoute);
         $definitions = [
+            'stages' => [
+                'index' => 'dashboard.accounts.festivals.settings.stages',
+                'label' => 'app.festival_scenes',
+                'item' => 'app.festival_scene',
+                'create' => 'dashboard.accounts.festivals.stages.create',
+                'edit' => 'dashboard.accounts.festivals.stages.edit',
+                'parameter' => 'festivalStage',
+            ],
             'directions' => [
                 'index' => 'dashboard.accounts.festivals.settings.directions',
                 'label' => 'app.festival_taxonomy_directions',

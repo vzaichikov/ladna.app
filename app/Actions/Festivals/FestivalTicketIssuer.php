@@ -2,15 +2,14 @@
 
 namespace App\Actions\Festivals;
 
-use App\Mail\FestivalPortalMail;
 use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrder;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class FestivalTicketIssuer
 {
+    public function __construct(private readonly FestivalNotificationOutbox $notifications) {}
+
     public function execute(FestivalTicketOrder $order): void
     {
         $order->loadMissing(['account', 'edition', 'items']);
@@ -32,15 +31,9 @@ class FestivalTicketIssuer
             }
         }
 
-        $url = route('public.festival-orders.show', [$order->account->slug, $order->access_token_encrypted]);
-        DB::afterCommit(fn () => Mail::to($order->buyer_email)->queue(new FestivalPortalMail(
-            subjectLine: __('app.festival_tickets_issued_subject', locale: $order->locale),
-            greeting: __('app.festival_tickets_issued_greeting', ['name' => $order->buyer_name], $order->locale),
-            lines: [__('app.festival_tickets_issued_copy', ['festival' => $order->edition->title], $order->locale)],
-            actionLabel: __('app.festival_open_tickets', locale: $order->locale),
-            actionUrl: $url,
-            messageLocale: $order->locale,
-        )));
+        $this->notifications->queueForTicketOrder($order, [
+            'tickets_count' => $order->tickets()->count(),
+        ]);
     }
 
     private function uniqueCode(): string

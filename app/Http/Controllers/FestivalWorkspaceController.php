@@ -2,24 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Festivals\DeleteFestivalEntry;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
+use App\Enums\FestivalEntryStepStatus;
+use App\Enums\FestivalNotificationChannel;
+use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalTicketOrderStatus;
+use App\Enums\FestivalTicketStatus;
 use App\Models\Account;
+use App\Models\FestivalAdmissionType;
 use App\Models\FestivalAnnouncement;
 use App\Models\FestivalCategory;
-use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationSetting;
-use App\Models\FestivalTicketOrder;
+use App\Models\FestivalScheduleSlot;
+use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrderItem;
+use App\Models\User;
 use App\Support\Festivals\FestivalWorkspaceAccess;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class FestivalWorkspaceController extends Controller
@@ -31,9 +41,8 @@ class FestivalWorkspaceController extends Controller
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['registrations'] || $permissions['finance'], 403);
 
-        $entriesQuery = FestivalEntry::query()
-            ->where('festival_edition_id', $festivalEdition->id)
-            ->with('category.direction')
+        [$categories, $filters] = $this->entryIndexFilters($request, $festivalEdition, true);
+        $entries = $this->entryIndexQuery($festivalEdition, $filters, $permissions['registrations'])
             ->withCount([
                 'requirements as blocking_requirements_count' => fn ($query) => $query
                     ->whereHas('definition', fn ($query) => $query->where('is_required', true))
@@ -42,41 +51,17 @@ class FestivalWorkspaceController extends Controller
                 'scheduleSlots as performance_slots_count' => fn ($query) => $query->where('type', 'performance'),
             ])
             ->latest('submitted_at')
-            ->latest('id');
-
-        if ($permissions['registrations']) {
-            $entriesQuery->with(['portalUser', 'participants', 'steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'requirements.definition', 'requirements.participant', 'requirements.submissions']);
-        }
-
-        if ($permissions['finance']) {
-            $entriesQuery->with(['steps.charges.paymentAttempts', 'charges.paymentAttempts', 'chargeAdjustments']);
-        }
-
-        $entries = $entriesQuery->paginate(50)->withQueryString();
-        $entryStatistics = FestivalEntry::query()
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+        $entryCounts = FestivalEntry::query()
             ->where('festival_edition_id', $festivalEdition->id)
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
-            ->pluck('aggregate', 'status');
-        $categories = $festivalEdition->categories()
-            ->withCount('entries')
-            ->with('direction')
-            ->orderBy('name')
-            ->get();
-        $entryTable = (new FestivalEntry)->getTable();
-        $categoryTable = (new FestivalCategory)->getTable();
-        $directionTable = (new FestivalDirection)->getTable();
-        $directionStatistics = FestivalEntry::query()
-            ->where($entryTable.'.festival_edition_id', $festivalEdition->id)
-            ->leftJoin($categoryTable, $categoryTable.'.id', '=', $entryTable.'.festival_category_id')
-            ->leftJoin($directionTable, $directionTable.'.id', '=', $categoryTable.'.festival_direction_id')
-            ->whereNotNull($directionTable.'.name')
-            ->select($directionTable.'.name as label')
-            ->selectRaw('count(*) as aggregate')
-            ->groupBy($directionTable.'.code', $directionTable.'.name')
-            ->orderBy('label')
-            ->get()
-            ->map(fn ($row): array => ['label' => (string) $row->label, 'count' => (int) $row->aggregate]);
+            ->pluck('aggregate', 'status')
+            ->map(fn (mixed $count): int => (int) $count);
+        $entryStatistics = collect(FestivalEntryStatus::cases())
+            ->mapWithKeys(fn (FestivalEntryStatus $status): array => [$status->value => $entryCounts[$status->value] ?? 0]);
 
         return view('festivals.staff.applications', [
             'account' => $account,
@@ -84,9 +69,90 @@ class FestivalWorkspaceController extends Controller
             'workspacePermissions' => $permissions,
             'entries' => $entries,
             'categories' => $categories,
+            'filters' => $filters,
+            'hasFilters' => $filters['q'] !== '' || $filters['status'] !== '' || $filters['category'] !== '',
             'entryStatistics' => $entryStatistics,
-            'categoryStatistics' => $categories->map(fn ($category): array => ['label' => $category->name, 'count' => $category->entries_count]),
-            'directionStatistics' => $directionStatistics,
+        ]);
+    }
+
+    public function application(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, DeleteFestivalEntry $deleteEntry): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['registrations'] || $permissions['finance'], 403);
+        $this->loadApplication($festivalEntry, $festivalEdition, $permissions);
+
+        return view('festivals.staff.application', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'workspacePermissions' => $permissions,
+            'entry' => $festivalEntry,
+            'canDeleteApplication' => $permissions['manage'] && $deleteEntry->canDelete($festivalEntry),
+            'categories' => $festivalEdition->categories()->with('direction')->orderBy('name')->get(),
+            'currentStep' => $permissions['registrations']
+                ? $festivalEntry->steps->first(fn ($step): bool => $step->status !== FestivalEntryStepStatus::Approved)
+                : null,
+        ]);
+    }
+
+    public function destroyApplication(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, DeleteFestivalEntry $deleteEntry): RedirectResponse
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['manage'], 403);
+        abort_unless($festivalEntry->festival_edition_id === $festivalEdition->id, 404);
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 403);
+
+        try {
+            $deleteEntry->execute($festivalEntry, $actor);
+        } catch (QueryException $exception) {
+            if (($exception->errorInfo[0] ?? null) !== '23000') {
+                throw $exception;
+            }
+
+            return back()->withErrors([
+                'festival_application' => __('app.festival_application_delete_linked'),
+            ]);
+        }
+
+        return redirect()->route('dashboard.accounts.festivals.applications', [$account, $festivalEdition])
+            ->with('status', __('app.festival_application_deleted'));
+    }
+
+    public function performances(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['registrations'], 403);
+        [$categories, $filters] = $this->entryIndexFilters($request, $festivalEdition);
+        $entries = $this->entryIndexQuery($festivalEdition, $filters, true)
+            ->where('status', FestivalEntryStatus::Accepted->value)
+            ->latest('accepted_at')
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('festivals.staff.performances', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'workspacePermissions' => $permissions,
+            'entries' => $entries,
+            'categories' => $categories,
+            'filters' => $filters,
+            'hasFilters' => $filters['q'] !== '' || $filters['category'] !== '',
+        ]);
+    }
+
+    public function performance(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['registrations'], 403);
+        abort_unless($festivalEntry->festival_edition_id === $festivalEdition->id && $festivalEntry->status === FestivalEntryStatus::Accepted, 404);
+        $this->loadApplication($festivalEntry, $festivalEdition, $permissions);
+
+        return view('festivals.staff.performance', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'workspacePermissions' => $permissions,
+            'entry' => $festivalEntry,
         ]);
     }
 
@@ -95,17 +161,30 @@ class FestivalWorkspaceController extends Controller
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['schedule'], 403);
 
-        $festivalEdition->load([
-            'stages' => fn (HasMany $query) => $query->with(['slots' => fn (HasMany $query) => $query->with('entry')->orderBy('starts_at')]),
-        ]);
+        $stages = $festivalEdition->stages()->withCount('slots')->get();
+        $activeStage = $request->filled('scene')
+            ? $stages->firstWhere('id', $request->integer('scene'))
+            : $stages->first();
+        abort_if($request->filled('scene') && ! $activeStage, 404);
+        $programItems = $activeStage
+            ? FestivalScheduleSlot::query()
+                ->where('festival_stage_id', $activeStage->id)
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->with(['entry:id,festival_edition_id,code,entry_name', 'category:id,festival_edition_id,name'])
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+            : collect();
         $entries = FestivalEntry::query()
             ->where('festival_edition_id', $festivalEdition->id)
             ->whereIn('status', [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value, FestivalEntryStatus::Accepted->value])
             ->orderBy('entry_name')
             ->get(['id', 'festival_edition_id', 'code', 'entry_name']);
+        $categories = $festivalEdition->categories()->orderBy('name')->get(['id', 'festival_edition_id', 'name']);
 
-        return view('festivals.staff.program', compact('account', 'festivalEdition', 'entries') + [
+        return view('festivals.staff.program', compact('account', 'festivalEdition', 'entries', 'categories', 'stages', 'activeStage', 'programItems') + [
             'edition' => $festivalEdition,
+            'programTree' => $this->programTree($programItems),
             'workspacePermissions' => $permissions,
         ]);
     }
@@ -114,51 +193,76 @@ class FestivalWorkspaceController extends Controller
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['finance'] || $permissions['ticket_check_in'], 403);
-
-        $admissionTypes = $festivalEdition->admissionTypes()->get();
-        $admissionTypeIds = $admissionTypes->pluck('id');
-        $activeQuantities = FestivalTicketOrderItem::query()
-            ->whereIn('festival_admission_type_id', $admissionTypeIds)
-            ->whereHas('order', fn ($query) => $query
-                ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])
-                ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
-            ->selectRaw('festival_admission_type_id, sum(quantity) as aggregate')
-            ->groupBy('festival_admission_type_id')
-            ->pluck('aggregate', 'festival_admission_type_id');
-        $earlyQuantities = FestivalTicketOrderItem::query()
-            ->whereIn('festival_admission_type_id', $admissionTypeIds)
-            ->where('price_tier', 'early_bird')
-            ->whereHas('order', fn ($query) => $query
-                ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value])
-                ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
-            ->selectRaw('festival_admission_type_id, sum(quantity) as aggregate')
-            ->groupBy('festival_admission_type_id')
-            ->pluck('aggregate', 'festival_admission_type_id');
-        $admissionAvailability = $admissionTypes->mapWithKeys(function ($admissionType) use ($activeQuantities, $earlyQuantities): array {
-            $activeQuantity = (int) ($activeQuantities[$admissionType->id] ?? 0);
-            $earlySold = (int) ($earlyQuantities[$admissionType->id] ?? 0);
-            $earlyAvailable = $admissionType->early_bird_price_cents !== null
-                && (! $admissionType->early_bird_ends_at || $admissionType->early_bird_ends_at->isFuture())
-                && ($admissionType->early_bird_quota === null || $earlySold < $admissionType->early_bird_quota);
-
-            return [$admissionType->id => [
-                'remaining' => max(0, $admissionType->inventory - $activeQuantity),
-                'current_price_cents' => $earlyAvailable ? $admissionType->early_bird_price_cents : $admissionType->price_cents,
-                'price_tier' => $earlyAvailable ? 'early_bird' : 'regular',
-            ]];
-        });
+        $requestedTab = $request->query('tab');
+        $tab = $permissions['finance'] && in_array($requestedTab, ['types', 'sold'], true) ? (string) $requestedTab : 'types';
+        $revenueByCurrency = $permissions['finance']
+            ? $festivalEdition->ticketOrders()
+                ->where('status', FestivalTicketOrderStatus::Paid->value)
+                ->selectRaw('currency, sum(amount_cents) as aggregate')
+                ->groupBy('currency')
+                ->orderBy('currency')
+                ->pluck('aggregate', 'currency')
+                ->map(fn (mixed $amount): int => (int) $amount)
+            : collect();
 
         $admissionReport = [
             'paid_orders' => $permissions['finance'] ? $festivalEdition->ticketOrders()->where('status', FestivalTicketOrderStatus::Paid->value)->count() : null,
-            'revenue_cents' => $permissions['finance'] ? (int) $festivalEdition->ticketOrders()->where('status', FestivalTicketOrderStatus::Paid->value)->sum('amount_cents') : null,
+            'revenue_by_currency' => $revenueByCurrency,
             'tickets' => $festivalEdition->tickets()->count(),
             'checked_in' => $festivalEdition->tickets()->where('is_checked_in', true)->count(),
         ];
-        $orders = $permissions['finance']
-            ? FestivalTicketOrder::query()->where('festival_edition_id', $festivalEdition->id)->with('items')->withCount('tickets')->latest()->paginate(30)->withQueryString()
-            : null;
+        $admissionTypes = null;
+        $admissionAvailability = collect();
+        $tickets = null;
+        $ticketTypeOptions = collect();
+        $filters = ['q' => '', 'status' => '', 'type' => ''];
 
-        return view('festivals.staff.tickets', compact('account', 'admissionTypes', 'admissionAvailability', 'admissionReport', 'orders') + [
+        if ($permissions['finance'] && $tab === 'types') {
+            $filters = [
+                'q' => $request->string('q')->trim()->toString(),
+                'status' => in_array($request->query('status'), ['active', 'inactive'], true) ? (string) $request->query('status') : '',
+                'type' => '',
+            ];
+            $admissionTypes = FestivalAdmissionType::query()
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
+                    ->where('name', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('description', 'like', '%'.$filters['q'].'%')))
+                ->when($filters['status'] !== '', fn ($query) => $query->where('is_active', $filters['status'] === 'active'))
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->paginate(20)
+                ->withQueryString();
+
+            $admissionAvailability = $this->admissionAvailability($admissionTypes->getCollection());
+        } elseif ($permissions['finance'] && $tab === 'sold') {
+            $validTicketStatuses = collect(FestivalTicketStatus::cases())->pluck('value')->all();
+            $filters = [
+                'q' => $request->string('q')->trim()->toString(),
+                'status' => in_array($request->query('status'), $validTicketStatuses, true) ? (string) $request->query('status') : '',
+                'type' => $request->integer('type') > 0 ? (string) $request->integer('type') : '',
+            ];
+            $ticketTypeOptions = $festivalEdition->admissionTypes()->orderBy('name')->get(['id', 'festival_edition_id', 'name']);
+            $tickets = FestivalTicket::query()
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->with(['admissionType', 'orderItem', 'order.fiscalReceipt'])
+                ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
+                    ->where('code', 'like', '%'.$filters['q'].'%')
+                    ->orWhereHas('order', fn ($query) => $query
+                        ->where('order_id', 'like', '%'.$filters['q'].'%')
+                        ->orWhere('buyer_name', 'like', '%'.$filters['q'].'%')
+                        ->orWhere('buyer_email', 'like', '%'.$filters['q'].'%')
+                        ->orWhere('buyer_phone', 'like', '%'.$filters['q'].'%')
+                        ->orWhere('gateway_invoice_id', 'like', '%'.$filters['q'].'%')
+                        ->orWhere('gateway_payment_id', 'like', '%'.$filters['q'].'%'))))
+                ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+                ->when($filters['type'] !== '', fn ($query) => $query->where('festival_admission_type_id', (int) $filters['type']))
+                ->latest('id')
+                ->paginate(20)
+                ->withQueryString();
+        }
+
+        return view('festivals.staff.tickets', compact('account', 'tab', 'admissionTypes', 'admissionAvailability', 'admissionReport', 'tickets', 'ticketTypeOptions', 'filters') + [
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
         ]);
@@ -168,27 +272,185 @@ class FestivalWorkspaceController extends Controller
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['manage'], 403);
+        $requestedTab = $request->query('tab');
+        $tab = in_array($requestedTab, ['history', 'announcements', 'settings'], true) ? (string) $requestedTab : 'history';
+        $settings = collect();
+        $notificationStatistics = collect();
+        $announcements = null;
+        $notifications = null;
+        $notificationTypes = FestivalNotificationType::cases();
+        $filters = ['q' => '', 'type' => '', 'channel' => '', 'status' => ''];
 
-        $settings = FestivalNotificationSetting::query()
-            ->whereBelongsTo($account)
-            ->get()
-            ->keyBy(fn (FestivalNotificationSetting $setting): string => $setting->type->value);
-        $notificationStatistics = FestivalNotification::query()
-            ->where('festival_edition_id', $festivalEdition->id)
-            ->selectRaw('status, count(*) as aggregate')
-            ->groupBy('status')
-            ->pluck('aggregate', 'status');
+        if ($tab === 'history') {
+            $types = collect(FestivalNotificationType::cases())->pluck('value')->all();
+            $channels = collect(FestivalNotificationChannel::cases())->pluck('value')->all();
+            $statuses = collect(FestivalNotificationStatus::cases())->pluck('value')->all();
+            $filters = [
+                'q' => $request->string('q')->trim()->toString(),
+                'type' => in_array($request->query('type'), $types, true) ? (string) $request->query('type') : '',
+                'channel' => in_array($request->query('channel'), $channels, true) ? (string) $request->query('channel') : '',
+                'status' => in_array($request->query('status'), $statuses, true) ? (string) $request->query('status') : '',
+            ];
+            $notificationStatistics = FestivalNotification::query()
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->selectRaw('status, count(*) as aggregate')
+                ->groupBy('status')
+                ->pluck('aggregate', 'status');
+            $notifications = FestivalNotification::query()
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
+                    ->where('recipient_name', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('recipient_email', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('recipient_phone', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('subject', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('text', 'like', '%'.$filters['q'].'%')))
+                ->when($filters['type'] !== '', fn ($query) => $query->where('type', $filters['type']))
+                ->when($filters['channel'] !== '', fn ($query) => $query->where('channel', $filters['channel']))
+                ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+                ->latest('id')
+                ->paginate(20)
+                ->withQueryString();
+        } elseif ($tab === 'announcements') {
+            $announcements = FestivalAnnouncement::query()
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->latest('id')
+                ->paginate(20)
+                ->withQueryString();
+        } else {
+            $settings = FestivalNotificationSetting::query()
+                ->whereBelongsTo($account)
+                ->get()
+                ->keyBy(fn (FestivalNotificationSetting $setting): string => $setting->type->value);
+        }
 
         return view('festivals.staff.communication', [
             'account' => $account,
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
-            'notificationTypes' => FestivalNotificationType::cases(),
+            'tab' => $tab,
+            'notificationTypes' => $notificationTypes,
             'notificationSettings' => $settings,
             'notificationStatistics' => $notificationStatistics,
-            'announcements' => FestivalAnnouncement::query()->where('festival_edition_id', $festivalEdition->id)->latest()->paginate(20, ['*'], 'announcements_page')->withQueryString(),
-            'notifications' => FestivalNotification::query()->where('festival_edition_id', $festivalEdition->id)->latest()->paginate(30, ['*'], 'notifications_page')->withQueryString(),
+            'announcements' => $announcements,
+            'notifications' => $notifications,
+            'filters' => $filters,
         ]);
+    }
+
+    /**
+     * @param  Collection<int, FestivalAdmissionType>  $admissionTypes
+     * @return Collection<int, array{remaining: int, sold: int, held: int, current_price_cents: int, price_tier: string, locked: bool, has_history: bool}>
+     */
+    private function admissionAvailability(Collection $admissionTypes): Collection
+    {
+        $typeIds = $admissionTypes->pluck('id');
+        $quantities = fn (array $statuses, bool $pendingOnly = false) => FestivalTicketOrderItem::query()
+            ->whereIn('festival_admission_type_id', $typeIds)
+            ->whereHas('order', fn ($query) => $query
+                ->whereIn('status', $statuses)
+                ->when($pendingOnly, fn ($query) => $query->where('expires_at', '>', now())))
+            ->selectRaw('festival_admission_type_id, sum(quantity) as aggregate')
+            ->groupBy('festival_admission_type_id')
+            ->pluck('aggregate', 'festival_admission_type_id');
+        $sold = $quantities([FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value]);
+        $held = $quantities([FestivalTicketOrderStatus::Pending->value], true);
+        $early = FestivalTicketOrderItem::query()
+            ->whereIn('festival_admission_type_id', $typeIds)
+            ->where('price_tier', 'early_bird')
+            ->whereHas('order', fn ($query) => $query
+                ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])
+                ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
+            ->selectRaw('festival_admission_type_id, sum(quantity) as aggregate')
+            ->groupBy('festival_admission_type_id')
+            ->pluck('aggregate', 'festival_admission_type_id');
+        $lockedIds = FestivalTicketOrderItem::query()
+            ->whereIn('festival_admission_type_id', $typeIds)
+            ->whereHas('order', fn ($query) => $query->whereIn('status', [FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value, FestivalTicketOrderStatus::Refunded->value]))
+            ->pluck('festival_admission_type_id')
+            ->unique();
+        $historyIds = FestivalTicketOrderItem::query()->whereIn('festival_admission_type_id', $typeIds)->pluck('festival_admission_type_id')->unique();
+
+        return $admissionTypes->mapWithKeys(function (FestivalAdmissionType $type) use ($sold, $held, $early, $lockedIds, $historyIds): array {
+            $soldQuantity = (int) ($sold[$type->id] ?? 0);
+            $heldQuantity = (int) ($held[$type->id] ?? 0);
+            $earlyQuantity = (int) ($early[$type->id] ?? 0);
+            $earlyAvailable = $type->early_bird_price_cents !== null
+                && (! $type->early_bird_ends_at || $type->early_bird_ends_at->isFuture())
+                && ($type->early_bird_quota === null || $earlyQuantity < $type->early_bird_quota);
+
+            return [$type->id => [
+                'remaining' => max(0, $type->inventory - $soldQuantity - $heldQuantity),
+                'sold' => $soldQuantity,
+                'held' => $heldQuantity,
+                'current_price_cents' => $earlyAvailable ? (int) $type->early_bird_price_cents : $type->price_cents,
+                'price_tier' => $earlyAvailable ? 'early_bird' : 'regular',
+                'locked' => $lockedIds->contains($type->id),
+                'has_history' => $historyIds->contains($type->id),
+            ]];
+        });
+    }
+
+    /**
+     * @return array{Collection<int, FestivalCategory>, array{q: string, status: string, category: string}}
+     */
+    private function entryIndexFilters(Request $request, FestivalEdition $edition, bool $includeStatus = false): array
+    {
+        $categories = $edition->categories()->with('direction')->orderBy('name')->get();
+        $requestedCategory = $request->integer('category');
+        $statuses = collect(FestivalEntryStatus::cases())->pluck('value')->all();
+
+        return [$categories, [
+            'q' => $request->string('q')->trim()->toString(),
+            'status' => $includeStatus && in_array($request->query('status'), $statuses, true) ? (string) $request->query('status') : '',
+            'category' => $requestedCategory > 0 && $categories->contains('id', $requestedCategory) ? (string) $requestedCategory : '',
+        ]];
+    }
+
+    /** @param array{q: string, status: string, category: string} $filters */
+    private function entryIndexQuery(FestivalEdition $edition, array $filters, bool $includeApplicant): Builder
+    {
+        $searchTerms = preg_split('/\s+/u', $filters['q'], -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $query = FestivalEntry::query()
+            ->where('festival_edition_id', $edition->id)
+            ->when($searchTerms !== [], fn (Builder $query) => $query->where(function (Builder $query) use ($searchTerms, $includeApplicant): void {
+                foreach ($searchTerms as $term) {
+                    $search = '%'.$term.'%';
+                    $query->where(function (Builder $query) use ($search, $includeApplicant): void {
+                        $query->where('entry_name', 'like', $search)
+                            ->orWhere('act_title', 'like', $search);
+                        if ($includeApplicant) {
+                            $query->orWhereHas('portalUser', fn (Builder $query) => $query
+                                ->where('first_name', 'like', $search)
+                                ->orWhere('last_name', 'like', $search)
+                                ->orWhere('email', 'like', $search));
+                        }
+                    });
+                }
+            }))
+            ->when($filters['status'] !== '', fn (Builder $query) => $query->where('status', $filters['status']))
+            ->when($filters['category'] !== '', fn (Builder $query) => $query->where('festival_category_id', (int) $filters['category']))
+            ->with('category.direction');
+
+        if ($includeApplicant) {
+            $query->with('portalUser');
+        }
+
+        return $query;
+    }
+
+    /** @param array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} $permissions */
+    private function loadApplication(FestivalEntry $entry, FestivalEdition $edition, array $permissions): void
+    {
+        abort_unless($entry->festival_edition_id === $edition->id, 404);
+        $entry->load('category.direction');
+
+        if ($permissions['registrations']) {
+            $entry->load(['portalUser', 'participants', 'steps.workflowStep', 'requirements.definition', 'requirements.participant', 'requirements.submissions']);
+        }
+
+        if ($permissions['finance']) {
+            $entry->load(['charges.paymentAttempts', 'chargeAdjustments']);
+        }
     }
 
     /**
@@ -199,5 +461,21 @@ class FestivalWorkspaceController extends Controller
         abort_unless($edition->account_id === $account->id, 404);
 
         return $this->workspaceAccess->permissions($request->user(), $account, $edition);
+    }
+
+    /**
+     * @param  Collection<int, FestivalScheduleSlot>  $items
+     * @return list<array{item: FestivalScheduleSlot, children: array<mixed>}>
+     */
+    private function programTree(Collection $items, ?int $parentId = null): array
+    {
+        return $items
+            ->filter(fn (FestivalScheduleSlot $item): bool => $item->parent_id === $parentId)
+            ->map(fn (FestivalScheduleSlot $item): array => [
+                'item' => $item,
+                'children' => $this->programTree($items, $item->id),
+            ])
+            ->values()
+            ->all();
     }
 }

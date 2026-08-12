@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\SyncFestivalProfileParticipant;
 use App\Enums\AccountRole;
 use App\Enums\FestivalPortalRole;
 use App\Enums\StudioPermission;
@@ -114,6 +115,105 @@ class FestivalPortalUserDirectoryTest extends TestCase
         $this->assertTrue(Hash::check('secret1', (string) $portalUser->password));
     }
 
+    public function test_staff_participant_form_only_offers_supported_registration_types(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $createUrl = route('dashboard.accounts.festivals.users.create', [$account, $edition, 'registrant']);
+
+        $this->actingAs($owner)
+            ->get($createUrl)
+            ->assertOk()
+            ->assertSeeInOrder([
+                'value="adult_athlete"',
+                'value="coach"',
+            ], false)
+            ->assertDontSee('value="guardian"', false);
+
+        $this->from($createUrl)
+            ->post(route('dashboard.accounts.festivals.users.store', [$account, $edition, 'registrant']), $this->registrantPayload([
+                'registrant_type' => 'guardian',
+            ]))
+            ->assertRedirect($createUrl)
+            ->assertSessionHasErrors('registrant_type');
+    }
+
+    public function test_staff_cannot_change_an_adult_profile_to_coach(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create(['registrant_type' => 'adult_athlete']);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'is_profile_owner' => true,
+        ]);
+        $editUrl = route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser]);
+
+        $this->actingAs($owner)
+            ->from($editUrl)
+            ->put(route('dashboard.accounts.festivals.users.update', [$account, $edition, $portalUser]), $this->registrantPayload([
+                'email' => $portalUser->email,
+                'phone' => $portalUser->phone,
+                'registrant_type' => 'coach',
+                'password' => '',
+                'password_confirmation' => '',
+            ]))
+            ->assertRedirect($editUrl)
+            ->assertSessionHasErrors('registrant_type');
+
+        $this->assertSame('adult_athlete', $portalUser->refresh()->registrant_type->value);
+        $this->assertTrue($portalUser->profileParticipant->is($participant));
+    }
+
+    public function test_judge_staff_requests_reject_registrant_fields_and_sync_action_is_role_safe(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $createUrl = route('dashboard.accounts.festivals.users.create', [$account, $edition, 'judge']);
+        $hiddenRegistrantFields = [
+            'registrant_type' => 'adult_athlete',
+            'date_of_birth' => '2000-01-01',
+            'city' => 'Kyiv',
+            'studio_name' => 'Registrant Studio',
+            'instagram_url' => 'https://example.test/registrant',
+        ];
+
+        $this->actingAs($owner)
+            ->from($createUrl)
+            ->post(route('dashboard.accounts.festivals.users.store', [$account, $edition, 'judge']), [
+                'first_name' => 'Forged',
+                'last_name' => 'Judge',
+                'email' => 'forged.judge@example.test',
+                'phone' => null,
+                'locale' => 'en',
+                'password' => 'secret1',
+                'password_confirmation' => 'secret1',
+                'is_active' => 1,
+                ...$hiddenRegistrantFields,
+            ])
+            ->assertRedirect($createUrl)
+            ->assertSessionHasErrors(array_keys($hiddenRegistrantFields));
+        $this->assertDatabaseMissing('festival_portal_users', ['email_normalized' => 'forged.judge@example.test']);
+
+        $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
+        $editUrl = route('dashboard.accounts.festivals.users.edit', [$account, $edition, $judge]);
+        $this->actingAs($owner)
+            ->from($editUrl)
+            ->put(route('dashboard.accounts.festivals.users.update', [$account, $edition, $judge]), [
+                ...$this->judgePayload($judge, true),
+                ...$hiddenRegistrantFields,
+            ])
+            ->assertRedirect($editUrl)
+            ->assertSessionHasErrors(array_keys($hiddenRegistrantFields));
+
+        $judge->forceFill(['registrant_type' => 'adult_athlete'])->save();
+        $this->assertNull(app(SyncFestivalProfileParticipant::class)->execute($judge, '2000-01-01'));
+        $this->assertSame(0, $judge->participants()->count());
+    }
+
     public function test_directory_and_forms_are_account_isolated(): void
     {
         [$account, $edition] = $this->festival();
@@ -218,6 +318,34 @@ class FestivalPortalUserDirectoryTest extends TestCase
         $this->assertNull($participant->refresh()->archived_at);
         $this->assertModelExists($entry);
         $this->assertTrue($entry->participants()->whereKey($participant->id)->exists());
+    }
+
+    public function test_profile_owner_participant_is_managed_only_through_the_profile(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create(['registrant_type' => 'adult_athlete']);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'is_profile_owner' => true,
+        ]);
+        $editRoute = route('dashboard.accounts.festivals.users.participants.edit', [$account, $edition, $portalUser, $participant]);
+        $archiveRoute = route('dashboard.accounts.festivals.users.participants.archive', [$account, $edition, $portalUser, $participant]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser]))
+            ->assertOk()
+            ->assertDontSee($editRoute, false)
+            ->assertDontSee($archiveRoute, false);
+        $this->get($editRoute)->assertStatus(409);
+        $this->get($archiveRoute)->assertStatus(409);
+        $this->put(route('dashboard.accounts.festivals.users.participants.update', [$account, $edition, $portalUser, $participant]), [
+            'first_name' => 'Forged',
+            'last_name' => 'Change',
+            'date_of_birth' => '2000-01-01',
+        ])->assertStatus(409);
+        $this->patch(route('dashboard.accounts.festivals.users.participants.destroy', [$account, $edition, $portalUser, $participant]))->assertStatus(409);
     }
 
     /** @return array{Account, FestivalEdition, FestivalCategory} */

@@ -372,6 +372,7 @@ class FestivalHubTest extends TestCase
             ->assertSee(__('app.festival_public_content'))
             ->assertSee(__('app.festival_series_field_help'))
             ->assertSee(__('app.festival_rules_field_help'))
+            ->assertDontSee('name="currency"', false)
             ->assertDontSee('name="hero_image"', false)
             ->assertDontSee(__('app.festival_branding'));
 
@@ -385,6 +386,7 @@ class FestivalHubTest extends TestCase
             ->assertSee(__('app.festival_branding'))
             ->assertSee(__('app.festival_registration_status_field_help'))
             ->assertSee(__('app.festival_venue_directions_field_help'))
+            ->assertDontSee('name="currency"', false)
             ->assertDontSee('name="hero_image"', false)
             ->assertSeeInOrder([
                 'name="description_html"',
@@ -420,7 +422,7 @@ class FestivalHubTest extends TestCase
             ->assertDontSee('Unassigned Festival Sentinel');
     }
 
-    public function test_hero_image_upload_replaces_the_previous_managed_cover_safely(): void
+    public function test_desktop_and_mobile_hero_uploads_replace_their_previous_images_safely(): void
     {
         Storage::fake('public');
         [$account, $owner, $series] = $this->ownerFestival();
@@ -430,22 +432,40 @@ class FestivalHubTest extends TestCase
             'landing_template' => 'general',
             'landing_palette' => 'general',
             'hero_image' => UploadedFile::fake()->image('first-cover.png', 1600, 900),
-        ])->assertRedirect();
+            'mobile_hero_image' => UploadedFile::fake()->image('first-mobile-cover.png', 900, 1600),
+        ])->assertRedirect(route('dashboard.accounts.festivals.edit', [$account, $edition, 'tab' => 'branding']))->assertSessionHasNoErrors();
 
         $firstCover = $edition->coverMedia()->firstOrFail();
+        $firstMobileCover = $edition->mobileCoverMedia()->firstOrFail();
         Storage::disk('public')->assertExists($firstCover->path);
+        Storage::disk('public')->assertExists($firstMobileCover->path);
 
         $this->actingAs($owner)->put(route('dashboard.accounts.festivals.branding.update', [$account, $edition]), [
             'landing_template' => 'general',
             'landing_palette' => 'general',
             'hero_image' => UploadedFile::fake()->image('second-cover.jpg', 1600, 900),
-        ])->assertRedirect();
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $secondCover = $edition->coverMedia()->firstOrFail();
         $this->assertNotSame($firstCover->path, $secondCover->path);
         Storage::disk('public')->assertMissing($firstCover->path);
         Storage::disk('public')->assertExists($secondCover->path);
+        Storage::disk('public')->assertExists($firstMobileCover->path);
+        $this->assertSame($firstMobileCover->id, $edition->mobileCoverMedia()->firstOrFail()->id);
         $this->assertSame(1, $edition->media()->where('is_cover', true)->count());
+        $this->assertSame(1, $edition->media()->where('is_mobile_cover', true)->count());
+
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.branding.update', [$account, $edition]), [
+            'landing_template' => 'general',
+            'landing_palette' => 'general',
+            'mobile_hero_image' => UploadedFile::fake()->image('second-mobile-cover.webp', 900, 1600),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $secondMobileCover = $edition->mobileCoverMedia()->firstOrFail();
+        $this->assertNotSame($firstMobileCover->path, $secondMobileCover->path);
+        Storage::disk('public')->assertMissing($firstMobileCover->path);
+        Storage::disk('public')->assertExists($secondMobileCover->path);
+        Storage::disk('public')->assertExists($secondCover->path);
 
         $brandingUrl = route('dashboard.accounts.festivals.edit', [$account, $edition, 'tab' => 'branding']);
         $this->actingAs($owner)->from($brandingUrl)
@@ -458,6 +478,17 @@ class FestivalHubTest extends TestCase
             ->assertSessionHasErrors('hero_image');
         Storage::disk('public')->assertExists($secondCover->path);
         $this->assertSame($secondCover->id, $edition->coverMedia()->firstOrFail()->id);
+
+        $this->actingAs($owner)->from($brandingUrl)
+            ->put(route('dashboard.accounts.festivals.branding.update', [$account, $edition]), [
+                'landing_template' => 'general',
+                'landing_palette' => 'general',
+                'mobile_hero_image' => UploadedFile::fake()->create('unsafe-mobile.svg', 10, 'image/svg+xml'),
+            ])
+            ->assertRedirect($brandingUrl)
+            ->assertSessionHasErrors('mobile_hero_image');
+        Storage::disk('public')->assertExists($secondMobileCover->path);
+        $this->assertSame($secondMobileCover->id, $edition->mobileCoverMedia()->firstOrFail()->id);
     }
 
     /** @return array{Account, User, FestivalSeries} */
@@ -502,7 +533,6 @@ class FestivalHubTest extends TestCase
             'registration_status' => 'closed',
             'summary' => 'Festival summary',
             'timezone' => 'Europe/Kyiv',
-            'currency' => 'UAH',
             'starts_at' => now('Europe/Kyiv')->addMonth()->format('Y-m-d H:i:s'),
             'ends_at' => now('Europe/Kyiv')->addMonth()->addDay()->format('Y-m-d H:i:s'),
             'age_reference_date' => now('Europe/Kyiv')->addMonth()->toDateString(),

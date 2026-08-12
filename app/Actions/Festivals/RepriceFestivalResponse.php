@@ -6,13 +6,14 @@ use App\Enums\FestivalChargeStatus;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalSubmission;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class RepriceFestivalResponse
 {
     public function execute(FestivalEntryRequirement $requirement, FestivalSubmission $submission): void
     {
         DB::transaction(function () use ($requirement, $submission): void {
-            $requirement = FestivalEntryRequirement::query()->with(['definition', 'entry.edition'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
+            $requirement = FestivalEntryRequirement::query()->with(['definition', 'entry.account'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
             $pricing = (array) ($requirement->definition->pricing ?? []);
             $mode = $pricing['mode'] ?? 'none';
             if ($mode === 'none') {
@@ -21,7 +22,17 @@ class RepriceFestivalResponse
 
             $target = $this->targetAmount($mode, $pricing, $submission->value_json['value'] ?? null);
             $charges = $requirement->entry->charges()->where('festival_entry_requirement_id', $requirement->id)->lockForUpdate()->get();
-            $paid = (int) $charges->where('status', FestivalChargeStatus::Paid)->sum('amount_cents');
+            $currentCurrency = strtoupper($requirement->entry->account->default_currency);
+            $paidCharges = $charges->where('status', FestivalChargeStatus::Paid);
+            $hasForeignPaidCharge = $paidCharges->contains(
+                fn ($charge): bool => strtoupper((string) $charge->currency) !== $currentCurrency,
+            );
+            if ($hasForeignPaidCharge) {
+                throw ValidationException::withMessages([
+                    'value' => __('app.festival_reprice_currency_mismatch'),
+                ]);
+            }
+            $paid = (int) $paidCharges->sum('amount_cents');
             $requirement->entry->chargeAdjustments()->where('festival_entry_requirement_id', $requirement->id)->where('status', 'pending')->update(['status' => 'cancelled', 'updated_at' => now()]);
 
             foreach ($charges->whereIn('status', [FestivalChargeStatus::Pending, FestivalChargeStatus::Failed]) as $charge) {
@@ -39,7 +50,7 @@ class RepriceFestivalResponse
                     'kind' => 'response_price',
                     'name' => $requirement->definition->name,
                     'amount_cents' => $target - $paid,
-                    'currency' => $requirement->entry->edition->currency,
+                    'currency' => $currentCurrency,
                 ]);
             } elseif ($target < $paid) {
                 $requirement->entry->chargeAdjustments()->firstOrCreate(
@@ -52,7 +63,7 @@ class RepriceFestivalResponse
                         'direction' => 'refund',
                         'status' => 'pending',
                         'amount_cents' => $paid - $target,
-                        'currency' => $requirement->entry->edition->currency,
+                        'currency' => $currentCurrency,
                     ],
                 );
             }

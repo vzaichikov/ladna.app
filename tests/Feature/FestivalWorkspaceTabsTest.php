@@ -2,7 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\FestivalTicketIssuer;
+use App\Actions\Festivals\InitializeFestivalEntryWorkflow;
+use App\Actions\Festivals\StoreFestivalResponse;
+use App\Actions\Festivals\StoreFestivalSubmission;
 use App\Enums\AccountRole;
+use App\Enums\FestivalEntryStatus;
+use App\Enums\FestivalNotificationType;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
@@ -13,13 +19,19 @@ use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
+use App\Models\FestivalNotificationSetting;
+use App\Models\FestivalParticipant;
+use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalRubric;
 use App\Models\FestivalSeries;
 use App\Models\FestivalStage;
 use App\Models\FestivalTicketOrder;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FestivalWorkspaceTabsTest extends TestCase
@@ -35,6 +47,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $routes = [
             'dashboard.accounts.festivals.show' => 'festival_tab_overview',
             'dashboard.accounts.festivals.applications' => 'festival_tab_applications',
+            'dashboard.accounts.festivals.performances' => 'festival_tab_performances',
             'dashboard.accounts.festivals.program' => 'festival_tab_program',
             'dashboard.accounts.festivals.judging.judges.index' => 'festival_judges',
             'dashboard.accounts.festivals.judging.judges.create' => 'festival_judges',
@@ -43,8 +56,11 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.judging.score-sheets.index' => 'festival_score_sheets',
             'dashboard.accounts.festivals.judging.results.index' => 'festival_results',
             'dashboard.accounts.festivals.tickets' => 'festival_tab_tickets_entrance',
+            'dashboard.accounts.festivals.admission-types.create' => 'festival_tab_tickets_entrance',
             'dashboard.accounts.festivals.communication' => 'festival_tab_communication',
             'dashboard.accounts.festivals.settings' => 'festival_settings_overview',
+            'dashboard.accounts.festivals.settings.stages' => 'festival_scenes',
+            'dashboard.accounts.festivals.stages.create' => 'festival_scenes',
             'dashboard.accounts.festivals.settings.directions' => 'festival_taxonomy_directions',
             'dashboard.accounts.festivals.directions.create' => 'festival_taxonomy_directions',
             'dashboard.accounts.festivals.settings.categories' => 'festival_categories',
@@ -74,7 +90,12 @@ class FestivalWorkspaceTabsTest extends TestCase
                 ->assertSee(__('app.festival_workspace_back'))
                 ->assertSee(__('app.festival_workspace_back_to_studio'))
                 ->assertDontSee(__('app.my_studio'));
-            $expectedCurrentItems = $route === 'dashboard.accounts.festivals.edit' ? 3 : 2;
+            $expectedCurrentItems = in_array($route, [
+                'dashboard.accounts.festivals.applications',
+                'dashboard.accounts.festivals.edit',
+                'dashboard.accounts.festivals.tickets',
+                'dashboard.accounts.festivals.communication',
+            ], true) ? 3 : 2;
             $this->assertSame($expectedCurrentItems, substr_count($response->getContent(), 'aria-current="page"'), $route);
         }
 
@@ -82,6 +103,27 @@ class FestivalWorkspaceTabsTest extends TestCase
         $editResponse = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]));
         $editResponse->assertOk()->assertSee(__('app.festival_categories'));
         $this->assertSame(2, substr_count($editResponse->getContent(), 'aria-current="page"'));
+    }
+
+    public function test_festival_group_orders_overview_content_and_users_before_other_workflows(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.show', [$account, $edition]));
+        $response->assertOk();
+        $response->assertSeeInOrder([
+            __('app.festival_workspace_group_festival'),
+            __('app.festival_tab_overview'),
+            __('app.festival_content_media'),
+            __('app.festival_users'),
+            __('app.festival_workspace_group_participants'),
+        ]);
+        $this->assertSame(1, substr_count(
+            $response->getContent(),
+            'href="'.route('dashboard.accounts.festivals.settings.content', [$account, $edition]).'"',
+        ));
     }
 
     public function test_overview_links_total_categories_criteria_and_judges_for_managers(): void
@@ -136,8 +178,8 @@ class FestivalWorkspaceTabsTest extends TestCase
             'amount_cents' => 150000,
             'currency' => 'UAH',
         ]);
-        FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id]);
-        FestivalTicketOrder::factory()->for($edition)->create([
+        $admissionType = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id]);
+        $ticketOrder = FestivalTicketOrder::factory()->for($edition)->create([
             'account_id' => $account->id,
             'status' => 'paid',
             'buyer_name' => 'Finance Buyer Sentinel',
@@ -145,26 +187,57 @@ class FestivalWorkspaceTabsTest extends TestCase
             'amount_cents' => 30000,
             'paid_at' => now(),
         ]);
+        $ticketOrder->items()->create([
+            'account_id' => $account->id,
+            'festival_admission_type_id' => $admissionType->id,
+            'admission_name' => $admissionType->name,
+            'unit_price_cents' => 30000,
+            'quantity' => 1,
+            'total_cents' => 30000,
+        ]);
+        app(FestivalTicketIssuer::class)->execute($ticketOrder);
 
         $this->actingAs($registrationStaff)
             ->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))
             ->assertOk()
             ->assertSee($portalUser->email)
+            ->assertSee(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]), false)
+            ->assertSee(route('dashboard.accounts.festivals.performances', [$account, $edition]), false)
+            ->assertDontSee(__('app.festival_application_review'))
+            ->assertDontSee(__('app.festival_admission_revenue'));
+        $this->actingAs($registrationStaff)
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]))
+            ->assertOk()
             ->assertSee(__('app.festival_application_review'))
             ->assertDontSee(__('app.festival_admission_revenue'));
+        $this->actingAs($registrationStaff)
+            ->get(route('dashboard.accounts.festivals.performances', [$account, $edition]))
+            ->assertOk();
         $this->actingAs($registrationStaff)->get(route('dashboard.accounts.festivals.tickets', [$account, $edition]))->assertForbidden();
 
         $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.program', [$account, $edition]))->assertOk();
+        $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.settings', [$account, $edition]))->assertOk();
+        $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.settings.stages', [$account, $edition]))->assertOk();
         $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))->assertForbidden();
+        $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.performances', [$account, $edition]))->assertForbidden();
 
         $this->actingAs($financeStaff)
             ->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))
             ->assertOk()
-            ->assertSee('Private participation charge')
+            ->assertDontSee('Private participation charge')
             ->assertDontSee($portalUser->email)
+            ->assertDontSee(route('dashboard.accounts.festivals.performances', [$account, $edition]), false)
             ->assertDontSee(__('app.festival_application_review'));
         $this->actingAs($financeStaff)
-            ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition]))
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]))
+            ->assertOk()
+            ->assertSee('Private participation charge')
+            ->assertSee('1 500 ₴')
+            ->assertDontSee($portalUser->email)
+            ->assertDontSee(__('app.festival_application_review'));
+        $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.performances', [$account, $edition]))->assertForbidden();
+        $this->actingAs($financeStaff)
+            ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold']))
             ->assertOk()
             ->assertSee('finance-buyer-secret@example.test')
             ->assertSee(__('app.festival_admission_revenue'));
@@ -181,38 +254,355 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($checkInStaff)->get(route('dashboard.accounts.festivals.scanner', [$account, $edition]))->assertOk();
     }
 
-    public function test_applications_reports_current_directions_by_stable_identity_and_shows_live_category_rules(): void
+    public function test_ticket_and_communication_tabs_support_safe_defaults_deep_links_and_active_only_data(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'invalid']))
+            ->assertOk()
+            ->assertViewHas('tab', 'types')
+            ->assertViewHas('tickets', null);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold']))
+            ->assertOk()
+            ->assertViewHas('tab', 'sold')
+            ->assertViewHas('admissionTypes', null);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'invalid']))
+            ->assertOk()
+            ->assertViewHas('tab', 'history')
+            ->assertViewHas('announcements', null);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'announcements']))
+            ->assertOk()
+            ->assertViewHas('tab', 'announcements')
+            ->assertViewHas('notifications', null);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'settings']))
+            ->assertOk()
+            ->assertViewHas('tab', 'settings')
+            ->assertViewHas('notifications', null)
+            ->assertViewHas('announcements', null);
+    }
+
+    public function test_ticket_revenue_keeps_mixed_historical_currencies_separate(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => 'paid',
+            'amount_cents' => 150000,
+            'currency' => 'UAH',
+            'paid_at' => now(),
+        ]);
+        FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => 'paid',
+            'amount_cents' => 2500,
+            'currency' => 'USD',
+            'paid_at' => now(),
+        ]);
+
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets', [$account, $edition]));
+
+        $response->assertOk()
+            ->assertSee('1 500 ₴')
+            ->assertSee('25 $');
+        $this->assertSame([
+            'UAH' => 150000,
+            'USD' => 2500,
+        ], $response->viewData('admissionReport')['revenue_by_currency']->all());
+    }
+
+    public function test_bought_ticket_tab_paginates_real_tickets_and_preserves_search_and_filter_values(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 30]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => 'paid',
+            'buyer_name' => 'Pagination Buyer',
+            'buyer_email' => 'pagination-buyer@example.test',
+            'buyer_phone' => '+380501112233',
+            'provider' => 'monopay',
+            'gateway_payment_id' => 'festival-gateway-reference',
+            'amount_cents' => 630000,
+            'paid_at' => now(),
+            'expires_at' => null,
+        ]);
+        $order->items()->create([
+            'account_id' => $account->id,
+            'festival_admission_type_id' => $type->id,
+            'admission_name' => 'Frozen pagination admission',
+            'unit_price_cents' => 30000,
+            'quantity' => 21,
+            'total_cents' => 630000,
+        ]);
+        app(FestivalTicketIssuer::class)->execute($order);
+
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets', [
+            $account,
+            $edition,
+            'tab' => 'sold',
+            'q' => 'Pagination Buyer',
+            'type' => $type->id,
+            'status' => 'valid',
+        ]));
+
+        $response->assertOk()
+            ->assertSee('pagination-buyer@example.test')
+            ->assertSee('+380501112233')
+            ->assertSee('Frozen pagination admission')
+            ->assertSee('festival-gateway-reference')
+            ->assertSee('q=Pagination%20Buyer', false);
+        $this->assertSame(21, $response->viewData('tickets')->total());
+        $this->assertSame(20, $response->viewData('tickets')->perPage());
+    }
+
+    public function test_festival_notification_settings_keep_email_enabled_and_toggle_only_sms(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $url = route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'settings']);
+
+        $this->actingAs($owner)
+            ->from($url)
+            ->put(route('dashboard.accounts.festivals.notification-settings.update', $account), [
+                'sms' => [FestivalNotificationType::Announcement->value => '1'],
+            ])
+            ->assertRedirect($url);
+
+        $this->assertTrue(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::Announcement->value)
+            ->firstOrFail()
+            ->send_sms);
+        $this->assertFalse(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::EntrySubmitted->value)
+            ->firstOrFail()
+            ->send_sms);
+        $this->assertSame(FestivalNotificationType::cases(), FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->orderBy('id')
+            ->get()
+            ->pluck('type')
+            ->all());
+    }
+
+    public function test_admission_type_create_and_edit_pages_have_ticket_breadcrumbs_and_tenant_boundaries(): void
+    {
+        [$account, $edition] = $this->festival();
+        [$otherAccount, $otherEdition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id]);
+        $otherType = FestivalAdmissionType::factory()->for($otherEdition)->create(['account_id' => $otherAccount->id]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.admission-types.create', [$account, $edition]))
+            ->assertOk()
+            ->assertSee(__('app.festival_tickets'))
+            ->assertSee(__('app.festival_add_admission_type'));
+        $edit = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.admission-types.edit', [$account, $edition, $type]));
+        $edit->assertOk()
+            ->assertSee(__('app.festival_tickets'))
+            ->assertSee(__('app.festival_edit_admission_type'));
+        $this->assertSame(2, substr_count($edit->getContent(), 'aria-current="page"'));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.admission-types.edit', [$account, $edition, $otherType]))
+            ->assertNotFound();
+    }
+
+    public function test_applications_support_status_cards_global_counts_and_query_preserving_filters(): void
+    {
+        $this->assertSame('Заявки', trans('app.festival_applications_title', [], 'uk'));
+        $this->assertSame('Заявки за статусом', trans('app.festival_entries_by_status', [], 'uk'));
+        $this->assertSame('Заявок ще немає.', trans('app.festival_applications_empty', [], 'uk'));
+        $this->assertSame('Чекліст', trans('app.festival_requirements_open', [], 'uk'));
+
+        [$account, $edition, $firstCategory, $portalUser, $submittedEntry] = $this->festivalWithEntry();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $secondCategory = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Featured category',
+        ]);
+        $acceptedEntry = FestivalEntry::factory()->for($secondCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Featured performance',
+            'status' => FestivalEntryStatus::Accepted,
+            'submitted_at' => now()->subMinute(),
+        ]);
+        $draftEntry = FestivalEntry::factory()->for($firstCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Draft performance',
+            'status' => FestivalEntryStatus::Draft,
+        ]);
+
+        $byName = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'q' => 'Featured',
+        ]));
+        $byName->assertOk()
+            ->assertSee($acceptedEntry->entry_name)
+            ->assertDontSee($submittedEntry->entry_name)
+            ->assertViewHas('filters', fn (array $filters): bool => $filters['q'] === 'Featured')
+            ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 1);
+
+        $byStatus = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'status' => FestivalEntryStatus::Draft->value,
+        ]));
+        $byStatus->assertOk()
+            ->assertSee($draftEntry->entry_name)
+            ->assertDontSee($acceptedEntry->entry_name)
+            ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 1);
+
+        $byCategory = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'category' => $secondCategory->id,
+        ]));
+        $byCategory->assertOk()
+            ->assertSee($acceptedEntry->entry_name)
+            ->assertDontSee($draftEntry->entry_name)
+            ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 1);
+
+        $combinedUrl = route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'q' => 'Featured',
+            'category' => $secondCategory->id,
+            'status' => FestivalEntryStatus::Accepted->value,
+        ]);
+        $combined = $this->actingAs($owner)->get($combinedUrl);
+        $allStatusesUrl = route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'q' => 'Featured',
+            'category' => $secondCategory->id,
+        ]);
+        $combined->assertOk()
+            ->assertSee(__('app.festival_applications_title'))
+            ->assertSee(__('app.festival_requirements_open'))
+            ->assertSee($acceptedEntry->entry_name)
+            ->assertDontSee($draftEntry->entry_name)
+            ->assertSee($combinedUrl)
+            ->assertSee($allStatusesUrl)
+            ->assertDontSee(__('app.festival_application_statistics'))
+            ->assertDontSee(__('app.festival_entries_by_category'))
+            ->assertDontSee(__('app.festival_entries_by_direction'))
+            ->assertDontSee('crm-tab whitespace-nowrap', false)
+            ->assertSee('border-slate-200 bg-slate-50', false)
+            ->assertSee('border-stone-200 bg-stone-50 text-stone-800', false)
+            ->assertSee('border-sky-200 bg-sky-50 text-sky-900', false)
+            ->assertSee('border-amber-200 bg-amber-50 text-amber-900', false)
+            ->assertSee('border-emerald-200 bg-emerald-50 text-emerald-900', false)
+            ->assertSee('border-rose-200 bg-rose-50 text-rose-900', false)
+            ->assertSee('border-slate-300 bg-slate-100 text-slate-800', false)
+            ->assertViewHas('filters', [
+                'q' => 'Featured',
+                'status' => FestivalEntryStatus::Accepted->value,
+                'category' => (string) $secondCategory->id,
+            ])
+            ->assertViewHas('entryStatistics', function ($statistics): bool {
+                return $statistics->all() === [
+                    FestivalEntryStatus::Draft->value => 1,
+                    FestivalEntryStatus::Submitted->value => 1,
+                    FestivalEntryStatus::UnderReview->value => 0,
+                    FestivalEntryStatus::Accepted->value => 1,
+                    FestivalEntryStatus::Rejected->value => 0,
+                    FestivalEntryStatus::Withdrawn->value => 0,
+                ];
+            });
+        $this->assertSame(7, substr_count($combined->getContent(), 'data-status-card='));
+        $this->assertMatchesRegularExpression('/data-status-card="all"[^>]*>.*?<strong class="text-xl">3<\/strong>/s', $combined->getContent());
+        $this->assertMatchesRegularExpression('/data-status-card="accepted"\s+aria-current="page"/', $combined->getContent());
+        $this->assertSame(3, substr_count($combined->getContent(), 'aria-current="page"'));
+        foreach (FestivalEntryStatus::cases() as $status) {
+            $combined->assertSee(__('app.festival_entry_status_'.$status->value));
+        }
+
+        FestivalEntry::factory()->count(20)->for($firstCategory)->state(fn (): array => [
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Performer pagination '.fake()->unique()->numerify('###'),
+            'status' => FestivalEntryStatus::Submitted,
+            'submitted_at' => now()->subMinutes(2),
+        ])->create();
+        $paginated = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'q' => 'Performer',
+            'status' => FestivalEntryStatus::Submitted->value,
+            'category' => $firstCategory->id,
+        ]));
+        $paginated->assertOk()->assertViewHas('entries', fn ($entries): bool => $entries->total() === 21 && $entries->perPage() === 20);
+        $nextPageUrl = $paginated->viewData('entries')->nextPageUrl();
+        $this->assertNotNull($nextPageUrl);
+        $this->assertStringContainsString('q=Performer', $nextPageUrl);
+        $this->assertStringContainsString('status=submitted', $nextPageUrl);
+        $this->assertStringContainsString('category='.$firstCategory->id, $nextPageUrl);
+
+        $filteredEmpty = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'q' => 'No matching performance',
+        ]));
+        $filteredEmpty->assertOk()
+            ->assertSee(__('app.no_data'))
+            ->assertSee(__('app.reset_filters'))
+            ->assertViewHas('hasFilters', true);
+
+        $emptyEdition = FestivalEdition::factory()->published()->for($edition->series)->create([
+            'account_id' => $account->id,
+            'timezone' => 'Europe/Kyiv',
+        ]);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.applications', [$account, $emptyEdition]))
+            ->assertOk()
+            ->assertSee(__('app.festival_applications_empty'));
+
+        [, $otherEdition, $otherCategory] = $this->festival();
+        $invalid = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'status' => 'unknown-status',
+            'category' => $otherCategory->id,
+        ]));
+        $invalid->assertOk()
+            ->assertDontSee($otherEdition->title)
+            ->assertDontSee($otherCategory->name)
+            ->assertViewHas('filters', [
+                'q' => '',
+                'status' => '',
+                'category' => '',
+            ])
+            ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 23);
+    }
+
+    public function test_applications_show_live_direction_and_category_rules(): void
     {
         [$account, $edition, $firstCategory] = $this->festivalWithEntry();
         $registrationStaff = $this->staff($account, [StudioPermission::ManageFestivalRegistrations]);
-        $firstDirection = $firstCategory->direction()->firstOrFail();
-        $firstDirection->update(['name' => 'Shared direction', 'code' => 'shared-one']);
-        $secondDirection = FestivalDirection::factory()->for($edition)->create([
-            'account_id' => $account->id,
-            'name' => 'Shared direction',
-            'code' => 'shared-two',
-        ]);
-        $secondCategory = FestivalCategory::factory()->for($edition)->for($secondDirection)->create([
-            'account_id' => $account->id,
-            'name' => 'Second category',
-        ]);
-        $secondPortalUser = FestivalPortalUser::factory()->for($account)->create();
-        FestivalEntry::factory()->for($secondCategory)->create([
-            'account_id' => $account->id,
-            'festival_edition_id' => $edition->id,
-            'festival_portal_user_id' => $secondPortalUser->id,
-            'entry_name' => 'Second act',
-        ]);
-
-        $duplicateLabels = $this->actingAs($registrationStaff)
-            ->get(route('dashboard.accounts.festivals.applications', [$account, $edition]));
-
-        $duplicateLabels->assertOk();
-        $this->assertSame([
-            ['label' => 'Shared direction', 'count' => 1],
-            ['label' => 'Shared direction', 'count' => 1],
-        ], $duplicateLabels->viewData('directionStatistics')->values()->all());
-
         $movedDirection = FestivalDirection::factory()->for($edition)->create([
             'account_id' => $account->id,
             'name' => 'Moved direction',
@@ -227,8 +617,9 @@ class FestivalWorkspaceTabsTest extends TestCase
             'registration_closes_at' => $categoryDeadline,
         ]);
 
+        $entry = $edition->entries()->firstOrFail();
         $currentRules = $this->actingAs($registrationStaff)
-            ->get(route('dashboard.accounts.festivals.applications', [$account, $edition]));
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]));
 
         $currentRules->assertOk()
             ->assertSee('Moved direction')
@@ -238,10 +629,251 @@ class FestivalWorkspaceTabsTest extends TestCase
                 'date' => $categoryDeadline->timezone($edition->timezone)->format('d.m.Y H:i'),
                 'timezone' => $edition->timezone,
             ]));
-        $this->assertSame([
-            ['label' => 'Moved direction', 'count' => 1],
-            ['label' => 'Shared direction', 'count' => 1],
-        ], $currentRules->viewData('directionStatistics')->values()->all());
+    }
+
+    public function test_festival_manager_may_permanently_delete_only_an_application_without_payment_history(): void
+    {
+        Storage::fake('local');
+        [$account, $edition, $category, $portalUser, $entry] = $this->festivalWithEntry();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $registrationStaff = $this->staff($account, [StudioPermission::ManageFestivalRegistrations]);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
+        $entry->participants()->sync([$participant->id => ['account_id' => $account->id, 'sort_order' => 0]]);
+        $fileDefinition = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'type' => 'custom_document',
+            'stage' => 'qualification',
+            'allowed_extensions' => ['png'],
+            'allowed_mime_types' => ['image/png'],
+        ]);
+        $textDefinition = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'type' => 'custom_document',
+            'input_type' => 'short_text',
+            'name' => 'Application note',
+            'stage' => 'qualification',
+            'allowed_extensions' => [],
+            'allowed_mime_types' => [],
+        ]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
+        $submission = app(StoreFestivalSubmission::class)->execute(
+            $entry->requirements->firstWhere('festival_requirement_definition_id', $fileDefinition->id),
+            $portalUser,
+            UploadedFile::fake()->image('delete-with-application.png'),
+        );
+        $textSubmission = app(StoreFestivalResponse::class)->execute(
+            $entry->requirements->firstWhere('festival_requirement_definition_id', $textDefinition->id),
+            $portalUser,
+            'Text response without a file path',
+        );
+        $this->assertNull($textSubmission->path);
+        $applicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]);
+        $deleteUrl = route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $entry]);
+
+        $this->actingAs($registrationStaff)
+            ->get($applicationUrl)
+            ->assertOk()
+            ->assertDontSee($deleteUrl, false);
+        $this->actingAs($owner)
+            ->get($applicationUrl)
+            ->assertOk()
+            ->assertSee($deleteUrl, false)
+            ->assertSee('data-confirm-delete', false)
+            ->assertSee(__('app.festival_delete_application_title'));
+
+        $this->actingAs($owner)
+            ->delete($deleteUrl)
+            ->assertRedirect(route('dashboard.accounts.festivals.applications', [$account, $edition]))
+            ->assertSessionHas('status', __('app.festival_application_deleted'));
+        $this->assertDatabaseMissing('festival_entries', ['id' => $entry->id]);
+        $this->assertDatabaseHas('festival_activity_logs', [
+            'subject_type' => $entry->getMorphClass(),
+            'subject_id' => $entry->id,
+            'actor_user_id' => $owner->id,
+            'action' => 'entry.deleted',
+        ]);
+        Storage::disk('local')->assertMissing($submission->path);
+
+        $protectedEntry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Protected payment history',
+        ]);
+        $charge = FestivalCharge::query()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $protectedEntry->id,
+            'code' => 'FCH-DELETE-PROTECTED',
+            'kind' => 'participation',
+            'name' => 'Participation fee',
+            'amount_cents' => 50000,
+            'currency' => 'UAH',
+        ]);
+        FestivalPaymentAttempt::query()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'provider' => 'monopay',
+            'order_id' => 'FCHP-DELETE-PROTECTED',
+            'amount_cents' => $charge->amount_cents,
+            'currency' => $charge->currency,
+            'status' => 'expired',
+        ]);
+        $protectedApplicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $protectedEntry]);
+        $protectedDeleteUrl = route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $protectedEntry]);
+
+        $this->actingAs($owner)
+            ->get($protectedApplicationUrl)
+            ->assertOk()
+            ->assertDontSee($protectedDeleteUrl, false);
+        $this->actingAs($owner)
+            ->from($protectedApplicationUrl)
+            ->delete($protectedDeleteUrl)
+            ->assertRedirect($protectedApplicationUrl)
+            ->assertSessionHasErrors('festival_application');
+        $this->assertDatabaseHas('festival_entries', ['id' => $protectedEntry->id]);
+
+        $manualPaymentEntry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Protected manual payment',
+        ]);
+        FestivalCharge::query()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $manualPaymentEntry->id,
+            'code' => 'FCH-DELETE-MANUAL',
+            'kind' => 'participation',
+            'name' => 'Manual participation fee',
+            'status' => 'paid',
+            'amount_cents' => 50000,
+            'currency' => 'UAH',
+            'paid_at' => now(),
+        ]);
+        $manualApplicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $manualPaymentEntry]);
+        $manualDeleteUrl = route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $manualPaymentEntry]);
+
+        $this->actingAs($owner)
+            ->get($manualApplicationUrl)
+            ->assertOk()
+            ->assertDontSee($manualDeleteUrl, false);
+        $this->actingAs($owner)
+            ->from($manualApplicationUrl)
+            ->delete($manualDeleteUrl)
+            ->assertRedirect($manualApplicationUrl)
+            ->assertSessionHasErrors('festival_application');
+        $this->assertDatabaseHas('festival_entries', ['id' => $manualPaymentEntry->id]);
+    }
+
+    public function test_performances_list_only_fully_confirmed_entries_with_filters_and_separate_summary_and_application_pages(): void
+    {
+        [$account, $edition, $category, $portalUser, $submittedEntry] = $this->festivalWithEntry();
+        $portalUser->update(['first_name' => 'Olena', 'last_name' => 'Applicant']);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $confirmedCategory = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Confirmed category',
+        ]);
+        $confirmedEntry = FestivalEntry::factory()->for($confirmedCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Confirmed performance',
+            'status' => FestivalEntryStatus::Accepted,
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
+        ]);
+
+        $index = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.performances', [$account, $edition]));
+
+        $index->assertOk()
+            ->assertSee(__('app.festival_performances_title'))
+            ->assertSee($confirmedEntry->entry_name)
+            ->assertSee($portalUser->displayName())
+            ->assertSee($confirmedCategory->name)
+            ->assertDontSee($submittedEntry->entry_name)
+            ->assertSee(route('dashboard.accounts.festivals.performances.show', [$account, $edition, $confirmedEntry]), false)
+            ->assertSee(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $confirmedEntry]), false)
+            ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 1 && $entries->perPage() === 20);
+
+        $byApplicant = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.performances', [
+            $account,
+            $edition,
+            'q' => 'Olena Applicant',
+        ]));
+        $byApplicant->assertOk()->assertSee($confirmedEntry->entry_name)->assertViewHas('filters', [
+            'q' => 'Olena Applicant',
+            'status' => '',
+            'category' => '',
+        ]);
+
+        $byCategory = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.performances', [
+            $account,
+            $edition,
+            'category' => $confirmedCategory->id,
+        ]));
+        $byCategory->assertOk()->assertSee($confirmedEntry->entry_name)->assertViewHas('entries', fn ($entries): bool => $entries->total() === 1);
+
+        $summary = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.performances.show', [$account, $edition, $confirmedEntry]));
+        $summary->assertOk()
+            ->assertSee(__('app.festival_readonly_summary_copy'))
+            ->assertSee($confirmedEntry->entry_name)
+            ->assertSee($portalUser->displayName())
+            ->assertSee($confirmedCategory->name)
+            ->assertSee('class="mt-4 flex flex-col gap-3"', false)
+            ->assertDontSee('data-async-form', false)
+            ->assertSee(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $confirmedEntry]), false);
+
+        $application = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $confirmedEntry]));
+        $application->assertOk()
+            ->assertSee(__('app.festival_application'))
+            ->assertSee('data-festival-application-fragment-key="charges-'.$confirmedEntry->id.'"', false)
+            ->assertSee('class="mt-3 flex flex-col gap-3"', false);
+        $this->assertLessThan(
+            strpos($application->getContent(), __('app.festival_checklist')),
+            strpos($application->getContent(), __('app.festival_payments')),
+        );
+        $this->assertLessThan(
+            strpos($application->getContent(), __('app.festival_payments')),
+            strpos($application->getContent(), __('app.festival_application_review')),
+        );
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.performances.show', [$account, $edition, $submittedEntry]))
+            ->assertNotFound();
+
+        FestivalEntry::factory()->count(20)->for($confirmedCategory)->state(fn (): array => [
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Confirmed pagination '.fake()->unique()->numerify('###'),
+            'status' => FestivalEntryStatus::Accepted,
+            'accepted_at' => now()->subMinute(),
+            'registration_completed_at' => now()->subMinute(),
+        ])->create();
+        $paginated = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.performances', [
+            $account,
+            $edition,
+            'q' => 'Confirmed',
+            'category' => $confirmedCategory->id,
+        ]));
+        $paginated->assertOk()->assertViewHas('entries', fn ($entries): bool => $entries->total() === 21 && $entries->perPage() === 20);
+        $nextPageUrl = $paginated->viewData('entries')->nextPageUrl();
+        $this->assertNotNull($nextPageUrl);
+        $this->assertStringContainsString('q=Confirmed', $nextPageUrl);
+        $this->assertStringContainsString('category='.$confirmedCategory->id, $nextPageUrl);
+
+        [, , $otherCategory] = $this->festival();
+        $invalidCategory = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.performances', [
+            $account,
+            $edition,
+            'category' => $otherCategory->id,
+        ]));
+        $invalidCategory->assertOk()
+            ->assertDontSee($otherCategory->name)
+            ->assertViewHas('filters', ['q' => '', 'status' => '', 'category' => ''])
+            ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 21);
     }
 
     public function test_staff_judge_requires_an_active_assignment_for_the_edition(): void
@@ -275,6 +907,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         foreach ([
             'dashboard.accounts.festivals.show',
             'dashboard.accounts.festivals.applications',
+            'dashboard.accounts.festivals.performances',
             'dashboard.accounts.festivals.program',
             'dashboard.accounts.festivals.judging.index',
             'dashboard.accounts.festivals.judging.judges.index',
@@ -282,8 +915,11 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.judging.score-sheets.index',
             'dashboard.accounts.festivals.judging.results.index',
             'dashboard.accounts.festivals.tickets',
+            'dashboard.accounts.festivals.admission-types.create',
             'dashboard.accounts.festivals.communication',
             'dashboard.accounts.festivals.settings',
+            'dashboard.accounts.festivals.settings.stages',
+            'dashboard.accounts.festivals.stages.create',
             'dashboard.accounts.festivals.settings.directions',
             'dashboard.accounts.festivals.directions.create',
             'dashboard.accounts.festivals.settings.categories',
@@ -325,14 +961,14 @@ class FestivalWorkspaceTabsTest extends TestCase
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.stages.store', [$account, $edition]), [
             'name' => 'Second stage',
-        ])->assertRedirect(route('dashboard.accounts.festivals.program', [$account, $edition]));
+        ])->assertRedirect(route('dashboard.accounts.festivals.settings.stages', [$account, $edition]));
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), [
             'name' => 'Balcony',
             'inventory' => 20,
-            'price_cents' => 50000,
+            'price' => '500.00',
             'max_per_order' => 4,
-        ])->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition]));
+        ])->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
 
         $this->actingAs($owner)->patch(route('dashboard.accounts.festivals.entries.review', [$account, $edition, $entry]), [
             'status' => 'accepted',
@@ -342,7 +978,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.announcements.store', [$account, $edition]), [
             'subject' => 'Workflow update',
             'body' => 'The schedule is ready.',
-        ])->assertRedirect(route('dashboard.accounts.festivals.communication', [$account, $edition]));
+        ])->assertRedirect(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'announcements']));
 
         $this->assertSame($edition->id, $category->festival_edition_id);
     }

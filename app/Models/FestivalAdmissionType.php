@@ -94,4 +94,25 @@ class FestivalAdmissionType extends Model
     {
         return $this->hasMany(FestivalTicketOrderItem::class);
     }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(FestivalTicket::class);
+    }
+
+    public function hasPurchaseHistory(): bool
+    {
+        return $this->orderItems()->exists();
+    }
+
+    public function hasLockedPurchaseHistory(): bool
+    {
+        return $this->orderItems()
+            ->whereHas('order', fn ($query) => $query->whereIn('status', [
+                FestivalTicketOrderStatus::Paid->value,
+                FestivalTicketOrderStatus::PaidRequiresRefund->value,
+                FestivalTicketOrderStatus::Refunded->value,
+            ]))
+            ->exists();
+    }
 }

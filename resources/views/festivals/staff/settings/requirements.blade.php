@@ -25,7 +25,20 @@
             <div class="crm-row lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center">
                 <div><div class="flex flex-wrap items-center gap-2"><h2 class="font-semibold text-slate-950">{{ $requirement->name }}</h2>@unless ($requirement->is_active)<span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{{ __('app.inactive') }}</span>@endunless</div><p class="mt-1 text-sm text-slate-500">{{ __('app.festival_input_'.$requirement->input_type->value) }} · {{ __('app.festival_scope_'.$requirement->subject_scope->value) }}</p></div>
                 <p class="text-sm text-slate-500">{{ $requirement->workflowStep?->workflow?->name }} · {{ $requirement->workflowStep?->title }} · {{ $requirement->category?->name ?? __('app.all') }}</p>
-                <x-festivals.settings-actions :active="$requirement->is_active" :toggle-route="route('dashboard.accounts.festivals.requirements.toggle', [$account, $edition, $requirement])" :move-route="route('dashboard.accounts.festivals.requirements.move', [$account, $edition, $requirement])" :edit-route="route('dashboard.accounts.festivals.requirements.edit', [$account, $edition, $requirement])" :show-ordering="! $hasFilters" :can-move-up="$globalIndex > 1" :can-move-down="$globalIndex < $requirements->total()" />
+                <x-festivals.settings-actions
+                    :active="$requirement->is_active"
+                    :toggle-route="route('dashboard.accounts.festivals.requirements.toggle', [$account, $edition, $requirement])"
+                    :move-route="route('dashboard.accounts.festivals.requirements.move', [$account, $edition, $requirement])"
+                    :edit-route="route('dashboard.accounts.festivals.requirements.edit', [$account, $edition, $requirement])"
+                    :show-ordering="$canReorder"
+                    :can-move-up="$globalIndex > 1"
+                    :can-move-down="$globalIndex < $requirements->total()"
+                    :move-parameters="$filters['workflow_step'] > 0 ? ['ordering_scope' => 'workflow_step'] : []"
+                    :delete-route="$requirement->entry_requirements_exists ? null : route('dashboard.accounts.festivals.requirements.destroy', [$account, $edition, $requirement])"
+                    :delete-label="__('app.festival_delete_registration_field')"
+                    :delete-confirm-title="__('app.festival_delete_registration_field_confirm_title')"
+                    :delete-confirm-body="__('app.festival_delete_registration_field_confirm_body')"
+                />
             </div>
         @empty
             <x-ui.empty-state :title="$hasFilters ? __('app.no_data') : __('app.festival_registration_fields_empty')" icon="clipboard-list" class="m-5">{{ $hasFilters ? __('app.festival_filtered_empty_copy') : __('app.festival_registration_fields_empty_copy') }}</x-ui.empty-state>

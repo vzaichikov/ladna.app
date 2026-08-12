@@ -39,6 +39,6 @@ class FestivalStage extends Model
 
     public function slots(): HasMany
     {
-        return $this->hasMany(FestivalScheduleSlot::class);
+        return $this->hasMany(FestivalScheduleSlot::class)->orderBy('sort_order')->orderBy('id');
     }
 }

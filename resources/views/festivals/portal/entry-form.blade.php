@@ -1,10 +1,10 @@
-@extends('layouts.public', ['hideAppFooter' => true])
+@extends('layouts.festival-portal')
 
 @section('title', __('app.festival_performance').' - '.$edition->title)
 
 @section('content')
 <main class="min-h-screen bg-canvas px-4 py-6 sm:px-5 sm:py-8">
-    <div class="mx-auto max-w-4xl">
+    <div class="mx-auto max-w-6xl">
         @include('festivals.portal._nav')
         <header class="mt-8">
             <p class="text-sm font-semibold text-brand-700">{{ $edition->title }}</p>
@@ -22,9 +22,9 @@
 
             <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
                 <h2 class="text-xl font-semibold">{{ __('app.festival_choose_category') }}</h2>
-                <p class="mt-1 text-sm leading-6 text-slate-600">{{ $entry->exists ? __('app.festival_category_selected_copy') : __('app.festival_choose_category_copy') }}</p>
+                <p class="mt-1 text-sm leading-6 text-slate-600">{{ $entry->exists && ! $canChangeCategory ? __('app.festival_category_selected_copy') : ($entry->exists ? __('app.festival_category_change_available_copy') : __('app.festival_choose_category_copy')) }}</p>
 
-                @if($entry->exists)
+                @if($entry->exists && ! $canChangeCategory)
                     <input type="hidden" name="festival_category_id" value="{{ $entry->festival_category_id }}">
                     <article class="mt-5 rounded-2xl border border-brand-300 bg-brand-50/60 p-5">
                         <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ $entry->category->direction->name }}</p>
@@ -63,7 +63,7 @@
                                         @endphp
                                         <div class="rounded-2xl border border-stone-200 bg-white p-4 transition has-checked:border-brand-500 has-checked:bg-brand-50/60 has-focus-visible:ring-2 has-focus-visible:ring-brand-500">
                                             <div class="flex items-start gap-3">
-                                                <input id="{{ $categoryInputId }}" type="radio" name="festival_category_id" value="{{ $category->id }}" required aria-describedby="{{ $categoryDescriptionId }}" class="crm-radio mt-1" @checked((int) old('festival_category_id') === $category->id)>
+                                                <input id="{{ $categoryInputId }}" type="radio" name="festival_category_id" value="{{ $category->id }}" required aria-describedby="{{ $categoryDescriptionId }}" class="crm-radio mt-1" @checked((int) old('festival_category_id', $entry->festival_category_id) === $category->id)>
                                                 <label for="{{ $categoryInputId }}" class="min-w-0 cursor-pointer text-base font-semibold text-slate-950">{{ $category->name }}</label>
                                             </div>
                                             <div id="{{ $categoryDescriptionId }}" class="mt-3 pl-7">
@@ -103,7 +103,7 @@
             <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
                 <h2 class="text-xl font-semibold">{{ __('app.festival_performance_details') }}</h2>
                 <div class="mt-5 grid gap-5 sm:grid-cols-2">
-                    <label><span class="crm-label">{{ __('app.festival_entry_name') }}</span><input name="entry_name" value="{{ old('entry_name', $entry->entry_name) }}" required class="crm-field"></label>
+                    <label><span class="crm-label">{{ __('app.festival_entry_name') }}</span><input name="entry_name" value="{{ old('entry_name', $entry->exists ? $entry->entry_name : $portalUser->suggestedEntryName()) }}" required class="crm-field"></label>
                     <label><span class="crm-label">{{ __('app.festival_act_title') }}</span><input name="act_title" value="{{ old('act_title', $entry->act_title) }}" class="crm-field"></label>
                     <label class="sm:col-span-2"><span class="crm-label">{{ __('app.description') }}</span><textarea name="act_description" rows="4" class="crm-field">{{ old('act_description', $entry->act_description) }}</textarea></label>
                 </div>
@@ -112,11 +112,12 @@
             <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
                 <h2 class="text-xl font-semibold">{{ __('app.festival_profile_contacts') }}</h2>
                 <p class="mt-1 text-sm text-slate-500">{{ $portalUser->displayName() }} · {{ $portalUser->email }}</p>
-                <div class="mt-4 grid gap-4 sm:grid-cols-3">
-                    <label><span class="crm-label">{{ __('app.phone') }}</span><input name="profile_phone" value="{{ old('profile_phone', $portalUser->phone) }}" class="crm-field"></label>
-                    <label><span class="crm-label">{{ __('app.city') }}</span><input name="profile_city" value="{{ old('profile_city', $portalUser->city) }}" class="crm-field"></label>
-                    <label><span class="crm-label">{{ __('app.studio') }}</span><input name="profile_studio_name" value="{{ old('profile_studio_name', $portalUser->studio_name) }}" class="crm-field"></label>
-                </div>
+                <dl class="mt-4 grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
+                    <div><dt class="font-semibold text-slate-500">{{ __('app.phone') }}</dt><dd class="mt-1 text-slate-950">{{ $portalUser->phone }}</dd></div>
+                    <div><dt class="font-semibold text-slate-500">{{ __('app.city') }}</dt><dd class="mt-1 text-slate-950">{{ $portalUser->city }}</dd></div>
+                    <div><dt class="font-semibold text-slate-500">{{ __('app.studio') }}</dt><dd class="mt-1 text-slate-950">{{ $portalUser->studio_name }}</dd></div>
+                </dl>
+                <a href="{{ route('festival.portal.profile.edit', $account->slug) }}" class="mt-3 inline-flex text-sm font-semibold text-brand-700">{{ __('app.edit_profile') }}</a>
             </section>
 
             <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">

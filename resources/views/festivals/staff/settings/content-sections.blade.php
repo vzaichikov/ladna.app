@@ -24,7 +24,19 @@
             <article class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm">
                 <div class="flex items-start justify-between gap-4">
                     <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h2 class="truncate font-semibold text-slate-950" title="{{ $section->title }}">{{ $section->title }}</h2>@unless ($section->is_active)<span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{{ __('app.inactive') }}</span>@endunless</div><p class="mt-1 text-sm text-slate-500">{{ __('app.festival_visibility_'.$section->visibility) }}</p></div>
-                    <x-festivals.settings-actions :active="$section->is_active" :toggle-route="route('dashboard.accounts.festivals.content.toggle', [$account, $edition, $section])" :move-route="route('dashboard.accounts.festivals.content.move', [$account, $edition, $section])" :edit-route="route('dashboard.accounts.festivals.content.edit', [$account, $edition, $section])" :show-ordering="! $hasFilters" :can-move-up="$globalIndex > 1" :can-move-down="$globalIndex < $sections->total()" />
+                    <x-festivals.settings-actions
+                        :active="$section->is_active"
+                        :toggle-route="route('dashboard.accounts.festivals.content.toggle', [$account, $edition, $section])"
+                        :move-route="route('dashboard.accounts.festivals.content.move', [$account, $edition, $section])"
+                        :edit-route="route('dashboard.accounts.festivals.content.edit', [$account, $edition, $section])"
+                        :delete-route="route('dashboard.accounts.festivals.content.destroy', [$account, $edition, $section])"
+                        :delete-label="__('app.festival_delete_content_section')"
+                        :delete-confirm-title="__('app.festival_delete_content_section_title')"
+                        :delete-confirm-body="__('app.festival_delete_content_section_copy')"
+                        :show-ordering="! $hasFilters"
+                        :can-move-up="$globalIndex > 1"
+                        :can-move-down="$globalIndex < $sections->total()"
+                    />
                 </div>
                 @if (filled(strip_tags($section->body_html ?? '')))<p class="mt-4 line-clamp-3 text-sm leading-6 text-slate-600">{{ strip_tags($section->body_html) }}</p>@endif
             </article>

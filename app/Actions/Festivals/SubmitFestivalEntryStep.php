@@ -90,7 +90,9 @@ class SubmitFestivalEntryStep
     {
         $missing = $step->requirements
             ->contains(fn ($requirement): bool => $requirement->definition->is_required
-                && ! in_array($requirement->status, [FestivalRequirementStatus::Submitted, FestivalRequirementStatus::Accepted, FestivalRequirementStatus::Waived], true));
+                && $requirement->status !== FestivalRequirementStatus::Waived
+                && (! in_array($requirement->status, [FestivalRequirementStatus::Submitted, FestivalRequirementStatus::Accepted], true)
+                    || ! $requirement->hasSubmittedResponse()));
 
         if ($missing) {
             throw ValidationException::withMessages(['step' => __('app.festival_step_requirements_incomplete')]);

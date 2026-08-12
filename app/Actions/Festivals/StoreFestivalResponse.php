@@ -49,11 +49,10 @@ class StoreFestivalResponse
             ]);
             $locked->forceFill(['status' => FestivalRequirementStatus::Submitted, 'reviewed_at' => null, 'reviewed_by' => null, 'review_notes' => null])->save();
             $this->activity->record($submission, 'response.saved', $locked->entry->edition, $portalUser);
+            $this->reprice->execute($locked, $submission);
 
             return $submission;
         }, 3);
-
-        $this->reprice->execute($requirement, $submission);
 
         return $submission;
     }

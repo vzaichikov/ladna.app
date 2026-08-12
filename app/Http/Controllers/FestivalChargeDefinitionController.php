@@ -10,6 +10,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalWorkflowStep;
 use App\Support\Festivals\FestivalSettingsOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
+use App\Support\Payments\PaymentAmounts;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -77,7 +78,7 @@ class FestivalChargeDefinitionController extends Controller
             'account_id' => $account->id,
             'festival_edition_id' => $festivalEdition->id,
             ...$data,
-            'currency' => $festivalEdition->currency,
+            'currency' => strtoupper($account->default_currency),
             'is_active' => $data['is_active'] ?? true,
             'sort_order' => $this->settingsOrder->next(FestivalChargeDefinition::query()->where('festival_edition_id', $festivalEdition->id)),
         ]);
@@ -99,7 +100,7 @@ class FestivalChargeDefinitionController extends Controller
         $data = $this->feeData($festivalEdition, $request->validated());
         $festivalChargeDefinition->update([
             ...$data,
-            'currency' => $festivalEdition->currency,
+            'currency' => strtoupper($account->default_currency),
             'is_active' => $data['is_active'] ?? false,
         ]);
 
@@ -142,6 +143,12 @@ class FestivalChargeDefinitionController extends Controller
             ->whereKey($data['festival_workflow_step_id'])
             ->whereHas('workflow', fn ($query) => $query->where('festival_edition_id', $edition->id))
             ->exists(), 422);
+        $data['amount_cents'] = (int) PaymentAmounts::decimalToCents($data['amount']);
+        $data['additional_member_amount_cents'] = filled($data['additional_member_amount'] ?? null)
+            ? (int) PaymentAmounts::decimalToCents($data['additional_member_amount'])
+            : null;
+        unset($data['amount'], $data['additional_member_amount']);
+
         if ($data['pricing_mode'] === 'fixed') {
             $data['included_members'] = null;
             $data['additional_member_amount_cents'] = null;

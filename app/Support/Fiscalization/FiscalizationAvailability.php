@@ -11,6 +11,7 @@ use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\FestivalEditionPurchase;
+use App\Models\FestivalTicketOrder;
 use App\Models\IntegrationSetting;
 use App\Models\SmsTopUpPayment;
 use App\Support\IntegrationCatalog;
@@ -46,9 +47,9 @@ class FiscalizationAvailability
         return $this->configuredMethod(IntegrationSetting::platform());
     }
 
-    public function methodForPayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase $payment): ?IntegrationSetting
+    public function methodForPayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): ?IntegrationSetting
     {
-        if ($payment instanceof CustomerPurchase || $payment instanceof CustomerPurchaseRefund || $payment instanceof EventOrder) {
+        if ($payment instanceof CustomerPurchase || $payment instanceof CustomerPurchaseRefund || $payment instanceof EventOrder || $payment instanceof FestivalTicketOrder) {
             $account = $payment->relationLoaded('account')
                 ? $payment->account
                 : $payment->account()->first();

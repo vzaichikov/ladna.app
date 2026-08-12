@@ -10,10 +10,12 @@ use App\Enums\FestivalTicketOrderStatus;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCharge;
+use App\Models\FestivalEntry;
 use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\IntegrationSetting;
+use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -31,12 +33,23 @@ class FestivalPaymentService
         private readonly PaymentGatewayRegistry $gateways,
         private readonly FestivalTicketIssuer $tickets,
         private readonly FestivalNotificationOutbox $notifications,
+        private readonly FiscalReceiptService $fiscalReceipts,
     ) {}
 
     public function startCharge(FestivalCharge $charge, string $provider): PaymentCheckout
     {
         return DB::transaction(function () use ($charge, $provider): PaymentCheckout {
-            $charge = FestivalCharge::query()->with(['entry.portalUser', 'entry.edition.account'])->whereKey($charge->id)->lockForUpdate()->firstOrFail();
+            $entry = FestivalEntry::query()
+                ->with(['portalUser', 'edition.account'])
+                ->whereKey($charge->festival_entry_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $charge = FestivalCharge::query()
+                ->whereKey($charge->id)
+                ->where('festival_entry_id', $entry->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $charge->setRelation('entry', $entry);
             if ($charge->due_at?->isPast()) {
                 throw ValidationException::withMessages(['provider' => __('app.festival_step_deadline_expired')]);
             }
@@ -47,7 +60,11 @@ class FestivalPaymentService
                 throw ValidationException::withMessages(['provider' => __('app.festival_payment_already_pending')]);
             }
 
-            $setting = $this->setting($charge->entry->edition->account, $provider);
+            try {
+                $setting = $this->setting($charge->entry->edition->account, $provider);
+            } catch (PaymentGatewayException) {
+                throw ValidationException::withMessages(['provider' => __('app.no_payment_methods_available')]);
+            }
             $expiresAt = now()->addMinutes(30);
             if ($charge->due_at && $charge->due_at->lessThan($expiresAt)) {
                 $expiresAt = $charge->due_at;
@@ -139,6 +156,13 @@ class FestivalPaymentService
                     'paid_at' => $callback->paidAt ?? now(),
                 ])->save();
                 $this->notifications->queueForEntry($attempt->charge->entry, 'payment_paid', ['charge' => $attempt->charge->name, 'entry_code' => $attempt->charge->entry->code]);
+            } elseif ($status !== FestivalPaymentStatus::Pending
+                && ! in_array($attempt->charge->status, [FestivalChargeStatus::Paid, FestivalChargeStatus::PaidRequiresRefund], true)
+                && ! $attempt->charge->paymentAttempts()
+                    ->whereKeyNot($attempt->id)
+                    ->where('status', FestivalPaymentStatus::Pending->value)
+                    ->exists()) {
+                $attempt->charge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
             }
 
             return $attempt->refresh();
@@ -147,7 +171,8 @@ class FestivalPaymentService
 
     public function completeOrder(FestivalTicketOrder $order, PaymentCallbackResult $callback): FestivalTicketOrder
     {
-        return DB::transaction(function () use ($order, $callback): FestivalTicketOrder {
+        $becamePaid = false;
+        $completed = DB::transaction(function () use ($order, $callback, &$becamePaid): FestivalTicketOrder {
             $order = FestivalTicketOrder::query()->with(['items.admissionType', 'edition'])->whereKey($order->id)->lockForUpdate()->firstOrFail();
             $this->assertCallback($order->order_id, $order->amount_cents, $order->currency, $callback);
             if (in_array($order->status, [FestivalTicketOrderStatus::Paid, FestivalTicketOrderStatus::PaidRequiresRefund, FestivalTicketOrderStatus::Refunded], true)) {
@@ -177,6 +202,7 @@ class FestivalPaymentService
                     'failure_reason' => $capacity ? null : 'late_payment_no_inventory',
                 ])->save();
                 if ($capacity) {
+                    $becamePaid = true;
                     $this->tickets->execute($order);
                 }
 
@@ -198,6 +224,12 @@ class FestivalPaymentService
 
             return $order->refresh();
         }, 3);
+
+        if ($becamePaid) {
+            $this->fiscalReceipts->fiscalizeFestivalTicketOrder($completed);
+        }
+
+        return $completed;
     }
 
     private function setting(Account $account, string $provider): IntegrationSetting

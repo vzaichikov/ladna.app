@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Festivals\SyncFestivalProfileParticipant;
 use App\Enums\FestivalPortalRole;
 use App\Http\Requests\StoreFestivalPortalUserRequest;
 use App\Http\Requests\UpdateFestivalPortalUserRequest;
@@ -90,18 +91,24 @@ class FestivalPortalUserController extends Controller
         ]), $permissions);
     }
 
-    public function store(StoreFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, string $role): RedirectResponse
+    public function store(StoreFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, string $role, SyncFestivalProfileParticipant $syncParticipant): RedirectResponse
     {
         $portalRole = $this->role($role);
         $permissions = $this->permissions($request, $account, $festivalEdition);
         $this->authorizeRole($portalRole, $permissions);
         $data = $request->validated();
-        $portalUser = FestivalPortalUser::query()->create([
-            'account_id' => $account->id,
-            'role' => $portalRole,
-            ...Arr::except($data, ['password_confirmation']),
-            'is_active' => $data['is_active'] ?? true,
-        ]);
+        $dateOfBirth = Arr::pull($data, 'date_of_birth');
+        $portalUser = DB::transaction(function () use ($account, $portalRole, $data, $dateOfBirth, $syncParticipant): FestivalPortalUser {
+            $portalUser = FestivalPortalUser::query()->create([
+                'account_id' => $account->id,
+                'role' => $portalRole,
+                ...Arr::except($data, ['password_confirmation']),
+                'is_active' => $data['is_active'] ?? true,
+            ]);
+            $syncParticipant->execute($portalUser, $dateOfBirth);
+
+            return $portalUser;
+        }, 3);
 
         return $this->redirectToEdit($account, $festivalEdition, $portalUser);
     }
@@ -119,18 +126,19 @@ class FestivalPortalUserController extends Controller
         return $this->formView($account, $festivalEdition, $festivalPortalUser, $permissions);
     }
 
-    public function update(UpdateFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalPortalUser $festivalPortalUser): RedirectResponse
+    public function update(UpdateFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalPortalUser $festivalPortalUser, SyncFestivalProfileParticipant $syncParticipant): RedirectResponse
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         $this->assertPortalUser($account, $festivalPortalUser);
         $this->authorizeRole($festivalPortalUser->role, $permissions);
         $data = $request->validated();
+        $dateOfBirth = Arr::pull($data, 'date_of_birth');
 
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
         }
 
-        DB::transaction(function () use ($account, $festivalPortalUser, $data): void {
+        DB::transaction(function () use ($account, $festivalPortalUser, $data, $dateOfBirth, $syncParticipant): void {
             $portalUser = FestivalPortalUser::query()->whereKey($festivalPortalUser->id)->lockForUpdate()->firstOrFail();
             $this->assertPortalUser($account, $portalUser);
 
@@ -139,6 +147,7 @@ class FestivalPortalUserController extends Controller
             }
 
             $portalUser->update(Arr::except($data, ['role']));
+            $syncParticipant->execute($portalUser, $dateOfBirth);
         }, 3);
 
         return $this->redirectToEdit($account, $festivalEdition, $festivalPortalUser);
@@ -147,6 +156,8 @@ class FestivalPortalUserController extends Controller
     /** @param array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} $permissions */
     private function formView(Account $account, FestivalEdition $edition, FestivalPortalUser $portalUser, array $permissions): View
     {
+        $portalUser->loadMissing('profileParticipant');
+
         return view('festivals.staff.users.form', [
             'account' => $account,
             'edition' => $edition,

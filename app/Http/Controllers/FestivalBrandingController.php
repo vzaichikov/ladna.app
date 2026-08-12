@@ -22,6 +22,7 @@ class FestivalBrandingController extends Controller
             $request->brandingPayload(),
             $request->user(),
             $request->file('hero_image'),
+            $request->file('mobile_hero_image'),
         );
 
         return redirect()

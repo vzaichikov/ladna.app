@@ -75,10 +75,10 @@ class PublishFestivalResults
                     'published_at' => $publishedAt,
                 ]);
                 $this->notifications->queueForEntry($entry, FestivalNotificationType::ResultsPublished, [
-                    'subject' => __('app.festival_results_notification_subject'),
-                    'lines' => [__('app.festival_results_notification_copy', ['entry' => $entry->entry_name, 'rank' => $rank])],
+                    'entry_code' => $entry->code,
+                    'entry_name' => $entry->entry_name,
+                    'rank' => $rank,
                     'action_url' => route('festival.portal.entries.show', [$edition->account->slug, $entry]),
-                    'action_label' => __('app.festival_view_results'),
                 ], 'category:'.$category->id.':'.$publishedAt->toDateString());
             }
 

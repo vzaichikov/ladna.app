@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-#[Fillable(['account_id', 'festival_portal_user_id', 'first_name', 'last_name', 'patronymic', 'date_of_birth', 'notes', 'archived_at'])]
+#[Fillable(['account_id', 'festival_portal_user_id', 'is_profile_owner', 'first_name', 'last_name', 'patronymic', 'date_of_birth', 'notes', 'archived_at'])]
 class FestivalParticipant extends Model
 {
     /** @use HasFactory<FestivalParticipantFactory> */
@@ -18,7 +18,7 @@ class FestivalParticipant extends Model
 
     protected function casts(): array
     {
-        return ['date_of_birth' => 'date', 'archived_at' => 'datetime'];
+        return ['is_profile_owner' => 'boolean', 'date_of_birth' => 'date', 'archived_at' => 'datetime'];
     }
 
     public function displayName(): string

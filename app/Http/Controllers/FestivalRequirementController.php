@@ -12,8 +12,12 @@ use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalWorkflowStep;
 use App\Support\Festivals\FestivalSettingsOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
+use App\Support\Payments\PaymentAmounts;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class FestivalRequirementController extends Controller
@@ -37,6 +41,7 @@ class FestivalRequirementController extends Controller
         $requirements = FestivalRequirementDefinition::query()
             ->where('festival_edition_id', $festivalEdition->id)
             ->with(['category', 'workflowStep.workflow'])
+            ->withExists('entryRequirements')
             ->when($filters['q'] !== '', fn ($query) => $query->where('name', 'like', '%'.$filters['q'].'%'))
             ->when($filters['status'] !== '', fn ($query) => $query->where('is_active', $filters['status'] === 'active'))
             ->when($filters['category'] > 0, fn ($query) => $query->where('festival_category_id', $filters['category']))
@@ -61,6 +66,11 @@ class FestivalRequirementController extends Controller
                 || $filters['workflow_step'] > 0
                 || $filters['input_type'] !== ''
                 || $filters['scope'] !== '',
+            'canReorder' => $filters['q'] === ''
+                && $filters['status'] === ''
+                && $filters['category'] === 0
+                && $filters['input_type'] === ''
+                && $filters['scope'] === '',
             'workspacePermissions' => $permissions,
         ]);
     }
@@ -125,13 +135,62 @@ class FestivalRequirementController extends Controller
     {
         $this->authorizeManager($request, $account);
         $this->assertRequirement($account, $festivalEdition, $festivalRequirementDefinition);
-        $this->settingsOrder->move(
-            $festivalRequirementDefinition,
-            FestivalRequirementDefinition::query()->where('festival_edition_id', $festivalEdition->id),
-            $request->validated('direction'),
-        );
+        $query = FestivalRequirementDefinition::query()->where('festival_edition_id', $festivalEdition->id);
+
+        if ($request->validated('ordering_scope') === 'workflow_step') {
+            $workflowStepId = $festivalRequirementDefinition->festival_workflow_step_id;
+            abort_unless($workflowStepId !== null, 422);
+            $this->settingsOrder->moveWithin(
+                $festivalRequirementDefinition,
+                $query,
+                $request->validated('direction'),
+                fn (Model $requirement): bool => (int) $requirement->festival_workflow_step_id === (int) $workflowStepId,
+            );
+        } else {
+            $this->settingsOrder->move(
+                $festivalRequirementDefinition,
+                $query,
+                $request->validated('direction'),
+            );
+        }
 
         return back()->with('status', __('app.festival_order_saved'));
+    }
+
+    public function destroy(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalRequirementDefinition $festivalRequirementDefinition): RedirectResponse
+    {
+        $this->managerPermissions($request, $account, $festivalEdition);
+        $this->assertRequirement($account, $festivalEdition, $festivalRequirementDefinition);
+
+        try {
+            $deleted = DB::transaction(function () use ($account, $festivalEdition, $festivalRequirementDefinition): bool {
+                $requirement = FestivalRequirementDefinition::query()
+                    ->whereKey($festivalRequirementDefinition->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $this->assertRequirement($account, $festivalEdition, $requirement);
+
+                if ($requirement->entryRequirements()->exists()) {
+                    return false;
+                }
+
+                return (bool) $requirement->delete();
+            }, 3);
+        } catch (QueryException $exception) {
+            if (($exception->errorInfo[0] ?? null) !== '23000') {
+                throw $exception;
+            }
+
+            $deleted = false;
+        }
+
+        if (! $deleted) {
+            return redirect()->route('dashboard.accounts.festivals.settings.requirements', [$account, $festivalEdition])
+                ->withErrors(['festival_requirement' => __('app.festival_registration_field_delete_linked')]);
+        }
+
+        return redirect()->route('dashboard.accounts.festivals.settings.requirements', [$account, $festivalEdition])
+            ->with('status', __('app.festival_registration_field_deleted'));
     }
 
     /**
@@ -141,16 +200,29 @@ class FestivalRequirementController extends Controller
     private function requirementData(FestivalEdition $edition, array $data): array
     {
         $this->assertDependencies($edition, $data);
+        $options = collect($data['options'] ?? [])->map(function (array $option): array {
+            return [
+                'value' => $option['value'],
+                'label' => $option['label'],
+            ];
+        })->all();
+        $optionPrices = collect($data['options'] ?? [])
+            ->filter(fn (array $option): bool => filled($option['price'] ?? null))
+            ->mapWithKeys(fn (array $option): array => [
+                $option['value'] => (int) PaymentAmounts::decimalToCents($option['price']),
+            ])
+            ->all();
+        $amountCents = (int) PaymentAmounts::decimalToCents($data['price_amount'] ?? 0);
         $pricing = match ($data['pricing_mode']) {
-            'flat_when_true' => ['mode' => 'flat_when_true', 'amount_cents' => (int) ($data['price_amount_cents'] ?? 0)],
-            'per_unit' => ['mode' => 'per_unit', 'unit_amount_cents' => (int) ($data['price_amount_cents'] ?? 0)],
-            'option_prices' => ['mode' => 'option_prices', 'prices' => $data['option_prices'] ?? []],
+            'flat_when_true' => ['mode' => 'flat_when_true', 'amount_cents' => $amountCents],
+            'per_unit' => ['mode' => 'per_unit', 'unit_amount_cents' => $amountCents],
+            'option_prices' => ['mode' => 'option_prices', 'prices' => $optionPrices],
             default => ['mode' => 'none'],
         };
         $validation = ['allowed_hosts' => $data['allowed_hosts'] ?? []];
-        unset($data['pricing_mode'], $data['price_amount_cents'], $data['option_prices'], $data['allowed_hosts'], $data['sort_order']);
+        unset($data['pricing_mode'], $data['price_amount'], $data['allowed_hosts'], $data['sort_order']);
 
-        return [...$data, 'pricing' => $pricing, 'validation' => $validation];
+        return [...$data, 'options' => $options, 'pricing' => $pricing, 'validation' => $validation];
     }
 
     /** @param array<string, mixed> $data */

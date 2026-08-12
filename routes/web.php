@@ -55,6 +55,7 @@ use App\Http\Controllers\EventScannerController;
 use App\Http\Controllers\EventTicketTypeController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\FestivalAdmissionController;
+use App\Http\Controllers\FestivalAdmissionTypeController;
 use App\Http\Controllers\FestivalAnnouncementController;
 use App\Http\Controllers\FestivalBattleController;
 use App\Http\Controllers\FestivalBattleVoteController;
@@ -84,6 +85,7 @@ use App\Http\Controllers\FestivalScheduleController;
 use App\Http\Controllers\FestivalSeriesController;
 use App\Http\Controllers\FestivalSettingsController;
 use App\Http\Controllers\FestivalStaffController;
+use App\Http\Controllers\FestivalStageController;
 use App\Http\Controllers\FestivalSubmissionController;
 use App\Http\Controllers\FestivalTicketScannerController;
 use App\Http\Controllers\FestivalWorkflowController;
@@ -527,6 +529,7 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             Route::get('series/{festivalSeries:id}/edit', [FestivalSeriesController::class, 'edit'])->whereNumber('festivalSeries')->name('series.edit');
             Route::put('series/{festivalSeries:id}', [FestivalSeriesController::class, 'update'])->whereNumber('festivalSeries')->name('series.update');
             Route::put('notification-settings', [FestivalAnnouncementController::class, 'updateSettings'])->name('notification-settings.update');
+            Route::get('files/submissions/{festivalSubmission}/view', [FestivalFileController::class, 'viewSubmission'])->name('submissions.view');
             Route::get('files/submissions/{festivalSubmission}', [FestivalFileController::class, 'submission'])->name('submissions.download');
             Route::get('{festivalEdition:id}', [FestivalStaffController::class, 'show'])->whereNumber('festivalEdition')->name('show');
             Route::get('{festivalEdition:id}/users', [FestivalPortalUserController::class, 'index'])->whereNumber('festivalEdition')->name('users.index');
@@ -541,10 +544,19 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             Route::get('{festivalEdition:id}/users/{festivalPortalUser}/participants/{festivalParticipant}/archive', [FestivalPortalRosterController::class, 'archive'])->whereNumber('festivalEdition')->name('users.participants.archive');
             Route::patch('{festivalEdition:id}/users/{festivalPortalUser}/participants/{festivalParticipant}/archive', [FestivalPortalRosterController::class, 'destroy'])->whereNumber('festivalEdition')->name('users.participants.destroy');
             Route::get('{festivalEdition:id}/applications', [FestivalWorkspaceController::class, 'applications'])->whereNumber('festivalEdition')->name('applications');
+            Route::get('{festivalEdition:id}/applications/{festivalEntry}', [FestivalWorkspaceController::class, 'application'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.show');
+            Route::delete('{festivalEdition:id}/applications/{festivalEntry}', [FestivalWorkspaceController::class, 'destroyApplication'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.destroy');
+            Route::get('{festivalEdition:id}/performances', [FestivalWorkspaceController::class, 'performances'])->whereNumber('festivalEdition')->name('performances');
+            Route::get('{festivalEdition:id}/performances/{festivalEntry}', [FestivalWorkspaceController::class, 'performance'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('performances.show');
             Route::get('{festivalEdition:id}/program', [FestivalWorkspaceController::class, 'program'])->whereNumber('festivalEdition')->name('program');
             Route::get('{festivalEdition:id}/tickets', [FestivalWorkspaceController::class, 'tickets'])->whereNumber('festivalEdition')->name('tickets');
+            Route::get('{festivalEdition:id}/admission-types/create', [FestivalAdmissionTypeController::class, 'create'])->whereNumber('festivalEdition')->name('admission-types.create');
+            Route::get('{festivalEdition:id}/admission-types/{festivalAdmissionType}/edit', [FestivalAdmissionTypeController::class, 'edit'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.edit');
             Route::get('{festivalEdition:id}/communication', [FestivalWorkspaceController::class, 'communication'])->whereNumber('festivalEdition')->name('communication');
             Route::get('{festivalEdition:id}/settings', [FestivalSettingsController::class, 'overview'])->whereNumber('festivalEdition')->name('settings');
+            Route::get('{festivalEdition:id}/settings/scenes', [FestivalStageController::class, 'index'])->whereNumber('festivalEdition')->name('settings.stages');
+            Route::get('{festivalEdition:id}/settings/scenes/create', [FestivalStageController::class, 'create'])->whereNumber('festivalEdition')->name('stages.create');
+            Route::get('{festivalEdition:id}/settings/scenes/{festivalStage}/edit', [FestivalStageController::class, 'edit'])->whereNumber('festivalEdition')->name('stages.edit');
             Route::get('{festivalEdition:id}/settings/directions', [FestivalDirectionController::class, 'index'])->whereNumber('festivalEdition')->name('settings.directions');
             Route::get('{festivalEdition:id}/settings/directions/create', [FestivalDirectionController::class, 'create'])->whereNumber('festivalEdition')->name('directions.create');
             Route::get('{festivalEdition:id}/settings/directions/{festivalDirection}/edit', [FestivalDirectionController::class, 'edit'])->whereNumber('festivalEdition')->name('directions.edit');
@@ -588,6 +600,7 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             Route::put('{festivalEdition:id}/settings/content/{festivalContentSection}', [FestivalContentSectionController::class, 'update'])->whereNumber('festivalEdition')->name('content.update');
             Route::patch('{festivalEdition:id}/settings/content/{festivalContentSection}/toggle', [FestivalContentSectionController::class, 'toggle'])->whereNumber('festivalEdition')->name('content.toggle');
             Route::patch('{festivalEdition:id}/settings/content/{festivalContentSection}/move', [FestivalContentSectionController::class, 'move'])->whereNumber('festivalEdition')->name('content.move');
+            Route::delete('{festivalEdition:id}/settings/content/{festivalContentSection}', [FestivalContentSectionController::class, 'destroy'])->whereNumber('festivalEdition')->name('content.destroy');
             Route::post('{festivalEdition:id}/documents', [FestivalDocumentController::class, 'store'])->whereNumber('festivalEdition')->name('documents.store');
             Route::put('{festivalEdition:id}/settings/documents/{festivalDocument}', [FestivalDocumentController::class, 'update'])->whereNumber('festivalEdition')->name('documents.update');
             Route::patch('{festivalEdition:id}/settings/documents/{festivalDocument}/toggle', [FestivalDocumentController::class, 'toggle'])->whereNumber('festivalEdition')->name('documents.toggle');
@@ -600,6 +613,7 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             Route::put('{festivalEdition:id}/settings/requirements/{festivalRequirementDefinition}', [FestivalRequirementController::class, 'update'])->whereNumber('festivalEdition')->name('requirements.update');
             Route::patch('{festivalEdition:id}/settings/requirements/{festivalRequirementDefinition}/toggle', [FestivalRequirementController::class, 'toggle'])->whereNumber('festivalEdition')->name('requirements.toggle');
             Route::patch('{festivalEdition:id}/settings/requirements/{festivalRequirementDefinition}/move', [FestivalRequirementController::class, 'move'])->whereNumber('festivalEdition')->name('requirements.move');
+            Route::delete('{festivalEdition:id}/settings/requirements/{festivalRequirementDefinition}', [FestivalRequirementController::class, 'destroy'])->whereNumber('festivalEdition')->name('requirements.destroy');
             Route::post('{festivalEdition:id}/charge-definitions', [FestivalChargeDefinitionController::class, 'store'])->whereNumber('festivalEdition')->name('charge-definitions.store');
             Route::put('{festivalEdition:id}/settings/charge-definitions/{festivalChargeDefinition}', [FestivalChargeDefinitionController::class, 'update'])->whereNumber('festivalEdition')->name('charge-definitions.update');
             Route::patch('{festivalEdition:id}/settings/charge-definitions/{festivalChargeDefinition}/toggle', [FestivalChargeDefinitionController::class, 'toggle'])->whereNumber('festivalEdition')->name('charge-definitions.toggle');
@@ -612,8 +626,13 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             Route::put('{festivalEdition:id}/settings/workflows/{festivalWorkflow}/steps/{festivalWorkflowStep}', [FestivalWorkflowStepController::class, 'update'])->whereNumber('festivalEdition')->name('workflow-steps.update');
             Route::patch('{festivalEdition:id}/settings/workflows/{festivalWorkflow}/steps/{festivalWorkflowStep}/toggle', [FestivalWorkflowStepController::class, 'toggle'])->whereNumber('festivalEdition')->name('workflow-steps.toggle');
             Route::patch('{festivalEdition:id}/settings/workflows/{festivalWorkflow}/steps/{festivalWorkflowStep}/move', [FestivalWorkflowStepController::class, 'move'])->whereNumber('festivalEdition')->name('workflow-steps.move');
-            Route::post('{festivalEdition:id}/stages', [FestivalStaffController::class, 'storeStage'])->whereNumber('festivalEdition')->name('stages.store');
-            Route::post('{festivalEdition:id}/admission-types', [FestivalStaffController::class, 'storeAdmission'])->whereNumber('festivalEdition')->name('admission-types.store');
+            Route::post('{festivalEdition:id}/settings/scenes', [FestivalStageController::class, 'store'])->whereNumber('festivalEdition')->name('stages.store');
+            Route::put('{festivalEdition:id}/settings/scenes/{festivalStage}', [FestivalStageController::class, 'update'])->whereNumber('festivalEdition')->name('stages.update');
+            Route::patch('{festivalEdition:id}/settings/scenes/{festivalStage}/toggle', [FestivalStageController::class, 'toggle'])->whereNumber('festivalEdition')->name('stages.toggle');
+            Route::patch('{festivalEdition:id}/settings/scenes/{festivalStage}/move', [FestivalStageController::class, 'move'])->whereNumber('festivalEdition')->name('stages.move');
+            Route::post('{festivalEdition:id}/admission-types', [FestivalAdmissionTypeController::class, 'store'])->whereNumber('festivalEdition')->name('admission-types.store');
+            Route::put('{festivalEdition:id}/admission-types/{festivalAdmissionType}', [FestivalAdmissionTypeController::class, 'update'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.update');
+            Route::delete('{festivalEdition:id}/admission-types/{festivalAdmissionType}', [FestivalAdmissionTypeController::class, 'destroy'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.destroy');
             Route::patch('{festivalEdition:id}/entries/{festivalEntry}/review', [FestivalStaffController::class, 'reviewEntry'])->whereNumber('festivalEdition')->name('entries.review');
             Route::patch('{festivalEdition:id}/entries/{festivalEntry}/category', [FestivalEntryStepController::class, 'reassignCategory'])->whereNumber('festivalEdition')->name('entries.reassign-category');
             Route::patch('{festivalEdition:id}/entries/{festivalEntry}/steps/{festivalEntryStep}/review', [FestivalEntryStepController::class, 'review'])->whereNumber('festivalEdition')->name('entry-steps.review');
@@ -621,6 +640,7 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             Route::patch('{festivalEdition:id}/charges/{festivalCharge}/manual-review', [FestivalStaffController::class, 'approveManualCharge'])->whereNumber('festivalEdition')->name('charges.manual-review');
             Route::post('{festivalEdition:id}/schedule', [FestivalScheduleController::class, 'store'])->whereNumber('festivalEdition')->name('schedule.store');
             Route::put('{festivalEdition:id}/schedule/{festivalScheduleSlot}', [FestivalScheduleController::class, 'update'])->whereNumber('festivalEdition')->name('schedule.update');
+            Route::patch('{festivalEdition:id}/program/scenes/{festivalStage}/order', [FestivalScheduleController::class, 'reorder'])->whereNumber('festivalEdition')->name('schedule.reorder');
             Route::get('{festivalEdition:id}/judging', [FestivalJudgingController::class, 'index'])->whereNumber('festivalEdition')->name('judging.index');
             Route::get('{festivalEdition:id}/judging/judges', [FestivalJudgeAssignmentController::class, 'index'])->whereNumber('festivalEdition')->name('judging.judges.index');
             Route::get('{festivalEdition:id}/judging/judges/create', [FestivalJudgeAssignmentController::class, 'create'])->whereNumber('festivalEdition')->name('judging.judges.create');
@@ -1014,11 +1034,16 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
         Route::middleware([EnsureFestivalPortalRole::class.':registrant', EnsureFestivalProfileComplete::class])->group(function (): void {
             Route::get('profile', [FestivalPortalController::class, 'editProfile'])->name('profile.edit');
             Route::put('profile', [FestivalPortalController::class, 'updateProfile'])->middleware(PreventReadOnlyDemoMutations::class)->name('profile.update');
+            Route::post('profile/phone/send', [FestivalPortalController::class, 'sendProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-profile-otp'])->name('profile.phone.send');
+            Route::post('profile/phone/resend', [FestivalPortalController::class, 'resendProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-profile-otp'])->name('profile.phone.resend');
+            Route::post('profile/phone/change', [FestivalPortalController::class, 'changeProfilePhone'])->middleware(PreventReadOnlyDemoMutations::class)->name('profile.phone.change');
+            Route::post('profile/phone/verify', [FestivalPortalController::class, 'verifyProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-login'])->name('profile.phone.verify');
             Route::get('/', [FestivalPortalController::class, 'dashboard'])->name('dashboard');
             Route::get('participants', [FestivalParticipantController::class, 'index'])->name('participants.index');
             Route::post('participants', [FestivalParticipantController::class, 'store'])->middleware(PreventReadOnlyDemoMutations::class)->name('participants.store');
             Route::put('participants/{festivalParticipant}', [FestivalParticipantController::class, 'update'])->middleware(PreventReadOnlyDemoMutations::class)->name('participants.update');
             Route::delete('participants/{festivalParticipant}', [FestivalParticipantController::class, 'destroy'])->middleware(PreventReadOnlyDemoMutations::class)->name('participants.destroy');
+            Route::get('entries', [FestivalPortalController::class, 'entries'])->name('entries.index');
             Route::get('editions/{editionSlug}/entries/create', [FestivalEntryController::class, 'create'])->name('entries.create');
             Route::post('editions/{editionSlug}/entries', [FestivalEntryController::class, 'store'])->middleware(PreventReadOnlyDemoMutations::class)->name('entries.store');
             Route::get('entries/{festivalEntry}', [FestivalEntryController::class, 'show'])->name('entries.show');
@@ -1038,6 +1063,10 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
         Route::prefix('judge')->name('judge.')->middleware([EnsureFestivalPortalRole::class.':judge', EnsureFestivalProfileComplete::class])->group(function (): void {
             Route::get('profile', [FestivalPortalController::class, 'editProfile'])->name('profile.edit');
             Route::put('profile', [FestivalPortalController::class, 'updateProfile'])->middleware(PreventReadOnlyDemoMutations::class)->name('profile.update');
+            Route::post('profile/phone/send', [FestivalPortalController::class, 'sendProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-profile-otp'])->name('profile.phone.send');
+            Route::post('profile/phone/resend', [FestivalPortalController::class, 'resendProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-profile-otp'])->name('profile.phone.resend');
+            Route::post('profile/phone/change', [FestivalPortalController::class, 'changeProfilePhone'])->middleware(PreventReadOnlyDemoMutations::class)->name('profile.phone.change');
+            Route::post('profile/phone/verify', [FestivalPortalController::class, 'verifyProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-login'])->name('profile.phone.verify');
             Route::get('/', [FestivalPortalController::class, 'judgeDashboard'])->name('dashboard');
         });
 

@@ -11,6 +11,8 @@ use App\Models\FestivalContentSection;
 use App\Models\FestivalDirection;
 use App\Models\FestivalDocument;
 use App\Models\FestivalEdition;
+use App\Models\FestivalEntry;
+use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalMedia;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalSeries;
@@ -85,10 +87,12 @@ class FestivalSettingsManagementTest extends TestCase
             'festival_workflow_step_id' => $applicationStep->id,
             'kind' => 'qualification',
             'name' => 'Кваліфікаційний внесок',
-            'amount_cents' => 50000,
+            'amount' => '500.00',
             'is_active' => 1,
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.fees', [$account, $edition]));
-        $this->assertSame('UAH', FestivalChargeDefinition::query()->where('festival_edition_id', $edition->id)->firstOrFail()->currency);
+        $fee = FestivalChargeDefinition::query()->where('festival_edition_id', $edition->id)->firstOrFail();
+        $this->assertSame(50000, $fee->amount_cents);
+        $this->assertSame(strtoupper($account->default_currency), $fee->currency);
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.content.store', [$account, $edition]), [
             'title' => 'Для учасників',
@@ -96,6 +100,95 @@ class FestivalSettingsManagementTest extends TestCase
             'visibility' => 'public',
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.content.sections', [$account, $edition]));
         $this->assertSame('dlya-uchasnykiv', FestivalContentSection::query()->where('festival_edition_id', $edition->id)->firstOrFail()->key);
+    }
+
+    public function test_content_sections_use_the_rich_text_editor_and_can_be_permanently_deleted_with_tenant_guards(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $section = FestivalContentSection::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'key' => 'jury',
+            'title' => 'Jury',
+            'body_html' => '<p>Authored jury</p>',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.content.edit', [$account, $edition, $section]))
+            ->assertOk()
+            ->assertSee('data-studio-rules-editor', false);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.content.sections', [$account, $edition]))
+            ->assertOk()
+            ->assertSee(route('dashboard.accounts.festivals.content.destroy', [$account, $edition, $section]), false)
+            ->assertSee(__('app.festival_delete_content_section_title'));
+
+        $otherEdition = FestivalEdition::factory()->published()->for($edition->series)->create([
+            'account_id' => $account->id,
+        ]);
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.content.destroy', [$account, $otherEdition, $section]))
+            ->assertNotFound();
+        $this->assertModelExists($section);
+
+        [$otherAccount, $crossAccountEdition] = $this->festival();
+        $crossAccountSection = FestivalContentSection::query()->create([
+            'account_id' => $otherAccount->id,
+            'festival_edition_id' => $crossAccountEdition->id,
+            'key' => 'other-jury',
+            'title' => 'Other jury',
+        ]);
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.content.destroy', [$account, $edition, $crossAccountSection]))
+            ->assertNotFound();
+        $this->assertModelExists($crossAccountSection);
+
+        $finance = User::factory()->create();
+        $account->users()->attach($finance->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => [StudioPermission::ManageFestivalFinance->value],
+        ]);
+        $this->actingAs($finance)
+            ->delete(route('dashboard.accounts.festivals.content.destroy', [$account, $edition, $section]))
+            ->assertForbidden();
+        $this->assertModelExists($section);
+
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.content.destroy', [$account, $edition, $section]))
+            ->assertRedirect(route('dashboard.accounts.festivals.settings.content.sections', [$account, $edition]))
+            ->assertSessionHas('status', __('app.festival_content_deleted'));
+        $this->assertModelMissing($section);
+    }
+
+    public function test_media_list_previews_stored_and_external_images_through_the_resolved_url(): void
+    {
+        Storage::fake('public');
+        [$account, $edition, $owner] = $this->festival();
+        $path = 'festival-media/'.$account->id.'/'.$edition->id.'/stored-cover.png';
+        Storage::disk('public')->put($path, 'image contents');
+        $storedMedia = FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'kind' => 'image',
+            'disk' => 'public',
+            'path' => $path,
+            'external_url' => null,
+            'alt_text' => 'Stored cover',
+        ]);
+        $externalMedia = FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'kind' => 'image',
+            'external_url' => 'https://example.test/external-cover.jpg',
+            'alt_text' => 'External cover',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.content.media', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('src="'.$storedMedia->url().'"', false)
+            ->assertSee('src="'.$externalMedia->url().'"', false);
     }
 
     public function test_referenced_direction_and_workflow_cannot_be_deactivated(): void
@@ -126,6 +219,84 @@ class FestivalSettingsManagementTest extends TestCase
 
         $this->assertTrue($direction->refresh()->is_active);
         $this->assertTrue($workflow->refresh()->is_active);
+    }
+
+    public function test_fee_and_priced_requirement_forms_use_major_account_currency_amounts(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $account->update(['default_currency' => 'USD']);
+        $edition->update(['currency' => 'UAH']);
+        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
+        $step = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.charge-definitions.store', [$account, $edition]), [
+            'festival_workflow_step_id' => $step->id,
+            'kind' => 'participation',
+            'name' => 'Roster fee',
+            'amount' => '500.00',
+            'pricing_mode' => 'roster',
+            'included_members' => 2,
+            'additional_member_amount' => '12.34',
+            'due_policy' => 'fixed',
+            'is_active' => 1,
+        ])->assertSessionHasNoErrors();
+        $fee = FestivalChargeDefinition::query()->where('festival_edition_id', $edition->id)->where('name', 'Roster fee')->firstOrFail();
+        $this->assertSame(50000, $fee->amount_cents);
+        $this->assertSame(1234, $fee->additional_member_amount_cents);
+        $this->assertSame('USD', $fee->currency);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.charge-definitions.edit', [$account, $edition, $fee]))
+            ->assertOk()
+            ->assertSee('name="amount"', false)
+            ->assertSee('value="500.00"', false)
+            ->assertSee('name="additional_member_amount"', false)
+            ->assertSee('value="12.34"', false)
+            ->assertDontSee('name="amount_cents"', false)
+            ->assertDontSee('name="additional_member_amount_cents"', false);
+
+        $requirementPayload = [
+            'festival_workflow_step_id' => $step->id,
+            'type' => 'custom_document',
+            'subject_scope' => 'entry',
+            'input_type' => 'boolean',
+            'name' => 'Flat priced answer',
+            'pricing_mode' => 'flat_when_true',
+            'price_amount' => '2900.05',
+            'stage' => 'final',
+            'max_size_kb' => 20480,
+            'is_required' => 1,
+            'is_active' => 1,
+        ];
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), $requirementPayload)
+            ->assertSessionHasNoErrors();
+        $requirement = FestivalRequirementDefinition::query()->where('festival_edition_id', $edition->id)->where('name', 'Flat priced answer')->firstOrFail();
+        $this->assertSame(290005, data_get($requirement->pricing, 'amount_cents'));
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.requirements.edit', [$account, $edition, $requirement]))
+            ->assertOk()
+            ->assertSee('name="price_amount"', false)
+            ->assertSee('value="2900.05"', false)
+            ->assertDontSee('name="price_amount_cents"', false);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.charge-definitions.store', [$account, $edition]), [
+                'festival_workflow_step_id' => $step->id,
+                'kind' => 'custom',
+                'name' => 'Invalid precision fee',
+                'amount' => '1.234',
+                'pricing_mode' => 'fixed',
+                'due_policy' => 'fixed',
+            ])
+            ->assertSessionHasErrors('amount');
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), [
+                ...$requirementPayload,
+                'name' => 'Invalid negative price',
+                'price_amount' => '-0.01',
+            ])
+            ->assertSessionHasErrors('price_amount');
     }
 
     public function test_referenced_workflow_step_can_be_deactivated(): void
@@ -306,8 +477,8 @@ class FestivalSettingsManagementTest extends TestCase
             'stage' => 'final',
             'max_size_kb' => 20480,
             'options' => [
-                ['label' => 'Стандарт', 'price_cents' => 100],
-                ['label' => 'Стандарт', 'price_cents' => 200],
+                ['label' => 'Стандарт', 'price' => '1.00'],
+                ['label' => 'Стандарт', 'price' => '2.00'],
             ],
             'is_required' => 1,
             'is_active' => 1,
@@ -316,17 +487,28 @@ class FestivalSettingsManagementTest extends TestCase
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), $payload)->assertRedirect();
         $field = FestivalRequirementDefinition::query()->where('festival_edition_id', $edition->id)->firstOrFail();
         $this->assertSame(['standart', 'standart-2'], collect($field->options)->pluck('value')->all());
+        $this->assertSame(['standart' => 100, 'standart-2' => 200], data_get($field->pricing, 'prices'));
+        $this->assertSame([['value' => 'standart', 'label' => 'Стандарт'], ['value' => 'standart-2', 'label' => 'Стандарт']], $field->options);
 
         $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $field]), [
             ...$payload,
             'name' => 'Оновлений костюм',
             'options' => [
-                ['original_value' => 'standart-2', 'label' => 'Преміум', 'price_cents' => 300],
-                ['original_value' => 'standart', 'label' => 'Базовий', 'price_cents' => 175],
+                ['original_value' => 'standart-2', 'label' => 'Преміум', 'price' => '3.00'],
+                ['original_value' => 'standart', 'label' => 'Базовий', 'price' => '1.75'],
             ],
         ])->assertRedirect();
         $this->assertSame('variant-kostyuma', $field->refresh()->code);
         $this->assertSame(['standart-2', 'standart'], collect($field->options)->pluck('value')->all());
+        $this->assertSame(['standart-2' => 300, 'standart' => 175], data_get($field->pricing, 'prices'));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.requirements.edit', [$account, $edition, $field]))
+            ->assertOk()
+            ->assertSee('name="options[0][price]"', false)
+            ->assertSee('value="3.00"', false)
+            ->assertSee('value="1.75"', false)
+            ->assertDontSee('price_cents', false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]))
@@ -544,6 +726,140 @@ class FestivalSettingsManagementTest extends TestCase
         $this->assertStringContainsString('page=2', (string) $directions->nextPageUrl());
         $this->assertStringContainsString('q=Searchable', (string) $directions->nextPageUrl());
         $this->assertStringContainsString('status=active', (string) $directions->nextPageUrl());
+    }
+
+    public function test_registration_fields_can_be_reordered_within_a_workflow_step_filter(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
+        $firstStep = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+        $secondStep = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+        $firstField = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $firstStep->id,
+            'name' => 'First filtered field',
+            'sort_order' => 10,
+        ]);
+        $firstHiddenField = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $secondStep->id,
+            'name' => 'First hidden field',
+            'sort_order' => 20,
+        ]);
+        $secondField = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $firstStep->id,
+            'name' => 'Second filtered field',
+            'sort_order' => 30,
+        ]);
+        $secondHiddenField = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $secondStep->id,
+            'name' => 'Second hidden field',
+            'sort_order' => 40,
+        ]);
+        $indexRoute = route('dashboard.accounts.festivals.settings.requirements', [
+            $account,
+            $edition,
+            'workflow_step' => $firstStep->id,
+        ]);
+        $moveRoute = route('dashboard.accounts.festivals.requirements.move', [$account, $edition, $firstField]);
+
+        $this->actingAs($owner)
+            ->get($indexRoute)
+            ->assertOk()
+            ->assertSee('action="'.$moveRoute.'"', false)
+            ->assertSee('name="ordering_scope" value="workflow_step"', false);
+
+        $this->actingAs($owner)
+            ->get($indexRoute.'&q=First')
+            ->assertOk()
+            ->assertDontSee('action="'.$moveRoute.'"', false);
+
+        $this->actingAs($owner)
+            ->from($indexRoute)
+            ->patch($moveRoute, ['direction' => 'down', 'ordering_scope' => 'workflow_step'])
+            ->assertRedirect($indexRoute)
+            ->assertSessionHas('status', __('app.festival_order_saved'));
+
+        $this->assertSame([
+            $secondField->id,
+            $firstHiddenField->id,
+            $firstField->id,
+            $secondHiddenField->id,
+        ], FestivalRequirementDefinition::query()
+            ->where('festival_edition_id', $edition->id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->pluck('id')
+            ->all());
+
+        $this->actingAs($owner)
+            ->patch($moveRoute, ['direction' => 'up', 'ordering_scope' => 'unsupported'])
+            ->assertSessionHasErrors('ordering_scope');
+    }
+
+    public function test_unused_registration_field_has_confirmed_permanent_delete_and_used_field_is_protected(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $direction = FestivalDirection::factory()->for($edition)->create(['account_id' => $account->id]);
+        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
+        $step = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+        $category = FestivalCategory::factory()->for($edition)->for($direction)->create([
+            'account_id' => $account->id,
+            'festival_workflow_id' => $workflow->id,
+        ]);
+        $unusedField = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $step->id,
+            'name' => 'Unused field',
+        ]);
+        $usedField = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $step->id,
+            'name' => 'Used field',
+        ]);
+        $entry = FestivalEntry::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_category_id' => $category->id,
+        ]);
+        FestivalEntryRequirement::query()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $entry->id,
+            'festival_requirement_definition_id' => $usedField->id,
+        ]);
+        $indexRoute = route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]);
+        $unusedDeleteRoute = route('dashboard.accounts.festivals.requirements.destroy', [$account, $edition, $unusedField]);
+        $usedDeleteRoute = route('dashboard.accounts.festivals.requirements.destroy', [$account, $edition, $usedField]);
+
+        $this->actingAs($owner)
+            ->get($indexRoute)
+            ->assertOk()
+            ->assertSee('action="'.$unusedDeleteRoute.'"', false)
+            ->assertSee('data-confirm-delete', false)
+            ->assertSee('data-confirm-title="'.__('app.festival_delete_registration_field_confirm_title').'"', false)
+            ->assertDontSee('action="'.$usedDeleteRoute.'"', false);
+
+        $this->actingAs($owner)
+            ->delete($usedDeleteRoute)
+            ->assertRedirect($indexRoute)
+            ->assertSessionHasErrors('festival_requirement');
+        $this->assertModelExists($usedField);
+
+        $otherEdition = FestivalEdition::factory()->published()->for($edition->series)->create([
+            'account_id' => $account->id,
+        ]);
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.requirements.destroy', [$account, $otherEdition, $unusedField]))
+            ->assertNotFound();
+        $this->assertModelExists($unusedField);
+
+        $this->actingAs($owner)
+            ->delete($unusedDeleteRoute)
+            ->assertRedirect($indexRoute)
+            ->assertSessionHas('status', __('app.festival_registration_field_deleted'));
+        $this->assertModelMissing($unusedField);
     }
 
     public function test_dedicated_complex_forms_render_field_level_validation_errors(): void

@@ -7,12 +7,84 @@
     <x-ui.page-header :title="__('app.festival_applications_title')" :copy="__('app.festival_applications_copy')" />
 
     <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
+        @php
+            $preservedApplicationFilters = array_filter([
+                'q' => $filters['q'],
+                'category' => $filters['category'],
+            ], fn ($value) => $value !== '');
+        @endphp
+
         <div class="flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold">{{ __('app.festival_entries') }}</h2>
+            <h2 class="text-xl font-semibold">{{ __('app.festival_applications_title') }}</h2>
             <span class="text-sm font-semibold text-slate-500">{{ $entries->total() }}</span>
         </div>
 
-        <div class="mt-4 space-y-3">
+        <div class="mt-5">
+            <h3 id="festival-entry-status-cards" class="font-semibold text-slate-950">{{ __('app.festival_entries_by_status') }}</h3>
+            <nav class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-labelledby="festival-entry-status-cards">
+                <a
+                    href="{{ route('dashboard.accounts.festivals.applications', array_merge([$account, $edition], $preservedApplicationFilters)) }}"
+                    class="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 {{ $filters['status'] === '' ? 'ring-2 ring-brand-500 ring-offset-2' : '' }}"
+                    data-status-card="all"
+                    @if($filters['status'] === '') aria-current="page" @endif
+                >
+                    <span class="truncate text-sm font-semibold">{{ __('app.all') }}</span>
+                    <strong class="text-xl">{{ $entryStatistics->sum() }}</strong>
+                </a>
+                @foreach (\App\Enums\FestivalEntryStatus::cases() as $status)
+                    @php
+                        $statusCardClasses = match ($status) {
+                            \App\Enums\FestivalEntryStatus::Draft => 'border-stone-200 bg-stone-50 text-stone-800 hover:border-stone-300 hover:bg-stone-100',
+                            \App\Enums\FestivalEntryStatus::Submitted => 'border-sky-200 bg-sky-50 text-sky-900 hover:border-sky-300 hover:bg-sky-100',
+                            \App\Enums\FestivalEntryStatus::UnderReview => 'border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-300 hover:bg-amber-100',
+                            \App\Enums\FestivalEntryStatus::Accepted => 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-100',
+                            \App\Enums\FestivalEntryStatus::Rejected => 'border-rose-200 bg-rose-50 text-rose-900 hover:border-rose-300 hover:bg-rose-100',
+                            \App\Enums\FestivalEntryStatus::Withdrawn => 'border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-400 hover:bg-slate-200',
+                        };
+                    @endphp
+                    <a
+                        href="{{ route('dashboard.accounts.festivals.applications', array_merge([$account, $edition], $preservedApplicationFilters, ['status' => $status->value])) }}"
+                        class="flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 {{ $statusCardClasses }} {{ $filters['status'] === $status->value ? 'ring-2 ring-brand-500 ring-offset-2' : '' }}"
+                        data-status-card="{{ $status->value }}"
+                        @if($filters['status'] === $status->value) aria-current="page" @endif
+                    >
+                        <span class="truncate text-sm font-semibold">{{ __('app.festival_entry_status_'.$status->value) }}</span>
+                        <strong class="text-xl">{{ $entryStatistics[$status->value] ?? 0 }}</strong>
+                    </a>
+                @endforeach
+            </nav>
+        </div>
+
+        <x-ui.filter-bar
+            :action="route('dashboard.accounts.festivals.applications', [$account, $edition])"
+            :reset-href="route('dashboard.accounts.festivals.applications', [$account, $edition])"
+            class="mt-5 sm:grid-cols-2 xl:grid-cols-3"
+        >
+            <label>
+                <span class="crm-label">{{ __('app.search') }}</span>
+                <input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_entry_search_placeholder') }}">
+            </label>
+            <label>
+                <span class="crm-label">{{ __('app.status') }}</span>
+                <select name="status" class="crm-field">
+                    <option value="">{{ __('app.all') }}</option>
+                    @foreach (\App\Enums\FestivalEntryStatus::cases() as $status)
+                        <option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.festival_entry_status_'.$status->value) }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <label>
+                <span class="crm-label">{{ __('app.festival_category') }}</span>
+                <select name="category" class="crm-field">
+                    <option value="">{{ __('app.all') }}</option>
+                    @foreach ($categories as $category)
+                        <option value="{{ $category->id }}" @selected($filters['category'] === (string) $category->id)>{{ $category->name }}</option>
+                    @endforeach
+                </select>
+            </label>
+        </x-ui.filter-bar>
+
+        <div class="mt-5 space-y-3">
             @forelse ($entries as $entry)
                 @php
                     $qualificationReady = in_array($entry->qualification_status, [\App\Enums\FestivalQualificationStatus::NotRequired, \App\Enums\FestivalQualificationStatus::Passed], true);
@@ -21,212 +93,45 @@
                         && $entry->blocking_requirements_count === 0
                         && $entry->blocking_charges_count === 0
                         && $entry->performance_slots_count > 0;
-                    $currentStep = $workspacePermissions['registrations']
-                        ? $entry->steps->first(fn($step) => $step->status !== \App\Enums\FestivalEntryStepStatus::Approved)
-                        : null;
-                    $category = $entry->category;
-                    $categoryName = $entry->category->name;
-                    $directionName = $entry->category->direction->name;
                 @endphp
-                <details class="rounded-xl border border-stone-200 bg-slate-50/70 p-4">
-                    <summary class="cursor-pointer list-none">
-                        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div class="min-w-0">
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <span class="font-mono text-xs font-semibold text-slate-500">{{ $entry->code }}</span>
-                                    <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{{ __('app.festival_entry_status_'.$entry->status->value) }}</span>
-                                    <span class="{{ $entryIsReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900' }} rounded-full px-2.5 py-1 text-xs font-semibold">
-                                        {{ $entryIsReady ? __('app.festival_ready') : __('app.festival_not_ready') }}
-                                    </span>
-                                </div>
-                                <strong class="mt-2 block truncate text-lg text-slate-950">{{ $entry->entry_name }}</strong>
-                                <span class="text-sm text-slate-500">{{ $directionName }} · {{ $categoryName }}</span>
-                                @if ($workspacePermissions['registrations'])
-                                    <span class="text-sm text-slate-500"> · {{ $entry->portalUser->email }}</span>
-                                @endif
+                <article class="rounded-xl border border-stone-200 bg-slate-50/70 p-4">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-mono text-xs font-semibold text-slate-500">{{ $entry->code }}</span>
+                                <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{{ __('app.festival_entry_status_'.$entry->status->value) }}</span>
+                                <span class="{{ $entryIsReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900' }} rounded-full px-2.5 py-1 text-xs font-semibold">
+                                    {{ $entryIsReady ? __('app.festival_ready') : __('app.festival_not_ready') }}
+                                </span>
                             </div>
+                            <h3 class="mt-2 truncate text-lg font-semibold text-slate-950">{{ $entry->entry_name }}</h3>
+                            <p class="text-sm text-slate-500">{{ $entry->category->direction->name }} · {{ $entry->category->name }}</p>
+                            @if ($workspacePermissions['registrations'])
+                                <p class="mt-1 text-sm text-slate-600">{{ $entry->portalUser->displayName() }} · {{ $entry->portalUser->email }}</p>
+                            @endif
+                        </div>
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                             <div class="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-72">
                                 <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->blocking_requirements_count }}</strong>{{ __('app.festival_requirements_open') }}</div>
                                 <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->blocking_charges_count }}</strong>{{ __('app.festival_charges_open') }}</div>
                                 <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->performance_slots_count }}</strong>{{ __('app.festival_program_slots') }}</div>
                             </div>
+                            <x-ui.button :href="route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry])">
+                                <x-ui.icon name="edit" class="h-4 w-4" />{{ __('app.festival_open_application') }}
+                            </x-ui.button>
                         </div>
-                    </summary>
-
-                    <div class="mt-5 grid gap-5 border-t border-stone-200 pt-5 xl:grid-cols-2">
-                        <section class="rounded-xl border border-stone-200 bg-white p-4 xl:col-span-2">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ $directionName }}</p>
-                            <h3 class="mt-1 font-semibold text-slate-950">{{ $categoryName }}</h3>
-                            <dl class="mt-3 flex flex-wrap gap-2 text-xs text-slate-700">
-                                <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $category->min_members, 'max' => $category->max_members]) }}</dd></div>
-                                @if($category->min_age !== null || $category->max_age !== null)
-                                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_age_limits') }}</dt><dd>{{ __('app.festival_age_range', ['min' => $category->min_age ?? '—', 'max' => $category->max_age ?? '—']) }}</dd></div>
-                                @endif
-                                @if($category->min_duration_seconds !== null || $category->max_duration_seconds !== null)
-                                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_performance_duration') }}</dt><dd>{{ __('app.festival_duration_range', ['min' => $category->min_duration_seconds ?? '—', 'max' => $category->max_duration_seconds ?? '—']) }}</dd></div>
-                                @endif
-                                @if($category->registration_closes_at)
-                                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_registration_closes_at') }}</dt><dd>{{ __('app.festival_category_deadline_value', ['date' => $category->registration_closes_at->timezone($edition->timezone)->format('d.m.Y H:i'), 'timezone' => $edition->timezone]) }}</dd></div>
-                                @endif
-                            </dl>
-                            <div class="mt-4 border-t border-stone-200 pt-4">
-                                <h4 class="text-sm font-semibold text-slate-950">{{ __('app.festival_category_requirements') }}</h4>
-                                @if($category->requirements_html)
-                                    <div class="prose prose-slate mt-2 max-w-none text-sm">{!! $category->requirements_html !!}</div>
-                                @else
-                                    <p class="mt-2 text-sm text-slate-500">{{ __('app.festival_category_requirements_none') }}</p>
-                                @endif
-                            </div>
-                            @if($workspacePermissions['registrations'] && $entry->qualification_status === \App\Enums\FestivalQualificationStatus::Passed)
-                                @php($reassignmentCategories = $categories->where('is_active', true)->where('festival_workflow_id', $category->festival_workflow_id)->where('id', '!=', $category->id))
-                                @if($reassignmentCategories->isNotEmpty())
-                                    <form method="POST" action="{{ route('dashboard.accounts.festivals.entries.reassign-category', [$account, $edition, $entry]) }}" class="mt-4 grid gap-3 border-t border-stone-200 pt-4 sm:grid-cols-2">
-                                        @csrf
-                                        @method('PATCH')
-                                        <div class="sm:col-span-2">
-                                            <h4 class="text-sm font-semibold text-slate-950">{{ __('app.festival_reassign_category') }}</h4>
-                                            <p class="mt-1 text-xs text-slate-500">{{ __('app.festival_reassignment_copy') }}</p>
-                                        </div>
-                                        <label>
-                                            <span class="crm-label">{{ __('app.festival_target_category') }}</span>
-                                            <select name="festival_category_id" class="crm-field" required>
-                                                <option value="">{{ __('app.select_option') }}</option>
-                                                @foreach($reassignmentCategories as $reassignmentCategory)
-                                                    <option value="{{ $reassignmentCategory->id }}">{{ $reassignmentCategory->name }}</option>
-                                                @endforeach
-                                            </select>
-                                        </label>
-                                        <label>
-                                            <span class="crm-label">{{ __('app.festival_reassignment_reason') }}</span>
-                                            <input name="reason" class="crm-field" maxlength="1000" required>
-                                        </label>
-                                        <div class="sm:col-span-2"><x-ui.button type="submit" size="sm" variant="secondary">{{ __('app.festival_reassign_category') }}</x-ui.button></div>
-                                    </form>
-                                @endif
-                            @endif
-                        </section>
-
-                        @if ($workspacePermissions['registrations'])
-                            <section>
-                                <h3 class="font-semibold text-slate-950">{{ __('app.festival_application_review') }}</h3>
-                                @if($currentStep)
-                                    <div class="mt-3 rounded-xl border border-stone-200 bg-white p-4"><p class="text-xs font-semibold text-brand-700">{{ __('app.festival_current_step') }}</p><strong class="mt-1 block">{{ $currentStep->workflowStep->title }}</strong><span class="mt-1 block text-xs text-slate-500">{{ __('app.festival_step_status_'.$currentStep->status->value) }}</span>@if($currentStep->review_notes)<p class="mt-2 whitespace-pre-line text-sm text-slate-600">{{ $currentStep->review_notes }}</p>@endif</div>
-                                    @if($currentStep->status === \App\Enums\FestivalEntryStepStatus::Submitted)
-                                        <form method="POST" action="{{ route('dashboard.accounts.festivals.entry-steps.review', [$account, $edition, $entry, $currentStep]) }}" class="mt-3 grid gap-3 sm:grid-cols-2">@csrf @method('PATCH')<label><span class="crm-label">{{ __('app.status') }}</span><select name="decision" class="crm-field"><option value="approve">{{ __('app.festival_review_approve') }}</option><option value="request_changes">{{ __('app.festival_review_request_changes') }}</option><option value="reject_entry">{{ __('app.festival_review_reject_entry') }}</option></select></label><label><span class="crm-label">{{ __('app.festival_correction_due_at') }}</span><input type="datetime-local" name="correction_due_at" class="crm-field"></label><label class="sm:col-span-2"><span class="crm-label">{{ __('app.festival_review_comment') }}</span><textarea name="comment" rows="3" class="crm-field"></textarea></label><div class="sm:col-span-2"><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button></div></form>
-                                    @endif
-                                @else
-                                    <p class="mt-3 rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{{ __('app.festival_registration_complete') }}</p>
-                                @endif
-                            </section>
-
-                            <section>
-                                <h3 class="font-semibold text-slate-950">{{ __('app.festival_checklist') }}</h3>
-                                <div class="mt-3 space-y-3">
-                                    @forelse ($entry->requirements as $requirement)
-                                        @php($latestSubmission = $requirement->submissions->first())
-                                        <div class="rounded-lg border border-stone-200 bg-white p-3">
-                                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                                <div>
-                                                    <strong class="text-sm">{{ $requirement->definition->name }}</strong>
-                                                    <span class="ml-2 text-xs text-slate-500">{{ __('app.festival_requirement_status_'.$requirement->status->value) }}</span>
-                                                </div>
-                                                @if ($latestSubmission?->path)
-                                                    <a href="{{ route('dashboard.accounts.festivals.submissions.download', [$account, $latestSubmission]) }}" class="text-xs font-semibold text-brand-700 hover:text-brand-800">{{ __('app.download') }} · {{ $latestSubmission->original_name }}</a>
-                                                @endif
-                                            </div>
-                                            @if ($latestSubmission && ! $latestSubmission->path)
-                                                <x-festivals.response-value :definition="$requirement->definition" :value="$latestSubmission->value_json['value'] ?? null" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm text-slate-700" />
-                                            @endif
-                                            <form method="POST" action="{{ route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]) }}" class="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                                                @csrf
-                                                @method('PATCH')
-                                                <select name="status" class="crm-field mt-0">
-                                                    @foreach ([\App\Enums\FestivalRequirementStatus::Accepted, \App\Enums\FestivalRequirementStatus::Rejected, \App\Enums\FestivalRequirementStatus::Waived] as $status)
-                                                        <option value="{{ $status->value }}" @selected($requirement->status === $status)>{{ __('app.festival_requirement_status_'.$status->value) }}</option>
-                                                    @endforeach
-                                                </select>
-                                                <input name="review_notes" value="{{ $requirement->review_notes }}" placeholder="{{ __('app.notes') }}" class="crm-field mt-0">
-                                                <x-ui.button type="submit" size="sm">{{ __('app.save') }}</x-ui.button>
-                                            </form>
-                                        </div>
-                                    @empty
-                                        <p class="text-sm text-slate-500">{{ __('app.festival_no_requirements') }}</p>
-                                    @endforelse
-                                </div>
-                            </section>
-                        @endif
-
-                        @if ($workspacePermissions['finance'])
-                            <section class="xl:col-span-2">
-                                <h3 class="font-semibold text-slate-950">{{ __('app.festival_payments') }}</h3>
-                                <div class="mt-3 grid gap-3 lg:grid-cols-2">
-                                    @forelse ($entry->charges as $charge)
-                                        <div class="rounded-lg border border-stone-200 bg-white p-3">
-                                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                                <div>
-                                                    <strong>{{ $charge->name }}</strong>
-                                                    <span class="ml-2 text-xs text-slate-500">{{ __('app.festival_charge_status_'.$charge->status->value) }}</span>
-                                                </div>
-                                                <strong>{{ number_format($charge->amount_cents / 100, 2) }} {{ $charge->currency }}</strong>
-                                            </div>
-                                            @if ($attempt = $charge->paymentAttempts->sortByDesc('id')->first())
-                                                <p class="mt-2 text-xs text-slate-500">{{ $attempt->provider }} · {{ __('app.festival_payment_status_'.$attempt->status->value) }} · {{ $attempt->order_id }}</p>
-                                            @endif
-                                            <form method="POST" action="{{ route('dashboard.accounts.festivals.charges.manual-review', [$account, $edition, $charge]) }}" class="mt-3 grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
-                                                @csrf
-                                                @method('PATCH')
-                                                <select name="decision" class="crm-field mt-0">
-                                                    <option value="approve">{{ __('app.accept') }}</option>
-                                                    <option value="reject">{{ __('app.reject') }}</option>
-                                                </select>
-                                                <input name="notes" value="{{ $charge->notes }}" placeholder="{{ __('app.notes') }}" class="crm-field mt-0">
-                                                <x-ui.button type="submit" size="sm">{{ __('app.save') }}</x-ui.button>
-                                            </form>
-                                        </div>
-                                    @empty
-                                        <p class="text-sm text-slate-500">{{ __('app.festival_no_payments') }}</p>
-                                    @endforelse
-                                </div>
-                            </section>
-                        @endif
                     </div>
-                </details>
+                </article>
             @empty
-                <x-ui.empty-state icon="trophy">{{ __('app.festival_entries_empty') }}</x-ui.empty-state>
+                <x-ui.empty-state :title="$hasFilters ? __('app.no_data') : __('app.festival_applications_empty')" icon="accounts">
+                    @if ($hasFilters)
+                        <x-ui.button :href="route('dashboard.accounts.festivals.applications', [$account, $edition])" variant="secondary" class="mt-3">{{ __('app.reset_filters') }}</x-ui.button>
+                    @endif
+                </x-ui.empty-state>
             @endforelse
         </div>
 
         <div class="mt-5">{{ $entries->links() }}</div>
-    </section>
-
-    <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
-        <h2 class="text-xl font-semibold">{{ __('app.festival_application_statistics') }}</h2>
-        <div class="mt-4 grid gap-5 lg:grid-cols-3">
-            <div>
-                <h3 class="font-semibold">{{ __('app.festival_entries_by_status') }}</h3>
-                <dl class="mt-2 space-y-2">
-                    @foreach ($entryStatistics as $label => $count)
-                        <div class="flex justify-between rounded-lg bg-slate-50 px-3 py-2"><dt>{{ __('app.festival_entry_status_'.$label) }}</dt><dd class="font-semibold">{{ $count }}</dd></div>
-                    @endforeach
-                </dl>
-            </div>
-            <div>
-                <h3 class="font-semibold">{{ __('app.festival_entries_by_category') }}</h3>
-                <dl class="mt-2 space-y-2">
-                    @foreach ($categoryStatistics as $row)
-                        <div class="flex justify-between rounded-lg bg-slate-50 px-3 py-2"><dt>{{ $row['label'] }}</dt><dd class="font-semibold">{{ $row['count'] }}</dd></div>
-                    @endforeach
-                </dl>
-            </div>
-            <div>
-                <h3 class="font-semibold">{{ __('app.festival_entries_by_direction') }}</h3>
-                <dl class="mt-2 space-y-2">
-                    @foreach ($directionStatistics as $row)
-                        <div class="flex justify-between rounded-lg bg-slate-50 px-3 py-2"><dt>{{ $row['label'] }}</dt><dd class="font-semibold">{{ $row['count'] }}</dd></div>
-                    @endforeach
-                </dl>
-            </div>
-        </div>
     </section>
 </x-festivals.staff.workspace>
 @endsection

@@ -5,7 +5,7 @@
 @section('content')
 @if ($guest)
     <main class="min-h-screen bg-canvas px-5 py-8">
-        <div class="mx-auto max-w-4xl space-y-6">
+        <div class="mx-auto max-w-6xl space-y-6">
             @include('festivals.portal._nav')
             <header>
                 <p class="text-sm font-semibold text-brand-700">{{ $edition->title }}</p>

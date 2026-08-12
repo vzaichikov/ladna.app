@@ -1,4 +1,4 @@
-@extends('layouts.public', ['hideAppFooter' => true])
+@extends('layouts.festival-portal')
 
 @section('title', $entry->entry_name.' - '.$entry->edition->title)
 
@@ -23,7 +23,6 @@
         </header>
 
         @if (session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
-        @if ($errors->any())<div class="mt-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $errors->first() }}</div>@endif
 
         <section class="mt-7 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
             <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ $directionName }}</p>
@@ -86,56 +85,34 @@
 
                 <div class="mt-6 space-y-4">
                     @foreach($selectedStep->requirements as $requirement)
-                        @php
-                            $definition = $requirement->definition;
-                            $inputType = $definition->input_type;
-                            $subjectLabel = $requirement->participant?->displayName()
-                                ?? ($definition->subject_scope === \App\Enums\FestivalFieldScope::Registrant ? $portalUser->displayName() : $entry->entry_name);
-                            $latest = $requirement->submissions->first();
-                            $currentValue = $latest?->value_json['value'] ?? null;
-                        @endphp
-                        <article class="rounded-xl border border-stone-200 p-4">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><strong>{{ $definition->name }}</strong><span class="ml-2 text-xs text-slate-500">{{ $subjectLabel }}</span>@if($definition->instructions)<p class="mt-1 text-sm text-slate-600">{{ $definition->instructions }}</p>@endif</div><span class="text-xs font-semibold text-slate-500">{{ __('app.festival_requirement_status_'.$requirement->status->value) }}</span></div>
-
-                            @if($selectedState['mutable'])
-                                @if($inputType === \App\Enums\FestivalRequirementInputType::File)
-                                    <form method="POST" enctype="multipart/form-data" action="{{ route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]) }}" class="mt-4 flex flex-col gap-2 sm:flex-row">@csrf<input type="file" name="file" @required($definition->is_required) class="crm-field"><x-ui.button type="submit">{{ __('app.upload') }}</x-ui.button></form>
-                                @else
-                                    <form method="POST" action="{{ route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $selectedStep, $requirement]) }}" class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">@csrf
-                                        <label class="grow"><span class="sr-only">{{ $definition->name }}</span>
-                                            @if($inputType === \App\Enums\FestivalRequirementInputType::LongText)
-                                                <textarea name="value" rows="4" @required($definition->is_required) class="crm-field">{{ is_scalar($currentValue) ? $currentValue : '' }}</textarea>
-                                            @elseif($inputType === \App\Enums\FestivalRequirementInputType::Boolean)
-                                                <select name="value" @required($definition->is_required) class="crm-field"><option value="">{{ __('app.select') }}</option><option value="1" @selected($currentValue === true || $currentValue === 1 || $currentValue === '1')>{{ __('app.yes') }}</option><option value="0" @selected($currentValue === false || $currentValue === 0 || $currentValue === '0')>{{ __('app.no') }}</option></select>
-                                            @elseif(in_array($inputType, [\App\Enums\FestivalRequirementInputType::SingleSelect, \App\Enums\FestivalRequirementInputType::MultiSelect], true))
-                                                <select name="value{{ $inputType === \App\Enums\FestivalRequirementInputType::MultiSelect ? '[]' : '' }}" @if($inputType === \App\Enums\FestivalRequirementInputType::MultiSelect) multiple @endif @required($definition->is_required) class="crm-field">@foreach(($definition->options ?? []) as $option)<option value="{{ $option['value'] }}" @selected(collect(is_array($currentValue) ? $currentValue : [$currentValue])->contains($option['value']))>{{ $option['label'] }}</option>@endforeach</select>
-                                            @else
-                                                <input type="{{ $inputType === \App\Enums\FestivalRequirementInputType::Integer ? 'number' : ($inputType === \App\Enums\FestivalRequirementInputType::Url ? 'url' : 'text') }}" name="value" value="{{ is_scalar($currentValue) ? $currentValue : '' }}" @required($definition->is_required) class="crm-field">
-                                            @endif
-                                        </label><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
-                                    </form>
-                                @endif
-                            @elseif($inputType !== \App\Enums\FestivalRequirementInputType::File && $latest)
-                                <x-festivals.response-value :definition="$definition" :value="$currentValue" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm" />
-                            @endif
-
-                            @if($latest?->path)
-                                <a href="{{ route('festival.portal.submissions.download', [$account->slug, $latest]) }}" class="mt-3 block break-all text-sm font-semibold text-brand-700">{{ __('app.download') }} · {{ $latest->original_name }}</a>
-                            @endif
-                        </article>
+                        @include('festivals.portal._requirement-card', compact('account', 'portalUser', 'entry', 'selectedStep', 'selectedState', 'requirement'))
                     @endforeach
                 </div>
 
                 @if($selectedStep->charges->isNotEmpty())
-                    <div class="mt-6 border-t border-stone-200 pt-5"><h3 class="text-lg font-semibold">{{ __('app.festival_payments') }}</h3><div class="mt-3 grid gap-3 md:grid-cols-2">@foreach($selectedStep->charges as $charge)<article class="rounded-xl bg-slate-50 p-4"><div class="flex items-start justify-between gap-3"><div><strong>{{ $charge->name }}</strong><p class="mt-1 text-xs text-slate-500">{{ __('app.festival_charge_status_'.$charge->status->value) }}</p></div><strong>{{ number_format($charge->amount_cents / 100, 2) }} {{ $charge->currency }}</strong></div>@if($selectedState['available'] && in_array($charge->status, [\App\Enums\FestivalChargeStatus::Pending, \App\Enums\FestivalChargeStatus::Failed], true) && $providers->isNotEmpty())<form method="POST" action="{{ route('festival.portal.charges.pay', [$account->slug, $entry, $charge]) }}" class="mt-3 flex gap-2">@csrf<select name="provider" class="crm-field">@foreach($providers as $provider)<option value="{{ $provider->provider->value }}">{{ config('integrations.providers.'.$provider->provider->value.'.label') }}</option>@endforeach</select><x-ui.button type="submit">{{ __('app.pay') }}</x-ui.button></form>@endif</article>@endforeach</div></div>
+                    <div class="mt-6 border-t border-stone-200 pt-5">
+                        <h3 class="text-lg font-semibold">{{ __('app.festival_payments') }}</h3>
+                        <div class="mt-3 space-y-3">
+                            @foreach($selectedStep->charges as $charge)
+                                @include('festivals.portal._charge-card', compact('account', 'entry', 'selectedState', 'providers', 'charge'))
+                            @endforeach
+                        </div>
+                    </div>
                 @endif
 
                 @if($entry->chargeAdjustments->where('status', 'pending')->isNotEmpty())
-                    <div class="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900"><strong>{{ __('app.festival_refund_pending') }}</strong><span class="ml-2">{{ number_format($entry->chargeAdjustments->where('status', 'pending')->sum('amount_cents') / 100, 2) }} {{ $entry->edition->currency }}</span></div>
+                    @php($pendingRefundsByCurrency = $entry->chargeAdjustments->where('status', 'pending')->groupBy(fn ($adjustment) => strtoupper($adjustment->currency)))
+                    <div class="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900"><strong>{{ __('app.festival_refund_pending') }}</strong><span class="ml-2">@foreach($pendingRefundsByCurrency as $currency => $adjustments)@if(! $loop->first) · @endif{{ \App\Support\MoneyFormatter::format((int) $adjustments->sum('amount_cents'), $currency) }}@endforeach</span></div>
                 @endif
 
                 @if($selectedState['mutable'])
-                    <form method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6 flex justify-end">@csrf<x-ui.button type="submit" size="lg">{{ $selectedStep->workflowStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer ? __('app.submit') : __('app.continue') }}</x-ui.button></form>
+                    <form method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6">
+                        @csrf
+                        @if ($errors->default->any())
+                            <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{{ $errors->default->first() }}</div>
+                        @endif
+                        <div class="flex justify-end"><x-ui.button type="submit" size="lg">{{ $selectedStep->workflowStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer ? __('app.submit') : __('app.continue') }}</x-ui.button></div>
+                    </form>
                 @endif
             </section>
         @endif

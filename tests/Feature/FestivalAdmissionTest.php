@@ -23,6 +23,7 @@ use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 use Mockery;
 use Tests\TestCase;
@@ -34,6 +35,8 @@ class FestivalAdmissionTest extends TestCase
     public function test_inventory_holds_and_early_pricing_preserve_transaction_facts(): void
     {
         [$account, $edition] = $this->festival();
+        $account->update(['default_currency' => 'USD']);
+        $edition->update(['currency' => 'UAH']);
         $type = FestivalAdmissionType::factory()->for($edition)->create([
             'account_id' => $account->id,
             'inventory' => 2,
@@ -46,6 +49,7 @@ class FestivalAdmissionTest extends TestCase
         $order = $create->execute($edition, $this->orderInput($type, 2));
 
         $this->assertSame(40000, $order->amount_cents);
+        $this->assertSame('USD', $order->currency);
         $this->assertSame('early_bird', $order->items->first()->price_tier);
         $this->assertSame(0, $type->remainingQuantity());
 
@@ -125,6 +129,217 @@ class FestivalAdmissionTest extends TestCase
         $create->execute($edition, $this->orderInput($secondType, 1, 'global-cap@example.com'));
     }
 
+    public function test_finance_owner_can_create_update_and_delete_an_admission_type_with_edition_timezone_dates(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), $this->admissionPayload([
+                'name' => 'Evening balcony',
+                'sales_starts_at' => '2026-08-20T10:00',
+                'sales_ends_at' => '2026-08-20T18:00',
+            ]))
+            ->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+
+        $type = $edition->admissionTypes()->where('name', 'Evening balcony')->firstOrFail();
+        $this->assertSame(30000, $type->price_cents);
+        $this->assertSame('2026-08-20 07:00:00', $type->sales_starts_at?->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-20 15:00:00', $type->sales_ends_at?->format('Y-m-d H:i:s'));
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $type]), $this->admissionPayload([
+                'name' => 'Updated balcony',
+                'inventory' => 80,
+            ]))
+            ->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+
+        $this->assertDatabaseHas('festival_admission_types', [
+            'id' => $type->id,
+            'name' => 'Updated balcony',
+            'inventory' => 80,
+        ]);
+
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.admission-types.destroy', [$account, $edition, $type]))
+            ->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+
+        $this->assertDatabaseMissing('festival_admission_types', ['id' => $type->id]);
+    }
+
+    public function test_order_history_blocks_deletion_and_paid_history_locks_every_admission_type_field(): void
+    {
+        Queue::fake();
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $type = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Locked admission',
+            'inventory' => 10,
+        ]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => FestivalTicketOrderStatus::Paid->value,
+            'amount_cents' => 30000,
+            'paid_at' => now(),
+            'expires_at' => null,
+        ]);
+        $order->items()->create([
+            'account_id' => $account->id,
+            'festival_admission_type_id' => $type->id,
+            'admission_name' => $type->name,
+            'unit_price_cents' => 30000,
+            'quantity' => 1,
+            'total_cents' => 30000,
+        ]);
+
+        $editUrl = route('dashboard.accounts.festivals.admission-types.edit', [$account, $edition, $type]);
+        $this->actingAs($owner)
+            ->from($editUrl)
+            ->put(route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $type]), $this->admissionPayload([
+                'name' => 'Attempted mutation',
+                'inventory' => 20,
+            ]))
+            ->assertRedirect($editUrl)
+            ->assertSessionHasErrors('admission_type');
+
+        $this->assertSame('Locked admission', $type->refresh()->name);
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']))
+            ->delete(route('dashboard.accounts.festivals.admission-types.destroy', [$account, $edition, $type]))
+            ->assertSessionHasErrors('admission_type');
+        $this->assertDatabaseHas('festival_admission_types', ['id' => $type->id]);
+    }
+
+    public function test_pending_holds_protect_inventory_and_any_order_history_protects_deletion(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 10]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create(['account_id' => $account->id, 'expires_at' => now()->addHour()]);
+        $order->items()->create([
+            'account_id' => $account->id,
+            'festival_admission_type_id' => $type->id,
+            'admission_name' => $type->name,
+            'unit_price_cents' => 30000,
+            'quantity' => 4,
+            'total_cents' => 120000,
+        ]);
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.festivals.admission-types.edit', [$account, $edition, $type]))
+            ->put(route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $type]), $this->admissionPayload(['inventory' => 3, 'max_per_order' => 3]))
+            ->assertSessionHasErrors('inventory');
+
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.admission-types.destroy', [$account, $edition, $type]))
+            ->assertSessionHasErrors('admission_type');
+        $this->assertSame(10, $type->refresh()->inventory);
+    }
+
+    public function test_admission_type_crud_enforces_package_inventory_and_price_constraints(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $plan = SubscriptionPlan::factory()->create(['currency' => 'UAH']);
+        $package = FestivalTariffPackage::factory()->create([
+            'subscription_plan_id' => $plan->id,
+            'name' => 'CRUD capacity '.str()->random(8),
+            'max_tickets' => 100,
+        ]);
+        FestivalEditionPurchase::factory()->create([
+            'account_id' => $account->id,
+            'subscription_plan_id' => $plan->id,
+            'festival_tariff_package_id' => $package->id,
+            'festival_edition_id' => $edition->id,
+        ]);
+        FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'inventory' => 60,
+        ]);
+        $createUrl = route('dashboard.accounts.festivals.admission-types.create', [$account, $edition]);
+
+        $this->actingAs($owner)
+            ->from($createUrl)
+            ->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), $this->admissionPayload([
+                'inventory' => 50,
+            ]))
+            ->assertRedirect($createUrl)
+            ->assertSessionHasErrors('inventory');
+
+        $this->actingAs($owner)
+            ->from($createUrl)
+            ->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), $this->admissionPayload([
+                'early_bird_price' => '300.00',
+                'early_bird_ends_at' => '2026-08-20T10:00',
+            ]))
+            ->assertRedirect($createUrl)
+            ->assertSessionHasErrors('early_bird_price');
+    }
+
+    public function test_admission_money_fields_use_major_units_and_render_decimal_edit_values(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $type = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'price_cents' => 50000,
+            'early_bird_price_cents' => 12345,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.admission-types.edit', [$account, $edition, $type]))
+            ->assertOk()
+            ->assertSee('name="price"', false)
+            ->assertSee('value="500.00"', false)
+            ->assertSee('name="early_bird_price"', false)
+            ->assertSee('value="123.45"', false)
+            ->assertDontSee('name="price_cents"', false)
+            ->assertDontSee('name="early_bird_price_cents"', false)
+            ->assertDontSee('minor units');
+
+        foreach ([
+            ['name' => 'Free admission', 'price' => '0', 'expected' => 0],
+            ['name' => 'Whole admission', 'price' => '500', 'expected' => 50000],
+            ['name' => 'Maximum admission', 'price' => '999999.99', 'expected' => 99999999],
+        ] as $case) {
+            $this->actingAs($owner)
+                ->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), $this->admissionPayload([
+                    'name' => $case['name'],
+                    'price' => $case['price'],
+                ]))
+                ->assertSessionHasNoErrors();
+            $this->assertSame($case['expected'], $edition->admissionTypes()->where('name', $case['name'])->value('price_cents'));
+        }
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), $this->admissionPayload([
+                'name' => 'Decimal early admission',
+                'price' => '500.00',
+                'early_bird_price' => '123.45',
+                'early_bird_ends_at' => '2026-08-20T10:00',
+            ]))
+            ->assertSessionHasNoErrors();
+        $decimalType = $edition->admissionTypes()->where('name', 'Decimal early admission')->firstOrFail();
+        $this->assertSame(50000, $decimalType->price_cents);
+        $this->assertSame(12345, $decimalType->early_bird_price_cents);
+
+        foreach (['-0.01', '1.234', '1000000.00'] as $index => $invalidPrice) {
+            $this->actingAs($owner)
+                ->from(route('dashboard.accounts.festivals.admission-types.create', [$account, $edition]))
+                ->post(route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]), $this->admissionPayload([
+                    'name' => 'Invalid admission '.$index,
+                    'price' => $invalidPrice,
+                ]))
+                ->assertSessionHasErrors('price');
+        }
+    }
+
     private function createOrderAction(Account $account): CreateFestivalTicketOrder
     {
         $setting = new IntegrationSetting(['provider' => 'monopay', 'is_enabled' => true]);
@@ -141,6 +356,25 @@ class FestivalAdmissionTest extends TestCase
     private function orderInput(FestivalAdmissionType $type, int $quantity, string $email = 'buyer@example.com'): array
     {
         return ['buyer_name' => 'Festival Guest', 'buyer_email' => $email, 'provider' => 'monopay', 'items' => [['admission_type_id' => $type->id, 'quantity' => $quantity]], 'terms' => true];
+    }
+
+    /** @param array<string, mixed> $overrides */
+    private function admissionPayload(array $overrides = []): array
+    {
+        return [
+            'name' => 'General admission',
+            'description' => 'Festival access',
+            'inventory' => 100,
+            'price' => '300.00',
+            'early_bird_price' => null,
+            'early_bird_ends_at' => null,
+            'early_bird_quota' => null,
+            'sales_starts_at' => null,
+            'sales_ends_at' => null,
+            'max_per_order' => 10,
+            'is_active' => 1,
+            ...$overrides,
+        ];
     }
 
     /** @return array{Account, FestivalEdition} */

@@ -13,6 +13,8 @@
             :account="$account"
             :show-locale-switcher="true"
             class="festival-footer mx-auto max-w-6xl px-5 pb-8 sm:px-8"
-        />
+        >
+            @yield('festivalFooterLinks')
+        </x-ui.powered-footer>
     </div>
 @endsection

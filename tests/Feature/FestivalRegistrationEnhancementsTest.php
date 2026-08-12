@@ -16,10 +16,14 @@ use App\Models\FestivalCategory;
 use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
+use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalRequirementDefinition;
+use App\Models\FestivalResult;
+use App\Models\FestivalRubric;
+use App\Models\FestivalScoreSheet;
 use App\Models\FestivalSeries;
 use App\Models\FestivalWorkflow;
 use App\Models\User;
@@ -100,6 +104,8 @@ class FestivalRegistrationEnhancementsTest extends TestCase
     {
         Queue::fake();
         [$account, $edition, $portalUser] = $this->festival();
+        $account->update(['default_currency' => 'USD']);
+        $edition->update(['currency' => 'UAH']);
         $workflow = $this->workflow($edition);
         $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id, 'festival_workflow_id' => $workflow->id, 'min_members' => 1, 'max_members' => 10]);
         $paymentStep = $workflow->steps->firstWhere('code', 'participation_payment');
@@ -125,6 +131,7 @@ class FestivalRegistrationEnhancementsTest extends TestCase
 
         $charge = $entry->charges()->where('kind', 'participation')->firstOrFail();
         $this->assertSame(400000, $charge->amount_cents);
+        $this->assertSame('USD', $charge->currency);
         $this->assertSame($hardCap->timestamp, $charge->due_at->timestamp);
         $this->assertSame(FestivalChargeStatus::Pending, $charge->status);
         $this->assertSame(FestivalQualificationStatus::Passed, $entry->refresh()->qualification_status);
@@ -313,6 +320,64 @@ class FestivalRegistrationEnhancementsTest extends TestCase
         $this->assertSame(FestivalQualificationStatus::Passed, $entry->qualification_status);
         $this->assertSame(FestivalChargeStatus::Cancelled, $sourceCharge->refresh()->status);
         $this->assertSame(320000, $entry->charges()->where('festival_charge_definition_id', '!=', $sourceCharge->festival_charge_definition_id)->firstOrFail()->amount_cents);
+    }
+
+    public function test_staff_reassignment_stops_after_judging_or_results_exist(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival();
+        $workflow = $this->workflow($edition);
+        $source = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id, 'festival_workflow_id' => $workflow->id]);
+        $target = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id, 'festival_workflow_id' => $workflow->id]);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($source, $portalUser, [$participant]));
+        $manager = User::factory()->create();
+        $assignment = FestivalJudgeAssignment::factory()->for($edition)->for($manager)->create(['account_id' => $account->id]);
+        $rubric = FestivalRubric::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_category_id' => $source->id,
+        ]);
+        $sheet = FestivalScoreSheet::query()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $entry->id,
+            'festival_judge_assignment_id' => $assignment->id,
+            'festival_rubric_id' => $rubric->id,
+        ]);
+
+        try {
+            app(ReassignFestivalEntryCategory::class)->execute($entry, $target, $manager, 'Too late after judging.');
+            $this->fail('A category changed after a score sheet was prepared.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                __('app.festival_category_reassignment_judging_started'),
+                $exception->errors()['festival_category_id'][0] ?? null,
+            );
+        }
+        $this->assertSame($source->id, $entry->refresh()->festival_category_id);
+
+        $sheet->delete();
+        $result = FestivalResult::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_entry_id' => $entry->id,
+            'total_score' => 9,
+            'rank' => 1,
+            'published_at' => now(),
+        ]);
+
+        try {
+            app(ReassignFestivalEntryCategory::class)->execute($entry, $target, $manager, 'Too late after results.');
+            $this->fail('A category changed after a result was published.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                __('app.festival_category_reassignment_judging_started'),
+                $exception->errors()['festival_category_id'][0] ?? null,
+            );
+        }
+        $this->assertSame($source->id, $entry->refresh()->festival_category_id);
+
+        $result->delete();
+        app(ReassignFestivalEntryCategory::class)->execute($entry, $target, $manager, 'Valid before competition progress.');
+        $this->assertSame($target->id, $entry->refresh()->festival_category_id);
     }
 
     /** @return array{Account, FestivalEdition, FestivalPortalUser} */

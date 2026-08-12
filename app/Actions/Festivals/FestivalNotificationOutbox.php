@@ -2,18 +2,23 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationType;
 use App\Jobs\SendFestivalNotification;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalNotification;
-use App\Models\FestivalNotificationPreference;
 use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalTicketOrder;
+use App\Support\Festivals\FestivalNotificationMessage;
+use App\Support\Festivals\FestivalNotificationRenderer;
 use Illuminate\Support\Facades\DB;
 
 class FestivalNotificationOutbox
 {
+    public function __construct(private readonly FestivalNotificationRenderer $renderer) {}
+
     /** @param array<string, mixed> $payload */
     public function queueForEntry(FestivalEntry $entry, string|FestivalNotificationType $type, array $payload, ?string $dedupeSuffix = null): ?FestivalNotification
     {
@@ -35,30 +40,107 @@ class FestivalNotificationOutbox
         $type = $type instanceof FestivalNotificationType ? $type : FestivalNotificationType::from($type);
         abort_unless($portalUser->account_id === $edition->account_id, 404);
 
-        if (! $this->isEnabled($portalUser, $type)) {
-            return null;
-        }
-
-        $dedupeKey = implode(':', [
+        $dedupeBase = implode(':', [
             $type->value,
             $edition->id,
             $entry?->id ?? 0,
             $portalUser->id,
             $dedupeSuffix ?? hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR)),
         ]);
+        $message = $this->renderer->render($type, $portalUser->locale, $portalUser->displayName(), $payload);
 
-        $notification = FestivalNotification::query()->firstOrCreate([
-            'dedupe_key' => $dedupeKey,
-        ], [
-            'account_id' => $edition->account_id,
-            'festival_portal_user_id' => $portalUser->id,
-            'festival_edition_id' => $edition->id,
-            'festival_entry_id' => $entry?->id,
+        $notification = $this->createChannel(
+            channel: FestivalNotificationChannel::Email,
+            dedupeBase: $dedupeBase,
+            attributes: [
+                'account_id' => $edition->account_id,
+                'festival_portal_user_id' => $portalUser->id,
+                'festival_edition_id' => $edition->id,
+                'festival_entry_id' => $entry?->id,
+                'type' => $type,
+                'recipient_email' => $portalUser->email,
+                'recipient_phone' => $portalUser->phone,
+                'recipient_name' => $portalUser->displayName(),
+                'subject' => $message->subject,
+                'text' => $message->emailText(),
+                'payload' => $this->storedPayload($payload, $message),
+                'available_at' => now(),
+            ],
+        );
+
+        if ($this->smsIsEnabled($edition->account_id, $type)) {
+            $this->createChannel(
+                channel: FestivalNotificationChannel::Sms,
+                dedupeBase: $dedupeBase,
+                attributes: [
+                    'account_id' => $edition->account_id,
+                    'festival_portal_user_id' => $portalUser->id,
+                    'festival_edition_id' => $edition->id,
+                    'festival_entry_id' => $entry?->id,
+                    'type' => $type,
+                    'recipient_email' => $portalUser->email,
+                    'recipient_phone' => $portalUser->phone,
+                    'recipient_name' => $portalUser->displayName(),
+                    'subject' => $message->subject,
+                    'text' => $message->smsText,
+                    'payload' => $this->storedPayload($payload, $message),
+                    'available_at' => now(),
+                ],
+            );
+        }
+
+        return $notification;
+    }
+
+    /** @param array<string, mixed> $payload */
+    public function queueForTicketOrder(FestivalTicketOrder $order, array $payload, ?string $dedupeSuffix = null): FestivalNotification
+    {
+        $order->loadMissing(['account', 'edition']);
+        abort_unless($order->account_id === $order->edition->account_id, 404);
+        $type = FestivalNotificationType::TicketsIssued;
+        unset($payload['action_url']);
+        $payload = [
+            ...$payload,
+            'festival' => $order->edition->title,
+            'order_id' => $order->order_id,
+        ];
+        $message = $this->renderer->render($type, $order->locale, $order->buyer_name, $payload);
+        $dedupeBase = implode(':', [$type->value, $order->festival_edition_id, 'order', $order->id, $dedupeSuffix ?? 'issued']);
+        $attributes = [
+            'account_id' => $order->account_id,
+            'festival_edition_id' => $order->festival_edition_id,
+            'festival_ticket_order_id' => $order->id,
             'type' => $type,
-            'recipient_email' => $portalUser->email,
-            'recipient_name' => $portalUser->displayName(),
-            'payload' => $payload,
+            'recipient_email' => $order->buyer_email,
+            'recipient_phone' => $order->buyer_phone,
+            'recipient_name' => $order->buyer_name,
+            'subject' => $message->subject,
+            'payload' => $this->storedPayload($payload, $message),
             'available_at' => now(),
+        ];
+        $notification = $this->createChannel(FestivalNotificationChannel::Email, $dedupeBase, [
+            ...$attributes,
+            'text' => $message->emailText(),
+        ]);
+
+        if ($this->smsIsEnabled($order->account_id, $type)) {
+            $this->createChannel(FestivalNotificationChannel::Sms, $dedupeBase, [
+                ...$attributes,
+                'text' => $message->smsText,
+            ]);
+        }
+
+        return $notification;
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function createChannel(FestivalNotificationChannel $channel, string $dedupeBase, array $attributes): FestivalNotification
+    {
+        $notification = FestivalNotification::query()->firstOrCreate([
+            'dedupe_key' => $dedupeBase.':'.$channel->value,
+        ], [
+            ...$attributes,
+            'channel' => $channel,
         ]);
 
         if ($notification->wasRecentlyCreated) {
@@ -68,23 +150,27 @@ class FestivalNotificationOutbox
         return $notification;
     }
 
-    private function isEnabled(FestivalPortalUser $portalUser, FestivalNotificationType $type): bool
+    private function smsIsEnabled(int $accountId, FestivalNotificationType $type): bool
     {
-        if (! $type->isOptional()) {
-            return true;
-        }
-
-        $accountEnabled = FestivalNotificationSetting::query()
-            ->where('account_id', $portalUser->account_id)
+        return FestivalNotificationSetting::query()
+            ->where('account_id', $accountId)
             ->where('type', $type->value)
-            ->where('is_enabled', true)
+            ->where('send_sms', true)
             ->exists();
-        $recipientEnabled = FestivalNotificationPreference::query()
-            ->where('festival_portal_user_id', $portalUser->id)
-            ->where('type', $type->value)
-            ->where('is_enabled', true)
-            ->exists();
+    }
 
-        return $accountEnabled && $recipientEnabled;
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function storedPayload(array $payload, FestivalNotificationMessage $message): array
+    {
+        return [
+            ...$payload,
+            'greeting' => $message->greeting,
+            'lines' => $message->lines,
+            'action_label' => $message->actionLabel,
+            'action_url' => $message->actionUrl,
+        ];
     }
 }

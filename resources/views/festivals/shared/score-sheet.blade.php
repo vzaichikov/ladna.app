@@ -4,7 +4,7 @@
 
 @section('content')
 <main class="{{ $guest ? 'min-h-screen bg-canvas px-5 py-8' : '' }}">
-    <div class="mx-auto max-w-4xl space-y-6">
+    <div @class(['mx-auto space-y-6', 'max-w-6xl' => $guest, 'max-w-4xl' => ! $guest])>
         @if ($guest)
             @include('festivals.portal._nav')
         @endif

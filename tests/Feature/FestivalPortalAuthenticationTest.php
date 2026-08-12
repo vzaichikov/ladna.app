@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\FestivalPortalRole;
 use App\Models\Account;
 use App\Models\Customer;
+use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
@@ -140,23 +141,293 @@ class FestivalPortalAuthenticationTest extends TestCase
         $this->assertGuest('festival');
     }
 
-    public function test_public_pages_expose_separate_participant_and_judge_entry_points(): void
+    public function test_participant_profile_uses_inline_errors_required_markers_and_current_registration_types(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'uk']);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create(['locale' => 'uk']);
+        $profileUrl = route('festival.portal.profile.edit', $account->slug);
+
+        $form = $this->actingAs($portalUser, 'festival')->get($profileUrl);
+
+        $form->assertOk()
+            ->assertSee('novalidate', false)
+            ->assertSeeInOrder([
+                'value="adult_athlete"',
+                'value="coach"',
+            ], false)
+            ->assertDontSee('value="guardian"', false)
+            ->assertDontSee(__('app.festival_registrant_guardian'));
+        $this->assertSame(9, substr_count((string) $form->getContent(), 'data-required-marker'));
+
+        $invalidForm = $this->from($profileUrl)
+            ->followingRedirects()
+            ->put(route('festival.portal.profile.update', $account->slug), [
+                'registrant_type' => 'guardian',
+                'first_name' => '',
+                'last_name' => '',
+                'email' => '',
+                'phone' => '',
+                'city' => '',
+                'studio_name' => '',
+                'locale' => '',
+            ]);
+
+        $invalidForm
+            ->assertOk()
+            ->assertDontSee('<ul class="list-disc pl-5">', false)
+            ->assertSeeInOrder([
+                'name="registrant_type"',
+                'data-field-error="registrant_type"',
+                'name="first_name"',
+                'data-field-error="first_name"',
+                'name="last_name"',
+                'data-field-error="last_name"',
+                'name="email"',
+                'data-field-error="email"',
+                'name="phone"',
+                'data-field-error="phone"',
+                'name="city"',
+                'data-field-error="city"',
+                'name="studio_name"',
+                'data-field-error="studio_name"',
+                'name="locale"',
+                'data-field-error="locale"',
+            ], false);
+    }
+
+    public function test_participant_profile_places_duplicate_identity_errors_under_visible_fields(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'email' => 'current@example.test',
+            'email_normalized' => 'current@example.test',
+            'phone' => '+380501112233',
+            'phone_normalized' => '+380501112233',
+        ]);
+        FestivalPortalUser::factory()->for($account)->create([
+            'email' => 'taken@example.test',
+            'email_normalized' => 'taken@example.test',
+            'phone' => '+380502223344',
+            'phone_normalized' => '+380502223344',
+        ]);
+
+        $this->actingAs($portalUser, 'festival')
+            ->from(route('festival.portal.profile.edit', $account->slug))
+            ->followingRedirects()
+            ->put(route('festival.portal.profile.update', $account->slug), [
+                'registrant_type' => 'adult_athlete',
+                'first_name' => $portalUser->first_name,
+                'last_name' => $portalUser->last_name,
+                'email' => 'TAKEN@example.test',
+                'phone' => '+380502223344',
+                'city' => $portalUser->city,
+                'studio_name' => $portalUser->studio_name,
+                'locale' => 'en',
+            ])
+            ->assertOk()
+            ->assertSee('data-field-error="email"', false)
+            ->assertSee('data-field-error="phone"', false)
+            ->assertDontSee('data-field-error="email_normalized"', false)
+            ->assertDontSee('data-field-error="phone_normalized"', false);
+    }
+
+    public function test_legacy_guardian_profile_can_be_edited_without_changing_its_stored_type(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'registrant_type' => 'guardian',
+            'email' => 'legacy.guardian@example.test',
+            'email_normalized' => 'legacy.guardian@example.test',
+            'phone' => '+380501112233',
+            'phone_normalized' => '+380501112233',
+        ]);
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.profile.edit', $account->slug))
+            ->assertOk()
+            ->assertSee('value="guardian"', false);
+
+        $this->put(route('festival.portal.profile.update', $account->slug), [
+            'registrant_type' => 'guardian',
+            'first_name' => $portalUser->first_name,
+            'last_name' => $portalUser->last_name,
+            'email' => $portalUser->email,
+            'phone' => $portalUser->phone,
+            'city' => 'Updated city',
+            'studio_name' => $portalUser->studio_name,
+            'locale' => 'en',
+        ])->assertRedirect(route('festival.portal.dashboard', $account->slug))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('guardian', $portalUser->refresh()->registrant_type->value);
+        $this->assertSame('Updated city', $portalUser->city);
+    }
+
+    public function test_role_specific_login_pages_do_not_cross_link_and_show_distinct_mascots(): void
     {
         $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
 
         $this->get(route('festival.login', $account->slug))
             ->assertOk()
             ->assertSee(__('app.festival_participant_login'))
-            ->assertSee(route('festival.judge.login', $account->slug), false)
+            ->assertSee('data-public-studio-header', false)
+            ->assertSee('data-public-studio-footer-identity', false)
+            ->assertSee('data-public-studio-footer-name', false)
+            ->assertSee(asset('assets/brand/mascot/ladna-mascot-festival-champion-cutout.png'), false)
+            ->assertDontSee(asset('assets/brand/mascot/ladna-mascot-festival-judge-cutout.png'), false)
+            ->assertDontSee(route('festival.judge.login', $account->slug), false)
             ->assertDontSee(route('api-docs.show'), false)
             ->assertDontSee(route('changelog.en'), false);
 
         $this->get(route('festival.judge.login', $account->slug))
             ->assertOk()
             ->assertSee(__('app.festival_judge_login'))
-            ->assertSee(route('festival.login', $account->slug), false)
+            ->assertSee('data-public-studio-header', false)
+            ->assertSee('data-public-studio-footer-identity', false)
+            ->assertSee('data-public-studio-footer-name', false)
+            ->assertSee(asset('assets/brand/mascot/ladna-mascot-festival-judge-cutout.png'), false)
+            ->assertDontSee(asset('assets/brand/mascot/ladna-mascot-festival-champion-cutout.png'), false)
+            ->assertDontSee(route('festival.login', $account->slug), false)
             ->assertDontSee(route('api-docs.show'), false)
             ->assertDontSee(route('changelog.en'), false);
+    }
+
+    public function test_participant_profile_creates_and_reuses_its_own_roster_member(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'uk']);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'registrant_type' => 'coach',
+            'patronymic' => null,
+            'phone' => '+380501234567',
+            'phone_normalized' => '+380501234567',
+        ]);
+        $payload = [
+            'registrant_type' => 'adult_athlete',
+            'first_name' => 'Марія',
+            'last_name' => 'Танцівниця',
+            'patronymic' => '',
+            'stage_name' => 'Mara Air',
+            'date_of_birth' => '2000-05-10',
+            'email' => $portalUser->email,
+            'phone' => $portalUser->phone,
+            'city' => $portalUser->city,
+            'studio_name' => $portalUser->studio_name,
+            'locale' => 'uk',
+        ];
+
+        $this->actingAs($portalUser, 'festival')
+            ->put(route('festival.portal.profile.update', $account->slug), $payload)
+            ->assertRedirect(route('festival.portal.dashboard', $account->slug))
+            ->assertSessionHasNoErrors();
+
+        $portalUser->refresh();
+        $this->assertSame('Mara Air', $portalUser->stage_name);
+        $this->assertCount(1, $portalUser->participants);
+        $this->assertTrue($portalUser->profileParticipant->is_profile_owner);
+        $this->assertSame('2000-05-10', $portalUser->profileParticipant->date_of_birth->toDateString());
+
+        $this->put(route('festival.portal.participants.update', [$account->slug, $portalUser->profileParticipant]), [
+            'first_name' => 'Forged',
+            'last_name' => 'Roster edit',
+            'date_of_birth' => '1999-01-01',
+        ])->assertStatus(409);
+        $this->delete(route('festival.portal.participants.destroy', [$account->slug, $portalUser->profileParticipant]))->assertStatus(409);
+
+        $payload['first_name'] = 'Марічка';
+        $this->put(route('festival.portal.profile.update', $account->slug), $payload)->assertRedirect();
+
+        $this->assertSame(1, $portalUser->participants()->count());
+        $this->assertSame('Марічка', $portalUser->profileParticipant()->firstOrFail()->first_name);
+    }
+
+    public function test_adult_participant_profile_cannot_change_to_coach(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'registrant_type' => 'adult_athlete',
+        ]);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'is_profile_owner' => true,
+        ]);
+        $profileUrl = route('festival.portal.profile.edit', $account->slug);
+
+        $this->actingAs($portalUser, 'festival')
+            ->get($profileUrl)
+            ->assertOk()
+            ->assertSee('value="adult_athlete"', false)
+            ->assertDontSee('value="coach"', false);
+
+        $this->from($profileUrl)
+            ->put(route('festival.portal.profile.update', $account->slug), [
+                'registrant_type' => 'coach',
+                'first_name' => $portalUser->first_name,
+                'last_name' => $portalUser->last_name,
+                'email' => $portalUser->email,
+                'phone' => $portalUser->phone,
+                'city' => $portalUser->city,
+                'studio_name' => $portalUser->studio_name,
+                'locale' => 'en',
+            ])
+            ->assertRedirect($profileUrl)
+            ->assertSessionHasErrors('registrant_type');
+
+        $this->assertSame('adult_athlete', $portalUser->refresh()->registrant_type->value);
+        $this->assertTrue($portalUser->profileParticipant->is($participant));
+    }
+
+    public function test_judge_profile_rejects_registrant_identity_fields(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
+        $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
+        $profileUrl = route('festival.portal.judge.profile.edit', $account->slug);
+
+        $this->actingAs($judge, 'festival')
+            ->from($profileUrl)
+            ->put(route('festival.portal.judge.profile.update', $account->slug), [
+                'registrant_type' => 'adult_athlete',
+                'date_of_birth' => '2000-01-01',
+                'city' => 'Kyiv',
+                'studio_name' => 'Registrant Studio',
+                'instagram_url' => 'https://example.test/registrant',
+                'first_name' => $judge->first_name,
+                'last_name' => $judge->last_name,
+                'email' => $judge->email,
+                'phone' => $judge->phone,
+                'locale' => 'en',
+            ])
+            ->assertRedirect($profileUrl)
+            ->assertSessionHasErrors(['registrant_type', 'date_of_birth', 'city', 'studio_name', 'instagram_url']);
+
+        $this->assertNull($judge->refresh()->registrant_type);
+        $this->assertSame(0, $judge->participants()->count());
+    }
+
+    public function test_all_primary_participant_portal_pages_use_the_dashboard_width(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+
+        foreach (['festival.portal.dashboard', 'festival.portal.entries.index', 'festival.portal.participants.index', 'festival.portal.profile.edit'] as $route) {
+            $this->actingAs($portalUser, 'festival')->get(route($route, $account->slug))
+                ->assertOk()
+                ->assertSee('max-w-6xl', false);
+        }
+    }
+
+    public function test_participant_roster_is_presented_as_the_portal_users_private_team(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.participants.index', $account->slug))
+            ->assertOk()
+            ->assertSee(__('app.festival_portal_team'))
+            ->assertSee(__('app.festival_portal_my_team'))
+            ->assertSee(__('app.festival_portal_team_copy'))
+            ->assertSee(__('app.festival_portal_add_to_team'))
+            ->assertDontSee(__('app.festival_participants_copy'));
     }
 
     public function test_magic_link_runtime_and_routes_are_removed(): void

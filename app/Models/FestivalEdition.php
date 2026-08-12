@@ -110,7 +110,18 @@ class FestivalEdition extends Model
 
     public function coverMedia(): HasOne
     {
-        return $this->hasOne(FestivalMedia::class)->where('is_cover', true)->where('is_active', true)->latestOfMany();
+        return $this->hasOne(FestivalMedia::class)->ofMany(
+            ['id' => 'max'],
+            fn (Builder $query): Builder => $query->where('is_cover', true)->where('is_active', true),
+        );
+    }
+
+    public function mobileCoverMedia(): HasOne
+    {
+        return $this->hasOne(FestivalMedia::class)->ofMany(
+            ['id' => 'max'],
+            fn (Builder $query): Builder => $query->where('is_mobile_cover', true)->where('is_active', true),
+        );
     }
 
     public function stages(): HasMany

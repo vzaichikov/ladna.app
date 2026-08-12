@@ -12,6 +12,10 @@ use App\Enums\AccountRole;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
+use App\Enums\FestivalPaymentStatus;
+use App\Enums\FestivalRequirementStatus;
+use App\Enums\IntegrationCategory;
+use App\Enums\IntegrationProvider;
 use App\Enums\StudioPermission;
 use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Models\Account;
@@ -20,12 +24,18 @@ use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
+use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalParticipant;
+use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalSeries;
 use App\Models\FestivalWorkflow;
+use App\Models\IntegrationSetting;
 use App\Models\User;
+use App\Support\Festivals\FestivalPaymentService;
+use App\Support\Payments\PaymentCallbackResult;
+use App\Support\Payments\PaymentCallbackStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Blade;
@@ -71,6 +81,453 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertStringNotContainsString('<script>', $hostile);
     }
 
+    public function test_boolean_agreements_use_ajax_checkboxes_and_refresh_their_semantic_card(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $definition = $this->requirement($edition, $workflow, 'application', 'agreement', 'boolean');
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Agreement entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $requirement = $step->requirements->firstWhere('festival_requirement_definition_id', $definition->id);
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, true);
+        $requirement->forceFill([
+            'status' => FestivalRequirementStatus::Rejected,
+            'review_notes' => 'Replace this agreement <script>alert("unsafe")</script>',
+        ])->save();
+
+        $page = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+
+        $page->assertOk()
+            ->assertSee('data-festival-requirement-card', false)
+            ->assertSee('data-async-form', false)
+            ->assertSee('type="checkbox"', false)
+            ->assertSee('name="value"', false)
+            ->assertSee('value="1"', false)
+            ->assertDontSee('<select name="value"', false)
+            ->assertSee('crm-status-danger', false)
+            ->assertSee('border-rose-300 bg-rose-50', false)
+            ->assertSee('Replace this agreement &lt;script&gt;alert(&quot;unsafe&quot;)&lt;/script&gt;', false)
+            ->assertDontSee('<script>alert("unsafe")</script>', false);
+
+        $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
+            'value' => 'not-a-boolean',
+        ])->assertUnprocessable()->assertJsonValidationErrors('value');
+
+        $saved = $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
+            'value' => true,
+        ]);
+        $saved->assertOk()
+            ->assertJsonPath('requirement_id', $requirement->id)
+            ->assertJsonPath('message', __('app.festival_response_saved'));
+        $this->assertStringContainsString('data-festival-requirement-card', $saved->json('requirement_html'));
+        $this->assertStringContainsString('crm-status-warning', $saved->json('requirement_html'));
+        $this->assertStringNotContainsString('Replace this agreement', $saved->json('requirement_html'));
+        $this->assertSame(FestivalRequirementStatus::Submitted, $requirement->refresh()->status);
+        $this->assertNull($requirement->review_notes);
+
+        $this->post(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
+            'value' => '1',
+        ])->assertRedirect()->assertSessionHas('status', __('app.festival_response_saved'));
+    }
+
+    public function test_required_files_upload_asynchronously_and_cannot_be_accepted_or_advance_without_a_submission(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $linkDefinition = $this->requirement($edition, $workflow, 'application', 'selection-link', 'url');
+        $fileDefinition = $this->requirement($edition, $workflow, 'application', 'performance-music', 'file');
+        $fileDefinition->update([
+            'name' => 'Performance music',
+            'allowed_extensions' => ['mp3'],
+            'allowed_mime_types' => [],
+        ]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'File upload entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $linkRequirement = $step->requirements->firstWhere('festival_requirement_definition_id', $linkDefinition->id);
+        $fileRequirement = $step->requirements->firstWhere('festival_requirement_definition_id', $fileDefinition->id);
+        app(StoreFestivalResponse::class)->execute($linkRequirement, $portalUser, 'https://music.example/preview');
+
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $fileRequirement]), [
+                'status' => FestivalRequirementStatus::Accepted->value,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
+        $this->assertSame(FestivalRequirementStatus::Missing, $fileRequirement->refresh()->status);
+
+        $fileRequirement->forceFill(['status' => FestivalRequirementStatus::Accepted])->save();
+        try {
+            app(SubmitFestivalEntryStep::class)->execute($entry->refresh(), $step->refresh());
+            $this->fail('An accepted file requirement without a submission must not advance its step.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('step', $exception->errors());
+        }
+        $this->assertSame(FestivalEntryStepStatus::Draft, $step->refresh()->status);
+
+        $step->forceFill(['status' => FestivalEntryStepStatus::Submitted])->save();
+        try {
+            app(ReviewFestivalEntryStep::class)->execute($step->refresh(), $owner, 'approve');
+            $this->fail('A step with an accepted file requirement but no submission must not be approved.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('decision', $exception->errors());
+        }
+        $step->forceFill(['status' => FestivalEntryStepStatus::Draft])->save();
+        $fileRequirement->forceFill(['status' => FestivalRequirementStatus::Missing])->save();
+
+        $portalPage = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+        $portalPage->assertOk()
+            ->assertSee(route('festival.portal.submissions.store', [$account->slug, $entry, $fileRequirement]), false)
+            ->assertSee('enctype="multipart/form-data"', false)
+            ->assertSee('data-async-form', false)
+            ->assertSee('data-async-error-for="file"', false);
+
+        $jsonHeaders = ['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'];
+        $uploadUrl = route('festival.portal.submissions.store', [$account->slug, $entry, $fileRequirement]);
+        $this->withHeaders($jsonHeaders)
+            ->post($uploadUrl)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('file');
+
+        $uploaded = $this->withHeaders($jsonHeaders)->post($uploadUrl, [
+            'file' => UploadedFile::fake()->create('performance.mp3', 12, 'audio/mpeg'),
+        ]);
+        $uploaded->assertOk()
+            ->assertJsonPath('requirement_id', $fileRequirement->id)
+            ->assertJsonPath('message', __('app.festival_submission_saved'));
+        $this->assertStringContainsString('data-festival-requirement-card', $uploaded->json('requirement_html'));
+        $this->assertStringContainsString('crm-status-warning', $uploaded->json('requirement_html'));
+        $submission = $fileRequirement->submissions()->firstOrFail();
+        Storage::disk('local')->assertExists($submission->path);
+
+        $this->flushHeaders()->post($uploadUrl, [
+            'file' => UploadedFile::fake()->create('replacement.mp3', 14, 'audio/mpeg'),
+        ])->assertRedirect()->assertSessionHas('status', __('app.festival_submission_saved'));
+        $submission->refresh();
+        $this->assertSame('replacement.mp3', $submission->original_name);
+
+        $application = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]));
+        $application->assertOk()
+            ->assertSeeInOrder([
+                __('app.festival_payments'),
+                __('app.files'),
+                'Performance music',
+                __('app.festival_checklist'),
+            ])
+            ->assertSee(route('dashboard.accounts.festivals.submissions.view', [$account, $submission]), false)
+            ->assertSee(route('dashboard.accounts.festivals.submissions.download', [$account, $submission]), false)
+            ->assertSee('target="_blank"', false)
+            ->assertSee('https://music.example/preview');
+
+        $viewResponse = $this->get(route('dashboard.accounts.festivals.submissions.view', [$account, $submission]));
+        $viewResponse->assertOk()->assertStreamed();
+        $this->assertStringStartsWith('inline;', (string) $viewResponse->headers->get('content-disposition'));
+        $downloadResponse = $this->get(route('dashboard.accounts.festivals.submissions.download', [$account, $submission]));
+        $downloadResponse->assertOk()->assertStreamed();
+        $this->assertStringStartsWith('attachment;', (string) $downloadResponse->headers->get('content-disposition'));
+
+        $judge = User::factory()->create();
+        $account->users()->attach($judge->id, [
+            'role' => AccountRole::Trainer->value,
+            'permissions' => [StudioPermission::JudgeFestivals->value],
+        ]);
+        $viewUrl = route('dashboard.accounts.festivals.submissions.view', [$account, $submission]);
+        $downloadUrl = route('dashboard.accounts.festivals.submissions.download', [$account, $submission]);
+        $this->actingAs($judge)->get($viewUrl)->assertForbidden();
+        $this->actingAs($judge)->get($downloadUrl)->assertForbidden();
+
+        $otherCategory = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $assignment = FestivalJudgeAssignment::factory()->for($edition)->for($judge)->create(['account_id' => $account->id]);
+        $assignment->categories()->attach($otherCategory->id, ['account_id' => $account->id]);
+        $this->actingAs($judge)->get($viewUrl)->assertForbidden();
+        $this->actingAs($judge)->get($downloadUrl)->assertForbidden();
+
+        $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
+        $assignedJudgeView = $this->actingAs($judge)->get($viewUrl);
+        $this->assertSame(200, $assignedJudgeView->getStatusCode(), 'An active judge assigned to the entry category must be able to preview its submission.');
+        $assignedJudgeDownload = $this->actingAs($judge)->get($downloadUrl);
+        $this->assertSame(200, $assignedJudgeDownload->getStatusCode(), 'An active judge assigned to the entry category must be able to download its submission.');
+
+        $assignment->update(['is_active' => false]);
+        $this->actingAs($judge)->get($viewUrl)->assertForbidden();
+        $this->actingAs($judge)->get($downloadUrl)->assertForbidden();
+
+        $fileDefinition->update(['allowed_extensions' => [], 'allowed_mime_types' => []]);
+        $this->actingAs($portalUser, 'festival')->post($uploadUrl, [
+            'file' => UploadedFile::fake()->createWithContent('active.html', '<!doctype html><script>document.cookie</script>'),
+        ])->assertRedirect()->assertSessionHas('status', __('app.festival_submission_saved'));
+        $submission->refresh();
+        $this->assertSame('text/html', $submission->mime_type);
+
+        $unsafeView = $this->actingAs($owner, 'web')->get(route('dashboard.accounts.festivals.submissions.view', [$account, $submission]));
+        $unsafeView->assertOk()->assertDownload('active.html');
+        $this->assertSame('application/octet-stream', $unsafeView->headers->get('content-type'));
+
+        app(SubmitFestivalEntryStep::class)->execute($entry->refresh(), $step->refresh());
+        $this->assertSame(FestivalEntryStepStatus::Submitted, $step->refresh()->status);
+    }
+
+    public function test_staff_application_review_forms_save_asynchronously_with_semantic_field_statuses(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $definition = $this->requirement($edition, $workflow, 'application', 'selection-video', 'url');
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Async review entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $requirement = $step->requirements->firstWhere('festival_requirement_definition_id', $definition->id);
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 'https://video.example/async-review');
+        app(SubmitFestivalEntryStep::class)->execute($entry, $step);
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $step->id,
+            'code' => 'FCH-ASYNC-'.$entry->id,
+            'kind' => 'custom',
+            'name' => 'Manual review charge',
+            'status' => FestivalChargeStatus::Pending,
+            'amount_cents' => 2500,
+            'currency' => 'UAH',
+            'due_at' => now()->addDay(),
+        ]);
+        $targetCategory = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_id' => $workflow->id,
+            'name' => 'Async target category',
+        ]);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $applicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]);
+        $page = $this->actingAs($owner)->get($applicationUrl);
+        $page->assertOk()
+            ->assertSee('data-festival-application-fragment-key="category-'.$entry->id.'"', false)
+            ->assertSee($targetCategory->name)
+            ->assertSee('data-festival-application-fragment-key="step-'.$entry->id.'"', false)
+            ->assertSee('data-festival-application-fragment-key="requirement-'.$requirement->id.'"', false)
+            ->assertSee('data-festival-application-fragment-key="charge-'.$charge->id.'"', false)
+            ->assertSee('data-async-form', false)
+            ->assertSee('crm-status-warning', false)
+            ->assertSee(__('app.festival_requirement_status_submitted'));
+
+        $categoryReview = $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.entries.reassign-category', [$account, $edition, $entry]), [
+                'festival_category_id' => $targetCategory->id,
+                'reason' => 'Better category fit.',
+            ]);
+        $categoryReview->assertOk()
+            ->assertJsonPath('message', __('app.festival_category_reassigned'))
+            ->assertJsonCount(2, 'fragments_html');
+        $this->assertStringContainsString('data-festival-application-fragment-key="category-'.$entry->id.'"', $categoryReview->json('fragments_html.0'));
+        $this->assertStringContainsString($targetCategory->name, $categoryReview->json('fragments_html.0'));
+        $this->assertSame($targetCategory->id, $entry->refresh()->festival_category_id);
+
+        $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]), [
+                'status' => 'unknown',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
+
+        $accepted = $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]), [
+                'status' => FestivalRequirementStatus::Accepted->value,
+                'review_notes' => 'Accepted asynchronously.',
+            ]);
+        $accepted->assertOk()
+            ->assertJsonPath('message', __('app.festival_requirement_reviewed'));
+        $this->assertStringContainsString('data-festival-application-fragment-key="requirement-'.$requirement->id.'"', $accepted->json('fragment_html'));
+        $this->assertStringContainsString('crm-status-active', $accepted->json('fragment_html'));
+        $this->assertSame(FestivalRequirementStatus::Accepted, $requirement->refresh()->status);
+
+        $rejected = $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]), [
+                'status' => FestivalRequirementStatus::Rejected->value,
+                'review_notes' => 'Rejected asynchronously.',
+            ]);
+        $rejected->assertOk();
+        $this->assertStringContainsString('crm-status-danger', $rejected->json('fragment_html'));
+        $this->assertSame(FestivalRequirementStatus::Rejected, $requirement->refresh()->status);
+
+        $this->actingAs($owner)
+            ->from($applicationUrl)
+            ->patch(route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]), [
+                'status' => FestivalRequirementStatus::Accepted->value,
+            ])
+            ->assertRedirect($applicationUrl);
+
+        $chargeReview = $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.charges.manual-review', [$account, $edition, $charge]), [
+                'decision' => 'approve',
+                'notes' => 'Received.',
+            ]);
+        $chargeReview->assertOk()
+            ->assertJsonPath('message', __('app.festival_charge_reviewed'));
+        $this->assertStringContainsString('data-festival-application-fragment-key="charge-'.$charge->id.'"', $chargeReview->json('fragment_html'));
+        $this->assertSame(FestivalChargeStatus::Paid, $charge->refresh()->status);
+
+        $stepReview = $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.entry-steps.review', [$account, $edition, $entry, $step]), [
+                'decision' => 'approve',
+                'comment' => 'Qualified.',
+            ]);
+        $stepReview->assertOk()
+            ->assertJsonPath('message', __('app.festival_step_reviewed'))
+            ->assertJsonCount(2, 'fragments_html');
+        $this->assertStringContainsString('data-festival-application-fragment-key="step-'.$entry->id.'"', $stepReview->json('fragments_html.0'));
+        $this->assertStringContainsString('data-festival-application-fragment-key="charges-'.$entry->id.'"', $stepReview->json('fragments_html.1'));
+        $this->assertSame(FestivalEntryStepStatus::Approved, $step->refresh()->status);
+
+        $laterStep = $entry->steps()->where('id', '!=', $step->id)->orderByDesc('id')->firstOrFail();
+        $laterStep->forceFill(['status' => FestivalEntryStepStatus::Submitted])->save();
+        $laterCategoryReview = $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.entries.reassign-category', [$account, $edition, $entry]), [
+                'festival_category_id' => $category->id,
+                'reason' => 'Return from a later registration step.',
+            ]);
+        $laterCategoryReview->assertOk();
+        $this->assertSame($category->id, $entry->refresh()->festival_category_id);
+    }
+
+    public function test_entry_charge_uses_only_the_studio_payment_account_and_renders_failed_and_paid_states(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category] = $this->festival();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Payment entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $step->id,
+            'code' => 'FCH-PORTAL-'.$entry->id,
+            'kind' => 'qualification',
+            'name' => 'Qualification fee',
+            'amount_cents' => 50000,
+            'currency' => 'UAH',
+        ]);
+        IntegrationSetting::factory()->create([
+            'provider' => IntegrationProvider::Liqpay,
+            'category' => IntegrationCategory::Payment,
+            'is_enabled' => true,
+            'credentials' => ['public_key' => 'platform-public', 'private_key' => 'platform-private'],
+        ]);
+
+        $page = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+        $page->assertOk()
+            ->assertSee('data-festival-charge-card', false)
+            ->assertSee(__('app.no_payment_methods_available'))
+            ->assertDontSee('name="provider"', false);
+
+        $paymentError = $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+            'festival_rules_accepted' => '1',
+        ]);
+        $paymentError
+            ->assertRedirect(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]).'#festival-charge-'.$charge->id)
+            ->assertSessionHasErrorsIn('festival_payment_'.$charge->id, 'provider');
+        $this->assertFalse(session('errors')->getBag('default')->any());
+
+        $this->followingRedirects()
+            ->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+                'provider' => IntegrationProvider::Liqpay->value,
+                'festival_rules_accepted' => '1',
+            ])
+            ->assertOk()
+            ->assertSeeInOrder(['data-festival-charge-card', 'data-festival-payment-error'], false);
+
+        IntegrationSetting::factory()->forAccountScope($account)->create([
+            'provider' => IntegrationProvider::Liqpay,
+            'category' => IntegrationCategory::Payment,
+            'is_enabled' => true,
+            'credentials' => ['public_key' => 'studio-public', 'private_key' => 'studio-private'],
+        ]);
+        IntegrationSetting::factory()->forAccountScope($account)->create([
+            'provider' => IntegrationProvider::Monopay,
+            'category' => IntegrationCategory::Payment,
+            'is_enabled' => true,
+            'credentials' => ['api_token' => 'studio-mono-token'],
+        ]);
+
+        $configuredPage = $this->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+        $configuredPage->assertOk()
+            ->assertSee('name="provider" value="liqpay"', false)
+            ->assertSee('lg:grid-cols-[1fr_0.75fr]', false)
+            ->assertSee(__('app.festival_payment_for'))
+            ->assertSee('name="festival_rules_accepted"', false)
+            ->assertSee(__('app.festival_rules_agreement_prefix'))
+            ->assertSee(__('app.festival_rules_link_text'))
+            ->assertSee('bg-emerald-600 text-white', false)
+            ->assertSee('alt="Google Pay"', false)
+            ->assertSee('alt="Apple Pay"', false)
+            ->assertSee('alt="Visa"', false)
+            ->assertSee('alt="Mastercard"', false)
+            ->assertDontSee('<select name="provider"', false)
+            ->assertDontSee(__('app.no_payment_methods_available'));
+
+        $rulesError = $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+        ]);
+        $rulesError->assertSessionHasErrorsIn('festival_payment_'.$charge->id, 'festival_rules_accepted');
+        $this->followingRedirects()
+            ->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+                'provider' => IntegrationProvider::Liqpay->value,
+            ])
+            ->assertOk()
+            ->assertSee('data-festival-payment-error', false)
+            ->assertSee(__('app.festival_rules_accepted'));
+
+        $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+            'festival_rules_accepted' => '1',
+        ])->assertOk()->assertSee('https://www.liqpay.ua/api/3/checkout', false);
+        $firstAttempt = FestivalPaymentAttempt::query()->where('festival_charge_id', $charge->id)->sole();
+        $this->assertSame($account->id, $firstAttempt->account_id);
+
+        app(FestivalPaymentService::class)->completeAttempt($firstAttempt, new PaymentCallbackResult(
+            orderId: $firstAttempt->order_id,
+            status: PaymentCallbackStatus::Failed,
+            amountCents: $firstAttempt->amount_cents,
+            currency: $firstAttempt->currency,
+        ));
+        $this->assertSame(FestivalPaymentStatus::Failed, $firstAttempt->refresh()->status);
+        $this->assertSame(FestivalChargeStatus::Failed, $charge->refresh()->status);
+        $this->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]))
+            ->assertOk()
+            ->assertSee('border-rose-300 bg-rose-50', false)
+            ->assertSee(__('app.festival_payment_failed_retry'))
+            ->assertSee(__('app.pay'));
+
+        $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+            'festival_rules_accepted' => '1',
+        ])->assertOk();
+        $secondAttempt = FestivalPaymentAttempt::query()->where('festival_charge_id', $charge->id)->latest('id')->firstOrFail();
+        app(FestivalPaymentService::class)->completeAttempt($secondAttempt, new PaymentCallbackResult(
+            orderId: $secondAttempt->order_id,
+            status: PaymentCallbackStatus::Paid,
+            amountCents: $secondAttempt->amount_cents,
+            currency: $secondAttempt->currency,
+        ));
+
+        $this->assertSame(FestivalChargeStatus::Paid, $charge->refresh()->status);
+        $this->assertSame(2, FestivalPaymentAttempt::query()->where('festival_charge_id', $charge->id)->count());
+        $this->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]))
+            ->assertOk()
+            ->assertSee('border-emerald-300 bg-emerald-50', false)
+            ->assertSee(__('app.festival_charge_status_paid'))
+            ->assertDontSee(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), false);
+    }
+
     public function test_owner_review_renders_only_current_values_and_file_downloads_while_portal_withdraw_is_touch_safe(): void
     {
         Queue::fake();
@@ -93,7 +550,7 @@ class FestivalRegistrationStepperTest extends TestCase
 
         $owner = User::factory()->create();
         $account->addOwner($owner);
-        $ownerResponse = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [$account, $edition]));
+        $ownerResponse = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]));
 
         $ownerResponse->assertOk()
             ->assertSee('https://video.example/revised')
@@ -110,7 +567,7 @@ class FestivalRegistrationStepperTest extends TestCase
             'permissions' => [StudioPermission::ManageFestivalFinance->value],
         ]);
         $this->actingAs($financeStaff)
-            ->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]))
             ->assertOk()
             ->assertDontSee('https://video.example/original')
             ->assertDontSee('https://video.example/revised');
@@ -366,6 +823,58 @@ class FestivalRegistrationStepperTest extends TestCase
             'status' => 'pending',
             'amount_cents' => 2000,
         ]);
+    }
+
+    public function test_cross_currency_paid_response_repricing_is_rejected_atomically(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $this->requirement($edition, $workflow, 'technical_form', 'helpers', 'integer', ['mode' => 'per_unit', 'unit_amount_cents' => 1000]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Cross-currency entry'));
+        $entry->steps()
+            ->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))
+            ->update(['status' => FestivalEntryStepStatus::Approved->value]);
+        $entry->load('steps.workflowStep', 'steps.requirements.definition');
+        $requirement = $this->step($entry, 'technical_form')->requirements->first();
+        $submission = app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 3);
+        $paidCharge = $entry->charges()->where('festival_submission_id', $submission->id)->firstOrFail();
+        $paidCharge->forceFill(['status' => FestivalChargeStatus::Paid, 'paid_at' => now(), 'currency' => 'UAH'])->save();
+        $account->update(['default_currency' => 'USD']);
+
+        try {
+            app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 1);
+            $this->fail('A paid response in another currency must not be repriced automatically.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('value', $exception->errors());
+        }
+
+        $this->assertSame(3, data_get($submission->refresh()->value_json, 'value'));
+        $this->assertSame(3000, $paidCharge->refresh()->amount_cents);
+        $this->assertSame('UAH', $paidCharge->currency);
+        $this->assertSame(0, $entry->chargeAdjustments()->count());
+        $this->assertSame(1, $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->count());
+    }
+
+    public function test_portal_groups_pending_refunds_by_stored_currency(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category] = $this->festival();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Mixed refund entry'));
+        foreach ([['UAH', 1000], ['USD', 2500]] as [$currency, $amountCents]) {
+            $entry->chargeAdjustments()->create([
+                'account_id' => $account->id,
+                'idempotency_key' => 'mixed-refund-'.strtolower($currency).'-'.$entry->id,
+                'direction' => 'refund',
+                'status' => 'pending',
+                'amount_cents' => $amountCents,
+                'currency' => $currency,
+            ]);
+        }
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entries.show', [$account->slug, $entry]))
+            ->assertOk()
+            ->assertSee('10 ₴')
+            ->assertSee('25 $');
     }
 
     /** @return array{Account, FestivalEdition, FestivalPortalUser, FestivalParticipant, FestivalCategory, FestivalWorkflow} */

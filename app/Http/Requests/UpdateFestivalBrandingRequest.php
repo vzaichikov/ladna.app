@@ -41,6 +41,7 @@ class UpdateFestivalBrandingRequest extends FormRequest
             ],
             'landing_palette' => ['required', 'string', Rule::in(array_keys($registry->palettes()))],
             'hero_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:8192'],
+            'mobile_hero_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:8192'],
         ];
     }
 

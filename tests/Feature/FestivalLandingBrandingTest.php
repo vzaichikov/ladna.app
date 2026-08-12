@@ -5,10 +5,18 @@ namespace Tests\Feature;
 use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\FestivalActivityLog;
+use App\Models\FestivalChargeDefinition;
+use App\Models\FestivalContentSection;
 use App\Models\FestivalEdition;
+use App\Models\FestivalJudgeAssignment;
+use App\Models\FestivalMedia;
 use App\Models\FestivalSeries;
+use App\Models\FestivalStage;
+use App\Models\FestivalWorkflow;
+use App\Models\FestivalWorkflowStep;
 use App\Models\User;
 use App\Support\Festivals\FestivalLandingRegistry;
+use App\Support\MoneyFormatter;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
@@ -17,20 +25,27 @@ class FestivalLandingBrandingTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_registry_contains_only_complete_trusted_entries_and_a_real_general_thumbnail(): void
+    public function test_registry_contains_only_complete_trusted_entries_and_real_template_thumbnails(): void
     {
         $registry = app(FestivalLandingRegistry::class);
         $templates = $registry->templates();
         $palettes = $registry->palettes();
 
+        $this->assertSame(['general', 'velvet_night'], array_keys($templates));
         $this->assertArrayHasKey('general', $templates);
         $this->assertSame('general', $templates['general']['key']);
-        $this->assertTrue(view()->exists($templates['general']['view']));
 
-        $thumbnailPath = public_path($templates['general']['thumbnail']);
-        $this->assertFileExists($thumbnailPath);
-        [$width, $height] = getimagesize($thumbnailPath);
-        $this->assertSame($width * 9, $height * 16);
+        foreach ($templates as $key => $template) {
+            $this->assertSame($key, $template['key']);
+            $this->assertTrue(view()->exists($template['view']));
+            $this->assertNotSame($template['name_key'], __($template['name_key'], [], 'en'));
+            $this->assertNotSame($template['name_key'], __($template['name_key'], [], 'uk'));
+
+            $thumbnailPath = public_path($template['thumbnail']);
+            $this->assertFileExists($thumbnailPath);
+            [$width, $height] = getimagesize($thumbnailPath);
+            $this->assertSame($width * 9, $height * 16);
+        }
 
         $this->assertSame(
             ['general', 'editorial_blush', 'velvet_theatre', 'electric_stage', 'midnight_gold'],
@@ -155,7 +170,8 @@ class FestivalLandingBrandingTest extends TestCase
 
         $this->get($publicUrl)
             ->assertOk()
-            ->assertSee('data-festival-template="general"', false);
+            ->assertSee('data-festival-template="general"', false)
+            ->assertDontSee('data-velvet-scroll-top', false);
         $this->assertSame('editorial', $edition->fresh()->landing_template);
 
         $account->update(['allowed_festival_landing_templates' => ['editorial']]);
@@ -170,6 +186,230 @@ class FestivalLandingBrandingTest extends TestCase
             ->assertOk()
             ->assertSee('data-festival-template="general"', false)
             ->assertSee('data-festival-palette="general"', false);
+    }
+
+    public function test_velvet_night_renders_the_public_contract_and_uses_a_single_centered_hero_as_fallback(): void
+    {
+        [$account, , $edition] = $this->ownerEdition([
+            'allowed_festival_landing_templates' => ['velvet_night'],
+        ], [
+            'status' => 'published',
+            'registration_status' => 'open',
+            'landing_template' => 'velvet_night',
+            'landing_palette' => 'velvet_theatre',
+            'rules_html' => '<p>Velvet rules sentinel</p>',
+            'published_at' => now(),
+        ]);
+        FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'kind' => 'image',
+            'external_url' => 'https://example.test/desktop-hero.jpg',
+            'is_cover' => true,
+        ]);
+
+        $publicUrl = route('public.festivals.show', [$account->slug, $edition->slug]);
+        $response = $this->get($publicUrl)
+            ->assertOk()
+            ->assertSee('data-festival-template="velvet_night"', false)
+            ->assertSee('class="velvet-hero-image"', false)
+            ->assertSee('data-velvet-scroll-top', false)
+            ->assertSee('aria-label="'.__('app.festival_back_to_top').'"', false)
+            ->assertDontSee('<source media="(max-width: 767px)"', false)
+            ->assertSee($edition->title)
+            ->assertSee($edition->summary)
+            ->assertSee('Velvet rules sentinel')
+            ->assertSee(__('app.festival_apply'))
+            ->assertSee(__('app.buy_tickets'))
+            ->assertSee(route('festival.login', $account->slug), false)
+            ->assertSee(route('festival.judge.login', $account->slug), false)
+            ->assertSee(route('public.festivals.admission.store', [$account->slug, $edition->slug]), false)
+            ->assertDontSee(__('app.all_festivals'))
+            ->assertSee(__('app.powered_by_ladna'));
+
+        $this->assertSame(2, substr_count($response->getContent(), $edition->series->name));
+
+        FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'kind' => 'image',
+            'external_url' => 'https://example.test/mobile-hero.jpg',
+            'is_mobile_cover' => true,
+        ]);
+
+        $this->get($publicUrl)
+            ->assertOk()
+            ->assertSee('<source media="(max-width: 767px)" srcset="https://example.test/mobile-hero.jpg">', false);
+
+        $edition->update(['registration_status' => 'closed']);
+
+        $this->get($publicUrl)
+            ->assertOk()
+            ->assertDontSee(__('app.festival_apply'))
+            ->assertSee(__('app.buy_tickets'))
+            ->assertSee(__('app.festival_participant_cabinet'))
+            ->assertSee(__('app.festival_judge_cabinet'));
+    }
+
+    public function test_velvet_night_uses_active_structured_data_and_authored_jury_content_without_decorative_numbers(): void
+    {
+        [$account, , $edition] = $this->ownerEdition([
+            'allowed_festival_landing_templates' => ['velvet_night'],
+        ], [
+            'status' => 'published',
+            'registration_status' => 'open',
+            'landing_template' => 'velvet_night',
+            'published_at' => now(),
+            'registration_opens_at' => '2030-09-03 10:00:00',
+            'registration_closes_at' => '2030-09-10 10:00:00',
+            'starts_at' => '2030-09-20 10:00:00',
+            'ends_at' => '2030-09-20 18:00:00',
+        ]);
+
+        foreach ([
+            ['key' => 'important-dates', 'title' => 'Live dates', 'body_html' => '<p>Authored dates sentinel</p>'],
+            ['key' => 'jury', 'title' => 'Live jury', 'body_html' => '<p>Authored Head Judge</p><p>Authored Judge</p>'],
+            ['key' => 'stage', 'title' => 'Live stages', 'body_html' => '<p>Authored stage sentinel</p>'],
+            ['key' => 'payments', 'title' => 'Live fees', 'body_html' => '<p>Authored fees sentinel</p>'],
+            ['key' => 'ordinary', 'title' => 'Ordinary section', 'body_html' => '<p>Ordinary body sentinel</p>'],
+        ] as $sortOrder => $section) {
+            FestivalContentSection::query()->create([
+                'account_id' => $account->id,
+                'festival_edition_id' => $edition->id,
+                'sort_order' => $sortOrder,
+                ...$section,
+            ]);
+        }
+
+        $workflow = FestivalWorkflow::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'name' => 'Active workflow',
+        ]);
+        $activeStep = FestivalWorkflowStep::factory()->create([
+            'account_id' => $account->id,
+            'festival_workflow_id' => $workflow->id,
+            'title' => 'Live application deadline',
+            'due_at' => '2030-09-12 10:00:00',
+        ]);
+        FestivalWorkflowStep::factory()->create([
+            'account_id' => $account->id,
+            'festival_workflow_id' => $workflow->id,
+            'title' => 'Inactive step sentinel',
+            'due_at' => '2030-09-13 10:00:00',
+            'is_active' => false,
+        ]);
+
+        FestivalStage::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'name' => 'Live database stage',
+            'description' => 'Live stage dimensions',
+        ]);
+        FestivalStage::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'name' => 'Inactive stage sentinel',
+            'is_active' => false,
+        ]);
+
+        FestivalChargeDefinition::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_workflow_step_id' => $activeStep->id,
+            'name' => 'Live fixed fee',
+            'amount_cents' => 12345,
+            'currency' => 'USD',
+            'due_at' => '2030-09-15 10:00:00',
+        ]);
+        FestivalChargeDefinition::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_workflow_step_id' => $activeStep->id,
+            'name' => 'Live roster fee',
+            'amount_cents' => 32000,
+            'pricing_mode' => 'roster',
+            'included_members' => 2,
+            'additional_member_amount_cents' => 4000,
+            'currency' => 'EUR',
+            'due_at' => '2030-09-16 10:00:00',
+        ]);
+        FestivalChargeDefinition::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'name' => 'Inactive fee sentinel',
+            'amount_cents' => 99999,
+            'currency' => 'GBP',
+            'is_active' => false,
+        ]);
+        FestivalJudgeAssignment::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'display_name' => 'Inactive Judge Sentinel',
+            'is_active' => false,
+        ]);
+
+        $publicUrl = route('public.festivals.show', [$account->slug, $edition->slug]);
+        $this->get($publicUrl)
+            ->assertOk()
+            ->assertSee('Live dates')
+            ->assertSee('03.09.2030')
+            ->assertSee('12.09.2030')
+            ->assertSee('15.09.2030')
+            ->assertSee('20.09.2030')
+            ->assertSee('Live database stage')
+            ->assertSee('Live stage dimensions')
+            ->assertSee(MoneyFormatter::format(12345, 'USD'))
+            ->assertSee(MoneyFormatter::format(32000, 'EUR'))
+            ->assertSee(__('app.festival_public_roster_fee', [
+                'count' => 2,
+                'amount' => MoneyFormatter::format(4000, 'EUR'),
+            ]))
+            ->assertSee('Ordinary body sentinel')
+            ->assertSee('Live jury')
+            ->assertSee('Authored Head Judge')
+            ->assertSee('Authored Judge')
+            ->assertDontSee('Inactive Judge Sentinel')
+            ->assertDontSee('Inactive step sentinel')
+            ->assertDontSee('Inactive stage sentinel')
+            ->assertDontSee('Inactive fee sentinel')
+            ->assertDontSee('Authored dates sentinel')
+            ->assertDontSee('Authored stage sentinel')
+            ->assertDontSee('Authored fees sentinel')
+            ->assertDontSee('velvet-card-number', false)
+            ->assertDontSee('velvet-section-index', false);
+
+        FestivalJudgeAssignment::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'display_name' => 'Live Head Judge',
+            'is_head_judge' => true,
+        ]);
+        FestivalJudgeAssignment::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'display_name' => 'Live Judge',
+        ]);
+
+        $this->get($publicUrl)
+            ->assertOk()
+            ->assertSee('Live jury')
+            ->assertSee('Authored Head Judge')
+            ->assertSee('Authored Judge')
+            ->assertDontSee('Live Head Judge')
+            ->assertDontSee('Live Judge')
+            ->assertDontSee('Inactive Judge Sentinel')
+            ->assertDontSee(__('app.festival_head_judge'));
+
+        $edition->sections()->where('key', 'jury')->delete();
+
+        $this->get($publicUrl)
+            ->assertOk()
+            ->assertDontSee('Live jury')
+            ->assertDontSee('Authored Head Judge')
+            ->assertDontSee('Authored Judge')
+            ->assertDontSee('Live Head Judge')
+            ->assertDontSee('Live Judge');
     }
 
     public function test_palette_only_save_retains_an_unavailable_saved_template(): void

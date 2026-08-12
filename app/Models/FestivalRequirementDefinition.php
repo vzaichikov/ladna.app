@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['account_id', 'festival_edition_id', 'festival_category_id', 'festival_workflow_step_id', 'code', 'type', 'subject_scope', 'input_type', 'name', 'instructions', 'options', 'validation', 'pricing', 'stage', 'due_at', 'allowed_extensions', 'allowed_mime_types', 'max_size_kb', 'min_duration_seconds', 'max_duration_seconds', 'is_required', 'is_active', 'sort_order'])]
 class FestivalRequirementDefinition extends Model
@@ -58,5 +59,10 @@ class FestivalRequirementDefinition extends Model
     public function workflowStep(): BelongsTo
     {
         return $this->belongsTo(FestivalWorkflowStep::class, 'festival_workflow_step_id');
+    }
+
+    public function entryRequirements(): HasMany
+    {
+        return $this->hasMany(FestivalEntryRequirement::class, 'festival_requirement_definition_id');
     }
 }

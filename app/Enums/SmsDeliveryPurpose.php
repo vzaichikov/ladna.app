@@ -8,6 +8,7 @@ enum SmsDeliveryPurpose: string
     case FestivalOtp = 'festival_otp';
     case UserOtp = 'user_otp';
     case CustomerNotification = 'customer_notification';
+    case FestivalNotification = 'festival_notification';
 
     public function isAuthenticationOtp(): bool
     {

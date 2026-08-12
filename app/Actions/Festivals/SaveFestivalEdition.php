@@ -70,7 +70,7 @@ class SaveFestivalEdition
                 'venue_map_url' => $input['venue_map_url'] ?? null,
                 'venue_directions' => $input['venue_directions'] ?? null,
                 'timezone' => $timezone,
-                'currency' => strtoupper((string) $input['currency']),
+                'currency' => strtoupper($account->default_currency),
                 'starts_at' => $startsAt,
                 'ends_at' => $endsAt,
                 'age_reference_date' => $input['age_reference_date'],

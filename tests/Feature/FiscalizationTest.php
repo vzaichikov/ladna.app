@@ -8,6 +8,7 @@ use App\Actions\Festivals\CompleteFestivalEditionPurchase;
 use App\Actions\Payments\CompleteCustomerPurchase;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\CustomerPurchaseStatus;
+use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FiscalReceiptStatus;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
@@ -21,13 +22,18 @@ use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\Event;
 use App\Models\EventTicketType;
+use App\Models\FestivalAdmissionType;
+use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
+use App\Models\FestivalSeries;
 use App\Models\FestivalTariffPackage;
+use App\Models\FestivalTicketOrder;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\SmsTopUpPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -259,6 +265,157 @@ class FiscalizationTest extends TestCase
             && data_get($request->data(), 'goods.0.good.name') === 'Summer Workshop'
             && data_get($request->data(), 'delivery.email') === 'ticket-buyer@example.com'
             && data_get($request->data(), 'delivery.phone') === '+380501112233');
+    }
+
+    public function test_paid_festival_admission_is_fiscalized_once_with_frozen_items_and_buyer_delivery(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $this->enableAccountFiscalization($account);
+        $edition = FestivalEdition::factory()
+            ->published()
+            ->for(FestivalSeries::factory()->for($account))
+            ->create(['account_id' => $account->id, 'title' => 'Admission Festival']);
+        $balcony = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Mutable balcony name',
+            'inventory' => 10,
+            'price_cents' => 45000,
+        ]);
+        $floor = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Mutable floor name',
+            'inventory' => 10,
+            'price_cents' => 30000,
+        ]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'provider' => IntegrationProvider::Liqpay->value,
+            'buyer_name' => 'Festival Buyer',
+            'buyer_email' => 'festival-ticket-buyer@example.com',
+            'buyer_phone' => '+380501112233',
+            'amount_cents' => 120000,
+            'currency' => 'UAH',
+        ]);
+        $order->items()->createMany([
+            [
+                'account_id' => $account->id,
+                'festival_admission_type_id' => $balcony->id,
+                'admission_name' => 'Frozen balcony',
+                'unit_price_cents' => 45000,
+                'quantity' => 2,
+                'total_cents' => 90000,
+            ],
+            [
+                'account_id' => $account->id,
+                'festival_admission_type_id' => $floor->id,
+                'admission_name' => 'Frozen floor',
+                'unit_price_cents' => 30000,
+                'quantity' => 1,
+                'total_cents' => 30000,
+            ],
+        ]);
+        $this->fakeCheckboxSuccess('FN-FESTIVAL-ADMISSION-1');
+
+        $completed = app(FestivalPaymentService::class)->completeOrder(
+            $order,
+            $this->paidCallback($order->order_id, $order->amount_cents, $order->currency),
+        );
+        app(FestivalPaymentService::class)->completeOrder(
+            $completed,
+            $this->paidCallback($order->order_id, $order->amount_cents, $order->currency),
+        );
+
+        $receipt = $completed->fiscalReceipt()->firstOrFail();
+        $this->assertSame(FestivalTicketOrderStatus::Paid, $completed->status);
+        $this->assertSame(3, $completed->tickets()->count());
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt->status);
+        $this->assertSame(IntegrationScope::Account, $receipt->scope_type);
+        $this->assertSame($account->id, $receipt->scope_id);
+        $this->assertSame('FN-FESTIVAL-ADMISSION-1', $receipt->fiscal_number);
+        $this->assertSame(1, $completed->fiscalReceipts()->count());
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'goods.0.good.name') === 'Frozen balcony'
+            && data_get($request->data(), 'goods.0.good.price') === 45000
+            && data_get($request->data(), 'goods.0.quantity') === 2000
+            && data_get($request->data(), 'goods.1.good.name') === 'Frozen floor'
+            && data_get($request->data(), 'goods.1.quantity') === 1000
+            && data_get($request->data(), 'payments.0.value') === 120000
+            && data_get($request->data(), 'total_sum') === 120000
+            && data_get($request->data(), 'delivery.email') === 'festival-ticket-buyer@example.com'
+            && data_get($request->data(), 'delivery.phone') === '+380501112233');
+        $this->assertCount(1, collect(Http::recorded())->filter(fn (array $record): bool => $record[0]->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'));
+    }
+
+    public function test_zero_value_festival_admission_issues_tickets_without_a_fiscal_receipt(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $this->enableAccountFiscalization($account);
+        $edition = FestivalEdition::factory()
+            ->published()
+            ->for(FestivalSeries::factory()->for($account))
+            ->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'inventory' => 10,
+            'price_cents' => 0,
+        ]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'amount_cents' => 0,
+            'provider' => IntegrationProvider::Liqpay->value,
+        ]);
+        $order->items()->create([
+            'account_id' => $account->id,
+            'festival_admission_type_id' => $type->id,
+            'admission_name' => 'Free admission',
+            'unit_price_cents' => 0,
+            'quantity' => 1,
+            'total_cents' => 0,
+        ]);
+
+        $completed = app(FestivalPaymentService::class)->completeOrder(
+            $order,
+            $this->paidCallback($order->order_id, 0, $order->currency),
+        );
+
+        $this->assertSame(FestivalTicketOrderStatus::Paid, $completed->status);
+        $this->assertSame(1, $completed->tickets()->count());
+        $this->assertNull($completed->fiscalReceipt()->first());
+        Http::assertNothingSent();
+    }
+
+    public function test_fiscalization_command_recovers_an_eligible_paid_festival_admission(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $this->enableAccountFiscalization($account);
+        $edition = FestivalEdition::factory()
+            ->published()
+            ->for(FestivalSeries::factory()->for($account))
+            ->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => FestivalTicketOrderStatus::Paid->value,
+            'provider' => IntegrationProvider::Liqpay->value,
+            'amount_cents' => 30000,
+            'paid_at' => now(),
+            'expires_at' => null,
+        ]);
+        $order->items()->create([
+            'account_id' => $account->id,
+            'festival_admission_type_id' => $type->id,
+            'admission_name' => 'Recovery admission',
+            'unit_price_cents' => 30000,
+            'quantity' => 1,
+            'total_cents' => 30000,
+        ]);
+        $this->fakeCheckboxSuccess('FN-FESTIVAL-RECOVERY-1');
+
+        $this->artisan('payments:fiscalize', ['account' => $account->id])
+            ->expectsOutputToContain("[festival-admission] #{$order->id} {$order->order_id}: fiscalized (FN-FESTIVAL-RECOVERY-1).")
+            ->assertExitCode(0);
+
+        $this->assertSame('FN-FESTIVAL-RECOVERY-1', $order->fiscalReceipt()->firstOrFail()->fiscal_number);
     }
 
     public function test_command_fiscalizes_eligible_paid_payments_for_account(): void

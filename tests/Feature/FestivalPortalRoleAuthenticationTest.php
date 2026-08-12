@@ -28,6 +28,31 @@ class FestivalPortalRoleAuthenticationTest extends TestCase
         $this->actingAs($judge, 'festival')
             ->get(route('festival.portal.dashboard', $account->slug))
             ->assertForbidden();
+
+        $this->actingAs($judge, 'festival')
+            ->get(route('festival.portal.entries.index', $account->slug))
+            ->assertForbidden();
+    }
+
+    public function test_participant_and_judge_cabinets_render_the_shared_studio_header_and_footer(): void
+    {
+        [$account] = $this->festival();
+        $participant = FestivalPortalUser::factory()->for($account)->create();
+        $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
+
+        $this->actingAs($participant, 'festival')
+            ->get(route('festival.portal.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee('data-public-studio-header', false)
+            ->assertSee('data-public-studio-footer-identity', false)
+            ->assertSee('data-public-studio-footer-name', false);
+
+        $this->actingAs($judge, 'festival')
+            ->get(route('festival.portal.judge.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee('data-public-studio-header', false)
+            ->assertSee('data-public-studio-footer-identity', false)
+            ->assertSee('data-public-studio-footer-name', false);
     }
 
     public function test_judge_dashboard_lists_only_active_assignment_cards(): void
@@ -63,6 +88,13 @@ class FestivalPortalRoleAuthenticationTest extends TestCase
             ->assertDontSee('Hidden inactive assignment')
             ->assertSee(route('festival.portal.judging.index', [$account->slug, $edition->slug]), false)
             ->assertSee(route('festival.portal.battle-votes.index', [$account->slug, $edition->slug]), false);
+
+        $this->get(route('festival.portal.judging.index', [$account->slug, $edition->slug]))
+            ->assertOk()
+            ->assertSee('max-w-6xl', false);
+        $this->get(route('festival.portal.battle-votes.index', [$account->slug, $edition->slug]))
+            ->assertOk()
+            ->assertSee('max-w-6xl', false);
     }
 
     public function test_judging_routes_require_an_active_assignment_for_the_current_edition(): void

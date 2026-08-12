@@ -25,26 +25,28 @@ class FestivalParticipantController extends Controller
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $portalUser->participants()->create(['account_id' => $account->id, ...$request->validated()]);
 
-        return back()->with('status', __('app.festival_participant_saved'));
+        return back()->with('status', __('app.festival_portal_team_saved'));
     }
 
     public function update(FestivalParticipantRequest $request, string $accountSlug, FestivalParticipant $festivalParticipant): RedirectResponse
     {
         [, $portalUser] = $this->context($request, $accountSlug);
         abort_unless($festivalParticipant->festival_portal_user_id === $portalUser->id && $festivalParticipant->account_id === $portalUser->account_id, 404);
+        abort_if($festivalParticipant->is_profile_owner, 409);
         $festivalParticipant->update($request->validated());
 
-        return back()->with('status', __('app.festival_participant_saved'));
+        return back()->with('status', __('app.festival_portal_team_saved'));
     }
 
     public function destroy(Request $request, string $accountSlug, FestivalParticipant $festivalParticipant): RedirectResponse
     {
         [, $portalUser] = $this->context($request, $accountSlug);
         abort_unless($festivalParticipant->festival_portal_user_id === $portalUser->id && $festivalParticipant->account_id === $portalUser->account_id, 404);
+        abort_if($festivalParticipant->is_profile_owner, 409);
         abort_if($festivalParticipant->newQuery()->whereKey($festivalParticipant->id)->whereHas('entries', fn ($query) => $query->where('status', '!=', 'draft'))->exists(), 409);
         $festivalParticipant->forceFill(['archived_at' => now()])->save();
 
-        return back()->with('status', __('app.festival_participant_archived'));
+        return back()->with('status', __('app.festival_portal_removed_from_team'));
     }
 
     /** @return array{Account, FestivalPortalUser} */

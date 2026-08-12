@@ -165,6 +165,48 @@ class FestivalOtpAuthenticationTest extends TestCase
         ])->assertNotFound();
     }
 
+    public function test_profile_phone_is_replaced_only_after_festival_otp_verification(): void
+    {
+        $account = $this->otpAccount();
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'phone' => '+380501112233',
+            'phone_normalized' => '+380501112233',
+            'phone_verified_at' => now(),
+        ]);
+        Http::fake([
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'festival-profile-otp']]]),
+        ]);
+
+        $this->actingAs($portalUser, 'festival')->put(route('festival.portal.profile.update', $account->slug), [
+            'registrant_type' => 'coach',
+            'first_name' => $portalUser->first_name,
+            'last_name' => $portalUser->last_name,
+            'email' => $portalUser->email,
+            'phone' => '0509998877',
+            'city' => $portalUser->city,
+            'studio_name' => $portalUser->studio_name,
+            'locale' => 'uk',
+        ])->assertRedirect(route('festival.portal.profile.edit', $account->slug));
+
+        $this->assertSame('+380501112233', $portalUser->refresh()->phone_normalized);
+        $this->get(route('festival.portal.profile.edit', $account->slug))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'name="phone"',
+                'data-profile-phone-merge',
+                'name="city"',
+            ], false);
+
+        $this->post(route('festival.portal.profile.phone.send', $account->slug))->assertRedirect();
+        $this->post(route('festival.portal.profile.phone.verify', $account->slug), [
+            'phone' => '+380509998877',
+            'code' => '123456',
+        ])->assertRedirect(route('festival.portal.dashboard', $account->slug));
+
+        $this->assertSame('+380509998877', $portalUser->refresh()->phone_normalized);
+        $this->assertNotNull($portalUser->phone_verified_at);
+    }
+
     public function test_turnstile_failure_prevents_festival_otp_delivery(): void
     {
         $account = $this->otpAccount();

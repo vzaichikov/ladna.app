@@ -44,7 +44,7 @@ class FestivalFoundationTest extends TestCase
 
     public function test_edition_creation_copies_series_defaults_once_and_public_calendar_is_tenant_scoped(): void
     {
-        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en', 'default_currency' => 'USD']);
         $owner = User::factory()->create();
         $account->addOwner($owner);
         $series = FestivalSeries::factory()->for($account)->create([
@@ -61,7 +61,6 @@ class FestivalFoundationTest extends TestCase
             'venue_name' => 'Arts Hall',
             'venue_address' => 'Kyiv',
             'timezone' => 'Europe/Kyiv',
-            'currency' => 'UAH',
             'starts_at' => now('Europe/Kyiv')->addMonth()->format('Y-m-d H:i:s'),
             'ends_at' => now('Europe/Kyiv')->addMonth()->addDay()->format('Y-m-d H:i:s'),
             'age_reference_date' => now()->addMonth()->toDateString(),
@@ -72,6 +71,7 @@ class FestivalFoundationTest extends TestCase
 
         $this->assertCount(1, $edition->stages);
         $this->assertSame(2, $edition->max_entries_per_participant);
+        $this->assertSame('USD', $edition->currency);
         $series->update(['defaults' => ['stages' => [['name' => 'Changed later']]]]);
         $this->assertSame('Main stage', $edition->stages()->firstOrFail()->name);
         $this->assertStringNotContainsString('<script', (string) $edition->description_html);

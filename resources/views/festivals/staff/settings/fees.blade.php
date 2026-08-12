@@ -24,7 +24,7 @@
             <div class="crm-row lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_auto] lg:items-center">
                 <div><div class="flex flex-wrap items-center gap-2"><h2 class="font-semibold text-slate-950">{{ $fee->name }}</h2>@unless ($fee->is_active)<span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{{ __('app.inactive') }}</span>@endunless</div><p class="mt-1 text-sm text-slate-500">{{ __('app.festival_charge_kind_'.$fee->kind) }}</p></div>
                 <p class="text-sm text-slate-500">{{ $fee->workflowStep?->workflow?->name }} · {{ $fee->workflowStep?->title }} · {{ $fee->category?->name ?? __('app.all') }}</p>
-                <strong class="text-sm text-slate-950">{{ number_format($fee->amount_cents / 100, 2) }} {{ $fee->currency }}</strong>
+                <strong class="text-sm text-slate-950">{{ \App\Support\MoneyFormatter::format($fee->amount_cents, $account->default_currency) }}</strong>
                 <x-festivals.settings-actions :active="$fee->is_active" :toggle-route="route('dashboard.accounts.festivals.charge-definitions.toggle', [$account, $edition, $fee])" :move-route="route('dashboard.accounts.festivals.charge-definitions.move', [$account, $edition, $fee])" :edit-route="route('dashboard.accounts.festivals.charge-definitions.edit', [$account, $edition, $fee])" :show-ordering="! $hasFilters" :can-move-up="$globalIndex > 1" :can-move-down="$globalIndex < $fees->total()" />
             </div>
         @empty

@@ -172,6 +172,10 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(3)->by($request->string('phone').'|'.$request->route('accountSlug').'|'.$request->ip());
         });
 
+        RateLimiter::for('festival-profile-otp', function (Request $request): Limit {
+            return Limit::perMinute(3)->by((string) $request->user('festival')?->getAuthIdentifier().'|'.$request->route('accountSlug').'|'.$request->ip());
+        });
+
         RateLimiter::for('festival-checkout', function (Request $request): Limit {
             return Limit::perMinute(8)->by($request->string('buyer_email')->lower().'|'.$request->ip());
         });

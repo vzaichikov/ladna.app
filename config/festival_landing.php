@@ -11,6 +11,12 @@ return [
             'view' => 'festivals.public.templates.general',
             'thumbnail' => 'assets/festivals/landing-templates/general.webp',
         ],
+        'velvet_night' => [
+            'key' => 'velvet_night',
+            'name_key' => 'app.festival_landing_template_velvet_night',
+            'view' => 'festivals.public.templates.velvet-night',
+            'thumbnail' => 'assets/festivals/landing-templates/velvet-night.webp',
+        ],
     ],
 
     'palettes' => [
@@ -49,17 +55,17 @@ return [
         'velvet_theatre' => [
             'key' => 'velvet_theatre',
             'name_key' => 'app.festival_landing_palette_velvet_theatre',
-            'swatches' => ['#1C1018', '#8E1837', '#D9AE62', '#FFF8EE'],
+            'swatches' => ['#120203', '#9E0E17', '#D9AE62', '#FFF5EE'],
             'tokens' => [
-                'page' => '#1C1018',
-                'surface' => '#2A1721',
-                'text' => '#FFF8EE',
-                'muted_text' => '#D5BCC4',
-                'primary' => '#8E1837',
+                'page' => '#120203',
+                'surface' => '#210305',
+                'text' => '#FFF5EE',
+                'muted_text' => '#D8B7B3',
+                'primary' => '#9E0E17',
                 'primary_text' => '#FFFFFF',
                 'accent' => '#D9AE62',
                 'accent_text' => '#25140D',
-                'border' => '#4A2A35',
+                'border' => '#571317',
             ],
         ],
         'electric_stage' => [

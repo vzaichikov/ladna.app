@@ -18,6 +18,19 @@ class FestivalCharge extends Model
         return ['status' => FestivalChargeStatus::class, 'amount_cents' => 'integer', 'due_at' => 'datetime', 'paid_at' => 'datetime', 'cancelled_at' => 'datetime', 'refunded_at' => 'datetime'];
     }
 
+    public function hasPaymentHistory(): bool
+    {
+        $hasAttempts = $this->relationLoaded('paymentAttempts')
+            ? $this->paymentAttempts->isNotEmpty()
+            : $this->paymentAttempts()->exists();
+
+        return $hasAttempts || ($this->amount_cents > 0 && ($this->paid_at !== null || in_array($this->status, [
+            FestivalChargeStatus::Paid,
+            FestivalChargeStatus::PaidRequiresRefund,
+            FestivalChargeStatus::Refunded,
+        ], true)));
+    }
+
     public function entry(): BelongsTo
     {
         return $this->belongsTo(FestivalEntry::class, 'festival_entry_id');

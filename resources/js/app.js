@@ -12,6 +12,8 @@ let publicCalendarSwipeStart = null;
 let publicBookingModalOpener = null;
 let trainerPrivateLessonsAbortController = null;
 let trainerPermissionDetailsOpener = null;
+let festivalAnnouncementModalOpener = null;
+let festivalProgramModalOpener = null;
 
 const confirmationButtonVariants = {
     danger: 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
@@ -1001,6 +1003,23 @@ function initOtpCountdowns() {
         };
 
         render();
+    });
+}
+
+function initFestivalRegistrantProfiles() {
+    document.querySelectorAll('[data-festival-registrant-type]').forEach((select) => {
+        const form = select.closest('form');
+        const input = form?.querySelector('[data-participant-required-input]');
+        const marker = form?.querySelector('[data-participant-required-marker]');
+
+        const sync = () => {
+            const isParticipant = select.value === 'adult_athlete';
+            input?.toggleAttribute('required', isParticipant);
+            marker?.classList.toggle('hidden', !isParticipant);
+        };
+
+        select.addEventListener('change', sync);
+        sync();
     });
 }
 
@@ -4126,7 +4145,9 @@ function initOnboardingShareActions() {
 }
 
 function asyncStatusElement(form = null) {
-    return form?.querySelector('[data-async-form-status]') ?? document.querySelector('[data-async-status]');
+    return form?.querySelector('[data-async-form-status]')
+        ?? form?.closest('[data-festival-application-fragment]')?.querySelector('[data-async-form-status]')
+        ?? document.querySelector('[data-async-status]');
 }
 
 function setAsyncStatus(message, type = 'success', form = null) {
@@ -4182,6 +4203,13 @@ function clearAsyncFormErrors(form) {
         status.textContent = '';
         status.classList.add('hidden');
     });
+
+    const status = asyncStatusElement(form);
+
+    if (status) {
+        status.textContent = '';
+        status.classList.add('hidden');
+    }
 }
 
 function formFieldSelector(attribute, name) {
@@ -4263,6 +4291,46 @@ function replaceScheduledClassCard(cardHtml, fallbackCard) {
     initPhoneMasks(replacement);
     initScheduledClassTrainerModals(replacement);
     createIcons({ icons });
+}
+
+function replaceFestivalRequirementCard(cardHtml, fallbackCard) {
+    const template = document.createElement('template');
+    template.innerHTML = cardHtml.trim();
+    const replacement = template.content.querySelector('[data-festival-requirement-card]');
+
+    if (!replacement) {
+        return null;
+    }
+
+    const requirementId = replacement.dataset.festivalRequirementId;
+    const target = requirementId
+        ? document.querySelector(`[data-festival-requirement-card][data-festival-requirement-id="${requirementId}"]`)
+        : fallbackCard;
+
+    (target ?? fallbackCard)?.replaceWith(replacement);
+    createIcons({ icons });
+
+    return replacement;
+}
+
+function replaceFestivalApplicationFragment(fragmentHtml, fallbackFragment) {
+    const template = document.createElement('template');
+    template.innerHTML = fragmentHtml.trim();
+    const replacement = template.content.querySelector('[data-festival-application-fragment]');
+
+    if (!replacement) {
+        return null;
+    }
+
+    const fragmentKey = replacement.dataset.festivalApplicationFragmentKey;
+    const target = fragmentKey
+        ? document.querySelector('[data-festival-application-fragment-key="' + window.CSS.escape(fragmentKey) + '"]')
+        : fallbackFragment;
+
+    (target ?? fallbackFragment)?.replaceWith(replacement);
+    createIcons({ icons });
+
+    return replacement;
 }
 
 function closeScheduledClassTrainerModal(modal) {
@@ -4702,6 +4770,8 @@ async function submitAsyncForm(form) {
     }
 
     const fallbackCard = form.closest('[data-scheduled-class-card]');
+    const fallbackRequirementCard = form.closest('[data-festival-requirement-card]');
+    const fallbackFestivalApplicationFragment = form.closest('[data-festival-application-fragment]');
     const formData = new FormData(form);
 
     clearAsyncFormErrors(form);
@@ -4727,6 +4797,27 @@ async function submitAsyncForm(form) {
                 if (modal) {
                     closeDeleteConfirmation(modal);
                 }
+            }
+
+            if (payload.requirement_html) {
+                const replacement = replaceFestivalRequirementCard(payload.requirement_html, fallbackRequirementCard);
+                const replacementForm = replacement?.querySelector('form[data-async-form]') ?? null;
+                setAsyncStatus(payload.message, 'success', replacementForm);
+                return;
+            }
+
+            if (payload.fragment_html) {
+                const replacement = replaceFestivalApplicationFragment(payload.fragment_html, fallbackFestivalApplicationFragment);
+                setAsyncStatus(payload.message, 'success', replacement);
+                return;
+            }
+
+            if (Array.isArray(payload.fragments_html)) {
+                const replacements = payload.fragments_html
+                    .map((fragmentHtml) => replaceFestivalApplicationFragment(fragmentHtml, fallbackFestivalApplicationFragment))
+                    .filter(Boolean);
+                setAsyncStatus(payload.message, 'success', replacements[0] ?? fallbackFestivalApplicationFragment);
+                return;
             }
 
             setAsyncStatus(payload.message, 'success', form);
@@ -5187,6 +5278,45 @@ function initActiveScrollTargets() {
     document.querySelectorAll('[data-active-scroll-target]').forEach((element) => {
         element.scrollIntoView({ block: 'nearest', inline: 'center' });
     });
+}
+
+function initVelvetScrollTop() {
+    const button = document.querySelector('[data-velvet-scroll-top]');
+
+    if (!button || button.dataset.velvetScrollTopReady === 'true') {
+        return;
+    }
+
+    const topTarget = document.querySelector('#festival-page-top');
+    let visibilityUpdateRequested = false;
+
+    const updateVisibility = () => {
+        const visibilityThreshold = Math.max(400, window.innerHeight * 0.75);
+
+        button.dataset.visible = window.scrollY >= visibilityThreshold ? 'true' : 'false';
+        visibilityUpdateRequested = false;
+    };
+
+    const requestVisibilityUpdate = () => {
+        if (visibilityUpdateRequested) {
+            return;
+        }
+
+        visibilityUpdateRequested = true;
+        window.requestAnimationFrame(updateVisibility);
+    };
+
+    button.dataset.velvetScrollTopReady = 'true';
+    button.hidden = false;
+    button.addEventListener('click', () => {
+        topTarget?.focus({ preventScroll: true });
+        window.scrollTo({
+            top: 0,
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        });
+    });
+    window.addEventListener('scroll', requestVisibilityUpdate, { passive: true });
+    updateVisibility();
 }
 
 function initProfilePhoneMergeScroll() {
@@ -6976,7 +7106,436 @@ function initFestivalRubricEditors(root = document) {
     });
 }
 
+function initFestivalAnnouncementModal() {
+    const modal = document.querySelector('[data-festival-announcement-modal]');
+
+    if (!modal) {
+        return;
+    }
+
+    const open = (opener = null) => {
+        festivalAnnouncementModalOpener = opener;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+        window.requestAnimationFrame(() => modal.querySelector('input:not([type="hidden"]), textarea, button')?.focus());
+    };
+    const close = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+        festivalAnnouncementModalOpener?.focus();
+        festivalAnnouncementModalOpener = null;
+    };
+
+    document.querySelectorAll('[data-festival-announcement-open]').forEach((button) => {
+        button.addEventListener('click', () => open(button));
+    });
+    modal.querySelectorAll('[data-festival-announcement-close]').forEach((button) => {
+        button.addEventListener('click', close);
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            close();
+        }
+    });
+
+    if (modal.dataset.open === 'true') {
+        open();
+    }
+}
+
+function initFestivalProgram() {
+    const program = document.querySelector('[data-festival-program]');
+    const modal = document.querySelector('[data-festival-program-modal]');
+
+    if (!program || !modal) {
+        return;
+    }
+
+    const form = modal.querySelector('[data-festival-program-form]');
+    const title = modal.querySelector('[data-festival-program-modal-title]');
+    const methodInput = form?.querySelector('[data-festival-program-method]');
+    const editingIdInput = form?.querySelector('[data-festival-program-editing-id]');
+    const typeInput = form?.querySelector('[data-festival-program-type]');
+    const rootList = program.querySelector('[data-festival-program-list][data-parent-id=""]');
+    const status = program.querySelector('[data-festival-program-status]');
+    let draggedItem = null;
+    let treeBeforeDrag = null;
+    let savingOrder = false;
+
+    if (!form || !title || !methodInput || !editingIdInput || !typeInput || !rootList) {
+        return;
+    }
+
+    const fieldsForType = {
+        performance: ['entry', 'times', 'publish'],
+        rehearsal: ['entry', 'times', 'publish'],
+        custom: ['name', 'times'],
+        free_header: ['name'],
+        category_header: ['category'],
+    };
+
+    const setFieldValue = (name, value) => {
+        const field = form.elements.namedItem(name);
+
+        if (!field) {
+            return;
+        }
+
+        if (field instanceof RadioNodeList) {
+            field.value = value ?? '';
+            return;
+        }
+
+        if (field instanceof HTMLInputElement && field.type === 'checkbox') {
+            field.checked = Boolean(value);
+            return;
+        }
+
+        field.value = value ?? '';
+    };
+
+    const syncTypeFields = () => {
+        const visibleFields = fieldsForType[typeInput.value] ?? [];
+
+        form.querySelectorAll('[data-festival-program-field]').forEach((container) => {
+            const fieldName = container.dataset.festivalProgramField;
+            const visible = visibleFields.includes(fieldName) || (fieldName === 'reschedule' && editingIdInput.value !== '');
+
+            container.classList.toggle('hidden', !visible);
+            container.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach((field) => {
+                field.disabled = !visible;
+                field.required = visible && ['entry', 'category', 'name', 'times'].includes(fieldName);
+            });
+        });
+    };
+
+    const focusableElements = () => [...modal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => !element.closest('.hidden'));
+
+    const openModal = (opener = null) => {
+        festivalProgramModalOpener = opener;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+        syncTypeFields();
+        window.requestAnimationFrame(() => focusableElements()[0]?.focus());
+    };
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+        festivalProgramModalOpener?.focus();
+        festivalProgramModalOpener = null;
+    };
+
+    const resetAddForm = () => {
+        form.reset();
+        form.action = modal.dataset.storeAction;
+        methodInput.disabled = true;
+        editingIdInput.value = '';
+        title.textContent = modal.dataset.addTitle;
+        setFieldValue('type', 'performance');
+        syncTypeFields();
+    };
+
+    const openEditForm = (button) => {
+        const item = JSON.parse(button.dataset.programItem ?? '{}');
+
+        form.reset();
+        form.action = button.dataset.updateAction;
+        methodInput.disabled = false;
+        editingIdInput.value = item.id ?? '';
+        title.textContent = modal.dataset.editTitle;
+        ['type', 'festival_entry_id', 'festival_category_id', 'parent_id', 'name', 'starts_at', 'ends_at', 'notes', 'is_published'].forEach((name) => {
+            setFieldValue(name, item[name]);
+        });
+        setFieldValue('reschedule_reason', '');
+        syncTypeFields();
+        openModal(button);
+    };
+
+    const directItems = (list) => [...list.children].filter((child) => child.matches('[data-festival-program-item]'));
+    const childList = (item) => [...item.children].find((child) => child.matches('[data-festival-program-list]'));
+
+    const syncTreePresentation = () => {
+        program.querySelectorAll('[data-festival-program-list]').forEach((list) => {
+            if (list !== rootList) {
+                list.classList.toggle('hidden', directItems(list).length === 0);
+            }
+        });
+
+        program.querySelectorAll('[data-festival-program-item]').forEach((item) => {
+            const siblings = directItems(item.parentElement);
+            const index = siblings.indexOf(item);
+            const previousHeader = siblings.slice(0, index).reverse().find((sibling) => ['free_header', 'category_header'].includes(sibling.dataset.itemType));
+            item.querySelector('[data-festival-program-up]')?.toggleAttribute('disabled', index <= 0 || savingOrder);
+            item.querySelector('[data-festival-program-down]')?.toggleAttribute('disabled', index === -1 || index >= siblings.length - 1 || savingOrder);
+            item.querySelector('[data-festival-program-indent]')?.toggleAttribute('disabled', !previousHeader || savingOrder);
+            item.querySelector('[data-festival-program-outdent]')?.toggleAttribute('disabled', item.parentElement === rootList || savingOrder);
+        });
+
+        program.querySelectorAll('[data-festival-program-drag]').forEach((row) => {
+            row.draggable = !savingOrder;
+        });
+
+        program.querySelectorAll('[data-festival-program-sort-control]').forEach((control) => {
+            if (control.matches('[data-festival-program-drag-affordance]')) {
+                control.toggleAttribute('disabled', savingOrder);
+            } else if (savingOrder) {
+                control.setAttribute('disabled', 'disabled');
+            }
+        });
+    };
+
+    const serializeTree = () => {
+        const items = [];
+        const visit = (list, parentId = null) => {
+            directItems(list).forEach((item) => {
+                const id = Number(item.dataset.itemId);
+                items.push({ id, parent_id: parentId });
+                const nestedList = childList(item);
+
+                if (nestedList) {
+                    visit(nestedList, id);
+                }
+            });
+        };
+
+        visit(rootList);
+
+        return items;
+    };
+
+    const showOrderStatus = (message, isError = false) => {
+        if (!status) {
+            return;
+        }
+
+        status.textContent = message;
+        status.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'bg-rose-50', 'text-rose-800');
+        status.classList.add(isError ? 'bg-rose-50' : 'bg-emerald-50', isError ? 'text-rose-800' : 'text-emerald-800');
+    };
+
+    const restoreTree = (html) => {
+        rootList.innerHTML = html;
+        createIcons({ icons });
+        syncTreePresentation();
+    };
+
+    const saveOrder = async (previousTree) => {
+        savingOrder = true;
+        syncTreePresentation();
+
+        try {
+            const response = await fetch(program.dataset.orderUrl, {
+                method: 'PATCH',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+                },
+                body: JSON.stringify({ items: serializeTree() }),
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(payload.message ?? program.dataset.orderError);
+            }
+
+            showOrderStatus(payload.message);
+        } catch (error) {
+            restoreTree(previousTree);
+            showOrderStatus(error instanceof Error ? error.message : program.dataset.orderError, true);
+        } finally {
+            savingOrder = false;
+            syncTreePresentation();
+        }
+    };
+
+    const mutateTree = (callback) => {
+        if (savingOrder) {
+            return;
+        }
+
+        const previousTree = rootList.innerHTML;
+        callback();
+        syncTreePresentation();
+
+        if (previousTree !== rootList.innerHTML) {
+            saveOrder(previousTree);
+        }
+    };
+
+    document.querySelectorAll('[data-festival-program-add]').forEach((button) => {
+        button.addEventListener('click', () => {
+            resetAddForm();
+            openModal(button);
+        });
+    });
+    modal.querySelectorAll('[data-festival-program-close]').forEach((button) => button.addEventListener('click', closeModal));
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+    modal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeModal();
+            return;
+        }
+
+        if (event.key !== 'Tab') {
+            return;
+        }
+
+        const focusable = focusableElements();
+        const first = focusable[0];
+        const last = focusable.at(-1);
+
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+        }
+    });
+    typeInput.addEventListener('change', syncTypeFields);
+
+    program.addEventListener('click', (event) => {
+        const editButton = event.target.closest('[data-festival-program-edit]');
+
+        if (editButton) {
+            openEditForm(editButton);
+            return;
+        }
+
+        const item = event.target.closest('[data-festival-program-item]');
+
+        if (!item) {
+            return;
+        }
+
+        if (event.target.closest('[data-festival-program-up]')) {
+            mutateTree(() => item.previousElementSibling?.before(item));
+        } else if (event.target.closest('[data-festival-program-down]')) {
+            mutateTree(() => item.nextElementSibling?.after(item));
+        } else if (event.target.closest('[data-festival-program-indent]')) {
+            mutateTree(() => {
+                const siblings = directItems(item.parentElement);
+                const previousHeader = siblings.slice(0, siblings.indexOf(item)).reverse().find((sibling) => ['free_header', 'category_header'].includes(sibling.dataset.itemType));
+
+                if (previousHeader) {
+                    childList(previousHeader)?.append(item);
+                }
+            });
+        } else if (event.target.closest('[data-festival-program-outdent]')) {
+            mutateTree(() => {
+                const parentList = item.parentElement;
+                const parentItem = parentList.closest('[data-festival-program-item]');
+                parentItem?.after(item);
+            });
+        }
+    });
+
+    program.addEventListener('dragstart', (event) => {
+        const row = event.target.closest('[data-festival-program-drag]');
+
+        if (!row || savingOrder) {
+            return;
+        }
+
+        draggedItem = row.closest('[data-festival-program-item]');
+        treeBeforeDrag = rootList.innerHTML;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', draggedItem.dataset.itemId);
+        window.requestAnimationFrame(() => draggedItem?.classList.add('opacity-50'));
+    });
+    program.addEventListener('dragover', (event) => {
+        const targetItem = event.target.closest('[data-festival-program-item]');
+
+        if (!draggedItem || !targetItem || targetItem === draggedItem || draggedItem.contains(targetItem)) {
+            return;
+        }
+
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    });
+    program.addEventListener('drop', (event) => {
+        const targetItem = event.target.closest('[data-festival-program-item]');
+
+        if (!draggedItem || !targetItem || targetItem === draggedItem || draggedItem.contains(targetItem)) {
+            return;
+        }
+
+        event.preventDefault();
+        const row = targetItem.querySelector(':scope > [data-festival-program-row]');
+        const rectangle = row?.getBoundingClientRect();
+        const relativeY = rectangle ? (event.clientY - rectangle.top) / rectangle.height : 0;
+        const targetIsHeader = ['free_header', 'category_header'].includes(targetItem.dataset.itemType);
+
+        if (targetIsHeader && relativeY >= 0.25 && relativeY <= 0.75) {
+            childList(targetItem)?.append(draggedItem);
+        } else if (relativeY < 0.5) {
+            targetItem.before(draggedItem);
+        } else {
+            targetItem.after(draggedItem);
+        }
+
+        draggedItem.classList.remove('opacity-50');
+        draggedItem = null;
+        syncTreePresentation();
+
+        if (treeBeforeDrag !== rootList.innerHTML) {
+            saveOrder(treeBeforeDrag);
+        }
+
+        treeBeforeDrag = null;
+    });
+    program.addEventListener('dragend', () => {
+        draggedItem?.classList.remove('opacity-50');
+        draggedItem = null;
+        treeBeforeDrag = null;
+    });
+
+    if (modal.dataset.autoOpen === 'true') {
+        openModal();
+    }
+
+    syncTypeFields();
+    syncTreePresentation();
+}
+
+function initFestivalSceneTabs() {
+    document.querySelectorAll('[data-festival-scene-tabs]').forEach((tabContainer) => {
+        const tabs = [...tabContainer.querySelectorAll('[role="tab"]')];
+
+        tabContainer.addEventListener('keydown', (event) => {
+            const currentIndex = tabs.indexOf(document.activeElement);
+
+            if (currentIndex === -1 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+                return;
+            }
+
+            event.preventDefault();
+            const nextIndex = event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                    ? tabs.length - 1
+                    : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+            tabs[nextIndex]?.click();
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    initFestivalAnnouncementModal();
+    initFestivalSceneTabs();
+    initFestivalProgram();
     initEventScanner();
     initEventForms();
     createIcons({ icons });
@@ -6997,6 +7556,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPlatformTelegramWebhook();
     initPhoneMasks();
     initOtpCountdowns();
+    initFestivalRegistrantProfiles();
     initPrintButtons();
     initPeopleCounterMaskEditors();
     initScheduleSeriesForms();
@@ -7014,6 +7574,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initOnboardingLogoPreviews();
     initOnboardingShareActions();
     initActiveScrollTargets();
+    initVelvetScrollTop();
     initProfilePhoneMergeScroll();
     initAssistantChat();
     initAppUpdatePrompt();
@@ -7367,6 +7928,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (event.key === 'Escape' && asyncSuccessModal && !asyncSuccessModal.classList.contains('hidden')) {
             closeAsyncSuccessModal(asyncSuccessModal);
+        }
+
+        if (event.key === 'Escape') {
+            const announcementModal = document.querySelector('[data-festival-announcement-modal]:not(.hidden)');
+            announcementModal?.querySelector('[data-festival-announcement-close]')?.click();
         }
     });
 

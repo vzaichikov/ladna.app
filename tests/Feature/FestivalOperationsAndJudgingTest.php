@@ -7,6 +7,7 @@ use App\Actions\Festivals\PublishFestivalResults;
 use App\Actions\Festivals\SaveFestivalScheduleSlot;
 use App\Actions\Festivals\SaveFestivalScoreSheet;
 use App\Actions\Festivals\UnlockFestivalScoreSheet;
+use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalScoreSheetStatus;
 use App\Models\Account;
 use App\Models\FestivalCategory;
@@ -63,7 +64,13 @@ class FestivalOperationsAndJudgingTest extends TestCase
         app(FestivalNotificationOutbox::class)->queue($portalUser, $edition, 'entry_submitted', $payload);
 
         $this->assertSame(1, FestivalNotification::query()->where('account_id', $account->id)->count());
-        $this->assertSame($payload, FestivalNotification::query()->firstOrFail()->payload);
+        $notification = FestivalNotification::query()->firstOrFail();
+        $this->assertSame(FestivalNotificationChannel::Email, $notification->channel);
+        $this->assertSame($portalUser->email, $notification->recipient_email);
+        $this->assertSame(__('app.festival_notification_template_entry_submitted_subject', locale: $portalUser->locale), $notification->subject);
+        $this->assertSame($payload['subject'], $notification->payload['subject']);
+        $this->assertArrayHasKey('greeting', $notification->payload);
+        $this->assertArrayHasKey('lines', $notification->payload);
     }
 
     public function test_score_sheet_uses_assignment_boundaries_and_remains_editable(): void
