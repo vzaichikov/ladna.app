@@ -204,6 +204,11 @@ class FestivalEdition extends Model
         return $this->scheduleSlots();
     }
 
+    public function timelines(): HasMany
+    {
+        return $this->hasMany(FestivalTimeline::class)->orderBy('festival_stage_id')->orderBy('id');
+    }
+
     public function festivalEntryRequirements(): HasManyThrough
     {
         return $this->hasManyThrough(FestivalEntryRequirement::class, FestivalEntry::class, 'festival_edition_id', 'festival_entry_id');
@@ -239,6 +244,11 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalAdmissionType::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function onlineStream(): HasOne
+    {
+        return $this->hasOne(FestivalOnlineStream::class);
+    }
+
     public function festivalAdmissionTypes(): HasMany
     {
         return $this->admissionTypes();
@@ -247,6 +257,11 @@ class FestivalEdition extends Model
     public function ticketOrders(): HasMany
     {
         return $this->hasMany(FestivalTicketOrder::class);
+    }
+
+    public function festivalTicketOrders(): HasMany
+    {
+        return $this->ticketOrders();
     }
 
     public function tickets(): HasMany

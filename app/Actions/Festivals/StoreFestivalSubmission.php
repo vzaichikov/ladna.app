@@ -30,7 +30,7 @@ class StoreFestivalSubmission
         abort_unless($requirement->account_id === $portalUser->account_id && $requirement->entry->festival_portal_user_id === $portalUser->id, 404);
         abort_unless($requirement->definition->input_type === FestivalRequirementInputType::File, 422);
         if ($requirement->entryStep) {
-            $this->workflowState->assertMutable($requirement->entry, $requirement->entryStep);
+            $this->workflowState->assertRequirementMutable($requirement);
         } else {
             abort_unless($requirement->entry->steps->isEmpty(), 409);
         }
@@ -71,9 +71,10 @@ class StoreFestivalSubmission
             $submission = DB::transaction(function () use ($requirement, $portalUser, $file, $path, $mimeType, $duration, &$previousPath): FestivalSubmission {
                 $locked = FestivalEntryRequirement::query()->with(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
                 if ($locked->entryStep) {
-                    $this->workflowState->assertMutable($locked->entry, $locked->entryStep);
+                    $postConfirmationChange = $this->workflowState->assertRequirementMutable($locked);
                 } else {
                     abort_unless($locked->entry->steps->isEmpty(), 409);
+                    $postConfirmationChange = false;
                 }
                 $current = $locked->submissions()->lockForUpdate()->first();
                 $previousPath = $current?->path;
@@ -94,6 +95,9 @@ class StoreFestivalSubmission
                     'review_notes' => null,
                 ]);
                 $locked->forceFill(['status' => FestivalRequirementStatus::Submitted, 'reviewed_at' => null, 'reviewed_by' => null, 'review_notes' => null])->save();
+                if ($postConfirmationChange) {
+                    $this->workflowState->markPostConfirmationChange($locked);
+                }
                 $this->activity->record($submission, 'submission.uploaded', $locked->entry->edition, $portalUser);
 
                 return $submission;

@@ -107,6 +107,15 @@ class AuthenticatedBreadcrumbsTest extends TestCase
             ['label' => 'Judges', 'href' => null, 'current' => true],
         ], $this->breadcrumbItems($judges));
 
+        $timeline = $this->withSession(['locale' => 'en'])
+            ->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.timeline.show', [$account, $edition, $stage]));
+        $timeline->assertOk();
+        $this->assertSame(
+            ['Festivals', $edition->title, 'Timeline', 'Main scene'],
+            array_column($this->breadcrumbItems($timeline), 'label'),
+        );
+
         foreach ([
             'dashboard.accounts.festivals.judging.judges.create' => ['Festivals', $edition->title, 'Judges', 'Add: Judge'],
             'dashboard.accounts.festivals.judging.judges.edit' => ['Festivals', $edition->title, 'Judges', 'Edit: Judge One'],

@@ -2,6 +2,7 @@
     'provider',
     'label' => null,
     'presentation' => 'provider',
+    'actionLabel' => null,
 ])
 
 @php
@@ -18,7 +19,7 @@
 @if ($showCardPresentation)
     <span {{ $attributes->class(['inline-flex min-w-0 items-center gap-2 text-left']) }}>
         <x-ui.icon name="credit-card" class="h-5 w-5 shrink-0 text-white" />
-        <span class="min-w-0 text-sm font-semibold">{{ __('app.pay_by_card') }}</span>
+        <span class="min-w-0 text-sm font-semibold">{{ $actionLabel ?? __('app.pay_by_card') }}</span>
         <span class="ml-auto inline-flex shrink-0 items-center gap-1.5">
             <img src="{{ asset('assets/payment-methods/google-pay-mark.svg') }}" alt="Google Pay" class="h-9 w-auto">
             <img src="{{ asset('assets/payment-methods/apple-pay-mark.svg') }}" alt="Apple Pay" class="h-5 w-auto">
@@ -51,7 +52,7 @@
             @endswitch
         </span>
         <span class="block min-w-0 truncate text-sm font-semibold">
-            {{ __('app.pay_with_provider', ['provider' => $displayLabel]) }}
+            {{ $actionLabel ?? __('app.pay_with_provider', ['provider' => $displayLabel]) }}
         </span>
     </span>
 @endif

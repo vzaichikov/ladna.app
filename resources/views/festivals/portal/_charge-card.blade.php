@@ -77,7 +77,7 @@
 
             <div class="mt-4 space-y-3">
                 @foreach ($providers as $provider)
-                    <form method="POST" action="{{ route('festival.portal.charges.pay', [$account->slug, $entry, $charge]) }}">
+                    <form method="POST" action="{{ route('festival.portal.charges.pay', [$account->slug, $entry, $charge]) }}" data-festival-combined-payment>
                         @csrf
                         <input type="hidden" name="provider" value="{{ $provider->provider->value }}">
                         <label class="mb-3 flex items-start gap-3 rounded-lg border border-stone-200 bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-600">
@@ -99,8 +99,9 @@
                         @if ($paymentErrors->has('festival_rules_accepted'))
                             <span data-festival-payment-error class="crm-help mb-3 block">{{ $paymentErrors->first('festival_rules_accepted') }}</span>
                         @endif
-                        <x-ui.button type="submit" variant="success" size="lg" class="w-full justify-start px-3">
-                            <x-ui.payment-brand :provider="$provider->provider->value" :label="config('integrations.providers.'.$provider->provider->value.'.label')" presentation="card" class="w-full" />
+                        <p data-festival-progress-blocked-message @class(['mb-3 text-sm font-semibold text-amber-800', 'hidden' => $selectedState['requirements_complete']])>{{ __('app.festival_complete_required_fields_first') }}</p>
+                        <x-ui.button type="submit" variant="success" size="lg" class="w-full justify-start px-3" data-festival-progress-action :disabled="!$selectedState['requirements_complete']">
+                            <x-ui.payment-brand :provider="$provider->provider->value" :label="config('integrations.providers.'.$provider->provider->value.'.label')" presentation="card" :action-label="__('app.festival_submit_and_pay')" class="w-full" />
                         </x-ui.button>
                     </form>
                 @endforeach

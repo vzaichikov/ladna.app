@@ -31,6 +31,19 @@ class FestivalPortalUserFactory extends Factory
         ]);
     }
 
+    public function guest(): static
+    {
+        return $this->state(fn (): array => [
+            'role' => FestivalPortalRole::Guest,
+            'registrant_type' => null,
+            'stage_name' => null,
+            'city' => null,
+            'studio_name' => null,
+            'instagram_url' => null,
+            'telegram_contact' => null,
+        ]);
+    }
+
     public function inactive(): static
     {
         return $this->state(fn (): array => ['is_active' => false]);

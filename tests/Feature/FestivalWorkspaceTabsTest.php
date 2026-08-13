@@ -43,12 +43,14 @@ class FestivalWorkspaceTabsTest extends TestCase
         [$account, $edition] = $this->festival();
         $owner = User::factory()->create();
         $account->addOwner($owner);
+        $timelineStage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
 
         $routes = [
             'dashboard.accounts.festivals.show' => 'festival_tab_overview',
             'dashboard.accounts.festivals.applications' => 'festival_tab_applications',
             'dashboard.accounts.festivals.performances' => 'festival_tab_performances',
             'dashboard.accounts.festivals.program' => 'festival_tab_program',
+            'dashboard.accounts.festivals.timeline.show' => 'festival_timeline_title',
             'dashboard.accounts.festivals.judging.judges.index' => 'festival_judges',
             'dashboard.accounts.festivals.judging.judges.create' => 'festival_judges',
             'dashboard.accounts.festivals.judging.criteria.index' => 'festival_criteria',
@@ -83,7 +85,10 @@ class FestivalWorkspaceTabsTest extends TestCase
         ];
 
         foreach ($routes as $route => $activeLabel) {
-            $response = $this->actingAs($owner)->get(route($route, [$account, $edition]));
+            $parameters = $route === 'dashboard.accounts.festivals.timeline.show'
+                ? [$account, $edition, $timelineStage]
+                : [$account, $edition];
+            $response = $this->actingAs($owner)->get(route($route, $parameters));
             $response->assertOk()
                 ->assertSee(__('app.'.$activeLabel))
                 ->assertSee('data-workspace="festival"', false)
@@ -216,6 +221,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($registrationStaff)->get(route('dashboard.accounts.festivals.tickets', [$account, $edition]))->assertForbidden();
 
         $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.program', [$account, $edition]))->assertOk();
+        $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.timeline.index', [$account, $edition]))->assertRedirect();
         $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.settings', [$account, $edition]))->assertOk();
         $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.settings.stages', [$account, $edition]))->assertOk();
         $this->actingAs($scheduleStaff)->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))->assertForbidden();
@@ -514,6 +520,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertSee('border-stone-200 bg-stone-50 text-stone-800', false)
             ->assertSee('border-sky-200 bg-sky-50 text-sky-900', false)
             ->assertSee('border-amber-200 bg-amber-50 text-amber-900', false)
+            ->assertSee('border-violet-200 bg-violet-50 text-violet-900', false)
             ->assertSee('border-emerald-200 bg-emerald-50 text-emerald-900', false)
             ->assertSee('border-rose-200 bg-rose-50 text-rose-900', false)
             ->assertSee('border-slate-300 bg-slate-100 text-slate-800', false)
@@ -527,12 +534,13 @@ class FestivalWorkspaceTabsTest extends TestCase
                     FestivalEntryStatus::Draft->value => 1,
                     FestivalEntryStatus::Submitted->value => 1,
                     FestivalEntryStatus::UnderReview->value => 0,
+                    FestivalEntryStatus::ChangesPending->value => 0,
                     FestivalEntryStatus::Accepted->value => 1,
                     FestivalEntryStatus::Rejected->value => 0,
                     FestivalEntryStatus::Withdrawn->value => 0,
                 ];
             });
-        $this->assertSame(7, substr_count($combined->getContent(), 'data-status-card='));
+        $this->assertSame(8, substr_count($combined->getContent(), 'data-status-card='));
         $this->assertMatchesRegularExpression('/data-status-card="all"[^>]*>.*?<strong class="text-xl">3<\/strong>/s', $combined->getContent());
         $this->assertMatchesRegularExpression('/data-status-card="accepted"\s+aria-current="page"/', $combined->getContent());
         $this->assertSame(3, substr_count($combined->getContent(), 'aria-current="page"'));

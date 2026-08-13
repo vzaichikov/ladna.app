@@ -79,6 +79,21 @@
             <div>{{ $admissionTypes->links() }}</div>
         @else
             <div><h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_bought_tickets_tab') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_bought_tickets_copy') }}</p></div>
+            @if ($refundRequiredOrders->isNotEmpty())
+                <section class="rounded-2xl border border-rose-200 bg-rose-50 p-5">
+                    <h3 class="font-semibold text-rose-950">{{ __('app.festival_refund_pending') }}</h3>
+                    <div class="mt-4 space-y-3">
+                        @foreach ($refundRequiredOrders as $refundOrder)
+                            <form method="POST" action="{{ route('dashboard.accounts.festivals.ticket-orders.refund', [$account, $edition, $refundOrder]) }}" class="grid gap-3 rounded-xl bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(16rem,1fr)_auto] md:items-end">
+                                @csrf
+                                <div><strong class="font-mono text-sm">{{ $refundOrder->order_id }}</strong><p class="mt-1 text-sm text-slate-600">{{ $refundOrder->buyer_name }} · {{ \App\Support\MoneyFormatter::format($refundOrder->amount_cents, $refundOrder->currency) }}</p></div>
+                                <label><span class="crm-label">{{ __('app.refund_reason') }}</span><input name="reason" required maxlength="2000" class="crm-field"></label>
+                                <x-ui.button type="submit" variant="danger">{{ __('app.festival_record_refund') }}</x-ui.button>
+                            </form>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
             <x-ui.filter-bar :action="route('dashboard.accounts.festivals.tickets', [$account, $edition])" :reset-href="route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold'])" class="lg:grid-cols-3">
                 <input type="hidden" name="tab" value="sold">
                 <label><span class="crm-label">{{ __('app.search') }}</span><input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_ticket_search_placeholder') }}"></label>
@@ -101,6 +116,22 @@
                             <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_payment') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->provider ?: '—' }} · {{ __('app.festival_order_'.$order->status->value) }}</dd><span class="mt-1 block break-all text-xs text-slate-500">{{ $order->gateway_payment_id ?: $order->gateway_invoice_id ?: '—' }}</span></div>
                             <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_fiscal_receipt') }}</dt><dd class="mt-1 font-semibold text-slate-900">@if($order->amount_cents === 0){{ __('app.festival_fiscal_not_required') }}@elseif($receipt){{ __('app.fiscal_status_'.$receipt->status->value) }}@else{{ __('app.fiscal_status_pending') }}@endif</dd>@if($receipt?->fiscal_number)<span class="mt-1 block break-all text-xs text-slate-500">{{ $receipt->fiscal_number }}</span>@endif @if($receipt?->last_error)<span class="mt-1 block text-xs text-rose-700">{{ $receipt->last_error }}</span>@endif</div>
                         </dl>
+                        @if ($ticket->status === \App\Enums\FestivalTicketStatus::Valid)
+                            <div class="mt-4 grid gap-3 border-t border-stone-100 pt-4 md:grid-cols-2">
+                                <form method="POST" action="{{ route('dashboard.accounts.festivals.tickets.void', [$account, $edition, $ticket]) }}" class="flex gap-2">
+                                    @csrf
+                                    <input name="reason" required maxlength="2000" class="crm-field" placeholder="{{ __('app.festival_ticket_void_reason') }}">
+                                    <x-ui.button type="submit" variant="danger">{{ __('app.festival_void_ticket') }}</x-ui.button>
+                                </form>
+                                @if ($order->status === \App\Enums\FestivalTicketOrderStatus::Paid && $order->tickets->first()?->is($ticket))
+                                    <form method="POST" action="{{ route('dashboard.accounts.festivals.ticket-orders.refund', [$account, $edition, $order]) }}" class="flex gap-2">
+                                        @csrf
+                                        <input name="reason" required maxlength="2000" class="crm-field" placeholder="{{ __('app.refund_reason') }}">
+                                        <x-ui.button type="submit" variant="danger">{{ __('app.festival_record_refund') }}</x-ui.button>
+                                    </form>
+                                @endif
+                            </div>
+                        @endif
                     </article>
                 @empty
                     <x-ui.empty-state icon="ticket">{{ __('app.festival_bought_tickets_empty') }}</x-ui.empty-state>

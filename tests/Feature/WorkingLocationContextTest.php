@@ -192,6 +192,10 @@ class WorkingLocationContextTest extends TestCase
         $account = Account::factory()->create();
         $account->addOwner($owner);
         $location = Location::factory()->for($account)->create(['name' => 'Only studio']);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $accountWidePlan = ClassPassPlan::factory()->for($account)->create(['name' => 'Anywhere plan']);
+        $locationPlan = ClassPassPlan::factory()->for($account)->create(['name' => 'Only studio plan']);
+        $locationPlan->rooms()->attach($room);
 
         $dashboardResponse = $this->actingAs($owner)
             ->get(route('dashboard.accounts.show', $account));
@@ -203,6 +207,16 @@ class WorkingLocationContextTest extends TestCase
             ->assertDontSee(__('app.account_wide'))
             ->assertDontSee(__('app.dashboard_mixed_scope_notice'))
             ->assertDontSee('name="location_context"', false);
+
+        $classPassPlansResponse = $this->get(route('dashboard.accounts.class-pass-plans.index', $account));
+
+        $classPassPlansResponse
+            ->assertOk()
+            ->assertViewHas('hasMultipleWorkingLocations', false)
+            ->assertSee($accountWidePlan->name)
+            ->assertSee($locationPlan->name)
+            ->assertDontSee(__('app.available_at_all_locations'))
+            ->assertDontSee(__('app.available_at_locations', ['locations' => $location->name]));
 
         $scheduleResponse = $this->get(route('dashboard.accounts.scheduled-classes.index', $account));
 

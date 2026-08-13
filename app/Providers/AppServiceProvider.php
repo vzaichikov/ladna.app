@@ -184,6 +184,34 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(120)->by((string) $request->user()?->id.'|'.$request->ip());
         });
 
+        RateLimiter::for('festival-stream-bootstrap', function (Request $request): Limit {
+            if ($request->routeIs('festival.stream.bootstrap')) {
+                return Limit::perMinute(120)->by($request->ip());
+            }
+
+            return Limit::perMinute(10)->by((string) $request->user('festival')?->getAuthIdentifier().'|'.$request->ip());
+        });
+
+        RateLimiter::for('festival-stream-heartbeat', function (Request $request): Limit {
+            return Limit::perMinute(10)->by(hash('sha256', implode('|', [
+                $request->ip(),
+                (string) $request->route('path'),
+                (string) $request->header('Cookie'),
+            ])));
+        });
+
+        RateLimiter::for('festival-stream-gateway', function (Request $request): Limit {
+            return Limit::perMinute(120)->by(hash('sha256', implode('|', [
+                (string) $request->header('X-Original-Client-IP', $request->ip()),
+                (string) $request->header('X-Festival-Stream-Path'),
+                (string) $request->header('Cookie'),
+            ])));
+        });
+
+        RateLimiter::for('festival-stream-publisher', function (Request $request): Limit {
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
         RateLimiter::for('mobile-auth', function (Request $request): Limit {
             return Limit::perMinute(10)->by($request->string('email')->lower().$request->string('phone').$request->ip());
         });

@@ -21,9 +21,11 @@ class AuthenticateFestivalPortal
     {
         $account = $request->attributes->get('festivalAccount');
         $portalUser = $request->user('festival');
-        $expectedRole = $request->routeIs('festival.portal.judge.*', 'festival.portal.judging.*', 'festival.portal.battle-votes.*')
-            ? FestivalPortalRole::Judge
-            : FestivalPortalRole::Registrant;
+        $expectedRole = match (true) {
+            $request->routeIs('festival.portal.judge.*', 'festival.portal.judging.*', 'festival.portal.battle-votes.*') => FestivalPortalRole::Judge,
+            $request->routeIs('festival.portal.guest.*') => FestivalPortalRole::Guest,
+            default => FestivalPortalRole::Registrant,
+        };
 
         if (! $portalUser instanceof FestivalPortalUser) {
             if ($request->isMethod('GET') && $account instanceof Account) {
@@ -34,7 +36,7 @@ class AuthenticateFestivalPortal
             }
 
             return redirect()->route(
-                $expectedRole === FestivalPortalRole::Judge ? 'festival.judge.login' : 'festival.login',
+                $this->loginRoute($expectedRole),
                 ['accountSlug' => $request->route('accountSlug')],
             );
         }
@@ -47,11 +49,20 @@ class AuthenticateFestivalPortal
             $request->session()->regenerateToken();
 
             return redirect()->route(
-                $portalUser->role === FestivalPortalRole::Judge ? 'festival.judge.login' : 'festival.login',
+                $this->loginRoute($portalUser->role),
                 $account->slug,
             )->withErrors(['email' => __('app.festival_profile_inactive')]);
         }
 
         return $next($request);
+    }
+
+    private function loginRoute(FestivalPortalRole $role): string
+    {
+        return match ($role) {
+            FestivalPortalRole::Registrant => 'festival.login',
+            FestivalPortalRole::Judge => 'festival.judge.login',
+            FestivalPortalRole::Guest => 'festival.guest.login',
+        };
     }
 }

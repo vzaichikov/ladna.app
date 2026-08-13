@@ -3,6 +3,7 @@ import Panzoom from '@panzoom/panzoom';
 import SimplePhoneMask from 'simple-phone-mask';
 import 'summernote/dist/summernote-lite.css';
 import { initEventScanner } from './event-scanner';
+import { initFestivalStreamPlayer } from './festival-stream-player';
 
 let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
@@ -14,6 +15,7 @@ let trainerPrivateLessonsAbortController = null;
 let trainerPermissionDetailsOpener = null;
 let festivalAnnouncementModalOpener = null;
 let festivalProgramModalOpener = null;
+let confirmationModalOpener = null;
 let activeFieldHelp = null;
 
 const confirmationButtonVariants = {
@@ -72,6 +74,7 @@ const cyrillicMap = {
 function closeDeleteConfirmation(modal) {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+    document.body.classList.remove('overflow-hidden');
 
     const phraseContainer = modal.querySelector('[data-confirm-phrase-container]');
     const phraseInput = modal.querySelector('[data-confirm-phrase-input]');
@@ -90,6 +93,8 @@ function closeDeleteConfirmation(modal) {
     pendingDeleteForm = null;
     pendingConfirmationSubmitter = null;
     pendingConfirmationPhrase = null;
+    confirmationModalOpener?.focus();
+    confirmationModalOpener = null;
 }
 
 function applyClassVariant(element, allVariantClasses, variantClasses) {
@@ -130,6 +135,61 @@ function applyConfirmationIcon(container, iconName) {
 
     container.innerHTML = `<i data-lucide="${iconName}" class="h-5 w-5" aria-hidden="true"></i>`;
     createIcons({ icons });
+}
+
+function applyConfirmationDetails(container, encodedDetails) {
+    if (!container) {
+        return false;
+    }
+
+    container.replaceChildren();
+
+    if (!encodedDetails) {
+        container.classList.add('hidden');
+
+        return false;
+    }
+
+    let details = [];
+
+    try {
+        const parsedDetails = JSON.parse(encodedDetails);
+        details = Array.isArray(parsedDetails) ? parsedDetails : [];
+    } catch {
+        details = [];
+    }
+
+    details = details
+        .filter((detail) => detail && typeof detail.label === 'string' && typeof detail.value === 'string')
+        .slice(0, 12);
+
+    if (details.length === 0) {
+        container.classList.add('hidden');
+
+        return false;
+    }
+
+    const list = document.createElement('dl');
+    list.className = 'grid gap-3';
+
+    details.forEach((detail) => {
+        const row = document.createElement('div');
+        const term = document.createElement('dt');
+        const description = document.createElement('dd');
+
+        row.className = 'grid gap-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-3';
+        term.className = 'font-semibold text-slate-800';
+        description.className = 'min-w-0 whitespace-pre-line break-words text-slate-600';
+        term.textContent = detail.label;
+        description.textContent = detail.value;
+        row.append(term, description);
+        list.append(row);
+    });
+
+    container.append(list);
+    container.classList.remove('hidden');
+
+    return true;
 }
 
 function updateAnyTimeAddon(container) {
@@ -4368,9 +4428,26 @@ function replaceFestivalRequirementCard(cardHtml, fallbackCard) {
         : fallbackCard;
 
     (target ?? fallbackCard)?.replaceWith(replacement);
+    syncFestivalStepProgressActions(replacement.closest('[data-festival-step-panel]'));
     createIcons({ icons });
 
     return replacement;
+}
+
+function syncFestivalStepProgressActions(panel) {
+    if (!panel) {
+        return;
+    }
+
+    const blockingRequirements = [...panel.querySelectorAll('[data-festival-requirement-blocking="true"]')];
+    const complete = blockingRequirements.every((requirement) => requirement.dataset.festivalRequirementComplete === 'true');
+
+    panel.querySelectorAll('[data-festival-progress-action]').forEach((button) => {
+        button.disabled = !complete;
+    });
+    panel.querySelectorAll('[data-festival-progress-blocked-message]').forEach((message) => {
+        message.classList.toggle('hidden', complete);
+    });
 }
 
 function replaceFestivalApplicationFragment(fragmentHtml, fallbackFragment) {
@@ -7592,6 +7669,354 @@ function initFestivalProgram() {
     syncTreePresentation();
 }
 
+function initFestivalTimeline(root = document.querySelector('[data-festival-timeline], [data-festival-timeline-poller]')) {
+    if (!root || root.dataset.timelineReady === 'true') {
+        return;
+    }
+
+    root.dataset.timelineReady = 'true';
+    const list = root.querySelector('[data-timeline-list]');
+    const status = root.querySelector('[data-timeline-save-status]');
+    let draggedItem = null;
+    let savingOrder = false;
+    let savingAction = false;
+    let polling = false;
+    const lifecycle = new AbortController();
+
+    const updateCountdowns = () => {
+        if (!root.isConnected) {
+            return;
+        }
+
+        root.querySelectorAll('[data-timeline-countdown]').forEach((countdown) => {
+            const boundary = Date.parse(countdown.dataset.timelineBoundary ?? '');
+
+            if (Number.isNaN(boundary)) {
+                countdown.textContent = '--:--:--';
+                return;
+            }
+
+            const remainingSeconds = Math.max(0, Math.ceil((boundary - Date.now()) / 1000));
+            const hours = Math.floor(remainingSeconds / 3600);
+            const minutes = Math.floor((remainingSeconds % 3600) / 60);
+            const seconds = remainingSeconds % 60;
+            countdown.textContent = [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':');
+
+            if (remainingSeconds === 0 && root.dataset.timelineBoundaryReached !== 'true') {
+                root.dataset.timelineBoundaryReached = 'true';
+                window.setTimeout(poll, 0);
+            }
+        });
+    };
+
+    const renderStatus = (target, message, isError = false) => {
+        if (!target || !message) {
+            return;
+        }
+
+        target.textContent = message;
+        target.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'bg-rose-50', 'text-rose-800');
+        target.classList.add(isError ? 'bg-rose-50' : 'bg-emerald-50', isError ? 'text-rose-800' : 'text-emerald-800');
+    };
+    const showStatus = (message, isError = false) => renderStatus(status, message, isError);
+
+    const replaceTimelineFragment = (html, itemId = null, actionName = null, message = null) => {
+        const template = document.createElement('template');
+        template.innerHTML = html.trim();
+        const replacement = template.content.firstElementChild;
+
+        if (!replacement) {
+            root.remove();
+
+            return null;
+        }
+
+        lifecycle.abort();
+        root.replaceWith(replacement);
+        createIcons({ icons });
+        initFestivalTimeline(replacement);
+        renderStatus(replacement.querySelector('[data-timeline-save-status]'), message);
+
+        let focusTarget = null;
+
+        if (['activate', 'pause', 'resume'].includes(actionName)) {
+            focusTarget = replacement.querySelector('[data-timeline-current-control] button');
+        } else if (itemId && actionName) {
+            focusTarget = replacement.querySelector(`[data-timeline-item][data-item-id="${itemId}"] [data-timeline-action="${actionName}"] button`);
+        }
+
+        focusTarget ??= itemId
+            ? replacement.querySelector(`[data-timeline-item][data-item-id="${itemId}"] button`)
+            : null;
+        focusTarget?.focus();
+
+        return replacement;
+    };
+
+    const itemElements = () => list ? [...list.querySelectorAll(':scope > [data-timeline-item]')] : [];
+    const serializeOrder = () => itemElements().map((item) => Number(item.dataset.itemId));
+
+    const syncOrderControls = () => {
+        itemElements().forEach((item, index, items) => {
+            item.querySelector('[data-timeline-move="up"]')?.toggleAttribute('disabled', savingOrder || index === 0);
+            item.querySelector('[data-timeline-move="down"]')?.toggleAttribute('disabled', savingOrder || index === items.length - 1);
+            item.draggable = !savingOrder;
+        });
+    };
+
+    const submitTimelineAction = async (form) => {
+        if (savingAction) {
+            return;
+        }
+
+        savingAction = true;
+        root.dataset.timelineSaving = 'true';
+        const itemId = form.closest('[data-timeline-item]')?.dataset.itemId ?? null;
+        const actionName = form.dataset.timelineAction ?? null;
+        const confirmationModal = document.getElementById('delete-confirmation-modal');
+        const formData = new FormData(form);
+
+        delete form.dataset.confirmed;
+
+        if (confirmationModal && !confirmationModal.classList.contains('hidden')) {
+            closeDeleteConfirmation(confirmationModal);
+        }
+
+        setFormDisabled(form, true);
+
+        try {
+            const response = await fetch(form.action, {
+                method: form.method.toUpperCase(),
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                const validationMessage = Object.values(payload.errors ?? {}).flat().find((error) => typeof error === 'string');
+                throw new Error(validationMessage || payload.message || root.dataset.actionError);
+            }
+
+            if (!payload.fragment_html) {
+                throw new Error(root.dataset.actionError);
+            }
+
+            replaceTimelineFragment(payload.fragment_html, itemId, actionName, payload.message);
+        } catch (error) {
+            showStatus(error instanceof Error ? error.message : root.dataset.actionError, true);
+        } finally {
+            savingAction = false;
+
+            if (root.isConnected) {
+                delete root.dataset.timelineSaving;
+                setFormDisabled(form, false);
+            }
+        }
+    };
+
+    root.addEventListener('submit', (event) => {
+        const form = event.target.closest('form[data-timeline-action]');
+
+        if (!form || (form.matches('[data-confirm-action]') && form.dataset.confirmed !== 'true')) {
+            return;
+        }
+
+        event.preventDefault();
+        submitTimelineAction(form);
+    });
+
+    const saveOrder = async (previousOrder) => {
+        if (!root.dataset.timelineOrderUrl) {
+            return;
+        }
+
+        savingOrder = true;
+        root.dataset.timelineSaving = 'true';
+        syncOrderControls();
+
+        try {
+            const response = await fetch(root.dataset.timelineOrderUrl, {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': root.dataset.csrfToken ?? '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ items: serializeOrder() }),
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(payload.message ?? root.dataset.orderError);
+            }
+
+            showStatus(payload.message);
+        } catch (error) {
+            previousOrder.forEach((id) => {
+                const item = list?.querySelector(`[data-timeline-item][data-item-id="${id}"]`);
+                item && list.append(item);
+            });
+            showStatus(error instanceof Error ? error.message : root.dataset.orderError, true);
+        } finally {
+            savingOrder = false;
+            delete root.dataset.timelineSaving;
+            syncOrderControls();
+        }
+    };
+
+    const moveItem = (item, direction) => {
+        if (savingOrder || !list) {
+            return;
+        }
+
+        const previousOrder = serializeOrder();
+
+        if (direction === 'up') {
+            item.previousElementSibling?.before(item);
+        } else {
+            item.nextElementSibling?.after(item);
+        }
+
+        syncOrderControls();
+
+        if (previousOrder.join(',') !== serializeOrder().join(',')) {
+            saveOrder(previousOrder);
+        }
+    };
+
+    list?.addEventListener('click', (event) => {
+        const moveButton = event.target.closest('[data-timeline-move]');
+        const item = moveButton?.closest('[data-timeline-item]');
+
+        if (moveButton && item) {
+            moveItem(item, moveButton.dataset.timelineMove);
+        }
+    });
+    list?.addEventListener('dragstart', (event) => {
+        const item = event.target.closest('[data-timeline-item]');
+
+        if (!item || savingOrder) {
+            return;
+        }
+
+        draggedItem = item;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', item.dataset.itemId);
+        window.requestAnimationFrame(() => item.classList.add('opacity-50'));
+    });
+    list?.addEventListener('dragover', (event) => {
+        const target = event.target.closest('[data-timeline-item]');
+
+        if (!draggedItem || !target || target === draggedItem) {
+            return;
+        }
+
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    });
+    list?.addEventListener('drop', (event) => {
+        const target = event.target.closest('[data-timeline-item]');
+
+        if (!draggedItem || !target || target === draggedItem) {
+            return;
+        }
+
+        event.preventDefault();
+        const previousOrder = serializeOrder();
+        const rectangle = target.getBoundingClientRect();
+
+        if (event.clientY < rectangle.top + rectangle.height / 2) {
+            target.before(draggedItem);
+        } else {
+            target.after(draggedItem);
+        }
+
+        draggedItem.classList.remove('opacity-50');
+        draggedItem = null;
+        syncOrderControls();
+        saveOrder(previousOrder);
+    });
+    list?.addEventListener('dragend', () => {
+        draggedItem?.classList.remove('opacity-50');
+        draggedItem = null;
+    });
+
+    const poll = async () => {
+        if (!root.isConnected) {
+            return;
+        }
+
+        const confirmationModal = document.getElementById('delete-confirmation-modal');
+        const interactionPending = savingOrder
+            || savingAction
+            || root.dataset.timelineSaving === 'true'
+            || (confirmationModal && !confirmationModal.classList.contains('hidden'));
+
+        if (document.hidden || polling || interactionPending || !root.dataset.timelineFragmentUrl) {
+            window.setTimeout(poll, 2000);
+            return;
+        }
+
+        polling = true;
+
+        try {
+            const response = await fetch(root.dataset.timelineFragmentUrl, {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Timeline poll failed: ${response.status}`);
+            }
+
+            const html = await response.text();
+            const confirmationOpenedDuringPoll = confirmationModal && !confirmationModal.classList.contains('hidden');
+
+            if (savingOrder || savingAction || root.dataset.timelineSaving === 'true' || confirmationOpenedDuringPoll) {
+                return;
+            }
+
+            const focusedItemId = document.activeElement?.closest('[data-timeline-item]')?.dataset.itemId;
+            replaceTimelineFragment(html, focusedItemId);
+        } catch (error) {
+            if (root.dataset.timelineScope === 'staff') {
+                showStatus(error instanceof Error ? error.message : root.dataset.orderError, true);
+            }
+        } finally {
+            polling = false;
+
+            if (root.isConnected) {
+                window.setTimeout(poll, 10000);
+            }
+        }
+    };
+
+    const tickCountdowns = () => {
+        if (!root.isConnected) {
+            return;
+        }
+
+        updateCountdowns();
+        window.setTimeout(tickCountdowns, 1000);
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        if (root.isConnected && !document.hidden) {
+            poll();
+        }
+    }, { signal: lifecycle.signal });
+    tickCountdowns();
+    window.setTimeout(poll, 10000);
+    syncOrderControls();
+}
+
 function initFestivalSceneTabs() {
     document.querySelectorAll('[data-festival-scene-tabs]').forEach((tabContainer) => {
         const tabs = [...tabContainer.querySelectorAll('[role="tab"]')];
@@ -7679,9 +8104,11 @@ function initFieldHelp(root = document) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    initFestivalStreamPlayer();
     initFestivalAnnouncementModal();
     initFestivalSceneTabs();
     initFestivalProgram();
+    initFestivalTimeline();
     initEventScanner();
     initEventForms();
     createIcons({ icons });
@@ -7914,6 +8341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const acceptButton = modal?.querySelector('[data-confirm-accept]');
     const confirmTitle = modal?.querySelector('[data-confirm-title]');
     const confirmBody = modal?.querySelector('[data-confirm-body]');
+    const confirmDetails = modal?.querySelector('[data-confirm-details]');
     const confirmIcon = modal?.querySelector('[data-confirm-icon]');
     const confirmationPhraseContainer = modal?.querySelector('[data-confirm-phrase-container]');
     const confirmationPhraseLabel = modal?.querySelector('[data-confirm-phrase-label]');
@@ -7928,8 +8356,19 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmTitle.textContent = source.dataset.confirmTitle || form.dataset.confirmTitle || confirmTitle.dataset.defaultText || confirmTitle.textContent;
         }
 
+        const hasDetails = applyConfirmationDetails(
+            confirmDetails,
+            source.dataset.confirmDetails || form.dataset.confirmDetails || '',
+        );
+
         if (confirmBody) {
             confirmBody.textContent = source.dataset.confirmBody || form.dataset.confirmBody || confirmBody.dataset.defaultText || confirmBody.textContent;
+            confirmBody.classList.toggle('rounded-xl', hasDetails);
+            confirmBody.classList.toggle('bg-slate-50', hasDetails);
+            confirmBody.classList.toggle('px-4', hasDetails);
+            confirmBody.classList.toggle('py-3', hasDetails);
+            confirmBody.classList.toggle('text-slate-500', !hasDetails);
+            confirmBody.classList.toggle('text-slate-700', hasDetails);
         }
 
         acceptButton.textContent = source.dataset.confirmAccept || form.dataset.confirmAccept || acceptButton.dataset.defaultText || acceptButton.textContent;
@@ -8011,9 +8450,11 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         pendingDeleteForm = form;
         pendingConfirmationSubmitter = submitter?.form === form ? submitter : null;
+        confirmationModalOpener = submitter ?? document.activeElement;
         applyConfirmationCopy(form, pendingConfirmationSubmitter);
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
 
         if (pendingConfirmationPhrase && confirmationPhraseInput) {
             confirmationPhraseInput.focus();
@@ -8032,6 +8473,25 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.addEventListener('click', (event) => {
         if (event.target === modal) {
             closeDeleteConfirmation(modal);
+        }
+    });
+
+    modal.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab') {
+            return;
+        }
+
+        const focusable = [...modal.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+            .filter((element) => !element.closest('.hidden'));
+        const first = focusable[0];
+        const last = focusable.at(-1);
+
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
         }
     });
 

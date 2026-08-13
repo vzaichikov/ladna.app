@@ -31,6 +31,7 @@ class ClassPassPlanController extends Controller
         $scheduleKindTabs = $this->scheduleKindTabs($account);
         $activeScheduleKindValue = $this->activeScheduleKindValue($account, $request->query('tab'));
         $activeSegmentValue = $this->activeSegmentValue($account, $activeScheduleKindValue, $request->query('segment'));
+        $hasMultipleWorkingLocations = $workingLocationContext->locations($account)->count() > 1;
         $workingLocationId = $workingLocationContext->selectedLocationId($account);
         $classPassPlans = $account->classPassPlans()
             ->with(['classPassSegment', 'classTypes', 'trainerTypes', 'rooms.location'])
@@ -54,7 +55,10 @@ class ClassPassPlanController extends Controller
             'classPassSegmentFilters' => $this->classPassSegmentFilters($account, $activeScheduleKindValue),
             'activeSegmentValue' => $activeSegmentValue,
             'classPassPlanGroups' => $this->classPassPlanGroups($classPassPlans),
-            'classPassPlanLocationLabels' => $this->classPassPlanLocationLabels($classPassPlans),
+            'hasMultipleWorkingLocations' => $hasMultipleWorkingLocations,
+            'classPassPlanLocationLabels' => $hasMultipleWorkingLocations
+                ? $this->classPassPlanLocationLabels($classPassPlans)
+                : [],
         ]);
     }
 

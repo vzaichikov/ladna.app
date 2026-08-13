@@ -1,9 +1,23 @@
-@props(['account', 'edition', 'requirement' => null])
+@props([
+    'account',
+    'edition',
+    'requirement' => null,
+    'deadlineReferences' => [],
+    'resolvedDueAt' => null,
+    'resolvedEditableUntil' => null,
+])
 
 @php
     $editing = $requirement?->exists;
     $pricing = $requirement?->pricing ?? ['mode' => 'none'];
     $options = collect(old('options', $requirement?->options ?? []))->pad(3, ['value' => '', 'label' => ''])->take(3);
+    $dueRule = data_get($requirement?->validation, 'due_rule', []);
+    $editableUntilRule = data_get($requirement?->validation, 'editable_until_rule', []);
+    $dueReference = old('due_reference', data_get($dueRule, 'reference'));
+    $dueOffsetDays = old('due_offset_days', data_get($dueRule, 'offset_days'));
+    $allowPostConfirmationEdits = (bool) old('allow_post_confirmation_edits', data_get($requirement?->validation, 'allow_post_confirmation_edits', false));
+    $editableUntilReference = old('editable_until_reference', data_get($editableUntilRule, 'reference'));
+    $editableUntilOffsetDays = old('editable_until_offset_days', data_get($editableUntilRule, 'offset_days'));
 @endphp
 
 <form method="POST" action="{{ $editing ? route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]) : route('dashboard.accounts.festivals.requirements.store', [$account, $edition]) }}" class="space-y-4">
@@ -162,11 +176,30 @@
                 <input id="requirement-price-amount" type="number" name="price_amount" min="0" max="999999.99" step="0.01" inputmode="decimal" value="{{ old('price_amount', isset($pricing['amount_cents']) || isset($pricing['unit_amount_cents']) ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) ($pricing['amount_cents'] ?? $pricing['unit_amount_cents'])) : null) }}" class="crm-field">
                 <x-ui.field-error name="price_amount" />
             </div>
-            <div>
-                <x-ui.field-label for="requirement-due-at" :label="__('app.festival_due_at')" :help="__('app.festival_registration_field_due_at_help')" />
-                <input id="requirement-due-at" type="datetime-local" name="due_at" value="{{ old('due_at', $requirement?->due_at?->format('Y-m-d\TH:i')) }}" class="crm-field">
-                <x-ui.field-error name="due_at" />
+            <div class="sm:col-span-2 xl:col-span-1">
+                <x-ui.field-label for="requirement-due-reference" :label="__('app.festival_due_at')" :help="__('app.festival_registration_field_due_at_help')" />
+                <select id="requirement-due-reference" name="due_reference" class="crm-field">
+                    <option value="">{{ __('app.festival_deadline_none') }}</option>
+                    @foreach ($deadlineReferences as $reference)
+                        <option value="{{ $reference }}" @selected($dueReference === $reference)>{{ __('app.festival_deadline_reference_'.$reference) }}</option>
+                    @endforeach
+                </select>
+                <x-ui.field-error name="due_reference" />
             </div>
+            <div>
+                <x-ui.field-label for="requirement-due-offset" :label="__('app.festival_deadline_offset_days')" :help="__('app.festival_deadline_offset_help')" />
+                <input id="requirement-due-offset" type="number" min="-366" max="366" name="due_offset_days" value="{{ $dueOffsetDays }}" placeholder="-5" class="crm-field">
+                <x-ui.field-error name="due_offset_days" />
+            </div>
+            @if ($resolvedDueAt)
+                <div class="rounded-xl bg-white px-4 py-3 text-sm text-slate-700">
+                    <span class="block text-xs font-semibold text-slate-500">{{ __('app.festival_resolved_deadline') }}</span>
+                    <strong>{{ $resolvedDueAt->timezone($edition->timezone)->format('d.m.Y H:i') }}</strong>
+                    @if ($requirement?->due_at && blank(data_get($dueRule, 'reference')))
+                        <span class="mt-1 block text-xs text-amber-700">{{ __('app.festival_legacy_fixed_deadline_help') }}</span>
+                    @endif
+                </div>
+            @endif
         </div>
     </section>
 
@@ -183,9 +216,36 @@
                 <input id="requirement-is-active" type="checkbox" name="is_active" value="1" @checked(old('is_active', $requirement?->is_active ?? true))>
                 <x-ui.field-label for="requirement-is-active" :label="__('app.active')" :help="__('app.festival_registration_field_active_help')" />
             </div>
+            <input type="hidden" name="allow_post_confirmation_edits" value="0">
+            <div class="flex min-w-52 items-center gap-2">
+                <input id="requirement-allow-post-confirmation-edits" type="checkbox" name="allow_post_confirmation_edits" value="1" @checked($allowPostConfirmationEdits)>
+                <x-ui.field-label for="requirement-allow-post-confirmation-edits" :label="__('app.festival_allow_post_confirmation_edits')" :help="__('app.festival_allow_post_confirmation_edits_help')" />
+            </div>
         </div>
         <x-ui.field-error name="is_required" />
         <x-ui.field-error name="is_active" />
+        <x-ui.field-error name="allow_post_confirmation_edits" />
+
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+                <x-ui.field-label for="requirement-editable-until-reference" :label="__('app.festival_editable_until')" :help="__('app.festival_editable_until_help')" />
+                <select id="requirement-editable-until-reference" name="editable_until_reference" class="crm-field">
+                    <option value="">{{ __('app.festival_deadline_none') }}</option>
+                    @foreach ($deadlineReferences as $reference)
+                        <option value="{{ $reference }}" @selected($editableUntilReference === $reference)>{{ __('app.festival_deadline_reference_'.$reference) }}</option>
+                    @endforeach
+                </select>
+                <x-ui.field-error name="editable_until_reference" />
+            </div>
+            <div>
+                <x-ui.field-label for="requirement-editable-until-offset" :label="__('app.festival_deadline_offset_days')" :help="__('app.festival_deadline_offset_help')" />
+                <input id="requirement-editable-until-offset" type="number" min="-366" max="366" name="editable_until_offset_days" value="{{ $editableUntilOffsetDays }}" placeholder="10" class="crm-field">
+                <x-ui.field-error name="editable_until_offset_days" />
+            </div>
+        </div>
+        @if ($resolvedEditableUntil)
+            <p class="mt-3 rounded-xl bg-white px-4 py-3 text-sm text-slate-700">{{ __('app.festival_resolved_editable_until', ['date' => $resolvedEditableUntil->timezone($edition->timezone)->format('d.m.Y H:i')]) }}</p>
+        @endif
     </section>
 
     <div class="flex flex-wrap gap-2">

@@ -38,6 +38,7 @@ class UpdateSystemSettingsRequest extends FormRequest
             'founders_page_enabled' => ['nullable', 'boolean'],
             'founders_banner_enabled' => ['nullable', 'boolean'],
             'founders_remaining_studios' => ['nullable', 'integer', 'min:0', 'max:'.FoundersProgramSettings::MaxRemainingStudios],
+            'festival_powered_banner_enabled' => ['nullable', 'boolean'],
             'activity_log_enabled' => ['nullable', 'boolean'],
             'activity_log_retention_days' => ['nullable', 'integer', 'min:'.AccountActivityLogSettings::MinRetentionDays, 'max:'.AccountActivityLogSettings::MaxRetentionDays],
             'owner_ai_assistant_enabled' => ['nullable', 'boolean'],

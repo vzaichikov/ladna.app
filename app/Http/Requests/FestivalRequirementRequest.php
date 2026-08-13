@@ -9,8 +9,10 @@ use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalRequirementDefinition;
 use App\Support\FestivalCodeGenerator;
+use App\Support\Festivals\FestivalRequirementDeadlineResolver;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class FestivalRequirementRequest extends FormRequest
 {
@@ -95,7 +97,11 @@ class FestivalRequirementRequest extends FormRequest
             'options.*.price' => ['nullable', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'pricing_mode' => ['required', Rule::in(['none', 'flat_when_true', 'per_unit', 'option_prices'])],
             'price_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
-            'due_at' => ['nullable', 'date'],
+            'due_reference' => ['nullable', Rule::in(FestivalRequirementDeadlineResolver::References), 'required_with:due_offset_days'],
+            'due_offset_days' => ['nullable', 'integer', 'between:-366,366', 'required_with:due_reference'],
+            'allow_post_confirmation_edits' => ['sometimes', 'boolean'],
+            'editable_until_reference' => ['nullable', Rule::in(FestivalRequirementDeadlineResolver::References), 'required_if:allow_post_confirmation_edits,1'],
+            'editable_until_offset_days' => ['nullable', 'integer', 'between:-366,366', 'required_if:allow_post_confirmation_edits,1'],
             'allowed_extensions' => ['sometimes', 'array'],
             'allowed_extensions.*' => ['string', 'max:20', 'regex:/^[a-zA-Z0-9]+$/'],
             'allowed_mime_types' => ['sometimes', 'array'],
@@ -109,5 +115,30 @@ class FestivalRequirementRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:10000'],
         ];
+    }
+
+    /** @return array<int, callable> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $edition = $this->route('festivalEdition');
+            if (! $edition instanceof FestivalEdition) {
+                return;
+            }
+
+            $referenceFields = ['due_reference'];
+            if ($this->boolean('allow_post_confirmation_edits')) {
+                $referenceFields[] = 'editable_until_reference';
+            }
+
+            foreach ($referenceFields as $field) {
+                $reference = $this->input($field);
+                if (is_string($reference)
+                    && in_array($reference, FestivalRequirementDeadlineResolver::References, true)
+                    && $edition->{$reference} === null) {
+                    $validator->errors()->add($field, __('app.festival_deadline_reference_missing'));
+                }
+            }
+        }];
     }
 }

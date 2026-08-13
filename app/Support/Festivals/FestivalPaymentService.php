@@ -4,14 +4,21 @@ namespace App\Support\Festivals;
 
 use App\Actions\Festivals\FestivalNotificationOutbox;
 use App\Actions\Festivals\FestivalTicketIssuer;
+use App\Actions\Festivals\SubmitFestivalEntryStep;
+use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalChargeStatus;
+use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalPaymentStatus;
+use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCharge;
 use App\Models\FestivalEntry;
+use App\Models\FestivalEntryStep;
+use App\Models\FestivalOnlineStream;
 use App\Models\FestivalPaymentAttempt;
+use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\IntegrationSetting;
@@ -26,6 +33,7 @@ use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class FestivalPaymentService
 {
@@ -34,13 +42,23 @@ class FestivalPaymentService
         private readonly FestivalTicketIssuer $tickets,
         private readonly FestivalNotificationOutbox $notifications,
         private readonly FiscalReceiptService $fiscalReceipts,
+        private readonly FestivalEntryStepCompletion $completion,
+        private readonly FestivalEntryWorkflowState $workflowState,
+        private readonly SubmitFestivalEntryStep $submitEntryStep,
     ) {}
 
     public function startCharge(FestivalCharge $charge, string $provider): PaymentCheckout
     {
         return DB::transaction(function () use ($charge, $provider): PaymentCheckout {
             $entry = FestivalEntry::query()
-                ->with(['portalUser', 'edition.account'])
+                ->with([
+                    'portalUser',
+                    'edition.account',
+                    'steps.workflowStep',
+                    'steps.requirements.definition.edition',
+                    'steps.requirements.submissions',
+                    'steps.charges',
+                ])
                 ->whereKey($charge->festival_entry_id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -50,6 +68,17 @@ class FestivalPaymentService
                 ->lockForUpdate()
                 ->firstOrFail();
             $charge->setRelation('entry', $entry);
+            if ($charge->festival_entry_step_id !== null) {
+                $entryStep = FestivalEntryStep::query()
+                    ->with(['workflowStep', 'requirements.definition.edition', 'requirements.submissions', 'charges'])
+                    ->whereKey($charge->festival_entry_step_id)
+                    ->where('festival_entry_id', $entry->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $charge->setRelation('entryStep', $entryStep);
+                $this->workflowState->assertPaymentAvailable($entry, $entryStep);
+                $this->completion->assertRequirementsComplete($entryStep, 'provider');
+            }
             if ($charge->due_at?->isPast()) {
                 throw ValidationException::withMessages(['provider' => __('app.festival_step_deadline_expired')]);
             }
@@ -113,7 +142,9 @@ class FestivalPaymentService
             buyerEmail: $order->buyer_email,
             buyerPhone: $order->buyer_phone,
             locale: $order->locale,
-            returnUrl: route('public.festival-orders.show', [$order->account->slug, $order->access_token_encrypted]),
+            returnUrl: $order->festival_portal_user_id
+                ? route('festival.portal.guest.dashboard', $order->account->slug)
+                : route('public.festival-orders.show', [$order->account->slug, $order->access_token_encrypted]),
             callbackUrl: route('api.v1.festival-payments.callbacks', $gateway->provider()->value),
             expiresAt: $order->expires_at ?? now()->addMinutes(30),
         ), $setting);
@@ -124,8 +155,10 @@ class FestivalPaymentService
 
     public function completeAttempt(FestivalPaymentAttempt $attempt, PaymentCallbackResult $callback): FestivalPaymentAttempt
     {
-        return DB::transaction(function () use ($attempt, $callback): FestivalPaymentAttempt {
-            $attempt = FestivalPaymentAttempt::query()->with(['charge.entry.portalUser', 'charge.entry.edition'])->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+        $submitStepId = null;
+        $becamePaid = false;
+        $completed = DB::transaction(function () use ($attempt, $callback, &$submitStepId, &$becamePaid): FestivalPaymentAttempt {
+            $attempt = FestivalPaymentAttempt::query()->with(['charge.entry.portalUser', 'charge.entry.edition', 'charge.entryStep'])->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->assertCallback($attempt->order_id, $attempt->amount_cents, $attempt->currency, $callback);
             if ($attempt->status === FestivalPaymentStatus::Paid) {
                 return $attempt;
@@ -150,11 +183,15 @@ class FestivalPaymentService
             ])->save();
 
             if ($status === FestivalPaymentStatus::Paid) {
+                $becamePaid = true;
                 $late = $attempt->expires_at?->isPast() || $attempt->charge->due_at?->isPast() || $attempt->charge->cancelled_at !== null;
                 $attempt->charge->forceFill([
                     'status' => $late ? FestivalChargeStatus::PaidRequiresRefund : FestivalChargeStatus::Paid,
                     'paid_at' => $callback->paidAt ?? now(),
                 ])->save();
+                if (! $late && $attempt->charge->entryStep) {
+                    $submitStepId = $attempt->charge->entryStep->id;
+                }
                 $this->notifications->queueForEntry($attempt->charge->entry, 'payment_paid', ['charge' => $attempt->charge->name, 'entry_code' => $attempt->charge->entry->code]);
             } elseif ($status !== FestivalPaymentStatus::Pending
                 && ! in_array($attempt->charge->status, [FestivalChargeStatus::Paid, FestivalChargeStatus::PaidRequiresRefund], true)
@@ -167,6 +204,36 @@ class FestivalPaymentService
 
             return $attempt->refresh();
         }, 3);
+
+        if ($becamePaid) {
+            $this->fiscalReceipts->fiscalizeFestivalPaymentAttempt($completed);
+        }
+
+        if ($submitStepId !== null) {
+            $this->submitPaidEntryStep($submitStepId);
+        }
+
+        return $completed;
+    }
+
+    private function submitPaidEntryStep(int $stepId): void
+    {
+        $step = FestivalEntryStep::query()
+            ->with(['entry.edition', 'entry.steps.workflowStep', 'workflowStep', 'requirements.definition', 'requirements.submissions', 'charges'])
+            ->find($stepId);
+
+        if (! $step
+            || ! in_array($step->status, [FestivalEntryStepStatus::Draft, FestivalEntryStepStatus::ChangesRequested], true)
+            || ! $this->completion->requirementsComplete($step)
+            || ! $this->completion->chargesComplete($step)) {
+            return;
+        }
+
+        try {
+            $this->submitEntryStep->execute($step->entry, $step);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     public function completeOrder(FestivalTicketOrder $order, PaymentCallbackResult $callback): FestivalTicketOrder
@@ -191,17 +258,60 @@ class FestivalPaymentService
 
                     return $other + $item->quantity <= $item->admissionType->inventory;
                 });
+                $onlineAccess = true;
+                $onlineItems = $order->items->filter(fn ($item): bool => $item->admissionType->delivery_mode === FestivalAdmissionDeliveryMode::OnlineStream);
+                if ($onlineItems->isNotEmpty()) {
+                    $onlineItem = $onlineItems->first();
+                    $portalUser = $order->festival_portal_user_id
+                        ? FestivalPortalUser::query()
+                            ->whereKey($order->festival_portal_user_id)
+                            ->where('account_id', $order->account_id)
+                            ->where('role', FestivalPortalRole::Guest->value)
+                            ->where('is_active', true)
+                            ->lockForUpdate()
+                            ->first()
+                        : null;
+                    $stream = $onlineItem?->admissionType->festival_online_stream_id
+                        ? FestivalOnlineStream::query()
+                            ->whereKey($onlineItem->admissionType->festival_online_stream_id)
+                            ->where('account_id', $order->account_id)
+                            ->where('festival_edition_id', $order->festival_edition_id)
+                            ->lockForUpdate()
+                            ->first()
+                        : null;
+                    $hasConflict = $portalUser && $stream
+                        ? FestivalTicketOrder::query()
+                            ->whereKeyNot($order->id)
+                            ->where('festival_portal_user_id', $portalUser->id)
+                            ->where('festival_edition_id', $order->festival_edition_id)
+                            ->whereHas('items.admissionType', fn ($query) => $query->where('festival_online_stream_id', $stream->id))
+                            ->where(fn ($query) => $query
+                                ->where(fn ($query) => $query
+                                    ->where('status', FestivalTicketOrderStatus::Pending->value)
+                                    ->where('expires_at', '>', now()))
+                                ->orWhere(fn ($query) => $query
+                                    ->where('status', FestivalTicketOrderStatus::Paid->value)
+                                    ->whereHas('tickets.streamEntitlement', fn ($query) => $query->where('festival_online_stream_id', $stream->id))))
+                            ->exists()
+                        : true;
+                    $onlineAccess = $onlineItems->count() === 1
+                        && (int) $onlineItem?->quantity === 1
+                        && $portalUser !== null
+                        && $stream?->is_enabled
+                        && ! $hasConflict;
+                }
+                $canIssue = $capacity && $onlineAccess;
                 $order->forceFill([
-                    'status' => $capacity ? FestivalTicketOrderStatus::Paid : FestivalTicketOrderStatus::PaidRequiresRefund,
+                    'status' => $canIssue ? FestivalTicketOrderStatus::Paid : FestivalTicketOrderStatus::PaidRequiresRefund,
                     'paid_at' => $callback->paidAt ?? now(),
                     'expires_at' => null,
                     'gateway_invoice_id' => $callback->gatewayInvoiceId,
                     'gateway_payment_id' => $callback->gatewayPaymentId,
                     'gateway_status' => $callback->gatewayStatus,
                     'last_callback_payload' => $callback->payload,
-                    'failure_reason' => $capacity ? null : 'late_payment_no_inventory',
+                    'failure_reason' => $canIssue ? null : ($capacity ? 'online_access_conflict' : 'late_payment_no_inventory'),
                 ])->save();
-                if ($capacity) {
+                if ($canIssue) {
                     $becamePaid = true;
                     $this->tickets->execute($order);
                 }

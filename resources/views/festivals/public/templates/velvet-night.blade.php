@@ -113,6 +113,10 @@
         </div>
     </section>
 
+    <div class="velvet-shell py-8 sm:py-12">
+        @include('festivals.public._timeline')
+    </div>
+
     <div class="velvet-shell velvet-body">
         <section id="festival-information" class="velvet-story">
             <div class="velvet-section-heading">
@@ -249,8 +253,7 @@
                 </div>
             </div>
 
-            <form method="POST" action="{{ route('public.festivals.admission.store', [$account->slug, $edition->slug]) }}" class="velvet-ticket-form">
-                @csrf
+            <section class="velvet-ticket-form">
                 @if ($errors->any())
                     <div class="rounded-lg border border-rose-700 bg-rose-950/60 p-4 text-sm text-rose-100">
                         <ul class="list-disc space-y-1 pl-5">
@@ -264,40 +267,22 @@
                 <div class="space-y-3">
                     @forelse ($edition->admissionTypes as $type)
                         @php($price = $type->currentPrice())
-                        <label class="velvet-ticket-row">
+                        <div class="velvet-ticket-row">
                             <span>
                                 <strong>{{ $type->name }}</strong>
                                 <small>{{ \App\Support\MoneyFormatter::format($price['price_cents'], $account->default_currency) }} · {{ $type->remainingQuantity() }} {{ __('app.left') }}</small>
                             </span>
-                            <span>
-                                <input type="hidden" name="items[{{ $type->id }}][admission_type_id]" value="{{ $type->id }}">
-                                <input type="number" name="items[{{ $type->id }}][quantity]" min="0" max="{{ min($type->max_per_order, $type->remainingQuantity()) }}" value="0" class="crm-field text-center">
-                            </span>
-                        </label>
+                        </div>
                     @empty
                         <p class="festival-muted">{{ __('app.festival_admission_unavailable') }}</p>
                     @endforelse
                 </div>
 
-                @if ($edition->admissionTypes->isNotEmpty() && $providers->isNotEmpty())
-                    <div class="mt-5 space-y-3">
-                        <input name="buyer_name" required placeholder="{{ __('app.person_name') }}" class="crm-field">
-                        <input type="email" name="buyer_email" required placeholder="{{ __('app.email') }}" class="crm-field">
-                        <input name="buyer_phone" placeholder="{{ __('app.phone_optional') }}" class="crm-field">
-                        @foreach ($providers as $provider)
-                            <label class="velvet-provider-row">
-                                <input type="radio" name="provider" value="{{ $provider->provider->value }}" @checked($loop->first) class="crm-radio">
-                                <x-ui.payment-brand :provider="$provider->provider->value" :label="config('integrations.providers.'.$provider->provider->value.'.label')" />
-                            </label>
-                        @endforeach
-                        <label class="flex items-start gap-2 text-sm festival-muted">
-                            <input type="checkbox" name="terms" value="1" required class="crm-checkbox mt-0.5">
-                            {{ __('app.festival_admission_terms') }}
-                        </label>
-                        <button type="submit" class="velvet-button velvet-button-primary w-full">{{ __('app.pay') }}</button>
-                    </div>
+                @if ($edition->admissionTypes->isNotEmpty())
+                    <p class="mt-5 festival-muted">{{ __('app.festival_buy_in_cabinet') }}</p>
+                    <a href="{{ route('festival.guest.login', $account->slug) }}" class="velvet-button velvet-button-primary mt-5 w-full">{{ __('app.festival_open_ticket_cabinet') }}</a>
                 @endif
-            </form>
+            </section>
         </section>
     </div>
 </main>
@@ -321,5 +306,8 @@
     </a>
     <a href="{{ route('festival.judge.login', $account->slug) }}" class="velvet-footer-login">
         {{ __('app.festival_judge_cabinet') }}
+    </a>
+    <a href="{{ route('festival.guest.login', $account->slug) }}" class="velvet-footer-login">
+        {{ __('app.festival_guest_cabinet') }}
     </a>
 @endsection

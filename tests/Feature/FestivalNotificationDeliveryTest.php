@@ -193,6 +193,35 @@ class FestivalNotificationDeliveryTest extends TestCase
         $this->assertSame(FestivalNotificationStatus::Sent, $notification->refresh()->status);
     }
 
+    public function test_new_guest_ticket_notification_links_to_the_cabinet_without_storing_a_bearer(): void
+    {
+        [$account, $edition] = $this->festival();
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create(['locale' => 'en']);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_portal_user_id' => $guest->id,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => null,
+            'buyer_name' => $guest->displayName(),
+            'buyer_email' => $guest->email,
+            'locale' => 'en',
+        ]);
+        $expectedUrl = route('festival.portal.guest.dashboard', $account->slug);
+
+        $notification = app(FestivalNotificationOutbox::class)->queueForTicketOrder($order, [
+            'tickets_count' => 1,
+        ]);
+
+        $this->assertSame($guest->id, $notification->festival_portal_user_id);
+        $storedPayload = (string) DB::table('festival_notifications')->where('id', $notification->id)->value('payload');
+        $this->assertStringNotContainsString($order->access_token_encrypted, $storedPayload);
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        Mail::assertSent(FestivalPortalMail::class, fn (FestivalPortalMail $mail): bool => $mail->actionUrl === $expectedUrl
+            && $mail->actionLabel === __('app.festival_open_tickets', locale: 'en'));
+    }
+
     public function test_every_notification_type_has_immutable_ukrainian_and_english_email_and_sms_templates(): void
     {
         $renderer = app(FestivalNotificationRenderer::class);

@@ -183,6 +183,20 @@
                         </label>
                     </div>
                 </div>
+
+                <div class="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4 sm:p-5">
+                    <h3 class="text-base font-semibold text-slate-950">{{ __('app.festival_powered_banner_settings_title') }}</h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ __('app.festival_powered_banner_settings_copy') }}</p>
+
+                    <label class="mt-4 flex items-start gap-3 rounded-xl border border-stone-200 bg-white p-4">
+                        <input type="hidden" name="festival_powered_banner_enabled" value="0">
+                        <input name="festival_powered_banner_enabled" type="checkbox" value="1" @checked((bool) old('festival_powered_banner_enabled', $festivalPoweredBannerEnabled)) class="crm-checkbox mt-1">
+                        <span>
+                            <span class="block text-sm font-semibold text-slate-950">{{ __('app.festival_powered_banner_enabled') }}</span>
+                            <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.festival_powered_banner_enabled_hint') }}</span>
+                        </span>
+                    </label>
+                </div>
             </section>
 
             <section

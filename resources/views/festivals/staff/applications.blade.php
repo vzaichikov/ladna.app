@@ -37,6 +37,7 @@
                             \App\Enums\FestivalEntryStatus::Draft => 'border-stone-200 bg-stone-50 text-stone-800 hover:border-stone-300 hover:bg-stone-100',
                             \App\Enums\FestivalEntryStatus::Submitted => 'border-sky-200 bg-sky-50 text-sky-900 hover:border-sky-300 hover:bg-sky-100',
                             \App\Enums\FestivalEntryStatus::UnderReview => 'border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-300 hover:bg-amber-100',
+                            \App\Enums\FestivalEntryStatus::ChangesPending => 'border-violet-200 bg-violet-50 text-violet-900 hover:border-violet-300 hover:bg-violet-100',
                             \App\Enums\FestivalEntryStatus::Accepted => 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-100',
                             \App\Enums\FestivalEntryStatus::Rejected => 'border-rose-200 bg-rose-50 text-rose-900 hover:border-rose-300 hover:bg-rose-100',
                             \App\Enums\FestivalEntryStatus::Withdrawn => 'border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-400 hover:bg-slate-200',
@@ -55,34 +56,36 @@
             </nav>
         </div>
 
-        <x-ui.filter-bar
-            :action="route('dashboard.accounts.festivals.applications', [$account, $edition])"
-            :reset-href="route('dashboard.accounts.festivals.applications', [$account, $edition])"
-            class="mt-5 sm:grid-cols-2 xl:grid-cols-3"
-        >
-            <label>
-                <span class="crm-label">{{ __('app.search') }}</span>
-                <input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_entry_search_placeholder') }}">
-            </label>
-            <label>
-                <span class="crm-label">{{ __('app.status') }}</span>
-                <select name="status" class="crm-field">
-                    <option value="">{{ __('app.all') }}</option>
-                    @foreach (\App\Enums\FestivalEntryStatus::cases() as $status)
-                        <option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.festival_entry_status_'.$status->value) }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label>
-                <span class="crm-label">{{ __('app.festival_category') }}</span>
-                <select name="category" class="crm-field">
-                    <option value="">{{ __('app.all') }}</option>
-                    @foreach ($categories as $category)
-                        <option value="{{ $category->id }}" @selected($filters['category'] === (string) $category->id)>{{ $category->name }}</option>
-                    @endforeach
-                </select>
-            </label>
-        </x-ui.filter-bar>
+        <div class="mt-5">
+            <x-ui.filter-bar
+                :action="route('dashboard.accounts.festivals.applications', [$account, $edition])"
+                :reset-href="route('dashboard.accounts.festivals.applications', [$account, $edition])"
+                class="sm:grid-cols-2 xl:grid-cols-3"
+            >
+                <label>
+                    <span class="crm-label">{{ __('app.search') }}</span>
+                    <input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_entry_search_placeholder') }}">
+                </label>
+                <label>
+                    <span class="crm-label">{{ __('app.status') }}</span>
+                    <select name="status" class="crm-field">
+                        <option value="">{{ __('app.all') }}</option>
+                        @foreach (\App\Enums\FestivalEntryStatus::cases() as $status)
+                            <option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.festival_entry_status_'.$status->value) }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label>
+                    <span class="crm-label">{{ __('app.festival_category') }}</span>
+                    <select name="category" class="crm-field">
+                        <option value="">{{ __('app.all') }}</option>
+                        @foreach ($categories as $category)
+                            <option value="{{ $category->id }}" @selected($filters['category'] === (string) $category->id)>{{ $category->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
+            </x-ui.filter-bar>
+        </div>
 
         <div class="mt-5 space-y-3">
             @forelse ($entries as $entry)

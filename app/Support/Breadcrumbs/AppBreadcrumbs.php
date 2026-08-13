@@ -325,11 +325,24 @@ final class AppBreadcrumbs
             ];
         }
 
+        if ($routeName === 'dashboard.accounts.festivals.timeline.show') {
+            $stage = $this->modelParameter($request, 'festivalStage');
+
+            return [
+                ...$base,
+                $this->item(__('app.festival_timeline_title'), route('dashboard.accounts.festivals.timeline.index', [$account, $edition])),
+                $this->item($this->modelLabel($stage, __('app.festival_scene'))),
+            ];
+        }
+
         $workspaceLabels = [
             'dashboard.accounts.festivals.applications' => 'app.festival_tab_applications',
             'dashboard.accounts.festivals.performances' => 'app.festival_tab_performances',
             'dashboard.accounts.festivals.program' => 'app.festival_tab_program',
             'dashboard.accounts.festivals.tickets' => 'app.festival_tickets',
+            'dashboard.accounts.festivals.online-stream.edit' => 'app.festival_stream_settings',
+            'dashboard.accounts.festivals.online-stream.update' => 'app.festival_stream_settings',
+            'dashboard.accounts.festivals.online-stream.reset-leases' => 'app.festival_stream_settings',
             'dashboard.accounts.festivals.communication' => 'app.festival_tab_communication',
         ];
 

@@ -51,9 +51,11 @@
             @unless ($latestSubmission)
                 <option value="" selected disabled>{{ __('app.festival_requirement_response_missing') }}</option>
             @endunless
-            @foreach ($latestSubmission
-                ? [\App\Enums\FestivalRequirementStatus::Accepted, \App\Enums\FestivalRequirementStatus::Rejected, \App\Enums\FestivalRequirementStatus::Waived]
-                : [\App\Enums\FestivalRequirementStatus::Waived] as $status)
+            @foreach ($requirement->definition->input_type === \App\Enums\FestivalRequirementInputType::Agreement
+                ? ($latestSubmission ? [\App\Enums\FestivalRequirementStatus::Accepted, \App\Enums\FestivalRequirementStatus::Rejected] : [])
+                : ($latestSubmission
+                    ? [\App\Enums\FestivalRequirementStatus::Accepted, \App\Enums\FestivalRequirementStatus::Rejected, \App\Enums\FestivalRequirementStatus::Waived]
+                    : [\App\Enums\FestivalRequirementStatus::Waived]) as $status)
                 <option value="{{ $status->value }}" @selected($requirement->status === $status)>{{ __('app.festival_requirement_status_'.$status->value) }}</option>
             @endforeach
         </select>

@@ -34,6 +34,7 @@ use App\Models\FestivalWorkflow;
 use App\Models\IntegrationSetting;
 use App\Models\User;
 use App\Support\Festivals\FestivalPaymentService;
+use App\Support\Festivals\FestivalRequirementDeadlineResolver;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -165,10 +166,25 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertSee(__('app.festival_agreement_confirm'))
             ->assertSee('type="submit"', false)
             ->assertDontSee('type="radio"', false);
+        $this->assertDoesNotMatchRegularExpression(
+            '/<input(?=[^>]*type="checkbox")(?=[^>]*name="value")(?=[^>]*required)[^>]*>/s',
+            $page->getContent(),
+        );
 
         $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
-            'value' => false,
+            'value' => 'not-a-boolean',
         ])->assertUnprocessable()->assertJsonValidationErrors('value');
+
+        $revoked = $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
+            'value' => false,
+        ]);
+        $revoked->assertOk()
+            ->assertJsonPath('requirement_id', $requirement->id)
+            ->assertJsonPath('message', __('app.festival_response_saved'));
+        $this->assertStringContainsString('data-festival-requirement-complete="false"', $revoked->json('requirement_html'));
+        $this->assertSame(FestivalRequirementStatus::Missing, $requirement->refresh()->status);
+        $this->assertFalse(data_get($requirement->submissions()->firstOrFail()->value_json, 'value'));
+        $this->assertFalse($requirement->unsetRelation('definition')->unsetRelation('submissions')->hasSubmittedResponse());
 
         $saved = $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
             'value' => true,
@@ -177,11 +193,173 @@ class FestivalRegistrationStepperTest extends TestCase
         $saved->assertOk()
             ->assertJsonPath('requirement_id', $requirement->id)
             ->assertJsonPath('message', __('app.festival_response_saved'));
+        $this->assertStringContainsString('data-festival-requirement-complete="true"', $saved->json('requirement_html'));
+        $this->assertSame(FestivalRequirementStatus::Submitted, $requirement->refresh()->status);
         $this->assertTrue(data_get($requirement->submissions()->firstOrFail()->value_json, 'value'));
+
+        $revokedAgain = $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
+            'value' => '0',
+        ]);
+        $revokedAgain->assertOk();
+        $this->assertStringContainsString('data-festival-requirement-complete="false"', $revokedAgain->json('requirement_html'));
+        $this->assertSame(FestivalRequirementStatus::Missing, $requirement->refresh()->status);
+        $this->assertFalse(data_get($requirement->submissions()->firstOrFail()->value_json, 'value'));
 
         $this->post(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
             'value' => '1',
         ])->assertRedirect()->assertSessionHas('status', __('app.festival_response_saved'));
+    }
+
+    public function test_required_fields_and_every_condition_confirmation_gate_submission_and_payment(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $textDefinition = $this->requirement($edition, $workflow, 'application', 'required-name', 'short_text');
+        $agreementDefinition = $this->requirement($edition, $workflow, 'application', 'conditions', 'agreement');
+        $agreementDefinition->forceFill(['is_required' => false])->save();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Gated entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $textRequirement = $step->requirements->firstWhere('festival_requirement_definition_id', $textDefinition->id);
+        $agreementRequirement = $step->requirements->firstWhere('festival_requirement_definition_id', $agreementDefinition->id);
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $step->id,
+            'code' => 'FCH-GATED-'.$entry->id,
+            'kind' => 'qualification',
+            'name' => 'Gated fee',
+            'amount_cents' => 10000,
+            'currency' => 'UAH',
+        ]);
+        IntegrationSetting::factory()->forAccountScope($account)->create([
+            'provider' => IntegrationProvider::Liqpay,
+            'category' => IntegrationCategory::Payment,
+            'is_enabled' => true,
+            'credentials' => ['public_key' => 'studio-public', 'private_key' => 'studio-private'],
+        ]);
+
+        $page = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+        $page->assertOk()
+            ->assertSee('data-festival-requirement-blocking="true"', false)
+            ->assertSee('data-festival-requirement-complete="false"', false)
+            ->assertSee('data-festival-progress-action', false)
+            ->assertSee('disabled', false)
+            ->assertSee(__('app.festival_complete_required_fields_first'));
+
+        try {
+            app(SubmitFestivalEntryStep::class)->execute($entry, $step);
+            $this->fail('The step must remain blocked while required fields and confirmations are incomplete.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('step', $exception->errors());
+        }
+
+        $agreementRequirement->forceFill(['status' => FestivalRequirementStatus::Waived])->save();
+        $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+            'festival_rules_accepted' => '1',
+        ])->assertRedirect()->assertSessionHasErrorsIn('festival_payment_'.$charge->id, 'provider');
+
+        app(StoreFestivalResponse::class)->execute($textRequirement, $portalUser, 'Ready');
+        $agreementRequirement->forceFill(['status' => FestivalRequirementStatus::Missing])->save();
+        app(StoreFestivalResponse::class)->execute($agreementRequirement, $portalUser, false);
+        $this->assertSame(FestivalRequirementStatus::Missing, $agreementRequirement->refresh()->status);
+        $this->assertFalse($agreementRequirement->unsetRelation('definition')->unsetRelation('submissions')->hasSubmittedResponse());
+
+        try {
+            app(SubmitFestivalEntryStep::class)->execute($entry, $step);
+            $this->fail('The step must remain blocked after a condition confirmation is revoked.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('step', $exception->errors());
+        }
+
+        $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+            'festival_rules_accepted' => '1',
+        ])->assertRedirect()->assertSessionHasErrorsIn('festival_payment_'.$charge->id, 'provider');
+
+        app(StoreFestivalResponse::class)->execute($agreementRequirement, $portalUser, true);
+
+        $readyPage = $this->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+        $readyPage->assertOk()
+            ->assertSee(__('app.festival_submit_and_pay'))
+            ->assertDontSee('data-festival-progress-action="data-festival-progress-action" disabled', false);
+
+        $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+            'festival_rules_accepted' => '1',
+        ])->assertOk()->assertSee('https://www.liqpay.ua/api/3/checkout', false);
+    }
+
+    public function test_accepted_application_allows_only_configured_fields_until_the_relative_deadline_and_returns_changes_for_approval(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $editableDefinition = $this->requirement($edition, $workflow, 'application', 'editable-note', 'short_text');
+        $editableDefinition->forceFill(['validation' => [
+            'allowed_hosts' => [],
+            'allow_post_confirmation_edits' => true,
+            'editable_until_rule' => ['reference' => 'starts_at', 'offset_days' => 10],
+        ]])->save();
+        $lockedDefinition = $this->requirement($edition, $workflow, 'application', 'locked-note', 'short_text');
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Editable accepted entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $editableRequirement = $step->requirements->firstWhere('festival_requirement_definition_id', $editableDefinition->id);
+        $lockedRequirement = $step->requirements->firstWhere('festival_requirement_definition_id', $lockedDefinition->id);
+        app(StoreFestivalResponse::class)->execute($editableRequirement, $portalUser, 'Original editable value');
+        app(StoreFestivalResponse::class)->execute($lockedRequirement, $portalUser, 'Original locked value');
+        $entry->requirements()->update(['status' => FestivalRequirementStatus::Accepted->value]);
+        $entry->steps()->update(['status' => FestivalEntryStepStatus::Approved->value, 'reviewed_at' => now()]);
+        $entry->forceFill([
+            'status' => FestivalEntryStatus::Accepted,
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
+        ])->save();
+
+        $page = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+        $page->assertOk()
+            ->assertSee(__('app.festival_field_editable_until', [
+                'date' => app(FestivalRequirementDeadlineResolver::class)
+                    ->editableUntil($editableDefinition)
+                    ->timezone($edition->timezone)
+                    ->format('d.m.Y H:i'),
+            ]))
+            ->assertSee(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $editableRequirement]), false)
+            ->assertDontSee(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $lockedRequirement]), false);
+
+        $saved = $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $editableRequirement]), [
+            'value' => 'Applicant changed this',
+        ]);
+        $saved->assertOk()->assertJsonPath('requirement_id', $editableRequirement->id);
+        $this->assertSame(FestivalEntryStatus::ChangesPending, $entry->refresh()->status);
+        $this->assertSame(FestivalEntryStepStatus::Submitted, $step->refresh()->status);
+        $this->assertSame(FestivalRequirementStatus::Submitted, $editableRequirement->refresh()->status);
+
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->actingAs($owner, 'web')
+            ->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))
+            ->assertOk()
+            ->assertSee(__('app.festival_entry_status_changes_pending'));
+
+        app(ReviewFestivalEntryStep::class)->execute($step->refresh(), $owner, 'approve');
+        $this->assertSame(FestivalEntryStatus::Accepted, $entry->refresh()->status);
+        $this->assertSame(FestivalEntryStepStatus::Approved, $step->refresh()->status);
+
+        $editableDefinition->forceFill(['validation' => [
+            'allowed_hosts' => [],
+            'allow_post_confirmation_edits' => true,
+            'editable_until_rule' => ['reference' => 'starts_at', 'offset_days' => -366],
+        ]])->save();
+        $this->actingAs($portalUser, 'festival')
+            ->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $editableRequirement]), [
+                'value' => 'Too late',
+            ])
+            ->assertStatus(409);
     }
 
     public function test_required_files_upload_asynchronously_and_cannot_be_accepted_or_advance_without_a_submission(): void
@@ -519,6 +697,8 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertSee(__('app.festival_rules_agreement_prefix'))
             ->assertSee(__('app.festival_rules_link_text'))
             ->assertSee('bg-emerald-600 text-white', false)
+            ->assertSee(__('app.festival_submit_and_pay'))
+            ->assertDontSee(route('festival.portal.entry-steps.submit', [$account->slug, $entry, $step]), false)
             ->assertSee('alt="Google Pay"', false)
             ->assertSee('alt="Apple Pay"', false)
             ->assertSee('alt="Visa"', false)
@@ -557,7 +737,8 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertOk()
             ->assertSee('border-rose-300 bg-rose-50', false)
             ->assertSee(__('app.festival_payment_failed_retry'))
-            ->assertSee(__('app.pay'));
+            ->assertSee(__('app.festival_submit_and_pay'))
+            ->assertDontSee(__('app.pay_now'));
 
         $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), [
             'provider' => IntegrationProvider::Liqpay->value,
@@ -569,15 +750,56 @@ class FestivalRegistrationStepperTest extends TestCase
             status: PaymentCallbackStatus::Paid,
             amountCents: $secondAttempt->amount_cents,
             currency: $secondAttempt->currency,
+            gatewayInvoiceId: 'invoice-portal-1',
         ));
 
         $this->assertSame(FestivalChargeStatus::Paid, $charge->refresh()->status);
+        $this->assertSame(FestivalEntryStepStatus::Submitted, $step->refresh()->status);
+        $this->assertSame(FestivalEntryStatus::Submitted, $entry->refresh()->status);
         $this->assertSame(2, FestivalPaymentAttempt::query()->where('festival_charge_id', $charge->id)->count());
         $this->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]))
             ->assertOk()
             ->assertSee('border-emerald-300 bg-emerald-50', false)
             ->assertSee(__('app.festival_charge_status_paid'))
             ->assertDontSee(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), false);
+
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->actingAs($owner, 'web')
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]))
+            ->assertOk()
+            ->assertSee(__('app.festival_online_payment_time'))
+            ->assertSee(__('app.festival_gateway_invoice'))
+            ->assertSee('invoice-portal-1')
+            ->assertSee(__('app.festival_fiscal_receipt'))
+            ->assertSee(__('app.festival_fiscal_not_configured'));
+    }
+
+    public function test_manually_paid_step_keeps_the_regular_submit_action(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category] = $this->festival();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Manually paid entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $step->id,
+            'code' => 'FCH-MANUAL-'.$entry->id,
+            'kind' => 'qualification',
+            'name' => 'Manually paid fee',
+            'status' => FestivalChargeStatus::Paid,
+            'amount_cents' => 10000,
+            'currency' => 'UAH',
+            'paid_at' => now(),
+        ]);
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]))
+            ->assertOk()
+            ->assertSee(route('festival.portal.entry-steps.submit', [$account->slug, $entry, $step]), false)
+            ->assertDontSee(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), false)
+            ->assertDontSee(__('app.festival_submit_and_pay'));
     }
 
     public function test_owner_review_renders_only_current_values_and_file_downloads_while_portal_withdraw_is_touch_safe(): void

@@ -12,6 +12,8 @@ use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
+use App\Http\Requests\FestivalTicketRefundRequest;
+use App\Http\Requests\FestivalTicketVoidRequest;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalAnnouncement;
@@ -22,19 +24,25 @@ use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalScheduleSlot;
 use App\Models\FestivalTicket;
+use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\User;
+use App\Support\Festivals\FestivalProgramOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class FestivalWorkspaceController extends Controller
 {
-    public function __construct(private FestivalWorkspaceAccess $workspaceAccess) {}
+    public function __construct(
+        private FestivalWorkspaceAccess $workspaceAccess,
+        private FestivalProgramOrder $programOrder,
+    ) {}
 
     public function applications(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
@@ -177,14 +185,14 @@ class FestivalWorkspaceController extends Controller
             : collect();
         $entries = FestivalEntry::query()
             ->where('festival_edition_id', $festivalEdition->id)
-            ->whereIn('status', [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value, FestivalEntryStatus::Accepted->value])
+            ->whereIn('status', [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value, FestivalEntryStatus::ChangesPending->value, FestivalEntryStatus::Accepted->value])
             ->orderBy('entry_name')
             ->get(['id', 'festival_edition_id', 'code', 'entry_name']);
         $categories = $festivalEdition->categories()->orderBy('name')->get(['id', 'festival_edition_id', 'name']);
 
         return view('festivals.staff.program', compact('account', 'festivalEdition', 'entries', 'categories', 'stages', 'activeStage', 'programItems') + [
             'edition' => $festivalEdition,
-            'programTree' => $this->programTree($programItems),
+            'programTree' => $this->programOrder->tree($programItems),
             'workspacePermissions' => $permissions,
         ]);
     }
@@ -214,6 +222,7 @@ class FestivalWorkspaceController extends Controller
         $admissionTypes = null;
         $admissionAvailability = collect();
         $tickets = null;
+        $refundRequiredOrders = collect();
         $ticketTypeOptions = collect();
         $filters = ['q' => '', 'status' => '', 'type' => ''];
 
@@ -245,7 +254,7 @@ class FestivalWorkspaceController extends Controller
             $ticketTypeOptions = $festivalEdition->admissionTypes()->orderBy('name')->get(['id', 'festival_edition_id', 'name']);
             $tickets = FestivalTicket::query()
                 ->where('festival_edition_id', $festivalEdition->id)
-                ->with(['admissionType', 'orderItem', 'order.fiscalReceipt'])
+                ->with(['admissionType', 'orderItem', 'order.fiscalReceipt', 'order.tickets'])
                 ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
                     ->where('code', 'like', '%'.$filters['q'].'%')
                     ->orWhereHas('order', fn ($query) => $query
@@ -260,12 +269,62 @@ class FestivalWorkspaceController extends Controller
                 ->latest('id')
                 ->paginate(20)
                 ->withQueryString();
+            $refundRequiredOrders = $festivalEdition->ticketOrders()
+                ->where('status', FestivalTicketOrderStatus::PaidRequiresRefund->value)
+                ->with('items')
+                ->latest('paid_at')
+                ->get();
         }
 
-        return view('festivals.staff.tickets', compact('account', 'tab', 'admissionTypes', 'admissionAvailability', 'admissionReport', 'tickets', 'ticketTypeOptions', 'filters') + [
+        return view('festivals.staff.tickets', compact('account', 'tab', 'admissionTypes', 'admissionAvailability', 'admissionReport', 'tickets', 'ticketTypeOptions', 'filters', 'refundRequiredOrders') + [
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
         ]);
+    }
+
+    public function refundTicketOrder(FestivalTicketRefundRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalTicketOrder $festivalTicketOrder): RedirectResponse
+    {
+        $this->assertTicketOrderScope($account, $festivalEdition, $festivalTicketOrder);
+
+        DB::transaction(function () use ($festivalTicketOrder, $request): void {
+            $order = FestivalTicketOrder::query()->whereKey($festivalTicketOrder->id)->lockForUpdate()->firstOrFail();
+            abort_unless(in_array($order->status, [FestivalTicketOrderStatus::Paid, FestivalTicketOrderStatus::PaidRequiresRefund], true), 422);
+            $order->forceFill([
+                'status' => FestivalTicketOrderStatus::Refunded,
+                'refunded_by' => $request->user()->id,
+                'refunded_at' => now(),
+                'refund_reason' => $request->validated('reason'),
+            ])->save();
+            $order->tickets()->update([
+                'status' => FestivalTicketStatus::Refunded->value,
+                'is_checked_in' => false,
+                'checked_in_at' => null,
+            ]);
+            $order->tickets()->each(fn (FestivalTicket $ticket) => $ticket->streamEntitlement()->delete());
+        }, 3);
+
+        return back()->with('status', __('app.festival_refund_recorded'));
+    }
+
+    public function voidTicket(FestivalTicketVoidRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalTicket $festivalTicket): RedirectResponse
+    {
+        abort_unless($festivalTicket->account_id === $account->id && $festivalTicket->festival_edition_id === $festivalEdition->id, 404);
+
+        DB::transaction(function () use ($festivalTicket, $request): void {
+            $ticket = FestivalTicket::query()->whereKey($festivalTicket->id)->lockForUpdate()->firstOrFail();
+            abort_unless($ticket->status === FestivalTicketStatus::Valid, 422);
+            $ticket->forceFill([
+                'status' => FestivalTicketStatus::Voided,
+                'is_checked_in' => false,
+                'checked_in_at' => null,
+                'voided_by' => $request->user()->id,
+                'voided_at' => now(),
+                'void_reason' => $request->validated('reason'),
+            ])->save();
+            $ticket->streamEntitlement()->delete();
+        }, 3);
+
+        return back()->with('status', __('app.festival_ticket_voided'));
     }
 
     public function communication(Request $request, Account $account, FestivalEdition $festivalEdition): View
@@ -449,8 +508,15 @@ class FestivalWorkspaceController extends Controller
         }
 
         if ($permissions['finance']) {
-            $entry->load(['charges.paymentAttempts', 'chargeAdjustments']);
+            $entry->load(['charges.paymentAttempts.fiscalReceipt', 'chargeAdjustments']);
         }
+    }
+
+    private function assertTicketOrderScope(Account $account, FestivalEdition $edition, FestivalTicketOrder $order): void
+    {
+        abort_unless($edition->account_id === $account->id
+            && $order->account_id === $account->id
+            && $order->festival_edition_id === $edition->id, 404);
     }
 
     /**
@@ -461,21 +527,5 @@ class FestivalWorkspaceController extends Controller
         abort_unless($edition->account_id === $account->id, 404);
 
         return $this->workspaceAccess->permissions($request->user(), $account, $edition);
-    }
-
-    /**
-     * @param  Collection<int, FestivalScheduleSlot>  $items
-     * @return list<array{item: FestivalScheduleSlot, children: array<mixed>}>
-     */
-    private function programTree(Collection $items, ?int $parentId = null): array
-    {
-        return $items
-            ->filter(fn (FestivalScheduleSlot $item): bool => $item->parent_id === $parentId)
-            ->map(fn (FestivalScheduleSlot $item): array => [
-                'item' => $item,
-                'children' => $this->programTree($items, $item->id),
-            ])
-            ->values()
-            ->all();
     }
 }

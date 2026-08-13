@@ -14,6 +14,7 @@ use App\Models\TelegramBotInstallation;
 use App\Models\TelegramBroadcastTarget;
 use App\Support\AccountActivityLogSettings;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\Festivals\FestivalPoweredBannerSettings;
 use App\Support\FoundersProgramSettings;
 use App\Support\Payments\PaymentAmounts;
 use App\Support\Sms\SmsServiceSettings;
@@ -31,6 +32,7 @@ class SystemSettingsController extends Controller
         SmsServiceSettings $smsSettings,
         CustomerAuthAvailability $customerAuthAvailability,
         FoundersProgramSettings $foundersProgramSettings,
+        FestivalPoweredBannerSettings $festivalPoweredBannerSettings,
     ): View {
         $fontOptions = SystemAppearance::fontOptions();
         $ownerTelegramBotInstallation = TelegramBotInstallation::query()
@@ -47,6 +49,7 @@ class SystemSettingsController extends Controller
             'previewFontsUrl' => SystemAppearance::googleFontsUrl($fontOptions),
             'supportUrl' => SystemSetting::stringValue(SystemSetting::SupportUrlKey),
             'foundersProgram' => $foundersProgramSettings->current(),
+            'festivalPoweredBannerEnabled' => $festivalPoweredBannerSettings->enabled(),
             'activityLogEnabled' => AccountActivityLogSettings::enabled(),
             'activityLogRetentionDays' => AccountActivityLogSettings::retentionDays(),
             'activityLogMinRetentionDays' => AccountActivityLogSettings::MinRetentionDays,
@@ -84,10 +87,11 @@ class SystemSettingsController extends Controller
         TelegramBroadcastTargetVerifier $targetVerifier,
         SmsServiceSettings $smsSettings,
         FoundersProgramSettings $foundersProgramSettings,
+        FestivalPoweredBannerSettings $festivalPoweredBannerSettings,
     ): RedirectResponse {
         $validated = $request->validated();
 
-        $ownerTelegramBotInstallation = DB::transaction(function () use ($request, $validated, $smsSettings, $foundersProgramSettings): TelegramBotInstallation {
+        $ownerTelegramBotInstallation = DB::transaction(function () use ($request, $validated, $smsSettings, $foundersProgramSettings, $festivalPoweredBannerSettings): TelegramBotInstallation {
             SystemSetting::setValue(SystemAppearance::FontSettingKey, $validated['font_family']);
             SystemSetting::setValue(SystemSetting::SupportUrlKey, $validated['support_url'] ?? null);
             if ($request->hasAny([
@@ -107,6 +111,9 @@ class SystemSettingsController extends Controller
                         ? (int) $validated['founders_remaining_studios']
                         : $currentFoundersProgram['remaining_studios'],
                 );
+            }
+            if ($request->has('festival_powered_banner_enabled')) {
+                $festivalPoweredBannerSettings->save($request->boolean('festival_powered_banner_enabled'));
             }
             AccountActivityLogSettings::setEnabled(
                 $request->has('activity_log_enabled')

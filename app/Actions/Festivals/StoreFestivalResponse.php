@@ -25,12 +25,12 @@ class StoreFestivalResponse
         $requirement->load(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep']);
         abort_unless($requirement->account_id === $portalUser->account_id && $requirement->entry->festival_portal_user_id === $portalUser->id, 404);
         abort_unless($requirement->definition->input_type !== FestivalRequirementInputType::File, 422);
-        $this->workflowState->assertMutable($requirement->entry, $requirement->entryStep);
+        $this->workflowState->assertRequirementMutable($requirement);
         $value = $this->validatedValue($requirement, $value);
 
         $submission = DB::transaction(function () use ($requirement, $portalUser, $value): FestivalSubmission {
             $locked = FestivalEntryRequirement::query()->with(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
-            $this->workflowState->assertMutable($locked->entry, $locked->entryStep);
+            $postConfirmationChange = $this->workflowState->assertRequirementMutable($locked);
             $submission = $locked->submissions()->updateOrCreate([], [
                 'account_id' => $portalUser->account_id,
                 'festival_entry_id' => $locked->festival_entry_id,
@@ -47,7 +47,13 @@ class StoreFestivalResponse
                 'reviewed_at' => null,
                 'review_notes' => null,
             ]);
-            $locked->forceFill(['status' => FestivalRequirementStatus::Submitted, 'reviewed_at' => null, 'reviewed_by' => null, 'review_notes' => null])->save();
+            $requirementStatus = $locked->definition->input_type === FestivalRequirementInputType::Agreement && $value === false
+                ? FestivalRequirementStatus::Missing
+                : FestivalRequirementStatus::Submitted;
+            $locked->forceFill(['status' => $requirementStatus, 'reviewed_at' => null, 'reviewed_by' => null, 'review_notes' => null])->save();
+            if ($postConfirmationChange) {
+                $this->workflowState->markPostConfirmationChange($locked);
+            }
             $this->activity->record($submission, 'response.saved', $locked->entry->edition, $portalUser);
             $this->reprice->execute($locked, $submission);
 
@@ -66,13 +72,13 @@ class StoreFestivalResponse
             FestivalRequirementInputType::LongText => ['nullable', 'string', 'max:10000'],
             FestivalRequirementInputType::Integer => ['nullable', 'integer', 'min:0'],
             FestivalRequirementInputType::Boolean => ['nullable', 'boolean'],
-            FestivalRequirementInputType::Agreement => ['nullable', 'accepted'],
+            FestivalRequirementInputType::Agreement => ['present', 'boolean'],
             FestivalRequirementInputType::Url => ['nullable', 'url:http,https', 'max:2048'],
             FestivalRequirementInputType::SingleSelect => ['nullable', 'string', 'in:'.implode(',', $options)],
             FestivalRequirementInputType::MultiSelect => ['nullable', 'array'],
             FestivalRequirementInputType::File => [],
         };
-        if ($requirement->definition->is_required) {
+        if ($requirement->definition->is_required && $type !== FestivalRequirementInputType::Agreement) {
             $rules[0] = 'required';
         }
         $validated = Validator::make(['value' => $value], ['value' => $rules])->validate();

@@ -15,6 +15,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
+use App\Support\Festivals\FestivalEntryStepCompletion;
 use App\Support\Festivals\FestivalEntryWorkflowState;
 use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Festivals\FestivalRuleRegistry;
@@ -133,14 +134,14 @@ class FestivalEntryController extends Controller
         return back()->with('status', __('app.festival_entry_withdrawn'));
     }
 
-    public function payCharge(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalCharge $festivalCharge, FestivalPaymentService $payments, FestivalEntryWorkflowState $workflowState): RedirectResponse|View
+    public function payCharge(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalCharge $festivalCharge, FestivalPaymentService $payments, FestivalEntryWorkflowState $workflowState, FestivalEntryStepCompletion $completion): RedirectResponse|View
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $this->assertEntry($festivalEntry, $portalUser);
         abort_unless($festivalCharge->festival_entry_id === $festivalEntry->id && $festivalCharge->account_id === $account->id, 404);
         $festivalCharge->loadMissing('entryStep');
         if ($festivalCharge->entryStep) {
-            $workflowState->assertMutable($festivalEntry->load(['steps', 'edition']), $festivalCharge->entryStep);
+            $workflowState->assertPaymentAvailable($festivalEntry->load(['steps', 'edition']), $festivalCharge->entryStep);
         } else {
             abort_unless($festivalEntry->steps()->doesntExist(), 409);
         }
@@ -159,6 +160,9 @@ class FestivalEntryController extends Controller
         $data = $validator->validated();
 
         try {
+            if ($festivalCharge->entryStep) {
+                $completion->assertRequirementsComplete($festivalCharge->entryStep, 'provider');
+            }
             $checkout = $payments->startCharge($festivalCharge, $data['provider']);
         } catch (ValidationException $exception) {
             return $this->paymentErrorRedirect($accountSlug, $festivalEntry, $festivalCharge, $exception->errors());

@@ -24,41 +24,43 @@ class FestivalPortalProfileRequest extends FormRequest
         $portalUser = $this->user('festival');
         $account = $this->attributes->get('festivalAccount');
         $role = $portalUser?->role;
+        $isRegistrant = $role === FestivalPortalRole::Registrant;
+        $isGuest = $role === FestivalPortalRole::Guest;
 
         return [
             'role' => ['prohibited'],
             'account_id' => ['prohibited'],
             'google_id' => ['prohibited'],
-            'profile_action' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), 'nullable', 'string', Rule::in(['send_phone_otp'])],
-            'registrant_type' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser?->registrant_type))],
+            'profile_action' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'string', Rule::in(['send_phone_otp'])],
+            'registrant_type' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser?->registrant_type))],
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
-            'patronymic' => ['nullable', 'string', 'max:255'],
-            'stage_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant && $this->input('registrant_type') === FestivalRegistrantType::AdultAthlete->value), 'nullable', 'date', 'before_or_equal:today'],
+            'patronymic' => [Rule::prohibitedIf($isGuest), 'nullable', 'string', 'max:255'],
+            'stage_name' => [Rule::prohibitedIf($isGuest), 'nullable', 'string', 'max:255'],
+            'date_of_birth' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant && $this->input('registrant_type') === FestivalRegistrantType::AdultAthlete->value), 'nullable', 'date', 'before_or_equal:today'],
             'email' => [
                 'required',
                 'email',
                 'max:255',
                 Rule::unique((new FestivalPortalUser)->getTable(), 'email_normalized')
-                    ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0))
+                    ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0)->where('role', $role?->value))
                     ->ignore($portalUser?->id ?? 0),
             ],
             'email_normalized' => ['required'],
             'phone' => [
-                Rule::requiredIf($role === FestivalPortalRole::Registrant),
+                Rule::requiredIf($isRegistrant),
                 'nullable',
                 'string',
                 'max:50',
                 Rule::unique((new FestivalPortalUser)->getTable(), 'phone_normalized')
-                    ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0))
+                    ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0)->where('role', $role?->value))
                     ->ignore($portalUser?->id ?? 0),
             ],
             'phone_normalized' => ['nullable'],
-            'city' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
-            'studio_name' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
-            'instagram_url' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), 'nullable', 'url:http,https', 'max:2048'],
-            'telegram_contact' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), 'nullable', 'string', 'max:255', 'regex:/^(?:@?[A-Za-z0-9_]+|(?:https?:\/\/)?t\.me\/[A-Za-z0-9_]+\/?|\d+)$/i'],
+            'city' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant), 'nullable', 'string', 'max:255'],
+            'studio_name' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant), 'nullable', 'string', 'max:255'],
+            'instagram_url' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'url:http,https', 'max:2048'],
+            'telegram_contact' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'string', 'max:255', 'regex:/^(?:@?[A-Za-z0-9_]+|(?:https?:\/\/)?t\.me\/[A-Za-z0-9_]+\/?|\d+)$/i'],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
         ];

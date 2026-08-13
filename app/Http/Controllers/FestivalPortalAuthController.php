@@ -48,14 +48,15 @@ class FestivalPortalAuthController extends Controller
         $portalUser = DB::transaction(function () use ($account, $role, $validated): FestivalPortalUser {
             $portalUser = FestivalPortalUser::query()
                 ->whereBelongsTo($account)
+                ->forRole($role)
                 ->where('email_normalized', $validated['email'])
                 ->lockForUpdate()
                 ->first();
 
-            if (! $portalUser && $role === FestivalPortalRole::Registrant) {
+            if (! $portalUser && $role !== FestivalPortalRole::Judge) {
                 return FestivalPortalUser::query()->create([
                     'account_id' => $account->id,
-                    'role' => FestivalPortalRole::Registrant,
+                    'role' => $role,
                     'is_active' => true,
                     'email' => $validated['email'],
                     'email_normalized' => $validated['email'],
@@ -186,14 +187,15 @@ class FestivalPortalAuthController extends Controller
         $portalUser = DB::transaction(function () use ($account, $role, $result): FestivalPortalUser {
             $portalUser = FestivalPortalUser::query()
                 ->whereBelongsTo($account)
+                ->forRole($role)
                 ->where('phone_normalized', $result->challenge->phone)
                 ->lockForUpdate()
                 ->first();
 
-            if (! $portalUser && $role === FestivalPortalRole::Registrant) {
+            if (! $portalUser && $role !== FestivalPortalRole::Judge) {
                 return FestivalPortalUser::query()->create([
                     'account_id' => $account->id,
-                    'role' => FestivalPortalRole::Registrant,
+                    'role' => $role,
                     'is_active' => true,
                     'phone' => $result->challenge->phone,
                     'phone_normalized' => $result->challenge->phone,
@@ -258,8 +260,8 @@ class FestivalPortalAuthController extends Controller
         $email = FestivalPortalUser::normalizeEmail((string) $googleUser->email);
 
         return DB::transaction(function () use ($account, $role, $googleUser, $email): FestivalPortalUser {
-            $googleMatch = FestivalPortalUser::query()->whereBelongsTo($account)->where('google_id', $googleUser->id)->lockForUpdate()->first();
-            $emailMatch = FestivalPortalUser::query()->whereBelongsTo($account)->where('email_normalized', $email)->lockForUpdate()->first();
+            $googleMatch = FestivalPortalUser::query()->whereBelongsTo($account)->forRole($role)->where('google_id', $googleUser->id)->lockForUpdate()->first();
+            $emailMatch = FestivalPortalUser::query()->whereBelongsTo($account)->forRole($role)->where('email_normalized', $email)->lockForUpdate()->first();
 
             if ($googleMatch && $emailMatch && ! $googleMatch->is($emailMatch)) {
                 throw ValidationException::withMessages(['google' => __('app.festival_google_identity_conflict')]);
@@ -275,7 +277,7 @@ class FestivalPortalAuthController extends Controller
                 [$firstName, $lastName] = $this->googleNames($googleUser->name);
                 $portalUser = FestivalPortalUser::query()->create([
                     'account_id' => $account->id,
-                    'role' => FestivalPortalRole::Registrant,
+                    'role' => $role,
                     'is_active' => true,
                     'first_name' => $firstName,
                     'last_name' => $lastName,
@@ -366,17 +368,29 @@ class FestivalPortalAuthController extends Controller
 
     private function loginRoute(FestivalPortalRole $role): string
     {
-        return $role === FestivalPortalRole::Judge ? 'festival.judge.login' : 'festival.login';
+        return match ($role) {
+            FestivalPortalRole::Registrant => 'festival.login',
+            FestivalPortalRole::Judge => 'festival.judge.login',
+            FestivalPortalRole::Guest => 'festival.guest.login',
+        };
     }
 
     private function dashboardRoute(FestivalPortalRole $role): string
     {
-        return $role === FestivalPortalRole::Judge ? 'festival.portal.judge.dashboard' : 'festival.portal.dashboard';
+        return match ($role) {
+            FestivalPortalRole::Registrant => 'festival.portal.dashboard',
+            FestivalPortalRole::Judge => 'festival.portal.judge.dashboard',
+            FestivalPortalRole::Guest => 'festival.portal.guest.dashboard',
+        };
     }
 
     private function routeName(FestivalPortalRole $role, string $suffix): string
     {
-        return $role === FestivalPortalRole::Judge ? 'festival.judge.login.'.$suffix : 'festival.login.'.$suffix;
+        return match ($role) {
+            FestivalPortalRole::Registrant => 'festival.login.'.$suffix,
+            FestivalPortalRole::Judge => 'festival.judge.login.'.$suffix,
+            FestivalPortalRole::Guest => 'festival.guest.login.'.$suffix,
+        };
     }
 
     private function otpPhoneSessionKey(Account $account, FestivalPortalRole $role): string

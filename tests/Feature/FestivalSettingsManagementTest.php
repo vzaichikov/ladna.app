@@ -19,6 +19,7 @@ use App\Models\FestivalSeries;
 use App\Models\FestivalWorkflow;
 use App\Models\FestivalWorkflowStep;
 use App\Models\User;
+use App\Support\Festivals\FestivalRequirementDeadlineResolver;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -130,8 +131,8 @@ class FestivalSettingsManagementTest extends TestCase
             ->assertSee('value="agreement"', false)
             ->assertSee(__('app.festival_input_agreement'));
         $this->assertSame(5, substr_count($response->getContent(), 'data-requirement-section'));
-        $this->assertSame(19, substr_count($response->getContent(), 'data-field-help-toggle'));
-        $this->assertSame(19, substr_count($response->getContent(), 'data-field-help-popover'));
+        $this->assertSame(23, substr_count($response->getContent(), 'data-field-help-toggle'));
+        $this->assertSame(23, substr_count($response->getContent(), 'data-field-help-popover'));
 
         $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]), [
             'festival_workflow_step_id' => $step->id,
@@ -141,12 +142,32 @@ class FestivalSettingsManagementTest extends TestCase
             'name' => 'Updated field',
             'pricing_mode' => 'none',
             'max_size_kb' => 20480,
-            'is_required' => 1,
+            'is_required' => 0,
             'is_active' => 1,
+            'due_reference' => 'registration_opens_at',
+            'due_offset_days' => 3,
+            'allow_post_confirmation_edits' => 1,
+            'editable_until_reference' => 'starts_at',
+            'editable_until_offset_days' => -10,
         ])->assertSessionHasNoErrors();
 
         $this->assertSame('qualification', $requirement->refresh()->stage);
         $this->assertSame('agreement', $requirement->input_type->value);
+        $this->assertTrue($requirement->is_required);
+        $this->assertSame([
+            'reference' => 'registration_opens_at',
+            'offset_days' => 3,
+        ], data_get($requirement->validation, 'due_rule'));
+        $this->assertTrue(data_get($requirement->validation, 'allow_post_confirmation_edits'));
+        $this->assertSame([
+            'reference' => 'starts_at',
+            'offset_days' => -10,
+        ], data_get($requirement->validation, 'editable_until_rule'));
+
+        $resolver = app(FestivalRequirementDeadlineResolver::class);
+        $firstResolvedDueAt = $resolver->dueAt($requirement);
+        $edition->forceFill(['registration_opens_at' => $edition->registration_opens_at->copy()->addDays(7)])->save();
+        $this->assertTrue($firstResolvedDueAt->copy()->addDays(7)->equalTo($resolver->dueAt($requirement->unsetRelation('edition'))));
     }
 
     public function test_content_sections_use_the_rich_text_editor_and_can_be_permanently_deleted_with_tenant_guards(): void

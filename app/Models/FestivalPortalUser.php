@@ -64,9 +64,9 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
             : collect([$this->first_name, $this->last_name])->filter()->join(' ');
     }
 
-    public function profileIsComplete(): bool
+    public function profileIsComplete(bool $requiresVerifiedPhone = true): bool
     {
-        if ($this->role === FestivalPortalRole::Judge) {
+        if (in_array($this->role, [FestivalPortalRole::Judge, FestivalPortalRole::Guest], true)) {
             return filled($this->first_name)
                 && filled($this->last_name)
                 && filled($this->email);
@@ -77,7 +77,7 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
             && filled($this->last_name)
             && filled($this->email)
             && filled($this->phone)
-            && $this->phone_verified_at !== null
+            && (! $requiresVerifiedPhone || $this->phone_verified_at !== null)
             && filled($this->city)
             && filled($this->studio_name)
             && ($this->registrant_type !== FestivalRegistrantType::AdultAthlete || $this->profileParticipant()->whereNull('archived_at')->exists());
@@ -126,5 +126,15 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
     public function notificationPreferences(): HasMany
     {
         return $this->hasMany(FestivalNotificationPreference::class);
+    }
+
+    public function ticketOrders(): HasMany
+    {
+        return $this->hasMany(FestivalTicketOrder::class);
+    }
+
+    public function streamEntitlements(): HasMany
+    {
+        return $this->hasMany(FestivalStreamEntitlement::class);
     }
 }

@@ -28,6 +28,15 @@
             <fieldset class="space-y-5" @disabled($isLocked)>
                 <div class="grid gap-5 md:grid-cols-2">
                     <label class="md:col-span-2">
+                        <span class="crm-label">{{ __('app.festival_admission_delivery_mode') }}</span>
+                        <select name="delivery_mode" required class="crm-field">
+                            <option value="venue" @selected(old('delivery_mode', $admissionType->delivery_mode?->value ?? 'venue') === 'venue')>{{ __('app.festival_admission_delivery_venue') }}</option>
+                            <option value="online_stream" @selected(old('delivery_mode', $admissionType->delivery_mode?->value) === 'online_stream') @disabled(! $onlineStream?->is_enabled)>{{ __('app.festival_admission_delivery_online_stream') }}</option>
+                        </select>
+                        <span class="crm-help">{{ $onlineStream?->is_enabled ? __('app.festival_online_ticket_separate_order') : __('app.festival_online_ticket_requires_stream') }}</span>
+                        @error('delivery_mode') <span class="crm-help text-rose-600">{{ $message }}</span> @enderror
+                    </label>
+                    <label class="md:col-span-2">
                         <span class="crm-label">{{ __('app.festival_admission_name') }}</span>
                         <input name="name" value="{{ old('name', $admissionType->name) }}" maxlength="255" required class="crm-field">
                         @error('name') <span class="crm-help">{{ $message }}</span> @enderror

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalTicketOrderStatus;
 use Database\Factories\FestivalAdmissionTypeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -11,17 +12,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'festival_edition_id', 'name', 'description', 'inventory', 'price_cents', 'early_bird_price_cents', 'early_bird_ends_at', 'early_bird_quota', 'sales_starts_at', 'sales_ends_at', 'max_per_order', 'is_active', 'sort_order'])]
+#[Fillable(['account_id', 'festival_edition_id', 'delivery_mode', 'festival_online_stream_id', 'name', 'description', 'inventory', 'price_cents', 'early_bird_price_cents', 'early_bird_ends_at', 'early_bird_quota', 'sales_starts_at', 'sales_ends_at', 'max_per_order', 'is_active', 'sort_order'])]
 class FestivalAdmissionType extends Model
 {
     /** @use HasFactory<FestivalAdmissionTypeFactory> */
     use HasFactory;
 
-    protected $attributes = ['max_per_order' => 10, 'is_active' => true, 'sort_order' => 0];
+    protected $attributes = ['delivery_mode' => 'venue', 'max_per_order' => 10, 'is_active' => true, 'sort_order' => 0];
 
     protected function casts(): array
     {
         return [
+            'delivery_mode' => FestivalAdmissionDeliveryMode::class,
             'inventory' => 'integer',
             'price_cents' => 'integer',
             'early_bird_price_cents' => 'integer',
@@ -39,6 +41,9 @@ class FestivalAdmissionType extends Model
     {
         return $query
             ->where('is_active', true)
+            ->where(fn (Builder $query) => $query
+                ->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)
+                ->orWhereHas('onlineStream', fn (Builder $stream) => $stream->where('is_enabled', true)))
             ->where(fn (Builder $query) => $query->whereNull('sales_starts_at')->orWhere('sales_starts_at', '<=', now()))
             ->where(fn (Builder $query) => $query->whereNull('sales_ends_at')->orWhere('sales_ends_at', '>=', now()));
     }
@@ -46,6 +51,7 @@ class FestivalAdmissionType extends Model
     public function saleIsOpen(): bool
     {
         return $this->is_active
+            && ($this->delivery_mode === FestivalAdmissionDeliveryMode::Venue || $this->onlineStream?->is_enabled)
             && (! $this->sales_starts_at || $this->sales_starts_at->isPast())
             && (! $this->sales_ends_at || $this->sales_ends_at->isFuture());
     }
@@ -93,6 +99,11 @@ class FestivalAdmissionType extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(FestivalTicketOrderItem::class);
+    }
+
+    public function onlineStream(): BelongsTo
+    {
+        return $this->belongsTo(FestivalOnlineStream::class, 'festival_online_stream_id');
     }
 
     public function tickets(): HasMany

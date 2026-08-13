@@ -27,6 +27,7 @@
         <nav class="max-w-full min-w-0 overflow-x-auto pb-1" aria-label="{{ __('app.festival_scenes') }}" data-festival-scene-tabs>
             <div class="flex w-max min-w-full gap-2 border-b border-stone-200" role="tablist">
                 @foreach ($stages as $stage)
+                    <span class="inline-flex shrink-0 items-stretch">
                     <a
                         href="{{ route('dashboard.accounts.festivals.program', ['account' => $account, 'festivalEdition' => $edition, 'scene' => $stage->id]) }}"
                         id="festival-scene-tab-{{ $stage->id }}"
@@ -42,6 +43,10 @@
                             <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">{{ __('app.inactive') }}</span>
                         @endunless
                     </a>
+                    <a href="{{ route('dashboard.accounts.festivals.timeline.show', [$account, $edition, $stage]) }}" class="inline-flex min-h-11 items-center border-b-2 border-transparent px-2 text-slate-500 transition hover:text-brand-700 crm-focus" title="{{ __('app.festival_timeline_open_scene', ['scene' => $stage->name]) }}" aria-label="{{ __('app.festival_timeline_open_scene', ['scene' => $stage->name]) }}">
+                        <x-ui.icon name="timer" class="h-4 w-4" />
+                    </a>
+                    </span>
                 @endforeach
             </div>
         </nav>

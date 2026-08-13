@@ -94,7 +94,9 @@ class FestivalRegistrationEnhancementsTest extends TestCase
             'https://www.instagram.com/reel/ABC123/',
             'https://instagram.com/p/DEF456/',
             'https://www.instagram.com/share/reel/GHI789/',
+            'https://www.instagram.com/share/p/MNO345/?utm_source=ig_web_copy_link',
             'https://m.instagram.com/p/JKL012/',
+            'https://l.instagram.com/?u=https%3A%2F%2Fwww.instagram.com%2Freel%2FPQR678%2F',
         ];
 
         foreach ($acceptedUrls as $acceptedUrl) {
@@ -102,11 +104,13 @@ class FestivalRegistrationEnhancementsTest extends TestCase
             $this->assertSame($acceptedUrl, data_get($requirement->submissions()->first()->value_json, 'value'));
         }
 
-        try {
-            app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 'https://example.com/video');
-            $this->fail('An unconfigured qualification video host should be rejected.');
-        } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('value', $exception->errors());
+        foreach (['https://example.com/video', 'https://evilinstagram.com/reel/ABC123', 'https://instagram.com.example/p/DEF456'] as $rejectedUrl) {
+            try {
+                app(StoreFestivalResponse::class)->execute($requirement, $portalUser, $rejectedUrl);
+                $this->fail("The unconfigured qualification video host in {$rejectedUrl} should be rejected.");
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('value', $exception->errors());
+            }
         }
     }
 

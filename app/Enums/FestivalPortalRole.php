@@ -6,4 +6,5 @@ enum FestivalPortalRole: string
 {
     case Registrant = 'registrant';
     case Judge = 'judge';
+    case Guest = 'guest';
 }

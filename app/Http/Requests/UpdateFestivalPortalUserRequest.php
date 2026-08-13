@@ -26,6 +26,7 @@ class UpdateFestivalPortalUserRequest extends FormRequest
         return $account instanceof Account
             && $portalUser instanceof FestivalPortalUser
             && $portalUser->account_id === $account->id
+            && $portalUser->role !== FestivalPortalRole::Guest
             && (bool) $this->user()?->can(
                 $portalUser->role === FestivalPortalRole::Judge ? 'manageFestivals' : 'manageFestivalRegistrations',
                 $account,
@@ -55,7 +56,9 @@ class UpdateFestivalPortalUserRequest extends FormRequest
                 'email',
                 'max:255',
                 Rule::unique((new FestivalPortalUser)->getTable(), 'email_normalized')
-                    ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0))
+                    ->where(fn ($query) => $query
+                        ->where('account_id', $account instanceof Account ? $account->id : 0)
+                        ->where('role', $role?->value))
                     ->ignore($portalUser instanceof FestivalPortalUser ? $portalUser->id : 0),
             ],
             'email_normalized' => ['required'],
@@ -65,7 +68,9 @@ class UpdateFestivalPortalUserRequest extends FormRequest
                 'string',
                 'max:50',
                 Rule::unique((new FestivalPortalUser)->getTable(), 'phone_normalized')
-                    ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0))
+                    ->where(fn ($query) => $query
+                        ->where('account_id', $account instanceof Account ? $account->id : 0)
+                        ->where('role', $role?->value))
                     ->ignore($portalUser instanceof FestivalPortalUser ? $portalUser->id : 0),
             ],
             'phone_normalized' => ['nullable'],

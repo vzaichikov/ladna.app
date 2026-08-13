@@ -10,6 +10,7 @@ use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalWorkflowStep;
+use App\Support\Festivals\FestivalRequirementDeadlineResolver;
 use App\Support\Festivals\FestivalSettingsOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\Payments\PaymentAmounts;
@@ -25,6 +26,7 @@ class FestivalRequirementController extends Controller
     public function __construct(
         private readonly FestivalWorkspaceAccess $workspaceAccess,
         private readonly FestivalSettingsOrder $settingsOrder,
+        private readonly FestivalRequirementDeadlineResolver $deadlineResolver,
     ) {}
 
     public function index(Request $request, Account $account, FestivalEdition $festivalEdition): View
@@ -112,7 +114,7 @@ class FestivalRequirementController extends Controller
     public function update(FestivalRequirementRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalRequirementDefinition $festivalRequirementDefinition): RedirectResponse
     {
         $this->assertRequirement($account, $festivalEdition, $festivalRequirementDefinition);
-        $data = $this->requirementData($festivalEdition, $request->validated());
+        $data = $this->requirementData($festivalEdition, $request->validated(), $festivalRequirementDefinition);
         $festivalRequirementDefinition->update([
             ...$data,
             'is_required' => $data['is_required'] ?? false,
@@ -197,7 +199,7 @@ class FestivalRequirementController extends Controller
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function requirementData(FestivalEdition $edition, array $data): array
+    private function requirementData(FestivalEdition $edition, array $data, ?FestivalRequirementDefinition $requirement = null): array
     {
         $this->assertDependencies($edition, $data);
         $options = collect($data['options'] ?? [])->map(function (array $option): array {
@@ -219,10 +221,53 @@ class FestivalRequirementController extends Controller
             'option_prices' => ['mode' => 'option_prices', 'prices' => $optionPrices],
             default => ['mode' => 'none'],
         };
-        $validation = ['allowed_hosts' => $data['allowed_hosts'] ?? []];
-        unset($data['pricing_mode'], $data['price_amount'], $data['allowed_hosts'], $data['sort_order']);
+        if ($data['input_type'] === FestivalRequirementInputType::Agreement->value) {
+            $data['is_required'] = true;
+        }
+        $dueRule = $this->deadlineRule($data, 'due');
+        $allowPostConfirmationEdits = (bool) ($data['allow_post_confirmation_edits'] ?? false);
+        $editableUntilRule = $allowPostConfirmationEdits
+            ? $this->deadlineRule($data, 'editable_until')
+            : null;
+        $validation = array_replace($requirement?->validation ?? [], [
+            'allowed_hosts' => $data['allowed_hosts'] ?? [],
+            'due_rule' => $dueRule,
+            'allow_post_confirmation_edits' => $allowPostConfirmationEdits,
+            'editable_until_rule' => $editableUntilRule,
+        ]);
+        unset(
+            $data['pricing_mode'],
+            $data['price_amount'],
+            $data['allowed_hosts'],
+            $data['sort_order'],
+            $data['due_reference'],
+            $data['due_offset_days'],
+            $data['allow_post_confirmation_edits'],
+            $data['editable_until_reference'],
+            $data['editable_until_offset_days'],
+        );
+
+        if ($dueRule !== null || data_get($requirement?->validation, 'due_rule') !== null) {
+            $data['due_at'] = null;
+        }
 
         return [...$data, 'options' => $options, 'pricing' => $pricing, 'validation' => $validation];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{reference: string, offset_days: int}|null
+     */
+    private function deadlineRule(array $data, string $prefix): ?array
+    {
+        $reference = $data[$prefix.'_reference'] ?? null;
+        $offsetDays = $data[$prefix.'_offset_days'] ?? null;
+
+        if (! is_string($reference) || ! in_array($reference, FestivalRequirementDeadlineResolver::References, true) || $offsetDays === null) {
+            return null;
+        }
+
+        return ['reference' => $reference, 'offset_days' => (int) $offsetDays];
     }
 
     /** @param array<string, mixed> $data */
@@ -249,6 +294,11 @@ class FestivalRequirementController extends Controller
             'account' => $account,
             'edition' => $edition,
             'requirement' => $requirement,
+            'deadlineReferences' => FestivalRequirementDeadlineResolver::References,
+            'resolvedDueAt' => $this->deadlineResolver->dueAt($requirement),
+            'resolvedEditableUntil' => $this->deadlineResolver->allowsPostConfirmationEdits($requirement)
+                ? $this->deadlineResolver->editableUntil($requirement)
+                : null,
             'workspacePermissions' => $permissions,
         ]);
     }

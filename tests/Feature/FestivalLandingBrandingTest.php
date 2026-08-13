@@ -161,7 +161,7 @@ class FestivalLandingBrandingTest extends TestCase
             ->assertSee('Rules sentinel')
             ->assertSee(route('festival.login', $account->slug), false)
             ->assertSee(route('festival.judge.login', $account->slug), false)
-            ->assertSee(route('public.festivals.admission.store', [$account->slug, $edition->slug]), false)
+            ->assertDontSee(route('public.festivals.admission.store', [$account->slug, $edition->slug]), false)
             ->assertSee(__('app.powered_by_ladna'))
             ->assertDontSee(route('api-docs.show'), false)
             ->assertDontSee(route('changelog.en'), false);
@@ -223,7 +223,8 @@ class FestivalLandingBrandingTest extends TestCase
             ->assertSee(__('app.buy_tickets'))
             ->assertSee(route('festival.login', $account->slug), false)
             ->assertSee(route('festival.judge.login', $account->slug), false)
-            ->assertSee(route('public.festivals.admission.store', [$account->slug, $edition->slug]), false)
+            ->assertSee(route('festival.guest.login', $account->slug), false)
+            ->assertDontSee(route('public.festivals.admission.store', [$account->slug, $edition->slug]), false)
             ->assertDontSee(__('app.all_festivals'))
             ->assertSee(__('app.powered_by_ladna'));
 

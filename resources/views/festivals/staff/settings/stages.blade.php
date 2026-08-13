@@ -58,15 +58,18 @@
                     @endif
                 </div>
                 <p class="text-sm text-slate-500">{{ trans_choice('app.festival_scene_item_count', $stage->slots_count, ['count' => $stage->slots_count]) }}</p>
-                <x-festivals.settings-actions
-                    :active="$stage->is_active"
-                    :toggle-route="route('dashboard.accounts.festivals.stages.toggle', [$account, $edition, $stage])"
-                    :move-route="route('dashboard.accounts.festivals.stages.move', [$account, $edition, $stage])"
-                    :edit-route="route('dashboard.accounts.festivals.stages.edit', [$account, $edition, $stage])"
-                    :show-ordering="! $hasFilters"
-                    :can-move-up="$globalIndex > 1"
-                    :can-move-down="$globalIndex < $stages->total()"
-                />
+                <div class="flex items-center justify-end gap-1">
+                    <x-ui.action-button :href="route('dashboard.accounts.festivals.timeline.show', [$account, $edition, $stage])" icon="timer" :label="__('app.festival_timeline_open_scene', ['scene' => $stage->name])" />
+                    <x-festivals.settings-actions
+                        :active="$stage->is_active"
+                        :toggle-route="route('dashboard.accounts.festivals.stages.toggle', [$account, $edition, $stage])"
+                        :move-route="route('dashboard.accounts.festivals.stages.move', [$account, $edition, $stage])"
+                        :edit-route="route('dashboard.accounts.festivals.stages.edit', [$account, $edition, $stage])"
+                        :show-ordering="! $hasFilters"
+                        :can-move-up="$globalIndex > 1"
+                        :can-move-down="$globalIndex < $stages->total()"
+                    />
+                </div>
             </div>
         @empty
             <x-ui.empty-state :title="$hasFilters ? __('app.no_data') : __('app.festival_scenes_empty')" icon="theater" class="m-5">

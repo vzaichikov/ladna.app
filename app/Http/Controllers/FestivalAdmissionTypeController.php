@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Http\Requests\FestivalAdmissionTypeRequest;
 use App\Models\Account;
@@ -24,6 +25,7 @@ class FestivalAdmissionTypeController extends Controller
     public function create(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
         $permissions = $this->financePermissions($request, $account, $festivalEdition);
+        $festivalEdition->loadMissing('onlineStream');
 
         return view('festivals.staff.admission-type-form', [
             'account' => $account,
@@ -31,13 +33,14 @@ class FestivalAdmissionTypeController extends Controller
             'admissionType' => new FestivalAdmissionType(['is_active' => true, 'max_per_order' => 10]),
             'isLocked' => false,
             'workspacePermissions' => $permissions,
+            'onlineStream' => $festivalEdition->onlineStream,
         ]);
     }
 
     public function store(FestivalAdmissionTypeRequest $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
-        $data = $this->admissionTypeData($request->validated(), $festivalEdition->timezone);
+        $data = $this->admissionTypeData($request->validated(), $festivalEdition);
 
         DB::transaction(function () use ($account, $festivalEdition, $data): void {
             $purchase = $this->lockedPurchase($festivalEdition);
@@ -56,6 +59,7 @@ class FestivalAdmissionTypeController extends Controller
     {
         $permissions = $this->financePermissions($request, $account, $festivalEdition);
         $this->assertAdmissionType($account, $festivalEdition, $festivalAdmissionType);
+        $festivalEdition->loadMissing('onlineStream');
 
         return view('festivals.staff.admission-type-form', [
             'account' => $account,
@@ -63,13 +67,14 @@ class FestivalAdmissionTypeController extends Controller
             'admissionType' => $festivalAdmissionType,
             'isLocked' => $festivalAdmissionType->hasLockedPurchaseHistory(),
             'workspacePermissions' => $permissions,
+            'onlineStream' => $festivalEdition->onlineStream,
         ]);
     }
 
     public function update(FestivalAdmissionTypeRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalAdmissionType $festivalAdmissionType): RedirectResponse
     {
         $this->assertAdmissionType($account, $festivalEdition, $festivalAdmissionType);
-        $data = $this->admissionTypeData($request->validated(), $festivalEdition->timezone);
+        $data = $this->admissionTypeData($request->validated(), $festivalEdition);
 
         DB::transaction(function () use ($account, $festivalEdition, $festivalAdmissionType, $data): void {
             $purchase = $this->lockedPurchase($festivalEdition);
@@ -121,8 +126,17 @@ class FestivalAdmissionTypeController extends Controller
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function admissionTypeData(array $data, string $timezone): array
+    private function admissionTypeData(array $data, FestivalEdition $edition): array
     {
+        $deliveryMode = FestivalAdmissionDeliveryMode::from($data['delivery_mode']);
+        $stream = $edition->onlineStream()->first();
+        if ($deliveryMode === FestivalAdmissionDeliveryMode::OnlineStream && ! $stream?->is_enabled) {
+            throw ValidationException::withMessages(['delivery_mode' => __('app.festival_online_ticket_requires_stream')]);
+        }
+        $data['festival_online_stream_id'] = $deliveryMode === FestivalAdmissionDeliveryMode::OnlineStream ? $stream->id : null;
+        if ($deliveryMode === FestivalAdmissionDeliveryMode::OnlineStream) {
+            $data['max_per_order'] = 1;
+        }
         $data['price_cents'] = (int) PaymentAmounts::decimalToCents($data['price']);
         $data['early_bird_price_cents'] = filled($data['early_bird_price'] ?? null)
             ? (int) PaymentAmounts::decimalToCents($data['early_bird_price'])
@@ -131,7 +145,7 @@ class FestivalAdmissionTypeController extends Controller
 
         foreach (['early_bird_ends_at', 'sales_starts_at', 'sales_ends_at'] as $field) {
             $data[$field] = filled($data[$field] ?? null)
-                ? CarbonImmutable::parse((string) $data[$field], $timezone)->utc()
+                ? CarbonImmutable::parse((string) $data[$field], $edition->timezone)->utc()
                 : null;
         }
 

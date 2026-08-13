@@ -18,7 +18,8 @@ class FestivalArchitectureBoundaryTest extends TestCase
         $tables = [
             'festival_series', 'festival_editions', 'festival_portal_users', 'festival_otp_challenges', 'festival_participants',
             'festival_directions', 'festival_categories', 'festival_entries', 'festival_charges', 'festival_payment_attempts',
-            'festival_schedule_slots', 'festival_score_sheets', 'festival_ticket_orders', 'festival_tickets',
+            'festival_schedule_slots', 'festival_timelines', 'festival_timeline_items', 'festival_score_sheets', 'festival_ticket_orders', 'festival_tickets',
+            'festival_online_streams', 'festival_stream_entitlements', 'festival_stream_ip_leases',
         ];
 
         foreach ($tables as $table) {
@@ -44,6 +45,10 @@ class FestivalArchitectureBoundaryTest extends TestCase
         $festivalControllers = [
             app_path('Http/Controllers/FestivalWorkspaceController.php'),
             app_path('Http/Controllers/FestivalSeriesController.php'),
+            app_path('Http/Controllers/FestivalTimelineController.php'),
+            app_path('Http/Controllers/FestivalOnlineStreamController.php'),
+            app_path('Http/Controllers/FestivalStreamAccessController.php'),
+            app_path('Jobs/AdvanceFestivalTimelineJob.php'),
             app_path('View/Composers/FestivalWorkspaceComposer.php'),
         ];
 
@@ -61,6 +66,31 @@ class FestivalArchitectureBoundaryTest extends TestCase
 
         $this->assertCount(1, $festivalApiRoutes);
         $this->assertSame('api/v1/festival-payments/{provider}/callbacks', $festivalApiRoutes->first()->uri());
+
+        $internalStreamRoutes = collect(app('router')->getRoutes()->getRoutes())
+            ->filter(fn ($route): bool => str_starts_with($route->uri(), 'internal/festival-stream/'))
+            ->map(fn ($route): string => $route->uri())
+            ->values()
+            ->all();
+        $this->assertSame([
+            'internal/festival-stream/authorize',
+            'internal/festival-stream/publisher-authorize',
+        ], $internalStreamRoutes);
+    }
+
+    public function test_optional_stream_schema_has_single_edition_and_guest_entitlement_constraints(): void
+    {
+        $streamIndexes = collect(Schema::getIndexes('festival_online_streams'));
+        $this->assertTrue($streamIndexes->contains(fn (array $index): bool => $index['columns'] === ['festival_edition_id'] && $index['unique']));
+        $this->assertTrue($streamIndexes->contains(fn (array $index): bool => $index['columns'] === ['path'] && $index['unique']));
+
+        $entitlementIndexes = collect(Schema::getIndexes('festival_stream_entitlements'));
+        $this->assertTrue($entitlementIndexes->contains(fn (array $index): bool => $index['columns'] === ['festival_ticket_id'] && $index['unique']));
+        $this->assertTrue($entitlementIndexes->contains(fn (array $index): bool => $index['columns'] === ['festival_online_stream_id', 'festival_portal_user_id'] && $index['unique']));
+        $this->assertTrue($entitlementIndexes->contains(fn (array $index): bool => $index['columns'] === ['account_id', 'festival_portal_user_id']));
+
+        $leaseIndexes = collect(Schema::getIndexes('festival_stream_ip_leases'));
+        $this->assertTrue($leaseIndexes->contains(fn (array $index): bool => $index['columns'] === ['festival_stream_entitlement_id', 'ip_hash'] && $index['unique']));
     }
 
     public function test_festival_authentication_has_no_magic_link_runtime_or_storage(): void
@@ -127,6 +157,14 @@ class FestivalArchitectureBoundaryTest extends TestCase
 
         $this->assertSame('restrict', strtolower((string) $stepForeignKey['on_delete']));
         $this->assertSame('restrict', strtolower((string) $packageForeignKey['on_delete']));
+
+        $this->assertFalse(Schema::hasColumn('festival_timeline_items', 'status'));
+        $timelineIndexes = collect(Schema::getIndexes('festival_timelines'));
+        $this->assertTrue($timelineIndexes->contains(fn (array $index): bool => $index['columns'] === ['festival_edition_id', 'festival_stage_id'] && $index['unique']));
+        $sourceSlotForeignKey = collect(Schema::getForeignKeys('festival_timeline_items'))
+            ->first(fn (array $foreignKey): bool => $foreignKey['columns'] === ['festival_schedule_slot_id']);
+        $this->assertSame('festival_schedule_slots', $sourceSlotForeignKey['foreign_table']);
+        $this->assertSame('set null', strtolower((string) $sourceSlotForeignKey['on_delete']));
     }
 
     public function test_repository_does_not_use_a_root_docs_directory(): void

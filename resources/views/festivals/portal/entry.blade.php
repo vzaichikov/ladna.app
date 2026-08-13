@@ -67,7 +67,7 @@
 
         @if($selectedStep)
             @php $selectedState = $workflowStates->first(fn($state) => $state['step']->is($selectedStep)); @endphp
-            <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+            <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6" data-festival-step-panel>
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div><p class="text-sm font-semibold text-brand-700">{{ __('app.festival_current_step') }}</p><h2 class="mt-1 text-2xl font-semibold">{{ $selectedStep->workflowStep->title }}</h2>@if($selectedStep->workflowStep->description)<p class="mt-2 max-w-3xl text-sm text-slate-600">{{ $selectedStep->workflowStep->description }}</p>@endif</div>
                     <span class="self-start rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">{{ __('app.festival_step_status_'.$selectedStep->status->value) }}</span>
@@ -105,13 +105,14 @@
                     <div class="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900"><strong>{{ __('app.festival_refund_pending') }}</strong><span class="ml-2">@foreach($pendingRefundsByCurrency as $currency => $adjustments)@if(! $loop->first) · @endif{{ \App\Support\MoneyFormatter::format((int) $adjustments->sum('amount_cents'), $currency) }}@endforeach</span></div>
                 @endif
 
-                @if($selectedState['mutable'])
+                @if($selectedState['mutable'] && !$selectedState['has_blocking_charges'])
                     <form method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6">
                         @csrf
                         @if ($errors->default->any())
                             <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{{ $errors->default->first() }}</div>
                         @endif
-                        <div class="flex justify-end"><x-ui.button type="submit" size="lg">{{ $selectedStep->workflowStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer ? __('app.submit') : __('app.continue') }}</x-ui.button></div>
+                        <p data-festival-progress-blocked-message @class(['mb-3 text-right text-sm font-semibold text-amber-800', 'hidden' => $selectedState['requirements_complete']])>{{ __('app.festival_complete_required_fields_first') }}</p>
+                        <div class="flex justify-end"><x-ui.button type="submit" size="lg" data-festival-progress-action :disabled="!$selectedState['requirements_complete']">{{ $selectedStep->workflowStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer ? __('app.submit') : __('app.continue') }}</x-ui.button></div>
                     </form>
                 @endif
             </section>

@@ -75,6 +75,33 @@ class FestivalPortalAuthenticationTest extends TestCase
             ->assertRedirect(route('festival.judge.login', $account->slug));
     }
 
+    public function test_guest_email_login_is_role_bound_and_opens_only_the_ticket_cabinet(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $registrant = FestivalPortalUser::factory()->for($account)->create([
+            'email' => 'shared.viewer@example.com',
+            'email_normalized' => 'shared.viewer@example.com',
+            'password' => 'registrant-secret',
+        ]);
+
+        $this->post(route('festival.guest.login.email', $account->slug), [
+            'email' => 'shared.viewer@example.com',
+            'password' => 'guest-secret',
+        ])->assertRedirect(route('festival.portal.guest.dashboard', $account->slug));
+
+        $guest = FestivalPortalUser::query()->whereBelongsTo($account)->forRole(FestivalPortalRole::Guest)->sole();
+        $this->assertNotSame($registrant->id, $guest->id);
+        $this->assertTrue(Hash::check('guest-secret', (string) $guest->password));
+        $this->assertAuthenticatedAs($guest, 'festival');
+
+        $this->get(route('festival.portal.dashboard', $account->slug))->assertForbidden();
+        $this->get(route('festival.portal.guest.dashboard', $account->slug))
+            ->assertRedirect(route('festival.portal.guest.profile.edit', $account->slug));
+
+        $this->post(route('festival.portal.logout', $account->slug))
+            ->assertRedirect(route('festival.guest.login', $account->slug));
+    }
+
     public function test_unknown_judge_and_passwordless_existing_profile_cannot_be_claimed(): void
     {
         $account = Account::factory()->create(['enable_festivals' => true]);
@@ -257,7 +284,7 @@ class FestivalPortalAuthenticationTest extends TestCase
             ->assertDontSee('data-field-error="phone_normalized"', false);
     }
 
-    public function test_unverified_participant_profile_always_shows_phone_verification_action_and_optional_telegram_contact(): void
+    public function test_participant_profile_completion_remains_available_when_studio_otp_is_unavailable(): void
     {
         $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
         $portalUser = FestivalPortalUser::factory()->for($account)->create([
@@ -267,40 +294,41 @@ class FestivalPortalAuthenticationTest extends TestCase
             'telegram_contact' => null,
         ]);
 
-        $emptyPhoneForm = $this->actingAs($portalUser, 'festival')
+        $this->get(route('festival.login', $account->slug))
+            ->assertOk()
+            ->assertSee(__('app.festival_profile_step_label', ['current' => 1, 'total' => 2]))
+            ->assertDontSee('role="tablist"', false);
+
+        $profileForm = $this->actingAs($portalUser, 'festival')
             ->get(route('festival.portal.profile.edit', $account->slug));
 
-        $emptyPhoneForm
+        $profileForm
             ->assertOk()
-            ->assertSee('data-profile-phone-verification', false)
+            ->assertDontSee('data-festival-profile-phone-step', false)
             ->assertSee('data-festival-profile-phone', false)
-            ->assertSee('name="profile_action"', false)
-            ->assertSee('value="send_phone_otp"', false)
-            ->assertSee('data-festival-profile-phone-send', false)
             ->assertSee('name="telegram_contact"', false)
             ->assertSee('@username / ID / t.me/username', false)
-            ->assertDontSee('data-profile-phone-merge', false);
+            ->assertSee(__('app.festival_profile_step_label', ['current' => 2, 'total' => 2]))
+            ->assertDontSee('data-profile-phone-verification', false);
 
-        $this->assertMatchesRegularExpression(
-            '/<button(?=[^>]*data-festival-profile-phone-send)[^>]*\sdisabled(?:="disabled"|(?=\s|>))/',
-            (string) $emptyPhoneForm->getContent(),
-        );
+        $this->post(route('festival.portal.profile.phone.send', $account->slug), [
+            'phone' => '0501112233',
+        ])->assertNotFound();
 
-        $portalUser->forceFill([
-            'phone' => '+380501112233',
-            'phone_normalized' => '+380501112233',
-        ])->save();
+        $this->put(route('festival.portal.profile.update', $account->slug), [
+            'registrant_type' => 'coach',
+            'first_name' => $portalUser->first_name,
+            'last_name' => $portalUser->last_name,
+            'email' => $portalUser->email,
+            'phone' => '0501112233',
+            'city' => $portalUser->city,
+            'studio_name' => $portalUser->studio_name,
+            'locale' => 'en',
+        ])->assertRedirect(route('festival.portal.dashboard', $account->slug));
 
-        $storedUnverifiedForm = $this->get(route('festival.portal.profile.edit', $account->slug));
-        $storedUnverifiedForm
-            ->assertOk()
-            ->assertSee('value="+380501112233"', false)
-            ->assertSee('data-profile-phone-merge', false);
-
-        $this->assertDoesNotMatchRegularExpression(
-            '/<button(?=[^>]*data-festival-profile-phone-send)[^>]*\sdisabled(?:[=\s>])/',
-            (string) $storedUnverifiedForm->getContent(),
-        );
+        $this->assertSame('+380501112233', $portalUser->refresh()->phone_normalized);
+        $this->assertNull($portalUser->phone_verified_at);
+        $this->get(route('festival.portal.dashboard', $account->slug))->assertOk();
     }
 
     public function test_participant_telegram_contact_accepts_ids_and_short_links_and_rejects_other_urls(): void

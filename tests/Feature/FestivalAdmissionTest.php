@@ -10,6 +10,7 @@ use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
+use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTariffPackage;
 use App\Models\FestivalTicketOrder;
@@ -46,7 +47,8 @@ class FestivalAdmissionTest extends TestCase
             'early_bird_quota' => 2,
         ]);
         $create = $this->createOrderAction($account);
-        $order = $create->execute($edition, $this->orderInput($type, 2));
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $order = $create->execute($edition, $this->orderInput($type, 2), $guest);
 
         $this->assertSame(40000, $order->amount_cents);
         $this->assertSame('USD', $order->currency);
@@ -54,7 +56,7 @@ class FestivalAdmissionTest extends TestCase
         $this->assertSame(0, $type->remainingQuantity());
 
         $this->expectException(ValidationException::class);
-        $create->execute($edition, $this->orderInput($type, 1, 'second@example.com'));
+        $create->execute($edition, $this->orderInput($type, 1, 'second@example.com'), $guest);
     }
 
     public function test_ticket_tokens_are_encrypted_hashed_tenant_bound_and_duplicate_scans_are_audited(): void
@@ -62,7 +64,8 @@ class FestivalAdmissionTest extends TestCase
         Mail::fake();
         [$account, $edition] = $this->festival();
         $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 5, 'price_cents' => 0]);
-        $order = $this->createOrderAction($account)->execute($edition, $this->orderInput($type, 1));
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $order = $this->createOrderAction($account)->execute($edition, $this->orderInput($type, 1), $guest);
         $order->update(['status' => FestivalTicketOrderStatus::Paid, 'paid_at' => now(), 'expires_at' => null]);
         app(FestivalTicketIssuer::class)->execute($order);
         $ticket = $order->tickets()->firstOrFail();
@@ -93,7 +96,8 @@ class FestivalAdmissionTest extends TestCase
     {
         [$account, $edition] = $this->festival();
         $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 1]);
-        $first = $this->createOrderAction($account)->execute($edition, $this->orderInput($type, 1));
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $first = $this->createOrderAction($account)->execute($edition, $this->orderInput($type, 1), $guest);
         $first->forceFill(['status' => FestivalTicketOrderStatus::Paid, 'paid_at' => now(), 'expires_at' => null])->save();
         app(FestivalTicketIssuer::class)->execute($first);
 
@@ -123,10 +127,11 @@ class FestivalAdmissionTest extends TestCase
         $firstType = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 2]);
         $secondType = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 2]);
         $create = $this->createOrderAction($account);
-        $create->execute($edition, $this->orderInput($firstType, 2));
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $create->execute($edition, $this->orderInput($firstType, 2), $guest);
 
         $this->expectException(ValidationException::class);
-        $create->execute($edition, $this->orderInput($secondType, 1, 'global-cap@example.com'));
+        $create->execute($edition, $this->orderInput($secondType, 1, 'global-cap@example.com'), $guest);
     }
 
     public function test_finance_owner_can_create_update_and_delete_an_admission_type_with_edition_timezone_dates(): void
@@ -363,6 +368,7 @@ class FestivalAdmissionTest extends TestCase
     {
         return [
             'name' => 'General admission',
+            'delivery_mode' => 'venue',
             'description' => 'Festival access',
             'inventory' => 100,
             'price' => '300.00',

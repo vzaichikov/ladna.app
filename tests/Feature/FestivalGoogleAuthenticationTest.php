@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Enums\FestivalPortalRole;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
+use App\Enums\SmsSendingMode;
 use App\Models\Account;
 use App\Models\Customer;
+use App\Models\CustomerAuthSetting;
 use App\Models\FestivalPortalUser;
 use App\Models\IntegrationSetting;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -36,6 +38,34 @@ class FestivalGoogleAuthenticationTest extends TestCase
         $this->assertAuthenticatedAs($portalUser, 'festival');
     }
 
+    public function test_google_participant_completes_phone_verification_before_the_full_profile_when_otp_is_available(): void
+    {
+        $this->enableGoogle();
+        $account = Account::factory()->create(['enable_festivals' => true, 'country_code' => 'UA']);
+        $this->enableOtp($account);
+        $state = $this->oauthState(route('festival.login.google', $account->slug));
+        $this->fakeGoogle('google-staged-participant', 'staged.google@example.com', true, 'Staged Participant');
+
+        $this->get(route('festival.google.callback', ['state' => $state, 'code' => 'authorization-code']))
+            ->assertRedirect(route('festival.portal.dashboard', $account->slug));
+
+        $portalUser = FestivalPortalUser::query()
+            ->whereBelongsTo($account)
+            ->where('google_id', 'google-staged-participant')
+            ->firstOrFail();
+
+        $this->assertNull($portalUser->phone_normalized);
+        $this->assertNull($portalUser->phone_verified_at);
+        $this->get(route('festival.portal.dashboard', $account->slug))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug));
+        $this->get(route('festival.portal.profile.edit', $account->slug))
+            ->assertOk()
+            ->assertSee('data-festival-profile-phone-step', false)
+            ->assertSee(__('app.festival_profile_step_label', ['current' => 2, 'total' => 3]))
+            ->assertSee('name="phone"', false)
+            ->assertDontSee('name="first_name"', false);
+    }
+
     public function test_judge_google_login_links_only_an_existing_active_judge_profile(): void
     {
         $this->enableGoogle();
@@ -53,6 +83,27 @@ class FestivalGoogleAuthenticationTest extends TestCase
 
         $this->assertSame('google-judge-1', $judge->refresh()->google_id);
         $this->assertAuthenticatedAs($judge, 'festival');
+    }
+
+    public function test_guest_google_registration_is_separate_from_the_same_registrant_identity(): void
+    {
+        $this->enableGoogle();
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $registrant = FestivalPortalUser::factory()->for($account)->create([
+            'email' => 'shared.google@example.com',
+            'email_normalized' => 'shared.google@example.com',
+            'google_id' => 'shared-google-subject',
+        ]);
+        $state = $this->oauthState(route('festival.guest.login.google', $account->slug));
+        $this->fakeGoogle('shared-google-subject', 'shared.google@example.com', true, 'Shared Google');
+
+        $this->get(route('festival.google.callback', ['state' => $state, 'code' => 'authorization-code']))
+            ->assertRedirect(route('festival.portal.guest.dashboard', $account->slug));
+
+        $guest = FestivalPortalUser::query()->whereBelongsTo($account)->forRole(FestivalPortalRole::Guest)->sole();
+        $this->assertNotSame($registrant->id, $guest->id);
+        $this->assertSame('shared-google-subject', $guest->google_id);
+        $this->assertAuthenticatedAs($guest, 'festival');
     }
 
     public function test_unknown_judge_unverified_email_and_wrong_role_are_rejected_without_profile_creation(): void
@@ -157,6 +208,39 @@ class FestivalGoogleAuthenticationTest extends TestCase
             'credentials' => [
                 'client_id' => 'festival-google-client',
                 'client_secret' => 'festival-google-secret',
+            ],
+        ]);
+    }
+
+    private function enableOtp(Account $account): void
+    {
+        CustomerAuthSetting::create([
+            'account_id' => $account->id,
+            'allow_otp' => true,
+            'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
+            'sms_provider' => 'turbosms',
+        ]);
+        IntegrationSetting::create([
+            'scope_type' => IntegrationScope::Platform->value,
+            'scope_id' => 0,
+            'provider' => 'cloudflare_turnstile',
+            'category' => IntegrationCategory::Authentication->value,
+            'is_enabled' => true,
+            'credentials' => [
+                'site_key' => 'turnstile-site',
+                'secret_key' => 'turnstile-secret',
+            ],
+        ]);
+        IntegrationSetting::create([
+            'scope_type' => IntegrationScope::Account->value,
+            'scope_id' => $account->id,
+            'account_id' => $account->id,
+            'provider' => 'turbosms',
+            'category' => IntegrationCategory::Messaging->value,
+            'is_enabled' => true,
+            'credentials' => [
+                'api_token' => 'turbosms-token',
+                'sms_sender' => 'Ladna',
             ],
         ]);
     }

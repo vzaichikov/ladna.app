@@ -46,7 +46,10 @@ class FestivalProgramAndScenesTest extends TestCase
         $this->assertSame('By the entrance', $outdoor->description);
 
         $index = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.settings.stages', [$account, $edition, 'q' => 'Outdoor']));
-        $index->assertOk()->assertSee('Outdoor scene')->assertDontSee('Main scene');
+        $index->assertOk()
+            ->assertSee('Outdoor scene')
+            ->assertSee(route('dashboard.accounts.festivals.timeline.show', [$account, $edition, $outdoor]), false)
+            ->assertDontSee('Main scene');
         $this->assertInstanceOf(LengthAwarePaginator::class, $index->viewData('stages'));
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.stages.create', [$account, $edition]))
             ->assertOk()
@@ -189,6 +192,8 @@ class FestivalProgramAndScenesTest extends TestCase
             ->assertSee('Inactive scene')
             ->assertSee(__('app.inactive'))
             ->assertDontSee('Inactive sentinel');
+        $response->assertSee(route('dashboard.accounts.festivals.timeline.show', [$account, $edition, $main]), false)
+            ->assertSee(route('dashboard.accounts.festivals.timeline.show', [$account, $edition, $inactive]), false);
         $festivalStartDateTime = $edition->starts_at->timezone($edition->timezone)->format('Y-m-d\TH:i');
         $response->assertSee('name="starts_at" value="'.$festivalStartDateTime.'"', false)
             ->assertSee('name="ends_at" value="'.$festivalStartDateTime.'"', false);

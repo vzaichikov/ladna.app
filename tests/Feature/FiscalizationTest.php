@@ -8,6 +8,7 @@ use App\Actions\Festivals\CompleteFestivalEditionPurchase;
 use App\Actions\Payments\CompleteCustomerPurchase;
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\CustomerPurchaseStatus;
+use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FiscalReceiptStatus;
 use App\Enums\IntegrationCategory;
@@ -23,8 +24,12 @@ use App\Models\CustomerPurchaseRefund;
 use App\Models\Event;
 use App\Models\EventTicketType;
 use App\Models\FestivalAdmissionType;
+use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
+use App\Models\FestivalEntry;
+use App\Models\FestivalPaymentAttempt;
+use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTariffPackage;
 use App\Models\FestivalTicketOrder;
@@ -231,6 +236,57 @@ class FiscalizationTest extends TestCase
             && data_get($request->data(), 'delivery.email') === 'festival-receipt-owner@example.com');
     }
 
+    public function test_paid_festival_entry_charge_is_fiscalized_for_the_applicant(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $this->enableAccountFiscalization($account);
+        $series = FestivalSeries::factory()->for($account)->create();
+        $edition = FestivalEdition::factory()->published()->for($series)->create(['account_id' => $account->id]);
+        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'email' => 'festival-applicant@example.com',
+            'phone' => '+380501112233',
+        ]);
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+        ]);
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'code' => 'FCH-FISCAL-'.$entry->id,
+            'kind' => 'qualification',
+            'name' => 'Festival qualification fee',
+            'amount_cents' => 25000,
+            'currency' => 'UAH',
+        ]);
+        $attempt = FestivalPaymentAttempt::query()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'provider' => IntegrationProvider::Monopay->value,
+            'order_id' => 'FCHP-FISCAL-'.$entry->id,
+            'amount_cents' => 25000,
+            'currency' => 'UAH',
+            'expires_at' => now()->addMinutes(30),
+        ]);
+        $this->fakeCheckboxSuccess('FN-FESTIVAL-ENTRY-1');
+
+        $completed = app(FestivalPaymentService::class)->completeAttempt(
+            $attempt,
+            $this->paidCallback($attempt->order_id, $attempt->amount_cents, $attempt->currency),
+        );
+
+        $receipt = $completed->fiscalReceipt()->firstOrFail();
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt->status);
+        $this->assertSame('FN-FESTIVAL-ENTRY-1', $receipt->fiscal_number);
+        $this->assertSame(IntegrationScope::Account, $receipt->scope_type);
+        $this->assertSame($account->id, $receipt->scope_id);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'goods.0.good.name') === 'Festival qualification fee'
+            && data_get($request->data(), 'delivery.email') === 'festival-applicant@example.com'
+            && data_get($request->data(), 'delivery.phone') === '+380501112233');
+    }
+
     public function test_paid_event_order_is_fiscalized_with_event_and_buyer_snapshots(): void
     {
         $account = Account::factory()->create();
@@ -416,6 +472,50 @@ class FiscalizationTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertSame('FN-FESTIVAL-RECOVERY-1', $order->fiscalReceipt()->firstOrFail()->fiscal_number);
+    }
+
+    public function test_fiscalization_command_recovers_an_eligible_paid_festival_entry_charge(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $this->enableAccountFiscalization($account);
+        $series = FestivalSeries::factory()->for($account)->create();
+        $edition = FestivalEdition::factory()->published()->for($series)->create(['account_id' => $account->id]);
+        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'email' => 'festival-recovery@example.com',
+        ]);
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+        ]);
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'code' => 'FCH-FISCAL-RECOVERY-'.$entry->id,
+            'kind' => 'qualification',
+            'name' => 'Festival recovery fee',
+            'amount_cents' => 25000,
+            'currency' => 'UAH',
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        $attempt = FestivalPaymentAttempt::query()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'provider' => IntegrationProvider::Monopay->value,
+            'order_id' => 'FCHP-FISCAL-RECOVERY-'.$entry->id,
+            'status' => FestivalPaymentStatus::Paid->value,
+            'amount_cents' => 25000,
+            'currency' => 'UAH',
+            'paid_at' => now(),
+        ]);
+        $this->fakeCheckboxSuccess('FN-FESTIVAL-ENTRY-RECOVERY-1');
+
+        $this->artisan('payments:fiscalize', ['account' => $account->id])
+            ->expectsOutputToContain("[festival-entry] #{$attempt->id} {$attempt->order_id}: fiscalized (FN-FESTIVAL-ENTRY-RECOVERY-1).")
+            ->assertExitCode(0);
+
+        $this->assertSame('FN-FESTIVAL-ENTRY-RECOVERY-1', $attempt->fiscalReceipt()->firstOrFail()->fiscal_number);
     }
 
     public function test_command_fiscalizes_eligible_paid_payments_for_account(): void

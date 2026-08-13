@@ -86,7 +86,10 @@ class SendFestivalNotification implements ShouldQueue
                     return;
                 }
                 $actionLabel = __('app.festival_open_tickets', locale: $locale);
-                $actionUrl = route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);
+                $actionUrl = $notification->festival_portal_user_id !== null
+                    && $notification->festival_portal_user_id === $order->festival_portal_user_id
+                    ? route('festival.portal.guest.dashboard', $account->slug)
+                    : route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);
             }
             Mail::to($notification->recipient_email)->send(new FestivalPortalMail(
                 subjectLine: (string) ($notification->subject ?? __('app.festival_notification_subject', locale: $locale)),

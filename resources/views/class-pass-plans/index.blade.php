@@ -145,10 +145,12 @@
                                 <h3 class="font-semibold text-slate-950">{{ $classPassPlan->name }}</h3>
                                 <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                                     <span>{{ $classPassPlan->slug }}</span>
-                                    <x-ui.entity-scope-badge
-                                        :label="$classPassPlanLocationLabels[$classPassPlan->id]"
-                                        variant="location"
-                                    />
+                                    @if ($hasMultipleWorkingLocations)
+                                        <x-ui.entity-scope-badge
+                                            :label="$classPassPlanLocationLabels[$classPassPlan->id]"
+                                            variant="location"
+                                        />
+                                    @endif
                                     @if ($classPassPlan->is_trial)
                                         <span class="crm-status-scheduled">{{ __('app.trial_class_pass_short') }}</span>
                                     @endif

@@ -177,6 +177,7 @@ class FestivalPortalUserController extends Controller
     /** @param array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} $permissions */
     private function authorizeRole(FestivalPortalRole $role, array $permissions): void
     {
+        abort_if($role === FestivalPortalRole::Guest, 404);
         abort_unless($role === FestivalPortalRole::Judge ? $permissions['manage'] : $permissions['registrations'], 403);
     }
 

@@ -6,6 +6,11 @@
     $latest = $requirement->submissions->first();
     $currentValue = $latest?->value_json['value'] ?? null;
     $isRejected = $requirement->status === \App\Enums\FestivalRequirementStatus::Rejected;
+    $requirementMutable = $selectedState['requirement_mutability'][$requirement->id] ?? $selectedState['mutable'];
+    $requirementBlocking = $definition->is_required || $inputType === \App\Enums\FestivalRequirementInputType::Agreement;
+    $requirementComplete = $selectedState['requirement_completeness'][$requirement->id] ?? false;
+    $editableUntil = $selectedState['editable_until'][$requirement->id] ?? null;
+    $dueAt = $selectedState['due_at'][$requirement->id] ?? null;
     $statusClass = match ($requirement->status) {
         \App\Enums\FestivalRequirementStatus::Missing,
         \App\Enums\FestivalRequirementStatus::Rejected => 'crm-status-danger',
@@ -18,6 +23,8 @@
 <article
     data-festival-requirement-card
     data-festival-requirement-id="{{ $requirement->id }}"
+    data-festival-requirement-blocking="{{ $requirementBlocking ? 'true' : 'false' }}"
+    data-festival-requirement-complete="{{ $requirementComplete ? 'true' : 'false' }}"
     class="rounded-xl border p-4 {{ $isRejected ? 'border-rose-300 bg-rose-50' : 'border-stone-200 bg-white' }}"
 >
     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -35,7 +42,18 @@
         <p class="mt-3 whitespace-pre-line text-sm font-semibold text-rose-700">{{ $requirement->review_notes }}</p>
     @endif
 
-    @if ($selectedState['mutable'])
+    @if ($editableUntil)
+        <p class="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800">
+            {{ __('app.festival_field_editable_until', ['date' => $editableUntil->timezone($entry->edition->timezone)->format('d.m.Y H:i')]) }}
+        </p>
+    @endif
+    @if ($dueAt && !$requirement->hasSubmittedResponse())
+        <p class="mt-3 text-sm font-semibold {{ $dueAt->isPast() ? 'text-rose-700' : 'text-slate-600' }}">
+            {{ __('app.festival_field_due_at', ['date' => $dueAt->timezone($entry->edition->timezone)->format('d.m.Y H:i')]) }}
+        </p>
+    @endif
+
+    @if ($requirementMutable)
         @if ($inputType === \App\Enums\FestivalRequirementInputType::File)
             <form method="POST" enctype="multipart/form-data" action="{{ route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]) }}" data-async-form class="mt-4">
                 @csrf
@@ -88,7 +106,6 @@
                                 name="value"
                                 value="1"
                                 @checked($currentValue === true || $currentValue === 1 || $currentValue === '1')
-                                @required($definition->is_required)
                                 data-async-submit-on-change
                                 class="crm-checkbox"
                             >

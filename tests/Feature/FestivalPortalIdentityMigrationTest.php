@@ -85,24 +85,22 @@ class FestivalPortalIdentityMigrationTest extends TestCase
         $this->assertNull($second->refresh()->phone_normalized);
     }
 
-    public function test_email_phone_and_google_identities_are_unique_per_account_but_reusable_across_accounts(): void
+    public function test_email_phone_and_google_identities_are_unique_per_account_and_role(): void
     {
         $firstAccount = Account::factory()->create(['enable_festivals' => true]);
         $secondAccount = Account::factory()->create(['enable_festivals' => true]);
-        FestivalPortalUser::factory()->for($firstAccount)->create([
+        $identity = [
             'email' => 'identity@example.com',
             'email_normalized' => 'identity@example.com',
             'phone' => '+380501112233',
             'phone_normalized' => '+380501112233',
             'google_id' => 'google-identity',
-        ]);
-        FestivalPortalUser::factory()->for($secondAccount)->create([
-            'email' => 'identity@example.com',
-            'email_normalized' => 'identity@example.com',
-            'phone' => '+380501112233',
-            'phone_normalized' => '+380501112233',
-            'google_id' => 'google-identity',
-        ]);
+        ];
+        FestivalPortalUser::factory()->for($firstAccount)->create($identity);
+        FestivalPortalUser::factory()->guest()->for($firstAccount)->create($identity);
+        FestivalPortalUser::factory()->for($secondAccount)->create($identity);
+
+        $this->assertSame(2, FestivalPortalUser::query()->whereBelongsTo($firstAccount)->where('email_normalized', 'identity@example.com')->count());
 
         $duplicates = [
             [
@@ -131,7 +129,7 @@ class FestivalPortalIdentityMigrationTest extends TestCase
         foreach ($duplicates as $attributes) {
             try {
                 FestivalPortalUser::factory()->for($firstAccount)->create($attributes);
-                $this->fail('A duplicate account-scoped Festival identity was accepted.');
+                $this->fail('A duplicate account-and-role-scoped Festival identity was accepted.');
             } catch (QueryException) {
                 $this->addToAssertionCount(1);
             }

@@ -10,6 +10,7 @@ use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalQualificationStatus;
+use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
 use App\Http\Requests\FestivalChargeDefinitionRequest;
 use App\Http\Requests\FestivalEditionRequest;
@@ -162,7 +163,7 @@ class FestivalStaffController extends Controller
                     ->count()
                 : null,
             'entriesAwaitingReview' => $permissions['registrations']
-                ? FestivalEntry::query()->where('festival_edition_id', $festivalEdition->id)->whereIn('status', [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value])->count()
+                ? FestivalEntry::query()->where('festival_edition_id', $festivalEdition->id)->whereIn('status', [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value, FestivalEntryStatus::ChangesPending->value])->count()
                 : null,
             'requirementsAwaitingReview' => $permissions['registrations']
                 ? $festivalEdition->festivalEntryRequirements()->where((new FestivalEntryRequirement)->qualifyColumn('status'), FestivalRequirementStatus::Submitted->value)->count()
@@ -329,6 +330,10 @@ class FestivalStaffController extends Controller
         $data = $request->validate(['status' => ['required', Rule::in([FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Rejected->value, FestivalRequirementStatus::Waived->value])], 'review_notes' => ['nullable', 'string', 'max:5000']]);
         DB::transaction(function () use ($festivalEntryRequirement, $request, $data, $activity, $festivalEdition): void {
             $requirement = FestivalEntryRequirement::query()->with(['definition', 'submissions'])->whereKey($festivalEntryRequirement->id)->lockForUpdate()->firstOrFail();
+            if ($data['status'] === FestivalRequirementStatus::Waived->value
+                && $requirement->definition->input_type === FestivalRequirementInputType::Agreement) {
+                throw ValidationException::withMessages(['status' => __('app.festival_condition_confirmation_cannot_be_waived')]);
+            }
             if ($data['status'] === FestivalRequirementStatus::Accepted->value && ! $requirement->hasSubmittedResponse()) {
                 throw ValidationException::withMessages(['status' => __('app.festival_requirement_response_missing')]);
             }
@@ -380,7 +385,7 @@ class FestivalStaffController extends Controller
         }, 3);
 
         if ($request->expectsJson()) {
-            $festivalCharge->refresh()->load('paymentAttempts');
+            $festivalCharge->refresh()->load('paymentAttempts.fiscalReceipt');
 
             return response()->json([
                 'message' => __('app.festival_charge_reviewed'),

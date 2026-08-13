@@ -42,7 +42,7 @@ class FestivalEntryStepController extends Controller
         ]);
     }
 
-    public function storeResponse(FestivalEntryStepRequest $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryStep $festivalEntryStep, FestivalEntryRequirement $festivalEntryRequirement, StoreFestivalResponse $store): JsonResponse|RedirectResponse
+    public function storeResponse(FestivalEntryStepRequest $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryStep $festivalEntryStep, FestivalEntryRequirement $festivalEntryRequirement, StoreFestivalResponse $store, FestivalEntryWorkflowState $workflowState): JsonResponse|RedirectResponse
     {
         [, $portalUser] = $this->portalContext($request, $accountSlug);
         $this->assertPortalEntry($festivalEntry, $festivalEntryStep, $portalUser);
@@ -51,6 +51,9 @@ class FestivalEntryStepController extends Controller
 
         if ($request->expectsJson()) {
             $festivalEntryRequirement->refresh()->load(['definition', 'participant', 'submissions']);
+            $festivalEntry->refresh()->load($this->entryRelations());
+            $selectedStep = $festivalEntry->steps->firstWhere('id', $festivalEntryStep->id);
+            $selectedState = $workflowState->forEntry($festivalEntry)->first(fn (array $state): bool => $state['step']->is($selectedStep));
 
             return response()->json([
                 'message' => __('app.festival_response_saved'),
@@ -59,8 +62,8 @@ class FestivalEntryStepController extends Controller
                     'account' => $request->attributes->get('festivalAccount'),
                     'portalUser' => $portalUser,
                     'entry' => $festivalEntry,
-                    'selectedStep' => $festivalEntryStep,
-                    'selectedState' => ['mutable' => true],
+                    'selectedStep' => $selectedStep,
+                    'selectedState' => $selectedState,
                     'requirement' => $festivalEntryRequirement,
                 ])->render(),
             ]);
@@ -99,7 +102,7 @@ class FestivalEntryStepController extends Controller
             ];
 
             if ($request->user()?->can('manageFestivalFinance', $account)) {
-                $festivalEntry->load('charges.paymentAttempts');
+                $festivalEntry->load('charges.paymentAttempts.fiscalReceipt');
                 $fragments[] = view('festivals.staff._application-charges', [
                     'account' => $account,
                     'edition' => $festivalEdition,
@@ -136,7 +139,7 @@ class FestivalEntryStepController extends Controller
             ];
 
             if ($request->user()?->can('manageFestivalFinance', $account)) {
-                $festivalEntry->load('charges.paymentAttempts');
+                $festivalEntry->load('charges.paymentAttempts.fiscalReceipt');
                 $fragments[] = view('festivals.staff._application-charges', [
                     'account' => $account,
                     'edition' => $festivalEdition,

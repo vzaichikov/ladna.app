@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.131.0',
+                'date' => '2026-08-13',
+                'title' => 'Live Festival operations and protected online viewing',
+                'items' => ['Festival teams can run synchronized real-time timelines for multiple scenes, adjust the live order, pause or resume operations, and publish current and next timings to visitors.', 'Guest ticket cabinets now support protected live-stream admission with revocable tickets and viewer devices. Streaming remains unavailable until Ladna\'s dedicated infrastructure is configured.', 'Festival registration and payments now provide clearer completion rules, correction windows, participant phone verification, payment and fiscal details, and polished public and Help presentation.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.130.0',
                 'date' => '2026-08-13',
                 'title' => 'Clearer Festival registration and public discovery',
@@ -1143,6 +1150,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.131.0',
+                'date' => '2026-08-13',
+                'title' => 'Живе керування фестивалем і захищений онлайн-перегляд',
+                'items' => ['Команда фестивалю може вести синхронні таймлайни кількох сцен, змінювати порядок наживо, ставити перебіг на паузу й відновлювати його, а також показувати глядачам поточний і наступний час.', 'Кабінет глядача підтримує захищені онлайн-квитки, відкликання доступу та керування пристроями. Трансляція залишається недоступною, доки для Ladna не налаштовано окрему інфраструктуру.', 'Реєстрація й оплати фестивалю отримали чіткіші правила завершення, строки виправлень, підтвердження телефону учасника, дані про оплату й фіскалізацію та оновлені публічні сторінки й довідку.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.130.0',
                 'date' => '2026-08-13',

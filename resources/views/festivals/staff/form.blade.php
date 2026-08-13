@@ -176,7 +176,7 @@
                 <label class="block">
                     <span class="crm-label">{{ __('app.status') }}</span>
                     <select name="status" class="crm-field">
-                        @foreach(\App\Enums\FestivalEditionStatus::cases() as $status)
+                        @foreach(collect(\App\Enums\FestivalEditionStatus::cases())->reject(fn ($status) => $status === \App\Enums\FestivalEditionStatus::InProgress && $edition->status !== \App\Enums\FestivalEditionStatus::InProgress) as $status)
                             <option value="{{ $status->value }}" @selected(old('status', $edition->status?->value ?? 'draft') === $status->value)>{{ __('app.festival_status_'.$status->value) }}</option>
                         @endforeach
                     </select>

@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Models\Account;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class FestivalAdmissionTypeRequest extends FormRequest
 {
@@ -17,11 +19,12 @@ class FestivalAdmissionTypeRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, array<int, string>>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
         return [
+            'delivery_mode' => ['required', Rule::enum(FestivalAdmissionDeliveryMode::class)],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:3000'],
             'inventory' => ['required', 'integer', 'min:1', 'max:1000000'],
@@ -38,6 +41,9 @@ class FestivalAdmissionTypeRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge(['is_active' => $this->boolean('is_active')]);
+        $this->merge([
+            'delivery_mode' => $this->input('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value),
+            'is_active' => $this->boolean('is_active'),
+        ]);
     }
 }

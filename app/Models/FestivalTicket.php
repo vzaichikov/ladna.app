@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['account_id', 'festival_edition_id', 'festival_ticket_order_id', 'festival_ticket_order_item_id', 'festival_admission_type_id', 'code', 'token_encrypted', 'token_hash', 'status', 'is_checked_in', 'checked_in_at', 'voided_by', 'voided_at', 'void_reason'])]
 #[Hidden(['token_encrypted', 'token_hash'])]
@@ -43,5 +44,10 @@ class FestivalTicket extends Model
     public function scans(): HasMany
     {
         return $this->hasMany(FestivalTicketScan::class);
+    }
+
+    public function streamEntitlement(): HasOne
+    {
+        return $this->hasOne(FestivalStreamEntitlement::class);
     }
 }

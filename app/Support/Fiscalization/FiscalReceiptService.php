@@ -7,6 +7,7 @@ use App\Enums\AccountSubscriptionPaymentStatus;
 use App\Enums\CustomerPurchaseStatus;
 use App\Enums\EventOrderStatus;
 use App\Enums\FestivalEditionPurchaseStatus;
+use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FiscalReceiptStatus;
 use App\Enums\IntegrationScope;
@@ -16,6 +17,7 @@ use App\Models\CustomerPurchase;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\FestivalEditionPurchase;
+use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalTicketOrder;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
@@ -31,7 +33,7 @@ class FiscalReceiptService
         private readonly CheckboxFiscalizationClient $checkbox,
     ) {}
 
-    public function skipReasonFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): ?string
+    public function skipReasonFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): ?string
     {
         $payment->loadMissing('account');
 
@@ -101,7 +103,12 @@ class FiscalReceiptService
         return $this->fiscalizePayment($order);
     }
 
-    public function fiscalizePayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): ?FiscalReceipt
+    public function fiscalizeFestivalPaymentAttempt(FestivalPaymentAttempt $attempt): ?FiscalReceipt
+    {
+        return $this->fiscalizePayment($attempt);
+    }
+
+    public function fiscalizePayment(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): ?FiscalReceipt
     {
         $receipt = null;
 
@@ -141,7 +148,7 @@ class FiscalReceiptService
         }
     }
 
-    private function paymentIsPaid(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): bool
+    private function paymentIsPaid(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): bool
     {
         return match (true) {
             $payment instanceof CustomerPurchase => $payment->status === CustomerPurchaseStatus::PaymentPaid,
@@ -151,10 +158,11 @@ class FiscalReceiptService
             $payment instanceof AccountSubscriptionPayment => $payment->status === AccountSubscriptionPaymentStatus::PaymentPaid,
             $payment instanceof SmsTopUpPayment => $payment->status === SmsTopUpPaymentStatus::PaymentPaid,
             $payment instanceof FestivalEditionPurchase => in_array($payment->status, [FestivalEditionPurchaseStatus::Available, FestivalEditionPurchaseStatus::Redeemed], true),
+            $payment instanceof FestivalPaymentAttempt => $payment->status === FestivalPaymentStatus::Paid,
         };
     }
 
-    private function receiptFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment, IntegrationSetting $setting): FiscalReceipt
+    private function receiptFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment, IntegrationSetting $setting): FiscalReceipt
     {
         return DB::transaction(function () use ($payment, $setting): FiscalReceipt {
             $receipt = FiscalReceipt::query()
@@ -185,7 +193,7 @@ class FiscalReceiptService
         });
     }
 
-    private function markSending(FiscalReceipt $receipt, CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): FiscalReceipt
+    private function markSending(FiscalReceipt $receipt, CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): FiscalReceipt
     {
         $externalUuid = (string) Str::uuid();
 
@@ -237,7 +245,7 @@ class FiscalReceiptService
     /**
      * @return array<string, mixed>
      */
-    private function payloadFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment, string $externalUuid): array
+    private function payloadFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment, string $externalUuid): array
     {
         $name = $this->itemName($payment);
         $isReturn = $payment instanceof CustomerPurchaseRefund;
@@ -276,7 +284,7 @@ class FiscalReceiptService
         return $payload;
     }
 
-    private function itemName(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): string
+    private function itemName(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): string
     {
         if ($payment instanceof CustomerPurchaseRefund) {
             $payment->loadMissing('customerPurchase');
@@ -310,6 +318,12 @@ class FiscalReceiptService
             return Str::limit('Ladna Festival · '.$payment->package->name, 128, '');
         }
 
+        if ($payment instanceof FestivalPaymentAttempt) {
+            $payment->loadMissing('charge');
+
+            return Str::limit($payment->charge?->name ?: __('app.festival_payments'), 128, '');
+        }
+
         $payment->loadMissing('plan');
         $planName = $payment->plan_name_snapshot ?: $payment->plan?->name ?: __('app.subscription_plan');
         $locations = $payment->billable_location_count
@@ -322,7 +336,7 @@ class FiscalReceiptService
     /**
      * @return array<string, string>
      */
-    private function deliveryFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): array
+    private function deliveryFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): array
     {
         if ($payment instanceof CustomerPurchaseRefund) {
             $payment->loadMissing('customerPurchase.customer');
@@ -337,6 +351,15 @@ class FiscalReceiptService
             return array_filter([
                 'email' => $payment->buyer_email,
                 'phone' => $payment->buyer_phone,
+            ]);
+        }
+
+        if ($payment instanceof FestivalPaymentAttempt) {
+            $payment->loadMissing('charge.entry.portalUser');
+
+            return array_filter([
+                'email' => $payment->charge?->entry?->portalUser?->email,
+                'phone' => $payment->charge?->entry?->portalUser?->phone,
             ]);
         }
 
@@ -382,12 +405,12 @@ class FiscalReceiptService
         return is_string($label) ? $label : $provider;
     }
 
-    private function paymentAccountId(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): ?int
+    private function paymentAccountId(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): ?int
     {
         return $payment->account_id ? (int) $payment->account_id : null;
     }
 
-    private function paymentReference(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder $payment): string
+    private function paymentReference(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): string
     {
         if ($payment instanceof CustomerPurchaseRefund) {
             $payment->loadMissing('customerPurchase');

@@ -23,7 +23,7 @@ class StoreFestivalPortalUserRequest extends FormRequest
         $account = $this->route('account');
         $role = FestivalPortalRole::tryFrom((string) $this->route('role'));
 
-        return $account instanceof Account && $role !== null && (bool) $this->user()?->can(
+        return $account instanceof Account && in_array($role, [FestivalPortalRole::Registrant, FestivalPortalRole::Judge], true) && (bool) $this->user()?->can(
             $role === FestivalPortalRole::Judge ? 'manageFestivals' : 'manageFestivalRegistrations',
             $account,
         );
@@ -50,7 +50,9 @@ class StoreFestivalPortalUserRequest extends FormRequest
                 'email',
                 'max:255',
                 Rule::unique((new FestivalPortalUser)->getTable(), 'email_normalized')
-                    ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0)),
+                    ->where(fn ($query) => $query
+                        ->where('account_id', $account instanceof Account ? $account->id : 0)
+                        ->where('role', $role?->value)),
             ],
             'email_normalized' => ['required'],
             'phone' => [
@@ -59,7 +61,9 @@ class StoreFestivalPortalUserRequest extends FormRequest
                 'string',
                 'max:50',
                 Rule::unique((new FestivalPortalUser)->getTable(), 'phone_normalized')
-                    ->where(fn ($query) => $query->where('account_id', $account instanceof Account ? $account->id : 0)),
+                    ->where(fn ($query) => $query
+                        ->where('account_id', $account instanceof Account ? $account->id : 0)
+                        ->where('role', $role?->value)),
             ],
             'phone_normalized' => ['nullable'],
             'registrant_type' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases())],

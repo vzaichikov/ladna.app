@@ -2,7 +2,6 @@
 
 namespace App\Actions\Festivals;
 
-use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
@@ -15,6 +14,7 @@ use App\Models\FestivalCategory;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
+use App\Support\Festivals\FestivalEntryStepCompletion;
 use App\Support\Festivals\FestivalEntryWorkflowState;
 use App\Support\Festivals\FestivalRuleRegistry;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +24,7 @@ class SubmitFestivalEntryStep
 {
     public function __construct(
         private readonly FestivalEntryWorkflowState $workflowState,
+        private readonly FestivalEntryStepCompletion $completion,
         private readonly FestivalRuleRegistry $rules,
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalNotificationOutbox $notifications,
@@ -46,8 +47,8 @@ class SubmitFestivalEntryStep
             $entry->setRelation('category', $category);
             $step = FestivalEntryStep::query()->with(['workflowStep', 'requirements.definition', 'requirements.submissions', 'charges'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
             $this->workflowState->assertMutable($entry, $step);
-            $this->assertRequirementsComplete($step);
-            $this->assertChargesPaid($step);
+            $this->completion->assertRequirementsComplete($step);
+            $this->completion->assertChargesComplete($step);
 
             $this->reserveTrack->execute($entry, $step);
 
@@ -55,7 +56,8 @@ class SubmitFestivalEntryStep
                 $this->submitApplication($entry, $purchase);
             }
 
-            $automatic = $step->workflowStep->review_mode === FestivalWorkflowReviewMode::Automatic;
+            $postConfirmationReview = $entry->status === FestivalEntryStatus::ChangesPending;
+            $automatic = ! $postConfirmationReview && $step->workflowStep->review_mode === FestivalWorkflowReviewMode::Automatic;
             $step->forceFill([
                 'status' => $automatic ? FestivalEntryStepStatus::Approved : FestivalEntryStepStatus::Submitted,
                 'submitted_at' => now(),
@@ -76,7 +78,7 @@ class SubmitFestivalEntryStep
                     'registration_completed_at' => now(),
                 ])->save();
                 $this->notifications->queueForEntry($entry, 'entry_reviewed', ['entry_code' => $entry->code, 'status' => FestivalEntryStatus::Accepted->value]);
-            } elseif ($entry->status !== FestivalEntryStatus::Submitted) {
+            } elseif (! $postConfirmationReview && $entry->status !== FestivalEntryStatus::Submitted) {
                 $entry->forceFill(['status' => FestivalEntryStatus::UnderReview])->save();
             }
 
@@ -84,27 +86,6 @@ class SubmitFestivalEntryStep
 
             return $step->refresh();
         }, 3);
-    }
-
-    private function assertRequirementsComplete(FestivalEntryStep $step): void
-    {
-        $missing = $step->requirements
-            ->contains(fn ($requirement): bool => $requirement->definition->is_required
-                && $requirement->status !== FestivalRequirementStatus::Waived
-                && (! in_array($requirement->status, [FestivalRequirementStatus::Submitted, FestivalRequirementStatus::Accepted], true)
-                    || ! $requirement->hasSubmittedResponse()));
-
-        if ($missing) {
-            throw ValidationException::withMessages(['step' => __('app.festival_step_requirements_incomplete')]);
-        }
-    }
-
-    private function assertChargesPaid(FestivalEntryStep $step): void
-    {
-        $blocking = $step->charges->contains(fn ($charge): bool => ! in_array($charge->status, [FestivalChargeStatus::Paid, FestivalChargeStatus::Cancelled], true));
-        if ($blocking) {
-            throw ValidationException::withMessages(['step' => __('app.festival_step_payment_required')]);
-        }
     }
 
     private function submitApplication(FestivalEntry $entry, ?FestivalEditionPurchase $purchase): void
@@ -117,7 +98,7 @@ class SubmitFestivalEntryStep
         }
 
         $entry->forceFill([
-            'status' => FestivalEntryStatus::Submitted,
+            'status' => $entry->status === FestivalEntryStatus::ChangesPending ? FestivalEntryStatus::ChangesPending : FestivalEntryStatus::Submitted,
             'qualification_status' => $entry->steps->contains(fn (FestivalEntryStep $step): bool => $step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification) ? FestivalQualificationStatus::Pending : FestivalQualificationStatus::NotRequired,
             'submitted_at' => $entry->submitted_at ?? now(),
         ])->save();
@@ -131,7 +112,7 @@ class SubmitFestivalEntryStep
     private function assertParticipantLimits(FestivalEntry $entry, ?FestivalEditionPurchase $purchase): void
     {
         $participantIds = $entry->participants->modelKeys();
-        $activeStatuses = [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value, FestivalEntryStatus::Accepted->value];
+        $activeStatuses = [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value, FestivalEntryStatus::ChangesPending->value, FestivalEntryStatus::Accepted->value];
 
         if ($entry->edition->max_entries_per_participant !== null) {
             $counts = DB::table('festival_entry_participant')

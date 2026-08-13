@@ -44,7 +44,13 @@ class SaveFestivalEdition
             )
             : (string) $edition->slug;
 
-        if ($edition?->exists && ! $edition->status->canTransitionTo(FestivalEditionStatus::from($input['status']))) {
+        $nextStatus = FestivalEditionStatus::from($input['status']);
+
+        if ($nextStatus === FestivalEditionStatus::InProgress && (! $edition?->exists || $edition->status !== FestivalEditionStatus::InProgress)) {
+            throw ValidationException::withMessages(['status' => __('app.festival_status_in_progress_requires_start')]);
+        }
+
+        if ($edition?->exists && ! $edition->status->canTransitionTo($nextStatus)) {
             throw ValidationException::withMessages(['status' => __('app.festival_status_transition_invalid')]);
         }
 

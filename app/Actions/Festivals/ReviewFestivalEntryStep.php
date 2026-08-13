@@ -2,6 +2,7 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalQualificationStatus;
@@ -9,6 +10,7 @@ use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalWorkflowReviewEffect;
 use App\Models\FestivalEntryStep;
 use App\Models\User;
+use App\Support\Festivals\FestivalEntryStepCompletion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -18,6 +20,8 @@ class ReviewFestivalEntryStep
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalNotificationOutbox $notifications,
         private readonly ActivateFestivalParticipationCharges $activateParticipationCharges,
+        private readonly FestivalEntryStepCompletion $completion,
+        private readonly ReserveFestivalEntryTrack $reserveTrack,
     ) {}
 
     /** @param array<string, string> $requirementNotes */
@@ -36,13 +40,14 @@ class ReviewFestivalEntryStep
         return DB::transaction(function () use ($step, $reviewer, $decision, $comment, $correctionDueAt, $requirementNotes): FestivalEntryStep {
             $step = FestivalEntryStep::query()->with(['workflowStep', 'entry.edition', 'entry.portalUser', 'entry.steps.workflowStep', 'requirements.definition', 'requirements.submissions'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
             abort_unless($step->status === FestivalEntryStepStatus::Submitted, 409);
+            $postConfirmationReview = $step->entry->status === FestivalEntryStatus::ChangesPending;
 
-            if ($decision === 'approve' && $step->requirements->contains(
-                fn ($requirement): bool => $requirement->definition?->is_required
-                    && $requirement->status !== FestivalRequirementStatus::Waived
-                    && ! $requirement->hasSubmittedResponse(),
-            )) {
+            if ($decision === 'approve' && ! $this->completion->requirementsComplete($step)) {
                 throw ValidationException::withMessages(['decision' => __('app.festival_step_requirements_incomplete')]);
+            }
+
+            if ($decision === 'approve' && $postConfirmationReview) {
+                $this->reserveTrack->execute($step->entry, $step);
             }
 
             foreach ($step->requirements as $requirement) {
@@ -61,23 +66,30 @@ class ReviewFestivalEntryStep
 
             if ($decision === 'approve') {
                 $step->forceFill(['status' => FestivalEntryStepStatus::Approved, 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_notes' => $comment, 'correction_due_at' => null])->save();
-                if ($step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification) {
+                if (! $postConfirmationReview && $step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification) {
                     $step->entry->forceFill(['qualification_status' => FestivalQualificationStatus::Passed, 'status' => FestivalEntryStatus::UnderReview])->save();
                     $this->activateParticipationCharges->execute($step->entry, $step->reviewed_at ?? now());
                 }
+                if ($postConfirmationReview
+                    && $step->entry->steps()->where('status', '!=', FestivalEntryStepStatus::Approved->value)->doesntExist()
+                    && $step->entry->charges()->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value])->doesntExist()) {
+                    $step->entry->forceFill(['status' => FestivalEntryStatus::Accepted])->save();
+                }
             } elseif ($decision === 'request_changes') {
                 $step->forceFill(['status' => FestivalEntryStepStatus::ChangesRequested, 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_notes' => $comment, 'correction_due_at' => $correctionDueAt])->save();
-                $step->entry->steps()
-                    ->whereHas('workflowStep', fn ($query) => $query->where('sort_order', '>', $step->workflowStep->sort_order))
-                    ->where('status', '!=', FestivalEntryStepStatus::Draft->value)
-                    ->update([
-                        'status' => FestivalEntryStepStatus::Draft->value,
-                        'submitted_at' => null,
-                        'reviewed_at' => null,
-                        'reviewed_by' => null,
-                        'review_notes' => null,
-                    ]);
-                if ($step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification) {
+                if (! $postConfirmationReview) {
+                    $step->entry->steps()
+                        ->whereHas('workflowStep', fn ($query) => $query->where('sort_order', '>', $step->workflowStep->sort_order))
+                        ->where('status', '!=', FestivalEntryStepStatus::Draft->value)
+                        ->update([
+                            'status' => FestivalEntryStepStatus::Draft->value,
+                            'submitted_at' => null,
+                            'reviewed_at' => null,
+                            'reviewed_by' => null,
+                            'review_notes' => null,
+                        ]);
+                }
+                if (! $postConfirmationReview && $step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification) {
                     $step->entry->forceFill(['qualification_status' => FestivalQualificationStatus::Pending, 'status' => FestivalEntryStatus::Submitted])->save();
                 }
             } else {

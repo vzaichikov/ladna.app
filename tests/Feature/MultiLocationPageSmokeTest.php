@@ -70,7 +70,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(171, $classifiedRouteNames);
+        $this->assertCount(175, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -492,6 +492,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.judging.score-sheets.index' => 'festival_edition',
             'dashboard.accounts.festivals.judging.score-sheets.edit' => 'festival_score_sheet',
             'dashboard.accounts.festivals.judging.results.index' => 'festival_edition',
+            'dashboard.accounts.festivals.online-stream.edit' => 'festival_edition',
             'dashboard.accounts.festivals.program' => 'festival_edition',
             'dashboard.accounts.festivals.performances' => 'festival_edition',
             'dashboard.accounts.festivals.performances.show' => 'festival_entry',
@@ -530,6 +531,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.settings.workflows' => 'festival_edition',
             'dashboard.accounts.festivals.show' => 'festival_edition',
             'dashboard.accounts.festivals.tickets' => 'festival_edition',
+            'dashboard.accounts.festivals.timeline.show' => 'festival_stage',
             'dashboard.accounts.festivals.users.create' => 'festival_edition',
             'dashboard.accounts.festivals.users.edit' => 'festival_portal_user',
             'dashboard.accounts.festivals.users.index' => 'festival_edition',
@@ -555,6 +557,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.submissions.download',
             'dashboard.accounts.festivals.submissions.view',
             'dashboard.accounts.festivals.judging.results.preview',
+            'dashboard.accounts.festivals.timeline.fragment',
             'dashboard.accounts.people-counter-samples.image',
             'dashboard.accounts.quick-bookings.group-availability',
             'dashboard.accounts.quick-bookings.manual-availability',
@@ -578,6 +581,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.edit',
             'dashboard.accounts.festivals.judging.index',
             'dashboard.accounts.festivals.score-sheets.edit',
+            'dashboard.accounts.festivals.timeline.index',
             'dashboard.accounts.studio-settings.index',
         ];
     }

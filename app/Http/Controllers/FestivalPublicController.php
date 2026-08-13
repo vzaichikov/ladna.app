@@ -7,9 +7,10 @@ use App\Enums\FestivalTicketStatus;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalTicketOrder;
+use App\Models\FestivalTimeline;
 use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalQrToken;
-use App\Support\Payments\PaymentGatewayRegistry;
+use App\Support\Festivals\FestivalTimelinePresenter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -29,28 +30,41 @@ class FestivalPublicController extends Controller
         Request $request,
         string $accountSlug,
         string $editionSlug,
-        PaymentGatewayRegistry $gateways,
         FestivalLandingRegistry $landingRegistry,
+        FestivalTimelinePresenter $timelinePresenter,
     ): View {
         $account = $this->account($request, $accountSlug);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)
             ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'stages', 'admissionTypes' => fn ($query) => $query->availableForSale(), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
             ->firstOrFail();
-        $providers = $gateways->availableSettingsFor($account);
         $landingTemplateKey = $landingRegistry->effectiveTemplateKey($edition, $account);
         $landingPaletteKey = $landingRegistry->effectivePaletteKey($edition);
         $landingTemplate = $landingRegistry->template($landingTemplateKey);
         $publicTemplateData = $landingTemplateKey === 'velvet_night'
             ? $this->velvetPublicContent($edition)
             : $this->emptyStructuredPublicContent($edition);
+        $timelineWithinDates = $timelinePresenter->isWithinLocalDates($edition);
+        $publicTimelines = $timelineWithinDates
+            ? FestivalTimeline::query()
+                ->where('festival_edition_id', $edition->id)
+                ->where('account_id', $account->id)
+                ->whereNotNull('started_at')
+                ->whereHas('stage', fn ($query) => $query->where('is_active', true))
+                ->with(['stage', 'edition', 'items', 'activeItem', 'lastFinishedItem'])
+                ->get()
+            : collect();
+        $publicTimelineViews = $timelinePresenter->scenes($publicTimelines, true);
+        $timelinePollingUrl = route('public.festivals.timeline', [$account->slug, $edition->slug]);
 
         return view($landingTemplate['view'], [
             ...compact(
                 'account',
                 'edition',
-                'providers',
                 'landingTemplateKey',
                 'landingPaletteKey',
+                'publicTimelineViews',
+                'timelineWithinDates',
+                'timelinePollingUrl',
             ),
             ...$publicTemplateData,
         ]);

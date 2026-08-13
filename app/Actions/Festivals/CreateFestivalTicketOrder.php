@@ -2,7 +2,9 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalEditionPurchaseStatus;
+use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
@@ -22,9 +24,9 @@ class CreateFestivalTicketOrder
     public function __construct(private readonly PaymentGatewayRegistry $gateways) {}
 
     /** @param array<string, mixed> $input */
-    public function execute(FestivalEdition $edition, array $input, ?FestivalPortalUser $portalUser = null): FestivalTicketOrder
+    public function execute(FestivalEdition $edition, array $input, FestivalPortalUser $portalUser): FestivalTicketOrder
     {
-        if ($portalUser && $portalUser->account_id !== $edition->account_id) {
+        if ($portalUser->account_id !== $edition->account_id) {
             abort(404);
         }
 
@@ -34,6 +36,16 @@ class CreateFestivalTicketOrder
         }
 
         return DB::transaction(function () use ($edition, $input, $portalUser): FestivalTicketOrder {
+            $portalUser = FestivalPortalUser::query()
+                ->whereKey($portalUser->id)
+                ->where('account_id', $edition->account_id)
+                ->where('role', FestivalPortalRole::Guest->value)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->first();
+            if (! $portalUser) {
+                throw ValidationException::withMessages(['items' => __('app.festival_ticket_cabinet_required')]);
+            }
             $purchase = FestivalEditionPurchase::query()->with('package')->where('festival_edition_id', $edition->id)->lockForUpdate()->first();
             abort_if($purchase?->status === FestivalEditionPurchaseStatus::PaymentReversed, 423, __('app.festival_payment_reversed_readonly'));
             $requested = collect($input['items'])->keyBy('admission_type_id');
@@ -41,6 +53,7 @@ class CreateFestivalTicketOrder
                 ->where('festival_edition_id', $edition->id)
                 ->where('account_id', $edition->account_id)
                 ->whereKey($requested->keys())
+                ->with('onlineStream')
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
@@ -50,6 +63,38 @@ class CreateFestivalTicketOrder
             }
 
             $requestedQuantity = (int) $requested->sum(fn (array $item): int => (int) $item['quantity']);
+            $onlineTypes = $types->where('delivery_mode', FestivalAdmissionDeliveryMode::OnlineStream);
+            if ($onlineTypes->isNotEmpty()) {
+                if ($types->count() !== 1 || $requestedQuantity !== 1) {
+                    throw ValidationException::withMessages(['items' => __('app.festival_online_ticket_separate_order')]);
+                }
+
+                $onlineType = $onlineTypes->firstOrFail();
+                $stream = $onlineType->onlineStream;
+                if (! $stream || $stream->account_id !== $edition->account_id || $stream->festival_edition_id !== $edition->id) {
+                    throw ValidationException::withMessages(['items' => __('app.festival_admission_unavailable')]);
+                }
+                $stream = $stream->newQuery()->whereKey($stream->id)->lockForUpdate()->firstOrFail();
+                if (! $stream->is_enabled) {
+                    throw ValidationException::withMessages(['items' => __('app.festival_stream_disabled')]);
+                }
+                $hasExistingOnlineOrder = FestivalTicketOrder::query()
+                    ->where('festival_portal_user_id', $portalUser->id)
+                    ->where('festival_edition_id', $edition->id)
+                    ->whereHas('items.admissionType', fn ($query) => $query->where('festival_online_stream_id', $stream->id))
+                    ->where(fn ($query) => $query
+                        ->where(fn ($query) => $query
+                            ->where('status', FestivalTicketOrderStatus::Pending->value)
+                            ->where('expires_at', '>', now()))
+                        ->orWhere(fn ($query) => $query
+                            ->where('status', FestivalTicketOrderStatus::Paid->value)
+                            ->whereHas('tickets.streamEntitlement', fn ($query) => $query->where('festival_online_stream_id', $stream->id)))
+                        ->orWhere('status', FestivalTicketOrderStatus::PaidRequiresRefund->value))
+                    ->exists();
+                if ($hasExistingOnlineOrder) {
+                    throw ValidationException::withMessages(['items' => __('app.festival_online_ticket_already_owned')]);
+                }
+            }
             if ($purchase) {
                 $heldQuantity = (int) FestivalTicketOrderItem::query()
                     ->whereHas('order', fn ($query) => $query
@@ -88,13 +133,13 @@ class CreateFestivalTicketOrder
             $order = FestivalTicketOrder::query()->create([
                 'account_id' => $edition->account_id,
                 'festival_edition_id' => $edition->id,
-                'festival_portal_user_id' => $portalUser?->id,
+                'festival_portal_user_id' => $portalUser->id,
                 'provider' => $input['provider'],
                 'order_id' => 'FTO-'.Str::upper(Str::random(18)),
-                'buyer_name' => $input['buyer_name'],
-                'buyer_email' => Str::lower(trim($input['buyer_email'])),
-                'buyer_phone' => $input['buyer_phone'] ?? null,
-                'locale' => $portalUser?->locale ?? app()->getLocale(),
+                'buyer_name' => $portalUser->displayName(),
+                'buyer_email' => Str::lower(trim($portalUser->email)),
+                'buyer_phone' => $portalUser->phone,
+                'locale' => $portalUser->locale,
                 'amount_cents' => $amount,
                 'currency' => strtoupper($edition->account->default_currency),
                 'access_token_encrypted' => $accessToken,

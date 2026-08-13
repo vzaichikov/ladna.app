@@ -67,6 +67,10 @@
             <x-ui.demo-readonly-banner />
         @endif
 
+        @if (request()->routeIs('public.festivals.index', 'public.festivals.show', 'public.festival-orders.show'))
+            <x-marketing.festival-powered-banner />
+        @endif
+
         @yield('content')
 
         @unless ($isEmbedLayout)

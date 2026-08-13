@@ -4,6 +4,7 @@ namespace App\Actions\Festivals;
 
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationType;
+use App\Enums\FestivalPortalRole;
 use App\Jobs\SendFestivalNotification;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
@@ -95,8 +96,12 @@ class FestivalNotificationOutbox
     /** @param array<string, mixed> $payload */
     public function queueForTicketOrder(FestivalTicketOrder $order, array $payload, ?string $dedupeSuffix = null): FestivalNotification
     {
-        $order->loadMissing(['account', 'edition']);
+        $order->loadMissing(['account', 'edition', 'portalUser']);
         abort_unless($order->account_id === $order->edition->account_id, 404);
+        $guest = $order->portalUser?->role === FestivalPortalRole::Guest
+            && $order->portalUser->account_id === $order->account_id
+            ? $order->portalUser
+            : null;
         $type = FestivalNotificationType::TicketsIssued;
         unset($payload['action_url']);
         $payload = [
@@ -108,6 +113,7 @@ class FestivalNotificationOutbox
         $dedupeBase = implode(':', [$type->value, $order->festival_edition_id, 'order', $order->id, $dedupeSuffix ?? 'issued']);
         $attributes = [
             'account_id' => $order->account_id,
+            'festival_portal_user_id' => $guest?->id,
             'festival_edition_id' => $order->festival_edition_id,
             'festival_ticket_order_id' => $order->id,
             'type' => $type,

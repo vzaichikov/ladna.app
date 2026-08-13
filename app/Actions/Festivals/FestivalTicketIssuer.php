@@ -2,6 +2,9 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalAdmissionDeliveryMode;
+use App\Enums\FestivalPortalRole;
+use App\Models\FestivalStreamEntitlement;
 use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrder;
 use Illuminate\Support\Str;
@@ -12,13 +15,13 @@ class FestivalTicketIssuer
 
     public function execute(FestivalTicketOrder $order): void
     {
-        $order->loadMissing(['account', 'edition', 'items']);
+        $order->loadMissing(['account', 'edition', 'portalUser', 'items.admissionType.onlineStream']);
 
         foreach ($order->items as $item) {
             $existing = $order->tickets()->where('festival_ticket_order_item_id', $item->id)->count();
             for ($position = $existing; $position < $item->quantity; $position++) {
                 $token = Str::random(64);
-                FestivalTicket::query()->create([
+                $ticket = FestivalTicket::query()->create([
                     'account_id' => $order->account_id,
                     'festival_edition_id' => $order->festival_edition_id,
                     'festival_ticket_order_id' => $order->id,
@@ -28,6 +31,20 @@ class FestivalTicketIssuer
                     'token_encrypted' => $token,
                     'token_hash' => hash('sha256', $token),
                 ]);
+
+                $admissionType = $item->admissionType;
+                if ($admissionType->delivery_mode === FestivalAdmissionDeliveryMode::OnlineStream) {
+                    $stream = $admissionType->onlineStream;
+                    if (! $stream?->is_enabled || ! $order->portalUser || $order->portalUser->role !== FestivalPortalRole::Guest) {
+                        throw new \LogicException('Online Festival ticket cannot be issued without an enabled stream and Guest owner.');
+                    }
+                    FestivalStreamEntitlement::query()->create([
+                        'account_id' => $order->account_id,
+                        'festival_online_stream_id' => $stream->id,
+                        'festival_ticket_id' => $ticket->id,
+                        'festival_portal_user_id' => $order->portalUser->id,
+                    ]);
+                }
             }
         }
 

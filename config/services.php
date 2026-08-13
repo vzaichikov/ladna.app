@@ -6,6 +6,9 @@ $appHost = parse_url($appUrl, PHP_URL_HOST);
 $mediaMtxPublicUrl = is_string($appHost) && $appHost !== ''
     ? str_replace('://'.$appHost, '://'.(str_starts_with($appHost, 'cam.') ? $appHost : 'cam.'.$appHost), $appUrl)
     : $appUrl;
+$festivalStreamPublicUrl = is_string($appHost) && $appHost !== ''
+    ? str_replace('://'.$appHost, '://'.(str_starts_with($appHost, 'stream.') ? $appHost : 'stream.'.$appHost), $appUrl)
+    : $appUrl;
 
 return [
 
@@ -74,6 +77,24 @@ return [
         'source_on_demand_start_timeout' => env('MEDIAMTX_SOURCE_ON_DEMAND_START_TIMEOUT', '20s'),
         'source_on_demand_close_after' => env('MEDIAMTX_SOURCE_ON_DEMAND_CLOSE_AFTER', '30s'),
         'rtsp_transport' => env('MEDIAMTX_RTSP_TRANSPORT', 'tcp'),
+    ],
+
+    'festival_stream' => [
+        'api_url' => env('FESTIVAL_STREAM_MEDIAMTX_API_URL', ''),
+        'api_username' => env('FESTIVAL_STREAM_MEDIAMTX_API_USERNAME', ''),
+        'api_password' => env('FESTIVAL_STREAM_MEDIAMTX_API_PASSWORD', ''),
+        'public_url' => env('FESTIVAL_STREAM_PUBLIC_URL', $festivalStreamPublicUrl),
+        'obs_server' => env('FESTIVAL_STREAM_OBS_SERVER', ''),
+        'hls_origin_url' => env('FESTIVAL_STREAM_HLS_ORIGIN_URL', 'http://127.0.0.1:8888'),
+        'internal_secret' => env('FESTIVAL_STREAM_INTERNAL_SECRET', ''),
+        'ip_hmac_key' => env('FESTIVAL_STREAM_IP_HMAC_KEY', ''),
+        'cookie_name' => env('FESTIVAL_STREAM_COOKIE_NAME', 'ladna_festival_stream'),
+        'lease_seconds' => (int) env('FESTIVAL_STREAM_LEASE_SECONDS', 120),
+        'bootstrap_seconds' => (int) env('FESTIVAL_STREAM_BOOTSTRAP_SECONDS', 30),
+        'session_seconds' => (int) env('FESTIVAL_STREAM_SESSION_SECONDS', 28800),
+        'max_ip_leases' => (int) env('FESTIVAL_STREAM_MAX_IP_LEASES', 3),
+        'connect_timeout' => (int) env('FESTIVAL_STREAM_CONNECT_TIMEOUT', 2),
+        'timeout' => (int) env('FESTIVAL_STREAM_TIMEOUT', 5),
     ],
 
     'people_counter' => [
