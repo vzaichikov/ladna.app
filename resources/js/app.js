@@ -14,6 +14,7 @@ let trainerPrivateLessonsAbortController = null;
 let trainerPermissionDetailsOpener = null;
 let festivalAnnouncementModalOpener = null;
 let festivalProgramModalOpener = null;
+let activeFieldHelp = null;
 
 const confirmationButtonVariants = {
     danger: 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
@@ -1020,6 +1021,31 @@ function initFestivalRegistrantProfiles() {
 
         select.addEventListener('change', sync);
         sync();
+    });
+
+    document.querySelectorAll('[data-festival-participant-profile-form]').forEach((form) => {
+        const phone = form.querySelector('[data-festival-profile-phone]');
+        const sendButton = form.querySelector('[data-festival-profile-phone-send]');
+
+        if (!phone || !sendButton || sendButton.dataset.festivalProfilePhoneSendReady === 'true') {
+            return;
+        }
+
+        const syncSendButton = () => {
+            const phoneDigits = phone.value.replace(/\D/g, '');
+            const selectedCallingCode = phone.closest('.spm-wrapper')
+                ?.querySelector('.spm-option-selected')
+                ?.dataset.code
+                ?.replace(/\D/g, '') ?? '';
+            const disabled = phoneDigits.length <= selectedCallingCode.length;
+            sendButton.disabled = disabled;
+            sendButton.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        };
+
+        sendButton.dataset.festivalProfilePhoneSendReady = 'true';
+        phone.addEventListener('input', syncSendButton);
+        phone.addEventListener('change', syncSendButton);
+        syncSendButton();
     });
 }
 
@@ -4226,6 +4252,40 @@ function formControlByName(form, name) {
         ?? Array.from(form.elements).find((element) => element.name === name);
 }
 
+function initServerValidationErrorScroll() {
+    document.querySelectorAll('[data-server-validation-scroll]').forEach((container) => {
+        if (container.dataset.serverValidationScrollReady === 'true') {
+            return;
+        }
+
+        container.dataset.serverValidationScrollReady = 'true';
+        const firstError = container.querySelector('[data-field-error]');
+
+        if (!firstError) {
+            return;
+        }
+
+        const fieldName = firstError.dataset.fieldError;
+        const firstControl = fieldName
+            ? container.querySelector(`${formFieldSelector('name', fieldName)}:not([type="hidden"]):not([disabled])`)
+            : null;
+        const visibleControl = firstControl instanceof HTMLElement && firstControl.offsetParent !== null
+            ? firstControl
+            : null;
+        const scrollTarget = visibleControl ?? firstError;
+
+        container.dataset.serverValidationErrorFocused = 'true';
+        window.setTimeout(() => {
+            visibleControl?.focus({ preventScroll: true });
+            scrollTarget.scrollIntoView({
+                block: 'center',
+                inline: 'nearest',
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+            });
+        }, 80);
+    });
+}
+
 function asyncErrorContainer(form, name, control) {
     return form.querySelector(formFieldSelector('data-async-error-for', name))
         ?? control?.closest('[data-customer-autocomplete]')
@@ -4853,6 +4913,24 @@ async function submitAsyncForm(form) {
     }
 }
 
+function initAsyncFormChangeSubmission() {
+    if (document.documentElement.dataset.asyncFormChangeSubmissionReady === 'true') {
+        return;
+    }
+
+    document.documentElement.dataset.asyncFormChangeSubmissionReady = 'true';
+    document.addEventListener('change', (event) => {
+        const control = event.target.closest('[data-async-submit-on-change]');
+        const form = control?.closest('form[data-async-form]');
+
+        if (!form || form.getAttribute('aria-busy') === 'true') {
+            return;
+        }
+
+        form.requestSubmit();
+    });
+}
+
 function closeCustomerTransferModal(modal) {
     modal?.classList.add('hidden');
     modal?.classList.remove('flex');
@@ -5322,12 +5400,16 @@ function initVelvetScrollTop() {
 function initProfilePhoneMergeScroll() {
     const mergePanel = document.querySelector('[data-profile-phone-merge]');
 
-    if (!mergePanel) {
+    if (!mergePanel || document.querySelector('[data-server-validation-error-focused="true"]')) {
         return;
     }
 
     window.setTimeout(() => {
-        mergePanel.scrollIntoView({ block: 'center', inline: 'nearest' });
+        mergePanel.scrollIntoView({
+            block: 'center',
+            inline: 'nearest',
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        });
     }, 80);
 }
 
@@ -7532,6 +7614,70 @@ function initFestivalSceneTabs() {
     });
 }
 
+function closeFieldHelp(restoreFocus = false) {
+    if (!activeFieldHelp) {
+        return;
+    }
+
+    const toggle = activeFieldHelp.querySelector('[data-field-help-toggle]');
+    const popover = activeFieldHelp.querySelector('[data-field-help-popover]');
+
+    if (popover) {
+        popover.hidden = true;
+    }
+
+    toggle?.setAttribute('aria-expanded', 'false');
+    toggle?.removeAttribute('aria-describedby');
+
+    if (restoreFocus) {
+        toggle?.focus();
+    }
+
+    activeFieldHelp = null;
+}
+
+function initFieldHelp(root = document) {
+    root.querySelectorAll('[data-field-help]:not([data-field-help-ready])').forEach((container) => {
+        const toggle = container.querySelector('[data-field-help-toggle]');
+        const popover = container.querySelector('[data-field-help-popover]');
+
+        if (!toggle || !popover) {
+            return;
+        }
+
+        container.dataset.fieldHelpReady = 'true';
+        toggle.addEventListener('click', () => {
+            if (activeFieldHelp === container) {
+                closeFieldHelp();
+
+                return;
+            }
+
+            closeFieldHelp();
+            activeFieldHelp = container;
+            popover.hidden = false;
+            toggle.setAttribute('aria-expanded', 'true');
+            toggle.setAttribute('aria-describedby', popover.id);
+        });
+    });
+
+    if (root !== document || document.documentElement.dataset.fieldHelpReady === 'true') {
+        return;
+    }
+
+    document.documentElement.dataset.fieldHelpReady = 'true';
+    document.addEventListener('click', (event) => {
+        if (activeFieldHelp && !event.target.closest('[data-field-help]')) {
+            closeFieldHelp();
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && activeFieldHelp) {
+            closeFieldHelp(true);
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initFestivalAnnouncementModal();
     initFestivalSceneTabs();
@@ -7557,6 +7703,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initPhoneMasks();
     initOtpCountdowns();
     initFestivalRegistrantProfiles();
+    initServerValidationErrorScroll();
     initPrintButtons();
     initPeopleCounterMaskEditors();
     initScheduleSeriesForms();
@@ -7588,6 +7735,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initSmsSendingSettings();
     initTrialClassPassOverrideForms();
     initFestivalRubricEditors();
+    initFieldHelp();
+    initAsyncFormChangeSubmission();
     syncPublicLegalReturnUrls();
 
     if (document.querySelector('[data-public-schedule-fragment]')) {

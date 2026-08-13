@@ -61,6 +61,10 @@ class FestivalEntryRequirement extends Model
             return filled($submission->disk) && filled($submission->path);
         }
 
+        if ($definition->input_type === FestivalRequirementInputType::Agreement) {
+            return in_array(data_get($submission->value_json, 'value'), [true, 1, '1'], true);
+        }
+
         return is_array($submission->value_json)
             && array_key_exists('value', $submission->value_json);
     }

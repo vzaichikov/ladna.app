@@ -29,6 +29,7 @@ class FestivalPortalProfileRequest extends FormRequest
             'role' => ['prohibited'],
             'account_id' => ['prohibited'],
             'google_id' => ['prohibited'],
+            'profile_action' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), 'nullable', 'string', Rule::in(['send_phone_otp'])],
             'registrant_type' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser?->registrant_type))],
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
@@ -57,8 +58,16 @@ class FestivalPortalProfileRequest extends FormRequest
             'city' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
             'studio_name' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
             'instagram_url' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), 'nullable', 'url:http,https', 'max:2048'],
+            'telegram_contact' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), 'nullable', 'string', 'max:255', 'regex:/^(?:@?[A-Za-z0-9_]+|(?:https?:\/\/)?t\.me\/[A-Za-z0-9_]+\/?|\d+)$/i'],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'telegram_contact.regex' => __('app.festival_telegram_contact_invalid'),
         ];
     }
 
@@ -88,6 +97,7 @@ class FestivalPortalProfileRequest extends FormRequest
             'email_normalized' => $email,
             'phone' => $phone,
             'phone_normalized' => $phone,
+            'telegram_contact' => filled($this->input('telegram_contact')) ? trim((string) $this->input('telegram_contact')) : null,
         ]);
     }
 }

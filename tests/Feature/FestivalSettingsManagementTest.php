@@ -75,6 +75,7 @@ class FestivalSettingsManagementTest extends TestCase
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]));
         $registrationField = FestivalRequirementDefinition::query()->where('festival_edition_id', $edition->id)->where('code', 'kvalifikatsiyne-video')->firstOrFail();
         $this->assertSame(['mp4', 'mov'], $registrationField->allowed_extensions);
+        $this->assertSame('final', $registrationField->stage);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]))
@@ -100,6 +101,52 @@ class FestivalSettingsManagementTest extends TestCase
             'visibility' => 'public',
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.content.sections', [$account, $edition]));
         $this->assertSame('dlya-uchasnykiv', FestivalContentSection::query()->where('festival_edition_id', $edition->id)->firstOrFail()->key);
+    }
+
+    public function test_registration_field_form_groups_and_explains_settings_without_legacy_stage(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
+        $step = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+        $requirement = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $step->id,
+            'stage' => 'qualification',
+        ]);
+
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.requirements.edit', [$account, $edition, $requirement]));
+
+        $response
+            ->assertOk()
+            ->assertDontSee('name="stage"', false)
+            ->assertSee('aria-controls="requirement-answer-scope-help"', false)
+            ->assertSee(__('app.festival_registration_field_scope_help'))
+            ->assertSee(__('app.festival_registration_field_due_at_help'))
+            ->assertSee(__('app.festival_requirement_section_definition'))
+            ->assertSee(__('app.festival_requirement_section_placement'))
+            ->assertSee(__('app.festival_requirement_section_response'))
+            ->assertSee(__('app.festival_requirement_section_commercial'))
+            ->assertSee(__('app.festival_requirement_section_availability'))
+            ->assertSee('value="agreement"', false)
+            ->assertSee(__('app.festival_input_agreement'));
+        $this->assertSame(5, substr_count($response->getContent(), 'data-requirement-section'));
+        $this->assertSame(19, substr_count($response->getContent(), 'data-field-help-toggle'));
+        $this->assertSame(19, substr_count($response->getContent(), 'data-field-help-popover'));
+
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]), [
+            'festival_workflow_step_id' => $step->id,
+            'type' => 'custom_document',
+            'subject_scope' => 'entry',
+            'input_type' => 'agreement',
+            'name' => 'Updated field',
+            'pricing_mode' => 'none',
+            'max_size_kb' => 20480,
+            'is_required' => 1,
+            'is_active' => 1,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('qualification', $requirement->refresh()->stage);
+        $this->assertSame('agreement', $requirement->input_type->value);
     }
 
     public function test_content_sections_use_the_rich_text_editor_and_can_be_permanently_deleted_with_tenant_guards(): void

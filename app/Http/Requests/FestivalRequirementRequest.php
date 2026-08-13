@@ -95,7 +95,6 @@ class FestivalRequirementRequest extends FormRequest
             'options.*.price' => ['nullable', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
             'pricing_mode' => ['required', Rule::in(['none', 'flat_when_true', 'per_unit', 'option_prices'])],
             'price_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
-            'stage' => ['required', Rule::in(['qualification', 'final'])],
             'due_at' => ['nullable', 'date'],
             'allowed_extensions' => ['sometimes', 'array'],
             'allowed_extensions.*' => ['string', 'max:20', 'regex:/^[a-zA-Z0-9]+$/'],

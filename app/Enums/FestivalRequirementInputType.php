@@ -9,6 +9,7 @@ enum FestivalRequirementInputType: string
     case LongText = 'long_text';
     case Integer = 'integer';
     case Boolean = 'boolean';
+    case Agreement = 'agreement';
     case Url = 'url';
     case SingleSelect = 'single_select';
     case MultiSelect = 'multi_select';

@@ -17,7 +17,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 
-#[Fillable(['account_id', 'role', 'is_active', 'registrant_type', 'first_name', 'last_name', 'patronymic', 'stage_name', 'email', 'email_normalized', 'password', 'google_id', 'phone', 'phone_normalized', 'city', 'studio_name', 'instagram_url', 'telegram_user_id', 'avatar_path', 'locale', 'email_verified_at', 'phone_verified_at', 'last_login_at'])]
+#[Fillable(['account_id', 'role', 'is_active', 'registrant_type', 'first_name', 'last_name', 'patronymic', 'stage_name', 'email', 'email_normalized', 'password', 'google_id', 'phone', 'phone_normalized', 'city', 'studio_name', 'instagram_url', 'telegram_contact', 'telegram_user_id', 'avatar_path', 'locale', 'email_verified_at', 'phone_verified_at', 'last_login_at'])]
 #[Hidden(['password', 'remember_token', 'telegram_user_id', 'google_id'])]
 class FestivalPortalUser extends Authenticatable implements HasLocalePreference
 {

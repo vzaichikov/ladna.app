@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.130.0',
+                'date' => '2026-08-13',
+                'title' => 'Clearer Festival registration and public discovery',
+                'items' => ['Festival registration fields now use grouped settings with contextual help, separate yes/no radio answers from required agreement checkboxes, and save both asynchronously.', 'Festival participants can save a Telegram contact and complete missing phone verification directly from their profile, with inline login and profile validation plus clear one-time-code guidance.', 'Public studio pages now show current and upcoming Festivals as hero-image cards with dates, summaries, and links to all published Festivals.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.129.0',
                 'date' => '2026-08-12',
                 'title' => 'Specialist Festival judging and knockout battles',
@@ -1136,6 +1143,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.130.0',
+                'date' => '2026-08-13',
+                'title' => 'Зручніша реєстрація та публічні фестивалі',
+                'items' => ['Поля реєстрації фестивалю тепер згруповані за призначенням, мають контекстні пояснення, окремі перемикачі «Так / ні» та обов’язкові підтвердження умов, а відповіді зберігаються без перезавантаження.', 'Учасники фестивалю можуть зберегти контакт Telegram і підтвердити відсутній номер телефону безпосередньо у профілі, а помилки входу й профілю та кроки з одноразовим кодом показуються біля відповідних полів.', 'На публічній сторінці студії тепер показуються актуальні та майбутні фестивалі у картках із головним зображенням, датами, описом і посиланням на всі опубліковані фестивалі.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.129.0',
                 'date' => '2026-08-12',

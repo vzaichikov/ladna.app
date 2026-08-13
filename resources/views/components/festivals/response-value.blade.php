@@ -12,7 +12,7 @@
 
     if ($isEmpty) {
         $displayValue = __('app.not_set');
-    } elseif ($inputType === \App\Enums\FestivalRequirementInputType::Boolean) {
+    } elseif (in_array($inputType, [\App\Enums\FestivalRequirementInputType::Boolean, \App\Enums\FestivalRequirementInputType::Agreement], true)) {
         $displayValue = in_array($value, [true, 1, '1'], true) ? __('app.yes') : __('app.no');
     } elseif (in_array($inputType, [\App\Enums\FestivalRequirementInputType::SingleSelect, \App\Enums\FestivalRequirementInputType::MultiSelect], true)) {
         $displayValue = collect(is_array($value) ? $value : [$value])

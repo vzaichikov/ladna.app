@@ -60,6 +60,8 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertStringContainsString('12', $render('integer', 12));
         $this->assertStringContainsString(__('app.yes'), $render('boolean', true));
         $this->assertStringContainsString(__('app.no'), $render('boolean', false));
+        $this->assertStringContainsString(__('app.yes'), $render('agreement', true));
+        $this->assertStringContainsString(__('app.no'), $render('agreement', false));
         $this->assertStringContainsString(__('app.not_set'), $render('short_text', null));
 
         $url = $render('url', 'https://video.example/qualification');
@@ -81,19 +83,19 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertStringNotContainsString('<script>', $hostile);
     }
 
-    public function test_boolean_agreements_use_ajax_checkboxes_and_refresh_their_semantic_card(): void
+    public function test_yes_no_fields_use_ajax_radios_and_save_an_explicit_no_value(): void
     {
         [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
-        $definition = $this->requirement($edition, $workflow, 'application', 'agreement', 'boolean');
+        $definition = $this->requirement($edition, $workflow, 'application', 'yes-or-no', 'boolean');
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
-            $this->entry($account, $edition, $portalUser, $participant, $category, 'Agreement entry'),
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Yes or no entry'),
         );
         $step = $this->step($entry, 'application');
         $requirement = $step->requirements->firstWhere('festival_requirement_definition_id', $definition->id);
         app(StoreFestivalResponse::class)->execute($requirement, $portalUser, true);
         $requirement->forceFill([
             'status' => FestivalRequirementStatus::Rejected,
-            'review_notes' => 'Replace this agreement <script>alert("unsafe")</script>',
+            'review_notes' => 'Replace this answer <script>alert("unsafe")</script>',
         ])->save();
 
         $page = $this->actingAs($portalUser, 'festival')
@@ -102,13 +104,16 @@ class FestivalRegistrationStepperTest extends TestCase
         $page->assertOk()
             ->assertSee('data-festival-requirement-card', false)
             ->assertSee('data-async-form', false)
-            ->assertSee('type="checkbox"', false)
+            ->assertSee('type="radio"', false)
             ->assertSee('name="value"', false)
             ->assertSee('value="1"', false)
-            ->assertDontSee('<select name="value"', false)
+            ->assertSee('value="0"', false)
+            ->assertSee('data-async-submit-on-change', false)
+            ->assertSee('type="submit"', false)
+            ->assertDontSee('type="checkbox"', false)
             ->assertSee('crm-status-danger', false)
             ->assertSee('border-rose-300 bg-rose-50', false)
-            ->assertSee('Replace this agreement &lt;script&gt;alert(&quot;unsafe&quot;)&lt;/script&gt;', false)
+            ->assertSee('Replace this answer &lt;script&gt;alert(&quot;unsafe&quot;)&lt;/script&gt;', false)
             ->assertDontSee('<script>alert("unsafe")</script>', false);
 
         $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
@@ -116,16 +121,63 @@ class FestivalRegistrationStepperTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('value');
 
         $saved = $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
-            'value' => true,
+            'value' => false,
         ]);
         $saved->assertOk()
             ->assertJsonPath('requirement_id', $requirement->id)
             ->assertJsonPath('message', __('app.festival_response_saved'));
         $this->assertStringContainsString('data-festival-requirement-card', $saved->json('requirement_html'));
         $this->assertStringContainsString('crm-status-warning', $saved->json('requirement_html'));
-        $this->assertStringNotContainsString('Replace this agreement', $saved->json('requirement_html'));
+        $this->assertStringNotContainsString('Replace this answer', $saved->json('requirement_html'));
         $this->assertSame(FestivalRequirementStatus::Submitted, $requirement->refresh()->status);
         $this->assertNull($requirement->review_notes);
+        $this->assertFalse(data_get($requirement->submissions()->firstOrFail()->value_json, 'value'));
+
+        $this->post(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
+            'value' => '0',
+        ])->assertRedirect()->assertSessionHas('status', __('app.festival_response_saved'));
+    }
+
+    public function test_agreement_fields_use_ajax_checkboxes_and_require_confirmation(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $definition = $this->requirement($edition, $workflow, 'application', 'agreement', 'agreement');
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Agreement entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $requirement = $step->requirements->firstWhere('festival_requirement_definition_id', $definition->id);
+
+        $definition->update(['input_type' => 'boolean']);
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, false);
+        $this->assertTrue($requirement->unsetRelation('definition')->unsetRelation('submissions')->hasSubmittedResponse());
+        $definition->update(['input_type' => 'agreement']);
+        $this->assertFalse($requirement->unsetRelation('definition')->unsetRelation('submissions')->hasSubmittedResponse());
+
+        $page = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+
+        $page->assertOk()
+            ->assertSee('type="checkbox"', false)
+            ->assertSee('name="value"', false)
+            ->assertSee('value="1"', false)
+            ->assertSee('data-async-submit-on-change', false)
+            ->assertSee(__('app.festival_agreement_confirm'))
+            ->assertSee('type="submit"', false)
+            ->assertDontSee('type="radio"', false);
+
+        $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
+            'value' => false,
+        ])->assertUnprocessable()->assertJsonValidationErrors('value');
+
+        $saved = $this->postJson(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
+            'value' => true,
+        ]);
+
+        $saved->assertOk()
+            ->assertJsonPath('requirement_id', $requirement->id)
+            ->assertJsonPath('message', __('app.festival_response_saved'));
+        $this->assertTrue(data_get($requirement->submissions()->firstOrFail()->value_json, 'value'));
 
         $this->post(route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $step, $requirement]), [
             'value' => '1',

@@ -61,6 +61,26 @@
                 <div data-async-form-status data-error-message="{{ __('app.async_request_failed') }}" class="hidden"></div>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
                     @if ($inputType === \App\Enums\FestivalRequirementInputType::Boolean)
+                        <fieldset class="grow">
+                            <legend class="sr-only">{{ $definition->name }}</legend>
+                            <div class="grid grid-cols-2 gap-2">
+                                @foreach ([1 => __('app.yes'), 0 => __('app.no')] as $value => $label)
+                                    <label class="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 transition has-checked:border-brand-500 has-checked:bg-brand-50">
+                                        <input
+                                            type="radio"
+                                            name="value"
+                                            value="{{ $value }}"
+                                            @checked(($value === 1 && in_array($currentValue, [true, 1, '1'], true)) || ($value === 0 && in_array($currentValue, [false, 0, '0'], true)))
+                                            @required($definition->is_required)
+                                            data-async-submit-on-change
+                                            class="crm-radio"
+                                        >
+                                        <span class="font-semibold text-slate-800">{{ $label }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </fieldset>
+                    @elseif ($inputType === \App\Enums\FestivalRequirementInputType::Agreement)
                         <input type="hidden" name="value" value="0">
                         <label class="flex min-h-12 grow cursor-pointer items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 transition has-checked:border-brand-500 has-checked:bg-brand-50">
                             <input
@@ -69,6 +89,7 @@
                                 value="1"
                                 @checked($currentValue === true || $currentValue === 1 || $currentValue === '1')
                                 @required($definition->is_required)
+                                data-async-submit-on-change
                                 class="crm-checkbox"
                             >
                             <span class="font-semibold text-slate-800">{{ __('app.festival_agreement_confirm') }}</span>
@@ -79,7 +100,7 @@
                             @if ($inputType === \App\Enums\FestivalRequirementInputType::LongText)
                                 <textarea name="value" rows="4" @required($definition->is_required) class="crm-field">{{ is_scalar($currentValue) ? $currentValue : '' }}</textarea>
                             @elseif (in_array($inputType, [\App\Enums\FestivalRequirementInputType::SingleSelect, \App\Enums\FestivalRequirementInputType::MultiSelect], true))
-                                <select name="value{{ $inputType === \App\Enums\FestivalRequirementInputType::MultiSelect ? '[]' : '' }}" @if ($inputType === \App\Enums\FestivalRequirementInputType::MultiSelect) multiple @endif @required($definition->is_required) class="crm-field">
+                                <select name="value{{ $inputType === \App\Enums\FestivalRequirementInputType::MultiSelect ? '[]' : '' }}" @if ($inputType === \App\Enums\FestivalRequirementInputType::MultiSelect) multiple @endif @required($definition->is_required) data-async-submit-on-change class="crm-field">
                                     @foreach (($definition->options ?? []) as $option)
                                         <option value="{{ $option['value'] }}" @selected(collect(is_array($currentValue) ? $currentValue : [$currentValue])->contains($option['value']))>{{ $option['label'] }}</option>
                                     @endforeach

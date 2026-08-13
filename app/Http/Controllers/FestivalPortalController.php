@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -66,10 +67,15 @@ class FestivalPortalController extends Controller
         ]);
     }
 
-    public function updateProfile(FestivalPortalProfileRequest $request, string $accountSlug, SyncFestivalProfileParticipant $syncParticipant): RedirectResponse
-    {
+    public function updateProfile(
+        FestivalPortalProfileRequest $request,
+        string $accountSlug,
+        SyncFestivalProfileParticipant $syncParticipant,
+        FestivalOtpService $otp,
+    ): RedirectResponse {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $data = $request->validated();
+        $profileAction = Arr::pull($data, 'profile_action');
         $dateOfBirth = Arr::pull($data, 'date_of_birth');
 
         if (blank($data['password'] ?? null)) {
@@ -105,6 +111,10 @@ class FestivalPortalController extends Controller
         $portalUser->refresh();
         $request->session()->put('locale', $portalUser->locale);
 
+        if ($profileAction === 'send_phone_otp' && $pendingPhone) {
+            return $this->sendPendingProfilePhoneOtp($request, $account, $portalUser, $pendingPhone, $otp, true);
+        }
+
         $route = $pendingPhone || ! $portalUser->profileIsComplete()
             ? ($portalUser->role === FestivalPortalRole::Judge ? 'festival.portal.judge.profile.edit' : 'festival.portal.profile.edit')
             : ($portalUser->role === FestivalPortalRole::Judge ? 'festival.portal.judge.dashboard' : 'festival.portal.dashboard');
@@ -121,15 +131,7 @@ class FestivalPortalController extends Controller
             return redirect()->route($this->profileEditRoute($portalUser), $account->slug);
         }
 
-        $result = $otp->send($account, $portalUser->role, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
-
-        if (! $result->ok) {
-            return back()->withErrors(['phone' => $result->message ?? __('app.customer_otp_send_failed')])->with('otp_resend_seconds', $result->secondsUntilResend);
-        }
-
-        $request->session()->put($this->profilePhoneChallengeSessionKey($account, $portalUser), true);
-
-        return back()->with('status', __('app.customer_otp_sent'))->with('otp_resend_seconds', $result->secondsUntilResend);
+        return $this->sendPendingProfilePhoneOtp($request, $account, $portalUser, $phone, $otp);
     }
 
     public function resendProfilePhoneOtp(Request $request, string $accountSlug, FestivalOtpService $otp): RedirectResponse
@@ -202,17 +204,66 @@ class FestivalPortalController extends Controller
     {
         $phone = $this->pendingProfilePhone($account, $portalUser);
 
-        return $phone ? [
-            'phone' => $phone,
-            'challenge_active' => (bool) session($this->profilePhoneChallengeSessionKey($account, $portalUser)),
-        ] : null;
+        if (! $phone && ! ($portalUser->role === FestivalPortalRole::Registrant && $portalUser->phone_verified_at === null)) {
+            return null;
+        }
+
+        return [
+            'phone' => $phone ?? '',
+            'challenge_active' => filled($phone) && (bool) session($this->profilePhoneChallengeSessionKey($account, $portalUser)),
+        ];
     }
 
     private function pendingProfilePhone(Account $account, FestivalPortalUser $portalUser): ?string
     {
         $phone = session($this->profilePhoneSessionKey($account, $portalUser));
 
-        return is_string($phone) && $phone !== '' ? $phone : null;
+        if (is_string($phone) && $phone !== '') {
+            return $phone;
+        }
+
+        if ($portalUser->role === FestivalPortalRole::Registrant && $portalUser->phone_verified_at === null) {
+            return filled($portalUser->phone_normalized) ? $portalUser->phone_normalized : null;
+        }
+
+        return null;
+    }
+
+    private function sendPendingProfilePhoneOtp(
+        Request $request,
+        Account $account,
+        FestivalPortalUser $portalUser,
+        string $phone,
+        FestivalOtpService $otp,
+        bool $applyRateLimit = false,
+    ): RedirectResponse {
+        if ($applyRateLimit) {
+            $rateLimitKey = md5('festival-profile-otp'.$portalUser->getAuthIdentifier().'|'.$account->slug.'|'.$request->ip());
+
+            if (RateLimiter::tooManyAttempts($rateLimitKey, 3)) {
+                return redirect()
+                    ->route($this->profileEditRoute($portalUser), $account->slug)
+                    ->withErrors(['phone' => __('app.customer_otp_resend_wait', ['seconds' => RateLimiter::availableIn($rateLimitKey)])]);
+            }
+
+            RateLimiter::hit($rateLimitKey, 60);
+        }
+
+        $result = $otp->send($account, $portalUser->role, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
+
+        if (! $result->ok) {
+            return redirect()
+                ->route($this->profileEditRoute($portalUser), $account->slug)
+                ->withErrors(['phone' => $result->message ?? __('app.customer_otp_send_failed')])
+                ->with('otp_resend_seconds', $result->secondsUntilResend);
+        }
+
+        $request->session()->put($this->profilePhoneChallengeSessionKey($account, $portalUser), true);
+
+        return redirect()
+            ->route($this->profileEditRoute($portalUser), $account->slug)
+            ->with('status', __('app.customer_otp_sent'))
+            ->with('otp_resend_seconds', $result->secondsUntilResend);
     }
 
     private function profilePhoneSessionKey(Account $account, FestivalPortalUser $portalUser): string

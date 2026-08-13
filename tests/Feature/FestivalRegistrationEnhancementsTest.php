@@ -89,8 +89,18 @@ class FestivalRegistrationEnhancementsTest extends TestCase
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($category, $portalUser, [$participant]));
         $requirement = $entry->requirements->first();
 
-        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 'https://www.youtube.com/watch?v=one');
-        $this->assertSame('https://www.youtube.com/watch?v=one', data_get($requirement->submissions()->first()->value_json, 'value'));
+        $acceptedUrls = [
+            'https://www.youtube.com/watch?v=one',
+            'https://www.instagram.com/reel/ABC123/',
+            'https://instagram.com/p/DEF456/',
+            'https://www.instagram.com/share/reel/GHI789/',
+            'https://m.instagram.com/p/JKL012/',
+        ];
+
+        foreach ($acceptedUrls as $acceptedUrl) {
+            app(StoreFestivalResponse::class)->execute($requirement, $portalUser, $acceptedUrl);
+            $this->assertSame($acceptedUrl, data_get($requirement->submissions()->first()->value_json, 'value'));
+        }
 
         try {
             app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 'https://example.com/video');

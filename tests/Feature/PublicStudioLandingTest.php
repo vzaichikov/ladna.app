@@ -8,6 +8,8 @@ use App\Enums\TelegramBotMode;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\Customer;
+use App\Models\FestivalEdition;
+use App\Models\FestivalSeries;
 use App\Models\Location;
 use App\Models\SubscriptionPlan;
 use App\Models\TelegramBotInstallation;
@@ -210,6 +212,90 @@ class PublicStudioLandingTest extends TestCase
             ->assertSee(__('app.studio_landing_locations_title'))
             ->assertSee('href="#location-north"', false)
             ->assertSee('href="#location-south"', false);
+    }
+
+    public function test_public_studio_landing_shows_only_current_account_upcoming_published_festivals_with_hero_images(): void
+    {
+        $account = Account::factory()->create([
+            'default_language' => 'en',
+            'enable_festivals' => true,
+        ]);
+        Location::factory()->for($account)->create();
+        $series = FestivalSeries::factory()->for($account)->create();
+        $ongoing = FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'title' => 'Ongoing Studio Festival',
+            'status' => 'in_progress',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDay(),
+        ]);
+        $upcoming = FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'title' => 'Upcoming Studio Festival',
+            'summary' => 'An upcoming Festival summary.',
+            'starts_at' => now()->addMonth(),
+            'ends_at' => now()->addMonth()->addDay(),
+        ]);
+        $cover = $upcoming->media()->create([
+            'account_id' => $account->id,
+            'kind' => 'image',
+            'external_url' => 'https://cdn.example.test/upcoming-studio-festival.webp',
+            'alt_text' => 'Festival hero image',
+            'is_cover' => true,
+            'is_active' => true,
+        ]);
+        foreach (range(1, 5) as $number) {
+            FestivalEdition::factory()->published()->for($series)->create([
+                'account_id' => $account->id,
+                'title' => "Later Studio Festival {$number}",
+                'starts_at' => now()->addMonths($number + 1),
+                'ends_at' => now()->addMonths($number + 1)->addDay(),
+            ]);
+        }
+        FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'title' => 'Past Studio Festival',
+            'starts_at' => now()->subDays(2),
+            'ends_at' => now()->subDay(),
+        ]);
+        FestivalEdition::factory()->for($series)->create([
+            'account_id' => $account->id,
+            'title' => 'Draft Studio Festival',
+        ]);
+        $otherAccount = Account::factory()->create(['enable_festivals' => true]);
+        FestivalEdition::factory()->published()->for(FestivalSeries::factory()->for($otherAccount))->create([
+            'account_id' => $otherAccount->id,
+            'title' => 'Other Studio Festival',
+        ]);
+
+        $this->get(route('public.studio', $account->slug))
+            ->assertOk()
+            ->assertSee('data-public-festivals-rail', false)
+            ->assertSee($ongoing->title)
+            ->assertSee($upcoming->title)
+            ->assertSee($upcoming->summary)
+            ->assertSee($cover->url(), false)
+            ->assertSee($cover->alt_text)
+            ->assertSee(route('public.festivals.index', $account->slug), false)
+            ->assertSee(route('public.festivals.show', [$account->slug, $upcoming->slug]), false)
+            ->assertSeeInOrder([$ongoing->title, $upcoming->title, 'Later Studio Festival 1'])
+            ->assertDontSee('Later Studio Festival 5')
+            ->assertDontSee('Past Studio Festival')
+            ->assertDontSee('Draft Studio Festival')
+            ->assertDontSee('Other Studio Festival');
+
+        $disabledAccount = Account::factory()->create(['enable_festivals' => false]);
+        Location::factory()->for($disabledAccount)->create();
+        FestivalEdition::factory()->published()->for(FestivalSeries::factory()->for($disabledAccount))->create([
+            'account_id' => $disabledAccount->id,
+            'title' => 'Disabled Studio Festival',
+        ]);
+
+        $this->get(route('public.studio', $disabledAccount->slug))
+            ->assertOk()
+            ->assertDontSee('data-public-festivals-rail', false)
+            ->assertDontSee(route('public.festivals.index', $disabledAccount->slug), false)
+            ->assertDontSee('Disabled Studio Festival');
     }
 
     public function test_suspended_account_studio_landing_is_not_public(): void

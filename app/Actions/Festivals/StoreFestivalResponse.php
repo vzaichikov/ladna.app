@@ -66,6 +66,7 @@ class StoreFestivalResponse
             FestivalRequirementInputType::LongText => ['nullable', 'string', 'max:10000'],
             FestivalRequirementInputType::Integer => ['nullable', 'integer', 'min:0'],
             FestivalRequirementInputType::Boolean => ['nullable', 'boolean'],
+            FestivalRequirementInputType::Agreement => ['nullable', 'accepted'],
             FestivalRequirementInputType::Url => ['nullable', 'url:http,https', 'max:2048'],
             FestivalRequirementInputType::SingleSelect => ['nullable', 'string', 'in:'.implode(',', $options)],
             FestivalRequirementInputType::MultiSelect => ['nullable', 'array'],
@@ -75,6 +76,10 @@ class StoreFestivalResponse
             $rules[0] = 'required';
         }
         $validated = Validator::make(['value' => $value], ['value' => $rules])->validate();
+
+        if (in_array($type, [FestivalRequirementInputType::Boolean, FestivalRequirementInputType::Agreement], true)) {
+            $validated['value'] = filter_var($validated['value'], FILTER_VALIDATE_BOOL);
+        }
 
         if ($type === FestivalRequirementInputType::MultiSelect) {
             Validator::make($validated, ['value.*' => ['string', 'in:'.implode(',', $options)]])->validate();

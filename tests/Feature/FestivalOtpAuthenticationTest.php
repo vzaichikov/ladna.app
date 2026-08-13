@@ -207,6 +207,193 @@ class FestivalOtpAuthenticationTest extends TestCase
         $this->assertNotNull($portalUser->phone_verified_at);
     }
 
+    public function test_first_profile_phone_is_saved_as_pending_and_verified_only_after_valid_otp(): void
+    {
+        $account = $this->otpAccount();
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'phone' => null,
+            'phone_normalized' => null,
+            'phone_verified_at' => null,
+        ]);
+        Http::fake([
+            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'festival-first-profile-otp']]]),
+        ]);
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.dashboard', $account->slug))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug));
+
+        $this->put(route('festival.portal.profile.update', $account->slug), $this->profilePayload($portalUser, [
+            'first_name' => 'Updated participant',
+            'phone' => '0507776655',
+            'telegram_contact' => 't.me/festival_participant',
+            'profile_action' => 'send_phone_otp',
+        ]))->assertRedirect(route('festival.portal.profile.edit', $account->slug))
+            ->assertSessionHasNoErrors();
+
+        $portalUser->refresh();
+        $this->assertSame('Updated participant', $portalUser->first_name);
+        $this->assertSame('t.me/festival_participant', $portalUser->telegram_contact);
+        $this->assertNull($portalUser->phone);
+        $this->assertNull($portalUser->phone_normalized);
+        $this->assertNull($portalUser->phone_verified_at);
+        $this->assertDatabaseHas('festival_otp_challenges', [
+            'account_id' => $account->id,
+            'role' => FestivalPortalRole::Registrant->value,
+            'phone' => '+380507776655',
+        ]);
+        $this->assertDatabaseCount('sms_deliveries', 1);
+
+        $this->get(route('festival.portal.profile.edit', $account->slug))
+            ->assertOk()
+            ->assertSee('festival-profile-phone-verify', false)
+            ->assertSee('readonly', false);
+
+        $this->post(route('festival.portal.profile.phone.verify', $account->slug), [
+            'phone' => '+380507776655',
+            'code' => '000000',
+        ])->assertSessionHasErrors('code');
+
+        $this->assertNull($portalUser->refresh()->phone_normalized);
+        $this->assertNull($portalUser->phone_verified_at);
+        $this->get(route('festival.portal.dashboard', $account->slug))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug));
+
+        $this->post(route('festival.portal.profile.phone.verify', $account->slug), [
+            'phone' => '+380507776655',
+            'code' => '123456',
+        ])->assertRedirect(route('festival.portal.dashboard', $account->slug));
+
+        $this->assertSame('+380507776655', $portalUser->refresh()->phone_normalized);
+        $this->assertNotNull($portalUser->phone_verified_at);
+        $this->get(route('festival.portal.dashboard', $account->slug))->assertOk();
+    }
+
+    public function test_profile_save_does_not_send_otp_without_explicit_send_action(): void
+    {
+        $account = $this->otpAccount();
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'phone' => null,
+            'phone_normalized' => null,
+            'phone_verified_at' => null,
+        ]);
+        Http::fake();
+
+        $this->actingAs($portalUser, 'festival')
+            ->put(route('festival.portal.profile.update', $account->slug), $this->profilePayload($portalUser, [
+                'phone' => '0503332211',
+            ]))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug))
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($portalUser->refresh()->phone_normalized);
+        $this->assertDatabaseCount('festival_otp_challenges', 0);
+        $this->assertDatabaseCount('sms_deliveries', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_expired_first_profile_phone_otp_keeps_the_phone_pending_and_blocks_cabinet(): void
+    {
+        $account = $this->otpAccount();
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'phone' => null,
+            'phone_normalized' => null,
+            'phone_verified_at' => null,
+        ]);
+
+        $this->actingAs($portalUser, 'festival')
+            ->put(route('festival.portal.profile.update', $account->slug), $this->profilePayload($portalUser, [
+                'phone' => '0503332211',
+            ]))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug))
+            ->assertSessionHasNoErrors();
+
+        FestivalOtpChallenge::factory()->for($account)->create([
+            'role' => FestivalPortalRole::Registrant,
+            'phone' => '+380503332211',
+            'code_hash' => Hash::make('123456'),
+            'expires_at' => now()->subMinute(),
+        ]);
+
+        $this->post(route('festival.portal.profile.phone.verify', $account->slug), [
+            'phone' => '+380503332211',
+            'code' => '123456',
+        ])->assertSessionHasErrors([
+            'code' => __('app.customer_otp_expired'),
+        ]);
+
+        $this->assertNull($portalUser->refresh()->phone_normalized);
+        $this->assertNull($portalUser->phone_verified_at);
+        $this->get(route('festival.portal.dashboard', $account->slug))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug));
+    }
+
+    public function test_profile_otp_delivery_failure_keeps_saved_profile_pending_and_blocks_cabinet(): void
+    {
+        $account = $this->otpAccount();
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'phone' => null,
+            'phone_normalized' => null,
+            'phone_verified_at' => null,
+        ]);
+        Http::fake([
+            'api.turbosms.ua/*' => Http::response('Rejected', 422),
+        ]);
+
+        $this->actingAs($portalUser, 'festival')
+            ->put(route('festival.portal.profile.update', $account->slug), $this->profilePayload($portalUser, [
+                'city' => 'Saved despite delivery failure',
+                'phone' => '0504443322',
+                'profile_action' => 'send_phone_otp',
+            ]))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug))
+            ->assertSessionHasErrors('phone');
+
+        $portalUser->refresh();
+        $this->assertSame('Saved despite delivery failure', $portalUser->city);
+        $this->assertNull($portalUser->phone_normalized);
+        $this->assertNull($portalUser->phone_verified_at);
+        $this->assertDatabaseCount('festival_otp_challenges', 0);
+        $this->assertDatabaseHas('sms_deliveries', [
+            'account_id' => $account->id,
+            'recipient_phone' => '+380504443322',
+            'status' => 'failed',
+        ]);
+        $this->get(route('festival.portal.profile.edit', $account->slug))
+            ->assertOk()
+            ->assertSee('value="+380504443322"', false)
+            ->assertSee('data-profile-phone-merge', false);
+        $this->get(route('festival.portal.dashboard', $account->slug))
+            ->assertRedirect(route('festival.portal.profile.edit', $account->slug));
+    }
+
+    public function test_duplicate_first_profile_phone_is_rejected_without_sending_otp(): void
+    {
+        $account = $this->otpAccount();
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'phone' => null,
+            'phone_normalized' => null,
+            'phone_verified_at' => null,
+        ]);
+        FestivalPortalUser::factory()->for($account)->create([
+            'phone' => '+380505554433',
+            'phone_normalized' => '+380505554433',
+        ]);
+        Http::fake();
+
+        $this->actingAs($portalUser, 'festival')
+            ->put(route('festival.portal.profile.update', $account->slug), $this->profilePayload($portalUser, [
+                'phone' => '0505554433',
+                'profile_action' => 'send_phone_otp',
+            ]))
+            ->assertSessionHasErrors('phone');
+
+        $this->assertNull($portalUser->refresh()->phone_normalized);
+        $this->assertDatabaseCount('festival_otp_challenges', 0);
+        $this->assertDatabaseCount('sms_deliveries', 0);
+        Http::assertNothingSent();
+    }
+
     public function test_turnstile_failure_prevents_festival_otp_delivery(): void
     {
         $account = $this->otpAccount();
@@ -261,5 +448,20 @@ class FestivalOtpAuthenticationTest extends TestCase
         ]);
 
         return $account;
+    }
+
+    /** @param array<string, mixed> $overrides */
+    private function profilePayload(FestivalPortalUser $portalUser, array $overrides = []): array
+    {
+        return array_merge([
+            'registrant_type' => 'coach',
+            'first_name' => $portalUser->first_name,
+            'last_name' => $portalUser->last_name,
+            'email' => $portalUser->email,
+            'phone' => $portalUser->phone,
+            'city' => $portalUser->city,
+            'studio_name' => $portalUser->studio_name,
+            'locale' => 'uk',
+        ], $overrides);
     }
 }

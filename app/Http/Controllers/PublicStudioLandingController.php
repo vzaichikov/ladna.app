@@ -35,12 +35,26 @@ class PublicStudioLandingController extends Controller
             ->orderBy('id')
             ->limit(6)
             ->get();
+        $festivals = collect();
+
+        if ($account->enable_festivals) {
+            $festivals = $account->festivalEditions()
+                ->published()
+                ->upcoming()
+                ->select(['id', 'account_id', 'festival_series_id', 'slug', 'title', 'summary', 'starts_at', 'ends_at', 'timezone'])
+                ->with('coverMedia')
+                ->orderBy('starts_at')
+                ->orderBy('id')
+                ->limit(6)
+                ->get();
+        }
 
         return view('public.studio', [
             'account' => $account,
             'customer' => $this->currentCustomerFor($account),
             'locations' => $locations,
             'events' => $events,
+            'festivals' => $festivals,
             'customerTelegramBotPublicStudioLink' => $telegramLinks->linkForPlacement(
                 $account,
                 CustomerTelegramLinkResolver::PlacementPublicStudio,

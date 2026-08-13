@@ -6,6 +6,7 @@
     $selectedRegistrantType = old('registrant_type', $portalUser->registrant_type?->value);
     $isParticipant = $selectedRegistrantType === \App\Enums\FestivalRegistrantType::AdultAthlete->value;
     $phoneChallengeActive = (bool) ($profilePhoneVerification['challenge_active'] ?? false);
+    $phoneVerificationHasPhone = filled($profilePhoneVerification['phone'] ?? null);
     $phoneValue = old('phone', $profilePhoneVerification['phone'] ?? $portalUser->phone);
 @endphp
 
@@ -18,7 +19,7 @@
         <header class="mt-8"><h1 class="text-3xl font-semibold sm:text-4xl">{{ __('app.festival_profile') }}</h1><p class="mt-2 text-slate-600">{{ $isJudge ? __('app.festival_role_judge') : __('app.festival_role_registrant') }}</p></header>
         @if(session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
 
-        <form method="POST" action="{{ route($profileRoutePrefix.'.update', $account->slug) }}" class="mt-6 space-y-6" novalidate>
+        <form method="POST" action="{{ route($profileRoutePrefix.'.update', $account->slug) }}" class="mt-6 space-y-6" novalidate @unless($isJudge) data-festival-participant-profile-form data-server-validation-scroll @endunless>
             @csrf
             @method('PUT')
 
@@ -55,9 +56,9 @@
                 <div class="mt-5 grid gap-5 sm:grid-cols-2">
                     <label for="email"><span class="crm-label">{{ __('app.email') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="email" type="email" name="email" value="{{ old('email', $portalUser->email) }}" required class="crm-field"><x-ui.field-error name="email" /></label>
                     <div>
-                        <label for="phone"><span class="crm-label">{{ __('app.phone') }}@unless($isJudge)<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span>@endunless</span><input id="phone" name="phone" value="{{ $phoneValue }}" @required(! $isJudge) @readonly($phoneChallengeActive) class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}"><x-ui.field-error name="phone" /></label>
+                        <label for="phone"><span class="crm-label">{{ __('app.phone') }}@unless($isJudge)<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span>@endunless</span><input id="phone" name="phone" value="{{ $phoneValue }}" @required(! $isJudge) @readonly($phoneChallengeActive) class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}" @unless($isJudge) data-festival-profile-phone @endunless><x-ui.field-error name="phone" /></label>
                         @if($profilePhoneVerification)
-                            <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" data-profile-phone-merge>
+                            <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" data-profile-phone-verification @if($phoneVerificationHasPhone) data-profile-phone-merge @endif>
                                 <p class="font-semibold">{{ __('app.festival_phone_verification_required') }}</p>
                                 @if($phoneChallengeActive)
                                     <p class="mt-2">{{ __('app.enter_otp_code_copy', ['phone' => $profilePhoneVerification['phone']]) }}</p>
@@ -65,8 +66,11 @@
                                     <div class="mt-4 flex flex-wrap gap-3"><x-ui.button type="submit" form="festival-profile-phone-verify">{{ __('app.confirm') }}</x-ui.button><x-ui.button type="submit" form="festival-profile-phone-resend" variant="secondary" data-otp-resend-button data-otp-countdown="{{ session('otp_resend_seconds', config('customer_auth.otp.resend_seconds')) }}" data-otp-countdown-message="{{ __('app.customer_otp_resend_countdown') }}">{{ __('app.resend_code') }}</x-ui.button><button type="submit" form="festival-profile-phone-change" class="text-sm font-semibold text-amber-800">{{ __('app.change_phone') }}</button></div>
                                     <div class="mt-3 text-sm text-amber-800" data-otp-countdown-label></div>
                                 @else
-                                    <p class="mt-2">{{ __('app.festival_phone_verification_copy', ['phone' => $profilePhoneVerification['phone']]) }}</p>
-                                    <div class="mt-4 flex flex-wrap gap-3"><x-ui.button type="submit" form="festival-profile-phone-send">{{ __('app.customer_google_phone_send_code') }}</x-ui.button><button type="submit" form="festival-profile-phone-change" class="text-sm font-semibold text-amber-800">{{ __('app.change_phone') }}</button></div>
+                                    <p class="mt-2">{{ $phoneVerificationHasPhone ? __('app.festival_phone_verification_copy', ['phone' => $profilePhoneVerification['phone']]) : __('app.festival_phone_verification_empty_copy') }}</p>
+                                    <div class="mt-4 flex flex-wrap gap-3">
+                                        <x-ui.button type="submit" name="profile_action" value="send_phone_otp" data-festival-profile-phone-send :disabled="blank($phoneValue)">{{ __('app.festival_profile_save_and_send_code') }}</x-ui.button>
+                                        @if($phoneVerificationHasPhone)<button type="submit" form="festival-profile-phone-change" class="text-sm font-semibold text-amber-800">{{ __('app.change_phone') }}</button>@endif
+                                    </div>
                                 @endif
                             </div>
                         @endif
@@ -74,7 +78,8 @@
                     @unless($isJudge)
                         <label for="city"><span class="crm-label">{{ __('app.city') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="city" name="city" value="{{ old('city', $portalUser->city) }}" required class="crm-field"><x-ui.field-error name="city" /></label>
                         <label for="studio-name"><span class="crm-label">{{ __('app.festival_studio_school') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="studio-name" name="studio_name" value="{{ old('studio_name', $portalUser->studio_name) }}" required class="crm-field"><x-ui.field-error name="studio_name" /></label>
-                        <label for="instagram-url" class="sm:col-span-2"><span class="crm-label">Instagram</span><input id="instagram-url" type="url" name="instagram_url" value="{{ old('instagram_url', $portalUser->instagram_url) }}" class="crm-field"><x-ui.field-error name="instagram_url" /></label>
+                        <label for="instagram-url"><span class="crm-label">Instagram</span><input id="instagram-url" type="url" name="instagram_url" value="{{ old('instagram_url', $portalUser->instagram_url) }}" class="crm-field"><x-ui.field-error name="instagram_url" /></label>
+                        <label for="telegram-contact"><span class="crm-label">Telegram</span><input id="telegram-contact" name="telegram_contact" value="{{ old('telegram_contact', $portalUser->telegram_contact) }}" placeholder="@username / ID / t.me/username" class="crm-field"><span class="mt-1 block text-sm text-slate-500">{{ __('app.festival_telegram_contact_help') }}</span><x-ui.field-error name="telegram_contact" /></label>
                     @endunless
                 </div>
 
@@ -93,8 +98,7 @@
             <div class="flex justify-end"><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button></div>
         </form>
 
-        @if($profilePhoneVerification)
-            <form id="festival-profile-phone-send" method="POST" action="{{ route($profileRoutePrefix.'.phone.send', $account->slug) }}">@csrf</form>
+        @if($profilePhoneVerification && $phoneVerificationHasPhone)
             <form id="festival-profile-phone-resend" method="POST" action="{{ route($profileRoutePrefix.'.phone.resend', $account->slug) }}">@csrf</form>
             <form id="festival-profile-phone-change" method="POST" action="{{ route($profileRoutePrefix.'.phone.change', $account->slug) }}">@csrf</form>
             <form id="festival-profile-phone-verify" method="POST" action="{{ route($profileRoutePrefix.'.phone.verify', $account->slug) }}">@csrf<input type="hidden" name="phone" value="{{ $profilePhoneVerification['phone'] }}"></form>

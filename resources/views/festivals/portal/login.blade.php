@@ -20,7 +20,7 @@
 <main class="min-h-screen bg-canvas px-5 py-10">
     <div class="mx-auto max-w-lg">
         <x-ui.public-studio-header :account="$account" />
-        <section class="mt-8 overflow-hidden rounded-3xl border border-stone-200 bg-white p-6 shadow-crm sm:p-8">
+        <section class="mt-8 overflow-hidden rounded-3xl border border-stone-200 bg-white p-6 shadow-crm sm:p-8" @unless($isJudge) data-server-validation-scroll @endunless>
             <div class="relative -mx-6 -mt-6 mb-6 h-48 overflow-hidden bg-[#F6F0F8] sm:-mx-8 sm:-mt-8 sm:h-56">
                 <span aria-hidden="true" class="absolute -left-8 top-8 h-32 w-32 rounded-full bg-white/50"></span>
                 <span aria-hidden="true" class="absolute -right-10 -top-8 h-40 w-40 rounded-full {{ $isJudge ? 'bg-slate-200/60' : 'bg-amber-100/70' }}"></span>
@@ -37,13 +37,13 @@
             <p class="mt-3 leading-7 text-slate-600">{{ $isJudge ? __('app.festival_judge_login_copy') : __('app.festival_participant_login_copy') }}</p>
 
             @if (session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
-            @if ($errors->any())<div class="mt-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $errors->first() }}</div>@endif
+            @if ($errors->any() && ($isJudge || ! $errors->hasAny(['code', 'email', 'password', 'phone', 'cf-turnstile-response'])))<div class="mt-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $errors->first() }}</div>@endif
 
             @if ($stage === 'otp_code')
                 <form method="POST" action="{{ route($routePrefix.'.otp.verify', $account->slug) }}" class="mt-6 space-y-4">
                     @csrf
                     <input type="hidden" name="phone" value="{{ $phone }}">
-                    <label class="block"><span class="crm-label">{{ __('app.otp_code') }}</span><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required class="crm-field text-center font-mono text-2xl tracking-[0.35em]"></label>
+                    <label class="block"><span class="crm-label">{{ __('app.otp_code') }}</span><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required class="crm-field text-center font-mono text-2xl tracking-[0.35em]">@unless($isJudge)<x-ui.field-error name="code" />@endunless</label>
                     <x-ui.button type="submit" class="w-full">{{ __('app.login') }}</x-ui.button>
                 </form>
                 <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -55,8 +55,8 @@
                 @if ($methods->emailPassword)
                     <form method="POST" action="{{ route($routePrefix.'.email', $account->slug) }}" class="mt-6 space-y-4">
                         @csrf
-                        <label class="block"><span class="crm-label">{{ __('app.email') }}</span><input type="email" name="email" value="{{ old('email') }}" required autocomplete="email" class="crm-field"></label>
-                        <label class="block"><span class="crm-label">{{ __('app.password') }}</span><input type="password" name="password" required autocomplete="current-password" class="crm-field"></label>
+                        <label class="block"><span class="crm-label">{{ __('app.email') }}</span><input type="email" name="email" value="{{ old('email') }}" required autocomplete="email" class="crm-field">@unless($isJudge)<x-ui.field-error name="email" />@endunless</label>
+                        <label class="block"><span class="crm-label">{{ __('app.password') }}</span><input type="password" name="password" required autocomplete="current-password" class="crm-field">@unless($isJudge)<x-ui.field-error name="password" />@endunless</label>
                         <x-ui.button type="submit" class="w-full">{{ $isJudge ? __('app.login') : __('app.login_or_register') }}</x-ui.button>
                     </form>
                 @endif
@@ -72,8 +72,9 @@
                     <div class="my-5 flex items-center gap-3 text-xs uppercase tracking-wide text-slate-400"><span class="h-px flex-1 bg-stone-200"></span>{{ __('app.or') }}<span class="h-px flex-1 bg-stone-200"></span></div>
                     <form method="POST" action="{{ route($routePrefix.'.otp.send', $account->slug) }}" class="space-y-4">
                         @csrf
-                        <label class="block"><span class="crm-label">{{ __('app.phone') }}</span><input name="phone" type="tel" value="{{ old('phone') }}" required class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}"></label>
+                        <label class="block"><span class="crm-label">{{ __('app.phone') }}</span><input name="phone" type="tel" value="{{ old('phone') }}" required class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}">@unless($isJudge)<x-ui.field-error name="phone" />@endunless</label>
                         <div class="cf-turnstile" data-sitekey="{{ $methods->turnstileSiteKey }}"></div>
+                        @unless($isJudge)<x-ui.field-error name="cf-turnstile-response" />@endunless
                         <x-ui.button type="submit" variant="secondary" class="w-full">{{ __('app.send_code') }}</x-ui.button>
                     </form>
                 @endif
