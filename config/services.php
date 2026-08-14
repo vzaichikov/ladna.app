@@ -85,7 +85,7 @@ return [
         'api_password' => env('FESTIVAL_STREAM_MEDIAMTX_API_PASSWORD', ''),
         'public_url' => env('FESTIVAL_STREAM_PUBLIC_URL', $festivalStreamPublicUrl),
         'obs_server' => env('FESTIVAL_STREAM_OBS_SERVER', ''),
-        'hls_origin_url' => env('FESTIVAL_STREAM_HLS_ORIGIN_URL', 'http://127.0.0.1:8888'),
+        'hls_origin_url' => env('FESTIVAL_STREAM_HLS_ORIGIN_URL', 'http://127.0.0.1:8898'),
         'internal_secret' => env('FESTIVAL_STREAM_INTERNAL_SECRET', ''),
         'ip_hmac_key' => env('FESTIVAL_STREAM_IP_HMAC_KEY', ''),
         'cookie_name' => env('FESTIVAL_STREAM_COOKIE_NAME', 'ladna_festival_stream'),
