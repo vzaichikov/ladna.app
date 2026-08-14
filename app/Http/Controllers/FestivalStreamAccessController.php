@@ -57,10 +57,12 @@ class FestivalStreamAccessController extends Controller
 
     public function player(Request $request, string $path): View
     {
-        $entitlement = $this->authorizeCookie($request, $path);
+        $entitlement = $this->authorizeCookie($request, $path)
+            ->loadMissing(['account', 'stream.edition']);
         $publicUrl = rtrim((string) config('services.festival_stream.public_url'), '/');
 
         return view('festivals.portal.stream-player', [
+            'account' => $entitlement->account,
             'stream' => $entitlement->stream,
             'playlistUrl' => $publicUrl.'/hls/'.rawurlencode($path).'/index.m3u8',
             'heartbeatUrl' => $publicUrl.'/festival-stream/heartbeat/'.rawurlencode($path),

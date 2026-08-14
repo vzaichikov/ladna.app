@@ -374,6 +374,30 @@ class FestivalOnlineStreamingTest extends TestCase
         $access->authorizeViewerCookie($cookie, $stream->path, '203.0.113.40');
     }
 
+    public function test_valid_ip_bound_cookie_renders_the_stream_player_with_its_account_context(): void
+    {
+        [$account, $edition] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->online($stream)->create();
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        [, $entitlement] = $this->issuedOnlineOrder($stream, $type, $guest);
+        $access = app(FestivalStreamAccessService::class);
+        $access->acquireLease($entitlement, $guest, '203.0.113.40');
+        $cookie = $access->viewerCookie($entitlement, '203.0.113.40');
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.40'])
+            ->withCookie($access->viewerCookieName($stream->path), $cookie)
+            ->get(route('festival.stream.player', $stream->path))
+            ->assertOk()
+            ->assertViewIs('festivals.portal.stream-player')
+            ->assertViewHas('account', fn (Account $viewAccount): bool => $viewAccount->is($account))
+            ->assertViewHas('stream', fn (FestivalOnlineStream $viewStream): bool => $viewStream->is($stream))
+            ->assertSee($edition->title)
+            ->assertSee($account->name)
+            ->assertSee('https://stream.ladna.test/hls/'.$stream->path.'/index.m3u8', false)
+            ->assertSee('https://stream.ladna.test/festival-stream/heartbeat/'.$stream->path, false);
+    }
+
     public function test_minted_viewer_access_is_revoked_with_account_capability_or_subscription(): void
     {
         [$account, $edition] = $this->festival();
