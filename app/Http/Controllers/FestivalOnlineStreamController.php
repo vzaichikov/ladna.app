@@ -15,7 +15,6 @@ use App\Models\User;
 use App\Support\Festivals\FestivalMediaMtxGateway;
 use App\Support\Festivals\FestivalStreamAccessService;
 use App\Support\Festivals\FestivalWorkspaceAccess;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -84,6 +83,7 @@ class FestivalOnlineStreamController extends Controller
                     'publisher_token_encrypted' => $publisherToken,
                     'publisher_token_hash' => hash('sha256', $publisherToken),
                     'is_enabled' => false,
+                    'playback_override' => FestivalStreamOverride::Closed,
                 ]);
             }
 
@@ -106,9 +106,6 @@ class FestivalOnlineStreamController extends Controller
 
             $stream->fill([
                 'is_enabled' => $requestedEnabled,
-                'opens_at' => filled($data['opens_at']) ? CarbonImmutable::parse($data['opens_at'], $festivalEdition->timezone)->utc() : null,
-                'closes_at' => filled($data['closes_at']) ? CarbonImmutable::parse($data['closes_at'], $festivalEdition->timezone)->utc() : null,
-                'playback_override' => FestivalStreamOverride::from($data['playback_override']),
             ])->save();
 
             return $stream;
@@ -116,6 +113,16 @@ class FestivalOnlineStreamController extends Controller
 
         return redirect()->route('dashboard.accounts.festivals.online-stream.edit', [$account, $festivalEdition])
             ->with('status', $configured->wasRecentlyCreated ? __('app.festival_stream_configured') : __('app.festival_stream_saved'));
+    }
+
+    public function start(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
+    {
+        return $this->setPlayback($request, $account, $festivalEdition, FestivalStreamOverride::Open);
+    }
+
+    public function stop(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
+    {
+        return $this->setPlayback($request, $account, $festivalEdition, FestivalStreamOverride::Closed);
     }
 
     public function resetLeases(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
@@ -161,6 +168,37 @@ class FestivalOnlineStreamController extends Controller
             ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now()))
             ->whereHas('items.admissionType', fn ($query) => $query->where('festival_online_stream_id', $stream->id))
             ->exists();
+    }
+
+    private function setPlayback(
+        Request $request,
+        Account $account,
+        FestivalEdition $festivalEdition,
+        FestivalStreamOverride $override,
+    ): RedirectResponse {
+        $this->financePermissions($request, $account, $festivalEdition);
+
+        DB::transaction(function () use ($account, $festivalEdition, $override): void {
+            $stream = FestivalOnlineStream::query()
+                ->whereBelongsTo($account)
+                ->whereBelongsTo($festivalEdition, 'edition')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($override === FestivalStreamOverride::Open && ! $stream->is_enabled) {
+                throw ValidationException::withMessages(['stream' => __('app.festival_stream_start_requires_enabled')]);
+            }
+
+            $stream->forceFill([
+                'playback_override' => $override,
+                'opens_at' => null,
+                'closes_at' => null,
+            ])->save();
+        }, 3);
+
+        return back()->with('status', __($override === FestivalStreamOverride::Open
+            ? 'app.festival_stream_started'
+            : 'app.festival_stream_stopped'));
     }
 
     private function hasOpenOnlineSales(FestivalOnlineStream $stream): bool

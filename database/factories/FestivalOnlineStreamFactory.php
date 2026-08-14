@@ -36,6 +36,9 @@ class FestivalOnlineStreamFactory extends Factory
 
     public function enabled(): static
     {
-        return $this->state(fn (): array => ['is_enabled' => true]);
+        return $this->state(fn (): array => [
+            'is_enabled' => true,
+            'playback_override' => 'open',
+        ]);
     }
 }

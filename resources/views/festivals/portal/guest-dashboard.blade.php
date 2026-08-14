@@ -67,8 +67,7 @@
                                                 @if($order->status === \App\Enums\FestivalTicketOrderStatus::Refunded || $ticket->status === \App\Enums\FestivalTicketStatus::Refunded) {{ __('app.festival_order_refunded') }}
                                                 @elseif(! $entitlement || $ticket->status !== \App\Enums\FestivalTicketStatus::Valid || $order->status !== \App\Enums\FestivalTicketOrderStatus::Paid) {{ __('app.festival_stream_unavailable') }}
                                                 @elseif(! $stream->is_enabled) {{ __('app.festival_stream_disabled') }}
-                                                @elseif($stream->playback_override === \App\Enums\FestivalStreamOverride::Closed || $stream->closes_at?->isPast()) {{ __('app.festival_stream_closed') }}
-                                                @elseif($stream->playback_override === \App\Enums\FestivalStreamOverride::Automatic && $stream->opens_at?->isFuture()) {{ __('app.festival_stream_not_open') }}
+                                                @elseif(! $stream->isOpen()) {{ __('app.festival_stream_closed') }}
                                                 @elseif($mediaStatus === null) {{ __('app.festival_stream_status_unavailable') }}
                                                 @elseif($mediaStatus['publisher_online']) {{ __('app.festival_stream_live') }}
                                                 @else {{ __('app.festival_stream_publisher_offline') }}

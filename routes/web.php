@@ -645,6 +645,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             Route::put('{festivalEdition:id}/admission-types/{festivalAdmissionType}', [FestivalAdmissionTypeController::class, 'update'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.update');
             Route::delete('{festivalEdition:id}/admission-types/{festivalAdmissionType}', [FestivalAdmissionTypeController::class, 'destroy'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.destroy');
             Route::put('{festivalEdition:id}/online-stream', [FestivalOnlineStreamController::class, 'update'])->whereNumber('festivalEdition')->name('online-stream.update');
+            Route::patch('{festivalEdition:id}/online-stream/start', [FestivalOnlineStreamController::class, 'start'])->whereNumber('festivalEdition')->name('online-stream.start');
+            Route::patch('{festivalEdition:id}/online-stream/stop', [FestivalOnlineStreamController::class, 'stop'])->whereNumber('festivalEdition')->name('online-stream.stop');
             Route::delete('{festivalEdition:id}/online-stream/leases', [FestivalOnlineStreamController::class, 'resetLeases'])->whereNumber('festivalEdition')->name('online-stream.reset-leases');
             Route::post('{festivalEdition:id}/ticket-orders/{festivalTicketOrder}/refund', [FestivalWorkspaceController::class, 'refundTicketOrder'])->whereNumber('festivalEdition')->whereNumber('festivalTicketOrder')->name('ticket-orders.refund');
             Route::post('{festivalEdition:id}/tickets/{festivalTicket}/void', [FestivalWorkspaceController::class, 'voidTicket'])->whereNumber('festivalEdition')->whereNumber('festivalTicket')->name('tickets.void');

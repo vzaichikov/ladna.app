@@ -6,12 +6,34 @@
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <x-ui.page-header :title="__('app.festival_stream_settings')" :copy="__('app.festival_stream_settings_copy')">
         <x-slot:actions>
+            @if ($stream)
+                <form method="POST" action="{{ route('dashboard.accounts.festivals.online-stream.start', [$account, $edition]) }}">
+                    @csrf
+                    @method('PATCH')
+                    <x-ui.button type="submit" variant="success" :disabled="! $stream->is_enabled || $stream->playback_override === \App\Enums\FestivalStreamOverride::Open">
+                        <x-ui.icon name="play" class="h-4 w-4" />
+                        {{ __('app.festival_stream_start') }}
+                    </x-ui.button>
+                </form>
+                <form method="POST" action="{{ route('dashboard.accounts.festivals.online-stream.stop', [$account, $edition]) }}">
+                    @csrf
+                    @method('PATCH')
+                    <x-ui.button type="submit" variant="danger" :disabled="$stream->playback_override === \App\Enums\FestivalStreamOverride::Closed">
+                        <x-ui.icon name="square" class="h-4 w-4" />
+                        {{ __('app.festival_stream_stop') }}
+                    </x-ui.button>
+                </form>
+            @endif
             <x-ui.button :href="route('help.show', 'festivals').'#help-section-festivals-online-streaming'" variant="secondary" target="_blank" rel="noopener">
                 <x-ui.icon name="circle-help" class="h-4 w-4" />
                 {{ __('app.festival_stream_full_help') }}
             </x-ui.button>
         </x-slot:actions>
     </x-ui.page-header>
+
+    @error('stream')
+        <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{{ $message }}</div>
+    @enderror
 
     @if (! $stream)
         <div class="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-sm text-sky-950">
@@ -86,55 +108,14 @@
                 </x-ui.button>
             </div>
             <div class="overflow-hidden rounded-2xl border border-slate-800 bg-black shadow-2xl">
-                <iframe src="{{ route('dashboard.accounts.festivals.online-stream.preview', [$account, $edition]) }}" title="{{ __('app.festival_stream_preview_frame_title') }}" allow="autoplay; fullscreen" allowfullscreen class="aspect-video w-full bg-black"></iframe>
+                <iframe src="{{ route('dashboard.accounts.festivals.online-stream.preview', [$account, $edition]) }}" title="{{ __('app.festival_stream_preview_frame_title') }}" allow="autoplay; fullscreen" allowfullscreen scrolling="no" class="block aspect-video w-full border-0 bg-black"></iframe>
             </div>
         </x-ui.panel>
     @else
-    @if ($stream)
-        <x-ui.panel class="max-w-4xl border-brand-200 bg-brand-50/40" data-festival-stream-staff-preview>
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h2 class="text-base font-semibold text-slate-950">{{ __('app.festival_stream_preview_title') }}</h2>
-                    <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{{ __('app.festival_stream_preview_copy') }}</p>
-                    @unless ($stream->is_enabled)
-                        <p class="mt-2 text-sm font-semibold text-amber-700">{{ __('app.festival_stream_preview_requires_enabled') }}</p>
-                    @endunless
-                </div>
-                @if ($stream->is_enabled)
-                    <x-ui.button :href="route('dashboard.accounts.festivals.online-stream.edit', [$account, $edition]).'?tab=preview'">
-                        <x-ui.icon name="play" class="h-4 w-4" />
-                        {{ __('app.festival_stream_preview_open') }}
-                    </x-ui.button>
-                @endif
-            </div>
-        </x-ui.panel>
-    @endif
-
     <x-ui.panel data-festival-stream-configuration>
         <form method="POST" action="{{ route('dashboard.accounts.festivals.online-stream.update', [$account, $edition]) }}" class="space-y-6">
             @csrf
             @method('PUT')
-
-            <div class="grid gap-5 md:grid-cols-2">
-                <label>
-                    <span class="crm-label">{{ __('app.festival_stream_opens_at') }}</span>
-                    <input type="datetime-local" name="opens_at" value="{{ old('opens_at', $stream?->opens_at?->timezone($edition->timezone)->format('Y-m-d\TH:i')) }}" class="crm-field">
-                    @error('opens_at') <span class="crm-help text-rose-600">{{ $message }}</span> @enderror
-                </label>
-                <label>
-                    <span class="crm-label">{{ __('app.festival_stream_closes_at') }}</span>
-                    <input type="datetime-local" name="closes_at" value="{{ old('closes_at', $stream?->closes_at?->timezone($edition->timezone)->format('Y-m-d\TH:i')) }}" class="crm-field">
-                    @error('closes_at') <span class="crm-help text-rose-600">{{ $message }}</span> @enderror
-                </label>
-                <label class="md:col-span-2">
-                    <span class="crm-label">{{ __('app.festival_stream_override') }}</span>
-                    <select name="playback_override" required class="crm-field">
-                        @foreach (\App\Enums\FestivalStreamOverride::cases() as $override)
-                            <option value="{{ $override->value }}" @selected(old('playback_override', $stream?->playback_override?->value ?? 'automatic') === $override->value)>{{ __('app.festival_stream_override_'.$override->value) }}</option>
-                        @endforeach
-                    </select>
-                </label>
-            </div>
 
             <input type="hidden" name="is_enabled" value="0">
             @if ($stream)

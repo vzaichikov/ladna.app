@@ -4,7 +4,6 @@ namespace App\Support\Festivals;
 
 use App\Enums\AccountStatus;
 use App\Enums\FestivalAdmissionDeliveryMode;
-use App\Enums\FestivalStreamOverride;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
 use App\Models\FestivalOnlineStream;
@@ -261,10 +260,7 @@ class FestivalStreamAccessService
             throw ValidationException::withMessages(['stream' => __('app.festival_stream_disabled')]);
         }
         if ($requireOpen && ! $stream->isOpen()) {
-            $message = $stream->playback_override === FestivalStreamOverride::Closed || $stream->closes_at?->isPast()
-                ? __('app.festival_stream_closed')
-                : __('app.festival_stream_not_open');
-            throw ValidationException::withMessages(['stream' => $message]);
+            throw ValidationException::withMessages(['stream' => __('app.festival_stream_closed')]);
         }
     }
 

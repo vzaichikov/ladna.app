@@ -67,6 +67,7 @@ class FestivalStreamAccessController extends Controller
         return response()->view('festivals.portal.stream-player', [
             'account' => $viewer->account,
             'disablePublicPwa' => true,
+            'isEmbed' => $viewer->isStaffPreview,
             'isStaffPreview' => $viewer->isStaffPreview,
             'stream' => $viewer->stream,
             'playlistUrl' => $publicUrl.'/hls/'.rawurlencode($path).'/index.m3u8',

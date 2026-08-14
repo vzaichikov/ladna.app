@@ -38,9 +38,7 @@ class FestivalOnlineStream extends Model
 
         return $this->is_enabled && match ($this->playback_override) {
             FestivalStreamOverride::Open => true,
-            FestivalStreamOverride::Closed => false,
-            FestivalStreamOverride::Automatic => (! $this->opens_at || $this->opens_at->lessThanOrEqualTo($at))
-                && (! $this->closes_at || $this->closes_at->greaterThanOrEqualTo($at)),
+            FestivalStreamOverride::Closed, FestivalStreamOverride::Automatic => false,
         };
     }
 

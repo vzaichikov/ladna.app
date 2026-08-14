@@ -64,6 +64,9 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSessionHasNoErrors();
         $stream = $edition->onlineStream()->firstOrFail();
         $this->assertFalse($stream->is_enabled);
+        $this->assertSame(FestivalStreamOverride::Closed, $stream->playback_override);
+        $this->assertNull($stream->opens_at);
+        $this->assertNull($stream->closes_at);
 
         $createTypeUrl = route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]);
         $this->actingAs($owner)->from($createTypeUrl)->post($createTypeUrl, $this->admissionPayload())
@@ -209,7 +212,7 @@ class FestivalOnlineStreamingTest extends TestCase
         $this->assertNotNull($current->tickets()->sole()->streamEntitlement);
     }
 
-    public function test_staff_cannot_disable_stream_with_active_online_orders_but_can_force_playback_closed(): void
+    public function test_staff_cannot_disable_stream_with_active_online_orders_but_can_stop_playback(): void
     {
         [$account, $edition, $owner] = $this->festival();
         $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
@@ -222,11 +225,57 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSessionHasErrors('is_enabled');
         $this->assertTrue($stream->refresh()->is_enabled);
 
-        $this->actingAs($owner)->put($url, $this->streamPayload([
-            'is_enabled' => 1,
-            'playback_override' => FestivalStreamOverride::Closed->value,
-        ]))->assertSessionHasNoErrors();
+        $this->actingAs($owner)
+            ->from($url)
+            ->patch(route('dashboard.accounts.festivals.online-stream.stop', [$account, $edition]))
+            ->assertRedirect($url)
+            ->assertSessionHasNoErrors();
         $this->assertSame(FestivalStreamOverride::Closed, $stream->refresh()->playback_override);
+        $this->assertTrue($stream->is_enabled);
+    }
+
+    public function test_finance_staff_manually_start_and_stop_playback_with_tenant_and_enablement_guards(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->for($edition, 'edition')->create([
+            'account_id' => $account->id,
+            'opens_at' => now()->subHour(),
+            'closes_at' => now()->addHour(),
+            'playback_override' => FestivalStreamOverride::Automatic,
+        ]);
+        $settingsUrl = route('dashboard.accounts.festivals.online-stream.edit', [$account, $edition]);
+        $startUrl = route('dashboard.accounts.festivals.online-stream.start', [$account, $edition]);
+        $stopUrl = route('dashboard.accounts.festivals.online-stream.stop', [$account, $edition]);
+
+        $this->assertFalse($stream->isOpen());
+        $this->actingAs($owner)->from($settingsUrl)->patch($startUrl)
+            ->assertRedirect($settingsUrl)
+            ->assertSessionHasErrors('stream');
+
+        $stream->update(['is_enabled' => true]);
+        $this->actingAs($owner)->from($settingsUrl)->patch($startUrl)
+            ->assertRedirect($settingsUrl)
+            ->assertSessionHas('status', __('app.festival_stream_started'));
+        $this->assertSame(FestivalStreamOverride::Open, $stream->refresh()->playback_override);
+        $this->assertTrue($stream->isOpen());
+        $this->assertNull($stream->opens_at);
+        $this->assertNull($stream->closes_at);
+
+        $this->actingAs($owner)->from($settingsUrl)->patch($stopUrl)
+            ->assertRedirect($settingsUrl)
+            ->assertSessionHas('status', __('app.festival_stream_stopped'));
+        $this->assertSame(FestivalStreamOverride::Closed, $stream->refresh()->playback_override);
+        $this->assertFalse($stream->isOpen());
+
+        $staff = User::factory()->create();
+        $account->users()->attach($staff, ['role' => 'manager']);
+        $this->actingAs($staff)->patch($startUrl)->assertForbidden();
+
+        $otherAccount = Account::factory()->create(['enable_festivals' => true]);
+        $otherAccount->addOwner($owner);
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.online-stream.start', [$otherAccount, $edition]))
+            ->assertNotFound();
     }
 
     public function test_staff_must_close_online_ticket_sales_before_disabling_streaming(): void
@@ -289,8 +338,11 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Security-Policy', "frame-ancestors 'self' ".rtrim((string) config('app.url'), '/'))
             ->assertViewHas('isStaffPreview', true)
+            ->assertViewHas('isEmbed', true)
             ->assertSee('data-festival-stream-staff-preview', false)
-            ->assertSee(__('app.festival_stream_preview_player_help'));
+            ->assertSee('h-dvh', false)
+            ->assertDontSee(__('app.festival_stream_preview_player_help'))
+            ->assertDontSee($edition->title);
 
         foreach ([$cookie.'forged', $cookie] as $index => $invalidCookie) {
             try {
@@ -357,20 +409,26 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSee('6000')
             ->assertSee('12–16')
             ->assertSee(route('help.show', 'festivals').'#help-section-festivals-online-streaming', false)
-            ->assertSee(__('app.festival_stream_preview_requires_enabled'))
+            ->assertSee(__('app.festival_stream_start'))
+            ->assertSee(__('app.festival_stream_stop'))
+            ->assertDontSee('name="opens_at"', false)
+            ->assertDontSee('name="closes_at"', false)
+            ->assertDontSee('name="playback_override"', false)
+            ->assertDontSee('data-festival-stream-staff-preview', false)
             ->assertDontSee('data-festival-stream-staff-preview-tab', false);
 
         $stream->update(['is_enabled' => true]);
         $this->actingAs($owner)->get($url)
             ->assertOk()
             ->assertSee($url.'?tab=preview', false)
-            ->assertSee(__('app.festival_stream_preview_copy'));
+            ->assertDontSee(__('app.festival_stream_preview_copy'));
         $this->actingAs($owner)->get($url.'?tab=preview')
             ->assertOk()
             ->assertViewHas('activeStreamTab', 'preview')
             ->assertSee('data-festival-stream-staff-preview-tab', false)
             ->assertSee('<iframe', false)
             ->assertSee('allow="autoplay; fullscreen"', false)
+            ->assertSee('scrolling="no"', false)
             ->assertSee($previewUrl, false);
     }
 
@@ -564,6 +622,7 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertViewIs('festivals.portal.stream-player')
             ->assertViewHas('account', fn (Account $viewAccount): bool => $viewAccount->is($account))
             ->assertViewHas('stream', fn (FestivalOnlineStream $viewStream): bool => $viewStream->is($stream))
+            ->assertViewHas('isEmbed', false)
             ->assertSee($edition->title)
             ->assertSee($account->name)
             ->assertSee(rtrim((string) config('app.url'), '/').'/'.$account->slug, false)
@@ -761,9 +820,6 @@ class FestivalOnlineStreamingTest extends TestCase
     {
         return [
             'is_enabled' => 0,
-            'opens_at' => now()->addDay()->format('Y-m-d\TH:i'),
-            'closes_at' => now()->addDays(2)->format('Y-m-d\TH:i'),
-            'playback_override' => FestivalStreamOverride::Automatic->value,
             'rotate_publisher_token' => 0,
             ...$overrides,
         ];
