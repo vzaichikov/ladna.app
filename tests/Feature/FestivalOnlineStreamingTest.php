@@ -7,6 +7,7 @@ use App\Actions\Festivals\FestivalTicketIssuer;
 use App\Enums\AccountStatus;
 use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalStreamOverride;
+use App\Enums\FestivalStreamProvider;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
 use App\Enums\SubscriptionStatus;
@@ -64,6 +65,7 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSessionHasNoErrors();
         $stream = $edition->onlineStream()->firstOrFail();
         $this->assertFalse($stream->is_enabled);
+        $this->assertSame(FestivalStreamProvider::MediaMtx, $stream->provider);
         $this->assertSame(FestivalStreamOverride::Closed, $stream->playback_override);
         $this->assertNull($stream->opens_at);
         $this->assertNull($stream->closes_at);
@@ -292,6 +294,7 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->assertFalse($stream->refresh()->is_enabled);
+        $this->assertSame(FestivalStreamOverride::Closed, $stream->playback_override);
     }
 
     public function test_finance_staff_can_preview_the_real_stream_without_a_ticket_schedule_or_ip_limit(): void
@@ -405,6 +408,11 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSee('data-festival-stream-status', false)
             ->assertSee($statusUrl, false)
             ->assertSee(__('app.festival_stream_obs_quick_setup'))
+            ->assertSee(__('app.festival_stream_provider_mediamtx'))
+            ->assertSee(__('app.festival_stream_provider_youtube'))
+            ->assertSee('name="provider"', false)
+            ->assertSee('name="youtube_url"', false)
+            ->assertSee(__('app.festival_stream_youtube_warning_title'))
             ->assertSee('1920x1080')
             ->assertSee('6000')
             ->assertSee('12–16')
@@ -729,6 +737,184 @@ class FestivalOnlineStreamingTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_youtube_fallback_is_stored_as_an_id_and_can_be_enabled_without_mediamtx(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $url = route('dashboard.accounts.festivals.online-stream.update', [$account, $edition]);
+        config([
+            'services.festival_stream.api_url' => '',
+            'services.festival_stream.obs_server' => '',
+            'services.festival_stream.hls_origin_url' => '',
+        ]);
+
+        $payload = $this->streamPayload([
+            'provider' => FestivalStreamProvider::YouTube->value,
+            'youtube_url' => 'https://youtu.be/dQw4w9WgXcQ?si=share-token',
+            'is_enabled' => 1,
+        ]);
+        $this->actingAs($owner)->put($url, $payload)->assertSessionHasNoErrors();
+        $stream = $edition->onlineStream()->firstOrFail();
+        $this->assertFalse($stream->is_enabled);
+        $this->assertSame(FestivalStreamProvider::YouTube, $stream->provider);
+        $this->assertSame('dQw4w9WgXcQ', $stream->youtube_video_id);
+
+        $this->actingAs($owner)->put($url, $payload)->assertSessionHasNoErrors();
+        $this->assertTrue($stream->refresh()->is_enabled);
+        $this->assertDatabaseMissing('festival_online_streams', ['youtube_video_id' => 'https://youtu.be/dQw4w9WgXcQ?si=share-token']);
+    }
+
+    public function test_source_switching_is_manual_and_keeps_existing_ticket_access(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create([
+            'account_id' => $account->id,
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+        ]);
+        $type = FestivalAdmissionType::factory()->online($stream)->create();
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        [, $entitlement] = $this->issuedOnlineOrder($stream, $type, $guest);
+        $access = app(FestivalStreamAccessService::class);
+        $access->acquireLease($entitlement, $guest, '203.0.113.81');
+        $cookie = $access->viewerCookie($entitlement, '203.0.113.81');
+        $settingsUrl = route('dashboard.accounts.festivals.online-stream.update', [$account, $edition]);
+        $youtubePayload = $this->streamPayload([
+            'is_enabled' => 1,
+            'provider' => FestivalStreamProvider::YouTube->value,
+            'youtube_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        ]);
+
+        $this->actingAs($owner)->from($settingsUrl)->put($settingsUrl, $youtubePayload)
+            ->assertSessionHasErrors('provider');
+        $this->assertSame(FestivalStreamProvider::MediaMtx, $stream->refresh()->provider);
+
+        $this->actingAs($owner)->patch(route('dashboard.accounts.festivals.online-stream.stop', [$account, $edition]))
+            ->assertSessionHasNoErrors();
+        $this->actingAs($owner)->put($settingsUrl, $youtubePayload)->assertSessionHasNoErrors();
+        $this->actingAs($owner)->patch(route('dashboard.accounts.festivals.online-stream.start', [$account, $edition]))
+            ->assertSessionHasNoErrors();
+        $this->assertSame(FestivalStreamProvider::YouTube, $stream->refresh()->provider);
+        $this->assertTrue($access->authorizeViewerCredential($cookie, $stream->path, '203.0.113.81')->entitlement?->is($entitlement));
+        $this->assertDatabaseHas('festival_stream_entitlements', ['id' => $entitlement->id, 'festival_online_stream_id' => $stream->id]);
+
+        $this->actingAs($owner)->from($settingsUrl)->put($settingsUrl, [
+            ...$youtubePayload,
+            'youtube_url' => 'https://youtu.be/aaaaaaaaaaa',
+        ])->assertSessionHasErrors('youtube_url');
+        $this->assertSame('dQw4w9WgXcQ', $stream->refresh()->youtube_video_id);
+
+        $oldTokenHash = $stream->publisher_token_hash;
+        $this->actingAs($owner)->put($settingsUrl, [
+            ...$youtubePayload,
+            'rotate_publisher_token' => 1,
+        ])->assertSessionHasNoErrors();
+        $this->assertNotSame($oldTokenHash, $stream->refresh()->publisher_token_hash);
+    }
+
+    public function test_youtube_player_uses_the_existing_authorization_wrapper_but_denies_hls_and_rtmp(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->enabled()->youtube()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->online($stream)->create();
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        [, $entitlement] = $this->issuedOnlineOrder($stream, $type, $guest);
+        $access = app(FestivalStreamAccessService::class);
+        $access->acquireLease($entitlement, $guest, '203.0.113.82');
+        $cookie = $access->viewerCookie($entitlement, '203.0.113.82');
+        $cookieName = $access->viewerCookieName($stream->path);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.82'])
+            ->withCookie($cookieName, $cookie)
+            ->get(route('festival.stream.player', $stream->path))
+            ->assertOk()
+            ->assertHeader('Content-Security-Policy', "frame-src https://www.youtube-nocookie.com; frame-ancestors 'self' ".rtrim((string) config('app.url'), '/'))
+            ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+            ->assertSee('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&amp;playsinline=1&amp;rel=0', false)
+            ->assertSee('data-stream-provider="youtube"', false)
+            ->assertSee('sandbox="allow-scripts allow-same-origin allow-presentation"', false)
+            ->assertDontSee('/hls/'.$stream->path, false)
+            ->assertDontSee('https://www.youtube.com/watch', false);
+
+        $headers = [
+            'X-Festival-Stream-Secret' => 'test-internal-secret',
+            'X-Festival-Stream-Path' => $stream->path,
+            'X-Original-Client-IP' => '203.0.113.82',
+        ];
+        $this->withCookie($cookieName, $cookie)->withHeaders($headers)
+            ->get(route('internal.festival-stream.authorize'))
+            ->assertForbidden();
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.82'])
+            ->withCookie($cookieName, $cookie)
+            ->get(route('festival.stream.heartbeat', $stream->path))
+            ->assertNoContent();
+        $this->withHeader('X-Festival-Stream-Secret', 'test-internal-secret')
+            ->postJson(route('internal.festival-stream.publisher-authorize'), [
+                'action' => 'publish',
+                'protocol' => 'rtmp',
+                'path' => $stream->path,
+                'query' => 'token='.rawurlencode($stream->publisher_token_encrypted),
+            ])->assertUnauthorized();
+
+        $viewer = $access->consumeBootstrapCredential(
+            $access->staffPreviewBootstrapToken($stream, $owner, '203.0.113.83'),
+            '203.0.113.83',
+        );
+        $staffCookie = $access->viewerCredentialCookie($viewer, '203.0.113.83');
+        $this->withCookie($cookieName, $staffCookie)->withHeaders([...$headers, 'X-Original-Client-IP' => '203.0.113.83'])
+            ->get(route('internal.festival-stream.authorize'))
+            ->assertForbidden();
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.99'])
+            ->withCookie($cookieName, $staffCookie)
+            ->get(route('festival.stream.player', $stream->path))
+            ->assertOk()
+            ->assertSee('data-festival-stream-staff-preview', false)
+            ->assertSee('data-stream-provider="youtube"', false)
+            ->assertSee('h-dvh', false)
+            ->assertDontSee($edition->title);
+    }
+
+    public function test_youtube_status_counts_only_current_ladna_ticket_networks_without_calling_mediamtx(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->enabled()->youtube()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->online($stream)->create();
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        [, $entitlement] = $this->issuedOnlineOrder($stream, $type, $guest);
+        $access = app(FestivalStreamAccessService::class);
+        $access->acquireLease($entitlement, $guest, '203.0.113.84');
+        $access->acquireLease($entitlement, $guest, '203.0.113.85');
+        $entitlement->leases()->where('ip_hash', '!=', $entitlement->leases()->oldest('id')->value('ip_hash'))->update(['expires_at' => now()->subSecond()]);
+        Http::fake();
+
+        $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.festivals.online-stream.status', [$account, $edition]))
+            ->assertOk()
+            ->assertJson([
+                'provider' => FestivalStreamProvider::YouTube->value,
+                'playback_open' => true,
+                'configured' => true,
+                'server_online' => false,
+                'readers' => 1,
+            ]);
+        Http::assertNothingSent();
+    }
+
+    public function test_youtube_start_requires_a_configured_video_id(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'provider' => FestivalStreamProvider::YouTube,
+            'youtube_video_id' => null,
+            'is_enabled' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.online-stream.start', [$account, $edition]))
+            ->assertSessionHasErrors('stream');
+        $this->assertFalse($stream->refresh()->isOpen());
+    }
+
     private function assertViewerAccessDenied(FestivalStreamAccessService $access, string $cookie, string $path): void
     {
         try {
@@ -820,6 +1006,7 @@ class FestivalOnlineStreamingTest extends TestCase
     {
         return [
             'is_enabled' => 0,
+            'provider' => FestivalStreamProvider::MediaMtx->value,
             'rotate_publisher_token' => 0,
             ...$overrides,
         ];

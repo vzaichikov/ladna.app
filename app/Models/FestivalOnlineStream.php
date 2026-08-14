@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\FestivalStreamOverride;
+use App\Enums\FestivalStreamProvider;
 use Database\Factories\FestivalOnlineStreamFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -12,19 +13,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
-#[Fillable(['account_id', 'festival_edition_id', 'is_enabled', 'path', 'publisher_token_encrypted', 'publisher_token_hash', 'opens_at', 'closes_at', 'playback_override'])]
+#[Fillable(['account_id', 'festival_edition_id', 'is_enabled', 'provider', 'path', 'publisher_token_encrypted', 'publisher_token_hash', 'youtube_video_id', 'opens_at', 'closes_at', 'playback_override'])]
 #[Hidden(['publisher_token_encrypted', 'publisher_token_hash'])]
 class FestivalOnlineStream extends Model
 {
     /** @use HasFactory<FestivalOnlineStreamFactory> */
     use HasFactory;
 
-    protected $attributes = ['is_enabled' => false, 'playback_override' => 'automatic'];
+    protected $attributes = ['is_enabled' => false, 'provider' => 'mediamtx', 'playback_override' => 'automatic'];
 
     protected function casts(): array
     {
         return [
             'is_enabled' => 'boolean',
+            'provider' => FestivalStreamProvider::class,
             'publisher_token_encrypted' => 'encrypted',
             'opens_at' => 'datetime',
             'closes_at' => 'datetime',

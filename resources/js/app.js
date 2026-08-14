@@ -2076,17 +2076,20 @@ function initFestivalStreamStatus(root = document) {
         }
 
         const statusUrl = container.dataset.statusUrl;
-        const serverCard = container.querySelector('[data-festival-stream-server-card]');
-        const serverValue = container.querySelector('[data-festival-stream-server-value]');
-        const obsCard = container.querySelector('[data-festival-stream-obs-card]');
-        const obsValue = container.querySelector('[data-festival-stream-obs-value]');
-        const obsDetails = container.querySelector('[data-festival-stream-obs-details]');
+        const providerCard = container.querySelector('[data-festival-stream-provider-card]');
+        const providerValue = container.querySelector('[data-festival-stream-provider-value]');
+        const providerDetails = container.querySelector('[data-festival-stream-provider-details]');
+        const healthCard = container.querySelector('[data-festival-stream-health-card]');
+        const healthLabel = container.querySelector('[data-festival-stream-health-label]');
+        const healthValue = container.querySelector('[data-festival-stream-health-value]');
+        const healthDetails = container.querySelector('[data-festival-stream-health-details]');
         const viewersCard = container.querySelector('[data-festival-stream-viewers-card]');
+        const viewersLabel = container.querySelector('[data-festival-stream-viewers-label]');
         const viewersValue = container.querySelector('[data-festival-stream-viewers-value]');
         const viewersDetails = container.querySelector('[data-festival-stream-viewers-details]');
         const statusMessage = container.querySelector('[data-festival-stream-status-message]');
 
-        if (!statusUrl || !serverCard || !serverValue || !obsCard || !obsValue || !obsDetails || !viewersCard || !viewersValue || !viewersDetails || !statusMessage) {
+        if (!statusUrl || !providerCard || !providerValue || !providerDetails || !healthCard || !healthLabel || !healthValue || !healthDetails || !viewersCard || !viewersLabel || !viewersValue || !viewersDetails || !statusMessage) {
             return;
         }
 
@@ -2105,28 +2108,53 @@ function initFestivalStreamStatus(root = document) {
         };
         const formatTemplate = (template, key, value) => (template || '').replace(`:${key}`, value);
         const renderUnavailable = () => {
-            serverValue.textContent = container.dataset.serverUnavailable || '';
-            obsValue.textContent = container.dataset.serverUnavailable || '';
+            providerValue.textContent = container.dataset.providerMediamtx || '';
+            providerDetails.textContent = container.dataset.serverUnavailable || '';
+            healthLabel.textContent = container.dataset.obsStatusLabel || '';
+            healthValue.textContent = container.dataset.serverUnavailable || '';
             viewersValue.textContent = '—';
-            obsDetails.textContent = '';
+            healthDetails.textContent = '';
+            viewersLabel.textContent = container.dataset.hlsViewersLabel || '';
             viewersDetails.textContent = container.dataset.serverUnavailable || '';
-            applyTone(serverCard, serverValue, 'danger');
-            applyTone(obsCard, obsValue, 'danger');
+            applyTone(providerCard, providerValue, 'danger');
+            applyTone(healthCard, healthValue, 'danger');
             applyTone(viewersCard, viewersValue, 'neutral');
         };
         const renderStatus = (payload) => {
+            const readers = Number.isFinite(Number(payload.readers)) ? Number(payload.readers) : 0;
+
+            if (payload.provider === 'youtube') {
+                providerValue.textContent = container.dataset.providerYoutube || '';
+                providerDetails.textContent = container.dataset.youtubeStatusHelp || '';
+                healthLabel.textContent = container.dataset.youtubeStatusLabel || '';
+                healthValue.textContent = payload.configured ? container.dataset.youtubeConfigured : container.dataset.youtubeUnavailable;
+                healthDetails.textContent = container.dataset.youtubeStatusHelp || '';
+                viewersLabel.textContent = container.dataset.youtubeConnectionsLabel || '';
+                viewersValue.textContent = String(readers);
+                viewersDetails.textContent = readers > 0
+                    ? formatTemplate(container.dataset.youtubeConnectionsTemplate, 'count', String(readers))
+                    : container.dataset.youtubeConnectionsEmpty || '';
+                applyTone(providerCard, providerValue, 'info');
+                applyTone(healthCard, healthValue, payload.configured ? 'success' : 'danger');
+                applyTone(viewersCard, viewersValue, readers > 0 ? 'info' : 'neutral');
+
+                return;
+            }
+
             if (!payload.server_online) {
                 renderUnavailable();
                 return;
             }
 
-            const readers = Number.isFinite(Number(payload.readers)) ? Number(payload.readers) : 0;
             const tracks = Array.isArray(payload.tracks) ? payload.tracks.filter(Boolean).join(', ') : '';
-            serverValue.textContent = container.dataset.serverOnline || '';
-            obsValue.textContent = payload.publisher_online ? container.dataset.obsOnline : container.dataset.obsOffline;
+            providerValue.textContent = container.dataset.providerMediamtx || '';
+            providerDetails.textContent = container.dataset.serverOnline || '';
+            healthLabel.textContent = container.dataset.obsStatusLabel || '';
+            healthValue.textContent = payload.publisher_online ? container.dataset.obsOnline : container.dataset.obsOffline;
+            viewersLabel.textContent = container.dataset.hlsViewersLabel || '';
             viewersValue.textContent = String(readers);
-            applyTone(serverCard, serverValue, 'success');
-            applyTone(obsCard, obsValue, payload.publisher_online ? 'success' : 'warning');
+            applyTone(providerCard, providerValue, 'info');
+            applyTone(healthCard, healthValue, payload.publisher_online ? 'success' : 'warning');
             applyTone(viewersCard, viewersValue, readers > 0 ? 'info' : 'neutral');
 
             const obsFacts = [];
@@ -2136,7 +2164,7 @@ function initFestivalStreamStatus(root = document) {
             if (payload.publisher_online && tracks) {
                 obsFacts.push(formatTemplate(container.dataset.obsTracksTemplate, 'tracks', tracks));
             }
-            obsDetails.textContent = obsFacts.join(' · ') || container.dataset.obsWaiting || '';
+            healthDetails.textContent = obsFacts.join(' · ') || container.dataset.obsWaiting || '';
             viewersDetails.textContent = readers > 0
                 ? formatTemplate(container.dataset.viewersTemplate, 'count', String(readers))
                 : container.dataset.viewersEmpty || '';

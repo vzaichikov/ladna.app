@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalStreamProvider;
 use App\Models\Account;
 use App\Models\FestivalOnlineStream;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalStreamEntitlement;
 use App\Support\Festivals\FestivalStreamAccessService;
 use App\Support\Festivals\FestivalStreamViewer;
+use App\Support\Festivals\FestivalYouTubeVideo;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -63,6 +65,14 @@ class FestivalStreamAccessController extends Controller
         $viewer = $this->authorizeCookie($request, $path);
         $viewer->stream->loadMissing('edition');
         $publicUrl = rtrim((string) config('services.festival_stream.public_url'), '/');
+        $youtubeEmbedUrl = $viewer->stream->provider === FestivalStreamProvider::YouTube
+            ? FestivalYouTubeVideo::embedUrl($viewer->stream->youtube_video_id)
+            : '';
+        abort_if($viewer->stream->provider === FestivalStreamProvider::YouTube && $youtubeEmbedUrl === '', 503, __('app.festival_stream_unavailable'));
+        $contentSecurityPolicy = "frame-ancestors 'self' ".rtrim((string) config('app.url'), '/');
+        if ($viewer->stream->provider === FestivalStreamProvider::YouTube) {
+            $contentSecurityPolicy = 'frame-src https://www.youtube-nocookie.com; '.$contentSecurityPolicy;
+        }
 
         return response()->view('festivals.portal.stream-player', [
             'account' => $viewer->account,
@@ -70,9 +80,15 @@ class FestivalStreamAccessController extends Controller
             'isEmbed' => $viewer->isStaffPreview,
             'isStaffPreview' => $viewer->isStaffPreview,
             'stream' => $viewer->stream,
-            'playlistUrl' => $publicUrl.'/hls/'.rawurlencode($path).'/index.m3u8',
+            'playlistUrl' => $viewer->stream->provider === FestivalStreamProvider::MediaMtx
+                ? $publicUrl.'/hls/'.rawurlencode($path).'/index.m3u8'
+                : '',
+            'youtubeEmbedUrl' => $youtubeEmbedUrl,
             'heartbeatUrl' => $publicUrl.'/festival-stream/heartbeat/'.rawurlencode($path),
-        ])->header('Content-Security-Policy', "frame-ancestors 'self' ".rtrim((string) config('app.url'), '/'));
+        ])->withHeaders([
+            'Content-Security-Policy' => $contentSecurityPolicy,
+            'Referrer-Policy' => 'strict-origin-when-cross-origin',
+        ]);
     }
 
     public function heartbeat(Request $request, string $path): Response
@@ -105,8 +121,11 @@ class FestivalStreamAccessController extends Controller
             return response('', 401);
         }
         try {
-            $this->access->authorizeViewerCredential($cookie, $path, $ip);
+            $viewer = $this->access->authorizeViewerCredential($cookie, $path, $ip);
         } catch (ModelNotFoundException|ValidationException) {
+            return response('', 403);
+        }
+        if ($viewer->stream->provider !== FestivalStreamProvider::MediaMtx) {
             return response('', 403);
         }
 
@@ -124,6 +143,7 @@ class FestivalStreamAccessController extends Controller
         $stream = FestivalOnlineStream::query()
             ->where('path', (string) $request->input('path'))
             ->where('is_enabled', true)
+            ->where('provider', FestivalStreamProvider::MediaMtx->value)
             ->first();
         if (! $stream) {
             return response('', 401);

@@ -2,9 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\FestivalStreamProvider;
 use App\Models\Account;
+use App\Rules\FestivalYouTubeUrl;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class FestivalOnlineStreamRequest extends FormRequest
 {
@@ -27,6 +30,15 @@ class FestivalOnlineStreamRequest extends FormRequest
     {
         return [
             'is_enabled' => ['required', 'boolean'],
+            'provider' => ['required', Rule::enum(FestivalStreamProvider::class)],
+            'youtube_url' => [
+                Rule::requiredIf($this->string('provider')->toString() === FestivalStreamProvider::YouTube->value),
+                'nullable',
+                'bail',
+                'string',
+                'max:2048',
+                new FestivalYouTubeUrl,
+            ],
             'rotate_publisher_token' => ['required', 'boolean'],
         ];
     }

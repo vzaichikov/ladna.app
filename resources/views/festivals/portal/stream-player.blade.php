@@ -3,9 +3,14 @@
 @section('title', __('app.festival_online_stream'))
 
 @section('content')
+@php($isYouTube = $stream->provider === \App\Enums\FestivalStreamProvider::YouTube)
 @if ($isStaffPreview)
 <main data-festival-stream-staff-preview class="relative h-dvh overflow-hidden bg-black">
-    <video data-festival-stream-player data-playlist-url="{{ $playlistUrl }}" data-heartbeat-url="{{ $heartbeatUrl }}" controls autoplay playsinline class="h-full w-full bg-black object-contain"></video>
+    @if($isYouTube)
+        <iframe data-festival-stream-player data-stream-provider="youtube" data-heartbeat-url="{{ $heartbeatUrl }}" src="{{ $youtubeEmbedUrl }}" title="{{ __('app.festival_stream_youtube_player_title') }}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation" referrerpolicy="strict-origin-when-cross-origin" scrolling="no" class="block h-full w-full border-0 bg-black"></iframe>
+    @else
+        <video data-festival-stream-player data-stream-provider="mediamtx" data-playlist-url="{{ $playlistUrl }}" data-heartbeat-url="{{ $heartbeatUrl }}" controls autoplay playsinline class="h-full w-full bg-black object-contain"></video>
+    @endif
     <div data-festival-stream-error class="absolute inset-x-4 bottom-4 hidden rounded-xl border border-rose-400/30 bg-slate-950/90 p-4 text-sm text-rose-100 shadow-2xl">{{ __('app.festival_stream_unavailable') }}</div>
 </main>
 @else
@@ -18,10 +23,14 @@
             </div>
         </div>
         <div class="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
-            <video data-festival-stream-player data-playlist-url="{{ $playlistUrl }}" data-heartbeat-url="{{ $heartbeatUrl }}" controls autoplay playsinline class="aspect-video w-full bg-black"></video>
+            @if($isYouTube)
+                <iframe data-festival-stream-player data-stream-provider="youtube" data-heartbeat-url="{{ $heartbeatUrl }}" src="{{ $youtubeEmbedUrl }}" title="{{ __('app.festival_stream_youtube_player_title') }}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation" referrerpolicy="strict-origin-when-cross-origin" scrolling="no" class="block aspect-video w-full border-0 bg-black"></iframe>
+            @else
+                <video data-festival-stream-player data-stream-provider="mediamtx" data-playlist-url="{{ $playlistUrl }}" data-heartbeat-url="{{ $heartbeatUrl }}" controls autoplay playsinline class="aspect-video w-full bg-black"></video>
+            @endif
         </div>
         <div data-festival-stream-error class="mt-4 hidden rounded-xl border border-rose-400/30 bg-rose-500/10 p-4 text-sm text-rose-100">{{ __('app.festival_stream_unavailable') }}</div>
-        <p class="mt-4 text-sm text-slate-400">{{ __('app.festival_stream_sharing_limit') }}</p>
+        <p class="mt-4 text-sm text-slate-400">{{ __($isYouTube ? 'app.festival_stream_youtube_sharing_limit' : 'app.festival_stream_sharing_limit') }}</p>
     </div>
 </main>
 @endif

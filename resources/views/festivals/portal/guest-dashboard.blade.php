@@ -68,6 +68,7 @@
                                                 @elseif(! $entitlement || $ticket->status !== \App\Enums\FestivalTicketStatus::Valid || $order->status !== \App\Enums\FestivalTicketOrderStatus::Paid) {{ __('app.festival_stream_unavailable') }}
                                                 @elseif(! $stream->is_enabled) {{ __('app.festival_stream_disabled') }}
                                                 @elseif(! $stream->isOpen()) {{ __('app.festival_stream_closed') }}
+                                                @elseif($stream->provider === \App\Enums\FestivalStreamProvider::YouTube) {{ __('app.festival_stream_youtube_ready') }}
                                                 @elseif($mediaStatus === null) {{ __('app.festival_stream_status_unavailable') }}
                                                 @elseif($mediaStatus['publisher_online']) {{ __('app.festival_stream_live') }}
                                                 @else {{ __('app.festival_stream_publisher_offline') }}

@@ -42,14 +42,21 @@
         </div>
     @else
         @php
+            $isMediaMtx = $stream->provider === \App\Enums\FestivalStreamProvider::MediaMtx;
             $serverOnline = $streamStatus !== null;
             $publisherOnline = $streamStatus['publisher_online'] ?? false;
-            $readerCount = $streamStatus['readers'] ?? 0;
+            $readerCount = $isMediaMtx ? ($streamStatus['readers'] ?? 0) : $activeStreamConnections;
             $trackCodecs = $streamStatus['tracks'] ?? [];
         @endphp
         <section
             data-festival-stream-status
             data-status-url="{{ route('dashboard.accounts.festivals.online-stream.status', [$account, $edition]) }}"
+            data-provider-mediamtx="{{ __('app.festival_stream_provider_mediamtx') }}"
+            data-provider-youtube="{{ __('app.festival_stream_provider_youtube') }}"
+            data-obs-status-label="{{ __('app.festival_stream_obs_status') }}"
+            data-youtube-status-label="{{ __('app.festival_stream_youtube_status') }}"
+            data-hls-viewers-label="{{ __('app.festival_stream_viewers') }}"
+            data-youtube-connections-label="{{ __('app.festival_stream_youtube_connections_label') }}"
             data-server-online="{{ __('app.festival_stream_server_online') }}"
             data-server-unavailable="{{ __('app.festival_stream_status_unavailable') }}"
             data-obs-online="{{ __('app.festival_stream_publisher_online') }}"
@@ -59,6 +66,11 @@
             data-obs-waiting="{{ __('app.festival_stream_waiting_for_obs_help') }}"
             data-viewers-template="{{ __('app.festival_stream_readers', ['count' => ':count']) }}"
             data-viewers-empty="{{ __('app.festival_stream_viewers_empty') }}"
+            data-youtube-configured="{{ __('app.festival_stream_youtube_configured') }}"
+            data-youtube-unavailable="{{ __('app.festival_stream_youtube_not_configured') }}"
+            data-youtube-status-help="{{ __('app.festival_stream_youtube_status_help') }}"
+            data-youtube-connections-template="{{ __('app.festival_stream_youtube_connections', ['count' => ':count']) }}"
+            data-youtube-connections-empty="{{ __('app.festival_stream_youtube_connections_empty') }}"
             data-checking="{{ __('app.festival_stream_status_checking') }}"
             data-checked-template="{{ __('app.festival_stream_status_checked', ['time' => ':time']) }}"
         >
@@ -67,19 +79,20 @@
                     <span class="text-sm text-slate-600">{{ __('app.status') }}</span>
                     <strong @class(['mt-1 block text-lg', 'text-emerald-800' => $stream->is_enabled, 'text-slate-800' => ! $stream->is_enabled])>{{ $stream->is_enabled ? __('app.active') : __('app.inactive') }}</strong>
                 </div>
-                <div data-festival-stream-server-card @class(['rounded-2xl border p-4 shadow-crm', 'border-emerald-200 bg-emerald-50/60' => $serverOnline, 'border-rose-200 bg-rose-50/60' => ! $serverOnline])>
-                    <span class="text-sm text-slate-600">{{ __('app.festival_stream_server') }}</span>
-                    <strong data-festival-stream-server-value @class(['mt-1 block text-lg', 'text-emerald-800' => $serverOnline, 'text-rose-800' => ! $serverOnline])>{{ $serverOnline ? __('app.festival_stream_server_online') : __('app.festival_stream_status_unavailable') }}</strong>
+                <div data-festival-stream-provider-card class="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 shadow-crm">
+                    <span class="text-sm text-slate-600">{{ __('app.festival_stream_active_source') }}</span>
+                    <strong data-festival-stream-provider-value class="mt-1 block text-lg text-sky-800">{{ $isMediaMtx ? __('app.festival_stream_provider_mediamtx') : __('app.festival_stream_provider_youtube') }}</strong>
+                    <p data-festival-stream-provider-details class="mt-1 text-xs text-slate-600">{{ $isMediaMtx ? ($serverOnline ? __('app.festival_stream_server_online') : __('app.festival_stream_status_unavailable')) : __('app.festival_stream_youtube_status_help') }}</p>
                 </div>
-                <div data-festival-stream-obs-card @class(['rounded-2xl border p-4 shadow-crm', 'border-emerald-200 bg-emerald-50/60' => $publisherOnline, 'border-amber-200 bg-amber-50/60' => $serverOnline && ! $publisherOnline, 'border-rose-200 bg-rose-50/60' => ! $serverOnline])>
-                    <span class="text-sm text-slate-600">{{ __('app.festival_stream_obs_status') }}</span>
-                    <strong data-festival-stream-obs-value @class(['mt-1 block text-lg', 'text-emerald-800' => $publisherOnline, 'text-amber-800' => $serverOnline && ! $publisherOnline, 'text-rose-800' => ! $serverOnline])>{{ ! $serverOnline ? __('app.festival_stream_status_unavailable') : ($publisherOnline ? __('app.festival_stream_publisher_online') : __('app.festival_stream_publisher_offline')) }}</strong>
-                    <p data-festival-stream-obs-details class="mt-1 text-xs text-slate-600">{{ $publisherOnline && $trackCodecs !== [] ? __('app.festival_stream_tracks', ['tracks' => implode(', ', $trackCodecs)]) : ($serverOnline ? __('app.festival_stream_waiting_for_obs_help') : '') }}</p>
+                <div data-festival-stream-health-card @class(['rounded-2xl border p-4 shadow-crm', 'border-emerald-200 bg-emerald-50/60' => $isMediaMtx ? $publisherOnline : filled($stream->youtube_video_id), 'border-amber-200 bg-amber-50/60' => $isMediaMtx && $serverOnline && ! $publisherOnline, 'border-rose-200 bg-rose-50/60' => ($isMediaMtx && ! $serverOnline) || (! $isMediaMtx && blank($stream->youtube_video_id))])>
+                    <span data-festival-stream-health-label class="text-sm text-slate-600">{{ $isMediaMtx ? __('app.festival_stream_obs_status') : __('app.festival_stream_youtube_status') }}</span>
+                    <strong data-festival-stream-health-value @class(['mt-1 block text-lg', 'text-emerald-800' => $isMediaMtx ? $publisherOnline : filled($stream->youtube_video_id), 'text-amber-800' => $isMediaMtx && $serverOnline && ! $publisherOnline, 'text-rose-800' => ($isMediaMtx && ! $serverOnline) || (! $isMediaMtx && blank($stream->youtube_video_id))])>{{ $isMediaMtx ? (! $serverOnline ? __('app.festival_stream_status_unavailable') : ($publisherOnline ? __('app.festival_stream_publisher_online') : __('app.festival_stream_publisher_offline'))) : (filled($stream->youtube_video_id) ? __('app.festival_stream_youtube_configured') : __('app.festival_stream_youtube_not_configured')) }}</strong>
+                    <p data-festival-stream-health-details class="mt-1 text-xs text-slate-600">{{ $isMediaMtx ? ($publisherOnline && $trackCodecs !== [] ? __('app.festival_stream_tracks', ['tracks' => implode(', ', $trackCodecs)]) : ($serverOnline ? __('app.festival_stream_waiting_for_obs_help') : '')) : __('app.festival_stream_youtube_status_help') }}</p>
                 </div>
                 <div data-festival-stream-viewers-card @class(['rounded-2xl border p-4 shadow-crm', 'border-sky-200 bg-sky-50/60' => $readerCount > 0, 'border-stone-200 bg-white' => $readerCount === 0])>
-                    <span class="text-sm text-slate-600">{{ __('app.festival_stream_viewers') }}</span>
+                    <span data-festival-stream-viewers-label class="text-sm text-slate-600">{{ $isMediaMtx ? __('app.festival_stream_viewers') : __('app.festival_stream_youtube_connections_label') }}</span>
                     <strong data-festival-stream-viewers-value @class(['mt-1 block text-lg', 'text-sky-800' => $readerCount > 0, 'text-slate-800' => $readerCount === 0])>{{ $readerCount }}</strong>
-                    <p data-festival-stream-viewers-details class="mt-1 text-xs text-slate-600">{{ $readerCount > 0 ? __('app.festival_stream_readers', ['count' => $readerCount]) : __('app.festival_stream_viewers_empty') }}</p>
+                    <p data-festival-stream-viewers-details class="mt-1 text-xs text-slate-600">{{ $readerCount > 0 ? ($isMediaMtx ? __('app.festival_stream_readers', ['count' => $readerCount]) : __('app.festival_stream_youtube_connections', ['count' => $readerCount])) : ($isMediaMtx ? __('app.festival_stream_viewers_empty') : __('app.festival_stream_youtube_connections_empty')) }}</p>
                 </div>
             </div>
             <p data-festival-stream-status-message class="mt-2 text-right text-xs text-slate-500" role="status" aria-live="polite">{{ __('app.festival_stream_status_checking') }}</p>
@@ -113,9 +126,39 @@
         </x-ui.panel>
     @else
     <x-ui.panel data-festival-stream-configuration>
+        @php
+            $selectedProvider = old('provider', $stream?->provider?->value ?? \App\Enums\FestivalStreamProvider::MediaMtx->value);
+            $streamIsOpen = $stream?->playback_override === \App\Enums\FestivalStreamOverride::Open;
+            $youtubeUrl = old('youtube_url', \App\Support\Festivals\FestivalYouTubeVideo::watchUrl($stream?->youtube_video_id));
+        @endphp
         <form method="POST" action="{{ route('dashboard.accounts.festivals.online-stream.update', [$account, $edition]) }}" class="space-y-6">
             @csrf
             @method('PUT')
+
+            <fieldset>
+                <legend class="crm-label">{{ __('app.festival_stream_source') }}</legend>
+                <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_stream_source_help') }}</p>
+                @if($streamIsOpen)
+                    <input type="hidden" name="provider" value="{{ $stream->provider->value }}">
+                @endif
+                <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                    @foreach(\App\Enums\FestivalStreamProvider::cases() as $provider)
+                        <label @class(['rounded-2xl border p-5 transition has-checked:border-brand-300 has-checked:bg-brand-50/50 has-checked:ring-1 has-checked:ring-brand-200', 'border-brand-300 bg-brand-50/50' => $selectedProvider === $provider->value, 'border-slate-200 bg-white' => $selectedProvider !== $provider->value, 'cursor-not-allowed opacity-70' => $streamIsOpen, 'cursor-pointer hover:border-brand-200' => ! $streamIsOpen])>
+                            <span class="flex items-start gap-3">
+                                <input type="radio" name="provider" value="{{ $provider->value }}" class="crm-radio mt-1" @checked($selectedProvider === $provider->value) @disabled($streamIsOpen)>
+                                <span>
+                                    <strong class="block text-slate-950">{{ __($provider === \App\Enums\FestivalStreamProvider::MediaMtx ? 'app.festival_stream_provider_mediamtx' : 'app.festival_stream_provider_youtube') }}</strong>
+                                    <span class="mt-1 block text-sm leading-6 text-slate-600">{{ __($provider === \App\Enums\FestivalStreamProvider::MediaMtx ? 'app.festival_stream_provider_mediamtx_help' : 'app.festival_stream_provider_youtube_help') }}</span>
+                                </span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+                @error('provider') <p class="mt-2 text-sm text-rose-600">{{ $message }}</p> @enderror
+                @if($streamIsOpen)
+                    <p class="mt-2 text-sm font-medium text-amber-700">{{ __('app.festival_stream_stop_before_switching') }}</p>
+                @endif
+            </fieldset>
 
             <input type="hidden" name="is_enabled" value="0">
             @if ($stream)
@@ -127,14 +170,30 @@
             @endif
 
             <input type="hidden" name="rotate_publisher_token" value="0">
+            <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                <h2 class="text-base font-semibold text-slate-950">{{ __('app.festival_stream_youtube_configuration') }}</h2>
+                <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('app.festival_stream_youtube_configuration_help') }}</p>
+                <label class="mt-4 block">
+                    <span class="crm-label">{{ __('app.festival_stream_youtube_url') }}</span>
+                    <input type="url" name="youtube_url" value="{{ $youtubeUrl }}" placeholder="https://www.youtube.com/watch?v=…" class="crm-field mt-1" @readonly($streamIsOpen && $stream?->provider === \App\Enums\FestivalStreamProvider::YouTube)>
+                </label>
+                @error('youtube_url') <p class="mt-2 text-sm text-rose-600">{{ $message }}</p> @enderror
+                <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                    <strong class="block">{{ __('app.festival_stream_youtube_warning_title') }}</strong>
+                    {{ __('app.festival_stream_youtube_warning') }}
+                </div>
+            </div>
+
             @if ($stream)
                 <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                    <h2 class="mb-4 text-base font-semibold text-slate-950">{{ __('app.festival_stream_mediamtx_configuration') }}</h2>
                     <div class="grid gap-4 md:grid-cols-2">
                         <div><span class="crm-label">{{ __('app.festival_stream_obs_server') }}</span><code class="mt-1 block break-all rounded-lg bg-white p-3 text-xs">{{ config('services.festival_stream.obs_server') ?: __('app.not_configured') }}</code></div>
                         <div><span class="crm-label">{{ __('app.festival_stream_obs_key') }}</span><code class="mt-1 block break-all rounded-lg bg-white p-3 text-xs">{{ $stream->path }}?token={{ $stream->publisher_token_encrypted }}</code></div>
                     </div>
                     <p class="mt-3 text-xs text-slate-600">{{ __('app.festival_stream_obs_private_help') }}</p>
-                    <label class="mt-4 flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="rotate_publisher_token" value="1" class="crm-checkbox">{{ __('app.festival_stream_rotate_key') }}</label>
+                    <label @class(['mt-4 flex items-center gap-2 text-sm text-slate-700', 'cursor-not-allowed opacity-60' => $streamIsOpen && $stream->provider === \App\Enums\FestivalStreamProvider::MediaMtx])><input type="checkbox" name="rotate_publisher_token" value="1" class="crm-checkbox" @disabled($streamIsOpen && $stream->provider === \App\Enums\FestivalStreamProvider::MediaMtx)>{{ __('app.festival_stream_rotate_key') }}</label>
+                    @error('rotate_publisher_token') <p class="mt-2 text-sm text-rose-600">{{ $message }}</p> @enderror
                 </div>
 
                 <div class="rounded-2xl border border-sky-200 bg-sky-50 p-5">

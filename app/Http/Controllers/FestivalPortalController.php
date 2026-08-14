@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Festivals\SyncFestivalProfileParticipant;
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalStreamProvider;
 use App\Http\Requests\FestivalOtpVerifyRequest;
 use App\Http\Requests\FestivalPortalProfileRequest;
 use App\Http\Requests\FestivalProfilePhoneOtpSendRequest;
@@ -83,6 +84,10 @@ class FestivalPortalController extends Controller
             ->filter()
             ->unique('id')
             ->mapWithKeys(function ($stream) use ($mediaMtx): array {
+                if ($stream->provider === FestivalStreamProvider::YouTube) {
+                    return [$stream->id => ['provider' => FestivalStreamProvider::YouTube->value]];
+                }
+
                 try {
                     return [$stream->id => $mediaMtx->status($stream)];
                 } catch (Throwable $exception) {

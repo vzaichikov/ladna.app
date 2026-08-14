@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\FestivalStreamOverride;
+use App\Enums\FestivalStreamProvider;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Http\Requests\FestivalOnlineStreamRequest;
 use App\Models\Account;
@@ -15,6 +16,7 @@ use App\Models\User;
 use App\Support\Festivals\FestivalMediaMtxGateway;
 use App\Support\Festivals\FestivalStreamAccessService;
 use App\Support\Festivals\FestivalWorkspaceAccess;
+use App\Support\Festivals\FestivalYouTubeVideo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,6 +44,7 @@ class FestivalOnlineStreamController extends Controller
             'account' => $account,
             'edition' => $festivalEdition,
             'stream' => $stream,
+            'activeStreamConnections' => $stream ? $this->activeLeaseCount($stream) : 0,
             'streamStatus' => $this->streamStatus($stream),
             'workspacePermissions' => $permissions,
         ]);
@@ -57,9 +60,14 @@ class FestivalOnlineStreamController extends Controller
         $status = $this->streamStatus($stream, reportFailure: false);
 
         return response()->json([
+            'provider' => $stream->provider->value,
+            'playback_open' => $stream->isOpen(),
+            'configured' => $this->providerConfigured($stream),
             'server_online' => $status !== null,
             'publisher_online' => $status['publisher_online'] ?? false,
-            'readers' => $status['readers'] ?? 0,
+            'readers' => $stream->provider === FestivalStreamProvider::MediaMtx
+                ? ($status['readers'] ?? 0)
+                : $this->activeLeaseCount($stream),
             'connected_at' => $status['connected_at'] ?? null,
             'tracks' => $status['tracks'] ?? [],
             'checked_at' => now()->toIso8601String(),
@@ -70,8 +78,12 @@ class FestivalOnlineStreamController extends Controller
     {
         $this->assertEdition($account, $festivalEdition);
         $data = $request->validated();
+        $provider = FestivalStreamProvider::from($data['provider']);
+        $youtubeVideoId = filled($data['youtube_url'] ?? null)
+            ? FestivalYouTubeVideo::idFromUrl((string) $data['youtube_url'])
+            : null;
 
-        $configured = DB::transaction(function () use ($account, $festivalEdition, $data): FestivalOnlineStream {
+        $configured = DB::transaction(function () use ($account, $festivalEdition, $data, $provider, $youtubeVideoId): FestivalOnlineStream {
             $stream = FestivalOnlineStream::query()->where('festival_edition_id', $festivalEdition->id)->lockForUpdate()->first();
             $creating = $stream === null;
             if ($creating) {
@@ -83,12 +95,25 @@ class FestivalOnlineStreamController extends Controller
                     'publisher_token_encrypted' => $publisherToken,
                     'publisher_token_hash' => hash('sha256', $publisherToken),
                     'is_enabled' => false,
+                    'provider' => $provider,
+                    'youtube_video_id' => $youtubeVideoId,
                     'playback_override' => FestivalStreamOverride::Closed,
                 ]);
             }
 
             $requestedEnabled = ! $creating && (bool) $data['is_enabled'];
-            if ($requestedEnabled && ! $this->mediaMtx->configured()) {
+            if ($stream->exists && $stream->playback_override === FestivalStreamOverride::Open) {
+                if ($stream->provider !== $provider) {
+                    throw ValidationException::withMessages(['provider' => __('app.festival_stream_stop_before_switching')]);
+                }
+                if ($provider === FestivalStreamProvider::YouTube && $stream->youtube_video_id !== $youtubeVideoId) {
+                    throw ValidationException::withMessages(['youtube_url' => __('app.festival_stream_stop_before_editing_source')]);
+                }
+                if ($provider === FestivalStreamProvider::MediaMtx && $data['rotate_publisher_token']) {
+                    throw ValidationException::withMessages(['rotate_publisher_token' => __('app.festival_stream_stop_before_editing_source')]);
+                }
+            }
+            if ($requestedEnabled && ! $this->providerReady($provider, $youtubeVideoId)) {
                 throw ValidationException::withMessages(['is_enabled' => __('app.festival_stream_infrastructure_unavailable')]);
             }
             if ($stream->exists
@@ -106,7 +131,17 @@ class FestivalOnlineStreamController extends Controller
 
             $stream->fill([
                 'is_enabled' => $requestedEnabled,
-            ])->save();
+                'provider' => $provider,
+                'youtube_video_id' => $youtubeVideoId,
+            ]);
+            if (! $requestedEnabled) {
+                $stream->forceFill([
+                    'playback_override' => FestivalStreamOverride::Closed,
+                    'opens_at' => null,
+                    'closes_at' => null,
+                ]);
+            }
+            $stream->save();
 
             return $stream;
         }, 3);
@@ -188,6 +223,9 @@ class FestivalOnlineStreamController extends Controller
             if ($override === FestivalStreamOverride::Open && ! $stream->is_enabled) {
                 throw ValidationException::withMessages(['stream' => __('app.festival_stream_start_requires_enabled')]);
             }
+            if ($override === FestivalStreamOverride::Open && ! $this->providerConfigured($stream)) {
+                throw ValidationException::withMessages(['stream' => __('app.festival_stream_source_incomplete')]);
+            }
 
             $stream->forceFill([
                 'playback_override' => $override,
@@ -213,7 +251,7 @@ class FestivalOnlineStreamController extends Controller
     /** @return array{publisher_online: bool, readers: int, connected_at: ?string, tracks: list<string>}|null */
     private function streamStatus(?FestivalOnlineStream $stream, bool $reportFailure = true): ?array
     {
-        if (! $stream) {
+        if (! $stream || $stream->provider !== FestivalStreamProvider::MediaMtx) {
             return null;
         }
 
@@ -226,6 +264,34 @@ class FestivalOnlineStreamController extends Controller
 
             return null;
         }
+    }
+
+    private function activeLeaseCount(FestivalOnlineStream $stream): int
+    {
+        if (! $stream->is_enabled || ! $stream->isOpen()) {
+            return 0;
+        }
+
+        return FestivalStreamIpLease::query()
+            ->where('expires_at', '>', now())
+            ->whereHas('entitlement', fn ($query) => $query->where('festival_online_stream_id', $stream->id))
+            ->count();
+    }
+
+    private function providerConfigured(FestivalOnlineStream $stream): bool
+    {
+        return $this->providerReady($stream->provider, $stream->youtube_video_id);
+    }
+
+    private function providerReady(FestivalStreamProvider $provider, ?string $youtubeVideoId): bool
+    {
+        if ($provider === FestivalStreamProvider::MediaMtx) {
+            return $this->mediaMtx->configured();
+        }
+
+        return FestivalYouTubeVideo::embedUrl($youtubeVideoId) !== ''
+            && collect(['public_url', 'internal_secret', 'ip_hmac_key'])
+                ->every(fn (string $key): bool => trim((string) config("services.festival_stream.{$key}")) !== '');
     }
 
     /** @return array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} */
