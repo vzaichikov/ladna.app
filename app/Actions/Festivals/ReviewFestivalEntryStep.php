@@ -5,13 +5,16 @@ namespace App\Actions\Festivals;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
+use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalQualificationStatus;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalWorkflowReviewEffect;
+use App\Models\FestivalCategory;
 use App\Models\FestivalEntryStep;
 use App\Models\User;
 use App\Support\Festivals\FestivalEntryStepCompletion;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ReviewFestivalEntryStep
@@ -37,8 +40,10 @@ class ReviewFestivalEntryStep
             throw ValidationException::withMessages(['correction_due_at' => __('validation.after', ['date' => 'now'])]);
         }
 
-        return DB::transaction(function () use ($step, $reviewer, $decision, $comment, $correctionDueAt, $requirementNotes): FestivalEntryStep {
-            $step = FestivalEntryStep::query()->with(['workflowStep', 'entry.edition', 'entry.portalUser', 'entry.steps.workflowStep', 'requirements.definition', 'requirements.submissions'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
+        $reviewDedupeToken = (string) Str::uuid();
+
+        return DB::transaction(function () use ($step, $reviewer, $decision, $comment, $correctionDueAt, $requirementNotes, $reviewDedupeToken): FestivalEntryStep {
+            $step = FestivalEntryStep::query()->with(['workflowStep', 'entry.account', 'entry.edition', 'entry.portalUser', 'entry.steps.workflowStep', 'requirements.definition', 'requirements.submissions'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
             abort_unless($step->status === FestivalEntryStepStatus::Submitted, 409);
             $postConfirmationReview = $step->entry->status === FestivalEntryStatus::ChangesPending;
 
@@ -73,6 +78,15 @@ class ReviewFestivalEntryStep
                 if ($postConfirmationReview
                     && $step->entry->steps()->where('status', '!=', FestivalEntryStepStatus::Approved->value)->doesntExist()
                     && $step->entry->charges()->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value])->doesntExist()) {
+                    $category = FestivalCategory::query()
+                        ->whereKey($step->entry->festival_category_id)
+                        ->where('account_id', $step->entry->account_id)
+                        ->where('festival_edition_id', $step->entry->festival_edition_id)
+                        ->lockForUpdate()
+                        ->firstOrFail();
+                    if ($category->applicationCapacityReached(excludingEntry: $step->entry)) {
+                        throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
+                    }
                     $step->entry->forceFill(['status' => FestivalEntryStatus::Accepted])->save();
                 }
             } elseif ($decision === 'request_changes') {
@@ -109,7 +123,20 @@ class ReviewFestivalEntryStep
             }
 
             $this->activity->record($step, 'entry_step.'.$decision, $step->entry->edition, $reviewer, ['step' => $step->workflowStep->code, 'comment' => $comment]);
-            $this->notifications->queueForEntry($step->entry, 'entry_reviewed', ['entry_code' => $step->entry->code, 'step' => $step->workflowStep->title, 'decision' => $decision, 'comment' => $comment, 'correction_due_at' => $correctionDueAt]);
+            $currentStepIndex = $step->entry->steps->search(fn (FestivalEntryStep $entryStep): bool => $entryStep->is($step));
+            $nextStep = $decision === 'approve' && $currentStepIndex !== false
+                ? $step->entry->steps->slice($currentStepIndex + 1)->first(fn (FestivalEntryStep $entryStep): bool => $entryStep->status !== FestivalEntryStepStatus::Approved)
+                : null;
+            $this->notifications->queueForEntry($step->entry, FestivalNotificationType::EntryStepReviewed, [
+                'step' => $step->workflowStep->title,
+                'decision' => $decision,
+                'comment' => $comment,
+                'correction_due_at' => $correctionDueAt,
+                'entry_status' => $step->entry->status->value,
+                'next_step' => $nextStep?->workflowStep->title,
+                'next_step_type' => $nextStep?->workflowStep->type->value,
+                'action_url' => route('festival.portal.entry-steps.show', [$step->entry->account->slug, $step->entry, $step]),
+            ], 'step-review:'.$step->id.':'.$reviewDedupeToken);
 
             return $step->refresh();
         }, 3);

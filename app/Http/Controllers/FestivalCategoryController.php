@@ -31,7 +31,7 @@ class FestivalCategoryController extends Controller
         ];
         $categories = $festivalEdition->categories()
             ->with(['direction', 'registrationWorkflow'])
-            ->withCount('entries')
+            ->withCount(['entries', 'acceptedEntries', 'capacityOccupyingEntries'])
             ->when($filters['q'] !== '', fn ($query) => $query->where('name', 'like', '%'.$filters['q'].'%'))
             ->when($filters['status'] !== '', fn ($query) => $query->where('is_active', $filters['status'] === 'active'))
             ->when($filters['direction'] > 0, fn ($query) => $query->where('festival_direction_id', $filters['direction']))

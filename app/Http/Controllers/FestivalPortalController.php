@@ -40,7 +40,7 @@ class FestivalPortalController extends Controller
         $entries = $portalUser->entries()->with([
             'edition.coverMedia',
             'category',
-            'steps',
+            'steps.charges',
             'scheduleSlots' => fn ($query) => $query
                 ->whereNotNull('published_at')
                 ->whereNotNull('starts_at')

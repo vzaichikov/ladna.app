@@ -23,7 +23,12 @@ class FestivalAnnouncementController extends Controller
         foreach (FestivalNotificationType::cases() as $type) {
             FestivalNotificationSetting::query()->updateOrCreate(
                 ['account_id' => $account->id, 'type' => $type->value],
-                ['is_optional' => $type->isOptional(), 'is_enabled' => true, 'send_sms' => $request->boolean('sms.'.$type->value)],
+                [
+                    'is_optional' => $type->isOptional(),
+                    'is_enabled' => true,
+                    'send_sms' => $request->boolean('sms.'.$type->value),
+                    'notify_owner_telegram' => $request->boolean('owner_telegram.'.$type->value),
+                ],
             );
         }
 

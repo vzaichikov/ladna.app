@@ -32,17 +32,31 @@
 
     <div class="space-y-4">
         @forelse ($categories as $category)
-            @php($globalIndex = ($categories->firstItem() ?? 1) + $loop->index)
+            @php
+                $globalIndex = ($categories->firstItem() ?? 1) + $loop->index;
+                $categoryIsFull = $category->applicationCapacityReached($category->capacity_occupying_entries_count);
+                $acceptedApplicationsUrl = route('dashboard.accounts.festivals.applications', [$account, $edition, 'category' => $category->id, 'status' => \App\Enums\FestivalEntryStatus::Accepted->value]);
+                $allApplicationsUrl = route('dashboard.accounts.festivals.applications', [$account, $edition, 'category' => $category->id]);
+            @endphp
             <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
                             <h2 class="text-lg font-semibold text-slate-950">{{ $category->name }}</h2>
                             @unless ($category->is_active)<span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{{ __('app.inactive') }}</span>@endunless
+                            @if ($categoryIsFull)<span class="crm-status-danger">{{ __('app.festival_category_capacity_full') }}</span>@endif
                         </div>
-                        <p class="mt-1 text-sm text-slate-500">{{ $category->direction->name }} · {{ $category->registrationWorkflow?->name ?? __('app.festival_workflow_not_selected') }} · {{ trans_choice('app.festival_entry_usage_count', $category->entries_count, ['count' => $category->entries_count]) }}</p>
+                        <p class="mt-1 text-sm text-slate-500">{{ $category->direction->name }} · {{ $category->registrationWorkflow?->name ?? __('app.festival_workflow_not_selected') }}</p>
+                        <p class="mt-2 text-sm text-slate-600">
+                            <span>{{ __('app.festival_category_application_counts') }}:</span>
+                            <a href="{{ $acceptedApplicationsUrl }}" class="font-semibold text-brand-700 underline decoration-brand-300 underline-offset-2 hover:text-brand-900">{{ $category->accepted_entries_count }}</a>
+                            <span aria-hidden="true">/</span>
+                            <a href="{{ $allApplicationsUrl }}" class="font-semibold text-brand-700 underline decoration-brand-300 underline-offset-2 hover:text-brand-900">{{ $category->entries_count }}</a>
+                            <span class="text-slate-500">· {{ __('app.festival_category_accepted_total') }}</span>
+                        </p>
                         <dl class="mt-4 flex flex-wrap gap-2 text-xs text-slate-700">
                             <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $category->min_members, 'max' => $category->max_members]) }}</dd></div>
+                            @if ($category->maximum_accepted_entries !== null)<div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_maximum_accepted_entries') }}</dt><dd>{{ __('app.festival_maximum_accepted_entries_value', ['maximum' => $category->maximum_accepted_entries]) }}</dd></div>@endif
                             @if ($category->min_age !== null || $category->max_age !== null)<div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_age_limits') }}</dt><dd>{{ __('app.festival_age_range', ['min' => $category->min_age ?? '—', 'max' => $category->max_age ?? '—']) }}</dd></div>@endif
                             @if ($category->registration_closes_at)<div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_registration_closes_at') }}</dt><dd>{{ __('app.festival_category_deadline_value', ['date' => $category->registration_closes_at->timezone($edition->timezone)->format('d.m.Y H:i'), 'timezone' => $edition->timezone]) }}</dd></div>@endif
                         </dl>

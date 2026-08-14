@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Actions\Festivals\CreateFestivalTicketOrder;
 use App\Actions\Festivals\FestivalTicketIssuer;
 use App\Actions\Festivals\FestivalTicketScanner;
+use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
@@ -51,6 +52,7 @@ class FestivalAdmissionTest extends TestCase
         $order = $create->execute($edition, $this->orderInput($type, 2), $guest);
 
         $this->assertSame(40000, $order->amount_cents);
+        $this->assertSame(FestivalTicketOrderSource::Checkout, $order->source);
         $this->assertSame('USD', $order->currency);
         $this->assertSame('early_bird', $order->items->first()->price_tier);
         $this->assertSame(0, $type->remainingQuantity());

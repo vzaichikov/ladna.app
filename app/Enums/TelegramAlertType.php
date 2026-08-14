@@ -6,6 +6,7 @@ enum TelegramAlertType: string
 {
     case TrainerAssignment = 'trainer_assignment';
     case TrainerClassCancellation = 'trainer_class_cancellation';
+    case FestivalUpdate = 'festival_update';
     case OwnerAnnouncement = 'owner_announcement';
     case FoundersAnnouncement = 'founders_announcement';
 

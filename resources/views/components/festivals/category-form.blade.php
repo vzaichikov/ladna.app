@@ -65,6 +65,12 @@
                 @error('minimum_entries_to_run') <span class="crm-help">{{ $message }}</span> @enderror
             </label>
             <label>
+                <span class="crm-label">{{ __('app.festival_maximum_accepted_entries') }}</span>
+                <input type="number" min="1" max="10000" name="maximum_accepted_entries" value="{{ old('maximum_accepted_entries', $category?->maximum_accepted_entries) }}" class="crm-field">
+                <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_maximum_accepted_entries_help') }}</span>
+                @error('maximum_accepted_entries') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            <label>
                 <span class="crm-label">{{ __('app.minimum_members') }}</span>
                 <input type="number" min="1" max="100" name="min_members" value="{{ old('min_members', $category?->min_members ?? 1) }}" required class="crm-field">
                 @error('min_members') <span class="crm-help">{{ $message }}</span> @enderror

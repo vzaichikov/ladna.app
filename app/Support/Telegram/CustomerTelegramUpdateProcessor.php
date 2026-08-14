@@ -232,6 +232,7 @@ class CustomerTelegramUpdateProcessor
             'bookings' => $this->showBookings($telegramUpdate, $session, $authorization),
             'booking_types' => $this->showBookingTypes($telegramUpdate, $session, $authorization, true),
             'book_type' => $this->beginBookingType($telegramUpdate, $session, $authorization, (string) $value),
+            'book_locations' => $this->beginGroupBooking($telegramUpdate, $session, $authorization, null, true),
             'book_location' => $this->showBookingDates($telegramUpdate, $session, $authorization, (int) $value, 0),
             'book_dates_page' => $this->showBookingDates($telegramUpdate, $session, $authorization, (int) data_get($session->encrypted_context, 'location_id'), (int) $value),
             'book_date' => $this->showClassesForDate($telegramUpdate, $session, $authorization, (string) $value),
@@ -481,6 +482,7 @@ class CustomerTelegramUpdateProcessor
         TelegramCustomerSession $session,
         TelegramChatAuthorization $authorization,
         ?Collection $classes = null,
+        bool $forceLocationChoice = false,
     ): bool {
         $classes ??= $this->eligibleClasses($authorization->account, $authorization->customer);
         $locationIds = $classes->pluck('location_id')->unique()->values();
@@ -491,7 +493,7 @@ class CustomerTelegramUpdateProcessor
             return true;
         }
 
-        if ($locationIds->count() === 1) {
+        if (! $forceLocationChoice && $locationIds->count() === 1) {
             return $this->showBookingDates($telegramUpdate, $session, $authorization, (int) $locationIds->first(), 0);
         }
 
@@ -501,6 +503,10 @@ class CustomerTelegramUpdateProcessor
             'action' => 'book_location',
             'value' => $location->id,
         ]])->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => 'booking_types',
+        ]];
         $markup = $this->callbackMarkup($session, TelegramCustomerSessionState::ChoosingLocation, $rows);
         $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_choose_location'), $markup, $authorization);
 
@@ -1148,7 +1154,8 @@ class CustomerTelegramUpdateProcessor
             return $this->beginBooking($telegramUpdate, $session, $authorization);
         }
 
-        $dates = $this->eligibleClasses($authorization->account, $authorization->customer, $locationId)
+        $eligibleClasses = $this->eligibleClasses($authorization->account, $authorization->customer, $locationId);
+        $dates = $eligibleClasses
             ->map(fn (ScheduledClass $class): string => $class->starts_at->copy()->timezone($class->displayTimezone())->toDateString())
             ->unique()
             ->values();
@@ -1185,11 +1192,19 @@ class CustomerTelegramUpdateProcessor
             $rows[] = $pagination;
         }
 
+        $availableLocationCount = $this->eligibleClasses($authorization->account, $authorization->customer)
+            ->pluck('location_id')
+            ->unique()
+            ->count();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => $availableLocationCount > 1 ? 'book_locations' : 'booking_types',
+        ]];
         $markup = $this->callbackMarkup(
             $session,
             TelegramCustomerSessionState::ChoosingDate,
             $rows,
-            ['location_id' => $location->id],
+            ['location_id' => $location->id, 'date_page' => $page],
         );
         $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_choose_date', ['location' => $location->name]), $markup, $authorization);
 
@@ -1199,6 +1214,7 @@ class CustomerTelegramUpdateProcessor
     private function showClassesForDate(TelegramUpdate $telegramUpdate, TelegramCustomerSession $session, TelegramChatAuthorization $authorization, string $date): bool
     {
         $locationId = (int) data_get($session->encrypted_context, 'location_id');
+        $datePage = (int) data_get($session->encrypted_context, 'date_page', 0);
         $classes = $this->eligibleClasses($authorization->account, $authorization->customer, $locationId)
             ->filter(fn (ScheduledClass $class): bool => $class->starts_at->copy()->timezone($class->displayTimezone())->toDateString() === $date)
             ->values();
@@ -1216,11 +1232,16 @@ class CustomerTelegramUpdateProcessor
                 'value' => $class->id,
             ]];
         })->all();
+        $rows[] = [[
+            'text' => $this->t($session, 'back'),
+            'action' => 'book_dates_page',
+            'value' => $datePage,
+        ]];
         $markup = $this->callbackMarkup(
             $session,
             TelegramCustomerSessionState::ChoosingClass,
             $rows,
-            ['location_id' => $locationId, 'date' => $date],
+            ['location_id' => $locationId, 'date' => $date, 'date_page' => $datePage],
         );
         $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_choose_class'), $markup, $authorization);
 
@@ -1239,6 +1260,7 @@ class CustomerTelegramUpdateProcessor
 
         $pass = $this->suitablePass($authorization->customer, $class);
         $startsAt = $class->starts_at->copy()->timezone($class->displayTimezone());
+        $datePage = (int) data_get($session->encrypted_context, 'date_page', 0);
         $bookingCloses = $class->bookingClosesAt()?->timezone($class->displayTimezone())->format('d.m H:i') ?? '—';
         $cancellationCloses = $this->cancellationWindow->closesAt($class)?->timezone($class->displayTimezone())->format('d.m H:i') ?? '—';
         $passText = $pass
@@ -1251,7 +1273,7 @@ class CustomerTelegramUpdateProcessor
                 ['text' => $this->t($session, 'telegram_customer_confirm_booking_button'), 'action' => 'confirm_booking', 'value' => $class->id],
                 ['text' => $this->t($session, 'back'), 'action' => 'book_date', 'value' => $startsAt->toDateString()],
             ]],
-            ['location_id' => $class->location_id, 'date' => $startsAt->toDateString()],
+            ['location_id' => $class->location_id, 'date' => $startsAt->toDateString(), 'date_page' => $datePage],
             self::ConfirmationMinutes,
         );
         $this->send($telegramUpdate, $session->telegram_chat_id, $this->t($session, 'telegram_customer_booking_confirmation', [

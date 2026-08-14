@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.132.0',
+                'date' => '2026-08-14',
+                'title' => 'Complete Festival applications and complimentary tickets',
+                'items' => ['Festival teams can issue secure complimentary venue tickets to individual guests or automatically to accepted participants and active judges, while managing guest profiles and remaining capacity from one workspace.', 'Application lists now show distinct workflow, payment, and current-step states. Category capacity limits prevent over-acceptance, manually declined draft payments no longer block safe deletion, and participants receive localized review, correction, payment, and acceptance updates.', 'Studio owners can opt into each Festival update through the main Ladna Telegram bot, notification settings are grouped by purpose, and the customer booking bot now provides clearer back navigation through locations, dates, and classes.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.131.1',
                 'date' => '2026-08-14',
                 'title' => 'Class passes for unpaid room rentals',
@@ -1157,6 +1164,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.132.0',
+                'date' => '2026-08-14',
+                'title' => 'Повний цикл заявок і безкоштовні квитки фестивалю',
+                'items' => ['Команда фестивалю може видавати захищені безкоштовні квитки до локації окремим гостям або автоматично всім прийнятим учасникам і активним суддям, а також керувати профілями гостей та доступною місткістю в одному робочому просторі.', 'Списки заявок тепер розрізняють статуси процесу, оплати й поточного етапу. Ліміти категорій запобігають надмірному прийняттю, вручну відхилена оплата чернетки не блокує безпечне видалення, а учасники отримують локалізовані повідомлення про рішення, доопрацювання, оплату та прийняття.', 'Власники студій можуть окремо ввімкнути кожне фестивальне сповіщення через основний Telegram-бот Ladna, налаштування згруповано за призначенням, а клієнтський бот бронювання отримав зрозумілішу навігацію назад між локаціями, датами та заняттями.'],
+                'meta' => 'Pending release commit.',
+            ],
             [
                 'version' => '0.131.1',
                 'date' => '2026-08-14',

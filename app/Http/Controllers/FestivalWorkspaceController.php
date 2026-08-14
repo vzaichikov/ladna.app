@@ -11,6 +11,7 @@ use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalScheduleSlotType;
+use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
 use App\Http\Requests\FestivalTicketRefundRequest;
@@ -30,6 +31,7 @@ use App\Models\FestivalTicketOrderItem;
 use App\Models\User;
 use App\Support\Festivals\FestivalProgramOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
+use App\Support\Telegram\Alerts\QueueFestivalOwnerTelegramAlert;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
@@ -52,6 +54,7 @@ class FestivalWorkspaceController extends Controller
 
         [$categories, $filters] = $this->entryIndexFilters($request, $festivalEdition, true);
         $entries = $this->entryIndexQuery($festivalEdition, $filters, $permissions['registrations'])
+            ->with('steps.charges')
             ->withCount([
                 'requirements as blocking_requirements_count' => fn ($query) => $query
                     ->whereHas('definition', fn ($query) => $query->where('is_required', true))
@@ -234,6 +237,7 @@ class FestivalWorkspaceController extends Controller
         $tab = $permissions['finance'] && in_array($requestedTab, ['types', 'sold'], true) ? (string) $requestedTab : 'types';
         $revenueByCurrency = $permissions['finance']
             ? $festivalEdition->ticketOrders()
+                ->where('source', FestivalTicketOrderSource::Checkout->value)
                 ->where('status', FestivalTicketOrderStatus::Paid->value)
                 ->selectRaw('currency, sum(amount_cents) as aggregate')
                 ->groupBy('currency')
@@ -243,7 +247,7 @@ class FestivalWorkspaceController extends Controller
             : collect();
 
         $admissionReport = [
-            'paid_orders' => $permissions['finance'] ? $festivalEdition->ticketOrders()->where('status', FestivalTicketOrderStatus::Paid->value)->count() : null,
+            'paid_orders' => $permissions['finance'] ? $festivalEdition->ticketOrders()->where('source', FestivalTicketOrderSource::Checkout->value)->where('status', FestivalTicketOrderStatus::Paid->value)->count() : null,
             'revenue_by_currency' => $revenueByCurrency,
             'tickets' => $festivalEdition->tickets()->count(),
             'checked_in' => $festivalEdition->tickets()->where('is_checked_in', true)->count(),
@@ -253,13 +257,14 @@ class FestivalWorkspaceController extends Controller
         $tickets = null;
         $refundRequiredOrders = collect();
         $ticketTypeOptions = collect();
-        $filters = ['q' => '', 'status' => '', 'type' => ''];
+        $filters = ['q' => '', 'status' => '', 'type' => '', 'source' => ''];
 
         if ($permissions['finance'] && $tab === 'types') {
             $filters = [
                 'q' => $request->string('q')->trim()->toString(),
                 'status' => in_array($request->query('status'), ['active', 'inactive'], true) ? (string) $request->query('status') : '',
                 'type' => '',
+                'source' => '',
             ];
             $admissionTypes = FestivalAdmissionType::query()
                 ->where('festival_edition_id', $festivalEdition->id)
@@ -279,13 +284,15 @@ class FestivalWorkspaceController extends Controller
                 'q' => $request->string('q')->trim()->toString(),
                 'status' => in_array($request->query('status'), $validTicketStatuses, true) ? (string) $request->query('status') : '',
                 'type' => $request->integer('type') > 0 ? (string) $request->integer('type') : '',
+                'source' => in_array($request->query('source'), collect(FestivalTicketOrderSource::cases())->pluck('value')->all(), true) ? (string) $request->query('source') : '',
             ];
             $ticketTypeOptions = $festivalEdition->admissionTypes()->orderBy('name')->get(['id', 'festival_edition_id', 'name']);
             $tickets = FestivalTicket::query()
                 ->where('festival_edition_id', $festivalEdition->id)
-                ->with(['admissionType', 'orderItem', 'order.fiscalReceipt', 'order.tickets'])
+                ->with(['admissionType', 'orderItem', 'order.fiscalReceipt', 'order.tickets', 'order.issuer'])
                 ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
                     ->where('code', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('holder_name', 'like', '%'.$filters['q'].'%')
                     ->orWhereHas('order', fn ($query) => $query
                         ->where('order_id', 'like', '%'.$filters['q'].'%')
                         ->orWhere('buyer_name', 'like', '%'.$filters['q'].'%')
@@ -295,10 +302,12 @@ class FestivalWorkspaceController extends Controller
                         ->orWhere('gateway_payment_id', 'like', '%'.$filters['q'].'%'))))
                 ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
                 ->when($filters['type'] !== '', fn ($query) => $query->where('festival_admission_type_id', (int) $filters['type']))
+                ->when($filters['source'] !== '', fn ($query) => $query->whereHas('order', fn ($orders) => $orders->where('source', $filters['source'])))
                 ->latest('id')
                 ->paginate(20)
                 ->withQueryString();
             $refundRequiredOrders = $festivalEdition->ticketOrders()
+                ->where('source', FestivalTicketOrderSource::Checkout->value)
                 ->where('status', FestivalTicketOrderStatus::PaidRequiresRefund->value)
                 ->with('items')
                 ->latest('paid_at')
@@ -317,6 +326,7 @@ class FestivalWorkspaceController extends Controller
 
         DB::transaction(function () use ($festivalTicketOrder, $request): void {
             $order = FestivalTicketOrder::query()->whereKey($festivalTicketOrder->id)->lockForUpdate()->firstOrFail();
+            abort_unless($order->source === FestivalTicketOrderSource::Checkout, 422);
             abort_unless(in_array($order->status, [FestivalTicketOrderStatus::Paid, FestivalTicketOrderStatus::PaidRequiresRefund], true), 422);
             $order->forceFill([
                 'status' => FestivalTicketOrderStatus::Refunded,
@@ -356,7 +366,7 @@ class FestivalWorkspaceController extends Controller
         return back()->with('status', __('app.festival_ticket_voided'));
     }
 
-    public function communication(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    public function communication(Request $request, Account $account, FestivalEdition $festivalEdition, QueueFestivalOwnerTelegramAlert $ownerTelegramAlerts): View
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['manage'], 403);
@@ -418,6 +428,7 @@ class FestivalWorkspaceController extends Controller
             'tab' => $tab,
             'notificationTypes' => $notificationTypes,
             'notificationSettings' => $settings,
+            'connectedFestivalOwnerCount' => $tab === 'settings' ? $ownerTelegramAlerts->connectedOwnerCount($account) : 0,
             'notificationStatistics' => $notificationStatistics,
             'announcements' => $announcements,
             'notifications' => $notifications,

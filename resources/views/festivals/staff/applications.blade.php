@@ -96,19 +96,40 @@
                         && $entry->blocking_requirements_count === 0
                         && $entry->blocking_charges_count === 0
                         && $entry->scheduled_performance_slots_count > 0;
+                    $currentStep = $entry->steps->first(fn ($step) => $step->status !== \App\Enums\FestivalEntryStepStatus::Approved);
+                    $currentPaymentCharges = $currentStep?->charges
+                        ->filter(fn ($charge) => $charge->amount_cents > 0 && $charge->status !== \App\Enums\FestivalChargeStatus::Cancelled)
+                        ?? collect();
+                    $currentStepIsPaid = $currentPaymentCharges->isNotEmpty()
+                        && $currentPaymentCharges->every(fn ($charge) => $charge->status === \App\Enums\FestivalChargeStatus::Paid);
                 @endphp
                 <article class="rounded-xl border border-stone-200 bg-slate-50/70 p-4">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="font-mono text-xs font-semibold text-slate-500">{{ $entry->code }}</span>
-                                <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{{ __('app.festival_entry_status_'.$entry->status->value) }}</span>
+                                <span class="{{ $entry->status->badgeClass() }}">{{ __('app.festival_entry_status_'.$entry->status->value) }}</span>
+                                @if($currentPaymentCharges->isNotEmpty())
+                                    <span class="{{ $currentStepIsPaid ? 'crm-status-active' : 'crm-status-danger' }}">
+                                        {{ $currentStepIsPaid ? __('app.festival_charge_status_paid') : __('app.festival_application_payment_unpaid') }}
+                                    </span>
+                                @endif
                                 <span class="{{ $entryIsReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900' }} rounded-full px-2.5 py-1 text-xs font-semibold">
                                     {{ $entryIsReady ? __('app.festival_ready') : __('app.festival_not_ready') }}
                                 </span>
                             </div>
                             <h3 class="mt-2 truncate text-lg font-semibold text-slate-950">{{ $entry->entry_name }}</h3>
                             <p class="text-sm text-slate-500">{{ $entry->category->direction->name }} · {{ $entry->category->name }}</p>
+                            <p class="mt-1 text-sm text-slate-600">
+                                <span class="font-semibold text-slate-700">{{ __('app.festival_current_step') }}:</span>
+                                @if($currentStep)
+                                    {{ $currentStep->workflowStep->title }} · {{ __('app.festival_step_status_'.$currentStep->status->value) }}
+                                @elseif($entry->steps->isNotEmpty())
+                                    {{ __('app.festival_registration_complete') }}
+                                @else
+                                    —
+                                @endif
+                            </p>
                             @if ($workspacePermissions['registrations'])
                                 <p class="mt-1 text-sm text-slate-600">{{ $entry->portalUser->displayName() }} · {{ $entry->portalUser->email }}</p>
                             @endif

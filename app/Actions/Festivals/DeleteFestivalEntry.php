@@ -2,6 +2,9 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalChargeStatus;
+use App\Enums\FestivalEntryStatus;
+use App\Enums\FestivalPaymentStatus;
 use App\Models\FestivalCharge;
 use App\Models\FestivalEntry;
 use App\Models\FestivalSubmission;
@@ -19,7 +22,7 @@ class DeleteFestivalEntry
     {
         $entry->loadMissing('charges.paymentAttempts');
 
-        return ! $this->hasPaymentHistory($entry->charges);
+        return ! $this->hasProtectedPaymentHistory($entry, $entry->charges);
     }
 
     public function execute(FestivalEntry $entry, User $actor): void
@@ -37,7 +40,7 @@ class DeleteFestivalEntry
                 ->lockForUpdate()
                 ->get();
 
-            if ($this->hasPaymentHistory($charges)) {
+            if ($this->hasProtectedPaymentHistory($entry, $charges)) {
                 throw ValidationException::withMessages([
                     'festival_application' => __('app.festival_application_delete_payment_history'),
                 ]);
@@ -68,8 +71,26 @@ class DeleteFestivalEntry
     }
 
     /** @param Collection<int, FestivalCharge> $charges */
-    private function hasPaymentHistory(Collection $charges): bool
+    private function hasProtectedPaymentHistory(FestivalEntry $entry, Collection $charges): bool
     {
-        return $charges->contains(fn (FestivalCharge $charge): bool => $charge->hasPaymentHistory());
+        return $charges->contains(function (FestivalCharge $charge) use ($entry): bool {
+            $hasPaidFact = $charge->paid_at !== null
+                || in_array($charge->status, [
+                    FestivalChargeStatus::Paid,
+                    FestivalChargeStatus::PaidRequiresRefund,
+                    FestivalChargeStatus::Refunded,
+                ], true)
+                || $charge->paymentAttempts->contains(fn ($attempt): bool => $attempt->paid_at !== null || $attempt->status === FestivalPaymentStatus::Paid);
+
+            if ($hasPaidFact || $charge->paymentAttempts->isEmpty()) {
+                return $hasPaidFact;
+            }
+
+            $wasDeclinedManually = $entry->status === FestivalEntryStatus::Draft
+                && $charge->status === FestivalChargeStatus::Failed
+                && $charge->approved_by !== null;
+
+            return ! $wasDeclinedManually;
+        });
     }
 }

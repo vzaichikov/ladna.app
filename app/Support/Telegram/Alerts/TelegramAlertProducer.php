@@ -16,7 +16,7 @@ class TelegramAlertProducer
 
     /**
      * @param  array<string, mixed>  $payload
-     * @param  array<string, int|null>  $context
+     * @param  array<string, int|string|null>  $context
      */
     public function queue(
         TelegramAlertType $type,
@@ -31,6 +31,10 @@ class TelegramAlertProducer
             'trainer_id' => $context['trainer_id'] ?? null,
             'scheduled_class_id' => $context['scheduled_class_id'] ?? null,
             'class_booking_id' => $context['class_booking_id'] ?? null,
+            'telegram_bot_installation_id' => $context['telegram_bot_installation_id'] ?? null,
+            'telegram_chat_authorization_id' => $context['telegram_chat_authorization_id'] ?? null,
+            'telegram_chat_id' => $context['telegram_chat_id'] ?? null,
+            'telegram_user_id' => $context['telegram_user_id'] ?? null,
             'type' => $type->value,
             'status' => TelegramAlertStatus::Pending->value,
             'recipient_kind' => $recipientKind->value,

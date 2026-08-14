@@ -26,11 +26,11 @@ class UpdateFestivalPortalUserRequest extends FormRequest
         return $account instanceof Account
             && $portalUser instanceof FestivalPortalUser
             && $portalUser->account_id === $account->id
-            && $portalUser->role !== FestivalPortalRole::Guest
-            && (bool) $this->user()?->can(
-                $portalUser->role === FestivalPortalRole::Judge ? 'manageFestivals' : 'manageFestivalRegistrations',
-                $account,
-            );
+            && match ($portalUser->role) {
+                FestivalPortalRole::Registrant => (bool) $this->user()?->can('manageFestivalRegistrations', $account),
+                FestivalPortalRole::Judge => (bool) $this->user()?->can('manageFestivals', $account),
+                FestivalPortalRole::Guest => (bool) $this->user()?->can('manageFestivals', $account) || (bool) $this->user()?->can('manageFestivalFinance', $account),
+            };
     }
 
     /**
@@ -49,8 +49,8 @@ class UpdateFestivalPortalUserRequest extends FormRequest
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'patronymic' => ['nullable', 'string', 'max:255'],
-            'stage_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant && $this->input('registrant_type') === FestivalRegistrantType::AdultAthlete->value), 'nullable', 'date', 'before_or_equal:today'],
+            'stage_name' => [Rule::prohibitedIf($role === FestivalPortalRole::Guest), 'nullable', 'string', 'max:255'],
+            'date_of_birth' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant && $this->input('registrant_type') === FestivalRegistrantType::AdultAthlete->value), 'nullable', 'date', 'before_or_equal:today'],
             'email' => [
                 'required',
                 'email',
@@ -74,10 +74,10 @@ class UpdateFestivalPortalUserRequest extends FormRequest
                     ->ignore($portalUser instanceof FestivalPortalUser ? $portalUser->id : 0),
             ],
             'phone_normalized' => ['nullable'],
-            'registrant_type' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser instanceof FestivalPortalUser ? $portalUser->registrant_type : null))],
-            'city' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
-            'studio_name' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
-            'instagram_url' => ['nullable', 'url:http,https', 'max:2048'],
+            'registrant_type' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser instanceof FestivalPortalUser ? $portalUser->registrant_type : null))],
+            'city' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
+            'studio_name' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
+            'instagram_url' => [Rule::prohibitedIf($role === FestivalPortalRole::Guest), 'nullable', 'url:http,https', 'max:2048'],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
             'is_active' => ['required', 'boolean'],

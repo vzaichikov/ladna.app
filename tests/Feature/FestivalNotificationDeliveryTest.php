@@ -7,6 +7,8 @@ use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\SmsDeliveryStatus;
+use App\Enums\TelegramAlertStatus;
+use App\Enums\TelegramAlertType;
 use App\Jobs\SendFestivalNotification;
 use App\Mail\FestivalPortalMail;
 use App\Models\Account;
@@ -21,6 +23,10 @@ use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTicketOrder;
 use App\Models\SmsDelivery;
+use App\Models\TelegramAlert;
+use App\Models\TelegramBotInstallation;
+use App\Models\TelegramChatAuthorization;
+use App\Models\TelegramMessage;
 use App\Models\User;
 use App\Support\Festivals\FestivalNotificationRenderer;
 use App\Support\PhoneNumberNormalizer;
@@ -30,6 +36,7 @@ use App\Support\Sms\StudioSmsSender;
 use App\Support\Sms\StudioSmsSendResult;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
@@ -250,6 +257,125 @@ class FestivalNotificationDeliveryTest extends TestCase
                 $this->assertStringNotContainsString('festival_notification_template_', $message->smsText);
             }
         }
+    }
+
+    public function test_review_notifications_localize_decisions_and_explain_the_next_payment_step(): void
+    {
+        $renderer = app(FestivalNotificationRenderer::class);
+        $actionUrl = 'https://ladna.test/festival/application';
+
+        foreach (['uk', 'en'] as $locale) {
+            $approved = $renderer->render(FestivalNotificationType::EntryStepReviewed, $locale, 'Recipient', [
+                'entry_code' => 'ENTRY-STEP',
+                'step' => 'Questionnaire',
+                'decision' => 'approve',
+                'next_step' => 'Participation payment',
+                'next_step_type' => 'payment',
+                'action_url' => $actionUrl,
+            ]);
+            $changes = $renderer->render(FestivalNotificationType::EntryStepReviewed, $locale, 'Recipient', [
+                'entry_code' => 'ENTRY-STEP',
+                'step' => 'Questionnaire',
+                'decision' => 'request_changes',
+                'comment' => 'Replace the file.',
+                'correction_due_at' => '20.08.2026 18:00',
+                'action_url' => $actionUrl,
+            ]);
+            $requirement = $renderer->render(FestivalNotificationType::RequirementReviewed, $locale, 'Recipient', [
+                'entry_code' => 'ENTRY-STEP',
+                'requirement' => 'Music',
+                'status' => 'accepted',
+                'action_url' => $actionUrl,
+            ]);
+            $acceptedEntry = $renderer->render(FestivalNotificationType::EntryReviewed, $locale, 'Recipient', [
+                'entry_code' => 'ENTRY-STEP',
+                'status' => 'accepted',
+                'action_url' => $actionUrl,
+            ]);
+            $rejectedEntry = $renderer->render(FestivalNotificationType::EntryStepReviewed, $locale, 'Recipient', [
+                'entry_code' => 'ENTRY-STEP',
+                'step' => 'Questionnaire',
+                'decision' => 'reject_entry',
+                'comment' => 'Eligibility was not confirmed.',
+                'action_url' => $actionUrl,
+            ]);
+
+            $this->assertStringContainsString($locale === 'uk' ? 'Можна переходити до оплати' : 'You can proceed to payment', $approved->smsText);
+            $this->assertStringContainsString($locale === 'uk' ? 'повернуто на доопрацювання' : 'returned for additional processing', $changes->emailText());
+            $this->assertStringContainsString(__('app.festival_requirement_status_accepted', locale: $locale), $requirement->emailText());
+            $this->assertStringContainsString($locale === 'uk' ? 'заявники стали учасниками фестивалю' : 'applicants are now Festival participants', $acceptedEntry->emailText());
+            $this->assertStringContainsString($locale === 'uk' ? 'заявку ENTRY-STEP не прийнято' : 'application ENTRY-STEP was not accepted', $rejectedEntry->emailText());
+            $this->assertStringNotContainsString('Decision: approve', $approved->emailText());
+            $this->assertStringNotContainsString('request_changes', $changes->emailText());
+            $this->assertStringNotContainsString('reject_entry', $rejectedEntry->emailText());
+            $this->assertSame(__('app.festival_open_application', locale: $locale), $approved->actionLabel);
+            $this->assertSame($actionUrl, $approved->actionUrl);
+        }
+    }
+
+    public function test_enabled_scenario_notifies_each_connected_studio_owner_through_the_general_ladna_bot(): void
+    {
+        Http::fake(['api.telegram.org/*' => Http::response([
+            'ok' => true,
+            'result' => ['message_id' => 501],
+        ])]);
+        [$account, $edition] = $this->festival(locale: 'en');
+        $entry = FestivalEntry::query()->where('festival_edition_id', $edition->id)->firstOrFail();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $installation = TelegramBotInstallation::factory()->platformOwner()->create([
+            'encrypted_token' => '123456:festival-owner-secret',
+            'is_enabled' => true,
+        ]);
+        $authorization = TelegramChatAuthorization::factory()->for($account)->for($owner)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'telegram_chat_id' => 'festival-owner-chat',
+            'telegram_user_id' => 'festival-owner-user',
+        ]);
+        FestivalNotificationSetting::query()->create([
+            'account_id' => $account->id,
+            'type' => FestivalNotificationType::EntrySubmitted,
+            'is_enabled' => true,
+            'is_optional' => false,
+            'notify_owner_telegram' => true,
+        ]);
+
+        $payload = ['entry_code' => $entry->code];
+        app(FestivalNotificationOutbox::class)->queueForEntry($entry, FestivalNotificationType::EntrySubmitted, $payload, 'submitted');
+        app(FestivalNotificationOutbox::class)->queueForEntry($entry, FestivalNotificationType::EntrySubmitted, $payload, 'submitted');
+
+        $alert = TelegramAlert::query()->firstOrFail();
+        $this->assertSame(1, TelegramAlert::query()->count());
+        $this->assertSame(TelegramAlertType::FestivalUpdate, $alert->type);
+        $this->assertSame($authorization->id, $alert->telegram_chat_authorization_id);
+        $this->assertSame(FestivalNotificationType::EntrySubmitted->value, $alert->payload['notification_type']);
+        $this->assertStringContainsString($entry->entry_name, (string) $alert->text);
+        $this->assertStringContainsString(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]), (string) $alert->text);
+
+        $this->artisan('telegram-alerts:send')->assertSuccessful();
+
+        $this->assertSame(TelegramAlertStatus::Sent, $alert->refresh()->status);
+        $this->assertDatabaseHas((new TelegramMessage)->getTable(), [
+            'telegram_chat_authorization_id' => $authorization->id,
+            'message_type' => 'festival_update',
+        ]);
+    }
+
+    public function test_owner_telegram_scenario_is_safely_skipped_without_a_connected_owner(): void
+    {
+        [$account, $edition] = $this->festival();
+        $entry = FestivalEntry::query()->where('festival_edition_id', $edition->id)->firstOrFail();
+        FestivalNotificationSetting::query()->create([
+            'account_id' => $account->id,
+            'type' => FestivalNotificationType::EntrySubmitted,
+            'is_enabled' => true,
+            'is_optional' => false,
+            'notify_owner_telegram' => true,
+        ]);
+
+        app(FestivalNotificationOutbox::class)->queueForEntry($entry, FestivalNotificationType::EntrySubmitted, [], 'no-owner');
+
+        $this->assertSame(0, TelegramAlert::query()->count());
     }
 
     public function test_announcement_modal_reopens_after_validation_and_scheduled_time_uses_edition_timezone(): void

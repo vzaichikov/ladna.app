@@ -7,14 +7,14 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'type', 'is_enabled', 'is_optional', 'send_sms'])]
+#[Fillable(['account_id', 'type', 'is_enabled', 'is_optional', 'send_sms', 'notify_owner_telegram'])]
 class FestivalNotificationSetting extends Model
 {
-    protected $attributes = ['is_enabled' => false, 'is_optional' => true, 'send_sms' => false];
+    protected $attributes = ['is_enabled' => false, 'is_optional' => true, 'send_sms' => false, 'notify_owner_telegram' => false];
 
     protected function casts(): array
     {
-        return ['type' => FestivalNotificationType::class, 'is_enabled' => 'boolean', 'is_optional' => 'boolean', 'send_sms' => 'boolean'];
+        return ['type' => FestivalNotificationType::class, 'is_enabled' => 'boolean', 'is_optional' => 'boolean', 'send_sms' => 'boolean', 'notify_owner_telegram' => 'boolean'];
     }
 
     public function account(): BelongsTo

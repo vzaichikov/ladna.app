@@ -335,6 +335,14 @@ final class AppBreadcrumbs
             ];
         }
 
+        if ($routeName === 'dashboard.accounts.festivals.tickets.issue') {
+            return [
+                ...$base,
+                $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition])),
+                $this->item(__('app.festival_issue_tickets')),
+            ];
+        }
+
         $workspaceLabels = [
             'dashboard.accounts.festivals.applications' => 'app.festival_tab_applications',
             'dashboard.accounts.festivals.performances' => 'app.festival_tab_performances',

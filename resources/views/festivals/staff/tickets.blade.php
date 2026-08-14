@@ -6,6 +6,9 @@
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <x-ui.page-header :title="__('app.festival_tickets_title')" :copy="__('app.festival_tickets_copy')">
         <x-slot:actions>
+            @if ($workspacePermissions['finance'])
+                <x-ui.button :href="route('dashboard.accounts.festivals.tickets.issue', [$account, $edition])"><x-ui.icon name="ticket" class="h-4 w-4" /> {{ __('app.festival_issue_tickets') }}</x-ui.button>
+            @endif
             @if ($workspacePermissions['ticket_check_in'])
                 <x-ui.button :href="route('dashboard.accounts.festivals.scanner', [$account, $edition])"><x-ui.icon name="qr-code" class="h-4 w-4" /> {{ __('app.festival_open_scanner') }}</x-ui.button>
             @endif
@@ -94,11 +97,12 @@
                     </div>
                 </section>
             @endif
-            <x-ui.filter-bar :action="route('dashboard.accounts.festivals.tickets', [$account, $edition])" :reset-href="route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold'])" class="lg:grid-cols-3">
+            <x-ui.filter-bar :action="route('dashboard.accounts.festivals.tickets', [$account, $edition])" :reset-href="route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold'])" class="lg:grid-cols-4">
                 <input type="hidden" name="tab" value="sold">
                 <label><span class="crm-label">{{ __('app.search') }}</span><input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_ticket_search_placeholder') }}"></label>
                 <label><span class="crm-label">{{ __('app.festival_ticket_type') }}</span><select name="type" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach($ticketTypeOptions as $type)<option value="{{ $type->id }}" @selected($filters['type'] === (string) $type->id)>{{ $type->name }}</option>@endforeach</select></label>
                 <label><span class="crm-label">{{ __('app.status') }}</span><select name="status" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach(\App\Enums\FestivalTicketStatus::cases() as $status)<option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.festival_ticket_status_'.$status->value) }}</option>@endforeach</select></label>
+                <label><span class="crm-label">{{ __('app.festival_ticket_source') }}</span><select name="source" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach(\App\Enums\FestivalTicketOrderSource::cases() as $source)<option value="{{ $source->value }}" @selected($filters['source'] === $source->value)>{{ __('app.festival_ticket_source_'.$source->value) }}</option>@endforeach</select></label>
             </x-ui.filter-bar>
 
             <div class="space-y-4">
@@ -107,14 +111,19 @@
                     @php($receipt = $order->fiscalReceipt)
                     <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                            <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="font-mono text-base text-slate-950">{{ $ticket->code }}</strong><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ __('app.festival_ticket_status_'.$ticket->status->value) }}</span><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $ticket->is_checked_in ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-700' }}">{{ $ticket->is_checked_in ? __('app.festival_checked_in') : __('app.festival_not_checked_in') }}</span></div><h3 class="mt-3 text-lg font-semibold text-slate-950">{{ $order->buyer_name }}</h3><p class="mt-1 break-words text-sm text-slate-600">{{ $order->buyer_email }}@if($order->buyer_phone) · {{ $order->buyer_phone }}@endif</p></div>
-                            <div class="text-left xl:text-right"><strong class="text-lg text-slate-950">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</strong><p class="mt-1 text-xs text-slate-500">{{ $order->paid_at?->timezone($edition->timezone)->format('d.m.Y H:i') ?? '—' }}</p></div>
+                            <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="font-mono text-base text-slate-950">{{ $ticket->code }}</strong><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ __('app.festival_ticket_status_'.$ticket->status->value) }}</span><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $order->source === \App\Enums\FestivalTicketOrderSource::Manual ? 'bg-violet-100 text-violet-800' : 'bg-sky-100 text-sky-800' }}">{{ __('app.festival_ticket_source_'.$order->source->value) }}</span><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $ticket->is_checked_in ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-700' }}">{{ $ticket->is_checked_in ? __('app.festival_checked_in') : __('app.festival_not_checked_in') }}</span></div><h3 class="mt-3 text-lg font-semibold text-slate-950">{{ $ticket->holder_name ?: $order->buyer_name }}</h3><p class="mt-1 break-words text-sm text-slate-600">{{ $order->buyer_name }} · {{ $order->buyer_email }}@if($order->buyer_phone) · {{ $order->buyer_phone }}@endif</p></div>
+                            <div class="text-left xl:text-right"><strong class="text-lg text-slate-950">{{ $order->source === \App\Enums\FestivalTicketOrderSource::Manual ? __('app.festival_complimentary') : \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</strong><p class="mt-1 text-xs text-slate-500">{{ ($order->issued_at ?: $order->paid_at)?->timezone($edition->timezone)->format('d.m.Y H:i') ?? '—' }}</p></div>
                         </div>
                         <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
                             <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_ticket_type') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $ticket->orderItem->admission_name }}</dd></div>
                             <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.order') }}</dt><dd class="mt-1 break-all font-mono text-xs text-slate-900">{{ $order->order_id }}</dd></div>
-                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_payment') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->provider ?: '—' }} · {{ __('app.festival_order_'.$order->status->value) }}</dd><span class="mt-1 block break-all text-xs text-slate-500">{{ $order->gateway_payment_id ?: $order->gateway_invoice_id ?: '—' }}</span></div>
-                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_fiscal_receipt') }}</dt><dd class="mt-1 font-semibold text-slate-900">@if($order->amount_cents === 0){{ __('app.festival_fiscal_not_required') }}@elseif($receipt){{ __('app.fiscal_status_'.$receipt->status->value) }}@else{{ __('app.fiscal_status_pending') }}@endif</dd>@if($receipt?->fiscal_number)<span class="mt-1 block break-all text-xs text-slate-500">{{ $receipt->fiscal_number }}</span>@endif @if($receipt?->last_error)<span class="mt-1 block text-xs text-rose-700">{{ $receipt->last_error }}</span>@endif</div>
+                            @if ($order->source === \App\Enums\FestivalTicketOrderSource::Manual)
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_issued_by') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->issuer?->name ?: '—' }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_issued_at') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->issued_at?->timezone($edition->timezone)->format('d.m.Y H:i') ?? '—' }}</dd></div>
+                            @else
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_payment') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->provider ?: '—' }} · {{ __('app.festival_order_'.$order->status->value) }}</dd><span class="mt-1 block break-all text-xs text-slate-500">{{ $order->gateway_payment_id ?: $order->gateway_invoice_id ?: '—' }}</span></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_fiscal_receipt') }}</dt><dd class="mt-1 font-semibold text-slate-900">@if($order->amount_cents === 0){{ __('app.festival_fiscal_not_required') }}@elseif($receipt){{ __('app.fiscal_status_'.$receipt->status->value) }}@else{{ __('app.fiscal_status_pending') }}@endif</dd>@if($receipt?->fiscal_number)<span class="mt-1 block break-all text-xs text-slate-500">{{ $receipt->fiscal_number }}</span>@endif @if($receipt?->last_error)<span class="mt-1 block text-xs text-rose-700">{{ $receipt->last_error }}</span>@endif</div>
+                            @endif
                         </dl>
                         @if ($ticket->status === \App\Enums\FestivalTicketStatus::Valid)
                             <div class="mt-4 grid gap-3 border-t border-stone-100 pt-4 md:grid-cols-2">
@@ -123,7 +132,7 @@
                                     <input name="reason" required maxlength="2000" class="crm-field" placeholder="{{ __('app.festival_ticket_void_reason') }}">
                                     <x-ui.button type="submit" variant="danger">{{ __('app.festival_void_ticket') }}</x-ui.button>
                                 </form>
-                                @if ($order->status === \App\Enums\FestivalTicketOrderStatus::Paid && $order->tickets->first()?->is($ticket))
+                                @if ($order->source === \App\Enums\FestivalTicketOrderSource::Checkout && $order->status === \App\Enums\FestivalTicketOrderStatus::Paid && $order->tickets->first()?->is($ticket))
                                     <form method="POST" action="{{ route('dashboard.accounts.festivals.ticket-orders.refund', [$account, $edition, $order]) }}" class="flex gap-2">
                                         @csrf
                                         <input name="reason" required maxlength="2000" class="crm-field" placeholder="{{ __('app.refund_reason') }}">

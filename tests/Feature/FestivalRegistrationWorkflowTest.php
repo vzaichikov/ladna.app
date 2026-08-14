@@ -145,10 +145,19 @@ class FestivalRegistrationWorkflowTest extends TestCase
             'min_age' => 12,
             'max_age' => 18,
         ]);
-        FestivalCategory::factory()->for($edition)->for($secondDirection)->create([
+        $fullCategory = FestivalCategory::factory()->for($edition)->for($secondDirection)->create([
             'account_id' => $account->id,
             'name' => 'Solo Silks',
             'requirements_html' => null,
+            'maximum_accepted_entries' => 1,
+        ]);
+        FestivalEntry::factory()->for($fullCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => FestivalEntryStatus::Accepted,
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
         ]);
         $participant = FestivalParticipant::factory()->for($portalUser)->create([
             'account_id' => $account->id,
@@ -162,8 +171,20 @@ class FestivalRegistrationWorkflowTest extends TestCase
             ->assertSee('Solo Hoop')
             ->assertSee('Bring a certified hoop.', false)
             ->assertSee(__('app.festival_category_deadline_value', ['date' => '15.09.2026 12:30', 'timezone' => 'Europe/Kyiv']))
-            ->assertSee(__('app.festival_category_requirements_none'));
+            ->assertSee(__('app.festival_category_requirements_none'))
+            ->assertSee(__('app.festival_category_full'));
+        $this->assertMatchesRegularExpression('/<input[^>]*value="'.$fullCategory->id.'"[^>]*disabled[^>]*>/', $createPage->getContent());
         $this->assertSame(2, substr_count($createPage->getContent(), '<legend class="text-base font-semibold text-slate-950">Aerial</legend>'));
+
+        $this->actingAs($portalUser, 'festival')
+            ->from(route('festival.portal.entries.create', [$account->slug, $edition->slug]))
+            ->post(route('festival.portal.entries.store', [$account->slug, $edition->slug]), [
+                'festival_category_id' => $fullCategory->id,
+                'participant_ids' => [$participant->id],
+                'entry_name' => 'Forged full category act',
+            ])
+            ->assertSessionHasErrors('festival_category_id');
+        $this->assertFalse(FestivalEntry::query()->where('entry_name', 'Forged full category act')->exists());
 
         $this->actingAs($portalUser, 'festival')->post(route('festival.portal.entries.store', [$account->slug, $edition->slug]), [
             'festival_category_id' => $category->id,
@@ -171,6 +192,17 @@ class FestivalRegistrationWorkflowTest extends TestCase
             'entry_name' => 'Live category act',
         ])->assertRedirect();
         $entry = FestivalEntry::query()->where('festival_portal_user_id', $portalUser->id)->where('entry_name', 'Live category act')->firstOrFail();
+        $fullCategoryDraft = FestivalEntry::factory()->for($fullCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Existing full category draft',
+            'status' => FestivalEntryStatus::Draft,
+        ]);
+        $fullCategoryDraft->participants()->sync([$participant->id => [
+            'account_id' => $account->id,
+            'sort_order' => 0,
+        ]]);
         $firstDirection->update(['name' => 'Updated Aerial']);
         $category->update(['name' => 'Updated Solo Hoop', 'requirements_html' => '<p>Current organizer conditions.</p>']);
 
@@ -185,6 +217,11 @@ class FestivalRegistrationWorkflowTest extends TestCase
             ->assertDontSee('type="hidden" name="festival_category_id"', false)
             ->assertSee('type="radio" name="festival_category_id"', false)
             ->assertSee(__('app.festival_category_change_available_copy'));
+
+        $currentDraftPage = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entries.edit', [$account->slug, $fullCategoryDraft]));
+        $currentDraftPage->assertOk();
+        $this->assertMatchesRegularExpression('/<input[^>]*value="'.$fullCategory->id.'"[^>]*checked(?![^>]*disabled)[^>]*>/', $currentDraftPage->getContent());
 
         $this->actingAs($portalUser, 'festival')
             ->get(route('festival.portal.entries.show', [$account->slug, $entry]))
@@ -600,17 +637,45 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $entry = FestivalEntry::query()->where('festival_portal_user_id', $portalUser->id)->sole();
         $this->assertNull($entry->act_title);
         $this->assertNotSame('+380500000000', $portalUser->refresh()->phone);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
+        $currentStep = $entry->steps->firstOrFail();
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $currentStep->id,
+            'code' => 'FCH-PORTAL-CARD',
+            'kind' => 'qualification',
+            'name' => 'Portal card fee',
+            'amount_cents' => 50000,
+            'currency' => 'UAH',
+        ]);
         $this->get(route('festival.portal.dashboard', $account->slug))
             ->assertOk()
             ->assertSee(__('app.festival_new_application'))
             ->assertDontSee('Sky Mara');
-        $this->get(route('festival.portal.entries.index', $account->slug))
+        $draftApplications = $this->get(route('festival.portal.entries.index', $account->slug));
+        $draftApplications
             ->assertOk()
             ->assertSee(__('app.festival_my_performances'))
             ->assertSee('Sky Mara')
             ->assertSee('src="https://example.test/festival-cover.jpg"', false)
             ->assertSee('alt="Festival cover"', false)
+            ->assertSee('<span class="crm-status-muted">'.__('app.festival_entry_status_draft').'</span>', false)
+            ->assertSee('crm-status-danger', false)
+            ->assertSee(__('app.festival_application_payment_unpaid'))
             ->assertDontSee(__('app.festival_new_application'));
+
+        $entry->update(['status' => FestivalEntryStatus::Submitted]);
+        $charge->update(['status' => FestivalChargeStatus::Paid, 'paid_at' => now()]);
+        $this->get(route('festival.portal.entries.index', $account->slug))
+            ->assertOk()
+            ->assertSee('<span class="crm-status-scheduled">'.__('app.festival_entry_status_submitted').'</span>', false)
+            ->assertSee(__('app.festival_charge_status_paid'));
+
+        $charge->update(['status' => FestivalChargeStatus::Cancelled, 'paid_at' => null]);
+        $this->get(route('festival.portal.entries.index', $account->slug))
+            ->assertOk()
+            ->assertDontSee(__('app.festival_application_payment_unpaid'))
+            ->assertDontSee(__('app.festival_charge_status_paid'));
     }
 
     /** @return array{Account, FestivalEdition, FestivalPortalUser} */

@@ -9,6 +9,7 @@ use App\Actions\Festivals\SaveFestivalEdition;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FestivalEntryStatus;
+use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalQualificationStatus;
 use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
@@ -16,6 +17,7 @@ use App\Http\Requests\FestivalChargeDefinitionRequest;
 use App\Http\Requests\FestivalEditionRequest;
 use App\Http\Requests\FestivalRequirementRequest;
 use App\Models\Account;
+use App\Models\FestivalCategory;
 use App\Models\FestivalCharge;
 use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalContentSection;
@@ -37,6 +39,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -318,25 +321,55 @@ class FestivalStaffController extends Controller
             'qualification_status' => ['required', Rule::enum(FestivalQualificationStatus::class)],
             'review_notes' => ['nullable', 'string', 'max:5000'],
         ]);
-        $festivalEntry->forceFill([
-            ...$data, 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(),
-            'accepted_at' => $data['status'] === FestivalEntryStatus::Accepted->value ? now() : null,
-            'rejected_at' => $data['status'] === FestivalEntryStatus::Rejected->value ? now() : null,
-        ])->save();
-        $activity->record($festivalEntry, 'entry.reviewed', $festivalEdition, $request->user(), $data);
-        $notifications->queueForEntry($festivalEntry, 'entry_reviewed', ['entry_code' => $festivalEntry->code, 'status' => $data['status']], now()->getTimestamp().':'.$data['status']);
+        DB::transaction(function () use ($request, $festivalEdition, $festivalEntry, $activity, $notifications, $data): void {
+            $festivalEntry = FestivalEntry::query()
+                ->whereKey($festivalEntry->id)
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $acceptingEntry = $data['status'] === FestivalEntryStatus::Accepted->value
+                && $festivalEntry->status !== FestivalEntryStatus::Accepted;
+
+            if ($acceptingEntry) {
+                $category = FestivalCategory::query()
+                    ->whereKey($festivalEntry->festival_category_id)
+                    ->where('account_id', $festivalEntry->account_id)
+                    ->where('festival_edition_id', $festivalEntry->festival_edition_id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                if ($category->applicationCapacityReached()) {
+                    throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
+                }
+            }
+
+            $reviewedAt = now();
+            $festivalEntry->forceFill([
+                ...$data,
+                'reviewed_by' => $request->user()->id,
+                'reviewed_at' => $reviewedAt,
+                'accepted_at' => $data['status'] === FestivalEntryStatus::Accepted->value ? ($festivalEntry->accepted_at ?? $reviewedAt) : null,
+                'registration_completed_at' => $data['status'] === FestivalEntryStatus::Accepted->value ? ($festivalEntry->registration_completed_at ?? $reviewedAt) : null,
+                'rejected_at' => $data['status'] === FestivalEntryStatus::Rejected->value ? $reviewedAt : null,
+            ])->save();
+            $activity->record($festivalEntry, 'entry.reviewed', $festivalEdition, $request->user(), $data);
+            $notifications->queueForEntry($festivalEntry, FestivalNotificationType::EntryReviewed, [
+                'status' => $data['status'],
+                'comment' => $data['review_notes'] ?? null,
+            ], $reviewedAt->getTimestamp().':'.$data['status']);
+        }, 3);
 
         return redirect()->route('dashboard.accounts.festivals.applications', [$account, $festivalEdition])->with('status', __('app.festival_entry_reviewed'));
     }
 
-    public function reviewRequirement(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntryRequirement $festivalEntryRequirement, FestivalActivityRecorder $activity): JsonResponse|RedirectResponse
+    public function reviewRequirement(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntryRequirement $festivalEntryRequirement, FestivalActivityRecorder $activity, FestivalNotificationOutbox $notifications): JsonResponse|RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
         abort_unless($festivalEntryRequirement->entry()->where('festival_edition_id', $festivalEdition->id)->exists(), 404);
         abort_unless($request->user()?->can('manageFestivalRegistrations', $account), 403);
         $data = $request->validate(['status' => ['required', Rule::in([FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Rejected->value, FestivalRequirementStatus::Waived->value])], 'review_notes' => ['nullable', 'string', 'max:5000']]);
-        DB::transaction(function () use ($festivalEntryRequirement, $request, $data, $activity, $festivalEdition): void {
-            $requirement = FestivalEntryRequirement::query()->with(['definition', 'submissions'])->whereKey($festivalEntryRequirement->id)->lockForUpdate()->firstOrFail();
+        $reviewDedupeToken = (string) Str::uuid();
+        DB::transaction(function () use ($festivalEntryRequirement, $request, $data, $activity, $festivalEdition, $notifications, $reviewDedupeToken): void {
+            $requirement = FestivalEntryRequirement::query()->with(['definition', 'submissions', 'entry.account', 'entry.edition', 'entry.portalUser', 'entryStep.workflowStep'])->whereKey($festivalEntryRequirement->id)->lockForUpdate()->firstOrFail();
             if ($data['status'] === FestivalRequirementStatus::Waived->value
                 && $requirement->definition->input_type === FestivalRequirementInputType::Agreement) {
                 throw ValidationException::withMessages(['status' => __('app.festival_condition_confirmation_cannot_be_waived')]);
@@ -349,6 +382,14 @@ class FestivalStaffController extends Controller
                 $submission->forceFill(['status' => $data['status'] === 'accepted' ? 'accepted' : ($data['status'] === 'rejected' ? 'rejected' : $submission->status), 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'review_notes' => $data['review_notes'] ?? null])->save();
             }
             $activity->record($requirement, 'requirement.reviewed', $festivalEdition, $request->user(), $data);
+            $notifications->queueForEntry($requirement->entry, FestivalNotificationType::RequirementReviewed, [
+                'requirement' => $requirement->definition->name,
+                'status' => $data['status'],
+                'comment' => $data['review_notes'] ?? null,
+                'action_url' => $requirement->entryStep
+                    ? route('festival.portal.entry-steps.show', [$requirement->entry->account->slug, $requirement->entry, $requirement->entryStep])
+                    : route('festival.portal.entries.show', [$requirement->entry->account->slug, $requirement->entry]),
+            ], 'requirement-review:'.$requirement->id.':'.$reviewDedupeToken);
         });
 
         if ($request->expectsJson()) {
@@ -367,13 +408,13 @@ class FestivalStaffController extends Controller
         return back()->with('status', __('app.festival_requirement_reviewed'));
     }
 
-    public function approveManualCharge(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalCharge $festivalCharge, FestivalActivityRecorder $activity): JsonResponse|RedirectResponse
+    public function approveManualCharge(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalCharge $festivalCharge, FestivalActivityRecorder $activity, FestivalNotificationOutbox $notifications): JsonResponse|RedirectResponse
     {
         $this->assertEdition($account, $festivalEdition);
         abort_unless($festivalCharge->entry()->where('festival_edition_id', $festivalEdition->id)->exists(), 404);
         abort_unless($request->user()?->can('manageFestivalFinance', $account), 403);
         $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])], 'notes' => ['nullable', 'string', 'max:5000']]);
-        DB::transaction(function () use ($festivalCharge, $data, $request, $activity, $festivalEdition): void {
+        DB::transaction(function () use ($festivalCharge, $data, $request, $activity, $festivalEdition, $notifications): void {
             $entry = FestivalEntry::query()
                 ->whereKey($festivalCharge->festival_entry_id)
                 ->where('festival_edition_id', $festivalEdition->id)
@@ -389,6 +430,11 @@ class FestivalStaffController extends Controller
             }
             $charge->forceFill(['status' => $data['decision'] === 'approve' ? 'paid' : 'failed', 'paid_at' => $data['decision'] === 'approve' ? now() : null, 'approved_by' => $request->user()->id, 'notes' => $data['notes'] ?? null])->save();
             $activity->record($charge, 'charge.manual_reviewed', $festivalEdition, $request->user(), $data);
+            if ($data['decision'] === 'approve') {
+                $notifications->queueForEntry($entry, FestivalNotificationType::PaymentPaid, [
+                    'charge' => $charge->name,
+                ], 'manual-charge-approved:'.$charge->id.':'.$charge->updated_at->getTimestamp());
+            }
         }, 3);
 
         if ($request->expectsJson()) {

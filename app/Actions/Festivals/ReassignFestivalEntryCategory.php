@@ -77,6 +77,10 @@ class ReassignFestivalEntryCategory
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($entry->festival_category_id !== $targetCategory->id && $targetCategory->applicationCapacityReached()) {
+                throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
+            }
+
             if ($entry->category->festival_workflow_id !== $targetCategory->festival_workflow_id) {
                 throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_reassignment_workflow_mismatch')]);
             }

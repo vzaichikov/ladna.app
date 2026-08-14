@@ -14,16 +14,27 @@ use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
 use App\Support\Festivals\FestivalNotificationMessage;
 use App\Support\Festivals\FestivalNotificationRenderer;
+use App\Support\Telegram\Alerts\QueueFestivalOwnerTelegramAlert;
 use Illuminate\Support\Facades\DB;
 
 class FestivalNotificationOutbox
 {
-    public function __construct(private readonly FestivalNotificationRenderer $renderer) {}
+    public function __construct(
+        private readonly FestivalNotificationRenderer $renderer,
+        private readonly QueueFestivalOwnerTelegramAlert $ownerTelegramAlerts,
+    ) {}
 
     /** @param array<string, mixed> $payload */
     public function queueForEntry(FestivalEntry $entry, string|FestivalNotificationType $type, array $payload, ?string $dedupeSuffix = null): ?FestivalNotification
     {
-        $entry->loadMissing(['portalUser', 'edition']);
+        $entry->loadMissing(['account', 'portalUser', 'edition']);
+        $payload = [
+            'festival' => $entry->edition->title,
+            'entry_code' => $entry->code,
+            'entry_name' => $entry->entry_name,
+            'action_url' => route('festival.portal.entries.show', [$entry->account->slug, $entry]),
+            ...$payload,
+        ];
 
         return $this->queue(
             portalUser: $entry->portalUser,
@@ -40,6 +51,7 @@ class FestivalNotificationOutbox
     {
         $type = $type instanceof FestivalNotificationType ? $type : FestivalNotificationType::from($type);
         abort_unless($portalUser->account_id === $edition->account_id, 404);
+        $edition->loadMissing('account');
 
         $dedupeBase = implode(':', [
             $type->value,
@@ -90,6 +102,15 @@ class FestivalNotificationOutbox
             );
         }
 
+        $this->ownerTelegramAlerts->execute(
+            $edition->account,
+            $edition,
+            $type,
+            $payload,
+            $this->ownerEventKey($type, $edition, $entry, $payload, $dedupeSuffix),
+            $entry,
+        );
+
         return $notification;
     }
 
@@ -136,6 +157,17 @@ class FestivalNotificationOutbox
             ]);
         }
 
+        $this->ownerTelegramAlerts->execute(
+            $order->account,
+            $order->edition,
+            $type,
+            [
+                ...$payload,
+                'applicant' => $order->buyer_name,
+            ],
+            'tickets-issued:'.$order->id.':'.($dedupeSuffix ?? 'issued'),
+        );
+
         return $notification;
     }
 
@@ -163,6 +195,17 @@ class FestivalNotificationOutbox
             ->where('type', $type->value)
             ->where('send_sms', true)
             ->exists();
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function ownerEventKey(FestivalNotificationType $type, FestivalEdition $edition, ?FestivalEntry $entry, array $payload, ?string $dedupeSuffix): string
+    {
+        return implode(':', [
+            $type->value,
+            $edition->id,
+            $entry?->id ?? 0,
+            $dedupeSuffix ?? hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR)),
+        ]);
     }
 
     /**

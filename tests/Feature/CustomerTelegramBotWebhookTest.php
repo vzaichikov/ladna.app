@@ -193,17 +193,54 @@ class CustomerTelegramBotWebhookTest extends TestCase
             'message' => $this->message($chatId, $telegramUserId, 1, '/book'),
         ])->assertNoContent();
         $session = TelegramCustomerSession::whereBelongsTo($installation, 'installation')->sole();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingDate, $session->state);
 
         $this->postCustomerUpdate($installation, $webhookKey, [
             'update_id' => 30002,
+            'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'booking_types')),
+        ])->assertNoContent();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingBookingType, $session->refresh()->state);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 30003,
+            'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackTokenWithValue($session->refresh(), 'book_type', ScheduleKind::GroupClass->value)),
+        ])->assertNoContent();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingDate, $session->refresh()->state);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 30004,
+            'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'book_date')),
+        ])->assertNoContent();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingClass, $session->refresh()->state);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 30005,
+            'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'book_dates_page')),
+        ])->assertNoContent();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingDate, $session->refresh()->state);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 30006,
             'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'book_date')),
         ])->assertNoContent();
         $this->postCustomerUpdate($installation, $webhookKey, [
-            'update_id' => 30003,
+            'update_id' => 30007,
+            'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'book_class')),
+        ])->assertNoContent();
+        $this->assertSame(TelegramCustomerSessionState::ConfirmingBooking, $session->refresh()->state);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 30008,
+            'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'book_date')),
+        ])->assertNoContent();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingClass, $session->refresh()->state);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 30009,
             'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'book_class')),
         ])->assertNoContent();
         $this->postCustomerUpdate($installation, $webhookKey, [
-            'update_id' => 30004,
+            'update_id' => 30010,
             'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'confirm_booking')),
         ])->assertNoContent();
 
@@ -214,36 +251,36 @@ class CustomerTelegramBotWebhookTest extends TestCase
         $this->assertSame(ClassBookingStatus::Booked, $booking->status);
 
         $this->postCustomerUpdate($installation, $webhookKey, [
-            'update_id' => 30005,
+            'update_id' => 30011,
             'message' => $this->message($chatId, $telegramUserId, 5, '/bookings'),
         ])->assertNoContent();
         $this->postCustomerUpdate($installation, $webhookKey, [
-            'update_id' => 30006,
+            'update_id' => 30012,
             'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'booking_detail')),
         ])->assertNoContent();
         $this->postCustomerUpdate($installation, $webhookKey, [
-            'update_id' => 30007,
+            'update_id' => 30013,
             'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'confirm_cancel_booking')),
         ])->assertNoContent();
         $this->postCustomerUpdate($installation, $webhookKey, [
-            'update_id' => 30008,
+            'update_id' => 30014,
             'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'cancel_booking')),
         ])->assertNoContent();
 
         $this->assertSame(ClassBookingStatus::Cancelled, $booking->refresh()->status);
 
         $this->postCustomerUpdate($installation, $webhookKey, [
-            'update_id' => 30009,
+            'update_id' => 30015,
             'message' => $this->message($chatId, $telegramUserId, 9, '/bookings'),
         ])->assertNoContent();
         $this->postCustomerUpdate($installation, $webhookKey, [
-            'update_id' => 30010,
+            'update_id' => 30016,
             'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'booking_history')),
         ])->assertNoContent();
 
         $historyUpdate = TelegramUpdate::query()
             ->whereBelongsTo($installation, 'installation')
-            ->where('update_id', 30010)
+            ->where('update_id', 30016)
             ->sole();
         $this->assertSame(TelegramUpdateStatus::Processed, $historyUpdate->status);
         $historyText = (string) TelegramMessage::query()
@@ -255,6 +292,110 @@ class CustomerTelegramBotWebhookTest extends TestCase
             __('app.telegram_customer_booking_status_cancelled', [], $session->refresh()->locale),
             $historyText,
         );
+    }
+
+    public function test_group_booking_returns_from_dates_to_the_account_location_list(): void
+    {
+        $this->fakeTelegram();
+        $account = Account::factory()->create(['default_language' => 'en']);
+        $customer = Customer::factory()->for($account)->create([
+            'phone' => '+380931234571',
+            'default_language' => 'en',
+        ]);
+        [$installation, $webhookKey] = $this->customerInstallation($account);
+        $chatId = 70008;
+        $telegramUserId = 80008;
+        $this->authorizeCustomer($account, $installation, $customer, $chatId, $telegramUserId);
+        $classType = ClassType::factory()->for($account)->create([
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $locations = collect(['First location', 'Second location'])->map(function (string $name) use ($account, $classType): Location {
+            $location = Location::factory()->for($account)->create(['name' => $name]);
+            $room = Room::factory()->for($account)->for($location)->create();
+            ScheduledClass::factory()
+                ->for($account)
+                ->for($location)
+                ->for($room)
+                ->for($classType)
+                ->create([
+                    'starts_at' => now()->addDays(2),
+                    'ends_at' => now()->addDays(2)->addHour(),
+                    'capacity' => 10,
+                    'is_public' => true,
+                ]);
+
+            return $location;
+        });
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 31001,
+            'message' => $this->message($chatId, $telegramUserId, 1, '/book'),
+        ])->assertNoContent();
+        $session = TelegramCustomerSession::whereBelongsTo($installation, 'installation')->sole();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingLocation, $session->state);
+        $this->callbackToken($session, 'booking_types');
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 31002,
+            'callback_query' => $this->callbackPayload(
+                $chatId,
+                $telegramUserId,
+                $this->callbackTokenWithValue($session->refresh(), 'book_location', $locations->first()->id),
+            ),
+        ])->assertNoContent();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingDate, $session->refresh()->state);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 31003,
+            'callback_query' => $this->callbackPayload($chatId, $telegramUserId, $this->callbackToken($session->refresh(), 'book_locations')),
+        ])->assertNoContent();
+        $this->assertSame(TelegramCustomerSessionState::ChoosingLocation, $session->refresh()->state);
+        $locationIds = collect((array) data_get($session->encrypted_context, 'callbacks', []))
+            ->where('action', 'book_location')
+            ->pluck('value');
+        $this->assertEqualsCanonicalizing($locations->pluck('id')->all(), $locationIds->all());
+    }
+
+    public function test_pass_summary_displays_each_session_counter_on_its_own_line(): void
+    {
+        $this->fakeTelegram();
+        $account = Account::factory()->create(['default_language' => 'uk']);
+        $customer = Customer::factory()->for($account)->create([
+            'phone' => '+380931234572',
+            'default_language' => 'uk',
+        ]);
+        [$installation, $webhookKey] = $this->customerInstallation($account);
+        $chatId = 70009;
+        $telegramUserId = 80009;
+        $this->authorizeCustomer($account, $installation, $customer, $chatId, $telegramUserId);
+        $classPassPlan = ClassPassPlan::factory()->for($account)->create([
+            'name' => 'Базовий',
+            'sessions_count' => 10,
+        ]);
+        CustomerClassPass::factory()
+            ->for($account)
+            ->for($customer)
+            ->for($classPassPlan)
+            ->create([
+                'plan_name' => 'Базовий',
+                'code' => 'KE54-ZEHF',
+                'sessions_count' => 10,
+                'reserved_sessions_count' => 1,
+                'used_sessions_count' => 1,
+            ]);
+
+        $this->postCustomerUpdate($installation, $webhookKey, [
+            'update_id' => 32001,
+            'message' => $this->message($chatId, $telegramUserId, 1, '/passes'),
+        ])->assertNoContent();
+
+        $outboundText = (string) TelegramMessage::query()
+            ->whereBelongsTo($installation, 'installation')
+            ->where('direction', 'outbound')
+            ->latest('id')
+            ->value('text');
+        $this->assertStringContainsString("Заняття:\nДоступно: 8\nЗарезервовано: 1\nВикористано: 1 з 10", $outboundText);
+        $this->assertStringNotContainsString('Заняття: 8 доступно', $outboundText);
     }
 
     public function test_linked_customer_can_book_an_individual_lesson_for_one_person_through_opening_hours(): void

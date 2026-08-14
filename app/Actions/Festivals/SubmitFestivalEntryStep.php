@@ -72,6 +72,9 @@ class SubmitFestivalEntryStep
             }
 
             if ($step->workflowStep->type === FestivalWorkflowStepType::Summary && $automatic) {
+                if ($category->applicationCapacityReached()) {
+                    throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
+                }
                 $entry->forceFill([
                     'status' => FestivalEntryStatus::Accepted,
                     'accepted_at' => now(),

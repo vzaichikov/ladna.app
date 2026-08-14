@@ -27,6 +27,7 @@ use App\Http\Controllers\FestivalSeriesController;
 use App\Http\Controllers\FestivalSettingsController;
 use App\Http\Controllers\FestivalStaffController;
 use App\Http\Controllers\FestivalStageController;
+use App\Http\Controllers\FestivalTicketIssuanceController;
 use App\Http\Controllers\FestivalTicketScannerController;
 use App\Http\Controllers\FestivalTimelineController;
 use App\Http\Controllers\FestivalWorkflowController;
@@ -50,8 +51,8 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('files/submissions/{festivalSubmission}', [FestivalFileController::class, 'submission'])->name('submissions.download');
     Route::get('{festivalEdition:id}', [FestivalStaffController::class, 'show'])->whereNumber('festivalEdition')->name('show');
     Route::get('{festivalEdition:id}/users', [FestivalPortalUserController::class, 'index'])->whereNumber('festivalEdition')->name('users.index');
-    Route::get('{festivalEdition:id}/users/{role}/create', [FestivalPortalUserController::class, 'create'])->whereNumber('festivalEdition')->whereIn('role', ['registrant', 'judge'])->name('users.create');
-    Route::post('{festivalEdition:id}/users/{role}', [FestivalPortalUserController::class, 'store'])->whereNumber('festivalEdition')->whereIn('role', ['registrant', 'judge'])->name('users.store');
+    Route::get('{festivalEdition:id}/users/{role}/create', [FestivalPortalUserController::class, 'create'])->whereNumber('festivalEdition')->whereIn('role', ['registrant', 'judge', 'guest'])->name('users.create');
+    Route::post('{festivalEdition:id}/users/{role}', [FestivalPortalUserController::class, 'store'])->whereNumber('festivalEdition')->whereIn('role', ['registrant', 'judge', 'guest'])->name('users.store');
     Route::get('{festivalEdition:id}/users/{festivalPortalUser}/edit', [FestivalPortalUserController::class, 'edit'])->whereNumber('festivalEdition')->name('users.edit');
     Route::put('{festivalEdition:id}/users/{festivalPortalUser}', [FestivalPortalUserController::class, 'update'])->whereNumber('festivalEdition')->name('users.update');
     Route::get('{festivalEdition:id}/users/{festivalPortalUser}/participants/create', [FestivalPortalRosterController::class, 'create'])->whereNumber('festivalEdition')->name('users.participants.create');
@@ -70,6 +71,7 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('{festivalEdition:id}/timeline/scenes/{festivalStage}', [FestivalTimelineController::class, 'show'])->whereNumber('festivalEdition')->whereNumber('festivalStage')->name('timeline.show');
     Route::get('{festivalEdition:id}/timeline/scenes/{festivalStage}/fragment', [FestivalTimelineController::class, 'fragment'])->whereNumber('festivalEdition')->whereNumber('festivalStage')->name('timeline.fragment');
     Route::get('{festivalEdition:id}/tickets', [FestivalWorkspaceController::class, 'tickets'])->whereNumber('festivalEdition')->name('tickets');
+    Route::get('{festivalEdition:id}/tickets/issue', [FestivalTicketIssuanceController::class, 'create'])->whereNumber('festivalEdition')->name('tickets.issue');
     Route::get('{festivalEdition:id}/online-stream', [FestivalOnlineStreamController::class, 'edit'])->whereNumber('festivalEdition')->name('online-stream.edit');
     Route::get('{festivalEdition:id}/online-stream/status', [FestivalOnlineStreamController::class, 'status'])->whereNumber('festivalEdition')->middleware('throttle:festival-stream-status')->name('online-stream.status');
     Route::get('{festivalEdition:id}/online-stream/preview', [FestivalOnlineStreamController::class, 'preview'])->whereNumber('festivalEdition')->middleware('throttle:festival-stream-bootstrap')->name('online-stream.preview');
@@ -161,6 +163,8 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::patch('{festivalEdition:id}/online-stream/stop', [FestivalOnlineStreamController::class, 'stop'])->whereNumber('festivalEdition')->name('online-stream.stop');
     Route::delete('{festivalEdition:id}/online-stream/leases', [FestivalOnlineStreamController::class, 'resetLeases'])->whereNumber('festivalEdition')->name('online-stream.reset-leases');
     Route::post('{festivalEdition:id}/ticket-orders/{festivalTicketOrder}/refund', [FestivalWorkspaceController::class, 'refundTicketOrder'])->whereNumber('festivalEdition')->whereNumber('festivalTicketOrder')->name('ticket-orders.refund');
+    Route::post('{festivalEdition:id}/tickets/issue', [FestivalTicketIssuanceController::class, 'store'])->whereNumber('festivalEdition')->name('tickets.issue.store');
+    Route::post('{festivalEdition:id}/tickets/issue/audience', [FestivalTicketIssuanceController::class, 'storeAudience'])->whereNumber('festivalEdition')->name('tickets.issue.audience');
     Route::post('{festivalEdition:id}/tickets/{festivalTicket}/void', [FestivalWorkspaceController::class, 'voidTicket'])->whereNumber('festivalEdition')->whereNumber('festivalTicket')->name('tickets.void');
     Route::patch('{festivalEdition:id}/entries/{festivalEntry}/review', [FestivalStaffController::class, 'reviewEntry'])->whereNumber('festivalEdition')->name('entries.review');
     Route::patch('{festivalEdition:id}/entries/{festivalEntry}/category', [FestivalEntryStepController::class, 'reassignCategory'])->whereNumber('festivalEdition')->name('entries.reassign-category');

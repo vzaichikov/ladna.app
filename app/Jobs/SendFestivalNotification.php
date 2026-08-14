@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
+use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\SmsDeliveryPurpose;
 use App\Mail\FestivalPortalMail;
@@ -15,22 +16,33 @@ use App\Models\FestivalTicketOrder;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
 use App\Support\Sms\StudioSmsSender;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 use Throwable;
 
-class SendFestivalNotification implements ShouldQueue
+class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
 {
     use FoundationQueueable;
 
     public int $tries = 5;
 
+    public int $timeout = 60;
+
+    public int $uniqueFor = 300;
+
     /** @var array<int, int> */
     public array $backoff = [30, 120, 600, 1800];
 
     public function __construct(public readonly int $notificationId) {}
+
+    public function uniqueId(): string
+    {
+        return (string) $this->notificationId;
+    }
 
     public function handle(StudioSmsSender $smsSender, SmsAutoTopUpService $autoTopUp, PhoneNumberNormalizer $phones): void
     {
@@ -60,7 +72,18 @@ class SendFestivalNotification implements ShouldQueue
             return;
         }
 
-        $notification->forceFill(['status' => FestivalNotificationStatus::Sending, 'attempts' => $notification->attempts + 1])->save();
+        $claimed = FestivalNotification::query()
+            ->whereKey($notification->id)
+            ->whereIn('status', [FestivalNotificationStatus::Pending->value, FestivalNotificationStatus::Failed->value])
+            ->update([
+                'status' => FestivalNotificationStatus::Sending->value,
+                'attempts' => DB::raw('attempts + 1'),
+                'updated_at' => now(),
+            ]);
+        if ($claimed !== 1) {
+            return;
+        }
+        $notification->refresh();
 
         try {
             if ($notification->channel === FestivalNotificationChannel::Sms) {
@@ -86,7 +109,8 @@ class SendFestivalNotification implements ShouldQueue
                     return;
                 }
                 $actionLabel = __('app.festival_open_tickets', locale: $locale);
-                $actionUrl = $notification->festival_portal_user_id !== null
+                $actionUrl = $order->source !== FestivalTicketOrderSource::Manual
+                    && $notification->festival_portal_user_id !== null
                     && $notification->festival_portal_user_id === $order->festival_portal_user_id
                     ? route('festival.portal.guest.dashboard', $account->slug)
                     : route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);

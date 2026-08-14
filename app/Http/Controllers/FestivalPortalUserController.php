@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Festivals\SyncFestivalProfileParticipant;
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalTicketStatus;
 use App\Http\Requests\StoreFestivalPortalUserRequest;
 use App\Http\Requests\UpdateFestivalPortalUserRequest;
 use App\Models\Account;
@@ -28,13 +29,18 @@ class FestivalPortalUserController extends Controller
         $allowedTabs = array_values(array_filter([
             $permissions['registrations'] ? 'participants' : null,
             $permissions['manage'] ? 'judges' : null,
+            $permissions['manage'] || $permissions['finance'] ? 'guests' : null,
         ]));
         abort_if($allowedTabs === [], 403);
 
         $tab = $request->query('tab');
-        $tab = is_string($tab) && in_array($tab, ['participants', 'judges'], true) ? $tab : $allowedTabs[0];
+        $tab = is_string($tab) && in_array($tab, ['participants', 'judges', 'guests'], true) ? $tab : $allowedTabs[0];
         abort_unless(in_array($tab, $allowedTabs, true), 403);
-        $role = $tab === 'judges' ? FestivalPortalRole::Judge : FestivalPortalRole::Registrant;
+        $role = match ($tab) {
+            'judges' => FestivalPortalRole::Judge,
+            'guests' => FestivalPortalRole::Guest,
+            default => FestivalPortalRole::Registrant,
+        };
         $filters = [
             'q' => $request->string('q')->trim()->toString(),
             'status' => in_array($request->query('status'), ['active', 'inactive'], true) ? $request->query('status') : '',
@@ -50,6 +56,12 @@ class FestivalPortalUserController extends Controller
                 ->withCount(['judgeAssignments as current_edition_assignments_count' => fn (Builder $assignments) => $assignments
                     ->where('festival_edition_id', $festivalEdition->id)
                     ->where('is_active', true)]))
+            ->when($role === FestivalPortalRole::Guest, fn (Builder $query) => $query
+                ->withCount(['ticketOrders as current_edition_orders_count' => fn (Builder $orders) => $orders
+                    ->where('festival_edition_id', $festivalEdition->id)])
+                ->withCount(['tickets as current_edition_valid_tickets_count' => fn (Builder $tickets) => $tickets
+                    ->where('festival_tickets.festival_edition_id', $festivalEdition->id)
+                    ->where('festival_tickets.status', FestivalTicketStatus::Valid->value)]))
             ->when($filters['q'] !== '', function (Builder $query) use ($filters): void {
                 $search = '%'.$filters['q'].'%';
                 $query->where(fn (Builder $identity) => $identity
@@ -88,7 +100,7 @@ class FestivalPortalUserController extends Controller
             'role' => $portalRole,
             'is_active' => true,
             'locale' => $account->default_language,
-        ]), $permissions);
+        ]), $permissions, $request->query('return_to') === 'ticket-issuance' ? 'ticket-issuance' : null);
     }
 
     public function store(StoreFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, string $role, SyncFestivalProfileParticipant $syncParticipant): RedirectResponse
@@ -109,6 +121,11 @@ class FestivalPortalUserController extends Controller
 
             return $portalUser;
         }, 3);
+
+        if ($portalRole === FestivalPortalRole::Guest && $request->string('return_to')->toString() === 'ticket-issuance') {
+            return redirect()->route('dashboard.accounts.festivals.tickets.issue', [$account, $festivalEdition, 'selected_guest_id' => $portalUser->id])
+                ->with('status', __('app.festival_user_saved'));
+        }
 
         return $this->redirectToEdit($account, $festivalEdition, $portalUser);
     }
@@ -146,6 +163,13 @@ class FestivalPortalUserController extends Controller
                 throw ValidationException::withMessages(['is_active' => __('app.festival_judge_profile_assignment_block')]);
             }
 
+            if ($portalUser->role === FestivalPortalRole::Guest && ! $data['is_active'] && (
+                $portalUser->tickets()->where('festival_tickets.status', FestivalTicketStatus::Valid->value)->exists()
+                || $portalUser->streamEntitlements()->exists()
+            )) {
+                throw ValidationException::withMessages(['is_active' => __('app.festival_guest_deactivation_block')]);
+            }
+
             $portalUser->update(Arr::except($data, ['role']));
             $syncParticipant->execute($portalUser, $dateOfBirth);
         }, 3);
@@ -154,7 +178,7 @@ class FestivalPortalUserController extends Controller
     }
 
     /** @param array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} $permissions */
-    private function formView(Account $account, FestivalEdition $edition, FestivalPortalUser $portalUser, array $permissions): View
+    private function formView(Account $account, FestivalEdition $edition, FestivalPortalUser $portalUser, array $permissions, ?string $returnTo = null): View
     {
         $portalUser->loadMissing('profileParticipant');
 
@@ -162,6 +186,7 @@ class FestivalPortalUserController extends Controller
             'account' => $account,
             'edition' => $edition,
             'portalUser' => $portalUser,
+            'returnTo' => $returnTo,
             'workspacePermissions' => $permissions,
         ]);
     }
@@ -177,8 +202,12 @@ class FestivalPortalUserController extends Controller
     /** @param array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} $permissions */
     private function authorizeRole(FestivalPortalRole $role, array $permissions): void
     {
-        abort_if($role === FestivalPortalRole::Guest, 404);
-        abort_unless($role === FestivalPortalRole::Judge ? $permissions['manage'] : $permissions['registrations'], 403);
+        $allowed = match ($role) {
+            FestivalPortalRole::Registrant => $permissions['registrations'],
+            FestivalPortalRole::Judge => $permissions['manage'],
+            FestivalPortalRole::Guest => $permissions['manage'] || $permissions['finance'],
+        };
+        abort_unless($allowed, 403);
     }
 
     private function role(string $role): FestivalPortalRole

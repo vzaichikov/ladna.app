@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_ticket_order_id', 'festival_ticket_order_item_id', 'festival_admission_type_id', 'code', 'token_encrypted', 'token_hash', 'status', 'is_checked_in', 'checked_in_at', 'voided_by', 'voided_at', 'void_reason'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_ticket_order_id', 'festival_ticket_order_item_id', 'festival_admission_type_id', 'holder_name', 'festival_participant_id', 'festival_judge_assignment_id', 'automation_key', 'code', 'token_encrypted', 'token_hash', 'status', 'is_checked_in', 'checked_in_at', 'voided_by', 'voided_at', 'void_reason'])]
 #[Hidden(['token_encrypted', 'token_hash'])]
 class FestivalTicket extends Model
 {
@@ -39,6 +39,16 @@ class FestivalTicket extends Model
     public function admissionType(): BelongsTo
     {
         return $this->belongsTo(FestivalAdmissionType::class, 'festival_admission_type_id');
+    }
+
+    public function participant(): BelongsTo
+    {
+        return $this->belongsTo(FestivalParticipant::class, 'festival_participant_id');
+    }
+
+    public function judgeAssignment(): BelongsTo
+    {
+        return $this->belongsTo(FestivalJudgeAssignment::class, 'festival_judge_assignment_id');
     }
 
     public function scans(): HasMany

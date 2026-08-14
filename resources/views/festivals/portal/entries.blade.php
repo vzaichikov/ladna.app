@@ -15,6 +15,12 @@
                     @php
                         $approvedSteps = $entry->steps->where('status', \App\Enums\FestivalEntryStepStatus::Approved)->count();
                         $coverUrl = $entry->edition->coverMedia?->url();
+                        $currentStep = $entry->steps->first(fn ($step) => $step->status !== \App\Enums\FestivalEntryStepStatus::Approved);
+                        $currentPaymentCharges = $currentStep?->charges
+                            ->filter(fn ($charge) => $charge->amount_cents > 0 && $charge->status !== \App\Enums\FestivalChargeStatus::Cancelled)
+                            ?? collect();
+                        $currentStepIsPaid = $currentPaymentCharges->isNotEmpty()
+                            && $currentPaymentCharges->every(fn ($charge) => $charge->status === \App\Enums\FestivalChargeStatus::Paid);
                     @endphp
                     <article class="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-crm transition hover:border-brand-300">
                         <a href="{{ route('festival.portal.entries.show', [$account->slug, $entry]) }}" class="block">
@@ -33,7 +39,14 @@
                                         <span class="mt-1 block text-xl font-semibold text-slate-950">{{ $entry->entry_name }}</span>
                                         <span class="mt-1 block text-sm text-slate-500">{{ $entry->edition->title }} · {{ $entry->category->name }}</span>
                                     </span>
-                                    <span class="crm-status-muted">{{ __('app.festival_entry_status_'.$entry->status->value) }}</span>
+                                    <span class="flex shrink-0 flex-col items-end gap-2">
+                                        <span class="{{ $entry->status->badgeClass() }}">{{ __('app.festival_entry_status_'.$entry->status->value) }}</span>
+                                        @if($currentPaymentCharges->isNotEmpty())
+                                            <span class="{{ $currentStepIsPaid ? 'crm-status-active' : 'crm-status-danger' }}">
+                                                {{ $currentStepIsPaid ? __('app.festival_charge_status_paid') : __('app.festival_application_payment_unpaid') }}
+                                            </span>
+                                        @endif
+                                    </span>
                                 </span>
                                 <span class="mt-4 block">
                                     <span class="flex justify-between text-xs text-slate-500"><span>{{ __('app.festival_registration_progress') }}</span><span>{{ $approvedSteps }}/{{ $entry->steps->count() }}</span></span>

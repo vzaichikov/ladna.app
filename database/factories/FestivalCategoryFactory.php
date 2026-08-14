@@ -30,6 +30,7 @@ class FestivalCategoryFactory extends Factory
             'max_members' => 1,
             'competition_format' => 'scored',
             'minimum_entries_to_run' => 1,
+            'maximum_accepted_entries' => null,
             'is_active' => true,
             'sort_order' => 0,
         ];

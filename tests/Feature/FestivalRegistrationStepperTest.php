@@ -12,6 +12,7 @@ use App\Enums\AccountRole;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
+use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\IntegrationCategory;
@@ -25,6 +26,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
 use App\Models\FestivalJudgeAssignment;
+use App\Models\FestivalNotification;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalPortalUser;
@@ -296,6 +298,7 @@ class FestivalRegistrationStepperTest extends TestCase
     {
         Queue::fake();
         [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $category->forceFill(['maximum_accepted_entries' => 1])->save();
         $editableDefinition = $this->requirement($edition, $workflow, 'application', 'editable-note', 'short_text');
         $editableDefinition->forceFill(['validation' => [
             'allowed_hosts' => [],
@@ -577,6 +580,13 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertStringContainsString('data-festival-application-fragment-key="requirement-'.$requirement->id.'"', $accepted->json('fragment_html'));
         $this->assertStringContainsString('crm-status-active', $accepted->json('fragment_html'));
         $this->assertSame(FestivalRequirementStatus::Accepted, $requirement->refresh()->status);
+        $acceptedNotification = FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::RequirementReviewed->value)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame(FestivalRequirementStatus::Accepted->value, $acceptedNotification->payload['status']);
+        $this->assertStringNotContainsString('Decision: accepted', (string) $acceptedNotification->text);
 
         $rejected = $this->actingAs($owner)
             ->patchJson(route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]), [
@@ -586,6 +596,13 @@ class FestivalRegistrationStepperTest extends TestCase
         $rejected->assertOk();
         $this->assertStringContainsString('crm-status-danger', $rejected->json('fragment_html'));
         $this->assertSame(FestivalRequirementStatus::Rejected, $requirement->refresh()->status);
+        $rejectedNotification = FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::RequirementReviewed->value)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame(FestivalRequirementStatus::Rejected->value, $rejectedNotification->payload['status']);
+        $this->assertStringNotContainsString('Decision: rejected', (string) $rejectedNotification->text);
 
         $this->actingAs($owner)
             ->from($applicationUrl)
@@ -603,6 +620,10 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertJsonPath('message', __('app.festival_charge_reviewed'));
         $this->assertStringContainsString('data-festival-application-fragment-key="charge-'.$charge->id.'"', $chargeReview->json('fragment_html'));
         $this->assertSame(FestivalChargeStatus::Paid, $charge->refresh()->status);
+        $this->assertSame(1, FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::PaymentPaid->value)
+            ->count());
 
         $stepReview = $this->actingAs($owner)
             ->patchJson(route('dashboard.accounts.festivals.entry-steps.review', [$account, $edition, $entry, $step]), [
@@ -849,6 +870,7 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->actingAs($portalUser, 'festival')
             ->get(route('festival.portal.entries.show', [$account->slug, $entry]))
             ->assertOk()
+            ->assertSee(__('app.refresh'))
             ->assertSeeInOrder([
                 route('festival.portal.entries.withdraw', [$account->slug, $entry]),
                 'min-h-11',
@@ -896,11 +918,27 @@ class FestivalRegistrationStepperTest extends TestCase
                 'correction_due_at' => now()->addDay()->toDateTimeString(),
             ])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame(FestivalEntryStepStatus::ChangesRequested, $application->refresh()->status);
+        $changesNotification = FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame('request_changes', $changesNotification->payload['decision']);
+        $this->assertStringNotContainsString('request_changes', (string) $changesNotification->text);
 
         app(StoreFestivalResponse::class)->execute($application->requirements->first(), $portalUser, 'https://video.example/revised');
         $this->assertCount(1, $application->requirements->first()->submissions()->get());
         app(SubmitFestivalEntryStep::class)->execute($entry->refresh(), $application->refresh());
         app(ReviewFestivalEntryStep::class)->execute($application->refresh(), $reviewer, 'approve', 'Qualified.');
+        $approvalNotification = FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame('approve', $approvalNotification->payload['decision']);
+        $this->assertSame('payment', $approvalNotification->payload['next_step_type']);
+        $this->assertStringContainsString(route('festival.portal.entry-steps.show', [$account->slug, $entry, $application]), $approvalNotification->payload['action_url']);
+        $this->assertStringNotContainsString('approve', (string) $approvalNotification->text);
 
         app(SubmitFestivalEntryStep::class)->execute($entry->refresh(), $payment->refresh());
         app(StoreFestivalResponse::class)->execute($technicalRequirement, $portalUser, 2);
@@ -1070,6 +1108,48 @@ class FestivalRegistrationStepperTest extends TestCase
             $this->assertNull($second->submitted_at);
             $this->assertSame(FestivalEntryStepStatus::Draft, $secondStep->refresh()->status);
         }
+    }
+
+    public function test_automatic_summary_acceptance_respects_category_capacity_and_post_confirmation_changes_keep_their_place(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category] = $this->festival();
+        $category->forceFill(['maximum_accepted_entries' => 1])->save();
+        $occupyingEntry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => FestivalEntryStatus::ChangesPending,
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
+        ]);
+        $candidate = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Capacity candidate'),
+        );
+        $candidate->steps()
+            ->whereHas('workflowStep', fn ($query) => $query->where('code', '!=', 'summary'))
+            ->update(['status' => FestivalEntryStepStatus::Approved->value, 'reviewed_at' => now()]);
+        $candidate->refresh()->load('steps.workflowStep');
+        $summaryStep = $this->step($candidate, 'summary');
+
+        try {
+            app(SubmitFestivalEntryStep::class)->execute($candidate, $summaryStep);
+            $this->fail('A category place reserved by post-confirmation changes must block another acceptance.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('festival_category_id', $exception->errors());
+        }
+        $this->assertSame(FestivalEntryStatus::Draft, $candidate->refresh()->status);
+        $this->assertSame(FestivalEntryStepStatus::Draft, $summaryStep->refresh()->status);
+
+        $occupyingEntry->forceFill([
+            'status' => FestivalEntryStatus::Rejected,
+            'registration_completed_at' => null,
+        ])->save();
+        app(SubmitFestivalEntryStep::class)->execute($candidate->refresh(), $summaryStep->refresh());
+
+        $this->assertSame(FestivalEntryStatus::Accepted, $candidate->refresh()->status);
+        $this->assertNotNull($candidate->accepted_at);
+        $this->assertNotNull($candidate->registration_completed_at);
     }
 
     public function test_lowering_a_paid_priced_answer_creates_a_non_blocking_refund_adjustment(): void

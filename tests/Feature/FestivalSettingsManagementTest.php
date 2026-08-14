@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\FestivalEntryStatus;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\FestivalCategory;
@@ -14,6 +15,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalMedia;
+use App\Models\FestivalPortalUser;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalSeries;
 use App\Models\FestivalWorkflow;
@@ -450,6 +452,7 @@ class FestivalSettingsManagementTest extends TestCase
             ])
             ->assertSee('data-studio-rules-editor', false)
             ->assertSee('name="festival_direction_id"', false)
+            ->assertSee('name="maximum_accepted_entries"', false)
             ->assertDontSee('name="workflow"', false)
             ->assertDontSee('name="option_ids', false);
 
@@ -462,6 +465,7 @@ class FestivalSettingsManagementTest extends TestCase
             'max_age' => 12,
             'min_duration_seconds' => 120,
             'max_duration_seconds' => 180,
+            'maximum_accepted_entries' => 12,
             'registration_closes_at' => '2026-08-20T18:30',
             'requirements_html' => '<p><br></p>',
             'is_active' => 1,
@@ -469,6 +473,7 @@ class FestivalSettingsManagementTest extends TestCase
 
         $category = FestivalCategory::query()->where('festival_edition_id', $edition->id)->where('code', 'junior-pole-art')->firstOrFail();
         $this->assertNull($category->requirements_html);
+        $this->assertSame(12, $category->maximum_accepted_entries);
         $this->assertSame('2026-08-20 15:30:00', $category->registration_closes_at->utc()->format('Y-m-d H:i:s'));
 
         $this->actingAs($owner)
@@ -490,6 +495,69 @@ class FestivalSettingsManagementTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]))
             ->assertSee('name="min_members" value="3"', false);
+    }
+
+    public function test_category_list_links_accepted_and_total_counts_and_capacity_cannot_drop_below_occupied_places(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $category = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'maximum_accepted_entries' => 3,
+        ]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+
+        foreach (range(1, 2) as $index) {
+            FestivalEntry::factory()->for($category)->create([
+                'account_id' => $account->id,
+                'festival_edition_id' => $edition->id,
+                'festival_portal_user_id' => $portalUser->id,
+                'entry_name' => 'Accepted category entry '.$index,
+                'status' => FestivalEntryStatus::Accepted,
+                'accepted_at' => now(),
+                'registration_completed_at' => now(),
+            ]);
+        }
+        FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => FestivalEntryStatus::ChangesPending,
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
+        ]);
+        FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => FestivalEntryStatus::Draft,
+        ]);
+
+        $acceptedUrl = route('dashboard.accounts.festivals.applications', [$account, $edition, 'category' => $category->id, 'status' => FestivalEntryStatus::Accepted->value]);
+        $totalUrl = route('dashboard.accounts.festivals.applications', [$account, $edition, 'category' => $category->id]);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]))
+            ->assertOk()
+            ->assertSee(htmlspecialchars($acceptedUrl, ENT_QUOTES), false)
+            ->assertSee(htmlspecialchars($totalUrl, ENT_QUOTES), false)
+            ->assertSeeInOrder(['>2</a>', '/', '>4</a>'], false)
+            ->assertSee(__('app.festival_category_accepted_total'))
+            ->assertSee(__('app.festival_category_capacity_full'))
+            ->assertSee(__('app.festival_maximum_accepted_entries_value', ['maximum' => 3]));
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.festivals.categories.edit', [$account, $edition, $category]))
+            ->put(route('dashboard.accounts.festivals.categories.update', [$account, $edition, $category]), [
+                'name' => $category->name,
+                'festival_direction_id' => $category->festival_direction_id,
+                'festival_workflow_id' => $category->festival_workflow_id,
+                'competition_format' => $category->competition_format->value,
+                'minimum_entries_to_run' => 1,
+                'maximum_accepted_entries' => 2,
+                'min_members' => $category->min_members,
+                'max_members' => $category->max_members,
+            ])
+            ->assertSessionHasErrors('maximum_accepted_entries');
+        $this->assertSame(3, $category->refresh()->maximum_accepted_entries);
     }
 
     public function test_category_and_direction_dependencies_are_tenant_scoped_and_manager_only(): void

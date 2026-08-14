@@ -17,9 +17,15 @@
                 <h1 class="mt-1 text-3xl font-semibold sm:text-4xl">{{ $entry->entry_name }}</h1>
                 <p class="mt-2 text-slate-600">{{ $entry->edition->title }} · {{ $directionName }} · {{ $categoryName }}</p>
             </div>
-            @if ($entry->registration_completed_at)
-                <span class="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800">{{ __('app.festival_registration_complete') }}</span>
-            @endif
+            <div class="flex flex-wrap items-center gap-2">
+                <x-ui.button :href="request()->fullUrl()" variant="secondary">
+                    <x-ui.icon name="refresh-cw" class="h-4 w-4" />
+                    {{ __('app.refresh') }}
+                </x-ui.button>
+                @if ($entry->registration_completed_at)
+                    <span class="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800">{{ __('app.festival_registration_complete') }}</span>
+                @endif
+            </div>
         </header>
 
         @if (session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif

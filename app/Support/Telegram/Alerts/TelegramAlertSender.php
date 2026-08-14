@@ -2,6 +2,7 @@
 
 namespace App\Support\Telegram\Alerts;
 
+use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\TelegramAlertRecipientKind;
@@ -9,6 +10,7 @@ use App\Enums\TelegramAlertStatus;
 use App\Enums\TelegramAlertType;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
+use App\Models\AccountMembership;
 use App\Models\ScheduledClassCancellation;
 use App\Models\TelegramAlert;
 use App\Models\TelegramBotInstallation;
@@ -126,7 +128,8 @@ class TelegramAlertSender
             return $this->sendFoundersAnnouncement($alert);
         }
 
-        if ($alert->recipient_kind === TelegramAlertRecipientKind::StudioOwner) {
+        if ($alert->recipient_kind === TelegramAlertRecipientKind::StudioOwner
+            && $alert->type !== TelegramAlertType::FestivalUpdate) {
             return $this->retryOrFail($alert, 'studio_owner_broadcast_retired', true);
         }
 
@@ -138,7 +141,8 @@ class TelegramAlertSender
             return $this->retryOrFail($alert, 'read_only_demo', true);
         }
 
-        if (! $alert->account->telegramAlertsEnabled()) {
+        if ($alert->recipient_kind !== TelegramAlertRecipientKind::StudioOwner
+            && ! $alert->account->telegramAlertsEnabled()) {
             return $this->retryOrFail($alert, 'telegram_alerts_disabled_for_studio', true);
         }
 
@@ -282,9 +286,29 @@ class TelegramAlertSender
     {
         return match ($alert->recipient_kind) {
             TelegramAlertRecipientKind::Trainer => $this->trainerAuthorization($alert, $installation),
-            TelegramAlertRecipientKind::StudioOwner,
+            TelegramAlertRecipientKind::StudioOwner => $this->studioOwnerAuthorization($alert, $installation),
             TelegramAlertRecipientKind::FoundersGroup => null,
         };
+    }
+
+    private function studioOwnerAuthorization(TelegramAlert $alert, TelegramBotInstallation $installation): ?TelegramChatAuthorization
+    {
+        if (! $alert->telegram_chat_authorization_id) {
+            return null;
+        }
+
+        return TelegramChatAuthorization::query()
+            ->whereKey($alert->telegram_chat_authorization_id)
+            ->where('account_id', $alert->account_id)
+            ->where('telegram_bot_installation_id', $installation->id)
+            ->where('profile', TelegramBotProfile::Owner->value)
+            ->where('status', TelegramChatAuthorizationStatus::Authorized->value)
+            ->whereIn('user_id', AccountMembership::query()
+                ->select('user_id')
+                ->where('account_id', $alert->account_id)
+                ->where('role', AccountRole::Owner->value))
+            ->when(filled($alert->telegram_chat_id), fn (Builder $query): Builder => $query->where('telegram_chat_id', $alert->telegram_chat_id))
+            ->first();
     }
 
     private function trainerAuthorization(TelegramAlert $alert, TelegramBotInstallation $installation): ?TelegramChatAuthorization
@@ -307,6 +331,10 @@ class TelegramAlertSender
 
     private function authorizationMissingError(TelegramAlert $alert): string
     {
+        if ($alert->recipient_kind === TelegramAlertRecipientKind::StudioOwner) {
+            return 'studio_owner_telegram_authorization_missing';
+        }
+
         return $alert->trainer_id ? 'trainer_telegram_authorization_missing' : 'trainer_not_assigned';
     }
 
@@ -424,6 +452,7 @@ class TelegramAlertSender
                 'telegram_user_id' => $authorization?->telegram_user_id,
                 'direction' => 'outbound',
                 'message_type' => match ($alert->type) {
+                    TelegramAlertType::FestivalUpdate => 'festival_update',
                     TelegramAlertType::OwnerAnnouncement => 'owner_announcement',
                     TelegramAlertType::FoundersAnnouncement => 'founders_announcement',
                     default => 'alert',

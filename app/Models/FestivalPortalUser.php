@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -131,6 +132,16 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
     public function ticketOrders(): HasMany
     {
         return $this->hasMany(FestivalTicketOrder::class);
+    }
+
+    public function tickets(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            FestivalTicket::class,
+            FestivalTicketOrder::class,
+            'festival_portal_user_id',
+            'festival_ticket_order_id',
+        );
     }
 
     public function streamEntitlements(): HasMany

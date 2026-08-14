@@ -53,6 +53,18 @@ class SaveFestivalCategory
                     ->firstOrFail()
                 : null;
 
+            $maximumAcceptedEntries = filled($input['maximum_accepted_entries'] ?? null)
+                ? (int) $input['maximum_accepted_entries']
+                : null;
+            if ($category->exists && $maximumAcceptedEntries !== null) {
+                $capacityOccupyingEntriesCount = $category->capacityOccupyingEntries()->count();
+                if ($maximumAcceptedEntries < $capacityOccupyingEntriesCount) {
+                    throw ValidationException::withMessages([
+                        'maximum_accepted_entries' => __('app.festival_category_capacity_below_accepted', ['count' => $capacityOccupyingEntriesCount]),
+                    ]);
+                }
+            }
+
             $category->fill([
                 'account_id' => $account->id,
                 'festival_edition_id' => $edition->id,
@@ -68,6 +80,7 @@ class SaveFestivalCategory
                 'max_duration_seconds' => $input['max_duration_seconds'] ?? null,
                 'competition_format' => $input['competition_format'],
                 'minimum_entries_to_run' => $input['minimum_entries_to_run'],
+                'maximum_accepted_entries' => $maximumAcceptedEntries,
                 'registration_closes_at' => $this->utc($input['registration_closes_at'] ?? null, $edition->timezone),
                 'requirements_html' => $this->htmlSanitizer->sanitize($input['requirements_html'] ?? null),
                 'is_active' => $input['is_active'] ?? ($category->exists ? $category->is_active : true),

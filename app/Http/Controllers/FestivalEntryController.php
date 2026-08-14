@@ -39,7 +39,7 @@ class FestivalEntryController extends Controller
         return view('festivals.portal.entry-form', [
             'account' => $account, 'portalUser' => $portalUser, 'edition' => $edition, 'entry' => new FestivalEntry,
             'canChangeCategory' => false,
-            'categories' => $edition->categories()->where('is_active', true)->with('direction')->get()->sortBy([['direction.sort_order', 'asc'], ['sort_order', 'asc'], ['id', 'asc']])->values(),
+            'categories' => $edition->categories()->where('is_active', true)->with('direction')->withCount('capacityOccupyingEntries')->get()->sortBy([['direction.sort_order', 'asc'], ['sort_order', 'asc'], ['id', 'asc']])->values(),
             'participants' => $portalUser->participants()->whereNull('archived_at')->orderBy('last_name')->get(),
         ]);
     }
@@ -103,6 +103,7 @@ class FestivalEntryController extends Controller
                 fn ($query) => $query->where('festival_workflow_id', $festivalEntry->category->festival_workflow_id),
             )
             ->with('direction')
+            ->withCount('capacityOccupyingEntries')
             ->get()
             ->sortBy([['direction.sort_order', 'asc'], ['sort_order', 'asc'], ['id', 'asc']])
             ->values();
@@ -230,6 +231,10 @@ class FestivalEntryController extends Controller
                 ->when(! $workflowInitialized || $categoryChanged, fn ($query) => $query->where('is_active', true))
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ((! $entry || $categoryChanged) && $category->applicationCapacityReached()) {
+                throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
+            }
             $participants = FestivalParticipant::query()
                 ->where('festival_portal_user_id', $portalUser->id)
                 ->where('account_id', $portalUser->account_id)

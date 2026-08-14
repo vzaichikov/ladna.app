@@ -9,6 +9,7 @@ use App\Actions\Festivals\ReviewFestivalEntryStep;
 use App\Actions\Festivals\StoreFestivalResponse;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
 use App\Enums\FestivalChargeStatus;
+use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalQualificationStatus;
 use App\Models\Account;
@@ -334,6 +335,49 @@ class FestivalRegistrationEnhancementsTest extends TestCase
         $this->assertSame(FestivalQualificationStatus::Passed, $entry->qualification_status);
         $this->assertSame(FestivalChargeStatus::Cancelled, $sourceCharge->refresh()->status);
         $this->assertSame(320000, $entry->charges()->where('festival_charge_definition_id', '!=', $sourceCharge->festival_charge_definition_id)->firstOrFail()->amount_cents);
+    }
+
+    public function test_accepted_entry_cannot_be_reassigned_into_a_full_category(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival();
+        $workflow = $this->workflow($edition);
+        $source = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_id' => $workflow->id,
+        ]);
+        $target = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_id' => $workflow->id,
+            'maximum_accepted_entries' => 1,
+        ]);
+        $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
+        $entry = $this->entry($source, $portalUser, [$participant]);
+        $entry->forceFill([
+            'status' => FestivalEntryStatus::Accepted,
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
+        ])->save();
+        $occupyingEntry = FestivalEntry::factory()->for($target)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => FestivalEntryStatus::Accepted,
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
+        ]);
+        $manager = User::factory()->create();
+
+        try {
+            app(ReassignFestivalEntryCategory::class)->execute($entry, $target, $manager, 'Move to target category.');
+            $this->fail('An accepted entry must not exceed the target category capacity.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('festival_category_id', $exception->errors());
+        }
+        $this->assertSame($source->id, $entry->refresh()->festival_category_id);
+
+        $occupyingEntry->forceFill(['status' => FestivalEntryStatus::Rejected, 'registration_completed_at' => null])->save();
+        app(ReassignFestivalEntryCategory::class)->execute($entry, $target, $manager, 'Move after a place becomes free.');
+        $this->assertSame($target->id, $entry->refresh()->festival_category_id);
     }
 
     public function test_staff_reassignment_stops_after_judging_or_results_exist(): void

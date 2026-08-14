@@ -7,6 +7,7 @@ use App\Actions\Festivals\InitializeFestivalEntryWorkflow;
 use App\Actions\Festivals\StoreFestivalResponse;
 use App\Actions\Festivals\StoreFestivalSubmission;
 use App\Enums\AccountRole;
+use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\StudioPermission;
@@ -405,7 +406,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->assertSame(20, $response->viewData('tickets')->perPage());
     }
 
-    public function test_festival_notification_settings_keep_email_enabled_and_toggle_only_sms(): void
+    public function test_festival_notification_settings_group_scenarios_and_toggle_participant_and_owner_channels(): void
     {
         [$account, $edition] = $this->festival();
         $owner = User::factory()->create();
@@ -413,9 +414,23 @@ class FestivalWorkspaceTabsTest extends TestCase
         $url = route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'settings']);
 
         $this->actingAs($owner)
+            ->get($url)
+            ->assertOk()
+            ->assertSeeInOrder([
+                __('app.festival_notification_group_registration'),
+                __('app.festival_notification_group_payments'),
+                __('app.festival_notification_group_program'),
+                __('app.festival_notification_group_tickets'),
+                __('app.festival_notification_group_announcements'),
+            ])
+            ->assertSee('owner_telegram['.FestivalNotificationType::EntrySubmitted->value.']', false)
+            ->assertSee(trans_choice('app.festival_owner_telegram_connections', 0, ['count' => 0]));
+
+        $this->actingAs($owner)
             ->from($url)
             ->put(route('dashboard.accounts.festivals.notification-settings.update', $account), [
                 'sms' => [FestivalNotificationType::Announcement->value => '1'],
+                'owner_telegram' => [FestivalNotificationType::EntrySubmitted->value => '1'],
             ])
             ->assertRedirect($url);
 
@@ -424,11 +439,21 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->where('type', FestivalNotificationType::Announcement->value)
             ->firstOrFail()
             ->send_sms);
+        $this->assertTrue(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::EntrySubmitted->value)
+            ->firstOrFail()
+            ->notify_owner_telegram);
         $this->assertFalse(FestivalNotificationSetting::query()
             ->whereBelongsTo($account)
             ->where('type', FestivalNotificationType::EntrySubmitted->value)
             ->firstOrFail()
             ->send_sms);
+        $this->assertFalse(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::Announcement->value)
+            ->firstOrFail()
+            ->notify_owner_telegram);
         $this->assertSame(FestivalNotificationType::cases(), FestivalNotificationSetting::query()
             ->whereBelongsTo($account)
             ->orderBy('id')
@@ -492,6 +517,30 @@ class FestivalWorkspaceTabsTest extends TestCase
             'entry_name' => 'Draft performance',
             'status' => FestivalEntryStatus::Draft,
         ]);
+        $submittedEntry = app(InitializeFestivalEntryWorkflow::class)->execute($submittedEntry);
+        $submittedCurrentStep = $submittedEntry->steps->firstOrFail();
+        $submittedEntry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $submittedCurrentStep->id,
+            'code' => 'FCH-APPLICATIONS-UNPAID',
+            'kind' => 'qualification',
+            'name' => 'Application fee',
+            'amount_cents' => 50000,
+            'currency' => 'UAH',
+        ]);
+        $acceptedEntry = app(InitializeFestivalEntryWorkflow::class)->execute($acceptedEntry);
+        $acceptedCurrentStep = $acceptedEntry->steps->firstOrFail();
+        $acceptedEntry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $acceptedCurrentStep->id,
+            'code' => 'FCH-APPLICATIONS-PAID',
+            'kind' => 'qualification',
+            'name' => 'Paid application fee',
+            'status' => FestivalChargeStatus::Paid,
+            'amount_cents' => 50000,
+            'currency' => 'UAH',
+            'paid_at' => now(),
+        ]);
 
         $byName = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
             $account,
@@ -512,7 +561,22 @@ class FestivalWorkspaceTabsTest extends TestCase
         $byStatus->assertOk()
             ->assertSee($draftEntry->entry_name)
             ->assertDontSee($acceptedEntry->entry_name)
+            ->assertSee('<span class="crm-status-muted">'.__('app.festival_entry_status_draft').'</span>', false)
             ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 1);
+
+        $submitted = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
+            $account,
+            $edition,
+            'status' => FestivalEntryStatus::Submitted->value,
+        ]));
+        $submitted->assertOk()
+            ->assertSee($submittedEntry->entry_name)
+            ->assertSee('<span class="crm-status-scheduled">'.__('app.festival_entry_status_submitted').'</span>', false)
+            ->assertSee('crm-status-danger', false)
+            ->assertSee(__('app.festival_application_payment_unpaid'))
+            ->assertSee(__('app.festival_current_step'))
+            ->assertSee($submittedCurrentStep->workflowStep->title)
+            ->assertSee(__('app.festival_step_status_'.$submittedCurrentStep->status->value));
 
         $byCategory = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [
             $account,
@@ -542,6 +606,9 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertSee(__('app.festival_applications_title'))
             ->assertSee(__('app.festival_requirements_open'))
             ->assertSee($acceptedEntry->entry_name)
+            ->assertSee(__('app.festival_charge_status_paid'))
+            ->assertSee(__('app.festival_current_step'))
+            ->assertSee($acceptedCurrentStep->workflowStep->title)
             ->assertDontSee($draftEntry->entry_name)
             ->assertSee($combinedUrl)
             ->assertSee($allStatusesUrl)
@@ -672,7 +739,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             ]));
     }
 
-    public function test_festival_manager_may_permanently_delete_only_an_application_without_payment_history(): void
+    public function test_festival_manager_may_delete_an_application_without_paid_or_unresolved_payment_history(): void
     {
         Storage::fake('local');
         [$account, $edition, $category, $portalUser, $entry] = $this->festivalWithEntry();
@@ -773,6 +840,52 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertRedirect($protectedApplicationUrl)
             ->assertSessionHasErrors('festival_application');
         $this->assertDatabaseHas('festival_entries', ['id' => $protectedEntry->id]);
+
+        $declinedEntry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Manually declined payment',
+            'status' => FestivalEntryStatus::Draft,
+        ]);
+        $declinedCharge = FestivalCharge::query()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $declinedEntry->id,
+            'code' => 'FCH-DELETE-DECLINED',
+            'kind' => 'participation',
+            'name' => 'Declined participation fee',
+            'amount_cents' => 50000,
+            'currency' => 'UAH',
+        ]);
+        FestivalPaymentAttempt::query()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $declinedCharge->id,
+            'provider' => 'monopay',
+            'order_id' => 'FCHP-DELETE-DECLINED',
+            'amount_cents' => $declinedCharge->amount_cents,
+            'currency' => $declinedCharge->currency,
+            'status' => 'pending',
+        ]);
+        $declinedApplicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $declinedEntry]);
+        $declinedDeleteUrl = route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $declinedEntry]);
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.charges.manual-review', [$account, $edition, $declinedCharge]), [
+                'decision' => 'reject',
+                'notes' => 'Declined by an administrator.',
+            ])
+            ->assertRedirect();
+        $this->assertSame(FestivalChargeStatus::Failed, $declinedCharge->refresh()->status);
+        $this->assertSame($owner->id, $declinedCharge->approved_by);
+        $this->actingAs($owner)
+            ->get($declinedApplicationUrl)
+            ->assertOk()
+            ->assertSee($declinedDeleteUrl, false);
+        $this->actingAs($owner)
+            ->delete($declinedDeleteUrl)
+            ->assertRedirect(route('dashboard.accounts.festivals.applications', [$account, $edition]))
+            ->assertSessionHas('status', __('app.festival_application_deleted'));
+        $this->assertDatabaseMissing('festival_entries', ['id' => $declinedEntry->id]);
 
         $manualPaymentEntry = FestivalEntry::factory()->for($category)->create([
             'account_id' => $account->id,
@@ -988,7 +1101,7 @@ class FestivalWorkspaceTabsTest extends TestCase
 
     public function test_mutations_return_to_their_owning_workflow(): void
     {
-        [$account, $edition, $category, , $entry] = $this->festivalWithEntry();
+        [$account, $edition, $category, $portalUser, $entry] = $this->festivalWithEntry();
         $owner = User::factory()->create();
         $account->addOwner($owner);
 
@@ -1022,6 +1135,43 @@ class FestivalWorkspaceTabsTest extends TestCase
         ])->assertRedirect(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'announcements']));
 
         $this->assertSame($edition->id, $category->festival_edition_id);
+    }
+
+    public function test_step_less_staff_acceptance_cannot_exceed_category_capacity(): void
+    {
+        [$account, $edition, $category, $portalUser, $entry] = $this->festivalWithEntry();
+        $originalStatus = $entry->status;
+        $category->forceFill(['maximum_accepted_entries' => 1])->save();
+        $occupied = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => FestivalEntryStatus::Accepted,
+            'accepted_at' => now(),
+            'registration_completed_at' => now(),
+        ]);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $reviewUrl = route('dashboard.accounts.festivals.entries.review', [$account, $edition, $entry]);
+        $payload = [
+            'status' => FestivalEntryStatus::Accepted->value,
+            'qualification_status' => 'not_required',
+        ];
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]))
+            ->patch($reviewUrl, $payload)
+            ->assertSessionHasErrors('festival_category_id');
+        $this->assertSame($originalStatus, $entry->refresh()->status);
+        $this->assertNull($entry->registration_completed_at);
+
+        $occupied->forceFill(['status' => FestivalEntryStatus::Rejected, 'registration_completed_at' => null])->save();
+        $this->actingAs($owner)
+            ->patch($reviewUrl, $payload)
+            ->assertRedirect(route('dashboard.accounts.festivals.applications', [$account, $edition]));
+        $this->assertSame(FestivalEntryStatus::Accepted, $entry->refresh()->status);
+        $this->assertNotNull($entry->accepted_at);
+        $this->assertNotNull($entry->registration_completed_at);
     }
 
     public function test_settings_pages_render_localized_system_labels_and_registration_fields_copy(): void

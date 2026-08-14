@@ -60,13 +60,23 @@
                                         @php
                                             $categoryInputId = 'festival-category-'.$category->id;
                                             $categoryDescriptionId = $categoryInputId.'-description';
+                                            $categoryIsCurrent = $entry->exists && $entry->festival_category_id === $category->id;
+                                            $categoryIsFull = $category->applicationCapacityReached($category->capacity_occupying_entries_count);
+                                            $categoryIsUnavailable = $categoryIsFull && ! $categoryIsCurrent;
                                         @endphp
-                                        <div class="rounded-2xl border border-stone-200 bg-white p-4 transition has-checked:border-brand-500 has-checked:bg-brand-50/60 has-focus-visible:ring-2 has-focus-visible:ring-brand-500">
+                                        <div @class([
+                                            'rounded-2xl border p-4 transition',
+                                            'border-stone-300 bg-stone-100 opacity-75' => $categoryIsUnavailable,
+                                            'border-stone-200 bg-white has-checked:border-brand-500 has-checked:bg-brand-50/60 has-focus-visible:ring-2 has-focus-visible:ring-brand-500' => ! $categoryIsUnavailable,
+                                        ])>
                                             <div class="flex items-start gap-3">
-                                                <input id="{{ $categoryInputId }}" type="radio" name="festival_category_id" value="{{ $category->id }}" required aria-describedby="{{ $categoryDescriptionId }}" class="crm-radio mt-1" @checked((int) old('festival_category_id', $entry->festival_category_id) === $category->id)>
-                                                <label for="{{ $categoryInputId }}" class="min-w-0 cursor-pointer text-base font-semibold text-slate-950">{{ $category->name }}</label>
+                                                <input id="{{ $categoryInputId }}" type="radio" name="festival_category_id" value="{{ $category->id }}" required aria-describedby="{{ $categoryDescriptionId }}" class="crm-radio mt-1" @checked((int) old('festival_category_id', $entry->festival_category_id) === $category->id) @disabled($categoryIsUnavailable)>
+                                                <label for="{{ $categoryInputId }}" @class(['min-w-0 text-base font-semibold', 'cursor-not-allowed text-slate-500' => $categoryIsUnavailable, 'cursor-pointer text-slate-950' => ! $categoryIsUnavailable])>{{ $category->name }}</label>
                                             </div>
                                             <div id="{{ $categoryDescriptionId }}" class="mt-3 pl-7">
+                                                @if($categoryIsFull)
+                                                    <p class="mb-3 text-sm font-semibold text-rose-700">{{ __('app.festival_category_full') }}</p>
+                                                @endif
                                                 <dl class="flex flex-wrap gap-2 text-xs text-slate-700">
                                                     <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $category->min_members, 'max' => $category->max_members]) }}</dd></div>
                                                     @if($category->min_age !== null || $category->max_age !== null)

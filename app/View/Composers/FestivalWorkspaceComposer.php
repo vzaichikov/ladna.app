@@ -40,7 +40,7 @@ class FestivalWorkspaceComposer
                 'items' => [
                     $this->item('overview', 'dashboard.accounts.festivals.show', 'festival_tab_overview', 'dashboard', true, $active, $account, $edition),
                     $this->item('settings-content', 'dashboard.accounts.festivals.settings.content', 'festival_content_media', 'settings', $permissions['manage'], $active, $account, $edition),
-                    $this->item('users', 'dashboard.accounts.festivals.users.index', 'festival_users', 'users', $permissions['registrations'] || $permissions['manage'], $active, $account, $edition),
+                    $this->item('users', 'dashboard.accounts.festivals.users.index', 'festival_users', 'users', $permissions['registrations'] || $permissions['manage'] || $permissions['finance'], $active, $account, $edition),
                 ],
             ],
             [
@@ -133,7 +133,7 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.judging.battle-votes.*') => 'judging-battle-votes',
             request()->routeIs('dashboard.accounts.festivals.judging.battles.*') => 'judging-battles',
             request()->routeIs('dashboard.accounts.festivals.judging.results.*') => 'judging-results',
-            request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.admission-types.*', 'dashboard.accounts.festivals.scanner*') => 'tickets',
+            request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.tickets.issue*', 'dashboard.accounts.festivals.admission-types.*', 'dashboard.accounts.festivals.scanner*') => 'tickets',
             request()->routeIs('dashboard.accounts.festivals.online-stream.*') => 'online-stream',
             request()->routeIs('dashboard.accounts.festivals.communication') => 'communication',
             request()->routeIs('dashboard.accounts.festivals.settings.stages', 'dashboard.accounts.festivals.stages.*') => 'settings-stages',

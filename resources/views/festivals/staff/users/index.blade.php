@@ -6,9 +6,9 @@
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <x-ui.page-header :title="__('app.festival_users')" :copy="__('app.festival_users_page_copy')">
         <x-slot:actions>
-            <x-ui.button :href="route('dashboard.accounts.festivals.users.create', [$account, $edition, $tab === 'judges' ? 'judge' : 'registrant'])">
+            <x-ui.button :href="route('dashboard.accounts.festivals.users.create', [$account, $edition, match ($tab) { 'judges' => 'judge', 'guests' => 'guest', default => 'registrant' }])">
                 <x-ui.icon name="plus" class="h-4 w-4" />
-                {{ $tab === 'judges' ? __('app.festival_add_judge_profile') : __('app.festival_add_registrant') }}
+                {{ match ($tab) { 'judges' => __('app.festival_add_judge_profile'), 'guests' => __('app.festival_add_guest'), default => __('app.festival_add_registrant') } }}
             </x-ui.button>
         </x-slot:actions>
     </x-ui.page-header>
@@ -19,6 +19,9 @@
         @endif
         @if (in_array('judges', $allowedTabs, true))
             <a href="{{ route('dashboard.accounts.festivals.users.index', [$account, $edition, 'tab' => 'judges']) }}" class="crm-tab" @if($tab === 'judges') aria-current="page" @endif>{{ __('app.festival_user_tab_judges') }}</a>
+        @endif
+        @if (in_array('guests', $allowedTabs, true))
+            <a href="{{ route('dashboard.accounts.festivals.users.index', [$account, $edition, 'tab' => 'guests']) }}" class="crm-tab" @if($tab === 'guests') aria-current="page" @endif>{{ __('app.festival_user_tab_guests') }}</a>
         @endif
     </nav>
 
@@ -60,14 +63,24 @@
                     @if ($tab === 'participants')
                         <p>{{ trans_choice('app.festival_roster_count', $portalUser->participants_count, ['count' => $portalUser->participants_count]) }}</p>
                         <p class="mt-1">{{ trans_choice('app.festival_current_entries_count', $portalUser->current_edition_entries_count, ['count' => $portalUser->current_edition_entries_count]) }}</p>
-                    @else
+                    @elseif ($tab === 'judges')
                         <p>{{ $portalUser->current_edition_assignments_count > 0 ? __('app.festival_judge_assigned_current') : __('app.festival_judge_not_assigned_current') }}</p>
                         @if ($portalUser->is_active && $portalUser->current_edition_assignments_count === 0)
                             <a href="{{ route('dashboard.accounts.festivals.judging.judges.create', [$account, $edition, 'festival_portal_user_id' => $portalUser->id]) }}" class="mt-1 inline-flex font-semibold text-brand-700 hover:text-brand-600">{{ __('app.festival_assign_to_edition') }}</a>
                         @endif
+                    @else
+                        <p>{{ trans_choice('app.festival_current_ticket_orders_count', $portalUser->current_edition_orders_count, ['count' => $portalUser->current_edition_orders_count]) }}</p>
+                        <p class="mt-1">{{ trans_choice('app.festival_current_valid_tickets_count', $portalUser->current_edition_valid_tickets_count, ['count' => $portalUser->current_edition_valid_tickets_count]) }}</p>
                     @endif
                 </div>
-                <div class="flex justify-end">
+                <div class="flex justify-end gap-2">
+                    @if ($tab === 'guests' && $workspacePermissions['finance'] && $portalUser->is_active)
+                        <x-ui.action-button
+                            :href="route('dashboard.accounts.festivals.tickets.issue', [$account, $edition, 'selected_guest_id' => $portalUser->id])"
+                            icon="ticket"
+                            :label="__('app.festival_issue_ticket')"
+                        />
+                    @endif
                     <x-ui.action-button
                         :href="route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser])"
                         :label="__('app.edit')"
