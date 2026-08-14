@@ -394,10 +394,13 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertViewHas('stream', fn (FestivalOnlineStream $viewStream): bool => $viewStream->is($stream))
             ->assertSee($edition->title)
             ->assertSee($account->name)
+            ->assertSee(rtrim((string) config('app.url'), '/').'/'.$account->slug, false)
             ->assertSee('https://stream.ladna.test/hls/'.$stream->path.'/index.m3u8', false)
             ->assertSee('https://stream.ladna.test/festival-stream/heartbeat/'.$stream->path, false)
             ->assertDontSee('rel="manifest"', false)
-            ->assertDontSee('data-app-update', false);
+            ->assertDontSee('data-app-update', false)
+            ->assertDontSee('data-customer-footer-legal-links', false)
+            ->assertDontSee('data-customer-footer-locale-switcher', false);
     }
 
     public function test_minted_viewer_access_is_revoked_with_account_capability_or_subscription(): void

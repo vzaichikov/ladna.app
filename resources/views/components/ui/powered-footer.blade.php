@@ -2,15 +2,18 @@
     'account' => null,
     'border' => true,
     'returnUrl' => request()->fullUrl(),
+    'showStudioLegalLinks' => true,
     'showLocaleSwitcher' => false,
+    'studioUrl' => null,
 ])
 
 @php
     $hasStudioAccount = $account instanceof \App\Models\Account;
-    $showStudioLegalLinks = $hasStudioAccount
+    $hasStudioLegalLinks = $showStudioLegalLinks && $hasStudioAccount
         && (filled($account->studio_rules_html) || filled($account->public_offer_html));
+    $resolvedStudioUrl = $studioUrl ?? ($hasStudioAccount ? route('public.studio', $account->slug) : null);
     $hasPrimaryLinks = trim((string) $slot) !== '';
-    $hasMiddleContent = $hasPrimaryLinks || $showStudioLegalLinks || $showLocaleSwitcher;
+    $hasMiddleContent = $hasPrimaryLinks || $hasStudioLegalLinks || $showLocaleSwitcher;
 @endphp
 
 <footer
@@ -24,7 +27,7 @@
 >
     @if ($hasStudioAccount)
         <a
-            href="{{ route('public.studio', $account->slug) }}"
+            href="{{ $resolvedStudioUrl }}"
             class="inline-flex max-w-full items-center gap-3 text-left text-slate-950 transition hover:text-brand-700 lg:justify-self-start"
             data-public-studio-footer-identity
         >
@@ -50,7 +53,7 @@
                 </nav>
             @endif
 
-            @if ($showStudioLegalLinks)
+            @if ($hasStudioLegalLinks)
                 <nav
                     class="flex flex-wrap justify-center gap-x-5 gap-y-2"
                     aria-label="{{ __('app.footer_links') }}"
