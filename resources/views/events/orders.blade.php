@@ -3,7 +3,7 @@
 @section('title', __('app.event_orders').' - '.$event->title)
 
 @section('content')
-<div class="space-y-6">
+<div class="mx-auto max-w-7xl space-y-6" data-event-admin-page>
     <x-ui.page-header :title="__('app.event_orders')" :copy="__('app.event_orders_help')" />
     <x-ui.event-navigation :account="$account" :event="$event" active="orders" />
     @if ($urgentRefundsCount > 0)

@@ -12,7 +12,7 @@
     $publicPageIsAvailable = $event->exists && in_array($event->status, [\App\Enums\EventStatus::Published, \App\Enums\EventStatus::Cancelled], true);
     $publicEventUrl = $publicPageIsAvailable ? route('public.events.show', [$account->slug, $event->slug]) : null;
 @endphp
-<div class="mx-auto max-w-6xl space-y-6">
+<div class="mx-auto max-w-7xl space-y-6" data-event-admin-page>
     <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
             <h1 class="crm-page-title">{{ $event->exists ? $event->title : __('app.event_create') }}</h1>

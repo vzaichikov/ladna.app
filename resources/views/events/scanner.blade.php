@@ -4,7 +4,8 @@
 
 @section('content')
 <div
-    class="mx-auto max-w-5xl space-y-6"
+    class="mx-auto max-w-7xl space-y-6"
+    data-event-admin-page
     data-event-scanner
     data-scan-url="{{ route('dashboard.accounts.events.scanner.scan', [$account, $event]) }}"
     data-csrf-token="{{ csrf_token() }}"

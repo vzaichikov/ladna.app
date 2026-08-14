@@ -3,7 +3,7 @@
 @section('title', __('app.events').' - '.$account->name)
 
 @section('content')
-<div class="space-y-6">
+<div class="mx-auto max-w-7xl space-y-6" data-event-admin-page>
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <h1 class="crm-page-title mt-1">{{ __('app.events') }}</h1>

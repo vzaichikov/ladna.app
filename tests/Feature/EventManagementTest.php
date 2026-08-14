@@ -25,6 +25,48 @@ class EventManagementTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_admin_event_routes_use_event_ids_and_all_event_pages_share_one_width(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $event = Event::factory()->published()->for($account)->create();
+        $ticketType = EventTicketType::factory()->for($account)->for($event)->create();
+        $eventPath = "/events/{$event->id}";
+
+        $eventPages = [
+            route('dashboard.accounts.events.index', $account),
+            route('dashboard.accounts.events.create', $account),
+            route('dashboard.accounts.events.edit', [$account, $event]),
+            route('dashboard.accounts.events.ticket-types.index', [$account, $event]),
+            route('dashboard.accounts.events.ticket-types.create', [$account, $event]),
+            route('dashboard.accounts.events.ticket-types.edit', [$account, $event, $ticketType]),
+            route('dashboard.accounts.events.tickets.index', [$account, $event]),
+            route('dashboard.accounts.events.tickets.issue.create', [$account, $event]),
+            route('dashboard.accounts.events.orders.index', [$account, $event]),
+            route('dashboard.accounts.events.scanner', [$account, $event]),
+        ];
+
+        foreach ($eventPages as $url) {
+            if (str_contains($url, '/events/') && ! str_ends_with($url, '/events/create')) {
+                $this->assertStringContainsString($eventPath, $url);
+                $this->assertStringNotContainsString("/events/{$event->slug}", $url);
+            }
+
+            $this->actingAs($owner)
+                ->get($url)
+                ->assertOk()
+                ->assertSee('data-event-admin-page', false)
+                ->assertSee('mx-auto max-w-7xl space-y-6', false);
+        }
+
+        $slugEditUrl = str_replace($eventPath, "/events/{$event->slug}", route('dashboard.accounts.events.edit', [$account, $event]));
+        $this->actingAs($owner)->get($slugEditUrl)->assertNotFound();
+
+        $publicUrl = route('public.events.show', [$account->slug, $event->slug]);
+        $this->assertStringContainsString("/events/{$event->slug}", $publicUrl);
+    }
+
     public function test_event_frontend_copy_uses_plain_bilingual_language_and_field_names(): void
     {
         $english = require lang_path('en/app.php');

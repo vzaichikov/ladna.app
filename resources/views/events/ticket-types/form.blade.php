@@ -3,7 +3,7 @@
 @section('title', ($ticketType->exists ? __('app.event_edit_ticket_type') : __('app.event_add_ticket_type')).' - '.$event->title)
 
 @section('content')
-<div class="mx-auto max-w-6xl space-y-6">
+<div class="mx-auto max-w-7xl space-y-6" data-event-admin-page>
     <x-ui.page-header
         :title="$ticketType->exists ? __('app.event_edit_ticket_type') : __('app.event_add_ticket_type')"
         :copy="__('app.event_ticket_type_form_help', ['event' => $event->title])"

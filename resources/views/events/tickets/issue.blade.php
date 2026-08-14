@@ -3,7 +3,7 @@
 @section('title', __('app.event_issue_tickets').' - '.$event->title)
 
 @section('content')
-<div class="mx-auto max-w-5xl space-y-6">
+<div class="mx-auto max-w-7xl space-y-6" data-event-admin-page>
     <x-ui.page-header :title="__('app.event_issue_tickets')" :copy="__('app.event_issue_tickets_help')" />
 
     <x-ui.event-navigation :account="$account" :event="$event" active="tickets" />
