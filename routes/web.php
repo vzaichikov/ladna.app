@@ -559,6 +559,8 @@ Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventRead
             Route::get('{festivalEdition:id}/timeline/scenes/{festivalStage}/fragment', [FestivalTimelineController::class, 'fragment'])->whereNumber('festivalEdition')->whereNumber('festivalStage')->name('timeline.fragment');
             Route::get('{festivalEdition:id}/tickets', [FestivalWorkspaceController::class, 'tickets'])->whereNumber('festivalEdition')->name('tickets');
             Route::get('{festivalEdition:id}/online-stream', [FestivalOnlineStreamController::class, 'edit'])->whereNumber('festivalEdition')->name('online-stream.edit');
+            Route::get('{festivalEdition:id}/online-stream/status', [FestivalOnlineStreamController::class, 'status'])->whereNumber('festivalEdition')->middleware('throttle:festival-stream-status')->name('online-stream.status');
+            Route::get('{festivalEdition:id}/online-stream/preview', [FestivalOnlineStreamController::class, 'preview'])->whereNumber('festivalEdition')->middleware('throttle:festival-stream-bootstrap')->name('online-stream.preview');
             Route::get('{festivalEdition:id}/admission-types/create', [FestivalAdmissionTypeController::class, 'create'])->whereNumber('festivalEdition')->name('admission-types.create');
             Route::get('{festivalEdition:id}/admission-types/{festivalAdmissionType}/edit', [FestivalAdmissionTypeController::class, 'edit'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.edit');
             Route::get('{festivalEdition:id}/communication', [FestivalWorkspaceController::class, 'communication'])->whereNumber('festivalEdition')->name('communication');

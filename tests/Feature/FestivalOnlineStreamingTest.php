@@ -49,7 +49,7 @@ class FestivalOnlineStreamingTest extends TestCase
             'services.festival_stream.api_url' => 'http://127.0.0.1:9998',
             'services.festival_stream.public_url' => 'https://stream.ladna.test',
             'services.festival_stream.obs_server' => 'rtmp://100.64.0.10:1935',
-            'services.festival_stream.hls_origin_url' => 'http://127.0.0.1:8888',
+            'services.festival_stream.hls_origin_url' => 'http://127.0.0.1:8898',
             'services.festival_stream.ip_hmac_key' => 'test-ip-hmac-key',
             'services.festival_stream.internal_secret' => 'test-internal-secret',
         ]);
@@ -243,6 +243,178 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->assertFalse($stream->refresh()->is_enabled);
+    }
+
+    public function test_finance_staff_can_preview_the_real_stream_without_a_ticket_schedule_or_ip_limit(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create([
+            'account_id' => $account->id,
+            'opens_at' => now()->addDay(),
+            'closes_at' => now()->addDays(2),
+            'playback_override' => FestivalStreamOverride::Closed,
+        ]);
+        $previewUrl = route('dashboard.accounts.festivals.online-stream.preview', [$account, $edition]);
+
+        $response = $this->actingAs($owner)
+            ->withServerVariables(['REMOTE_ADDR' => '203.0.113.70'])
+            ->get($previewUrl)
+            ->assertRedirectContains('https://stream.ladna.test/festival-stream/bootstrap?token=');
+        parse_str((string) parse_url((string) $response->headers->get('Location'), PHP_URL_QUERY), $query);
+        $access = app(FestivalStreamAccessService::class);
+        $viewer = $access->consumeBootstrapCredential((string) ($query['token'] ?? ''), '203.0.113.70');
+
+        $this->assertTrue($viewer->isStaffPreview);
+        $this->assertTrue($viewer->account->is($account));
+        $this->assertTrue($viewer->stream->is($stream));
+        $this->assertNull($viewer->entitlement);
+        $this->assertSame(0, FestivalStreamEntitlement::query()->whereBelongsTo($stream, 'stream')->count());
+        $this->assertDatabaseCount('festival_stream_ip_leases', 0);
+
+        $cookie = $access->viewerCredentialCookie($viewer, '203.0.113.70');
+        $this->assertTrue($access->authorizeViewerCredential($cookie, $stream->path, '198.51.100.90')->isStaffPreview);
+        $cookieName = $access->viewerCookieName($stream->path);
+        $gatewayHeaders = [
+            'X-Festival-Stream-Secret' => 'test-internal-secret',
+            'X-Festival-Stream-Path' => $stream->path,
+            'X-Original-Client-IP' => '198.51.100.90',
+        ];
+        $this->withCookie($cookieName, $cookie)
+            ->withHeaders($gatewayHeaders)
+            ->get(route('internal.festival-stream.authorize'))
+            ->assertNoContent();
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.90'])
+            ->withCookie($cookieName, $cookie)
+            ->get(route('festival.stream.player', $stream->path))
+            ->assertOk()
+            ->assertHeader('Content-Security-Policy', "frame-ancestors 'self' ".rtrim((string) config('app.url'), '/'))
+            ->assertViewHas('isStaffPreview', true)
+            ->assertSee('data-festival-stream-staff-preview', false)
+            ->assertSee(__('app.festival_stream_preview_player_help'));
+
+        foreach ([$cookie.'forged', $cookie] as $index => $invalidCookie) {
+            try {
+                $access->authorizeViewerCredential($invalidCookie, $index === 0 ? $stream->path : 'wrong-path', '198.51.100.90');
+                $this->fail('Invalid staff preview credentials were accepted.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('stream', $exception->errors());
+            }
+        }
+    }
+
+    public function test_staff_preview_requires_finance_permission_and_is_revoked_when_access_or_stream_is_disabled(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        $staff = User::factory()->create();
+        $account->users()->attach($staff, ['role' => 'manager']);
+        $previewUrl = route('dashboard.accounts.festivals.online-stream.preview', [$account, $edition]);
+
+        $this->actingAs($staff)->get($previewUrl)->assertForbidden();
+        $otherAccount = Account::factory()->create(['enable_festivals' => true]);
+        $otherAccount->addOwner($owner);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.online-stream.preview', [$otherAccount, $edition]))
+            ->assertNotFound();
+
+        $access = app(FestivalStreamAccessService::class);
+        $viewer = $access->consumeBootstrapCredential(
+            $access->staffPreviewBootstrapToken($stream, $owner, '203.0.113.71'),
+            '203.0.113.71',
+        );
+        $cookie = $access->viewerCredentialCookie($viewer, '203.0.113.71');
+        $account->memberships()->whereBelongsTo($owner)->delete();
+        $this->assertStaffPreviewDenied($access, $cookie, $stream->path);
+
+        $account->addOwner($owner);
+        $stream->update(['is_enabled' => false]);
+        $this->actingAs($owner)->get($previewUrl)->assertStatus(409);
+        $this->assertStaffPreviewDenied($access, $cookie, $stream->path);
+
+        $stream->update(['is_enabled' => true]);
+        $account->update(['status' => AccountStatus::Suspended]);
+        $this->assertStaffPreviewDenied($access, $cookie, $stream->path);
+    }
+
+    public function test_stream_panel_shows_obs_setup_help_and_only_enables_preview_for_an_enabled_stream(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        Http::fake([
+            'http://127.0.0.1:9998/v3/paths/get/*' => Http::response([], 404),
+        ]);
+        $url = route('dashboard.accounts.festivals.online-stream.edit', [$account, $edition]);
+        $previewUrl = route('dashboard.accounts.festivals.online-stream.preview', [$account, $edition]);
+        $statusUrl = route('dashboard.accounts.festivals.online-stream.status', [$account, $edition]);
+
+        $this->actingAs($owner)->get($url)
+            ->assertOk()
+            ->assertSee('data-festival-stream-configuration', false)
+            ->assertSee('data-festival-stream-status', false)
+            ->assertSee($statusUrl, false)
+            ->assertSee(__('app.festival_stream_obs_quick_setup'))
+            ->assertSee('1920x1080')
+            ->assertSee('6000')
+            ->assertSee('12–16')
+            ->assertSee(route('help.show', 'festivals').'#help-section-festivals-online-streaming', false)
+            ->assertSee(__('app.festival_stream_preview_requires_enabled'))
+            ->assertDontSee('data-festival-stream-staff-preview-tab', false);
+
+        $stream->update(['is_enabled' => true]);
+        $this->actingAs($owner)->get($url)
+            ->assertOk()
+            ->assertSee($url.'?tab=preview', false)
+            ->assertSee(__('app.festival_stream_preview_copy'));
+        $this->actingAs($owner)->get($url.'?tab=preview')
+            ->assertOk()
+            ->assertViewHas('activeStreamTab', 'preview')
+            ->assertSee('data-festival-stream-staff-preview-tab', false)
+            ->assertSee('<iframe', false)
+            ->assertSee('allow="autoplay; fullscreen"', false)
+            ->assertSee($previewUrl, false);
+    }
+
+    public function test_finance_staff_can_poll_live_mediamtx_status_without_exposing_other_paths_or_accounts(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        $staff = User::factory()->create();
+        $account->users()->attach($staff, ['role' => 'manager']);
+        Http::fake([
+            'http://127.0.0.1:9998/v3/paths/get/*' => Http::response([
+                'online' => true,
+                'onlineTime' => '2026-08-14T12:00:00Z',
+                'tracks2' => [['codec' => 'H264'], ['codec' => 'MPEG4Audio']],
+            ]),
+            'http://127.0.0.1:9998/v3/hlssessions/list*' => Http::response([
+                'items' => [
+                    ['path' => $stream->path, 'isCDN' => false],
+                    ['path' => $stream->path, 'isCDN' => false],
+                    ['path' => $stream->path, 'isCDN' => true],
+                    ['path' => 'another-festival', 'isCDN' => false],
+                ],
+            ]),
+        ]);
+        $url = route('dashboard.accounts.festivals.online-stream.status', [$account, $edition]);
+
+        $this->actingAs($owner)->getJson($url)
+            ->assertOk()
+            ->assertJson([
+                'server_online' => true,
+                'publisher_online' => true,
+                'readers' => 2,
+                'connected_at' => '2026-08-14T12:00:00Z',
+                'tracks' => ['H264', 'MPEG4Audio'],
+            ])
+            ->assertJsonStructure(['checked_at']);
+        $this->actingAs($staff)->getJson($url)->assertForbidden();
+
+        $otherAccount = Account::factory()->create(['enable_festivals' => true]);
+        $otherAccount->addOwner($owner);
+        $this->actingAs($owner)
+            ->getJson(route('dashboard.accounts.festivals.online-stream.status', [$otherAccount, $edition]))
+            ->assertNotFound();
+        Http::assertSentCount(2);
     }
 
     public function test_refund_revokes_entitlement_and_allows_a_legitimate_repurchase(): void
@@ -461,10 +633,25 @@ class FestivalOnlineStreamingTest extends TestCase
         $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
         config(['services.festival_stream.api_url' => 'http://127.0.0.1:9998']);
         Http::fake([
-            'http://127.0.0.1:9998/v3/paths/get/*' => Http::response(['ready' => true, 'readers' => [['id' => 'one'], ['id' => 'two']]]),
+            'http://127.0.0.1:9998/v3/paths/get/*' => Http::response([
+                'online' => true,
+                'onlineTime' => '2026-08-14T12:00:00Z',
+                'tracks2' => [['codec' => 'H264'], ['codec' => 'MPEG4Audio']],
+            ]),
+            'http://127.0.0.1:9998/v3/hlssessions/list*' => Http::response([
+                'items' => [
+                    ['path' => $stream->path, 'isCDN' => false],
+                    ['path' => $stream->path, 'isCDN' => false],
+                ],
+            ]),
         ]);
 
-        $this->assertSame(['publisher_online' => true, 'readers' => 2], app(FestivalMediaMtxGateway::class)->status($stream));
+        $this->assertSame([
+            'publisher_online' => true,
+            'readers' => 2,
+            'connected_at' => '2026-08-14T12:00:00Z',
+            'tracks' => ['H264', 'MPEG4Audio'],
+        ], app(FestivalMediaMtxGateway::class)->status($stream));
         $payload = [
             'action' => 'publish',
             'protocol' => 'rtmp',
@@ -480,7 +667,7 @@ class FestivalOnlineStreamingTest extends TestCase
         $this->withHeader('X-Festival-Stream-Secret', 'wrong-secret')
             ->postJson(route('internal.festival-stream.publisher-authorize'), $payload)
             ->assertUnauthorized();
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     }
 
     private function assertViewerAccessDenied(FestivalStreamAccessService $access, string $cookie, string $path): void
@@ -488,6 +675,16 @@ class FestivalOnlineStreamingTest extends TestCase
         try {
             $access->authorizeViewerCookie($cookie, $path, '203.0.113.40');
             $this->fail('Viewer access remained available after the account capability was revoked.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('stream', $exception->errors());
+        }
+    }
+
+    private function assertStaffPreviewDenied(FestivalStreamAccessService $access, string $cookie, string $path): void
+    {
+        try {
+            $access->authorizeViewerCredential($cookie, $path, '198.51.100.90');
+            $this->fail('Staff preview remained available after its authorization was revoked.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('stream', $exception->errors());
         }

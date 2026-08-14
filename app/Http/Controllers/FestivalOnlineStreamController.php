@@ -11,9 +11,12 @@ use App\Models\FestivalOnlineStream;
 use App\Models\FestivalStreamEntitlement;
 use App\Models\FestivalStreamIpLease;
 use App\Models\FestivalTicketOrder;
+use App\Models\User;
 use App\Support\Festivals\FestivalMediaMtxGateway;
+use App\Support\Festivals\FestivalStreamAccessService;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,27 +30,40 @@ class FestivalOnlineStreamController extends Controller
     public function __construct(
         private readonly FestivalWorkspaceAccess $workspaceAccess,
         private readonly FestivalMediaMtxGateway $mediaMtx,
+        private readonly FestivalStreamAccessService $streamAccess,
     ) {}
 
     public function edit(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
         $permissions = $this->financePermissions($request, $account, $festivalEdition);
         $stream = $festivalEdition->onlineStream()->withCount('entitlements')->first();
-        $status = null;
-        if ($stream) {
-            try {
-                $status = $this->mediaMtx->status($stream);
-            } catch (Throwable $exception) {
-                report($exception);
-            }
-        }
 
         return view('festivals.staff.online-stream', [
+            'activeStreamTab' => $stream?->is_enabled && $request->string('tab')->toString() === 'preview' ? 'preview' : 'settings',
             'account' => $account,
             'edition' => $festivalEdition,
             'stream' => $stream,
-            'streamStatus' => $status,
+            'streamStatus' => $this->streamStatus($stream),
             'workspacePermissions' => $permissions,
+        ]);
+    }
+
+    public function status(Request $request, Account $account, FestivalEdition $festivalEdition): JsonResponse
+    {
+        $this->financePermissions($request, $account, $festivalEdition);
+        $stream = FestivalOnlineStream::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($festivalEdition, 'edition')
+            ->firstOrFail();
+        $status = $this->streamStatus($stream, reportFailure: false);
+
+        return response()->json([
+            'server_online' => $status !== null,
+            'publisher_online' => $status['publisher_online'] ?? false,
+            'readers' => $status['readers'] ?? 0,
+            'connected_at' => $status['connected_at'] ?? null,
+            'tracks' => $status['tracks'] ?? [],
+            'checked_at' => now()->toIso8601String(),
         ]);
     }
 
@@ -120,6 +136,23 @@ class FestivalOnlineStreamController extends Controller
         return back()->with('status', __('app.festival_stream_devices_released'));
     }
 
+    public function preview(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
+    {
+        $this->financePermissions($request, $account, $festivalEdition);
+        $stream = FestivalOnlineStream::query()
+            ->whereBelongsTo($account)
+            ->whereBelongsTo($festivalEdition, 'edition')
+            ->firstOrFail();
+        abort_unless($stream->is_enabled, 409, __('app.festival_stream_disabled'));
+        $user = $request->user();
+        abort_unless($user instanceof User, 403);
+        $token = $this->streamAccess->staffPreviewBootstrapToken($stream, $user, (string) $request->ip());
+        $gateway = rtrim((string) config('services.festival_stream.public_url'), '/');
+        abort_if($gateway === '', 503, __('app.festival_stream_unavailable'));
+
+        return redirect()->away($gateway.'/festival-stream/bootstrap?token='.rawurlencode($token));
+    }
+
     private function hasActiveOnlineOrders(FestivalOnlineStream $stream): bool
     {
         return FestivalTicketOrder::query()
@@ -137,6 +170,24 @@ class FestivalOnlineStreamController extends Controller
             ->where(fn ($query) => $query->whereNull('sales_starts_at')->orWhere('sales_starts_at', '<=', now()))
             ->where(fn ($query) => $query->whereNull('sales_ends_at')->orWhere('sales_ends_at', '>=', now()))
             ->exists();
+    }
+
+    /** @return array{publisher_online: bool, readers: int, connected_at: ?string, tracks: list<string>}|null */
+    private function streamStatus(?FestivalOnlineStream $stream, bool $reportFailure = true): ?array
+    {
+        if (! $stream) {
+            return null;
+        }
+
+        try {
+            return $this->mediaMtx->status($stream);
+        } catch (Throwable $exception) {
+            if ($reportFailure) {
+                report($exception);
+            }
+
+            return null;
+        }
     }
 
     /** @return array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} */

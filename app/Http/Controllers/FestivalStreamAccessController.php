@@ -8,12 +8,12 @@ use App\Models\FestivalOnlineStream;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalStreamEntitlement;
 use App\Support\Festivals\FestivalStreamAccessService;
+use App\Support\Festivals\FestivalStreamViewer;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Validation\ValidationException;
-use Illuminate\View\View;
 
 class FestivalStreamAccessController extends Controller
 {
@@ -36,14 +36,17 @@ class FestivalStreamAccessController extends Controller
     public function bootstrap(Request $request): RedirectResponse
     {
         try {
-            $entitlement = $this->access->consumeBootstrapToken((string) $request->query('token'), (string) $request->ip());
+            $viewer = $this->access->consumeBootstrapCredential((string) $request->query('token'), (string) $request->ip());
         } catch (ModelNotFoundException|ValidationException) {
             abort(403, __('app.festival_stream_unavailable'));
         }
+        $sessionSeconds = $viewer->isStaffPreview
+            ? (int) config('services.festival_stream.staff_preview_session_seconds', 7200)
+            : (int) config('services.festival_stream.session_seconds', 28800);
         $cookie = cookie(
-            $this->access->viewerCookieName($entitlement->stream->path),
-            $this->access->viewerCookie($entitlement, (string) $request->ip()),
-            (int) ceil(((int) config('services.festival_stream.session_seconds', 28800)) / 60),
+            $this->access->viewerCookieName($viewer->stream->path),
+            $this->access->viewerCredentialCookie($viewer, (string) $request->ip()),
+            (int) ceil($sessionSeconds / 60),
             '/',
             null,
             true,
@@ -52,22 +55,23 @@ class FestivalStreamAccessController extends Controller
             'lax',
         );
 
-        return redirect('/festival-stream/watch/'.rawurlencode($entitlement->stream->path))->withCookie($cookie);
+        return redirect('/festival-stream/watch/'.rawurlencode($viewer->stream->path))->withCookie($cookie);
     }
 
-    public function player(Request $request, string $path): View
+    public function player(Request $request, string $path): Response
     {
-        $entitlement = $this->authorizeCookie($request, $path)
-            ->loadMissing(['account', 'stream.edition']);
+        $viewer = $this->authorizeCookie($request, $path);
+        $viewer->stream->loadMissing('edition');
         $publicUrl = rtrim((string) config('services.festival_stream.public_url'), '/');
 
-        return view('festivals.portal.stream-player', [
-            'account' => $entitlement->account,
+        return response()->view('festivals.portal.stream-player', [
+            'account' => $viewer->account,
             'disablePublicPwa' => true,
-            'stream' => $entitlement->stream,
+            'isStaffPreview' => $viewer->isStaffPreview,
+            'stream' => $viewer->stream,
             'playlistUrl' => $publicUrl.'/hls/'.rawurlencode($path).'/index.m3u8',
             'heartbeatUrl' => $publicUrl.'/festival-stream/heartbeat/'.rawurlencode($path),
-        ]);
+        ])->header('Content-Security-Policy', "frame-ancestors 'self' ".rtrim((string) config('app.url'), '/'));
     }
 
     public function heartbeat(Request $request, string $path): Response
@@ -100,7 +104,7 @@ class FestivalStreamAccessController extends Controller
             return response('', 401);
         }
         try {
-            $this->access->authorizeViewerCookie($cookie, $path, $ip);
+            $this->access->authorizeViewerCredential($cookie, $path, $ip);
         } catch (ModelNotFoundException|ValidationException) {
             return response('', 403);
         }
@@ -138,13 +142,13 @@ class FestivalStreamAccessController extends Controller
         return response()->noContent();
     }
 
-    private function authorizeCookie(Request $request, string $path): FestivalStreamEntitlement
+    private function authorizeCookie(Request $request, string $path): FestivalStreamViewer
     {
         $cookie = (string) $request->cookie($this->access->viewerCookieName($path));
         abort_if($cookie === '', 403, __('app.festival_stream_unavailable'));
 
         try {
-            return $this->access->authorizeViewerCookie($cookie, $path, (string) $request->ip());
+            return $this->access->authorizeViewerCredential($cookie, $path, (string) $request->ip());
         } catch (ModelNotFoundException|ValidationException) {
             abort(403, __('app.festival_stream_unavailable'));
         }

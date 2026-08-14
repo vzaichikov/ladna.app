@@ -92,6 +92,7 @@ return [
         'lease_seconds' => (int) env('FESTIVAL_STREAM_LEASE_SECONDS', 120),
         'bootstrap_seconds' => (int) env('FESTIVAL_STREAM_BOOTSTRAP_SECONDS', 30),
         'session_seconds' => (int) env('FESTIVAL_STREAM_SESSION_SECONDS', 28800),
+        'staff_preview_session_seconds' => (int) env('FESTIVAL_STREAM_STAFF_PREVIEW_SESSION_SECONDS', 7200),
         'max_ip_leases' => (int) env('FESTIVAL_STREAM_MAX_IP_LEASES', 3),
         'connect_timeout' => (int) env('FESTIVAL_STREAM_CONNECT_TIMEOUT', 2),
         'timeout' => (int) env('FESTIVAL_STREAM_TIMEOUT', 5),

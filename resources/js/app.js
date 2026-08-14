@@ -2053,6 +2053,133 @@ function initPlatformTelegramWebhook(root = document) {
     });
 }
 
+function initFestivalStreamStatus(root = document) {
+    const cardToneClasses = [
+        'border-stone-200', 'bg-white',
+        'border-emerald-200', 'bg-emerald-50/60',
+        'border-amber-200', 'bg-amber-50/60',
+        'border-rose-200', 'bg-rose-50/60',
+        'border-sky-200', 'bg-sky-50/60',
+    ];
+    const valueToneClasses = ['text-slate-800', 'text-emerald-800', 'text-amber-800', 'text-rose-800', 'text-sky-800'];
+    const tones = {
+        neutral: ['border-stone-200', 'bg-white', 'text-slate-800'],
+        success: ['border-emerald-200', 'bg-emerald-50/60', 'text-emerald-800'],
+        warning: ['border-amber-200', 'bg-amber-50/60', 'text-amber-800'],
+        danger: ['border-rose-200', 'bg-rose-50/60', 'text-rose-800'],
+        info: ['border-sky-200', 'bg-sky-50/60', 'text-sky-800'],
+    };
+
+    root.querySelectorAll('[data-festival-stream-status]').forEach((container) => {
+        if (container.dataset.statusReady === 'true') {
+            return;
+        }
+
+        const statusUrl = container.dataset.statusUrl;
+        const serverCard = container.querySelector('[data-festival-stream-server-card]');
+        const serverValue = container.querySelector('[data-festival-stream-server-value]');
+        const obsCard = container.querySelector('[data-festival-stream-obs-card]');
+        const obsValue = container.querySelector('[data-festival-stream-obs-value]');
+        const obsDetails = container.querySelector('[data-festival-stream-obs-details]');
+        const viewersCard = container.querySelector('[data-festival-stream-viewers-card]');
+        const viewersValue = container.querySelector('[data-festival-stream-viewers-value]');
+        const viewersDetails = container.querySelector('[data-festival-stream-viewers-details]');
+        const statusMessage = container.querySelector('[data-festival-stream-status-message]');
+
+        if (!statusUrl || !serverCard || !serverValue || !obsCard || !obsValue || !obsDetails || !viewersCard || !viewersValue || !viewersDetails || !statusMessage) {
+            return;
+        }
+
+        container.dataset.statusReady = 'true';
+
+        const applyTone = (card, value, tone) => {
+            card.classList.remove(...cardToneClasses);
+            value.classList.remove(...valueToneClasses);
+            card.classList.add(...tones[tone].slice(0, 2));
+            value.classList.add(tones[tone][2]);
+        };
+        const formatDate = (value) => {
+            const date = new Date(value);
+
+            return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+        };
+        const formatTemplate = (template, key, value) => (template || '').replace(`:${key}`, value);
+        const renderUnavailable = () => {
+            serverValue.textContent = container.dataset.serverUnavailable || '';
+            obsValue.textContent = container.dataset.serverUnavailable || '';
+            viewersValue.textContent = '—';
+            obsDetails.textContent = '';
+            viewersDetails.textContent = container.dataset.serverUnavailable || '';
+            applyTone(serverCard, serverValue, 'danger');
+            applyTone(obsCard, obsValue, 'danger');
+            applyTone(viewersCard, viewersValue, 'neutral');
+        };
+        const renderStatus = (payload) => {
+            if (!payload.server_online) {
+                renderUnavailable();
+                return;
+            }
+
+            const readers = Number.isFinite(Number(payload.readers)) ? Number(payload.readers) : 0;
+            const tracks = Array.isArray(payload.tracks) ? payload.tracks.filter(Boolean).join(', ') : '';
+            serverValue.textContent = container.dataset.serverOnline || '';
+            obsValue.textContent = payload.publisher_online ? container.dataset.obsOnline : container.dataset.obsOffline;
+            viewersValue.textContent = String(readers);
+            applyTone(serverCard, serverValue, 'success');
+            applyTone(obsCard, obsValue, payload.publisher_online ? 'success' : 'warning');
+            applyTone(viewersCard, viewersValue, readers > 0 ? 'info' : 'neutral');
+
+            const obsFacts = [];
+            if (payload.publisher_online && payload.connected_at) {
+                obsFacts.push(formatTemplate(container.dataset.obsConnectedTemplate, 'time', formatDate(payload.connected_at)));
+            }
+            if (payload.publisher_online && tracks) {
+                obsFacts.push(formatTemplate(container.dataset.obsTracksTemplate, 'tracks', tracks));
+            }
+            obsDetails.textContent = obsFacts.join(' · ') || container.dataset.obsWaiting || '';
+            viewersDetails.textContent = readers > 0
+                ? formatTemplate(container.dataset.viewersTemplate, 'count', String(readers))
+                : container.dataset.viewersEmpty || '';
+        };
+        const poll = async () => {
+            if (document.hidden) {
+                window.setTimeout(poll, 10000);
+                return;
+            }
+
+            statusMessage.textContent = container.dataset.checking || '';
+
+            try {
+                const response = await fetch(statusUrl, {
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(payload.message || container.dataset.serverUnavailable || 'Request failed');
+                }
+
+                renderStatus(payload);
+                statusMessage.textContent = formatTemplate(
+                    container.dataset.checkedTemplate,
+                    'time',
+                    formatDate(payload.checked_at || new Date().toISOString()),
+                );
+            } catch (error) {
+                renderUnavailable();
+                statusMessage.textContent = error.message || container.dataset.serverUnavailable || '';
+            } finally {
+                window.setTimeout(poll, 10000);
+            }
+        };
+
+        poll();
+    });
+}
+
 function selectPrintSection(printableSection = document.querySelector('[data-print-section]')) {
     if (!printableSection) {
         return;
@@ -8105,6 +8232,7 @@ function initFieldHelp(root = document) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initFestivalStreamPlayer();
+    initFestivalStreamStatus();
     initFestivalAnnouncementModal();
     initFestivalSceneTabs();
     initFestivalProgram();

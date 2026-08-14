@@ -164,6 +164,14 @@ class HelpPagesTest extends TestCase
             ->assertSee('один активний або очікуваний онлайн-квиток', false)
             ->assertSee('до трьох активних публічних IP-адрес', false)
             ->assertSee('Примусово закрити', false)
+            ->assertSee('Як налаштувати OBS і перевірити онлайн-трансляцію', false)
+            ->assertSee('Налаштування -&gt; Трансляція', false)
+            ->assertSee('Відкрити службове превʼю', false)
+            ->assertSee('без покупки квитка, розкладу, режиму Примусово закрити, ліміту трьох IP', false)
+            ->assertSee('CBR, бітрейт 6000 Кбіт/с', false)
+            ->assertSee('AAC, 160 Кбіт/с і 48 кГц', false)
+            ->assertSee('12–16 секунд', false)
+            ->assertSee('попередній ключ більше не працюватиме', false)
             ->assertSee('ключовим кадром кожні дві секунди', false)
             ->assertSee('навантаження 100 глядачів', false)
             ->assertSee('assets/help/screenshots/festival-online-stream.png', false)
@@ -210,6 +218,15 @@ class HelpPagesTest extends TestCase
         sort($diskPaths);
 
         $this->assertSame($configuredPaths, $diskPaths);
+    }
+
+    public function test_owner_help_search_finds_festival_obs_setup(): void
+    {
+        foreach (['як підключити OBS до фестивалю', 'як перевірити трансляцію без квитка'] as $question) {
+            $result = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame('festivals', $result[0]['slug'] ?? null, $question);
+        }
     }
 
     public function test_owner_help_search_finds_events_workflows(): void

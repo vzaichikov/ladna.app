@@ -189,7 +189,18 @@ class AppServiceProvider extends ServiceProvider
                 return Limit::perMinute(120)->by($request->ip());
             }
 
-            return Limit::perMinute(10)->by((string) $request->user('festival')?->getAuthIdentifier().'|'.$request->ip());
+            $userId = $request->routeIs('dashboard.accounts.festivals.online-stream.preview')
+                ? $request->user()?->getAuthIdentifier()
+                : $request->user('festival')?->getAuthIdentifier();
+
+            return Limit::perMinute(10)->by((string) $userId.'|'.$request->ip());
+        });
+
+        RateLimiter::for('festival-stream-status', function (Request $request): Limit {
+            $edition = $request->route('festivalEdition');
+            $editionKey = $edition instanceof FestivalEdition ? $edition->getKey() : $edition;
+
+            return Limit::perMinute(12)->by((string) $request->user()?->getAuthIdentifier().'|'.$editionKey.'|'.$request->ip());
         });
 
         RateLimiter::for('festival-stream-heartbeat', function (Request $request): Limit {

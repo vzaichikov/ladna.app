@@ -19,23 +19,57 @@ class FestivalMediaMtxGateway
         return true;
     }
 
-    /** @return array{publisher_online: bool, readers: int}|null */
+    /** @return array{publisher_online: bool, readers: int, connected_at: ?string, tracks: list<string>}|null */
     public function status(FestivalOnlineStream $stream): ?array
     {
-        if (! $this->configured()) {
+        if ($this->apiUrl() === '') {
             return null;
         }
 
         $response = $this->request()->get('/v3/paths/get/'.rawurlencode($stream->path));
         if ($response->notFound()) {
-            return ['publisher_online' => false, 'readers' => 0];
+            return $this->offlineStatus();
         }
         $payload = $response->throw()->json();
+        $sessions = $this->request()->get('/v3/hlssessions/list', ['itemsPerPage' => 10000])->throw()->json('items', []);
 
         return [
-            'publisher_online' => (bool) ($payload['ready'] ?? false),
-            'readers' => is_array($payload['readers'] ?? null) ? count($payload['readers']) : 0,
+            'publisher_online' => (bool) ($payload['online'] ?? $payload['ready'] ?? false),
+            'readers' => collect(is_array($sessions) ? $sessions : [])
+                ->where('path', $stream->path)
+                ->where('isCDN', false)
+                ->count(),
+            'connected_at' => $payload['onlineTime'] ?? $payload['readyTime'] ?? null,
+            'tracks' => $this->trackCodecs($payload),
         ];
+    }
+
+    /** @return array{publisher_online: false, readers: 0, connected_at: null, tracks: list<string>} */
+    private function offlineStatus(): array
+    {
+        return [
+            'publisher_online' => false,
+            'readers' => 0,
+            'connected_at' => null,
+            'tracks' => [],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<string>
+     */
+    private function trackCodecs(array $payload): array
+    {
+        $tracks = collect(is_array($payload['tracks2'] ?? null) ? $payload['tracks2'] : [])
+            ->pluck('codec')
+            ->filter(fn (mixed $codec): bool => is_string($codec) && $codec !== '')
+            ->values()
+            ->all();
+
+        return $tracks !== []
+            ? $tracks
+            : collect(is_array($payload['tracks'] ?? null) ? $payload['tracks'] : [])->filter('is_string')->values()->all();
     }
 
     private function request(): PendingRequest
