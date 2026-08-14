@@ -44,7 +44,15 @@ class FestivalEntry extends Model
         $chargesReady = ! $this->charges()->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value])->exists();
         $qualificationReady = in_array($this->qualification_status, [FestivalQualificationStatus::NotRequired, FestivalQualificationStatus::Passed], true);
 
-        return $this->status === FestivalEntryStatus::Accepted && $requirementsReady && $chargesReady && $qualificationReady && $this->scheduleSlots()->where('type', 'performance')->exists();
+        return $this->status === FestivalEntryStatus::Accepted
+            && $requirementsReady
+            && $chargesReady
+            && $qualificationReady
+            && $this->scheduleSlots()
+                ->where('type', 'performance')
+                ->whereNotNull('starts_at')
+                ->whereNotNull('ends_at')
+                ->exists();
     }
 
     public function account(): BelongsTo

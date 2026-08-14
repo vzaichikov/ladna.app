@@ -11,6 +11,10 @@
                 {{ __('app.help') }}
             </x-ui.button>
             @if ($activeStage)
+                <x-ui.button type="button" variant="secondary" data-festival-program-generate>
+                    <x-ui.icon name="wand-sparkles" class="h-4 w-4" />
+                    {{ __('app.festival_generate_program') }}
+                </x-ui.button>
                 <x-ui.button type="button" data-festival-program-add>
                     <x-ui.icon name="plus" class="h-4 w-4" />
                     {{ __('app.festival_add_program_item') }}
@@ -88,6 +92,96 @@
                 @endif
             </div>
         </section>
+
+        @php
+            $programGenerationErrors = $errors->getBag('programGeneration');
+            $generationConfirmationOpen = $programGenerationErrors->any() && old('mode') === 'full';
+        @endphp
+        <div
+            class="fixed inset-0 z-50 {{ $programGenerationErrors->any() ? 'flex' : 'hidden' }} items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="festival-program-generation-title"
+            data-festival-program-generation-modal
+            @if ($programGenerationErrors->any()) data-auto-open="true" @endif
+        >
+            <div class="flex max-h-[calc(100vh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100vh-2rem)]">
+                <div class="flex items-center justify-between gap-4 border-b border-stone-200 px-5 py-4">
+                    <div>
+                        <h2 id="festival-program-generation-title" class="text-xl font-semibold text-slate-950">{{ __('app.festival_generate_program') }}</h2>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_program_generation_copy', ['scene' => $activeStage->name]) }}</p>
+                    </div>
+                    <x-ui.action-button icon="x" :label="__('app.close')" data-festival-program-generation-close />
+                </div>
+
+                <div class="min-h-0 flex-1 overflow-y-auto p-5">
+                    @if ($programGenerationErrors->any())
+                        <div class="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert" data-festival-program-generation-error>
+                            @foreach ($programGenerationErrors->all() as $message)
+                                <p>{{ $message }}</p>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    <div class="{{ $generationConfirmationOpen ? 'hidden' : '' }}" data-festival-program-generation-choice>
+                        <dl class="mb-5 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-slate-500">{{ __('app.festival_program_generation_current_items') }}</dt><dd class="mt-1 text-xl font-semibold text-slate-950">{{ $generationStats['current_items'] }}</dd></div>
+                            <div class="rounded-xl bg-emerald-50 p-3"><dt class="text-emerald-700">{{ __('app.festival_program_generation_accepted') }}</dt><dd class="mt-1 text-xl font-semibold text-emerald-900">{{ $generationStats['accepted_performances'] }}</dd></div>
+                            <div class="rounded-xl bg-violet-50 p-3"><dt class="text-violet-700">{{ __('app.festival_program_generation_missing') }}</dt><dd class="mt-1 text-xl font-semibold text-violet-900">{{ $generationStats['missing_performances'] }}</dd></div>
+                            <div class="rounded-xl bg-amber-50 p-3"><dt class="text-amber-700">{{ __('app.festival_program_generation_elsewhere') }}</dt><dd class="mt-1 text-xl font-semibold text-amber-900">{{ $generationStats['assigned_elsewhere'] }}</dd></div>
+                        </dl>
+
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <form method="POST" action="{{ route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $activeStage]) }}" class="flex flex-col rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                                @csrf
+                                <input type="hidden" name="mode" value="missing">
+                                <h3 class="font-semibold text-slate-950">{{ __('app.festival_program_create_missing') }}</h3>
+                                <p class="mt-2 flex-1 text-sm leading-6 text-slate-600">{{ __('app.festival_program_create_missing_copy') }}</p>
+                                <x-ui.button type="submit" variant="success" class="mt-4 w-full" data-festival-program-generation-missing>
+                                    <x-ui.icon name="list-plus" class="h-4 w-4" />
+                                    {{ __('app.festival_program_create_missing') }}
+                                </x-ui.button>
+                            </form>
+
+                            <div class="flex flex-col rounded-xl border border-rose-200 bg-rose-50/60 p-4">
+                                <h3 class="font-semibold text-slate-950">{{ __('app.festival_program_regenerate_full') }}</h3>
+                                <p class="mt-2 flex-1 text-sm leading-6 text-slate-600">{{ __('app.festival_program_regenerate_full_copy') }}</p>
+                                <x-ui.button type="button" variant="danger" class="mt-4 w-full" data-festival-program-generation-full>
+                                    <x-ui.icon name="refresh-cw" class="h-4 w-4" />
+                                    {{ __('app.festival_program_regenerate_full') }}
+                                </x-ui.button>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 flex justify-end border-t border-stone-200 pt-4">
+                            <x-ui.button type="button" variant="secondary" data-festival-program-generation-close>{{ __('app.cancel') }}</x-ui.button>
+                        </div>
+                    </div>
+
+                    <div class="{{ $generationConfirmationOpen ? '' : 'hidden' }}" data-festival-program-generation-confirmation>
+                        <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+                            <div class="flex items-start gap-3">
+                                <span class="rounded-full bg-red-100 p-2 text-red-700"><x-ui.icon name="triangle-alert" class="h-5 w-5" /></span>
+                                <div>
+                                    <h3 class="font-semibold text-red-950">{{ __('app.festival_program_regenerate_confirm_title') }}</h3>
+                                    <p class="mt-2 text-sm leading-6 text-red-800">{{ __('app.festival_program_regenerate_confirm_copy', ['count' => $generationStats['current_items'], 'scene' => $activeStage->name]) }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <form method="POST" action="{{ route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $activeStage]) }}" class="mt-5 flex flex-wrap justify-end gap-2">
+                            @csrf
+                            <input type="hidden" name="mode" value="full">
+                            <x-ui.button type="button" variant="secondary" data-festival-program-generation-back>{{ __('app.back') }}</x-ui.button>
+                            <x-ui.button type="submit" variant="danger" data-festival-program-generation-confirm>
+                                <x-ui.icon name="refresh-cw" class="h-4 w-4" />
+                                {{ __('app.festival_program_regenerate_confirm') }}
+                            </x-ui.button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         @php
             $editingItemId = (int) old('editing_item_id', 0);

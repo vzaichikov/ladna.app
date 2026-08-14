@@ -60,7 +60,7 @@ class FillFestivalTimelines
             foreach ($stages as $stage) {
                 $orderedSlots = $this->programOrder
                     ->ordered($slots->where('festival_stage_id', $stage->id)->values())
-                    ->filter(fn (FestivalScheduleSlot $slot): bool => $slot->type->isTimed());
+                    ->filter(fn (FestivalScheduleSlot $slot): bool => $slot->type->isTimed() && $slot->hasTimeRange());
 
                 if ($orderedSlots->isEmpty()) {
                     continue;

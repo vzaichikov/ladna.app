@@ -41,7 +41,12 @@ class FestivalPortalController extends Controller
             'edition.coverMedia',
             'category',
             'steps',
-            'scheduleSlots' => fn ($query) => $query->whereNotNull('published_at')->with('stage')->orderBy('starts_at'),
+            'scheduleSlots' => fn ($query) => $query
+                ->whereNotNull('published_at')
+                ->whereNotNull('starts_at')
+                ->whereNotNull('ends_at')
+                ->with('stage')
+                ->orderBy('starts_at'),
         ])->latest()->get();
         $notifications = FestivalNotification::query()->where('festival_portal_user_id', $portalUser->id)->latest()->limit(50)->get();
 

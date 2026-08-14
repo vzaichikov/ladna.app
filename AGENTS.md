@@ -81,6 +81,12 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Stick to existing directory structure; don't create new base folders without approval.
 - Do not change the application's dependencies without approval.
 
+## Route Organization
+
+- Keep `routes/web.php` as an ordered orchestrator only. Do not add route definitions or application imports directly to it.
+- Add new web routes to the matching domain file under `routes/web`. Authenticated studio routes belong in the appropriate `routes/web/dashboard` fragment so they inherit the shared dashboard prefix, name, and middleware group from `routes/web/dashboard.php`. Each fragment owns its imports.
+- Preserve route registration order wherever static and parameterized routes may overlap. Keep `routes/web/studio-public.php` last because it contains account-slug catch-all routes, and keep the working-location route outside the main dashboard mutation group.
+
 ## Frontend Bundling
 
 - If the user doesn't see a frontend change reflected in the UI, it could mean they need to run `npm run build`, `npm run dev`, or `composer run dev`. Ask them.

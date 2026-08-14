@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\FillFestivalTimelines;
 use App\Actions\Festivals\SaveFestivalScheduleSlot;
 use App\Enums\AccountRole;
 use App\Enums\FestivalEditionPurchaseStatus;
@@ -12,11 +13,13 @@ use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
+use App\Models\FestivalEntryStep;
 use App\Models\FestivalNotification;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalScheduleSlot;
 use App\Models\FestivalSeries;
 use App\Models\FestivalStage;
+use App\Models\FestivalTimeline;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -100,6 +103,10 @@ class FestivalProgramAndScenesTest extends TestCase
             'festival_stage_id' => $stage->id,
             'type' => 'free_header',
             'name' => 'Blocked header',
+        ])->assertStatus(423);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
+            'mode' => 'missing',
         ])->assertStatus(423);
     }
 
@@ -204,6 +211,344 @@ class FestivalProgramAndScenesTest extends TestCase
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => 999999]))->assertNotFound();
     }
 
+    public function test_missing_generation_reuses_headers_preserves_manual_items_and_is_idempotent(): void
+    {
+        [$account, $edition, $category, $owner, $portalUser] = $this->festival();
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Main scene']);
+        $otherStage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Other scene']);
+        $manualRoot = $this->saveItem($edition, $owner, [
+            'festival_stage_id' => $stage->id,
+            'type' => 'free_header',
+            'name' => 'Opening ceremony',
+        ]);
+        $categoryHeader = $this->saveItem($edition, $owner, [
+            'festival_stage_id' => $stage->id,
+            'type' => 'category_header',
+            'festival_category_id' => $category->id,
+            'parent_id' => $manualRoot->id,
+        ]);
+        $manualChild = $this->saveItem($edition, $owner, [
+            'festival_stage_id' => $stage->id,
+            'type' => 'free_header',
+            'name' => 'Manual category note',
+            'parent_id' => $categoryHeader->id,
+        ]);
+        $alpha = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Alpha performance',
+            'status' => 'accepted',
+        ]);
+        $beta = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Beta performance',
+            'status' => 'accepted',
+        ]);
+        $elsewhere = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Already assigned',
+            'status' => 'accepted',
+        ]);
+        $submitted = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Not accepted',
+            'status' => 'submitted',
+        ]);
+        $startsAt = now($edition->timezone)->addMonth()->startOfHour();
+        $otherScenePerformance = $this->saveItem($edition, $owner, [
+            'festival_stage_id' => $otherStage->id,
+            'festival_entry_id' => $elsewhere->id,
+            'type' => 'performance',
+            'starts_at' => $startsAt->format('Y-m-d H:i:s'),
+            'ends_at' => $startsAt->copy()->addMinutes(10)->format('Y-m-d H:i:s'),
+        ]);
+
+        $response = $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
+            'mode' => 'missing',
+        ]);
+
+        $response->assertRedirect(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]))
+            ->assertSessionHas('status', __('app.festival_program_generated', [
+                'created' => 2,
+                'created_headers' => 0,
+                'deleted' => 0,
+                'skipped' => 1,
+            ]));
+        $this->assertDatabaseHas('festival_schedule_slots', ['id' => $manualRoot->id, 'name' => 'Opening ceremony']);
+        $this->assertDatabaseHas('festival_schedule_slots', ['id' => $manualChild->id, 'parent_id' => $categoryHeader->id]);
+        $this->assertDatabaseHas('festival_schedule_slots', ['id' => $otherScenePerformance->id, 'festival_stage_id' => $otherStage->id]);
+        $generated = FestivalScheduleSlot::query()
+            ->where('festival_stage_id', $stage->id)
+            ->where('type', 'performance')
+            ->with('entry')
+            ->orderBy('sort_order')
+            ->get();
+        $this->assertSame(['Alpha performance', 'Beta performance'], $generated->pluck('entry.entry_name')->all());
+        $this->assertSame([$categoryHeader->id, $categoryHeader->id], $generated->pluck('parent_id')->all());
+        $this->assertSame([20, 30], $generated->pluck('sort_order')->all());
+        $this->assertTrue($generated->every(fn (FestivalScheduleSlot $slot): bool => $slot->starts_at === null && $slot->ends_at === null && $slot->published_at === null));
+        $this->assertFalse($generated->contains('festival_entry_id', $submitted->id));
+
+        $activity = FestivalActivityLog::query()->where('action', 'schedule.generated')->latest('id')->firstOrFail();
+        $this->assertSame($owner->id, $activity->actor_user_id);
+        $this->assertSame(['mode' => 'missing', 'created' => 2, 'created_headers' => 0, 'deleted' => 0, 'skipped' => 1, 'timeline_removed' => false], $activity->payload);
+
+        $slotCount = FestivalScheduleSlot::query()->where('festival_edition_id', $edition->id)->count();
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
+            'mode' => 'missing',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame($slotCount, FestivalScheduleSlot::query()->where('festival_edition_id', $edition->id)->count());
+        $this->assertSame(0, FestivalActivityLog::query()->where('action', 'schedule.generated')->latest('id')->firstOrFail()->payload['created']);
+    }
+
+    public function test_full_generation_replaces_only_one_scene_in_configured_order_and_removes_its_prepared_timeline(): void
+    {
+        [$account, $edition, $laterCategory, $owner, $portalUser] = $this->festival();
+        $laterCategory->update(['name' => 'Later category', 'sort_order' => 20]);
+        $earlierCategory = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Earlier category',
+            'sort_order' => 10,
+        ]);
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Main scene']);
+        $otherStage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Other scene']);
+        $bravo = FestivalEntry::factory()->for($laterCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Bravo',
+            'status' => 'accepted',
+        ]);
+        FestivalEntry::factory()->for($earlierCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Zulu',
+            'status' => 'accepted',
+        ]);
+        FestivalEntry::factory()->for($earlierCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Alpha',
+            'status' => 'accepted',
+        ]);
+        $elsewhere = FestivalEntry::factory()->for($laterCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Elsewhere',
+            'status' => 'accepted',
+        ]);
+        $manual = $this->saveItem($edition, $owner, ['festival_stage_id' => $stage->id, 'type' => 'free_header', 'name' => 'Delete me']);
+        $startsAt = now($edition->timezone)->addMonth()->startOfHour();
+        $oldBravo = $this->saveItem($edition, $owner, [
+            'festival_stage_id' => $stage->id,
+            'festival_entry_id' => $bravo->id,
+            'type' => 'performance',
+            'starts_at' => $startsAt->format('Y-m-d H:i:s'),
+            'ends_at' => $startsAt->copy()->addMinutes(10)->format('Y-m-d H:i:s'),
+            'is_published' => true,
+        ]);
+        $otherScenePerformance = $this->saveItem($edition, $owner, [
+            'festival_stage_id' => $otherStage->id,
+            'festival_entry_id' => $elsewhere->id,
+            'type' => 'performance',
+            'starts_at' => $startsAt->format('Y-m-d H:i:s'),
+            'ends_at' => $startsAt->copy()->addMinutes(10)->format('Y-m-d H:i:s'),
+        ]);
+        $timeline = FestivalTimeline::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_stage_id' => $stage->id,
+            'created_by' => $owner->id,
+            'updated_by' => $owner->id,
+        ]);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
+            'mode' => 'full',
+        ])->assertRedirect()->assertSessionHas('status', __('app.festival_program_generated', [
+            'created' => 3,
+            'created_headers' => 2,
+            'deleted' => 2,
+            'skipped' => 1,
+        ]));
+
+        $this->assertDatabaseMissing('festival_schedule_slots', ['id' => $manual->id]);
+        $this->assertDatabaseMissing('festival_schedule_slots', ['id' => $oldBravo->id]);
+        $this->assertDatabaseMissing('festival_timelines', ['id' => $timeline->id]);
+        $this->assertDatabaseHas('festival_schedule_slots', ['id' => $otherScenePerformance->id, 'festival_stage_id' => $otherStage->id]);
+        $rootHeaders = FestivalScheduleSlot::query()
+            ->where('festival_stage_id', $stage->id)
+            ->where('type', 'category_header')
+            ->whereNull('parent_id')
+            ->orderBy('sort_order')
+            ->get();
+        $this->assertSame([$earlierCategory->id, $laterCategory->id], $rootHeaders->pluck('festival_category_id')->all());
+        $this->assertSame(['Alpha', 'Zulu'], FestivalScheduleSlot::query()
+            ->where('parent_id', $rootHeaders->first()->id)
+            ->with('entry')
+            ->orderBy('sort_order')
+            ->get()
+            ->pluck('entry.entry_name')
+            ->all());
+        $this->assertSame(['Bravo'], FestivalScheduleSlot::query()
+            ->where('parent_id', $rootHeaders->last()->id)
+            ->with('entry')
+            ->get()
+            ->pluck('entry.entry_name')
+            ->all());
+        $this->assertSame(3, FestivalScheduleSlot::query()->where('festival_stage_id', $stage->id)->where('type', 'performance')->whereNull('starts_at')->whereNull('ends_at')->whereNull('published_at')->count());
+        $this->assertSame(true, FestivalActivityLog::query()->where('action', 'schedule.generated')->latest('id')->firstOrFail()->payload['timeline_removed']);
+
+        $emptyTarget = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Empty target']);
+        $emptyTargetManual = $this->saveItem($edition, $owner, ['festival_stage_id' => $emptyTarget->id, 'type' => 'free_header', 'name' => 'Remove without replacements']);
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $emptyTarget]), [
+            'mode' => 'full',
+        ])->assertRedirect()->assertSessionHas('status', __('app.festival_program_generated', [
+            'created' => 0,
+            'created_headers' => 0,
+            'deleted' => 1,
+            'skipped' => 4,
+        ]));
+        $this->assertDatabaseMissing('festival_schedule_slots', ['id' => $emptyTargetManual->id]);
+        $this->assertSame(0, FestivalScheduleSlot::query()->where('festival_stage_id', $emptyTarget->id)->count());
+    }
+
+    public function test_started_timeline_and_access_boundaries_reject_generation_atomically(): void
+    {
+        [$account, $edition, $category, $owner, $portalUser] = $this->festival();
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
+        $manual = $this->saveItem($edition, $owner, ['festival_stage_id' => $stage->id, 'type' => 'free_header', 'name' => 'Keep me']);
+        FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => 'accepted',
+        ]);
+        $timeline = FestivalTimeline::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_stage_id' => $stage->id,
+            'started_at' => now(),
+        ]);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
+            'mode' => 'full',
+        ])->assertRedirect(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]))
+            ->assertSessionHasErrorsIn('programGeneration', ['mode']);
+        $this->assertDatabaseHas('festival_schedule_slots', ['id' => $manual->id, 'name' => 'Keep me']);
+        $this->assertDatabaseHas('festival_timelines', ['id' => $timeline->id, 'started_at' => $timeline->started_at]);
+        $this->assertDatabaseMissing('festival_activity_logs', ['festival_edition_id' => $edition->id, 'action' => 'schedule.generated']);
+
+        $unauthorized = User::factory()->create();
+        $this->actingAs($unauthorized)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
+            'mode' => 'missing',
+        ])->assertForbidden();
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
+            'mode' => 'invalid',
+        ])->assertSessionHasErrorsIn('programGeneration', ['mode']);
+
+        $otherSeries = FestivalSeries::factory()->for($account)->create();
+        $otherEdition = FestivalEdition::factory()->published()->for($otherSeries)->create(['account_id' => $account->id]);
+        $otherEditionStage = FestivalStage::factory()->for($otherEdition)->create(['account_id' => $account->id]);
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $otherEditionStage]), [
+            'mode' => 'missing',
+        ])->assertNotFound();
+    }
+
+    public function test_untimed_generated_performances_are_incomplete_until_their_times_are_saved(): void
+    {
+        Queue::fake();
+        [$account, $edition, $category, $owner, $portalUser] = $this->festival();
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Needs a time',
+            'status' => 'accepted',
+        ]);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
+            'mode' => 'missing',
+        ])->assertRedirect();
+        $placeholder = FestivalScheduleSlot::query()->where('festival_entry_id', $entry->id)->where('type', 'performance')->firstOrFail();
+        $header = FestivalScheduleSlot::query()->findOrFail($placeholder->parent_id);
+        $this->assertFalse($placeholder->hasTimeRange());
+        $this->assertFalse($entry->refresh()->isReady());
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('Needs a time')
+            ->assertSee(__('app.festival_not_ready'));
+
+        $program = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]));
+        $program->assertOk()
+            ->assertSee('data-festival-program-generation-modal', false)
+            ->assertSee('data-festival-program-generation-missing', false)
+            ->assertSee('data-festival-program-generation-full', false)
+            ->assertSee('data-festival-program-generation-confirmation', false)
+            ->assertSee('data-festival-program-generation-confirm', false)
+            ->assertSee('data-festival-program-time-warning', false)
+            ->assertSee(__('app.festival_program_time_required'))
+            ->assertSee('border-violet-200 bg-violet-50/70', false)
+            ->assertSee('border-emerald-200 bg-emerald-50/70', false);
+
+        $placeholder->forceFill(['published_at' => now()])->save();
+        $portal = $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entries.index', $account->slug));
+        $portal->assertOk();
+        $portalEntry = $portal->viewData('entries')->firstWhere('id', $entry->id);
+        $this->assertNotNull($portalEntry);
+        $this->assertTrue($portalEntry->scheduleSlots->isEmpty());
+        $portalDetail = $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entries.show', [$account->slug, $entry]));
+        $portalDetail->assertOk()->assertSee(__('app.festival_schedule_pending'));
+        $this->assertTrue($portalDetail->viewData('entry')->scheduleSlots->isEmpty());
+        $entryStep = FestivalEntryStep::factory()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $entry->id,
+        ]);
+        $portalStep = $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $entryStep]));
+        $portalStep->assertOk()->assertSee(__('app.festival_schedule_pending'));
+        $this->assertTrue($portalStep->viewData('entry')->scheduleSlots->isEmpty());
+        $staffOverview = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.show', [$account, $edition]));
+        $staffOverview->assertOk();
+        $this->assertTrue($staffOverview->viewData('upcomingSlots')->isEmpty());
+        $this->assertSame([], app(FillFestivalTimelines::class)->execute($edition, $owner));
+        $this->assertDatabaseMissing('festival_timelines', ['festival_stage_id' => $stage->id]);
+
+        $startsAt = now($edition->timezone)->addMonth()->startOfHour();
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.schedule.update', [$account, $edition, $placeholder]), [
+            'festival_stage_id' => $stage->id,
+            'festival_entry_id' => $entry->id,
+            'parent_id' => $header->id,
+            'type' => 'performance',
+            'starts_at' => $startsAt->format('Y-m-d H:i:s'),
+            'ends_at' => $startsAt->copy()->addMinutes(10)->format('Y-m-d H:i:s'),
+            'reschedule_reason' => 'Set the generated performance time',
+            'is_published' => true,
+            'editing_item_id' => $placeholder->id,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertTrue($placeholder->refresh()->hasTimeRange());
+        $this->assertTrue($entry->refresh()->isReady());
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))
+            ->assertOk()
+            ->assertSee(__('app.festival_ready'));
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]))
+            ->assertOk()
+            ->assertDontSee('data-festival-program-time-warning', false);
+        $timelines = app(FillFestivalTimelines::class)->execute($edition, $owner);
+        $this->assertCount(1, $timelines);
+        $this->assertSame(1, $timelines[0]->items()->count());
+    }
+
     public function test_all_program_item_types_enforce_their_shapes_and_custom_timeframes_overlap(): void
     {
         Queue::fake();
@@ -267,6 +612,14 @@ class FestivalProgramAndScenesTest extends TestCase
         $this->assertNull($freeHeader->ends_at);
         $this->assertNull($categoryHeader->name);
         $this->assertSame($category->id, $categoryHeader->festival_category_id);
+
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]))
+            ->assertOk()
+            ->assertSee('border-violet-200 bg-violet-50/70', false)
+            ->assertSee('border-sky-200 bg-sky-50/70', false)
+            ->assertSee('border-emerald-200 bg-emerald-50/70', false)
+            ->assertSee('border-amber-200 bg-amber-50/70', false)
+            ->assertSee('border-rose-200 bg-rose-50/70', false);
 
         try {
             $this->saveItem($edition, $owner, [

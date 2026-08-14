@@ -59,7 +59,26 @@ class FestivalEntryController extends Controller
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $this->assertEntry($festivalEntry, $portalUser);
-        $festivalEntry->load(['edition', 'category.direction', 'participants', 'steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section']);
+        $festivalEntry->load([
+            'edition',
+            'category.direction',
+            'participants',
+            'steps.workflowStep',
+            'steps.requirements.definition',
+            'steps.requirements.participant',
+            'steps.requirements.submissions',
+            'steps.charges.paymentAttempts',
+            'chargeAdjustments',
+            'scheduleSlots' => fn ($query) => $query
+                ->whereNotNull('published_at')
+                ->whereNotNull('starts_at')
+                ->whereNotNull('ends_at')
+                ->with('stage')
+                ->orderBy('starts_at'),
+            'result',
+            'scoreSheets.assignment',
+            'scoreSheets.scores.criterion.section',
+        ]);
         $providers = app(PaymentGatewayRegistry::class)->availableSettingsFor($account);
         $workflowStates = $workflowState->forEntry($festivalEntry);
         $selectedStep = $workflowState->current($festivalEntry) ?? $festivalEntry->steps->last();

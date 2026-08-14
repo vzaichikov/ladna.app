@@ -56,4 +56,9 @@ class FestivalScheduleSlot extends Model
             FestivalScheduleSlotType::Performance, FestivalScheduleSlotType::Rehearsal => $this->entry?->entry_name ?? '',
         };
     }
+
+    public function hasTimeRange(): bool
+    {
+        return $this->starts_at !== null && $this->ends_at !== null;
+    }
 }

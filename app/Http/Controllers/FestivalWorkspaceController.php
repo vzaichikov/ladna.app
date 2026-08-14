@@ -10,6 +10,7 @@ use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalRequirementStatus;
+use App\Enums\FestivalScheduleSlotType;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
 use App\Http\Requests\FestivalTicketRefundRequest;
@@ -57,6 +58,10 @@ class FestivalWorkspaceController extends Controller
                     ->whereNotIn('status', [FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Waived->value]),
                 'charges as blocking_charges_count' => fn ($query) => $query->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value]),
                 'scheduleSlots as performance_slots_count' => fn ($query) => $query->where('type', 'performance'),
+                'scheduleSlots as scheduled_performance_slots_count' => fn ($query) => $query
+                    ->where('type', 'performance')
+                    ->whereNotNull('starts_at')
+                    ->whereNotNull('ends_at'),
             ])
             ->latest('submitted_at')
             ->latest('id')
@@ -189,8 +194,32 @@ class FestivalWorkspaceController extends Controller
             ->orderBy('entry_name')
             ->get(['id', 'festival_edition_id', 'code', 'entry_name']);
         $categories = $festivalEdition->categories()->orderBy('name')->get(['id', 'festival_edition_id', 'name']);
+        $acceptedEntryIds = FestivalEntry::query()
+            ->where('festival_edition_id', $festivalEdition->id)
+            ->where('status', FestivalEntryStatus::Accepted->value)
+            ->pluck('id');
+        $assignedEntryIds = FestivalScheduleSlot::query()
+            ->where('festival_edition_id', $festivalEdition->id)
+            ->where('type', FestivalScheduleSlotType::Performance->value)
+            ->whereIn('festival_entry_id', $acceptedEntryIds)
+            ->pluck('festival_entry_id')
+            ->unique();
+        $generationStats = [
+            'current_items' => $programItems->count(),
+            'accepted_performances' => $acceptedEntryIds->count(),
+            'missing_performances' => $acceptedEntryIds->diff($assignedEntryIds)->count(),
+            'assigned_elsewhere' => $activeStage
+                ? FestivalScheduleSlot::query()
+                    ->where('festival_edition_id', $festivalEdition->id)
+                    ->where('festival_stage_id', '!=', $activeStage->id)
+                    ->where('type', FestivalScheduleSlotType::Performance->value)
+                    ->whereIn('festival_entry_id', $acceptedEntryIds)
+                    ->distinct()
+                    ->count('festival_entry_id')
+                : 0,
+        ];
 
-        return view('festivals.staff.program', compact('account', 'festivalEdition', 'entries', 'categories', 'stages', 'activeStage', 'programItems') + [
+        return view('festivals.staff.program', compact('account', 'festivalEdition', 'entries', 'categories', 'stages', 'activeStage', 'programItems', 'generationStats') + [
             'edition' => $festivalEdition,
             'programTree' => $this->programOrder->tree($programItems),
             'workspacePermissions' => $permissions,

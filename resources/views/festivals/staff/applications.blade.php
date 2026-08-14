@@ -95,7 +95,7 @@
                         && $qualificationReady
                         && $entry->blocking_requirements_count === 0
                         && $entry->blocking_charges_count === 0
-                        && $entry->performance_slots_count > 0;
+                        && $entry->scheduled_performance_slots_count > 0;
                 @endphp
                 <article class="rounded-xl border border-stone-200 bg-slate-50/70 p-4">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

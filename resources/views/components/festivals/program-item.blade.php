@@ -3,6 +3,21 @@
 @php
     $item = $node['item'];
     $isHeader = $item->type->isHeader();
+    $needsTime = $item->type === \App\Enums\FestivalScheduleSlotType::Performance && ! $item->hasTimeRange();
+    $cardClasses = match ($item->type) {
+        \App\Enums\FestivalScheduleSlotType::CategoryHeader => 'border-violet-200 bg-violet-50/70',
+        \App\Enums\FestivalScheduleSlotType::FreeHeader => 'border-sky-200 bg-sky-50/70',
+        \App\Enums\FestivalScheduleSlotType::Performance => 'border-emerald-200 bg-emerald-50/70',
+        \App\Enums\FestivalScheduleSlotType::Rehearsal => 'border-amber-200 bg-amber-50/70',
+        \App\Enums\FestivalScheduleSlotType::Custom => 'border-rose-200 bg-rose-50/70',
+    };
+    $typeBadgeClasses = match ($item->type) {
+        \App\Enums\FestivalScheduleSlotType::CategoryHeader => 'bg-violet-100 text-violet-800',
+        \App\Enums\FestivalScheduleSlotType::FreeHeader => 'bg-sky-100 text-sky-800',
+        \App\Enums\FestivalScheduleSlotType::Performance => 'bg-emerald-100 text-emerald-800',
+        \App\Enums\FestivalScheduleSlotType::Rehearsal => 'bg-amber-100 text-amber-900',
+        \App\Enums\FestivalScheduleSlotType::Custom => 'bg-rose-100 text-rose-800',
+    };
     $payload = [
         'id' => $item->id,
         'type' => $item->type->value,
@@ -18,7 +33,7 @@
 @endphp
 
 <li class="min-w-0 max-w-full space-y-2" role="listitem" data-festival-program-item data-item-id="{{ $item->id }}" data-item-type="{{ $item->type->value }}">
-    <article class="min-w-0 max-w-full cursor-grab overflow-hidden rounded-xl border p-3 transition active:cursor-grabbing {{ $isHeader ? 'border-brand-200 bg-brand-50/60' : 'border-stone-200 bg-slate-50' }}" draggable="true" data-festival-program-row data-festival-program-drag>
+    <article class="min-w-0 max-w-full cursor-grab overflow-hidden rounded-xl border p-3 transition active:cursor-grabbing {{ $cardClasses }}" draggable="true" data-festival-program-row data-festival-program-drag>
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="flex min-w-0 items-start gap-3">
                 <x-ui.action-button
@@ -30,7 +45,13 @@
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h3 class="min-w-0 break-words font-semibold text-slate-950 [overflow-wrap:anywhere] {{ $isHeader ? 'text-base' : '' }}">{{ $item->displayName() }}</h3>
-                        <span class="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">{{ __('app.festival_schedule_slot_type_'.$item->type->value) }}</span>
+                        <span class="rounded-full px-2 py-1 text-xs font-semibold {{ $typeBadgeClasses }}">{{ __('app.festival_schedule_slot_type_'.$item->type->value) }}</span>
+                        @if ($needsTime)
+                            <span class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-800" data-festival-program-time-warning>
+                                <x-ui.icon name="circle-alert" class="h-3.5 w-3.5" />
+                                {{ __('app.festival_program_time_required') }}
+                            </span>
+                        @endif
                         @if ($item->published_at)
                             <span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">{{ __('app.published') }}</span>
                         @endif

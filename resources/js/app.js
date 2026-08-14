@@ -7462,6 +7462,7 @@ function initFestivalAnnouncementModal() {
 function initFestivalProgram() {
     const program = document.querySelector('[data-festival-program]');
     const modal = document.querySelector('[data-festival-program-modal]');
+    const generationModal = document.querySelector('[data-festival-program-generation-modal]');
 
     if (!program || !modal) {
         return;
@@ -7474,9 +7475,11 @@ function initFestivalProgram() {
     const typeInput = form?.querySelector('[data-festival-program-type]');
     const rootList = program.querySelector('[data-festival-program-list][data-parent-id=""]');
     const status = program.querySelector('[data-festival-program-status]');
+    const generationTrigger = document.querySelector('[data-festival-program-generate]');
     let draggedItem = null;
     let treeBeforeDrag = null;
     let savingOrder = false;
+    let generationModalOpener = null;
 
     if (!form || !title || !methodInput || !editingIdInput || !typeInput || !rootList) {
         return;
@@ -7543,6 +7546,59 @@ function initFestivalProgram() {
         document.body.classList.remove('overflow-hidden');
         festivalProgramModalOpener?.focus();
         festivalProgramModalOpener = null;
+    };
+
+    const generationChoice = generationModal?.querySelector('[data-festival-program-generation-choice]');
+    const generationConfirmation = generationModal?.querySelector('[data-festival-program-generation-confirmation]');
+    const generationFocusableElements = () => generationModal
+        ? [...generationModal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+            .filter((element) => !element.closest('.hidden'))
+        : [];
+    const showGenerationChoice = (restoreFocus = false) => {
+        generationChoice?.classList.remove('hidden');
+        generationConfirmation?.classList.add('hidden');
+
+        if (restoreFocus) {
+            generationModal?.querySelector('[data-festival-program-generation-full]')?.focus();
+        }
+    };
+    const showGenerationConfirmation = () => {
+        generationChoice?.classList.add('hidden');
+        generationConfirmation?.classList.remove('hidden');
+        window.requestAnimationFrame(() => generationModal?.querySelector('[data-festival-program-generation-confirm]')?.focus());
+    };
+    const openGenerationModal = (opener = null, preserveStep = false) => {
+        if (!generationModal) {
+            return;
+        }
+
+        generationModalOpener = opener ?? generationTrigger;
+
+        if (!preserveStep) {
+            showGenerationChoice();
+        }
+
+        generationModal.classList.remove('hidden');
+        generationModal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+        window.requestAnimationFrame(() => {
+            const preferred = generationConfirmation && !generationConfirmation.classList.contains('hidden')
+                ? generationModal.querySelector('[data-festival-program-generation-confirm]')
+                : generationModal.querySelector('[data-festival-program-generation-missing]');
+            preferred?.focus();
+        });
+    };
+    const closeGenerationModal = () => {
+        if (!generationModal) {
+            return;
+        }
+
+        generationModal.classList.add('hidden');
+        generationModal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+        showGenerationChoice();
+        generationModalOpener?.focus();
+        generationModalOpener = null;
     };
 
     const resetAddForm = () => {
@@ -7689,6 +7745,40 @@ function initFestivalProgram() {
             openModal(button);
         });
     });
+    document.querySelectorAll('[data-festival-program-generate]').forEach((button) => {
+        button.addEventListener('click', () => openGenerationModal(button));
+    });
+    generationModal?.querySelectorAll('[data-festival-program-generation-close]').forEach((button) => button.addEventListener('click', closeGenerationModal));
+    generationModal?.querySelector('[data-festival-program-generation-full]')?.addEventListener('click', showGenerationConfirmation);
+    generationModal?.querySelector('[data-festival-program-generation-back]')?.addEventListener('click', () => showGenerationChoice(true));
+    generationModal?.addEventListener('click', (event) => {
+        if (event.target === generationModal) {
+            closeGenerationModal();
+        }
+    });
+    generationModal?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeGenerationModal();
+            return;
+        }
+
+        if (event.key !== 'Tab') {
+            return;
+        }
+
+        const focusable = generationFocusableElements();
+        const first = focusable[0];
+        const last = focusable.at(-1);
+
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+        }
+    });
     modal.querySelectorAll('[data-festival-program-close]').forEach((button) => button.addEventListener('click', closeModal));
     modal.addEventListener('click', (event) => {
         if (event.target === modal) {
@@ -7818,6 +7908,10 @@ function initFestivalProgram() {
 
     if (modal.dataset.autoOpen === 'true') {
         openModal();
+    }
+
+    if (generationModal?.dataset.autoOpen === 'true') {
+        openGenerationModal(generationTrigger, true);
     }
 
     syncTypeFields();

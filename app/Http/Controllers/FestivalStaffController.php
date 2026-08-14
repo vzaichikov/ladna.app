@@ -149,7 +149,14 @@ class FestivalStaffController extends Controller
         }
 
         $upcomingSlots = ($permissions['schedule'] || $permissions['judging'])
-            ? $festivalEdition->scheduleSlots()->whereNotNull('festival_entry_id')->where('ends_at', '>=', now())->with(['stage', 'entry'])->orderBy('starts_at')->limit(6)->get()
+            ? $festivalEdition->scheduleSlots()
+                ->whereNotNull('festival_entry_id')
+                ->whereNotNull('starts_at')
+                ->where('ends_at', '>=', now())
+                ->with(['stage', 'entry'])
+                ->orderBy('starts_at')
+                ->limit(6)
+                ->get()
             : collect();
 
         return view('festivals.staff.show', [

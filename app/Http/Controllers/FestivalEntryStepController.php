@@ -156,10 +156,29 @@ class FestivalEntryStepController extends Controller
         return back()->with('status', __('app.festival_category_reassigned'));
     }
 
-    /** @return array<int, string> */
+    /** @return array<int|string, mixed> */
     private function entryRelations(): array
     {
-        return ['edition', 'category.direction', 'participants', 'steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'steps.charges.paymentAttempts', 'chargeAdjustments', 'scheduleSlots.stage', 'result', 'scoreSheets.assignment', 'scoreSheets.scores.criterion.section'];
+        return [
+            'edition',
+            'category.direction',
+            'participants',
+            'steps.workflowStep',
+            'steps.requirements.definition',
+            'steps.requirements.participant',
+            'steps.requirements.submissions',
+            'steps.charges.paymentAttempts',
+            'chargeAdjustments',
+            'scheduleSlots' => fn ($query) => $query
+                ->whereNotNull('published_at')
+                ->whereNotNull('starts_at')
+                ->whereNotNull('ends_at')
+                ->with('stage')
+                ->orderBy('starts_at'),
+            'result',
+            'scoreSheets.assignment',
+            'scoreSheets.scores.criterion.section',
+        ];
     }
 
     /** @return array{Account, FestivalPortalUser} */
