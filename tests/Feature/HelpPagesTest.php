@@ -60,6 +60,16 @@ class HelpPagesTest extends TestCase
         }
     }
 
+    public function test_booking_help_explains_how_anytime_rent_uses_a_class_pass_or_cash_payment(): void
+    {
+        $this->get(route('help.show', 'customers-bookings', false))
+            ->assertOk()
+            ->assertSee('фактична тривалість має точно збігатися зі стандартною тривалістю', false)
+            ->assertSee('покриває ним найстарішу сумісну непогашену оренду', false)
+            ->assertSee('будь-якою історією ручної оплати автоматично не переводиться на абонемент', false)
+            ->assertSee('Якщо він хоче оплатити абонементом, залиште суму порожньою', false);
+    }
+
     public function test_events_help_explains_the_complete_owner_flow(): void
     {
         $this->get(route('help.show', 'events', false))
@@ -402,7 +412,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('Як створити індивідуальне заняття або оренду', false)
             ->assertSee('Як додати оренду залу на довільний час', false)
             ->assertSee('Пряма оренда на довільний час', false)
-            ->assertSee('не привʼязує запис до абонемента', false)
+            ->assertSee('Якщо поле Готівка внесена заповнене, Ladna зберігає пряму оплату', false)
             ->assertSee('не може накладатися на іншу подію в цьому ж залі', false)
             ->assertSee('Готівка внесена', false)
             ->assertSee('assets/help/screenshots/rent-anytime-modal.png', false)

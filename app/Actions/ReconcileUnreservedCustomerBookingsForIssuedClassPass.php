@@ -6,12 +6,12 @@ use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\ScheduleKind;
 use App\Models\ClassBooking;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerClassPassReservation;
 use App\Models\ScheduledClass;
-use App\Support\UnreservedClassPassBookingIssues;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -22,7 +22,6 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
 {
     public function __construct(
         private readonly NormalizeCustomerClassPasses $normalizeCustomerClassPasses,
-        private readonly UnreservedClassPassBookingIssues $unreservedClassPassBookingIssues,
     ) {}
 
     public function execute(CustomerClassPass $customerClassPass): int
@@ -242,13 +241,20 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
                     $reservationChanged = true;
                 }
 
+                $bookingChanged = false;
+
+                if ($classBooking->skip_class_pass_reservation) {
+                    $classBooking->forceFill(['skip_class_pass_reservation' => false])->save();
+                    $bookingChanged = true;
+                }
+
                 if ($reservationStatus === CustomerClassPassReservationStatus::Used) {
                     $customerClassPass->used_sessions_count++;
                 } else {
                     $customerClassPass->reserved_sessions_count++;
                 }
 
-                if ($reservationChanged) {
+                if ($reservationChanged || $bookingChanged) {
                     $reconciledCount++;
                 }
             }
@@ -289,7 +295,8 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
                 ClassBookingStatus::Attended->value,
                 ClassBookingStatus::NoShow->value,
             ])
-            ->where("{$classBookingTable}.skip_class_pass_reservation", false)
+            ->whereDoesntHave('manualCashPayment')
+            ->where(fn (Builder $query): Builder => $this->eligibleReservationMode($query, $classBookingTable, $scheduledClassTable))
             ->where("{$scheduledClassTable}.account_id", $accountId)
             ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)
             ->where(function ($query) use ($customerClassPassIds): void {
@@ -361,7 +368,28 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
      */
     private function candidateBookings(int $accountId, int $customerId): Collection
     {
-        return $this->unreservedClassPassBookingIssues->queryForAccountCustomer($accountId, $customerId)
+        $classBookingTable = (new ClassBooking)->getTable();
+        $scheduledClassTable = (new ScheduledClass)->getTable();
+
+        return ClassBooking::query()
+            ->join($scheduledClassTable, "{$scheduledClassTable}.id", '=', "{$classBookingTable}.scheduled_class_id")
+            ->where("{$classBookingTable}.account_id", $accountId)
+            ->where("{$classBookingTable}.customer_id", $customerId)
+            ->whereNull("{$classBookingTable}.corrected_removed_at")
+            ->whereIn("{$classBookingTable}.status", [
+                ClassBookingStatus::Booked->value,
+                ClassBookingStatus::Attended->value,
+                ClassBookingStatus::NoShow->value,
+            ])
+            ->whereDoesntHave('manualCashPayment')
+            ->where(fn (Builder $query): Builder => $this->eligibleReservationMode($query, $classBookingTable, $scheduledClassTable))
+            ->where("{$scheduledClassTable}.account_id", $accountId)
+            ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)
+            ->whereDoesntHave('classPassReservation', fn (Builder $query) => $query->whereIn('status', [
+                CustomerClassPassReservationStatus::Reserved->value,
+                CustomerClassPassReservationStatus::Used->value,
+            ]))
+            ->select("{$classBookingTable}.*")
             ->with([
                 'scheduledClass.account',
                 'scheduledClass.classType',
@@ -370,7 +398,22 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
                 'scheduledClass.room',
                 'customer',
             ])
+            ->orderBy("{$scheduledClassTable}.starts_at")
+            ->orderBy("{$classBookingTable}.id")
             ->get();
+    }
+
+    private function eligibleReservationMode(Builder $query, string $classBookingTable, string $scheduledClassTable): Builder
+    {
+        return $query
+            ->where("{$classBookingTable}.skip_class_pass_reservation", false)
+            ->orWhere(function (Builder $query) use ($classBookingTable, $scheduledClassTable): void {
+                $query
+                    ->where("{$classBookingTable}.skip_class_pass_reservation", true)
+                    ->where("{$scheduledClassTable}.metadata->rental_mode", 'anytime')
+                    ->whereHas('scheduledClass.classType', fn (Builder $query) => $query
+                        ->where('schedule_kind', ScheduleKind::RoomRental->value));
+            });
     }
 
     /**

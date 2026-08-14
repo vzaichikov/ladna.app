@@ -127,6 +127,11 @@ class ClassPassPlan extends Model
             return false;
         }
 
+        if ($scheduledClass->isAnytimeRoomRental()
+            && $scheduledClass->durationMinutes() !== (int) $scheduledClass->classType?->default_duration_minutes) {
+            return false;
+        }
+
         if ($this->rooms->isNotEmpty() && (! $scheduledClass->room_id || ! $this->rooms->contains('id', $scheduledClass->room_id))) {
             return false;
         }

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.131.1',
+                'date' => '2026-08-14',
+                'title' => 'Class passes for unpaid room rentals',
+                'items' => ['An unpaid anytime room rental now uses a compatible active class pass immediately or when one is issued later, starting with the oldest compatible unpaid rent. Direct cash-payment history remains unchanged and prevents automatic conversion, while anytime duration must exactly match the selected rental type.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.131.0',
                 'date' => '2026-08-13',
                 'title' => 'Live Festival operations and protected online viewing',
@@ -1150,6 +1157,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.131.1',
+                'date' => '2026-08-14',
+                'title' => 'Абонементи для непогашених оренд залу',
+                'items' => ['Непогашена оренда залу на довільний час тепер використовує сумісний активний абонемент одразу або після його пізнішої видачі, починаючи з найстарішої сумісної оренди. Історія прямої готівкової оплати не змінюється та блокує автоматичний перехід, а фактична тривалість має точно відповідати вибраному типу оренди.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.131.0',
                 'date' => '2026-08-13',

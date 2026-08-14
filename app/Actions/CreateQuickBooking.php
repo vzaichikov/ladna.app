@@ -47,7 +47,9 @@ class CreateQuickBooking
             $scheduledClass = $scheduleKind === ScheduleKind::GroupClass
                 ? $this->groupScheduledClass($account, (int) $validated['scheduled_class_id'], $customer->id)
                 : $this->createManualScheduledClass($account, $scheduleKind, $validated, $customer->id);
-            $skipClassPassReservation = $this->shouldSkipClassPassReservation($scheduleKind, $validated);
+            $isAnytimeRoomRental = $this->isAnytimeRoomRental($scheduleKind, $validated);
+            $skipClassPassReservation = $isAnytimeRoomRental
+                && $this->hasManualRentalPayment($scheduleKind, $validated);
 
             $classBooking = $scheduledClass->classBookings()->updateOrCreate(
                 ['customer_id' => $customer->id],
@@ -63,7 +65,11 @@ class CreateQuickBooking
             );
 
             if (! $skipClassPassReservation) {
-                $this->reserveCustomerClassPassForBooking->execute($classBooking);
+                $reservation = $this->reserveCustomerClassPassForBooking->execute($classBooking);
+
+                if ($isAnytimeRoomRental && ! $reservation) {
+                    $classBooking->update(['skip_class_pass_reservation' => true]);
+                }
             }
 
             $this->recordManualPaymentIfNeeded($account, $scheduleKind, $classBooking, $validated);
@@ -118,7 +124,7 @@ class CreateQuickBooking
         $activityDirectionId = $this->trainerActivityDirectionEligibility->activeDirectionId($account, $validated['activity_direction_id'] ?? null);
         $timezone = $location->timezone ?? $account->timezone ?? config('app.timezone');
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', (string) $validated['starts_at'], $timezone);
-        $isAnytimeRental = $this->shouldSkipClassPassReservation($scheduleKind, $validated);
+        $isAnytimeRental = $this->isAnytimeRoomRental($scheduleKind, $validated);
         $ignoreTrainerTimeframes = $scheduleKind === ScheduleKind::PrivateLesson
             && $account->trainerPrivateTimeframesEnabled()
             && (bool) ($validated['ignore_trainer_timeframes'] ?? false);
@@ -219,10 +225,24 @@ class CreateQuickBooking
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function shouldSkipClassPassReservation(ScheduleKind $scheduleKind, array $validated): bool
+    private function isAnytimeRoomRental(ScheduleKind $scheduleKind, array $validated): bool
     {
         return $scheduleKind === ScheduleKind::RoomRental
             && ($validated['rental_mode'] ?? 'preset') === 'anytime';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function hasManualRentalPayment(ScheduleKind $scheduleKind, array $validated): bool
+    {
+        if ($scheduleKind !== ScheduleKind::RoomRental || blank($validated['payment_amount'] ?? null)) {
+            return false;
+        }
+
+        $amountCents = PaymentAmounts::decimalToCents($validated['payment_amount']);
+
+        return $amountCents !== null && $amountCents > 0;
     }
 
     private function allowsPastManualBooking(ScheduleKind $scheduleKind): bool
