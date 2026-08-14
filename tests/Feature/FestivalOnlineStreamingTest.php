@@ -395,7 +395,9 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSee($edition->title)
             ->assertSee($account->name)
             ->assertSee('https://stream.ladna.test/hls/'.$stream->path.'/index.m3u8', false)
-            ->assertSee('https://stream.ladna.test/festival-stream/heartbeat/'.$stream->path, false);
+            ->assertSee('https://stream.ladna.test/festival-stream/heartbeat/'.$stream->path, false)
+            ->assertDontSee('rel="manifest"', false)
+            ->assertDontSee('data-app-update', false);
     }
 
     public function test_minted_viewer_access_is_revoked_with_account_capability_or_subscription(): void

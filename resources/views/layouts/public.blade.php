@@ -1,8 +1,9 @@
 @php
     $systemAppearance = $systemAppearance ?? \App\Support\SystemAppearance::current();
     $isEmbedLayout = $isEmbed ?? false;
+    $isPublicPwaDisabled = $disablePublicPwa ?? false;
     $candidateAccount = $account ?? null;
-    $publicPwaAccount = ! $isEmbedLayout && $candidateAccount instanceof \App\Models\Account && $candidateAccount->exists
+    $publicPwaAccount = ! $isEmbedLayout && ! $isPublicPwaDisabled && $candidateAccount instanceof \App\Models\Account && $candidateAccount->exists
         ? $candidateAccount
         : null;
     $isReadOnlyDemo = $publicPwaAccount?->isReadOnlyDemo() ?? false;

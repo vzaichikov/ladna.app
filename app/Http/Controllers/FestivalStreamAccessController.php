@@ -63,6 +63,7 @@ class FestivalStreamAccessController extends Controller
 
         return view('festivals.portal.stream-player', [
             'account' => $entitlement->account,
+            'disablePublicPwa' => true,
             'stream' => $entitlement->stream,
             'playlistUrl' => $publicUrl.'/hls/'.rawurlencode($path).'/index.m3u8',
             'heartbeatUrl' => $publicUrl.'/festival-stream/heartbeat/'.rawurlencode($path),
