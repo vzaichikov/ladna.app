@@ -20,6 +20,7 @@ use App\Enums\IntegrationProvider;
 use App\Enums\StudioPermission;
 use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Models\Account;
+use App\Models\FestivalActivityLog;
 use App\Models\FestivalCategory;
 use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalEdition;
@@ -745,6 +746,10 @@ class FestivalRegistrationStepperTest extends TestCase
         ])->assertOk()->assertSee('https://www.liqpay.ua/api/3/checkout', false);
         $firstAttempt = FestivalPaymentAttempt::query()->where('festival_charge_id', $charge->id)->sole();
         $this->assertSame($account->id, $firstAttempt->account_id);
+        $paymentStarted = FestivalActivityLog::query()->where('subject_type', $firstAttempt->getMorphClass())->where('subject_id', $firstAttempt->id)->where('action', 'payment.started')->sole();
+        $this->assertSame($entry->id, $paymentStarted->festival_entry_id);
+        $this->assertSame($portalUser->id, $paymentStarted->actor_portal_user_id);
+        $this->assertArrayNotHasKey('gateway_checkout_payload', $paymentStarted->payload);
 
         app(FestivalPaymentService::class)->completeAttempt($firstAttempt, new PaymentCallbackResult(
             orderId: $firstAttempt->order_id,
@@ -754,6 +759,11 @@ class FestivalRegistrationStepperTest extends TestCase
         ));
         $this->assertSame(FestivalPaymentStatus::Failed, $firstAttempt->refresh()->status);
         $this->assertSame(FestivalChargeStatus::Failed, $charge->refresh()->status);
+        $failedActivity = FestivalActivityLog::query()->where('subject_type', $firstAttempt->getMorphClass())->where('subject_id', $firstAttempt->id)->where('action', 'payment.status_changed')->sole();
+        $this->assertSame($entry->id, $failedActivity->festival_entry_id);
+        $this->assertSame('failed', $failedActivity->payload['to_status']);
+        $this->assertNull($failedActivity->actor_user_id);
+        $this->assertNull($failedActivity->actor_portal_user_id);
         $this->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]))
             ->assertOk()
             ->assertSee('border-rose-300 bg-rose-50', false)
@@ -926,9 +936,21 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertSame('request_changes', $changesNotification->payload['decision']);
         $this->assertStringNotContainsString('request_changes', (string) $changesNotification->text);
 
+        $correctionPage = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $application]));
+        $correctionPage->assertOk()
+            ->assertSee(__('app.festival_correction_submit_required'))
+            ->assertSee('id="festival-entry-step-submit-'.$application->id.'"', false)
+            ->assertSee('form="festival-entry-step-submit-'.$application->id.'"', false);
+        $this->assertSame(2, substr_count($correctionPage->getContent(), 'data-festival-progress-action='));
+
         app(StoreFestivalResponse::class)->execute($application->requirements->first(), $portalUser, 'https://video.example/revised');
         $this->assertCount(1, $application->requirements->first()->submissions()->get());
-        app(SubmitFestivalEntryStep::class)->execute($entry->refresh(), $application->refresh());
+        $this->actingAs($portalUser, 'festival')
+            ->post(route('festival.portal.entry-steps.submit', [$account->slug, $entry, $application]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+        $this->assertSame(FestivalEntryStepStatus::Submitted, $application->refresh()->status);
         app(ReviewFestivalEntryStep::class)->execute($application->refresh(), $reviewer, 'approve', 'Qualified.');
         $approvalNotification = FestivalNotification::query()
             ->where('festival_entry_id', $entry->id)

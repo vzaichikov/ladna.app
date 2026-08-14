@@ -67,8 +67,12 @@ class FestivalOperationsAndJudgingTest extends TestCase
         $notification = FestivalNotification::query()->firstOrFail();
         $this->assertSame(FestivalNotificationChannel::Email, $notification->channel);
         $this->assertSame($portalUser->email, $notification->recipient_email);
-        $this->assertSame(__('app.festival_notification_template_entry_submitted_subject', locale: $portalUser->locale), $notification->subject);
+        $this->assertSame(__('app.festival_notification_subject_with_name', [
+            'festival' => $edition->title,
+            'subject' => __('app.festival_notification_template_entry_submitted_subject', locale: $portalUser->locale),
+        ], $portalUser->locale), $notification->subject);
         $this->assertSame($payload['subject'], $notification->payload['subject']);
+        $this->assertSame($edition->title, $notification->payload['festival']);
         $this->assertArrayHasKey('greeting', $notification->payload);
         $this->assertArrayHasKey('lines', $notification->payload);
     }

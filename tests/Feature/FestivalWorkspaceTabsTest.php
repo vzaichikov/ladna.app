@@ -12,6 +12,7 @@ use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\StudioPermission;
 use App\Models\Account;
+use App\Models\FestivalActivityLog;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
 use App\Models\FestivalCharge;
@@ -326,6 +327,108 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertViewHas('tab', 'settings')
             ->assertViewHas('notifications', null)
             ->assertViewHas('announcements', null);
+    }
+
+    public function test_application_history_is_paginated_scoped_and_permission_safe(): void
+    {
+        [$account, $edition, , $portalUser, $entry] = $this->festivalWithEntry();
+        $owner = User::factory()->create(['name' => 'History Owner']);
+        $account->addOwner($owner);
+        $registrationStaff = $this->staff($account, [StudioPermission::ManageFestivalRegistrations]);
+        $financeStaff = $this->staff($account, [StudioPermission::ManageFestivalFinance]);
+
+        foreach (range(1, 21) as $index) {
+            FestivalActivityLog::query()->create([
+                'account_id' => $account->id,
+                'festival_edition_id' => $edition->id,
+                'festival_entry_id' => $entry->id,
+                'actor_portal_user_id' => $portalUser->id,
+                'action' => 'entry.updated',
+                'subject_type' => $entry->getMorphClass(),
+                'subject_id' => $entry->id,
+                'payload' => [
+                    'fields' => ['comments'],
+                    'comment' => 'History event '.$index,
+                ],
+                'occurred_at' => now()->subMinutes(30 - $index),
+            ]);
+        }
+        FestivalActivityLog::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_entry_id' => $entry->id,
+            'actor_user_id' => $owner->id,
+            'action' => 'entry.reviewed',
+            'subject_type' => $entry->getMorphClass(),
+            'subject_id' => $entry->id,
+            'payload' => [
+                'status' => FestivalEntryStatus::Submitted->value,
+                'comment' => 'Newest review detail',
+                'raw_secret' => 'RAW-PAYLOAD-MUST-NOT-RENDER',
+            ],
+            'occurred_at' => now(),
+        ]);
+        FestivalActivityLog::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_entry_id' => $entry->id,
+            'actor_portal_user_id' => $portalUser->id,
+            'action' => 'payment.started',
+            'subject_type' => $entry->getMorphClass(),
+            'subject_id' => $entry->id,
+            'payload' => ['provider' => 'private-provider', 'status' => 'pending'],
+            'occurred_at' => now()->addSecond(),
+        ]);
+
+        $defaultPage = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]));
+        $defaultPage->assertOk()
+            ->assertViewHas('tab', 'details')
+            ->assertSee(__('app.festival_application_tab_details'))
+            ->assertSee(__('app.festival_application_tab_history'));
+
+        $historyPage = $this->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry, 'tab' => 'history']));
+        $historyPage->assertOk()
+            ->assertViewHas('tab', 'history')
+            ->assertSeeInOrder([
+                __('app.festival_activity_action_payment_started'),
+                __('app.festival_activity_action_entry_reviewed'),
+                'Newest review detail',
+            ])
+            ->assertSee('History Owner')
+            ->assertSee('private-provider')
+            ->assertSee(__('app.festival_payment_status_pending'))
+            ->assertDontSee('RAW-PAYLOAD-MUST-NOT-RENDER');
+        $this->assertSame(20, $historyPage->viewData('activityHistory')->count());
+        $this->assertSame(23, $historyPage->viewData('activityHistory')->total());
+
+        $secondPage = $this->get(route('dashboard.accounts.festivals.applications.show', [
+            $account,
+            $edition,
+            $entry,
+            'tab' => 'history',
+            'history_page' => 2,
+        ]));
+        $secondPage->assertOk();
+        $this->assertSame(3, $secondPage->viewData('activityHistory')->count());
+
+        $this->actingAs($registrationStaff)
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry, 'tab' => 'history']))
+            ->assertOk()
+            ->assertViewHas('tab', 'history')
+            ->assertSee(__('app.festival_activity_action_payment_started'))
+            ->assertDontSee('private-provider')
+            ->assertDontSee(__('app.festival_payment_status_pending'));
+
+        $this->actingAs($financeStaff)
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry, 'tab' => 'history']))
+            ->assertOk()
+            ->assertViewHas('tab', 'details')
+            ->assertDontSee(__('app.festival_application_tab_history'));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry, 'tab' => 'invalid']))
+            ->assertOk()
+            ->assertViewHas('tab', 'details');
     }
 
     public function test_ticket_revenue_keeps_mixed_historical_currencies_separate(): void
@@ -782,7 +885,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($registrationStaff)
             ->get($applicationUrl)
             ->assertOk()
-            ->assertDontSee($deleteUrl, false);
+            ->assertDontSee('data-confirm-delete', false);
         $this->actingAs($owner)
             ->get($applicationUrl)
             ->assertOk()
@@ -833,7 +936,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($owner)
             ->get($protectedApplicationUrl)
             ->assertOk()
-            ->assertDontSee($protectedDeleteUrl, false);
+            ->assertDontSee('data-confirm-delete', false);
         $this->actingAs($owner)
             ->from($protectedApplicationUrl)
             ->delete($protectedDeleteUrl)
@@ -910,7 +1013,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($owner)
             ->get($manualApplicationUrl)
             ->assertOk()
-            ->assertDontSee($manualDeleteUrl, false);
+            ->assertDontSee('data-confirm-delete', false);
         $this->actingAs($owner)
             ->from($manualApplicationUrl)
             ->delete($manualDeleteUrl)

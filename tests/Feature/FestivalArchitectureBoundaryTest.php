@@ -2,6 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
+use App\Models\FestivalActivityLog;
+use App\Models\FestivalCategory;
+use App\Models\FestivalEdition;
+use App\Models\FestivalEntry;
+use App\Models\FestivalEntryStep;
+use App\Models\FestivalPortalUser;
+use App\Models\FestivalScheduleSlot;
+use App\Models\FestivalSeries;
+use App\Models\FestivalStage;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Schema;
 use RecursiveDirectoryIterator;
@@ -165,6 +175,88 @@ class FestivalArchitectureBoundaryTest extends TestCase
             ->first(fn (array $foreignKey): bool => $foreignKey['columns'] === ['festival_schedule_slot_id']);
         $this->assertSame('festival_schedule_slots', $sourceSlotForeignKey['foreign_table']);
         $this->assertSame('set null', strtolower((string) $sourceSlotForeignKey['on_delete']));
+    }
+
+    public function test_application_and_participant_history_schema_is_indexed_and_backfills_valid_entry_context(): void
+    {
+        $activityColumns = Schema::getColumnListing('festival_activity_logs');
+        $this->assertContains('festival_entry_id', $activityColumns);
+
+        $activityIndexes = collect(Schema::getIndexes('festival_activity_logs'));
+        $this->assertTrue($activityIndexes->contains(
+            fn (array $index): bool => $index['columns'] === ['festival_entry_id', 'occurred_at', 'id'],
+        ));
+        $activityEntryForeignKey = collect(Schema::getForeignKeys('festival_activity_logs'))
+            ->first(fn (array $foreignKey): bool => $foreignKey['columns'] === ['festival_entry_id']);
+        $this->assertSame('festival_entries', $activityEntryForeignKey['foreign_table']);
+        $this->assertSame('set null', strtolower((string) $activityEntryForeignKey['on_delete']));
+
+        $notificationIndexes = collect(Schema::getIndexes('festival_notifications'));
+        $this->assertTrue($notificationIndexes->contains(
+            fn (array $index): bool => $index['columns'] === ['festival_portal_user_id', 'id'],
+        ));
+
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $series = FestivalSeries::factory()->for($account)->create();
+        $edition = FestivalEdition::factory()->for($series)->create(['account_id' => $account->id]);
+        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+        ]);
+        $step = FestivalEntryStep::factory()->for($entry, 'entry')->create(['account_id' => $account->id]);
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
+        $scheduleSlot = FestivalScheduleSlot::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_stage_id' => $stage->id,
+            'festival_entry_id' => $entry->id,
+            'festival_category_id' => $category->id,
+        ]);
+
+        $entryActivity = FestivalActivityLog::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'action' => 'entry.submitted',
+            'subject_type' => $entry->getMorphClass(),
+            'subject_id' => $entry->id,
+            'occurred_at' => now(),
+        ]);
+        $stepActivity = FestivalActivityLog::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'action' => 'entry_step.submitted',
+            'subject_type' => $step->getMorphClass(),
+            'subject_id' => $step->id,
+            'occurred_at' => now(),
+        ]);
+        $scheduleActivity = FestivalActivityLog::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'action' => 'schedule.created',
+            'subject_type' => $scheduleSlot->getMorphClass(),
+            'subject_id' => $scheduleSlot->id,
+            'occurred_at' => now(),
+        ]);
+        $otherAccount = Account::factory()->create(['enable_festivals' => true]);
+        $invalidActivity = FestivalActivityLog::query()->create([
+            'account_id' => $otherAccount->id,
+            'festival_edition_id' => $edition->id,
+            'action' => 'entry.submitted',
+            'subject_type' => $entry->getMorphClass(),
+            'subject_id' => $entry->id,
+            'occurred_at' => now(),
+        ]);
+
+        $migration = require database_path('migrations/2026_08_14_171749_backfill_festival_activity_log_entry_context.php');
+        $migration->up();
+
+        $this->assertSame($entry->id, $entryActivity->refresh()->festival_entry_id);
+        $this->assertSame($entry->id, $stepActivity->refresh()->festival_entry_id);
+        $this->assertSame($entry->id, $scheduleActivity->refresh()->festival_entry_id);
+        $this->assertNull($invalidActivity->refresh()->festival_entry_id);
     }
 
     public function test_repository_does_not_use_a_root_docs_directory(): void

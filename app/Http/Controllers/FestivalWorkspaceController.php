@@ -17,6 +17,7 @@ use App\Enums\FestivalTicketStatus;
 use App\Http\Requests\FestivalTicketRefundRequest;
 use App\Http\Requests\FestivalTicketVoidRequest;
 use App\Models\Account;
+use App\Models\FestivalActivityLog;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalAnnouncement;
 use App\Models\FestivalCategory;
@@ -29,6 +30,7 @@ use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\User;
+use App\Support\Festivals\FestivalActivityLogPresenter;
 use App\Support\Festivals\FestivalProgramOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\Telegram\Alerts\QueueFestivalOwnerTelegramAlert;
@@ -91,20 +93,49 @@ class FestivalWorkspaceController extends Controller
         ]);
     }
 
-    public function application(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, DeleteFestivalEntry $deleteEntry): View
+    public function application(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, DeleteFestivalEntry $deleteEntry, FestivalActivityLogPresenter $activityPresenter): View
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['registrations'] || $permissions['finance'], 403);
-        $this->loadApplication($festivalEntry, $festivalEdition, $permissions);
+        abort_unless($festivalEntry->account_id === $account->id && $festivalEntry->festival_edition_id === $festivalEdition->id, 404);
+
+        $requestedTab = $request->query('tab');
+        $tab = $permissions['registrations'] && $requestedTab === 'history' ? 'history' : 'details';
+        $activityHistory = null;
+
+        if ($tab === 'history') {
+            $activityHistory = FestivalActivityLog::query()
+                ->where('account_id', $account->id)
+                ->where('festival_edition_id', $festivalEdition->id)
+                ->where('festival_entry_id', $festivalEntry->id)
+                ->with(['actorUser:id,name', 'actorPortalUser:id,first_name,last_name,email,phone'])
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->paginate(20, ['*'], 'history_page')
+                ->withQueryString();
+            $activityHistory->setCollection($activityHistory->getCollection()->map(
+                fn (FestivalActivityLog $activity): array => $activityPresenter->present(
+                    $activity,
+                    $festivalEdition->timezone,
+                    $permissions['finance'],
+                ),
+            ));
+        } else {
+            $this->loadApplication($festivalEntry, $festivalEdition, $permissions);
+        }
 
         return view('festivals.staff.application', [
             'account' => $account,
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
             'entry' => $festivalEntry,
-            'canDeleteApplication' => $permissions['manage'] && $deleteEntry->canDelete($festivalEntry),
-            'categories' => $festivalEdition->categories()->with('direction')->orderBy('name')->get(),
-            'currentStep' => $permissions['registrations']
+            'tab' => $tab,
+            'activityHistory' => $activityHistory,
+            'canDeleteApplication' => $tab === 'details' && $permissions['manage'] && $deleteEntry->canDelete($festivalEntry),
+            'categories' => $tab === 'details'
+                ? $festivalEdition->categories()->with('direction')->orderBy('name')->get()
+                : collect(),
+            'currentStep' => $tab === 'details' && $permissions['registrations']
                 ? $festivalEntry->steps->first(fn ($step): bool => $step->status !== FestivalEntryStepStatus::Approved)
                 : null,
         ]);

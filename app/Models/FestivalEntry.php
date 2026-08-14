@@ -129,6 +129,11 @@ class FestivalEntry extends Model
         return $this->hasMany(FestivalScheduleSlot::class);
     }
 
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(FestivalActivityLog::class);
+    }
+
     public function scoreSheets(): HasMany
     {
         return $this->hasMany(FestivalScoreSheet::class);

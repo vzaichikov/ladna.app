@@ -2,6 +2,7 @@
 
 namespace App\Support\Festivals;
 
+use App\Actions\Festivals\FestivalActivityRecorder;
 use App\Actions\Festivals\FestivalNotificationOutbox;
 use App\Actions\Festivals\FestivalTicketIssuer;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
@@ -45,6 +46,7 @@ class FestivalPaymentService
         private readonly FestivalEntryStepCompletion $completion,
         private readonly FestivalEntryWorkflowState $workflowState,
         private readonly SubmitFestivalEntryStep $submitEntryStep,
+        private readonly FestivalActivityRecorder $activity,
     ) {}
 
     public function startCharge(FestivalCharge $charge, string $provider): PaymentCheckout
@@ -123,6 +125,11 @@ class FestivalPaymentService
                 expiresAt: $attempt->expires_at,
             ), $setting);
             $attempt->forceFill(['gateway_checkout_payload' => $checkout->gatewayPayload])->save();
+            $attempt->setRelation('charge', $charge);
+            $this->activity->record($attempt, 'payment.started', $entry->edition, $entry->portalUser, [
+                'provider' => $provider,
+                'status' => $attempt->status->value,
+            ]);
 
             return $checkout;
         }, 3);
@@ -164,6 +171,8 @@ class FestivalPaymentService
                 return $attempt;
             }
 
+            $previousStatus = $attempt->status;
+
             $status = match ($callback->status) {
                 PaymentCallbackStatus::Paid => FestivalPaymentStatus::Paid,
                 PaymentCallbackStatus::Failed => FestivalPaymentStatus::Failed,
@@ -200,6 +209,14 @@ class FestivalPaymentService
                     ->where('status', FestivalPaymentStatus::Pending->value)
                     ->exists()) {
                 $attempt->charge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
+            }
+
+            if ($status !== $previousStatus) {
+                $this->activity->record($attempt, 'payment.status_changed', $attempt->charge->entry->edition, payload: [
+                    'from_status' => $previousStatus->value,
+                    'to_status' => $status->value,
+                    'charge_status' => $attempt->charge->status->value,
+                ]);
             }
 
             return $attempt->refresh();

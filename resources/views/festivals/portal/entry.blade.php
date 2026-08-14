@@ -72,7 +72,14 @@
         </section>
 
         @if($selectedStep)
-            @php $selectedState = $workflowStates->first(fn($state) => $state['step']->is($selectedStep)); @endphp
+            @php
+                $selectedState = $workflowStates->first(fn($state) => $state['step']->is($selectedStep));
+                $submitFormId = 'festival-entry-step-submit-'.$selectedStep->id;
+                $submitLabel = $selectedStep->status === \App\Enums\FestivalEntryStepStatus::ChangesRequested
+                    || $selectedStep->workflowStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer
+                        ? __('app.submit')
+                        : __('app.continue');
+            @endphp
             <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6" data-festival-step-panel>
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div><p class="text-sm font-semibold text-brand-700">{{ __('app.festival_current_step') }}</p><h2 class="mt-1 text-2xl font-semibold">{{ $selectedStep->workflowStep->title }}</h2>@if($selectedStep->workflowStep->description)<p class="mt-2 max-w-3xl text-sm text-slate-600">{{ $selectedStep->workflowStep->description }}</p>@endif</div>
@@ -80,7 +87,21 @@
                 </div>
 
                 @if($selectedStep->status === \App\Enums\FestivalEntryStepStatus::ChangesRequested)
-                    <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong>{{ __('app.festival_review_comment') }}</strong><p class="mt-1 whitespace-pre-line">{{ $selectedStep->review_notes }}</p>@if($selectedStep->correction_due_at)<p class="mt-2 font-semibold">{{ __('app.festival_correction_due_at') }}: {{ $selectedStep->correction_due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }}</p>@endif</div>
+                    <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                                <strong>{{ __('app.festival_review_comment') }}</strong>
+                                <p class="mt-1 whitespace-pre-line">{{ $selectedStep->review_notes }}</p>
+                                @if($selectedStep->correction_due_at)<p class="mt-2 font-semibold">{{ __('app.festival_correction_due_at') }}: {{ $selectedStep->correction_due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }}</p>@endif
+                                @if($selectedState['mutable'] && !$selectedState['has_blocking_charges'])
+                                    <p class="mt-3 font-semibold">{{ __('app.festival_correction_submit_required') }}</p>
+                                @endif
+                            </div>
+                            @if($selectedState['mutable'] && !$selectedState['has_blocking_charges'])
+                                <x-ui.button type="submit" size="lg" class="w-full shrink-0 sm:w-auto" :form="$submitFormId" data-festival-progress-action :disabled="!$selectedState['requirements_complete']">{{ __('app.submit') }}</x-ui.button>
+                            @endif
+                        </div>
+                    </div>
                 @elseif($selectedStep->review_notes)
                     <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{{ $selectedStep->review_notes }}</div>
                 @endif
@@ -112,13 +133,13 @@
                 @endif
 
                 @if($selectedState['mutable'] && !$selectedState['has_blocking_charges'])
-                    <form method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6">
+                    <form id="{{ $submitFormId }}" method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6">
                         @csrf
                         @if ($errors->default->any())
                             <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{{ $errors->default->first() }}</div>
                         @endif
                         <p data-festival-progress-blocked-message @class(['mb-3 text-right text-sm font-semibold text-amber-800', 'hidden' => $selectedState['requirements_complete']])>{{ __('app.festival_complete_required_fields_first') }}</p>
-                        <div class="flex justify-end"><x-ui.button type="submit" size="lg" data-festival-progress-action :disabled="!$selectedState['requirements_complete']">{{ $selectedStep->workflowStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer ? __('app.submit') : __('app.continue') }}</x-ui.button></div>
+                        <div class="flex justify-end"><x-ui.button type="submit" size="lg" data-festival-progress-action :disabled="!$selectedState['requirements_complete']">{{ $submitLabel }}</x-ui.button></div>
                     </form>
                 @endif
             </section>

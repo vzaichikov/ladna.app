@@ -13,6 +13,7 @@ use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
+use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
 use App\Support\Sms\StudioSmsSender;
@@ -44,8 +45,12 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         return (string) $this->notificationId;
     }
 
-    public function handle(StudioSmsSender $smsSender, SmsAutoTopUpService $autoTopUp, PhoneNumberNormalizer $phones): void
-    {
+    public function handle(
+        StudioSmsSender $smsSender,
+        SmsAutoTopUpService $autoTopUp,
+        PhoneNumberNormalizer $phones,
+        MailDeliverySettingsResolver $mailSettingsResolver,
+    ): void {
         $notification = FestivalNotification::query()->whereKey($this->notificationId)->first();
 
         if (! $notification || in_array($notification->status, [FestivalNotificationStatus::Sent, FestivalNotificationStatus::Cancelled, FestivalNotificationStatus::WaitingForSmsCredit], true)) {
@@ -55,6 +60,12 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         $account = Account::active()->whereKey($notification->account_id)->where('enable_festivals', true)->first();
         if (! $account) {
             $this->cancel($notification, 'account_state_changed');
+
+            return;
+        }
+
+        if ($account->isReadOnlyDemo()) {
+            $this->cancel($notification, 'read_only_demo');
 
             return;
         }
@@ -75,6 +86,7 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         $claimed = FestivalNotification::query()
             ->whereKey($notification->id)
             ->whereIn('status', [FestivalNotificationStatus::Pending->value, FestivalNotificationStatus::Failed->value])
+            ->where('attempts', '<', $this->tries)
             ->update([
                 'status' => FestivalNotificationStatus::Sending->value,
                 'attempts' => DB::raw('attempts + 1'),
@@ -115,14 +127,19 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
                     ? route('festival.portal.guest.dashboard', $account->slug)
                     : route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);
             }
-            Mail::to($notification->recipient_email)->send(new FestivalPortalMail(
+            $mailSettings = $mailSettingsResolver->resolve();
+            $mail = (new FestivalPortalMail(
                 subjectLine: (string) ($notification->subject ?? __('app.festival_notification_subject', locale: $locale)),
                 greeting: (string) ($payload['greeting'] ?? __('app.festival_notification_greeting', ['name' => $notification->recipient_name], $locale)),
                 lines: array_values(array_map('strval', (array) ($payload['lines'] ?? [$notification->text]))),
                 actionLabel: $actionLabel,
                 actionUrl: $actionUrl,
                 messageLocale: $locale,
-            ));
+            ))->from($mailSettings->fromEmail, $mailSettings->fromName);
+
+            Mail::mailer($mailSettings->mailer)
+                ->to($notification->recipient_email, $notification->recipient_name ?: $notification->recipient_email)
+                ->send($mail);
             $this->markSent($notification);
         } catch (Throwable $exception) {
             $notification->forceFill(['status' => FestivalNotificationStatus::Failed, 'failed_at' => now(), 'failure_reason' => str($exception->getMessage())->limit(1000)])->save();

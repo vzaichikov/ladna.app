@@ -6,6 +6,7 @@ use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalWorkflowStepType;
+use Illuminate\Support\Str;
 
 final class FestivalNotificationRenderer
 {
@@ -20,9 +21,9 @@ final class FestivalNotificationRenderer
             $isAuthored = filled($payload['subject'] ?? null) || filled($payload['body'] ?? null) || filled(data_get($payload, 'lines.0'));
 
             return new FestivalNotificationMessage(
-                subject: $subject,
+                subject: $this->emailSubject($subject, $payload, $locale),
                 greeting: __('app.festival_notification_greeting', ['name' => $recipientName], $locale),
-                lines: [$body],
+                lines: $this->emailLines([$body], $payload, $locale),
                 smsText: $isAuthored ? $subject."\n".$body : __('app.festival_notification_template_announcement_sms', locale: $locale),
             );
         }
@@ -53,13 +54,17 @@ final class FestivalNotificationRenderer
             return $this->requirementReviewed($locale, $recipientName, $payload, $replacements, $actionUrl);
         }
 
-        $subject = __('app.festival_notification_template_'.$type->value.'_subject', $replacements, $locale);
+        $subject = $this->emailSubject(
+            __('app.festival_notification_template_'.$type->value.'_subject', $replacements, $locale),
+            $payload,
+            $locale,
+        );
         $body = __('app.festival_notification_template_'.$type->value.'_body', $replacements, $locale);
 
         return new FestivalNotificationMessage(
             subject: $subject,
             greeting: __('app.festival_notification_greeting', ['name' => $recipientName], $locale),
-            lines: [$body],
+            lines: $this->emailLines([$body], $payload, $locale),
             smsText: __('app.festival_notification_template_'.$type->value.'_sms', $replacements, $locale),
             actionLabel: $this->actionLabel($type, $actionUrl, $locale),
             actionUrl: $actionUrl,
@@ -82,9 +87,13 @@ final class FestivalNotificationRenderer
         $this->appendReviewDetails($lines, $payload, $locale);
 
         return new FestivalNotificationMessage(
-            subject: __('app.festival_notification_template_entry_reviewed_subject', $replacements, $locale),
+            subject: $this->emailSubject(
+                __('app.festival_notification_template_entry_reviewed_subject', $replacements, $locale),
+                $payload,
+                $locale,
+            ),
             greeting: __('app.festival_notification_greeting', ['name' => $recipientName], $locale),
-            lines: $lines,
+            lines: $this->emailLines($lines, $payload, $locale),
             smsText: __('app.festival_notification_template_entry_reviewed_'.$statusKey.'_sms', $replacements, $locale),
             actionLabel: $this->actionLabel(FestivalNotificationType::EntryReviewed, $actionUrl, $locale),
             actionUrl: $actionUrl,
@@ -113,9 +122,13 @@ final class FestivalNotificationRenderer
         $this->appendReviewDetails($lines, $payload, $locale);
 
         return new FestivalNotificationMessage(
-            subject: __('app.festival_notification_template_entry_step_reviewed_subject', $replacements, $locale),
+            subject: $this->emailSubject(
+                __('app.festival_notification_template_entry_step_reviewed_subject', $replacements, $locale),
+                $payload,
+                $locale,
+            ),
             greeting: __('app.festival_notification_greeting', ['name' => $recipientName], $locale),
-            lines: $lines,
+            lines: $this->emailLines($lines, $payload, $locale),
             smsText: __('app.festival_notification_template_entry_step_reviewed_'.$template.'_sms', $replacements, $locale),
             actionLabel: $this->actionLabel(FestivalNotificationType::EntryStepReviewed, $actionUrl, $locale),
             actionUrl: $actionUrl,
@@ -136,9 +149,13 @@ final class FestivalNotificationRenderer
         $this->appendReviewDetails($lines, $payload, $locale);
 
         return new FestivalNotificationMessage(
-            subject: __('app.festival_notification_template_requirement_reviewed_subject', $replacements, $locale),
+            subject: $this->emailSubject(
+                __('app.festival_notification_template_requirement_reviewed_subject', $replacements, $locale),
+                $payload,
+                $locale,
+            ),
             greeting: __('app.festival_notification_greeting', ['name' => $recipientName], $locale),
-            lines: $lines,
+            lines: $this->emailLines($lines, $payload, $locale),
             smsText: __('app.festival_notification_template_requirement_reviewed_sms', $replacements, $locale),
             actionLabel: $this->actionLabel(FestivalNotificationType::RequirementReviewed, $actionUrl, $locale),
             actionUrl: $actionUrl,
@@ -179,5 +196,39 @@ final class FestivalNotificationRenderer
             FestivalNotificationType::TicketsIssued => __('app.festival_open_tickets', locale: $locale),
             default => null,
         };
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function emailSubject(string $subject, array $payload, string $locale): string
+    {
+        $festival = trim((string) ($payload['festival'] ?? ''));
+
+        if ($festival === '') {
+            return $subject;
+        }
+
+        return Str::limit((string) __('app.festival_notification_subject_with_name', [
+            'festival' => $festival,
+            'subject' => $subject,
+        ], $locale), 255);
+    }
+
+    /**
+     * @param  array<int, string>  $lines
+     * @param  array<string, mixed>  $payload
+     * @return array<int, string>
+     */
+    private function emailLines(array $lines, array $payload, string $locale): array
+    {
+        $festival = trim((string) ($payload['festival'] ?? ''));
+
+        if ($festival === '') {
+            return $lines;
+        }
+
+        return [
+            (string) __('app.festival_notification_festival_name', ['festival' => $festival], $locale),
+            ...$lines,
+        ];
     }
 }

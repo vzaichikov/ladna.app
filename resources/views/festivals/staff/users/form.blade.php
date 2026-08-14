@@ -2,7 +2,7 @@
     $isJudge = $portalUser->role === \App\Enums\FestivalPortalRole::Judge;
     $isGuest = $portalUser->role === \App\Enums\FestivalPortalRole::Guest;
     $isRegistrant = $portalUser->role === \App\Enums\FestivalPortalRole::Registrant;
-    $tab = $isJudge ? 'judges' : ($isGuest ? 'guests' : 'participants');
+    $directoryTab = $isJudge ? 'judges' : ($isGuest ? 'guests' : 'participants');
 @endphp
 
 @extends('layouts.app')
@@ -20,6 +20,15 @@
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">{{ session('status') }}</div>
     @endif
 
+    @if ($portalUser->exists && $isRegistrant)
+        <nav class="flex gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1" aria-label="{{ __('app.festival_participant_edit_tabs') }}">
+            @foreach (['profile', 'notifications'] as $participantTab)
+                <a href="{{ route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser, 'tab' => $participantTab]) }}" class="whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold {{ ($pageTab ?? 'profile') === $participantTab ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950' }}" @if(($pageTab ?? 'profile') === $participantTab) aria-current="page" @endif>{{ __('app.festival_participant_edit_tab_'.$participantTab) }}</a>
+            @endforeach
+        </nav>
+    @endif
+
+    @if (($pageTab ?? 'profile') === 'profile')
     <form method="POST" action="{{ $portalUser->exists ? route('dashboard.accounts.festivals.users.update', [$account, $edition, $portalUser]) : route('dashboard.accounts.festivals.users.store', [$account, $edition, $portalUser->role->value]) }}" class="max-w-4xl space-y-6">
         @csrf
         @if ($portalUser->exists) @method('PUT') @endif
@@ -79,7 +88,7 @@
         </section>
 
         <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <x-ui.button :href="($returnTo ?? null) === 'ticket-issuance' ? route('dashboard.accounts.festivals.tickets.issue', [$account, $edition]) : route('dashboard.accounts.festivals.users.index', [$account, $edition, 'tab' => $tab])" variant="secondary">{{ __('app.cancel') }}</x-ui.button>
+            <x-ui.button :href="($returnTo ?? null) === 'ticket-issuance' ? route('dashboard.accounts.festivals.tickets.issue', [$account, $edition]) : route('dashboard.accounts.festivals.users.index', [$account, $edition, 'tab' => $directoryTab])" variant="secondary">{{ __('app.cancel') }}</x-ui.button>
             <x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" />{{ __('app.save') }}</x-ui.button>
         </div>
     </form>
@@ -108,6 +117,28 @@
                     <x-ui.empty-state :title="__('app.festival_participants_empty')" icon="users" class="m-5" />
                 @endforelse
             </x-ui.panel>
+        </section>
+    @endif
+    @elseif ($portalUser->exists && $isRegistrant)
+        <section aria-labelledby="festival-participant-notifications-title">
+            <div>
+                <h2 id="festival-participant-notifications-title" class="text-xl font-semibold text-slate-950">{{ __('app.festival_participant_notifications_history') }}</h2>
+                <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_participant_notifications_history_copy') }}</p>
+            </div>
+
+            <div class="mt-5 space-y-4">
+                @forelse ($festivalNotifications as $notification)
+                    <x-festivals.staff.notification-card
+                        :$notification
+                        :timezone="$notification->edition?->timezone ?? $edition->timezone"
+                        :show-recipient="false"
+                        :show-context="true"
+                    />
+                @empty
+                    <x-ui.empty-state icon="bell">{{ __('app.festival_participant_notifications_empty') }}</x-ui.empty-state>
+                @endforelse
+            </div>
+            <div>{{ $festivalNotifications->links() }}</div>
         </section>
     @endif
 </x-festivals.staff.workspace>

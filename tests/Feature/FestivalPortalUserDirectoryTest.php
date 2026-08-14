@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Actions\Festivals\SyncFestivalProfileParticipant;
 use App\Enums\AccountRole;
+use App\Enums\FestivalNotificationChannel;
+use App\Enums\FestivalNotificationStatus;
+use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalPortalRole;
 use App\Enums\StudioPermission;
 use App\Models\Account;
@@ -11,6 +14,7 @@ use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
+use App\Models\FestivalNotification;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
@@ -62,6 +66,118 @@ class FestivalPortalUserDirectoryTest extends TestCase
         $listed = $filtered->viewData('portalUsers')->first();
         $this->assertSame(2, $listed->participants_count);
         $this->assertSame(1, $listed->current_edition_entries_count);
+    }
+
+    public function test_registrant_edit_has_paginated_account_wide_notification_history(): void
+    {
+        [$account, $edition, $category] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Current edition entry',
+        ]);
+        $otherEdition = FestivalEdition::factory()->published()->for(FestivalSeries::factory()->for($account))->create([
+            'account_id' => $account->id,
+            'title' => 'Previous Festival Edition',
+        ]);
+        $otherCategory = FestivalCategory::factory()->for($otherEdition)->create(['account_id' => $account->id]);
+        $otherEntry = FestivalEntry::factory()->for($otherCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $otherEdition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Previous edition entry',
+        ]);
+
+        foreach (range(1, 21) as $index) {
+            FestivalNotification::query()->create([
+                'account_id' => $account->id,
+                'festival_portal_user_id' => $portalUser->id,
+                'festival_edition_id' => $edition->id,
+                'festival_entry_id' => $entry->id,
+                'type' => FestivalNotificationType::EntrySubmitted,
+                'channel' => FestivalNotificationChannel::Email,
+                'status' => FestivalNotificationStatus::Sent,
+                'recipient_email' => $portalUser->email,
+                'recipient_name' => $portalUser->displayName(),
+                'subject' => 'Participant message '.$index,
+                'text' => 'Participant notification '.$index,
+                'dedupe_key' => 'participant-history-'.$portalUser->id.'-'.$index,
+                'payload' => [],
+                'sent_at' => now(),
+            ]);
+        }
+        FestivalNotification::query()->create([
+            'account_id' => $account->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'festival_edition_id' => $otherEdition->id,
+            'festival_entry_id' => $otherEntry->id,
+            'type' => FestivalNotificationType::EntryStepReviewed,
+            'channel' => FestivalNotificationChannel::Email,
+            'status' => FestivalNotificationStatus::Failed,
+            'recipient_email' => $portalUser->email,
+            'recipient_name' => $portalUser->displayName(),
+            'subject' => 'Cross-edition notification',
+            'text' => '<script>escaped notification</script>',
+            'dedupe_key' => 'participant-history-cross-edition-'.$portalUser->id,
+            'payload' => [],
+            'failed_at' => now(),
+            'failure_reason' => 'Mailbox unavailable',
+        ]);
+
+        $otherPortalUser = FestivalPortalUser::factory()->for($account)->create();
+        FestivalNotification::query()->create([
+            'account_id' => $account->id,
+            'festival_portal_user_id' => $otherPortalUser->id,
+            'festival_edition_id' => $edition->id,
+            'type' => FestivalNotificationType::Announcement,
+            'channel' => FestivalNotificationChannel::Email,
+            'status' => FestivalNotificationStatus::Sent,
+            'recipient_email' => $otherPortalUser->email,
+            'subject' => 'Other participant secret',
+            'text' => 'Other participant secret',
+            'dedupe_key' => 'other-participant-history-'.$otherPortalUser->id,
+            'payload' => [],
+        ]);
+
+        $profilePage = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser]));
+        $profilePage->assertOk()
+            ->assertViewHas('pageTab', 'profile')
+            ->assertSee(__('app.festival_participant_edit_tab_profile'))
+            ->assertSee(__('app.festival_participant_edit_tab_notifications'))
+            ->assertDontSee('Cross-edition notification');
+
+        $notificationPage = $this->get(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser, 'tab' => 'notifications']));
+        $notificationPage->assertOk()
+            ->assertViewHas('pageTab', 'notifications')
+            ->assertSee('Previous Festival Edition')
+            ->assertSee('Previous edition entry')
+            ->assertSee('Cross-edition notification')
+            ->assertSee('Mailbox unavailable')
+            ->assertSee('&lt;script&gt;escaped notification&lt;/script&gt;', false)
+            ->assertDontSee('<script>escaped notification</script>', false)
+            ->assertDontSee('Other participant secret');
+        $this->assertSame(20, $notificationPage->viewData('festivalNotifications')->count());
+        $this->assertSame(22, $notificationPage->viewData('festivalNotifications')->total());
+
+        $secondPage = $this->get(route('dashboard.accounts.festivals.users.edit', [
+            $account,
+            $edition,
+            $portalUser,
+            'tab' => 'notifications',
+            'notifications_page' => 2,
+        ]));
+        $secondPage->assertOk();
+        $this->assertSame(2, $secondPage->viewData('festivalNotifications')->count());
+
+        $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
+        $this->get(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $judge, 'tab' => 'notifications']))
+            ->assertOk()
+            ->assertViewHas('pageTab', 'profile')
+            ->assertDontSee(__('app.festival_participant_edit_tab_notifications'));
     }
 
     public function test_registration_managers_can_manage_participant_profiles_but_not_judges(): void

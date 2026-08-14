@@ -3,9 +3,12 @@
 namespace Tests\Feature;
 
 use App\Actions\Festivals\FestivalNotificationOutbox;
+use App\Enums\AccountMode;
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
+use App\Enums\IntegrationCategory;
+use App\Enums\IntegrationProvider;
 use App\Enums\SmsDeliveryStatus;
 use App\Enums\TelegramAlertStatus;
 use App\Enums\TelegramAlertType;
@@ -22,6 +25,7 @@ use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTicketOrder;
+use App\Models\IntegrationSetting;
 use App\Models\SmsDelivery;
 use App\Models\TelegramAlert;
 use App\Models\TelegramBotInstallation;
@@ -29,6 +33,7 @@ use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\User;
 use App\Support\Festivals\FestivalNotificationRenderer;
+use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\ResumeSmsNotificationsAfterTopUp;
 use App\Support\Sms\SmsAutoTopUpService;
@@ -57,6 +62,19 @@ class FestivalNotificationDeliveryTest extends TestCase
     public function test_email_is_always_queued_and_sent_while_sms_is_an_explicit_per_scenario_channel(): void
     {
         [$account, $edition, $portalUser] = $this->festival(locale: 'en');
+        config(['mail.default' => 'log']);
+        IntegrationSetting::factory()->create([
+            'provider' => IntegrationProvider::MailDelivery->value,
+            'category' => IntegrationCategory::Email->value,
+            'is_enabled' => true,
+            'credentials' => [
+                'engine' => 'sendpulse_api',
+                'fallback_engine' => 'log',
+                'mail_from_email' => 'festival@ladna.test',
+                'mail_from_name' => 'Ladna Festival',
+                'sendpulse_api_key' => 'festival-mail-api-key',
+            ],
+        ]);
         FestivalNotificationPreference::query()->create([
             'account_id' => $account->id,
             'festival_portal_user_id' => $portalUser->id,
@@ -92,7 +110,123 @@ class FestivalNotificationDeliveryTest extends TestCase
         app()->call([new SendFestivalNotification($email->id), 'handle']);
 
         $this->assertSame(FestivalNotificationStatus::Sent, $email->refresh()->status);
-        Mail::assertSent(FestivalPortalMail::class, fn (FestivalPortalMail $mail): bool => $mail->subjectLine === $email->subject);
+        Mail::assertSent(FestivalPortalMail::class, fn (FestivalPortalMail $mail): bool => $mail->subjectLine === $email->subject
+            && $mail->usesMailer(MailDeliverySettingsResolver::MailerName)
+            && $mail->from === [[
+                'name' => 'Ladna Festival',
+                'address' => 'festival@ladna.test',
+            ]]);
+    }
+
+    public function test_read_only_demo_neither_queues_nor_delivers_festival_notifications(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival(locale: 'en');
+        $account->forceFill(['mode' => AccountMode::DemoReadonly])->save();
+        $edition->unsetRelation('account');
+
+        $this->assertNull(app(FestivalNotificationOutbox::class)->queue(
+            $portalUser,
+            $edition,
+            FestivalNotificationType::EntrySubmitted,
+            ['entry_code' => 'DEMO-QUEUE'],
+        ));
+        $ticketOrder = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'buyer_email' => $portalUser->email,
+        ]);
+        $this->assertNull(app(FestivalNotificationOutbox::class)->queueForTicketOrder($ticketOrder, [
+            'tickets_count' => 1,
+        ]));
+        $this->assertSame(0, FestivalNotification::query()->whereBelongsTo($account)->count());
+        $this->assertSame(0, TelegramAlert::query()->whereBelongsTo($account)->count());
+        Queue::assertNothingPushed();
+
+        $account->forceFill(['mode' => AccountMode::Live])->save();
+        $edition->unsetRelation('account');
+        $notification = app(FestivalNotificationOutbox::class)->queue(
+            $portalUser,
+            $edition,
+            FestivalNotificationType::EntrySubmitted,
+            ['entry_code' => 'DEMO-DELIVERY'],
+        );
+        $this->assertNotNull($notification);
+
+        $account->forceFill(['mode' => AccountMode::DemoReadonly])->save();
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Cancelled, $notification->refresh()->status);
+        $this->assertSame('read_only_demo', $notification->failure_reason);
+        Mail::assertNothingSent();
+    }
+
+    public function test_dispatch_command_recovers_stale_sending_notifications_without_touching_active_delivery(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival(locale: 'en');
+        $attributes = [
+            'account_id' => $account->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'festival_edition_id' => $edition->id,
+            'type' => FestivalNotificationType::EntrySubmitted,
+            'channel' => FestivalNotificationChannel::Email,
+            'status' => FestivalNotificationStatus::Sending,
+            'recipient_email' => $portalUser->email,
+            'recipient_name' => $portalUser->displayName(),
+            'subject' => 'Festival application submitted',
+            'text' => 'Application submitted.',
+            'payload' => ['lines' => ['Application submitted.']],
+            'attempts' => 1,
+            'available_at' => now(),
+        ];
+        $stale = FestivalNotification::query()->create([
+            ...$attributes,
+            'dedupe_key' => 'stale-sending-'.fake()->uuid(),
+        ]);
+        DB::table((new FestivalNotification)->getTable())
+            ->where('id', $stale->id)
+            ->update([
+                'created_at' => now()->subMinutes(6),
+                'updated_at' => now()->subMinutes(6),
+            ]);
+        $active = FestivalNotification::query()->create([
+            ...$attributes,
+            'dedupe_key' => 'active-sending-'.fake()->uuid(),
+        ]);
+        Queue::fake();
+
+        $this->artisan('festivals:dispatch-notifications')->assertSuccessful();
+
+        $this->assertSame(FestivalNotificationStatus::Failed, $stale->refresh()->status);
+        $this->assertSame('delivery_interrupted', $stale->failure_reason);
+        $this->assertSame(FestivalNotificationStatus::Sending, $active->refresh()->status);
+        Queue::assertPushed(SendFestivalNotification::class, fn (SendFestivalNotification $job): bool => $job->notificationId === $stale->id);
+        Queue::assertNotPushed(SendFestivalNotification::class, fn (SendFestivalNotification $job): bool => $job->notificationId === $active->id);
+    }
+
+    public function test_delivery_claim_never_exceeds_the_job_attempt_limit(): void
+    {
+        [, $edition, $portalUser] = $this->festival(locale: 'en');
+        $notification = app(FestivalNotificationOutbox::class)->queue(
+            $portalUser,
+            $edition,
+            FestivalNotificationType::EntrySubmitted,
+            ['entry_code' => 'ATTEMPT-LIMIT'],
+        );
+        $this->assertNotNull($notification);
+        $notification->forceFill([
+            'status' => FestivalNotificationStatus::Failed,
+            'attempts' => 5,
+            'failed_at' => now(),
+            'failure_reason' => 'previous_delivery_failure',
+        ])->save();
+
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Failed, $notification->refresh()->status);
+        $this->assertSame(5, $notification->attempts);
+        $this->assertSame('previous_delivery_failure', $notification->failure_reason);
+        Mail::assertNothingSent();
     }
 
     public function test_sms_waiting_for_credit_is_visible_and_can_be_resumed_without_changing_email(): void
@@ -120,12 +254,20 @@ class FestivalNotificationDeliveryTest extends TestCase
         $autoTopUp = Mockery::mock(SmsAutoTopUpService::class);
         $autoTopUp->shouldReceive('attempt')->once()->with(Mockery::on(fn (Account $candidate): bool => $candidate->is($account)))->andReturnNull();
 
-        (new SendFestivalNotification($sms->id))->handle($sender, $autoTopUp, app(PhoneNumberNormalizer::class));
+        (new SendFestivalNotification($sms->id))->handle(
+            $sender,
+            $autoTopUp,
+            app(PhoneNumberNormalizer::class),
+            app(MailDeliverySettingsResolver::class),
+        );
 
         $this->assertSame(FestivalNotificationStatus::WaitingForSmsCredit, $sms->refresh()->status);
         $this->assertSame('waiting_for_sms_credit', $sms->failure_reason);
         $email = FestivalNotification::query()->where('channel', FestivalNotificationChannel::Email->value)->firstOrFail();
         $this->assertSame(FestivalNotificationStatus::Pending, $email->status);
+        $this->assertSame($edition->title.' — Program update', $email->subject);
+        $this->assertStringContainsString('Фестиваль: '.$edition->title, (string) $email->text);
+        $this->assertStringContainsString('The program is ready.', (string) $email->text);
 
         $this->assertSame(1, app(ResumeSmsNotificationsAfterTopUp::class)->execute($account));
         $this->assertSame(FestivalNotificationStatus::Pending, $sms->refresh()->status);
@@ -253,10 +395,35 @@ class FestivalNotificationDeliveryTest extends TestCase
                 $this->assertNotSame('', trim($message->subject), $locale.':'.$type->value.':subject');
                 $this->assertNotSame('', trim($message->emailText()), $locale.':'.$type->value.':email');
                 $this->assertNotSame('', trim($message->smsText), $locale.':'.$type->value.':sms');
+                $this->assertStringContainsString('Ladna Fest', $message->subject, $locale.':'.$type->value.':subject-festival');
+                $this->assertStringContainsString('Ladna Fest', $message->emailText(), $locale.':'.$type->value.':email-festival');
                 $this->assertStringNotContainsString('festival_notification_template_', $message->subject);
                 $this->assertStringNotContainsString('festival_notification_template_', $message->smsText);
             }
         }
+    }
+
+    public function test_festival_mail_renders_the_festival_name_in_its_subject_and_body(): void
+    {
+        $message = app(FestivalNotificationRenderer::class)->render(
+            FestivalNotificationType::EntrySubmitted,
+            'en',
+            'Recipient',
+            [
+                'festival' => 'Ladna Fest',
+                'entry_code' => 'ENTRY-1',
+            ],
+        );
+        $mail = new FestivalPortalMail(
+            subjectLine: $message->subject,
+            greeting: $message->greeting,
+            lines: $message->lines,
+            messageLocale: 'en',
+        );
+
+        $mail->assertHasSubject('Ladna Fest — Festival application submitted');
+        $mail->assertSeeInHtml('Festival: Ladna Fest');
+        $mail->assertSeeInText('Festival: Ladna Fest');
     }
 
     public function test_review_notifications_localize_decisions_and_explain_the_next_payment_step(): void

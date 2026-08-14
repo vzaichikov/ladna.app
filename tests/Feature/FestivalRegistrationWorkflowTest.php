@@ -14,6 +14,7 @@ use App\Enums\FestivalRequirementType;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Event;
+use App\Models\FestivalActivityLog;
 use App\Models\FestivalCategory;
 use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalDirection;
@@ -595,6 +596,28 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $this->assertSame($customers, Customer::query()->count());
         $this->assertSame($events, Event::query()->count());
         $this->assertDatabaseHas('festival_entries', ['account_id' => $account->id, 'festival_portal_user_id' => $portalUser->id]);
+
+        $entry = FestivalEntry::query()->where('festival_portal_user_id', $portalUser->id)->sole();
+        $createdActivity = FestivalActivityLog::query()->where('festival_entry_id', $entry->id)->where('action', 'entry.created')->sole();
+        $this->assertSame($portalUser->id, $createdActivity->actor_portal_user_id);
+        $this->assertSame([], $createdActivity->payload);
+
+        $this->put(route('festival.portal.entries.update', [$account->slug, $entry]), [
+            'festival_category_id' => $category->id,
+            'participant_ids' => [$participant->id],
+            'entry_name' => 'Updated independent act',
+            'comments' => 'Private changed value',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $updatedActivity = FestivalActivityLog::query()->where('festival_entry_id', $entry->id)->where('action', 'entry.updated')->sole();
+        $this->assertEqualsCanonicalizing(['entry_name', 'comments'], $updatedActivity->payload['fields']);
+        $this->assertStringNotContainsString('Private changed value', json_encode($updatedActivity->payload, JSON_THROW_ON_ERROR));
+
+        $this->post(route('festival.portal.entries.withdraw', [$account->slug, $entry]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+        $withdrawnActivity = FestivalActivityLog::query()->where('festival_entry_id', $entry->id)->where('action', 'entry.withdrawn')->sole();
+        $this->assertSame($portalUser->id, $withdrawnActivity->actor_portal_user_id);
     }
 
     public function test_portal_separates_festivals_from_applications_and_reuses_the_cover_on_entry_cards(): void

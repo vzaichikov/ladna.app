@@ -53,6 +53,15 @@ class FestivalNotificationOutbox
         abort_unless($portalUser->account_id === $edition->account_id, 404);
         $edition->loadMissing('account');
 
+        if ($edition->account->isReadOnlyDemo()) {
+            return null;
+        }
+
+        $payload = [
+            ...$payload,
+            'festival' => $edition->title,
+        ];
+
         $dedupeBase = implode(':', [
             $type->value,
             $edition->id,
@@ -115,10 +124,15 @@ class FestivalNotificationOutbox
     }
 
     /** @param array<string, mixed> $payload */
-    public function queueForTicketOrder(FestivalTicketOrder $order, array $payload, ?string $dedupeSuffix = null): FestivalNotification
+    public function queueForTicketOrder(FestivalTicketOrder $order, array $payload, ?string $dedupeSuffix = null): ?FestivalNotification
     {
         $order->loadMissing(['account', 'edition', 'portalUser']);
         abort_unless($order->account_id === $order->edition->account_id, 404);
+
+        if ($order->account->isReadOnlyDemo()) {
+            return null;
+        }
+
         $guest = $order->portalUser?->role === FestivalPortalRole::Guest
             && $order->portalUser->account_id === $order->account_id
             ? $order->portalUser

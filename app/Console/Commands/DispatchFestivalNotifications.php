@@ -18,6 +18,8 @@ use Illuminate\Console\Command;
 #[Description('Fill and dispatch due Festival notifications and expire stale admission holds')]
 class DispatchFestivalNotifications extends Command
 {
+    private const int StaleSendingAfterMinutes = 5;
+
     public function handle(FestivalNotificationOutbox $outbox): int
     {
         $limit = max(1, min(1000, (int) $this->option('limit')));
@@ -36,6 +38,15 @@ class DispatchFestivalNotifications extends Command
         }
 
         FestivalTicketOrder::query()->where('status', 'pending')->where('expires_at', '<=', now())->update(['status' => 'expired']);
+        $recovered = FestivalNotification::query()
+            ->where('status', FestivalNotificationStatus::Sending->value)
+            ->where('updated_at', '<=', now()->subMinutes(self::StaleSendingAfterMinutes))
+            ->update([
+                'status' => FestivalNotificationStatus::Failed->value,
+                'failed_at' => now(),
+                'failure_reason' => 'delivery_interrupted',
+                'updated_at' => now(),
+            ]);
         $notifications = FestivalNotification::query()
             ->whereIn('status', [FestivalNotificationStatus::Pending->value, FestivalNotificationStatus::Failed->value])
             ->where('attempts', '<', 5)
@@ -47,7 +58,7 @@ class DispatchFestivalNotifications extends Command
             SendFestivalNotification::dispatch($notification->id);
         }
 
-        $this->info("Announcements: {$announcements->count()}; notifications: {$notifications->count()}.");
+        $this->info("Announcements: {$announcements->count()}; recovered: {$recovered}; notifications: {$notifications->count()}.");
 
         return self::SUCCESS;
     }

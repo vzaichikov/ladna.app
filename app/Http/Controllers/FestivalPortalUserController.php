@@ -14,6 +14,7 @@ use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -135,12 +136,30 @@ class FestivalPortalUserController extends Controller
         $permissions = $this->permissions($request, $account, $festivalEdition);
         $this->assertPortalUser($account, $festivalPortalUser);
         $this->authorizeRole($festivalPortalUser->role, $permissions);
-        $festivalPortalUser->load([
-            'participants' => fn ($query) => $query->withCount('entries')->orderBy('archived_at')->orderBy('last_name')->orderBy('first_name'),
-            'judgeAssignments' => fn ($query) => $query->with('edition')->latest(),
-        ]);
+        $pageTab = $festivalPortalUser->role === FestivalPortalRole::Registrant
+            && $request->query('tab') === 'notifications'
+            ? 'notifications'
+            : 'profile';
+        $festivalNotifications = null;
 
-        return $this->formView($account, $festivalEdition, $festivalPortalUser, $permissions);
+        if ($pageTab === 'notifications') {
+            $festivalNotifications = $festivalPortalUser->festivalNotifications()
+                ->where('account_id', $account->id)
+                ->with([
+                    'edition:id,account_id,title,timezone',
+                    'entry:id,account_id,festival_edition_id,code,entry_name',
+                ])
+                ->latest('id')
+                ->paginate(20, ['*'], 'notifications_page')
+                ->withQueryString();
+        } else {
+            $festivalPortalUser->load([
+                'participants' => fn ($query) => $query->withCount('entries')->orderBy('archived_at')->orderBy('last_name')->orderBy('first_name'),
+                'judgeAssignments' => fn ($query) => $query->with('edition')->latest(),
+            ]);
+        }
+
+        return $this->formView($account, $festivalEdition, $festivalPortalUser, $permissions, pageTab: $pageTab, festivalNotifications: $festivalNotifications);
     }
 
     public function update(UpdateFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalPortalUser $festivalPortalUser, SyncFestivalProfileParticipant $syncParticipant): RedirectResponse
@@ -178,15 +197,19 @@ class FestivalPortalUserController extends Controller
     }
 
     /** @param array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} $permissions */
-    private function formView(Account $account, FestivalEdition $edition, FestivalPortalUser $portalUser, array $permissions, ?string $returnTo = null): View
+    private function formView(Account $account, FestivalEdition $edition, FestivalPortalUser $portalUser, array $permissions, ?string $returnTo = null, string $pageTab = 'profile', ?LengthAwarePaginator $festivalNotifications = null): View
     {
-        $portalUser->loadMissing('profileParticipant');
+        if ($pageTab === 'profile') {
+            $portalUser->loadMissing('profileParticipant');
+        }
 
         return view('festivals.staff.users.form', [
             'account' => $account,
             'edition' => $edition,
             'portalUser' => $portalUser,
             'returnTo' => $returnTo,
+            'pageTab' => $pageTab,
+            'festivalNotifications' => $festivalNotifications,
             'workspacePermissions' => $permissions,
         ]);
     }

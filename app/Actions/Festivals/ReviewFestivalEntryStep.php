@@ -122,7 +122,11 @@ class ReviewFestivalEntryStep
                 ])->save();
             }
 
-            $this->activity->record($step, 'entry_step.'.$decision, $step->entry->edition, $reviewer, ['step' => $step->workflowStep->code, 'comment' => $comment]);
+            $this->activity->record($step, 'entry_step.'.$decision, $step->entry->edition, $reviewer, [
+                'step' => $step->workflowStep->code,
+                'comment' => $comment,
+                'correction_due_at' => $decision === 'request_changes' ? $correctionDueAt : null,
+            ]);
             $currentStepIndex = $step->entry->steps->search(fn (FestivalEntryStep $entryStep): bool => $entryStep->is($step));
             $nextStep = $decision === 'approve' && $currentStepIndex !== false
                 ? $step->entry->steps->slice($currentStepIndex + 1)->first(fn (FestivalEntryStep $entryStep): bool => $entryStep->status !== FestivalEntryStepStatus::Approved)
