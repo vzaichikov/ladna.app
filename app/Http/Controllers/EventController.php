@@ -93,7 +93,7 @@ class EventController extends Controller
     {
         $this->ensureEventBelongsToAccount($account, $event);
         abort_unless($request->user()?->can('manageEvents', $account), 403);
-        $event->load(['rooms', 'media', 'ticketTypes']);
+        $event->load(['rooms', 'media', 'ticketTypes'])->loadCount('orders');
 
         return view('events.form', $this->formData($account, $event));
     }

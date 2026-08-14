@@ -82,6 +82,11 @@ class Event extends Model
         return $this->hasMany(EventTicketType::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function eventTicketTypes(): HasMany
+    {
+        return $this->ticketTypes();
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(EventOrder::class);

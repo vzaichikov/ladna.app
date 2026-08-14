@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\EventOrderStatus;
 use Database\Factories\EventTicketTypeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -54,8 +55,28 @@ class EventTicketType extends Model
         return $this->hasMany(EventOrderItem::class);
     }
 
+    public function scopeWithSoldOrHeldQuantity(Builder $query): Builder
+    {
+        return $query->withSum([
+            'orderItems as sold_or_held_quantity' => fn (Builder $query) => $query
+                ->whereHas('order', fn (Builder $query) => $query
+                    ->whereIn('status', [
+                        EventOrderStatus::Pending->value,
+                        EventOrderStatus::Paid->value,
+                        EventOrderStatus::RefundRequired->value,
+                    ])
+                    ->where(fn (Builder $query) => $query
+                        ->where('status', '!=', EventOrderStatus::Pending->value)
+                        ->orWhere('expires_at', '>', now()))),
+        ], 'quantity');
+    }
+
     public function soldOrHeldQuantity(): int
     {
+        if (array_key_exists('sold_or_held_quantity', $this->getAttributes())) {
+            return (int) $this->getAttribute('sold_or_held_quantity');
+        }
+
         return (int) $this->orderItems()
             ->whereHas('order', fn ($query) => $query
                 ->whereIn('status', [

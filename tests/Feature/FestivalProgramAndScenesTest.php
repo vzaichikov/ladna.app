@@ -56,7 +56,7 @@ class FestivalProgramAndScenesTest extends TestCase
         $this->assertInstanceOf(LengthAwarePaginator::class, $index->viewData('stages'));
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.stages.create', [$account, $edition]))
             ->assertOk()
-            ->assertSee(route('help.show', 'festivals').'#help-section-festivals-program-scenes', false);
+            ->assertSee(route('help.show', 'festival-program-timeline').'#help-section-festival-program-timeline-program-scenes', false);
 
         $this->actingAs($owner)->patch(route('dashboard.accounts.festivals.stages.toggle', [$account, $edition, $outdoor]))->assertRedirect();
         $this->assertFalse($outdoor->refresh()->is_active);

@@ -18,6 +18,8 @@
         <p class="crm-page-copy">{{ __('app.event_scanner_online_only') }}</p>
     </header>
 
+    <x-ui.event-navigation :account="$account" :event="$event" active="scanner" />
+
     <section class="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
         <div class="overflow-hidden rounded-2xl border border-stone-200 bg-slate-950 shadow-crm">
             <video data-scanner-video class="aspect-[3/4] w-full object-cover sm:aspect-video" playsinline muted></video>

@@ -30,7 +30,8 @@
                         @foreach ($topLevelPages as $pageSlug => $navPage)
                             @php
                                 $childPages = $childPagesByParent->get($pageSlug, collect());
-                                $isExpandedGroup = $activeParentSlug === $pageSlug;
+                                $isExpandedGroup = $activeParentSlug === $pageSlug
+                                    || ($slug === $pageSlug && ($navPage['expand_children_on_parent'] ?? false));
                                 $isActiveGroup = $slug === $pageSlug || $isExpandedGroup;
                             @endphp
 

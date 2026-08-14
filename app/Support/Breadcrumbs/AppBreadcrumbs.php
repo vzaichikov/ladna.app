@@ -143,6 +143,7 @@ final class AppBreadcrumbs
         $event = $this->modelParameter($request, 'event');
         $events = $this->item(__('app.events'), route('dashboard.accounts.events.index', $account));
         $eventLabel = $this->modelLabel($event, __('app.event'));
+        $eventPage = $this->item($eventLabel, route('dashboard.accounts.events.edit', [$account, $event]));
 
         return match ($routeName) {
             'dashboard.accounts.events.edit' => [
@@ -150,16 +151,51 @@ final class AppBreadcrumbs
                 $events,
                 $this->item(__('app.breadcrumb_edit_item', ['item' => $eventLabel])),
             ],
+            'dashboard.accounts.events.ticket-types.index' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.event_ticket_types')),
+            ],
+            'dashboard.accounts.events.ticket-types.create' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.event_ticket_types'), route('dashboard.accounts.events.ticket-types.index', [$account, $event])),
+                $this->item(__('app.event_add_ticket_type')),
+            ],
+            'dashboard.accounts.events.ticket-types.edit' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.event_ticket_types'), route('dashboard.accounts.events.ticket-types.index', [$account, $event])),
+                $this->item(__('app.breadcrumb_edit_item', [
+                    'item' => $this->modelLabel($this->modelParameter($request, 'eventTicketType'), __('app.event_ticket_type')),
+                ])),
+            ],
+            'dashboard.accounts.events.tickets.index' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.event_issued_tickets')),
+            ],
+            'dashboard.accounts.events.tickets.issue.create' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.event_issued_tickets'), route('dashboard.accounts.events.tickets.index', [$account, $event])),
+                $this->item(__('app.event_issue_tickets')),
+            ],
             'dashboard.accounts.events.orders.index' => [
                 ...$base,
                 $events,
-                $this->item($eventLabel, route('dashboard.accounts.events.edit', [$account, $event])),
+                $eventPage,
                 $this->item(__('app.orders')),
             ],
             'dashboard.accounts.events.scanner' => [
                 ...$base,
                 $events,
-                $this->item($eventLabel, route('dashboard.accounts.events.edit', [$account, $event])),
+                $eventPage,
                 $this->item(__('app.scanner')),
             ],
             default => throw new LogicException("No event breadcrumb definition exists for route [{$routeName}]."),

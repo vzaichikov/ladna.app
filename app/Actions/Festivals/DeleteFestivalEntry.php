@@ -16,18 +16,20 @@ use Illuminate\Validation\ValidationException;
 
 class DeleteFestivalEntry
 {
+    public const string CONFIRMATION_PHRASE = 'delete';
+
     public function __construct(private readonly FestivalActivityRecorder $activity) {}
 
-    public function canDelete(FestivalEntry $entry): bool
+    public function requiresPaymentConfirmation(FestivalEntry $entry): bool
     {
         $entry->loadMissing('charges.paymentAttempts');
 
-        return ! $this->hasProtectedPaymentHistory($entry, $entry->charges);
+        return $this->hasProtectedPaymentHistory($entry, $entry->charges);
     }
 
-    public function execute(FestivalEntry $entry, User $actor): void
+    public function execute(FestivalEntry $entry, User $actor, bool $paymentDeletionConfirmed = false): void
     {
-        $files = DB::transaction(function () use ($entry, $actor): Collection {
+        $files = DB::transaction(function () use ($entry, $actor, $paymentDeletionConfirmed): Collection {
             $entry = FestivalEntry::query()
                 ->with('edition')
                 ->whereKey($entry->id)
@@ -39,8 +41,9 @@ class DeleteFestivalEntry
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
+            $requiresPaymentConfirmation = $this->hasProtectedPaymentHistory($entry, $charges);
 
-            if ($this->hasProtectedPaymentHistory($entry, $charges)) {
+            if ($requiresPaymentConfirmation && ! $paymentDeletionConfirmed) {
                 throw ValidationException::withMessages([
                     'festival_application' => __('app.festival_application_delete_payment_history'),
                 ]);
@@ -56,6 +59,7 @@ class DeleteFestivalEntry
             $this->activity->record($entry, 'entry.deleted', $entry->edition, $actor, [
                 'code' => $entry->code,
                 'entry_name' => $entry->entry_name,
+                'payment_history_force_deleted' => $requiresPaymentConfirmation,
             ]);
             $entry->delete();
 

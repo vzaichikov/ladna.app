@@ -6,7 +6,7 @@
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <x-ui.page-header :title="__('app.festival_program_title')" :copy="__('app.festival_program_copy')">
         <x-slot:actions>
-            <x-ui.button :href="route('help.show', 'festivals').'#help-section-festivals-program-scenes'" variant="secondary" target="_blank" rel="noopener">
+            <x-ui.button :href="route('help.show', 'festival-program-timeline').'#help-section-festival-program-timeline-program-scenes'" variant="secondary" target="_blank" rel="noopener">
                 <x-ui.icon name="circle-help" class="h-4 w-4" />
                 {{ __('app.help') }}
             </x-ui.button>

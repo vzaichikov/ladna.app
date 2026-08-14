@@ -24,7 +24,7 @@
                     </x-ui.button>
                 </form>
             @endif
-            <x-ui.button :href="route('help.show', 'festivals').'#help-section-festivals-online-streaming'" variant="secondary" target="_blank" rel="noopener">
+            <x-ui.button :href="route('help.show', 'festival-online-streaming').'#help-section-festival-online-streaming-online-streaming'" variant="secondary" target="_blank" rel="noopener">
                 <x-ui.icon name="circle-help" class="h-4 w-4" />
                 {{ __('app.festival_stream_full_help') }}
             </x-ui.button>
@@ -205,7 +205,7 @@
                         <li class="rounded-xl bg-white/80 px-3 py-2">{{ __('app.festival_stream_obs_audio_settings') }}</li>
                         <li class="rounded-xl bg-white/80 px-3 py-2">{{ __('app.festival_stream_obs_start_help') }}</li>
                     </ul>
-                    <a href="{{ route('help.show', 'festivals').'#help-section-festivals-online-streaming' }}" target="_blank" rel="noopener" class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:text-brand-600">
+                    <a href="{{ route('help.show', 'festival-online-streaming').'#help-section-festival-online-streaming-online-streaming' }}" target="_blank" rel="noopener" class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:text-brand-600">
                         {{ __('app.festival_stream_full_help') }}
                         <x-ui.icon name="arrow-up-right" class="h-4 w-4" />
                     </a>

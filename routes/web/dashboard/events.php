@@ -3,6 +3,8 @@
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventOrderController;
 use App\Http\Controllers\EventScannerController;
+use App\Http\Controllers\EventTicketController;
+use App\Http\Controllers\EventTicketIssuanceController;
 use App\Http\Controllers\EventTicketTypeController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,9 +17,15 @@ Route::delete('accounts/{account}/events/{event:slug}', [EventController::class,
 Route::post('accounts/{account}/events/{event:slug}/publish', [EventController::class, 'publish'])->scopeBindings()->name('accounts.events.publish');
 Route::post('accounts/{account}/events/{event:slug}/cancel', [EventController::class, 'cancel'])->scopeBindings()->name('accounts.events.cancel');
 Route::post('accounts/{account}/events/{event:slug}/archive', [EventController::class, 'archive'])->scopeBindings()->name('accounts.events.archive');
+Route::get('accounts/{account}/events/{event:slug}/ticket-types', [EventTicketTypeController::class, 'index'])->scopeBindings()->name('accounts.events.ticket-types.index');
+Route::get('accounts/{account}/events/{event:slug}/ticket-types/create', [EventTicketTypeController::class, 'create'])->scopeBindings()->name('accounts.events.ticket-types.create');
 Route::post('accounts/{account}/events/{event:slug}/ticket-types', [EventTicketTypeController::class, 'store'])->scopeBindings()->name('accounts.events.ticket-types.store');
+Route::get('accounts/{account}/events/{event:slug}/ticket-types/{eventTicketType}/edit', [EventTicketTypeController::class, 'edit'])->scopeBindings()->name('accounts.events.ticket-types.edit');
 Route::put('accounts/{account}/events/{event:slug}/ticket-types/{eventTicketType}', [EventTicketTypeController::class, 'update'])->scopeBindings()->name('accounts.events.ticket-types.update');
 Route::delete('accounts/{account}/events/{event:slug}/ticket-types/{eventTicketType}', [EventTicketTypeController::class, 'destroy'])->scopeBindings()->name('accounts.events.ticket-types.destroy');
+Route::get('accounts/{account}/events/{event:slug}/tickets', [EventTicketController::class, 'index'])->scopeBindings()->name('accounts.events.tickets.index');
+Route::get('accounts/{account}/events/{event:slug}/tickets/issue', [EventTicketIssuanceController::class, 'create'])->scopeBindings()->name('accounts.events.tickets.issue.create');
+Route::post('accounts/{account}/events/{event:slug}/tickets/issue', [EventTicketIssuanceController::class, 'store'])->scopeBindings()->name('accounts.events.tickets.issue.store');
 Route::get('accounts/{account}/events/{event:slug}/orders', [EventOrderController::class, 'index'])->scopeBindings()->name('accounts.events.orders.index');
 Route::post('accounts/{account}/events/{event:slug}/orders/{eventOrder}/resend', [EventOrderController::class, 'resend'])->scopeBindings()->name('accounts.events.orders.resend');
 Route::post('accounts/{account}/events/{event:slug}/orders/{eventOrder}/refund', [EventOrderController::class, 'refund'])->scopeBindings()->name('accounts.events.orders.refund');

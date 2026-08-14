@@ -11,12 +11,20 @@
                     method="POST"
                     action="{{ route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $entry]) }}"
                     data-confirm-delete
-                    data-confirm-title="{{ __('app.festival_delete_application_title') }}"
-                    data-confirm-body="{{ __('app.festival_delete_application_copy') }}"
+                    data-confirm-title="{{ __($deleteApplicationRequiresPaymentConfirmation ? 'app.festival_delete_paid_application_title' : 'app.festival_delete_application_title') }}"
+                    data-confirm-body="{{ __($deleteApplicationRequiresPaymentConfirmation ? 'app.festival_delete_paid_application_copy' : 'app.festival_delete_application_copy') }}"
                     data-confirm-accept="{{ __('app.festival_delete_application') }}"
+                    @if ($deleteApplicationRequiresPaymentConfirmation)
+                        data-confirm-phrase="{{ $deleteApplicationConfirmationPhrase }}"
+                        data-confirm-phrase-help="{{ __('app.festival_delete_paid_application_confirmation_help', ['phrase' => $deleteApplicationConfirmationPhrase]) }}"
+                        data-confirm-phrase-placeholder="{{ $deleteApplicationConfirmationPhrase }}"
+                    @endif
                 >
                     @csrf
                     @method('DELETE')
+                    @if ($deleteApplicationRequiresPaymentConfirmation)
+                        <input type="hidden" name="approval" value="" data-confirm-approval-output>
+                    @endif
                     <x-ui.button type="submit" variant="danger">
                         <x-ui.icon name="trash" class="h-4 w-4" />{{ __('app.festival_delete_application') }}
                     </x-ui.button>
@@ -32,6 +40,9 @@
     </x-ui.page-header>
 
     @error('festival_application')
+        <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
+    @enderror
+    @error('approval')
         <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
     @enderror
 

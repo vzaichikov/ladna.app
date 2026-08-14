@@ -14,6 +14,7 @@ use App\Enums\FestivalScheduleSlotType;
 use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
+use App\Http\Requests\DeleteFestivalEntryRequest;
 use App\Http\Requests\FestivalTicketRefundRequest;
 use App\Http\Requests\FestivalTicketVoidRequest;
 use App\Models\Account;
@@ -131,7 +132,11 @@ class FestivalWorkspaceController extends Controller
             'entry' => $festivalEntry,
             'tab' => $tab,
             'activityHistory' => $activityHistory,
-            'canDeleteApplication' => $tab === 'details' && $permissions['manage'] && $deleteEntry->canDelete($festivalEntry),
+            'canDeleteApplication' => $tab === 'details' && $permissions['manage'],
+            'deleteApplicationRequiresPaymentConfirmation' => $tab === 'details'
+                && $permissions['manage']
+                && $deleteEntry->requiresPaymentConfirmation($festivalEntry),
+            'deleteApplicationConfirmationPhrase' => DeleteFestivalEntry::CONFIRMATION_PHRASE,
             'categories' => $tab === 'details'
                 ? $festivalEdition->categories()->with('direction')->orderBy('name')->get()
                 : collect(),
@@ -141,7 +146,7 @@ class FestivalWorkspaceController extends Controller
         ]);
     }
 
-    public function destroyApplication(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, DeleteFestivalEntry $deleteEntry): RedirectResponse
+    public function destroyApplication(DeleteFestivalEntryRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, DeleteFestivalEntry $deleteEntry): RedirectResponse
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['manage'], 403);
@@ -150,7 +155,7 @@ class FestivalWorkspaceController extends Controller
         abort_unless($actor instanceof User, 403);
 
         try {
-            $deleteEntry->execute($festivalEntry, $actor);
+            $deleteEntry->execute($festivalEntry, $actor, $request->paymentDeletionConfirmed());
         } catch (QueryException $exception) {
             if (($exception->errorInfo[0] ?? null) !== '23000') {
                 throw $exception;

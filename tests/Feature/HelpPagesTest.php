@@ -107,91 +107,131 @@ class HelpPagesTest extends TestCase
         }
     }
 
-    public function test_festivals_help_explains_the_independent_competition_flow(): void
+    public function test_festivals_help_is_a_structured_chapter_with_focused_pages(): void
     {
-        $this->get(route('help.show', 'festivals', false))
+        $chapterSlugs = [
+            'festival-edition-public',
+            'festival-users-access',
+            'festival-registration-settings',
+            'festival-applications-payments',
+            'festival-program-timeline',
+            'festival-judging-results',
+            'festival-tickets-entrance',
+            'festival-online-streaming',
+            'festival-communication-history',
+        ];
+
+        $indexResponse = $this->get(route('help.index', [], false))
             ->assertOk()
-            ->assertSee('Фестивалі та змагання', false)
-            ->assertSee('Події -&gt; Фестивалі', false)
-            ->assertSee('Серії фестивалів', false)
-            ->assertSee('Оплати й тарифи', false)
-            ->assertSee('біля використаного пакета видно назву створеного фестивалю', false)
-            ->assertSee('сама створює публічну адресу', false)
-            ->assertSee('загальне меню студії змінюється на окреме меню фестивалю', false)
-            ->assertSee('Одразу під Оглядом є Користувачі', false)
-            ->assertSee('окремі сторінки Заявки та Виступи', false)
-            ->assertSee('Як вести профілі учасників і суддів та надати вхід', false)
-            ->assertSee('Профілі суддів завжди створює команда', false)
-            ->assertSee('Кабінет учасника або Кабінет судді', false)
-            ->assertSee('Email і пароль доступні завжди', false)
-            ->assertSee('Роль профілю не змінюється після створення', false)
-            ->assertSee('Фестиваль живе окремо від Подій', false)
-            ->assertSee('не створює картки клієнтів студії', false)
-            ->assertSee('Огляд веде на окремі списки Сцен, Напрямків, Категорій, Сценаріїв реєстрації, Кроків сценарію, Полів реєстрації та Внесків', false)
-            ->assertSee('Розділи контенту, Документи та Медіа', false)
-            ->assertSee('Кожен список має пошук за назвою або основним текстом, фільтр стану та додаткові важливі фільтри', false)
-            ->assertSee('Додавання й редагування завжди відкривають окрему сторінку; вбудованих у список форм немає', false)
-            ->assertSee('Під час активного фільтра порядок не змінюють', false)
-            ->assertSee('Категорію, як і решту налаштувань, додають і редагують на окремій сторінці', false)
-            ->assertSee('основні дані, умови участі, виступ, реєстрація та вимоги категорії', false)
-            ->assertSee('У категорії можна оформити вимоги як форматований опис', false)
-            ->assertSee('напрямок групує категорії; категорія задає правила участі, опис вимог і сценарій; кроки сценарію містять поля реєстрації й внески', false)
-            ->assertSee('категорію серед карток, згрупованих за напрямками', false)
-            ->assertSee('актуальні напрямок, межі складу й віку, тривалість виступу, строк реєстрації та опис вимог', false)
-            ->assertSee('Уже створена заявка також показує актуальні напрямок, межі, строк реєстрації та вимоги вибраної категорії', false)
-            ->assertSee('Поки заявка є чернеткою й не має жодної історії оплат, представник може змінити категорію', false)
-            ->assertSee('Повторне збереження тексту або завантаження файла замінює поточну відповідь', false)
-            ->assertSee('Стандартний шаблон містить Заявку та кваліфікацію, Оплату участі, Технічну анкету й Підсумок', false)
-            ->assertSee('повертає його на доопрацювання з обовʼязковим коментарем і строком', false)
-            ->assertSee('У Заявках є всі реєстрації та фільтри за назвою, станом і категорією', false)
-            ->assertSee('категорію можна змінити на будь-якому кроці до початку оплати', false)
-            ->assertSee('Менеджер фестивалю може назавжди видалити заявку лише тоді, коли в ній не було жодної спроби або зафіксованої оплати', false)
-            ->assertSee('кожна оплата займає всю ширину й розміщується окремим блоком одна під одною', false)
-            ->assertSee('зберігається без перезавантаження сторінки', false)
-            ->assertSee('У Виступах видно лише заявки з повністю підтвердженою реєстрацією', false)
-            ->assertSee('окремий підсумок лише для читання та посилання на повʼязану заявку', false)
-            ->assertSee('Поданий лист залишається доступним для виправлення', false)
-            ->assertSee('Налаштування -&gt; Сцени', false)
-            ->assertSee('кожна сцена має окрему вкладку', false)
-            ->assertSee('Власний часовий блок має довільну назву й час', false)
-            ->assertSee('Лише заголовки можуть містити інші елементи', false)
-            ->assertSee('кнопками вище, нижче, вкласти та винести', false)
-            ->assertSee('що перетинається з іншим часовим елементом на тій самій сцені', false)
-            ->assertSee('не потрапляють до особистого розкладу учасника', false)
-            ->assertSee('кожен квиток отримує окремий захищений QR-код', false)
-            ->assertSee('Кожна нова покупка відбувається через окремий Кабінет гостя', false)
-            ->assertSee('Онлайн-квитки є необовʼязковими й початково вимкнені', false)
-            ->assertSee('один активний або очікуваний онлайн-квиток', false)
-            ->assertSee('до трьох активних публічних IP-адрес', false)
-            ->assertSee('натисніть Зупинити', false)
-            ->assertSee('Як налаштувати OBS або резервний YouTube і перевірити трансляцію', false)
-            ->assertSee('ID YouTube видно браузеру', false)
-            ->assertSee('Щоб змінити джерело, спочатку натисніть Зупинити', false)
-            ->assertSee('Налаштування -&gt; Трансляція', false)
-            ->assertSee('відкрийте вкладку Превʼю', false)
-            ->assertSee('ручного стану Почати/Зупинити', false)
-            ->assertSee('Квитки й доступи не змінюються під час ручного перемикання джерела', false)
-            ->assertSee('CBR, бітрейт 6000 Кбіт/с', false)
-            ->assertSee('AAC, 160 Кбіт/с і 48 кГц', false)
-            ->assertSee('12–16 секунд', false)
-            ->assertSee('змініть його після зупинки джерела', false)
-            ->assertSee('ключовим кадром кожні дві секунди', false)
-            ->assertSee('навантаження 100 глядачів', false)
-            ->assertSee('assets/help/screenshots/festival-online-stream.png', false)
-            ->assertSee('assets/help/screenshots/festivals-workspace.png', false)
-            ->assertSee('assets/help/screenshots/festival-settings-crud.png', false)
-            ->assertSee('assets/help/screenshots/festival-scenes-settings.png', false)
-            ->assertSee('assets/help/screenshots/festival-program.png', false)
-            ->assertSee('assets/help/screenshots/festival-users.png', false)
-            ->assertDontSee('копію вибраного напрямку', false)
-            ->assertDontSee('умови залишаються доступними лише для читання', false)
-            ->assertDontSee('Класифікації', false)
-            ->assertDontSee('класифікації', false)
-            ->assertDontSee('tenant', false)
-            ->assertDontSee('callback', false)
-            ->assertDontSee('Customer', false)
-            ->assertDontSee('Event', false)
-            ->assertDontSee('CRM', false);
+            ->assertSee('data-help-submenu="festivals"', false);
+
+        $parentResponse = $this->get(route('help.show', 'festivals', false))
+            ->assertOk()
+            ->assertSee('Як користуватися фестивальним довідником', false)
+            ->assertSee('У якому порядку підготувати фестиваль', false)
+            ->assertSee('Як розподілити роботу між командою', false);
+
+        $this->assertMatchesRegularExpression(
+            '/<details[^>]*data-help-submenu="festivals"[^>]*\sopen\b/',
+            $parentResponse->getContent(),
+        );
+
+        foreach ($chapterSlugs as $slug) {
+            $page = config("help.pages.{$slug}");
+
+            $this->assertSame('festivals', $page['parent'] ?? null);
+
+            $indexResponse->assertSee(route('help.show', $slug, false), false);
+            $parentResponse->assertSee($page['title'], false);
+
+            $this->get(route('help.show', $slug, false))
+                ->assertOk()
+                ->assertSee($page['title'], false)
+                ->assertSee('assets/help/screenshots/', false);
+        }
+    }
+
+    public function test_festival_help_chapters_cover_the_current_owner_workflows(): void
+    {
+        $expectedCopy = [
+            'festival-edition-public' => [
+                'Як придбати доступ і створити випуск',
+                'Як оформити сторінку й опублікувати фестиваль',
+                'мобільну обкладинку',
+                'редагування випуску блокується до рішення платформи',
+                'assets/help/screenshots/festival-branding.png',
+            ],
+            'festival-users-access' => [
+                'Користувачі, ролі та кабінети',
+                'Кабінет гостя',
+                'Моя команда',
+                'вкладка Сповіщення',
+                'активного призначення',
+            ],
+            'festival-registration-settings' => [
+                'Категорії, сценарії, поля та внески',
+                'умова-підтвердження',
+                'редагування після підтвердження',
+                'відносно відкриття реєстрації',
+                'поточну валюту студії',
+            ],
+            'festival-applications-payments' => [
+                'Зміни очікують підтвердження',
+                'вкладками Деталі та Історія',
+                'Подати заявку й оплатити',
+                'приватні файли й оплати',
+                'Сторінка Виступи містить тільки прийняті заявки',
+            ],
+            'festival-program-timeline' => [
+                'Створити відсутні',
+                'Перегенерувати повністю',
+                'Одна дія Заповнити готує або замінює списки для всіх активних сцен',
+                'Почати фестиваль',
+                'assets/help/screenshots/festival-timeline.png',
+            ],
+            'festival-judging-results' => [
+                'відкрити поданий лист на виправлення лише з причиною',
+                'попереднього перегляду',
+                'точної нічиєї',
+                'всі чотири голоси активних суддів',
+                'assets/help/screenshots/festival-judging-criteria.png',
+            ],
+            'festival-tickets-entrance' => [
+                'Кабінеті гостя',
+                'Видати відсутні',
+                'Повторний запуск не дублює',
+                'Два телефони не можуть одночасно прийняти той самий квиток',
+                'assets/help/screenshots/festival-ticket-issuance.png',
+            ],
+            'festival-online-streaming' => [
+                'H.264 CBR 6000 Кбіт/с',
+                'вкладку Превʼю',
+                'натисніть Почати',
+                'до трьох одночасно активних публічних IP-адрес',
+                'assets/help/screenshots/festival-online-stream.png',
+            ],
+            'festival-communication-history' => [
+                'Email учаснику завжди залишається увімкненим',
+                'повідомлення власникам студії через загального бота Ladna',
+                'вкладки Історія, Оголошення й Налаштування',
+                'вкладка Сповіщення',
+                'assets/help/screenshots/festival-communication.png',
+            ],
+        ];
+
+        foreach ($expectedCopy as $slug => $needles) {
+            $response = $this->get(route('help.show', $slug, false))
+                ->assertOk()
+                ->assertDontSee('MVP', false)
+                ->assertDontSee('tenant', false)
+                ->assertDontSee('Customer', false)
+                ->assertDontSee('Event', false)
+                ->assertDontSee('CRM', false);
+
+            foreach ($needles as $needle) {
+                $response->assertSee($needle, false);
+            }
+        }
     }
 
     public function test_help_screenshot_catalog_has_no_missing_or_duplicate_files(): void
@@ -223,12 +263,20 @@ class HelpPagesTest extends TestCase
         $this->assertSame($configuredPaths, $diskPaths);
     }
 
-    public function test_owner_help_search_finds_festival_obs_setup(): void
+    public function test_owner_help_search_finds_focused_festival_chapters(): void
     {
-        foreach (['як підключити OBS до фестивалю', 'як перевірити трансляцію без квитка'] as $question) {
+        $questions = [
+            'як підключити OBS до фестивалю' => 'festival-online-streaming',
+            'як перевірити трансляцію без квитка' => 'festival-online-streaming',
+            'як автоматично створити програму фестивалю' => 'festival-program-timeline',
+            'як видати квитки учасникам і суддям' => 'festival-tickets-entrance',
+            'де перевірити помилку доставки фестивалю' => 'festival-communication-history',
+        ];
+
+        foreach ($questions as $question => $expectedSlug) {
             $result = app(OwnerHelpIndex::class)->search($question, 1);
 
-            $this->assertSame('festivals', $result[0]['slug'] ?? null, $question);
+            $this->assertSame($expectedSlug, $result[0]['slug'] ?? null, $question);
         }
     }
 

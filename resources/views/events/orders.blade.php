@@ -4,10 +4,8 @@
 
 @section('content')
 <div class="space-y-6">
-    <header>
-        <h1 class="crm-page-title">{{ __('app.event_orders') }}</h1>
-        <p class="crm-page-copy">{{ __('app.event_orders_help') }}</p>
-    </header>
+    <x-ui.page-header :title="__('app.event_orders')" :copy="__('app.event_orders_help')" />
+    <x-ui.event-navigation :account="$account" :event="$event" active="orders" />
     @if ($urgentRefundsCount > 0)
         <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 font-semibold text-rose-900">{{ trans_choice('app.event_urgent_refunds', $urgentRefundsCount, ['count' => $urgentRefundsCount]) }}</div>
     @endif
@@ -22,7 +20,13 @@
                         <td class="px-5 py-4">
                             @php($latestEmailDelivery = $order->emailDeliveries->first())
                             <strong>{{ $order->buyer_name }}</strong>
-                            <span class="block text-xs text-slate-500">{{ $order->buyer_email }}@if ($order->buyer_phone) · {{ $order->buyer_phone }}@endif</span>
+                            @if (filled($order->buyer_email) || filled($order->buyer_phone))
+                                <span class="block text-xs text-slate-500">
+                                    @if (filled($order->buyer_email)){{ $order->buyer_email }}@endif
+                                    @if (filled($order->buyer_email) && filled($order->buyer_phone)) · @endif
+                                    @if (filled($order->buyer_phone)){{ $order->buyer_phone }}@endif
+                                </span>
+                            @endif
                             <span class="mt-1 block text-xs text-slate-500">{{ __('app.event_delivery_audit') }}: {{ $order->emailDeliveries->count() }}@if ($latestEmailDelivery) · {{ __($latestEmailDelivery->status->labelKey()) }} · {{ $latestEmailDelivery->created_at->format('d.m H:i') }}@endif</span>
                         </td>
                         <td class="px-5 py-4">
@@ -47,7 +51,7 @@
                                 </div>
                             </details>
                         </td>
-                        <td class="px-5 py-4">{{ number_format($order->amount_cents / 100, 2) }} {{ $order->currency }}</td>
+                        <td class="px-5 py-4">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</td>
                         <td class="px-5 py-4">
                             <span class="{{ in_array($order->status, [\App\Enums\EventOrderStatus::Paid, \App\Enums\EventOrderStatus::Refunded], true) ? 'crm-status-active' : (in_array($order->status, [\App\Enums\EventOrderStatus::RefundRequired, \App\Enums\EventOrderStatus::PaidRequiresRefund, \App\Enums\EventOrderStatus::Failed], true) ? 'crm-status-danger' : 'crm-status-muted') }}">
                                 {{ __('app.event_order_status_'.$order->status->value) }}
@@ -56,7 +60,7 @@
                         </td>
                         <td class="px-5 py-4">
                             <div class="space-y-2">
-                                @if ($order->tickets->isNotEmpty())
+                                @if ($order->tickets->isNotEmpty() && filled($order->buyer_email))
                                     <form method="POST" action="{{ route('dashboard.accounts.events.orders.resend', [$account, $event, $order]) }}">@csrf<x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.event_resend_tickets') }}</x-ui.button></form>
                                 @endif
                                 @if (in_array($order->status, [\App\Enums\EventOrderStatus::Paid, \App\Enums\EventOrderStatus::RefundRequired, \App\Enums\EventOrderStatus::PaidRequiresRefund], true) && $order->amount_cents > 0)

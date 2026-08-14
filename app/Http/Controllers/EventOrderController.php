@@ -44,6 +44,7 @@ class EventOrderController extends Controller
         abort_unless($request->user()?->can('manageEvents', $account), 403);
         abort_if(
             $event->status === EventStatus::Cancelled
+            || blank($eventOrder->buyer_email)
             || $eventOrder->tickets()->where('status', EventTicketStatus::Valid->value)->doesntExist(),
             422,
         );

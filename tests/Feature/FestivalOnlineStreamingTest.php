@@ -416,7 +416,7 @@ class FestivalOnlineStreamingTest extends TestCase
             ->assertSee('1920x1080')
             ->assertSee('6000')
             ->assertSee('12–16')
-            ->assertSee(route('help.show', 'festivals').'#help-section-festivals-online-streaming', false)
+            ->assertSee(route('help.show', 'festival-online-streaming').'#help-section-festival-online-streaming-online-streaming', false)
             ->assertSee(__('app.festival_stream_start'))
             ->assertSee(__('app.festival_stream_stop'))
             ->assertDontSee('name="opens_at"', false)

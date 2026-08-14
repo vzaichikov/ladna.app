@@ -30,17 +30,13 @@
                         <span data-copy-label>{{ __('app.copy_link') }}</span>
                     </x-ui.button>
                 @endif
-                <x-ui.button :href="route('dashboard.accounts.events.orders.index', [$account, $event])" variant="secondary">
-                    <x-ui.icon name="receipt-text" class="h-4 w-4" />
-                    {{ __('app.event_orders') }}
-                </x-ui.button>
-                <x-ui.button :href="route('dashboard.accounts.events.scanner', [$account, $event])" variant="secondary">
-                    <x-ui.icon name="scan-line" class="h-4 w-4" />
-                    {{ __('app.event_scanner') }}
-                </x-ui.button>
             </div>
         @endif
     </header>
+
+    @if ($event->exists)
+        <x-ui.event-navigation :account="$account" :event="$event" active="details" />
+    @endif
 
     @if ($errors->any())
         <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900" role="alert">
@@ -306,178 +302,48 @@
     </form>
 
     @if ($event->exists)
-        <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6" id="event-tickets">
-            <div class="flex flex-col gap-3 border-b border-stone-100 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        @php($activeTicketTypeCount = $event->ticketTypes->where('is_active', true)->count())
+        <section class="rounded-xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 class="text-xl font-semibold text-slate-950">{{ __('app.event_tickets') }}</h2>
-                    <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.event_tickets_help', ['currency' => $event->currency]) }}</p>
+                    <h2 class="text-xl font-semibold text-slate-950">{{ __('app.event_ticket_types') }}</h2>
+                    <p class="mt-1 text-sm leading-6 text-slate-500">
+                        {{ trans_choice('app.event_ticket_type_summary', $event->ticketTypes->count(), [
+                            'count' => $event->ticketTypes->count(),
+                            'active' => $activeTicketTypeCount,
+                        ]) }}
+                    </p>
                 </div>
-                <span class="crm-status-muted">{{ $event->currency }}</span>
-            </div>
-
-            <div class="mt-5 grid gap-3">
-                @foreach ($event->ticketTypes as $type)
-                    <details class="group rounded-xl border border-stone-200 bg-white open:border-brand-100 open:shadow-sm" data-event-ticket-type="{{ $type->id }}">
-                        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-4">
-                            <span class="min-w-0">
-                                <strong class="block truncate text-slate-950">{{ $type->name }}</strong>
-                                <span class="mt-1 block text-sm text-slate-500">
-                                    {{ number_format($type->price_cents / 100, 2) }} {{ $event->currency }}
-                                    · {{ $type->remainingQuantity() }}/{{ $type->inventory }} {{ __('app.event_available') }}
-                                </span>
-                            </span>
-                            <x-ui.icon name="chevron-down" class="h-5 w-5 shrink-0 text-slate-400 transition group-open:rotate-180" />
-                        </summary>
-
-                        <div class="border-t border-stone-100 bg-slate-50 p-4 sm:p-5">
-                            <form method="POST" action="{{ route('dashboard.accounts.events.ticket-types.update', [$account, $event, $type]) }}" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-event-ticket-form="update">
-                                @csrf
-                                @method('PUT')
-
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.name') }}</span>
-                                    <input name="name" required value="{{ $type->name }}" class="crm-field">
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.price') }} · {{ $event->currency }}</span>
-                                    <input name="price" required value="{{ number_format($type->price_cents / 100, 2, '.', '') }}" class="crm-field" inputmode="decimal">
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.event_inventory') }}</span>
-                                    <input type="number" name="inventory" required min="1" value="{{ $type->inventory }}" class="crm-field">
-                                </label>
-                                <label class="block sm:col-span-2 lg:col-span-3">
-                                    <span class="crm-label">{{ __('app.description') }}</span>
-                                    <textarea name="description" rows="2" class="crm-field">{{ $type->description }}</textarea>
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.event_early_price') }} · {{ $event->currency }}</span>
-                                    <input name="early_bird_price" value="{{ $type->early_bird_price_cents !== null ? number_format($type->early_bird_price_cents / 100, 2, '.', '') : '' }}" class="crm-field" inputmode="decimal">
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.event_early_ends') }}</span>
-                                    <input type="datetime-local" name="early_bird_ends_at" value="{{ $type->early_bird_ends_at?->timezone($timezone)->format('Y-m-d\\TH:i') }}" class="crm-field">
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.event_early_quota') }}</span>
-                                    <input type="number" name="early_bird_quota" min="1" value="{{ $type->early_bird_quota }}" class="crm-field">
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.event_sales_starts') }}</span>
-                                    <input type="datetime-local" name="sales_starts_at" value="{{ $type->sales_starts_at?->timezone($timezone)->format('Y-m-d\\TH:i') }}" class="crm-field">
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.event_sales_ends') }}</span>
-                                    <input type="datetime-local" name="sales_ends_at" value="{{ $type->sales_ends_at?->timezone($timezone)->format('Y-m-d\\TH:i') }}" class="crm-field">
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.event_max_per_order') }}</span>
-                                    <input type="number" name="max_per_order" required min="1" max="100" value="{{ $type->max_per_order }}" class="crm-field">
-                                </label>
-                                <label class="block">
-                                    <span class="crm-label">{{ __('app.sort_order') }}</span>
-                                    <input type="number" name="sort_order" required min="0" value="{{ $type->sort_order }}" class="crm-field">
-                                </label>
-                                <label class="flex items-center gap-3 pt-2 text-sm font-medium text-slate-700 sm:self-end sm:pb-3">
-                                    <input type="hidden" name="is_active" value="0">
-                                    <input type="checkbox" name="is_active" value="1" @checked($type->is_active) class="crm-checkbox">
-                                    {{ __('app.active') }}
-                                </label>
-                                <div class="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
-                                    <x-ui.button type="submit">
-                                        <x-ui.icon name="save" class="h-4 w-4" />
-                                        {{ __('app.save') }}
-                                    </x-ui.button>
-                                </div>
-                            </form>
-
-                            @if ($type->orderItems()->doesntExist())
-                                <form method="POST" action="{{ route('dashboard.accounts.events.ticket-types.destroy', [$account, $event, $type]) }}" class="mt-3">
-                                    @csrf
-                                    @method('DELETE')
-                                    <x-ui.button type="submit" variant="danger" size="sm">
-                                        <x-ui.icon name="trash-2" class="h-4 w-4" />
-                                        {{ __('app.delete') }}
-                                    </x-ui.button>
-                                </form>
-                            @endif
-                        </div>
-                    </details>
-                @endforeach
-            </div>
-
-            <details class="group mt-5 rounded-xl border border-dashed border-brand-100 bg-brand-50/60" data-event-add-ticket>
-                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-4 font-semibold text-brand-700">
-                    <span class="inline-flex items-center gap-2">
+                <div class="flex flex-wrap gap-2">
+                    <x-ui.button :href="route('dashboard.accounts.events.ticket-types.index', [$account, $event])" variant="secondary">
+                        {{ __('app.event_manage_ticket_types') }}
+                    </x-ui.button>
+                    <x-ui.button :href="route('dashboard.accounts.events.ticket-types.create', [$account, $event])">
                         <x-ui.icon name="plus" class="h-4 w-4" />
                         {{ __('app.event_add_ticket_type') }}
-                    </span>
-                    <x-ui.icon name="chevron-down" class="h-5 w-5 transition group-open:rotate-180" />
-                </summary>
-
-                <form method="POST" action="{{ route('dashboard.accounts.events.ticket-types.store', [$account, $event]) }}" class="grid gap-4 border-t border-brand-100 p-4 sm:grid-cols-2 lg:grid-cols-3 sm:p-5" data-event-ticket-form="create">
-                    @csrf
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.name') }}</span>
-                        <input name="name" required class="crm-field">
-                    </label>
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.price') }} · {{ $event->currency }}</span>
-                        <input name="price" required value="0.00" class="crm-field" inputmode="decimal">
-                    </label>
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.event_inventory') }}</span>
-                        <input type="number" name="inventory" required min="1" value="20" class="crm-field">
-                    </label>
-                    <label class="block sm:col-span-2 lg:col-span-3">
-                        <span class="crm-label">{{ __('app.description') }}</span>
-                        <textarea name="description" rows="2" class="crm-field"></textarea>
-                    </label>
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.event_early_price') }} · {{ $event->currency }}</span>
-                        <input name="early_bird_price" class="crm-field" inputmode="decimal">
-                    </label>
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.event_early_ends') }}</span>
-                        <input type="datetime-local" name="early_bird_ends_at" class="crm-field">
-                    </label>
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.event_early_quota') }}</span>
-                        <input type="number" name="early_bird_quota" min="1" class="crm-field">
-                    </label>
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.event_sales_starts') }}</span>
-                        <input type="datetime-local" name="sales_starts_at" class="crm-field">
-                    </label>
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.event_sales_ends') }}</span>
-                        <input type="datetime-local" name="sales_ends_at" class="crm-field">
-                    </label>
-                    <label class="block">
-                        <span class="crm-label">{{ __('app.event_max_per_order') }}</span>
-                        <input type="number" name="max_per_order" required min="1" max="100" value="10" class="crm-field">
-                    </label>
-                    <input type="hidden" name="sort_order" value="10">
-                    <input type="hidden" name="is_active" value="1">
-                    <div class="sm:col-span-2 lg:col-span-3">
-                        <x-ui.button type="submit">
-                            <x-ui.icon name="plus" class="h-4 w-4" />
-                            {{ __('app.event_add_ticket_type') }}
-                        </x-ui.button>
-                    </div>
-                </form>
-            </details>
+                    </x-ui.button>
+                </div>
+            </div>
         </section>
 
         <section class="flex flex-wrap gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-crm">
             @if ($event->status === \App\Enums\EventStatus::Draft)
-                <form method="POST" action="{{ route('dashboard.accounts.events.publish', [$account, $event]) }}">
-                    @csrf
-                    <x-ui.button type="submit">
-                        <x-ui.icon name="send" class="h-4 w-4" />
-                        {{ __('app.event_publish') }}
-                    </x-ui.button>
-                </form>
+                @if ($activeTicketTypeCount > 0)
+                    <form method="POST" action="{{ route('dashboard.accounts.events.publish', [$account, $event]) }}">
+                        @csrf
+                        <x-ui.button type="submit">
+                            <x-ui.icon name="send" class="h-4 w-4" />
+                            {{ __('app.event_publish') }}
+                        </x-ui.button>
+                    </form>
+                @else
+                    <div class="flex flex-wrap items-center gap-3 text-sm text-amber-800">
+                        <span>{{ __('app.event_publish_needs_ticket_type') }}</span>
+                        <x-ui.button :href="route('dashboard.accounts.events.ticket-types.create', [$account, $event])" variant="secondary" size="sm">
+                            {{ __('app.event_add_ticket_type') }}
+                        </x-ui.button>
+                    </div>
+                @endif
             @endif
             @if ($event->status === \App\Enums\EventStatus::Published)
                 <form method="POST" action="{{ route('dashboard.accounts.events.cancel', [$account, $event]) }}">
@@ -497,7 +363,7 @@
                     </x-ui.button>
                 </form>
             @endif
-            @if ($event->status === \App\Enums\EventStatus::Draft && $event->orders()->doesntExist())
+            @if ($event->status === \App\Enums\EventStatus::Draft && $event->orders_count === 0)
                 <form method="POST" action="{{ route('dashboard.accounts.events.destroy', [$account, $event]) }}">
                     @csrf
                     @method('DELETE')

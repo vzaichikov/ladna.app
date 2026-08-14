@@ -30,6 +30,7 @@ use App\Models\FestivalRubric;
 use App\Models\FestivalSeries;
 use App\Models\FestivalStage;
 use App\Models\FestivalTicketOrder;
+use App\Models\FiscalReceipt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
@@ -842,7 +843,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             ]));
     }
 
-    public function test_festival_manager_may_delete_an_application_without_paid_or_unresolved_payment_history(): void
+    public function test_festival_manager_may_delete_an_application_with_stronger_confirmation_for_payment_history(): void
     {
         Storage::fake('local');
         [$account, $edition, $category, $portalUser, $entry] = $this->festivalWithEntry();
@@ -886,11 +887,15 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->get($applicationUrl)
             ->assertOk()
             ->assertDontSee('data-confirm-delete', false);
+        $this->actingAs($registrationStaff)
+            ->delete($deleteUrl)
+            ->assertForbidden();
         $this->actingAs($owner)
             ->get($applicationUrl)
             ->assertOk()
             ->assertSee($deleteUrl, false)
             ->assertSee('data-confirm-delete', false)
+            ->assertDontSee('data-confirm-phrase=', false)
             ->assertSee(__('app.festival_delete_application_title'));
 
         $this->actingAs($owner)
@@ -936,13 +941,47 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($owner)
             ->get($protectedApplicationUrl)
             ->assertOk()
-            ->assertDontSee('data-confirm-delete', false);
+            ->assertSee($protectedDeleteUrl, false)
+            ->assertSee('data-confirm-delete', false)
+            ->assertSee('data-confirm-phrase="delete"', false)
+            ->assertSee('name="approval"', false)
+            ->assertSee(__('app.festival_delete_paid_application_title'));
         $this->actingAs($owner)
             ->from($protectedApplicationUrl)
             ->delete($protectedDeleteUrl)
             ->assertRedirect($protectedApplicationUrl)
             ->assertSessionHasErrors('festival_application');
         $this->assertDatabaseHas('festival_entries', ['id' => $protectedEntry->id]);
+
+        $changedAfterPageLoadEntry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Payment changed after page load',
+        ]);
+        $changedAfterPageLoadUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $changedAfterPageLoadEntry]);
+        $changedAfterPageLoadDeleteUrl = route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $changedAfterPageLoadEntry]);
+        $this->actingAs($owner)
+            ->get($changedAfterPageLoadUrl)
+            ->assertOk()
+            ->assertDontSee('data-confirm-phrase=', false);
+        FestivalCharge::query()->create([
+            'account_id' => $account->id,
+            'festival_entry_id' => $changedAfterPageLoadEntry->id,
+            'code' => 'FCH-DELETE-AFTER-PAGE-LOAD',
+            'kind' => 'participation',
+            'name' => 'Paid after page load',
+            'status' => 'paid',
+            'amount_cents' => 50000,
+            'currency' => 'UAH',
+            'paid_at' => now(),
+        ]);
+        $this->actingAs($owner)
+            ->from($changedAfterPageLoadUrl)
+            ->delete($changedAfterPageLoadDeleteUrl)
+            ->assertRedirect($changedAfterPageLoadUrl)
+            ->assertSessionHasErrors('festival_application');
+        $this->assertDatabaseHas('festival_entries', ['id' => $changedAfterPageLoadEntry->id]);
 
         $declinedEntry = FestivalEntry::factory()->for($category)->create([
             'account_id' => $account->id,
@@ -983,7 +1022,8 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($owner)
             ->get($declinedApplicationUrl)
             ->assertOk()
-            ->assertSee($declinedDeleteUrl, false);
+            ->assertSee($declinedDeleteUrl, false)
+            ->assertDontSee('data-confirm-phrase=', false);
         $this->actingAs($owner)
             ->delete($declinedDeleteUrl)
             ->assertRedirect(route('dashboard.accounts.festivals.applications', [$account, $edition]))
@@ -996,7 +1036,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             'festival_portal_user_id' => $portalUser->id,
             'entry_name' => 'Protected manual payment',
         ]);
-        FestivalCharge::query()->create([
+        $manualPaymentCharge = FestivalCharge::query()->create([
             'account_id' => $account->id,
             'festival_entry_id' => $manualPaymentEntry->id,
             'code' => 'FCH-DELETE-MANUAL',
@@ -1007,19 +1047,65 @@ class FestivalWorkspaceTabsTest extends TestCase
             'currency' => 'UAH',
             'paid_at' => now(),
         ]);
+        $paidAttempt = FestivalPaymentAttempt::query()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $manualPaymentCharge->id,
+            'provider' => 'monopay',
+            'order_id' => 'FCHP-DELETE-PAID',
+            'amount_cents' => $manualPaymentCharge->amount_cents,
+            'currency' => $manualPaymentCharge->currency,
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        $fiscalReceipt = FiscalReceipt::factory()
+            ->forAccountScope($account)
+            ->fiscalized('CHK-FESTIVAL-DELETE')
+            ->create([
+                'payment_type' => $paidAttempt->getMorphClass(),
+                'payment_id' => $paidAttempt->id,
+            ]);
         $manualApplicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $manualPaymentEntry]);
         $manualDeleteUrl = route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $manualPaymentEntry]);
 
         $this->actingAs($owner)
             ->get($manualApplicationUrl)
             ->assertOk()
-            ->assertDontSee('data-confirm-delete', false);
+            ->assertSee($manualDeleteUrl, false)
+            ->assertSee('data-confirm-phrase="delete"', false)
+            ->assertSee(__('app.festival_delete_paid_application_copy'));
         $this->actingAs($owner)
             ->from($manualApplicationUrl)
             ->delete($manualDeleteUrl)
             ->assertRedirect($manualApplicationUrl)
             ->assertSessionHasErrors('festival_application');
         $this->assertDatabaseHas('festival_entries', ['id' => $manualPaymentEntry->id]);
+
+        $this->actingAs($owner)
+            ->from($manualApplicationUrl)
+            ->delete($manualDeleteUrl, ['approval' => 'remove'])
+            ->assertRedirect($manualApplicationUrl)
+            ->assertSessionHasErrors('approval');
+        $this->assertDatabaseHas('festival_entries', ['id' => $manualPaymentEntry->id]);
+
+        $this->actingAs($owner)
+            ->delete($manualDeleteUrl, ['approval' => 'delete'])
+            ->assertRedirect(route('dashboard.accounts.festivals.applications', [$account, $edition]))
+            ->assertSessionHas('status', __('app.festival_application_deleted'));
+        $this->assertDatabaseMissing('festival_entries', ['id' => $manualPaymentEntry->id]);
+        $this->assertDatabaseMissing('festival_charges', ['id' => $manualPaymentCharge->id]);
+        $this->assertDatabaseMissing('festival_payment_attempts', ['id' => $paidAttempt->id]);
+        $this->assertModelExists($fiscalReceipt);
+        $this->assertDatabaseHas('festival_activity_logs', [
+            'subject_type' => $manualPaymentEntry->getMorphClass(),
+            'subject_id' => $manualPaymentEntry->id,
+            'action' => 'entry.deleted',
+        ]);
+        $forcedDeleteActivity = FestivalActivityLog::query()
+            ->where('subject_type', $manualPaymentEntry->getMorphClass())
+            ->where('subject_id', $manualPaymentEntry->id)
+            ->where('action', 'entry.deleted')
+            ->firstOrFail();
+        $this->assertTrue($forcedDeleteActivity->payload['payment_history_force_deleted']);
     }
 
     public function test_performances_list_only_fully_confirmed_entries_with_filters_and_separate_summary_and_application_pages(): void

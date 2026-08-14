@@ -12,6 +12,7 @@ use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\Event;
+use App\Models\EventTicketType;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
 use App\Models\FestivalChargeDefinition;
@@ -70,7 +71,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(178, $classifiedRouteNames);
+        $this->assertCount(183, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -91,8 +92,12 @@ class MultiLocationPageSmokeTest extends TestCase
             }
 
             foreach ($this->parameterizedHtmlRoutes() as $routeName => $fixtureKey) {
+                $parameters = $routeName === 'dashboard.accounts.events.ticket-types.edit'
+                    ? [$account, $fixtures['event'], $fixtures['event_ticket_type']]
+                    : [$account, $fixtures[$fixtureKey]];
+
                 $this->assertPageRenders(
-                    route($routeName, [$account, $fixtures[$fixtureKey]]),
+                    route($routeName, $parameters),
                     $routeName,
                     $activeLocationCount > 1,
                 );
@@ -167,6 +172,7 @@ class MultiLocationPageSmokeTest extends TestCase
             ->for($classPassPlan)
             ->create(['issued_location_id' => $location->id]);
         $event = Event::factory()->published()->for($account)->create();
+        $eventTicketType = EventTicketType::factory()->for($account)->for($event)->create();
         $festivalSeries = FestivalSeries::factory()->for($account)->create();
         $festivalPackage = FestivalTariffPackage::factory()->create([
             'subscription_plan_id' => $subscriptionPlan->id,
@@ -262,6 +268,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'customer_class_pass' => $customerClassPass,
             'customer' => $customer,
             'event' => $event,
+            'event_ticket_type' => $eventTicketType,
             'festival_edition' => $festivalEdition,
             'festival_entry' => $festivalEntry,
             'festival_admission_type' => $festivalAdmissionType,
@@ -451,6 +458,11 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.customer-class-passes.edit' => 'customer_class_pass',
             'dashboard.accounts.customers.edit' => 'customer',
             'dashboard.accounts.events.edit' => 'event',
+            'dashboard.accounts.events.ticket-types.index' => 'event',
+            'dashboard.accounts.events.ticket-types.create' => 'event',
+            'dashboard.accounts.events.ticket-types.edit' => 'event_ticket_type',
+            'dashboard.accounts.events.tickets.index' => 'event',
+            'dashboard.accounts.events.tickets.issue.create' => 'event',
             'dashboard.accounts.events.orders.index' => 'event',
             'dashboard.accounts.events.scanner' => 'event',
             'dashboard.accounts.group-classes.edit' => 'group_class_type',

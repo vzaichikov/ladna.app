@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.133.0',
+                'date' => '2026-08-14',
+                'title' => 'Event ticket operations and safer Festival exceptions',
+                'items' => ['Studios can configure Event ticket options on dedicated pages, require at least one active option before publication, and manage issued tickets through searchable status, check-in, source, and ticket-type filters.', 'Authorized Event staff can issue paid or complimentary venue tickets, record the offline payment method, enforce event and ticket inventory, email tickets when contact details are available, and move consistently between setup, orders, tickets, and scanning.', 'Festival managers can exceptionally delete an application with paid or unresolved payment history after handling any refund manually and typing an explicit confirmation. Ladna rechecks payment history before deletion and retains the related audit and fiscal evidence, while the Festival owner help is now organized into focused chapters with current screenshots.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.132.0',
                 'date' => '2026-08-14',
                 'title' => 'Complete Festival applications and complimentary tickets',
@@ -1164,6 +1171,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.133.0',
+                'date' => '2026-08-14',
+                'title' => 'Керування квитками подій і безпечні винятки фестивалю',
+                'items' => ['Студії можуть налаштовувати варіанти квитків події на окремих сторінках, публікувати подію лише за наявності активного варіанта та керувати виданими квитками через пошук і фільтри за статусом, входом, джерелом і типом квитка.', 'Уповноважені працівники можуть видавати на локації оплачені або безкоштовні квитки, фіксувати спосіб офлайн-оплати, дотримуватися місткості події та запасу квитків, надсилати квитки електронною поштою за наявності контакту й послідовно переходити між налаштуванням, замовленнями, квитками та скануванням.', 'Менеджери фестивалю можуть у винятковій ситуації видалити заявку з оплаченою або невирішеною історією оплат після ручного повернення коштів і введення явного підтвердження. Ladna повторно перевіряє історію оплат перед видаленням і зберігає пов’язані аудійовані та фіскальні факти, а довідку власника про фестивалі поділено на тематичні розділи з актуальними знімками екрана.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.132.0',
                 'date' => '2026-08-14',
