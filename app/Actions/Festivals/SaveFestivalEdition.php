@@ -69,6 +69,7 @@ class SaveFestivalEdition
                 'status' => $input['status'],
                 'registration_status' => $input['registration_status'],
                 'summary' => $input['summary'] ?? $series->summary,
+                'show_on_studio_page' => (bool) ($input['show_on_studio_page'] ?? false),
                 'description_html' => $this->htmlSanitizer->sanitize($input['description_html'] ?? null),
                 'rules_html' => $this->htmlSanitizer->sanitize($input['rules_html'] ?? null),
                 'venue_name' => $input['venue_name'] ?? null,

@@ -157,6 +157,35 @@ class FestivalHubTest extends TestCase
         }
     }
 
+    public function test_owner_can_control_whether_an_edition_is_listed_on_the_studio_page(): void
+    {
+        [$account, $owner, $series] = $this->ownerFestival();
+        $edition = FestivalEdition::factory()->for($series)->create(['account_id' => $account->id]);
+
+        $this->assertFalse($edition->show_on_studio_page);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.edit', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('name="show_on_studio_page"', false)
+            ->assertSee(__('app.festival_show_on_studio_page'));
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.update', [$account, $edition]), $this->editionData($series, [
+                'title' => $edition->title,
+                'show_on_studio_page' => '1',
+            ]))
+            ->assertRedirect();
+        $this->assertTrue($edition->refresh()->show_on_studio_page);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.update', [$account, $edition]), $this->editionData($series, [
+                'title' => $edition->title,
+            ]))
+            ->assertRedirect();
+        $this->assertFalse($edition->refresh()->show_on_studio_page);
+    }
+
     public function test_hub_default_tab_follows_edition_existence_and_explicit_tabs_win(): void
     {
         $this->assertSame('Payments & tariffs', trans('app.festival_payments_tariffs_tab', [], 'en'));

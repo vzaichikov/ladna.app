@@ -226,6 +226,7 @@ class PublicStudioLandingTest extends TestCase
             'account_id' => $account->id,
             'title' => 'Ongoing Studio Festival',
             'status' => 'in_progress',
+            'show_on_studio_page' => true,
             'starts_at' => now()->subDay(),
             'ends_at' => now()->addDay(),
         ]);
@@ -233,6 +234,7 @@ class PublicStudioLandingTest extends TestCase
             'account_id' => $account->id,
             'title' => 'Upcoming Studio Festival',
             'summary' => 'An upcoming Festival summary.',
+            'show_on_studio_page' => true,
             'starts_at' => now()->addMonth(),
             'ends_at' => now()->addMonth()->addDay(),
         ]);
@@ -248,10 +250,16 @@ class PublicStudioLandingTest extends TestCase
             FestivalEdition::factory()->published()->for($series)->create([
                 'account_id' => $account->id,
                 'title' => "Later Studio Festival {$number}",
+                'show_on_studio_page' => true,
                 'starts_at' => now()->addMonths($number + 1),
                 'ends_at' => now()->addMonths($number + 1)->addDay(),
             ]);
         }
+        FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'title' => 'Hidden Studio Festival',
+            'show_on_studio_page' => false,
+        ]);
         FestivalEdition::factory()->published()->for($series)->create([
             'account_id' => $account->id,
             'title' => 'Past Studio Festival',
@@ -282,6 +290,7 @@ class PublicStudioLandingTest extends TestCase
             ->assertDontSee('Later Studio Festival 5')
             ->assertDontSee('Past Studio Festival')
             ->assertDontSee('Draft Studio Festival')
+            ->assertDontSee('Hidden Studio Festival')
             ->assertDontSee('Other Studio Festival');
 
         $disabledAccount = Account::factory()->create(['enable_festivals' => false]);
@@ -289,6 +298,7 @@ class PublicStudioLandingTest extends TestCase
         FestivalEdition::factory()->published()->for(FestivalSeries::factory()->for($disabledAccount))->create([
             'account_id' => $disabledAccount->id,
             'title' => 'Disabled Studio Festival',
+            'show_on_studio_page' => true,
         ]);
 
         $this->get(route('public.studio', $disabledAccount->slug))

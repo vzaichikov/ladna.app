@@ -14,19 +14,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['account_id', 'festival_series_id', 'slug', 'title', 'status', 'registration_status', 'summary', 'description_html', 'rules_html', 'landing_template', 'landing_palette', 'venue_name', 'venue_address', 'venue_map_url', 'venue_directions', 'timezone', 'currency', 'starts_at', 'ends_at', 'age_reference_date', 'registration_opens_at', 'registration_closes_at', 'max_entries_per_participant', 'published_at', 'completed_at', 'cancelled_at', 'archived_at'])]
+#[Fillable(['account_id', 'festival_series_id', 'slug', 'title', 'status', 'registration_status', 'summary', 'show_on_studio_page', 'description_html', 'rules_html', 'landing_template', 'landing_palette', 'venue_name', 'venue_address', 'venue_map_url', 'venue_directions', 'timezone', 'currency', 'starts_at', 'ends_at', 'age_reference_date', 'registration_opens_at', 'registration_closes_at', 'max_entries_per_participant', 'published_at', 'completed_at', 'cancelled_at', 'archived_at'])]
 class FestivalEdition extends Model
 {
     /** @use HasFactory<FestivalEditionFactory> */
     use HasFactory;
 
-    protected $attributes = ['status' => 'draft', 'registration_status' => 'closed', 'currency' => 'UAH', 'landing_template' => 'general', 'landing_palette' => 'general'];
+    protected $attributes = ['status' => 'draft', 'registration_status' => 'closed', 'currency' => 'UAH', 'show_on_studio_page' => false, 'landing_template' => 'general', 'landing_palette' => 'general'];
 
     protected function casts(): array
     {
         return [
             'status' => FestivalEditionStatus::class,
             'registration_status' => FestivalRegistrationStatus::class,
+            'show_on_studio_page' => 'boolean',
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'age_reference_date' => 'date',

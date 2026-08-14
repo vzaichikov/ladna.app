@@ -164,6 +164,14 @@
                     <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_summary_field_help') }}</span>
                     @error('summary') <span class="crm-help">{{ $message }}</span> @enderror
                 </label>
+                <label class="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4 sm:col-span-2">
+                    <input type="hidden" name="show_on_studio_page" value="0">
+                    <input type="checkbox" name="show_on_studio_page" value="1" class="crm-checkbox mt-0.5" @checked(old('show_on_studio_page', $edition->show_on_studio_page))>
+                    <span>
+                        <span class="block font-semibold text-slate-900">{{ __('app.festival_show_on_studio_page') }}</span>
+                        <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_show_on_studio_page_help') }}</span>
+                    </span>
+                </label>
             </div>
         </section>
 

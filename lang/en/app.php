@@ -586,6 +586,8 @@ return [
     'festival_series_field_help' => 'The series supplies the reusable Festival brand and organizer defaults.',
     'festival_title_field_help' => 'Shown in the studio workspace, calendar, and public Festival page.',
     'festival_summary_field_help' => 'A short overview for cards and Festival introductions.',
+    'festival_show_on_studio_page' => 'Show on the studio page',
+    'festival_show_on_studio_page_help' => 'Include this Festival in the Festival list on the public studio page. It must also be published and current or upcoming.',
     'festival_schedule_lifecycle' => 'Status, dates, and locale',
     'festival_schedule_lifecycle_help' => 'Set the Festival lifecycle, official dates, timezone, and age date. Pricing uses the studio account currency.',
     'festival_status_field_help' => 'Draft Festivals remain private; publishing makes the configured public experience available.',

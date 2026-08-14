@@ -41,6 +41,7 @@ class PublicStudioLandingController extends Controller
             $festivals = $account->festivalEditions()
                 ->published()
                 ->upcoming()
+                ->where('show_on_studio_page', true)
                 ->select(['id', 'account_id', 'festival_series_id', 'slug', 'title', 'summary', 'starts_at', 'ends_at', 'timezone'])
                 ->with('coverMedia')
                 ->orderBy('starts_at')

@@ -23,6 +23,7 @@ class FestivalEditionRequest extends FormRequest
             'status' => ['required', Rule::enum(FestivalEditionStatus::class)],
             'registration_status' => ['required', Rule::enum(FestivalRegistrationStatus::class)],
             'summary' => ['nullable', 'string', 'max:500'],
+            'show_on_studio_page' => ['sometimes', 'boolean'],
             'description_html' => ['nullable', 'string', 'max:100000'],
             'rules_html' => ['nullable', 'string', 'max:100000'],
             'venue_name' => ['nullable', 'string', 'max:255'],
