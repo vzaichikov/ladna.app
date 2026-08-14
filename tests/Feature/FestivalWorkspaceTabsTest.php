@@ -131,6 +131,39 @@ class FestivalWorkspaceTabsTest extends TestCase
         ));
     }
 
+    public function test_festival_workspace_finishes_with_public_and_judge_links(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $publicUrl = route('public.festivals.show', [$account->slug, $edition->slug]);
+        $judgeCabinetUrl = route('festival.portal.judge.dashboard', $account->slug);
+
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.show', [$account, $edition]));
+
+        $response->assertOk()
+            ->assertSeeInOrder([
+                __('app.festival_workspace_group_settings'),
+                __('app.links'),
+                __('app.festival_public_page'),
+                __('app.festival_judge_cabinet'),
+                __('app.festival_workspace_back_to_studio'),
+            ])
+            ->assertSee('href="'.$publicUrl.'"', false)
+            ->assertSee('href="'.$judgeCabinetUrl.'"', false)
+            ->assertSee(__('app.festival_public_page_sidebar_help'))
+            ->assertSee(__('app.festival_judge_cabinet_sidebar_help'));
+        $this->assertSame(2, substr_count($response->getContent(), 'target="_blank" rel="noopener"'));
+
+        $edition->update(['status' => 'draft']);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.show', [$account, $edition]))
+            ->assertOk()
+            ->assertDontSee('href="'.$publicUrl.'"', false)
+            ->assertSee('href="'.$judgeCabinetUrl.'"', false);
+    }
+
     public function test_overview_links_total_categories_criteria_and_judges_for_managers(): void
     {
         [$account, $edition] = $this->festival();

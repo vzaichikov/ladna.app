@@ -2,6 +2,7 @@
 
 namespace App\View\Composers;
 
+use App\Enums\FestivalEditionStatus;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalJudgeAssignment;
@@ -84,6 +85,23 @@ class FestivalWorkspaceComposer
             ],
         ];
 
+        $links = [
+            ...(in_array($edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress, FestivalEditionStatus::Completed], true) ? [[
+                'label' => __('app.festival_public_page'),
+                'description' => __('app.festival_public_page_sidebar_help'),
+                'icon' => 'globe',
+                'href' => route('public.festivals.show', [$account->slug, $edition->slug]),
+                'external' => true,
+            ]] : []),
+            [
+                'label' => __('app.festival_judge_cabinet'),
+                'description' => __('app.festival_judge_cabinet_sidebar_help'),
+                'icon' => 'clipboard-check',
+                'href' => route('festival.portal.judge.dashboard', $account->slug),
+                'external' => true,
+            ],
+        ];
+
         $view->with('festivalWorkspace', [
             'account' => $account,
             'edition' => $edition,
@@ -97,6 +115,7 @@ class FestivalWorkspaceComposer
                 ->filter(fn (array $group): bool => $group['items'] !== [])
                 ->values()
                 ->all(),
+            'links' => $links,
         ]);
     }
 

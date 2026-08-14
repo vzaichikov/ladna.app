@@ -542,6 +542,31 @@
                                 </div>
                             </div>
                         @endforeach
+                        @if ($festivalWorkspace['links'])
+                            <div>
+                                <div class="px-3 text-xs font-semibold uppercase text-slate-500">{{ __('app.links') }}</div>
+                                <div class="mt-3 space-y-1">
+                                    @foreach ($festivalWorkspace['links'] as $item)
+                                        <a
+                                            href="{{ $item['href'] }}"
+                                            @if ($item['external']) target="_blank" rel="noopener" @endif
+                                            class="group flex items-start gap-3 rounded-lg px-3 py-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                                        >
+                                            <x-ui.icon :name="$item['icon']" class="mt-0.5 h-5 w-5 text-slate-400 group-hover:text-amber-300" />
+                                            <span class="min-w-0 flex-1">
+                                                <span class="flex min-w-0 items-center gap-1">
+                                                    <span class="truncate">{{ $item['label'] }}</span>
+                                                    @if ($item['external'])
+                                                        <x-ui.icon name="external" class="h-3.5 w-3.5 shrink-0 text-slate-500 group-hover:text-amber-200" />
+                                                    @endif
+                                                </span>
+                                                <span class="mt-0.5 block truncate text-[0.68rem] font-medium leading-4 text-slate-400">{{ $item['description'] }}</span>
+                                            </span>
+                                        </a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
                     @else
                     @if ($primaryNav)
                         <div>
