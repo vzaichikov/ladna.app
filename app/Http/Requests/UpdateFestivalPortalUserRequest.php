@@ -77,7 +77,7 @@ class UpdateFestivalPortalUserRequest extends FormRequest
             'registrant_type' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser instanceof FestivalPortalUser ? $portalUser->registrant_type : null))],
             'city' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
             'studio_name' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
-            'instagram_url' => [Rule::prohibitedIf($role === FestivalPortalRole::Judge), 'nullable', 'url:http,https', 'max:2048'],
+            'instagram_url' => ['nullable', 'url:http,https', 'max:2048'],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
             'is_active' => ['required', 'boolean'],

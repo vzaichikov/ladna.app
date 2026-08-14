@@ -139,6 +139,93 @@ class FestivalPortalUserDirectoryTest extends TestCase
             ->assertSessionHasErrors('registrant_type');
     }
 
+    public function test_staff_profile_forms_are_grouped_and_judges_can_save_instagram_links(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $registrant = FestivalPortalUser::factory()->for($account)->create();
+        $existingJudge = FestivalPortalUser::factory()->for($account)->judge()->create([
+            'instagram_url' => 'https://instagram.com/existing.judge',
+        ]);
+
+        $formUrls = [
+            route('dashboard.accounts.festivals.users.create', [$account, $edition, FestivalPortalRole::Registrant->value]),
+            route('dashboard.accounts.festivals.users.create', [$account, $edition, FestivalPortalRole::Judge->value]),
+            route('dashboard.accounts.festivals.users.edit', [$account, $edition, $registrant]),
+            route('dashboard.accounts.festivals.users.edit', [$account, $edition, $existingJudge]),
+        ];
+
+        foreach ($formUrls as $formUrl) {
+            $this->actingAs($owner)
+                ->get($formUrl)
+                ->assertOk()
+                ->assertSeeInOrder([
+                    __('app.festival_profile_personal_details'),
+                    __('app.festival_profile_contact_details'),
+                    __('app.festival_profile_preferences_security'),
+                ])
+                ->assertSee('name="instagram_url"', false);
+        }
+
+        $judgeCreateUrl = route('dashboard.accounts.festivals.users.create', [$account, $edition, 'judge']);
+        $this->actingAs($owner)
+            ->from($judgeCreateUrl)
+            ->post(route('dashboard.accounts.festivals.users.store', [$account, $edition, 'judge']), [
+                'first_name' => 'Invalid',
+                'last_name' => 'Instagram',
+                'email' => 'invalid.instagram.judge@example.test',
+                'phone' => null,
+                'instagram_url' => 'ftp://instagram.com/invalid.judge',
+                'locale' => 'en',
+                'password' => 'secret1',
+                'password_confirmation' => 'secret1',
+                'is_active' => 1,
+            ])
+            ->assertRedirect($judgeCreateUrl)
+            ->assertSessionHasErrors('instagram_url');
+
+        $instagramUrl = 'https://www.instagram.com/directory.judge';
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.users.store', [$account, $edition, 'judge']), [
+                'first_name' => 'Instagram',
+                'last_name' => 'Judge',
+                'email' => 'instagram.judge@example.test',
+                'phone' => null,
+                'instagram_url' => $instagramUrl,
+                'locale' => 'en',
+                'password' => 'secret1',
+                'password_confirmation' => 'secret1',
+                'is_active' => 1,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $judge = FestivalPortalUser::query()
+            ->whereBelongsTo($account)
+            ->forRole(FestivalPortalRole::Judge)
+            ->where('email_normalized', 'instagram.judge@example.test')
+            ->firstOrFail();
+        $this->assertSame($instagramUrl, $judge->instagram_url);
+
+        $editUrl = route('dashboard.accounts.festivals.users.edit', [$account, $edition, $judge]);
+        $this->actingAs($owner)
+            ->get($editUrl)
+            ->assertOk()
+            ->assertSee('value="'.$instagramUrl.'"', false);
+
+        $updatedInstagramUrl = 'https://instagram.com/updated.judge';
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.users.update', [$account, $edition, $judge]), [
+                ...$this->judgePayload($judge, true),
+                'instagram_url' => $updatedInstagramUrl,
+            ])
+            ->assertRedirect($editUrl)
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($updatedInstagramUrl, $judge->refresh()->instagram_url);
+    }
+
     public function test_staff_cannot_change_an_adult_profile_to_coach(): void
     {
         [$account, $edition] = $this->festival();
@@ -178,7 +265,6 @@ class FestivalPortalUserDirectoryTest extends TestCase
             'date_of_birth' => '2000-01-01',
             'city' => 'Kyiv',
             'studio_name' => 'Registrant Studio',
-            'instagram_url' => 'https://example.test/registrant',
         ];
 
         $this->actingAs($owner)
