@@ -32,6 +32,7 @@ use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\User;
 use App\Support\Festivals\FestivalActivityLogPresenter;
+use App\Support\Festivals\FestivalApplicationIndex;
 use App\Support\Festivals\FestivalProgramOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\Telegram\Alerts\QueueFestivalOwnerTelegramAlert;
@@ -48,6 +49,7 @@ class FestivalWorkspaceController extends Controller
     public function __construct(
         private FestivalWorkspaceAccess $workspaceAccess,
         private FestivalProgramOrder $programOrder,
+        private FestivalApplicationIndex $applicationIndex,
     ) {}
 
     public function applications(Request $request, Account $account, FestivalEdition $festivalEdition): View
@@ -55,9 +57,11 @@ class FestivalWorkspaceController extends Controller
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['registrations'] || $permissions['finance'], 403);
 
-        [$categories, $filters] = $this->entryIndexFilters($request, $festivalEdition, true);
-        $entries = $this->entryIndexQuery($festivalEdition, $filters, $permissions['registrations'])
-            ->with('steps.charges')
+        $filterData = $this->applicationIndex->filterData($request, $festivalEdition);
+        $filters = $filterData['filters'];
+        $entries = $this->applicationIndex->query($festivalEdition, $filters, $permissions['registrations'])
+            ->with(['category.direction', 'steps.charges', 'steps.workflowStep'])
+            ->when($permissions['registrations'], fn (Builder $query) => $query->with('portalUser'))
             ->withCount([
                 'requirements as blocking_requirements_count' => fn ($query) => $query
                     ->whereHas('definition', fn ($query) => $query->where('is_required', true))
@@ -73,24 +77,18 @@ class FestivalWorkspaceController extends Controller
             ->latest('id')
             ->paginate(20)
             ->withQueryString();
-        $entryCounts = FestivalEntry::query()
-            ->where('festival_edition_id', $festivalEdition->id)
-            ->selectRaw('status, count(*) as aggregate')
-            ->groupBy('status')
-            ->pluck('aggregate', 'status')
-            ->map(fn (mixed $count): int => (int) $count);
-        $entryStatistics = collect(FestivalEntryStatus::cases())
-            ->mapWithKeys(fn (FestivalEntryStatus $status): array => [$status->value => $entryCounts[$status->value] ?? 0]);
 
         return view('festivals.staff.applications', [
             'account' => $account,
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
             'entries' => $entries,
-            'categories' => $categories,
+            'categories' => $filterData['categories'],
+            'currentStepGroups' => $filterData['current_steps']->groupBy('festival_workflow_id'),
             'filters' => $filters,
-            'hasFilters' => $filters['q'] !== '' || $filters['status'] !== '' || $filters['category'] !== '',
-            'entryStatistics' => $entryStatistics,
+            'hasFilters' => collect($filters)->contains(fn (string $value): bool => $value !== ''),
+            'queueKeys' => $this->applicationIndex->queueKeys(),
+            'queueCounts' => $this->applicationIndex->queueCounts($festivalEdition, $filters, $permissions['registrations']),
         ]);
     }
 

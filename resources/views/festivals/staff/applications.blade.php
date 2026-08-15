@@ -8,10 +8,10 @@
 
     <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
         @php
-            $preservedApplicationFilters = array_filter([
-                'q' => $filters['q'],
-                'category' => $filters['category'],
-            ], fn ($value) => $value !== '');
+            $preservedApplicationFilters = collect($filters)
+                ->except('queue')
+                ->filter(fn ($value) => $value !== '')
+                ->all();
         @endphp
 
         <div class="flex items-center justify-between gap-4">
@@ -20,70 +20,107 @@
         </div>
 
         <div class="mt-5">
-            <h3 id="festival-entry-status-cards" class="font-semibold text-slate-950">{{ __('app.festival_entries_by_status') }}</h3>
-            <nav class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-labelledby="festival-entry-status-cards">
-                <a
-                    href="{{ route('dashboard.accounts.festivals.applications', array_merge([$account, $edition], $preservedApplicationFilters)) }}"
-                    class="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 {{ $filters['status'] === '' ? 'ring-2 ring-brand-500 ring-offset-2' : '' }}"
-                    data-status-card="all"
-                    @if($filters['status'] === '') aria-current="page" @endif
-                >
-                    <span class="truncate text-sm font-semibold">{{ __('app.all') }}</span>
-                    <strong class="text-xl">{{ $entryStatistics->sum() }}</strong>
-                </a>
-                @foreach (\App\Enums\FestivalEntryStatus::cases() as $status)
+            <div class="-mx-1 overflow-x-auto px-1 pb-2">
+                <nav class="flex min-w-max flex-nowrap gap-2 sm:min-w-0 sm:flex-wrap" aria-label="{{ __('app.festival_application_work_queues') }}">
+                    <a
+                        href="{{ route('dashboard.accounts.festivals.applications', array_merge([$account, $edition], $preservedApplicationFilters)) }}"
+                        class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 {{ $filters['queue'] === '' ? 'ring-2 ring-brand-500 ring-offset-2' : '' }}"
+                        data-queue-pill="all"
+                        @if($filters['queue'] === '') aria-current="page" @endif
+                    >
+                        <span>{{ __('app.all') }}</span>
+                        <strong class="rounded-full bg-white/80 px-2 py-0.5 text-xs">{{ $queueCounts['all'] }}</strong>
+                    </a>
+                    @foreach ($queueKeys as $queue)
                     @php
-                        $statusCardClasses = match ($status) {
-                            \App\Enums\FestivalEntryStatus::Draft => 'border-stone-200 bg-stone-50 text-stone-800 hover:border-stone-300 hover:bg-stone-100',
-                            \App\Enums\FestivalEntryStatus::Submitted => 'border-sky-200 bg-sky-50 text-sky-900 hover:border-sky-300 hover:bg-sky-100',
-                            \App\Enums\FestivalEntryStatus::UnderReview => 'border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-300 hover:bg-amber-100',
-                            \App\Enums\FestivalEntryStatus::ChangesPending => 'border-violet-200 bg-violet-50 text-violet-900 hover:border-violet-300 hover:bg-violet-100',
-                            \App\Enums\FestivalEntryStatus::Accepted => 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-100',
-                            \App\Enums\FestivalEntryStatus::Rejected => 'border-rose-200 bg-rose-50 text-rose-900 hover:border-rose-300 hover:bg-rose-100',
-                            \App\Enums\FestivalEntryStatus::Withdrawn => 'border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-400 hover:bg-slate-200',
+                        $queueClasses = match ($queue) {
+                            \App\Support\Festivals\FestivalApplicationIndex::QueueAwaitingReview => 'border-sky-200 bg-sky-50 text-sky-900 hover:border-sky-300 hover:bg-sky-100',
+                            \App\Support\Festivals\FestivalApplicationIndex::QueueCorrectionsRequested => 'border-violet-200 bg-violet-50 text-violet-900 hover:border-violet-300 hover:bg-violet-100',
+                            \App\Support\Festivals\FestivalApplicationIndex::QueuePaymentIncomplete => 'border-rose-200 bg-rose-50 text-rose-900 hover:border-rose-300 hover:bg-rose-100',
+                            \App\Support\Festivals\FestivalApplicationIndex::QueueNotSubmitted => 'border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-300 hover:bg-amber-100',
+                            \App\Support\Festivals\FestivalApplicationIndex::QueueComplete => 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-100',
+                            \App\Support\Festivals\FestivalApplicationIndex::QueueClosed => 'border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-400 hover:bg-slate-200',
                         };
                     @endphp
                     <a
-                        href="{{ route('dashboard.accounts.festivals.applications', array_merge([$account, $edition], $preservedApplicationFilters, ['status' => $status->value])) }}"
-                        class="flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 {{ $statusCardClasses }} {{ $filters['status'] === $status->value ? 'ring-2 ring-brand-500 ring-offset-2' : '' }}"
-                        data-status-card="{{ $status->value }}"
-                        @if($filters['status'] === $status->value) aria-current="page" @endif
+                        href="{{ route('dashboard.accounts.festivals.applications', array_merge([$account, $edition], $preservedApplicationFilters, ['queue' => $queue])) }}"
+                        class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 {{ $queueClasses }} {{ $filters['queue'] === $queue ? 'ring-2 ring-brand-500 ring-offset-2' : '' }}"
+                        data-queue-pill="{{ $queue }}"
+                        @if($filters['queue'] === $queue) aria-current="page" @endif
                     >
-                        <span class="truncate text-sm font-semibold">{{ __('app.festival_entry_status_'.$status->value) }}</span>
-                        <strong class="text-xl">{{ $entryStatistics[$status->value] ?? 0 }}</strong>
+                        <span>{{ __('app.festival_application_queue_'.$queue) }}</span>
+                        <strong class="rounded-full bg-white/80 px-2 py-0.5 text-xs">{{ $queueCounts[$queue] }}</strong>
                     </a>
-                @endforeach
-            </nav>
+                    @endforeach
+                </nav>
+            </div>
         </div>
 
         <div class="mt-5">
             <x-ui.filter-bar
                 :action="route('dashboard.accounts.festivals.applications', [$account, $edition])"
                 :reset-href="route('dashboard.accounts.festivals.applications', [$account, $edition])"
-                class="sm:grid-cols-2 xl:grid-cols-3"
+                class="sm:grid-cols-2"
             >
-                <label>
+                @if($filters['queue'] !== '')
+                    <input type="hidden" name="queue" value="{{ $filters['queue'] }}">
+                @endif
+                <label class="block min-w-0">
                     <span class="crm-label">{{ __('app.search') }}</span>
-                    <input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_entry_search_placeholder') }}">
+                    <input type="search" name="q" value="{{ $filters['q'] }}" class="crm-field min-h-11" placeholder="{{ __('app.festival_entry_search_placeholder') }}">
                 </label>
-                <label>
-                    <span class="crm-label">{{ __('app.status') }}</span>
-                    <select name="status" class="crm-field">
-                        <option value="">{{ __('app.all') }}</option>
-                        @foreach (\App\Enums\FestivalEntryStatus::cases() as $status)
-                            <option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.festival_entry_status_'.$status->value) }}</option>
-                        @endforeach
-                    </select>
-                </label>
-                <label>
+                <label class="block min-w-0">
                     <span class="crm-label">{{ __('app.festival_category') }}</span>
-                    <select name="category" class="crm-field">
+                    <select name="category" class="crm-field min-h-11">
                         <option value="">{{ __('app.all') }}</option>
                         @foreach ($categories as $category)
                             <option value="{{ $category->id }}" @selected($filters['category'] === (string) $category->id)>{{ $category->name }}</option>
                         @endforeach
                     </select>
                 </label>
+                <div class="grid gap-3 pb-1 sm:col-span-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <label class="block min-w-0">
+                        <span class="crm-label">{{ __('app.festival_application_status_filter') }}</span>
+                        <select name="status" class="crm-field min-h-11">
+                            <option value="">{{ __('app.all') }}</option>
+                            @foreach (\App\Enums\FestivalEntryStatus::cases() as $status)
+                                <option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.festival_entry_status_'.$status->value) }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="block min-w-0">
+                        <span class="crm-label">{{ __('app.festival_current_step_filter') }}</span>
+                        <select name="current_step" class="crm-field min-h-11">
+                            <option value="">{{ __('app.all') }}</option>
+                            @foreach ($currentStepGroups as $steps)
+                                <optgroup label="{{ $steps->first()->workflow->name }}">
+                                    @foreach ($steps as $step)
+                                        <option value="{{ $step->id }}" @selected($filters['current_step'] === (string) $step->id)>
+                                            {{ $step->title }}@if(! $step->is_active) · {{ __('app.inactive') }}@endif
+                                        </option>
+                                    @endforeach
+                                </optgroup>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="block min-w-0">
+                        <span class="crm-label">{{ __('app.festival_checklist_filter') }}</span>
+                        <select name="checklist" class="crm-field min-h-11">
+                            <option value="">{{ __('app.all') }}</option>
+                            <option value="open" @selected($filters['checklist'] === 'open')>{{ __('app.festival_checklist_open') }}</option>
+                            <option value="complete" @selected($filters['checklist'] === 'complete')>{{ __('app.festival_checklist_complete') }}</option>
+                        </select>
+                    </label>
+                    <label class="block min-w-0">
+                        <span class="crm-label">{{ __('app.festival_current_step_payment_filter') }}</span>
+                        <select name="payment" class="crm-field min-h-11">
+                            <option value="">{{ __('app.all') }}</option>
+                            <option value="incomplete" @selected($filters['payment'] === 'incomplete')>{{ __('app.festival_payment_filter_incomplete') }}</option>
+                            <option value="paid" @selected($filters['payment'] === 'paid')>{{ __('app.festival_payment_filter_paid') }}</option>
+                            <option value="not_required" @selected($filters['payment'] === 'not_required')>{{ __('app.festival_payment_filter_not_required') }}</option>
+                        </select>
+                    </label>
+                </div>
             </x-ui.filter-bar>
         </div>
 
@@ -96,7 +133,9 @@
                         && $entry->blocking_requirements_count === 0
                         && $entry->blocking_charges_count === 0
                         && $entry->scheduled_performance_slots_count > 0;
-                    $currentStep = $entry->steps->first(fn ($step) => $step->status !== \App\Enums\FestivalEntryStepStatus::Approved);
+                    $currentStep = $entry->current_step_id
+                        ? $entry->steps->firstWhere('id', (int) $entry->current_step_id)
+                        : null;
                     $currentPaymentCharges = $currentStep?->charges
                         ->filter(fn ($charge) => $charge->amount_cents > 0 && $charge->status !== \App\Enums\FestivalChargeStatus::Cancelled)
                         ?? collect();
@@ -136,7 +175,7 @@
                         </div>
                         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                             <div class="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-72">
-                                <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->blocking_requirements_count }}</strong>{{ __('app.festival_requirements_open') }}</div>
+                                <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->current_checklist_open_count }}</strong>{{ __('app.festival_requirements_open') }}</div>
                                 <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->blocking_charges_count }}</strong>{{ __('app.festival_charges_open') }}</div>
                                 <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->performance_slots_count }}</strong>{{ __('app.festival_program_slots') }}</div>
                             </div>

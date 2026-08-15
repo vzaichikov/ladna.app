@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.134.0',
+                'date' => '2026-08-15',
+                'title' => 'Actionable Festival application queues',
+                'items' => ['Festival application lists now use compact, mutually exclusive work queues for review, requested corrections, incomplete payments, participant submission, completed registrations, and closed applications.', 'Organizers can combine each queue with always-visible search, category, application-status, current-step, checklist, and current-step payment filters. Counts adapt to the other selected filters, and every selection survives queue changes and pagination.', 'Current-step checklist and payment filters follow the actual registration flow, so teams can find an approved first step with an unpaid second step or a later step that has not yet been completed without scanning every application.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.133.0',
                 'date' => '2026-08-14',
                 'title' => 'Event ticket operations and safer Festival exceptions',
@@ -1171,6 +1178,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.134.0',
+                'date' => '2026-08-15',
+                'title' => 'Дієві черги заявок фестивалю',
+                'items' => ['Список заявок фестивалю тепер має компактні взаємовиключні черги для перевірки, запитаних виправлень, незавершених оплат, подання учасником, завершених реєстрацій і закритих заявок.', 'Організатори можуть поєднувати кожну чергу із завжди видимими фільтрами пошуку, категорії, статусу заявки, поточного кроку, чекліста й оплати поточного кроку. Лічильники враховують інші вибрані фільтри, а всі параметри зберігаються під час зміни черги та переходу між сторінками.', 'Фільтри чекліста й оплати поточного кроку повторюють реальний процес реєстрації, тому команда може знайти схвалений перший крок із неоплаченим другим або пізніший крок, який учасник ще не завершив, без ручного перегляду всіх заявок.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.133.0',
                 'date' => '2026-08-14',

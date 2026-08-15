@@ -32,6 +32,7 @@ use App\Models\FestivalStage;
 use App\Models\FestivalTicketOrder;
 use App\Models\FiscalReceipt;
 use App\Models\User;
+use App\Support\Festivals\FestivalApplicationIndex;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -592,10 +593,10 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_applications_support_status_cards_global_counts_and_query_preserving_filters(): void
+    public function test_applications_support_compact_work_queues_and_query_preserving_filters(): void
     {
         $this->assertSame('Заявки', trans('app.festival_applications_title', [], 'uk'));
-        $this->assertSame('Заявки за статусом', trans('app.festival_entries_by_status', [], 'uk'));
+        $this->assertSame('Робочі черги', trans('app.festival_application_work_queues', [], 'uk'));
         $this->assertSame('Заявок ще немає.', trans('app.festival_applications_empty', [], 'uk'));
         $this->assertSame('Чекліст', trans('app.festival_requirements_open', [], 'uk'));
 
@@ -654,6 +655,9 @@ class FestivalWorkspaceTabsTest extends TestCase
         $byName->assertOk()
             ->assertSee($acceptedEntry->entry_name)
             ->assertDontSee($submittedEntry->entry_name)
+            ->assertSee('aria-label="'.__('app.festival_application_work_queues').'"', false)
+            ->assertDontSee('<h3 id="festival-application-work-queues"', false)
+            ->assertDontSee('<details class="sm:col-span-2"', false)
             ->assertViewHas('filters', fn (array $filters): bool => $filters['q'] === 'Featured')
             ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 1);
 
@@ -700,10 +704,11 @@ class FestivalWorkspaceTabsTest extends TestCase
             'status' => FestivalEntryStatus::Accepted->value,
         ]);
         $combined = $this->actingAs($owner)->get($combinedUrl);
-        $allStatusesUrl = route('dashboard.accounts.festivals.applications', [
+        $allQueuesUrl = route('dashboard.accounts.festivals.applications', [
             $account,
             $edition,
             'q' => 'Featured',
+            'status' => FestivalEntryStatus::Accepted->value,
             'category' => $secondCategory->id,
         ]);
         $combined->assertOk()
@@ -714,14 +719,12 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertSee(__('app.festival_current_step'))
             ->assertSee($acceptedCurrentStep->workflowStep->title)
             ->assertDontSee($draftEntry->entry_name)
-            ->assertSee($combinedUrl)
-            ->assertSee($allStatusesUrl)
+            ->assertSee($allQueuesUrl)
             ->assertDontSee(__('app.festival_application_statistics'))
             ->assertDontSee(__('app.festival_entries_by_category'))
             ->assertDontSee(__('app.festival_entries_by_direction'))
             ->assertDontSee('crm-tab whitespace-nowrap', false)
             ->assertSee('border-slate-200 bg-slate-50', false)
-            ->assertSee('border-stone-200 bg-stone-50 text-stone-800', false)
             ->assertSee('border-sky-200 bg-sky-50 text-sky-900', false)
             ->assertSee('border-amber-200 bg-amber-50 text-amber-900', false)
             ->assertSee('border-violet-200 bg-violet-50 text-violet-900', false)
@@ -732,24 +735,28 @@ class FestivalWorkspaceTabsTest extends TestCase
                 'q' => 'Featured',
                 'status' => FestivalEntryStatus::Accepted->value,
                 'category' => (string) $secondCategory->id,
+                'queue' => '',
+                'current_step' => '',
+                'checklist' => '',
+                'payment' => '',
             ])
-            ->assertViewHas('entryStatistics', function ($statistics): bool {
-                return $statistics->all() === [
-                    FestivalEntryStatus::Draft->value => 1,
-                    FestivalEntryStatus::Submitted->value => 1,
-                    FestivalEntryStatus::UnderReview->value => 0,
-                    FestivalEntryStatus::ChangesPending->value => 0,
-                    FestivalEntryStatus::Accepted->value => 1,
-                    FestivalEntryStatus::Rejected->value => 0,
-                    FestivalEntryStatus::Withdrawn->value => 0,
+            ->assertViewHas('queueCounts', function ($counts): bool {
+                return $counts->all() === [
+                    'all' => 1,
+                    'awaiting_review' => 0,
+                    'corrections_requested' => 0,
+                    'payment_incomplete' => 0,
+                    'not_submitted' => 1,
+                    'complete' => 0,
+                    'closed' => 0,
                 ];
             });
-        $this->assertSame(8, substr_count($combined->getContent(), 'data-status-card='));
-        $this->assertMatchesRegularExpression('/data-status-card="all"[^>]*>.*?<strong class="text-xl">3<\/strong>/s', $combined->getContent());
-        $this->assertMatchesRegularExpression('/data-status-card="accepted"\s+aria-current="page"/', $combined->getContent());
+        $this->assertSame(7, substr_count($combined->getContent(), 'data-queue-pill='));
+        $this->assertMatchesRegularExpression('/data-queue-pill="all"\s+aria-current="page"/', $combined->getContent());
+        $combined->assertDontSee('data-status-card=', false);
         $this->assertSame(3, substr_count($combined->getContent(), 'aria-current="page"'));
-        foreach (FestivalEntryStatus::cases() as $status) {
-            $combined->assertSee(__('app.festival_entry_status_'.$status->value));
+        foreach (app(FestivalApplicationIndex::class)->queueKeys() as $queue) {
+            $combined->assertSee(__('app.festival_application_queue_'.$queue));
         }
 
         FestivalEntry::factory()->count(20)->for($firstCategory)->state(fn (): array => [
@@ -799,6 +806,10 @@ class FestivalWorkspaceTabsTest extends TestCase
             $edition,
             'status' => 'unknown-status',
             'category' => $otherCategory->id,
+            'queue' => 'unknown-queue',
+            'current_step' => 999999999,
+            'checklist' => 'unknown-checklist',
+            'payment' => 'unknown-payment',
         ]));
         $invalid->assertOk()
             ->assertDontSee($otherEdition->title)
@@ -807,6 +818,10 @@ class FestivalWorkspaceTabsTest extends TestCase
                 'q' => '',
                 'status' => '',
                 'category' => '',
+                'queue' => '',
+                'current_step' => '',
+                'checklist' => '',
+                'payment' => '',
             ])
             ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 23);
     }
