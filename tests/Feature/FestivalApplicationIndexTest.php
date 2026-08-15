@@ -287,6 +287,7 @@ class FestivalApplicationIndexTest extends TestCase
             ->assertViewHas('queueCounts', fn ($counts): bool => $counts['all'] === 1 && $counts[FestivalApplicationIndex::QueueNotSubmitted] === 1)
             ->assertViewHas('entries', fn ($entries): bool => $entries->total() === 1);
         $response->assertSee('aria-label="'.__('app.festival_application_work_queues').'"', false)
+            ->assertDontSee('<h2 class="text-xl font-semibold">'.__('app.festival_applications_title').'</h2>', false)
             ->assertDontSee('<h3 id="festival-application-work-queues"', false)
             ->assertDontSee('<details class="sm:col-span-2"', false)
             ->assertDontSee(__('app.more_filters'))

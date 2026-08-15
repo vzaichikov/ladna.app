@@ -14,14 +14,8 @@
                 ->all();
         @endphp
 
-        <div class="flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold">{{ __('app.festival_applications_title') }}</h2>
-            <span class="text-sm font-semibold text-slate-500">{{ $entries->total() }}</span>
-        </div>
-
-        <div class="mt-5">
-            <div class="-mx-1 overflow-x-auto px-1 pb-2 pt-1">
-                <nav class="flex min-w-max flex-nowrap gap-2 sm:min-w-0 sm:flex-wrap" aria-label="{{ __('app.festival_application_work_queues') }}">
+        <div class="-mx-1 overflow-x-auto px-1 pb-2 pt-1">
+            <nav class="flex min-w-max flex-nowrap gap-2 sm:min-w-0 sm:flex-wrap" aria-label="{{ __('app.festival_application_work_queues') }}">
                     <a
                         href="{{ route('dashboard.accounts.festivals.applications', array_merge([$account, $edition], $preservedApplicationFilters)) }}"
                         class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 {{ $filters['queue'] === '' ? 'ring-2 ring-brand-500 ring-offset-2' : '' }}"
@@ -52,8 +46,7 @@
                         <strong class="rounded-full bg-white/80 px-2 py-0.5 text-xs">{{ $queueCounts[$queue] }}</strong>
                     </a>
                     @endforeach
-                </nav>
-            </div>
+            </nav>
         </div>
 
         <div class="mt-5">
