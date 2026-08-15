@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.138.0',
+                'date' => '2026-08-15',
+                'title' => 'Human-confirmed ticket admission',
+                'items' => ['Event and Festival scanners now show the ticket holder, ticket type, and code before admission. Scanning a valid QR code never marks it as passed until a staff member explicitly selects Confirm pass.', 'An already-used ticket opens a clear danger dialog with its holder and admission time, while missing, invalid, void, and unexpected tickets show a dismissible warning.', 'Every scanner dialog can be closed without changing the ticket and scanning continues immediately, with the camera and optional light remaining available.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.137.0',
                 'date' => '2026-08-15',
                 'title' => 'Live Event admission and clearer ticket operations',
@@ -1199,6 +1206,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.138.0',
+                'date' => '2026-08-15',
+                'title' => 'Явне підтвердження проходу за квитком',
+                'items' => ['Сканери подій і фестивалів тепер показують власника, тип і код квитка до проходу. Сканування дійсного QR-коду ніколи не позначає квиток як використаний, доки працівник явно не натисне Підтвердити прохід.', 'Для вже використаного квитка відкривається виразне попередження з даними власника й часом проходу, а відсутній, недійсний, анульований або неочікуваний квиток показує повідомлення, яке можна закрити.', 'Кожне вікно сканера можна закрити без зміни квитка й одразу продовжити сканування, не вимикаючи камеру та доступну підсвітку.'],
+                'meta' => 'Очікується релізний коміт.',
+            ],
             [
                 'version' => '0.137.0',
                 'date' => '2026-08-15',

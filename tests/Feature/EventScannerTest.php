@@ -16,7 +16,7 @@ class EventScannerTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_receptionist_can_scan_once_and_duplicate_returns_operator_audit(): void
+    public function test_receptionist_previews_then_confirms_once_and_duplicate_returns_ticket_details(): void
     {
         $account = Account::factory()->create();
         $receptionist = User::factory()->create();
@@ -37,6 +37,21 @@ class EventScannerTest extends TestCase
                 'source' => 'qr',
             ])
             ->assertOk()
+            ->assertJsonPath('state', 'awaiting_confirmation')
+            ->assertJsonPath('ticket.code', $ticket->code)
+            ->assertJsonPath('ticket.type', $type->name)
+            ->assertJsonPath('ticket.customer', 'Door Guest');
+
+        $this->assertFalse($ticket->refresh()->is_checked_in);
+        $this->assertSame(0, $ticket->checkIns()->count());
+
+        $this->actingAs($receptionist)
+            ->postJson(route('dashboard.accounts.events.scanner.scan', [$account, $event]), [
+                'code' => $ticket->token_encrypted,
+                'source' => 'qr',
+                'confirm' => true,
+            ])
+            ->assertOk()
             ->assertJsonPath('state', 'checked_in');
 
         $this->actingAs($receptionist)
@@ -46,7 +61,10 @@ class EventScannerTest extends TestCase
             ])
             ->assertConflict()
             ->assertJsonPath('state', 'already_checked_in')
-            ->assertJsonPath('operator', $receptionist->name);
+            ->assertJsonPath('operator', $receptionist->name)
+            ->assertJsonPath('ticket.customer', 'Door Guest')
+            ->assertJsonPath('ticket.code', $ticket->code)
+            ->assertJsonPath('checked_in_at_label', $ticket->refresh()->checked_in_at?->timezone($event->timezone)->format('d.m.Y H:i'));
 
         $this->assertDatabaseHas('event_ticket_check_ins', [
             'event_ticket_id' => $ticket->id,
@@ -99,6 +117,7 @@ class EventScannerTest extends TestCase
             ->postJson(route('dashboard.accounts.events.scanner.scan', [$account, $event]), [
                 'code' => $ticket->code,
                 'source' => 'door_list',
+                'confirm' => true,
             ])
             ->assertOk();
 
@@ -164,6 +183,8 @@ class EventScannerTest extends TestCase
             ->get(route('dashboard.accounts.events.scanner', [$account, $event]))
             ->assertOk()
             ->assertSee(__('app.event_latest_entries'))
+            ->assertSee('data-scanner-modal', false)
+            ->assertSee(__('app.ticket_scanner_confirm_pass'))
             ->assertDontSee('name="search"', false);
 
         $latestTickets = $response->viewData('tickets');

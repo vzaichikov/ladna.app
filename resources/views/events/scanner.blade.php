@@ -51,5 +51,7 @@
             @endforeach
         </div>
     </section>
+
+    <x-ui.ticket-scanner-modal />
 </div>
 @endsection

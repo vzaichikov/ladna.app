@@ -40,9 +40,12 @@ class EventScannerController extends Controller
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:2048'],
             'source' => ['nullable', 'in:qr,manual,door_list'],
+            'confirm' => ['sometimes', 'boolean'],
         ]);
         $value = trim($validated['code']);
+        $confirmed = (bool) ($validated['confirm'] ?? false);
         $ticket = EventTicket::query()
+            ->where('account_id', $account->id)
             ->where(fn ($query) => $query
                 ->where('token_hash', hash('sha256', $value))
                 ->orWhere('code', strtoupper($value)))
@@ -56,8 +59,14 @@ class EventScannerController extends Controller
             return response()->json(['state' => 'wrong_event', 'message' => __('app.event_scan_wrong_event')], 422);
         }
 
-        return DB::transaction(function () use ($ticket, $event, $request, $validated): JsonResponse {
-            $ticket = EventTicket::query()->with(['order', 'ticketType'])->whereKey($ticket->id)->lockForUpdate()->firstOrFail();
+        return DB::transaction(function () use ($ticket, $event, $request, $validated, $confirmed): JsonResponse {
+            $ticketQuery = EventTicket::query()->with(['order', 'ticketType'])->whereKey($ticket->id);
+
+            if ($confirmed) {
+                $ticketQuery->lockForUpdate();
+            }
+
+            $ticket = $ticketQuery->firstOrFail();
 
             if ($event->status === EventStatus::Cancelled || $event->status === EventStatus::Archived) {
                 return response()->json(['state' => 'cancelled_event', 'message' => __('app.event_scan_cancelled')], 422);
@@ -78,8 +87,18 @@ class EventScannerController extends Controller
                     'state' => 'already_checked_in',
                     'message' => __('app.event_scan_duplicate'),
                     'checked_in_at' => $ticket->checked_in_at?->toIso8601String(),
+                    'checked_in_at_label' => $ticket->checked_in_at?->timezone($event->timezone)->format('d.m.Y H:i'),
                     'operator' => $last?->actor_name,
+                    'ticket' => $this->ticketSummary($ticket),
                 ], 409);
+            }
+
+            if (! $confirmed) {
+                return response()->json([
+                    'state' => 'awaiting_confirmation',
+                    'message' => __('app.event_scan_ready'),
+                    'ticket' => $this->ticketSummary($ticket),
+                ]);
             }
 
             $ticket->forceFill(['is_checked_in' => true, 'checked_in_at' => now()])->save();
@@ -88,7 +107,7 @@ class EventScannerController extends Controller
             return response()->json([
                 'state' => 'checked_in',
                 'message' => __('app.event_scan_success'),
-                'ticket' => ['code' => $ticket->code, 'type' => $ticket->ticketType?->name],
+                'ticket' => $this->ticketSummary($ticket),
             ]);
         }, 3);
     }
@@ -132,5 +151,15 @@ class EventScannerController extends Controller
             'reason' => $reason,
             'occurred_at' => now(),
         ]);
+    }
+
+    /** @return array{code: string, type: string|null, customer: string} */
+    private function ticketSummary(EventTicket $ticket): array
+    {
+        return [
+            'code' => $ticket->code,
+            'type' => $ticket->ticketType?->name,
+            'customer' => $ticket->order?->buyer_name ?? __('app.unknown'),
+        ];
     }
 }

@@ -78,12 +78,24 @@ class FestivalAdmissionTest extends TestCase
         $this->assertSame(hash('sha256', $rawToken), $ticket->token_hash);
 
         $actor = User::factory()->create();
-        $first = app(FestivalTicketScanner::class)->checkIn($edition, $rawToken, $actor, 'qr', '127.0.0.1');
+        $preview = app(FestivalTicketScanner::class)->checkIn($edition, $rawToken, $actor, 'qr', '127.0.0.1');
+
+        $this->assertSame('awaiting_confirmation', $preview['state']);
+        $this->assertSame($ticket->code, $preview['ticket']['code']);
+        $expectedHolder = $ticket->holder_name ?: $order->buyer_name;
+
+        $this->assertSame($expectedHolder, $preview['ticket']['customer']);
+        $this->assertFalse($ticket->refresh()->is_checked_in);
+        $this->assertSame(0, $ticket->scans()->count());
+
+        $first = app(FestivalTicketScanner::class)->checkIn($edition, $rawToken, $actor, 'qr', '127.0.0.1', true);
         $duplicate = app(FestivalTicketScanner::class)->checkIn($edition, $rawToken, $actor, 'qr', '127.0.0.1');
         $checkout = app(FestivalTicketScanner::class)->checkOut($edition, $ticket->refresh(), $actor, 'Operator correction', '127.0.0.1');
 
         $this->assertSame('checked_in', $first['state']);
         $this->assertSame('already_checked_in', $duplicate['state']);
+        $this->assertSame($expectedHolder, $duplicate['ticket']['customer']);
+        $this->assertNotNull($duplicate['checked_in_at_label']);
         $this->assertSame('checked_out', $checkout['state']);
         $this->assertDatabaseHas('festival_ticket_scans', ['festival_ticket_id' => $ticket->id, 'action' => 'check_in']);
         $this->assertDatabaseHas('festival_ticket_scans', ['festival_ticket_id' => $ticket->id, 'action' => 'check_out', 'reason' => 'Operator correction']);
@@ -92,6 +104,56 @@ class FestivalAdmissionTest extends TestCase
         $otherEdition = FestivalEdition::factory()->published()->for(FestivalSeries::factory()->for($otherAccount))->create(['account_id' => $otherAccount->id]);
         $this->assertSame('invalid', app(FestivalTicketScanner::class)->checkIn($otherEdition, $rawToken, $actor, 'qr', null)['state']);
         $this->get(route('public.festival-orders.show', [$otherAccount->slug, $order->access_token_encrypted]))->assertNotFound();
+    }
+
+    public function test_festival_scanner_endpoint_requires_confirmation_and_renders_the_shared_modal(): void
+    {
+        Mail::fake();
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $type = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'inventory' => 5,
+            'price_cents' => 0,
+        ]);
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $order = $this->createOrderAction($account)->execute($edition, $this->orderInput($type, 1), $guest);
+        $order->update(['status' => FestivalTicketOrderStatus::Paid, 'paid_at' => now(), 'expires_at' => null]);
+        app(FestivalTicketIssuer::class)->execute($order);
+        $ticket = $order->tickets()->firstOrFail();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.scanner', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('data-scanner-modal', false)
+            ->assertSee(__('app.ticket_scanner_confirm_pass'));
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.festivals.scanner.scan', [$account, $edition]), [
+                'code' => $ticket->token_encrypted,
+                'source' => 'qr',
+            ])
+            ->assertOk()
+            ->assertJsonPath('state', 'awaiting_confirmation')
+            ->assertJsonPath('ticket.code', $ticket->code)
+            ->assertJsonMissingPath('ticket.email')
+            ->assertJsonMissingPath('ticket.phone');
+
+        $this->assertFalse($ticket->refresh()->is_checked_in);
+        $this->assertSame(0, $ticket->scans()->count());
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.festivals.scanner.scan', [$account, $edition]), [
+                'code' => $ticket->token_encrypted,
+                'source' => 'qr',
+                'confirm' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('state', 'checked_in');
+
+        $this->assertTrue($ticket->refresh()->is_checked_in);
+        $this->assertSame(1, $ticket->scans()->where('action', 'check_in')->count());
     }
 
     public function test_late_paid_order_becomes_refund_required_without_issuing_tickets(): void

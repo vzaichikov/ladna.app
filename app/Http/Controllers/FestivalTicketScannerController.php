@@ -29,8 +29,19 @@ class FestivalTicketScannerController extends Controller
     public function scan(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalTicketScanner $scanner): JsonResponse
     {
         $this->authorizeScanner($request, $account, $festivalEdition);
-        $data = $request->validate(['code' => ['required', 'string', 'max:2048'], 'source' => ['nullable', 'in:qr,manual,door_list']]);
-        $result = $scanner->checkIn($festivalEdition, $data['code'], $request->user(), $data['source'] ?? 'qr', $request->ip());
+        $data = $request->validate([
+            'code' => ['required', 'string', 'max:2048'],
+            'source' => ['nullable', 'in:qr,manual,door_list'],
+            'confirm' => ['sometimes', 'boolean'],
+        ]);
+        $result = $scanner->checkIn(
+            $festivalEdition,
+            $data['code'],
+            $request->user(),
+            $data['source'] ?? 'qr',
+            $request->ip(),
+            (bool) ($data['confirm'] ?? false),
+        );
         $status = match ($result['state']) {
             'invalid' => 404, 'already_checked_in' => 409, 'wrong_edition', 'void' => 422, default => 200
         };

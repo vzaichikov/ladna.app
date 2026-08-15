@@ -78,7 +78,7 @@ class FestivalManualTicketIssuanceTest extends TestCase
         $this->assertSame('Invited Staff Member', $ticket->holder_name);
         $this->assertSame(hash('sha256', $ticket->token_encrypted), $ticket->token_hash);
         $this->assertNotSame($ticket->token_encrypted, DB::table('festival_tickets')->where('id', $ticket->id)->value('token_encrypted'));
-        $this->assertSame('checked_in', app(FestivalTicketScanner::class)->checkIn($edition, $ticket->token_encrypted, $owner, 'qr', null)['state']);
+        $this->assertSame('checked_in', app(FestivalTicketScanner::class)->checkIn($edition, $ticket->token_encrypted, $owner, 'qr', null, true)['state']);
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.tickets.void', [$account, $edition, $ticket]), [
             'reason' => 'Invitation withdrawn',
         ])->assertRedirect();

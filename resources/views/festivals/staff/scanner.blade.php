@@ -62,6 +62,8 @@
             </div>
             {{ $tickets->links() }}
         </section>
+
+        <x-ui.ticket-scanner-modal />
     </div>
 </x-festivals.staff.workspace>
 @endsection
