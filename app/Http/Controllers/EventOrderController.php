@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\Event;
 use App\Models\EventOrder;
 use App\Models\EventTicket;
+use App\Support\Fiscalization\FiscalizationAvailability;
 use App\Support\Mail\TransactionalMailDispatcher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,15 +18,30 @@ use Illuminate\View\View;
 
 class EventOrderController extends Controller
 {
-    public function index(Request $request, Account $account, Event $event): View
-    {
+    public function index(
+        Request $request,
+        Account $account,
+        Event $event,
+        FiscalizationAvailability $fiscalization,
+    ): View {
         $this->ensureScope($account, $event);
         abort_unless($request->user()?->can('manageEvents', $account), 403);
 
         return view('events.orders', [
             'account' => $account,
             'event' => $event,
-            'orders' => $event->orders()->with(['items', 'tickets', 'emailDeliveries' => fn ($query) => $query->latest()])->latest()->paginate(30),
+            'orders' => $event->orders()
+                ->with([
+                    'items',
+                    'tickets' => fn ($query) => $query->with('orderItem')->orderBy('id'),
+                    'emailDeliveries' => fn ($query) => $query->latest('id'),
+                    'fiscalReceipt',
+                    'issuedBy:id,name',
+                ])
+                ->latest('id')
+                ->paginate(20)
+                ->withQueryString(),
+            'fiscalizationEnabled' => $fiscalization->enabledForAccount($account),
             'urgentRefundsCount' => $event->orders()->whereIn('status', [
                 EventOrderStatus::PaidRequiresRefund->value,
                 EventOrderStatus::RefundRequired->value,

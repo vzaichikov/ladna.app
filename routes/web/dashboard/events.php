@@ -5,6 +5,7 @@ use App\Http\Controllers\EventOrderController;
 use App\Http\Controllers\EventScannerController;
 use App\Http\Controllers\EventTicketController;
 use App\Http\Controllers\EventTicketIssuanceController;
+use App\Http\Controllers\EventTicketOverviewController;
 use App\Http\Controllers\EventTicketTypeController;
 use Illuminate\Support\Facades\Route;
 
@@ -33,3 +34,5 @@ Route::post('accounts/{account}/events/{event:id}/orders/{eventOrder}/tickets/{e
 Route::get('accounts/{account}/events/{event:id}/scanner', [EventScannerController::class, 'show'])->scopeBindings()->name('accounts.events.scanner');
 Route::post('accounts/{account}/events/{event:id}/scanner/scan', [EventScannerController::class, 'scan'])->middleware('throttle:event-scanner')->scopeBindings()->name('accounts.events.scanner.scan');
 Route::post('accounts/{account}/events/{event:id}/scanner/tickets/{eventTicket}/check-out', [EventScannerController::class, 'checkOut'])->middleware('throttle:event-scanner')->scopeBindings()->name('accounts.events.scanner.check-out');
+Route::get('accounts/{account}/events/{event:id}/attendance', [EventTicketOverviewController::class, 'show'])->scopeBindings()->name('accounts.events.attendance');
+Route::get('accounts/{account}/events/{event:id}/attendance/data', [EventTicketOverviewController::class, 'data'])->scopeBindings()->name('accounts.events.attendance.data');

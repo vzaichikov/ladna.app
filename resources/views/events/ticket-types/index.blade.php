@@ -3,7 +3,7 @@
 @section('title', __('app.event_ticket_types').' - '.$event->title)
 
 @section('content')
-<div class="mx-auto max-w-7xl space-y-6" data-event-admin-page>
+<div class="w-full min-w-0 space-y-6" data-event-admin-page>
     <x-ui.page-header :title="__('app.event_ticket_types')" :copy="__('app.event_tickets_help', ['currency' => $event->currency])">
         <x-slot:actions>
             <x-ui.button :href="route('dashboard.accounts.events.ticket-types.create', [$account, $event])">

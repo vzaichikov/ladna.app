@@ -18,22 +18,19 @@ class EventScannerController extends Controller
     public function show(Request $request, Account $account, Event $event): View
     {
         $this->authorizeScanner($request, $account, $event);
-        $search = trim($request->string('search')->toString());
         $tickets = $event->tickets()
-            ->with(['ticketType', 'order:id,buyer_name'])
-            ->when($search !== '', fn ($query) => $query
-                ->where(fn ($query) => $query
-                    ->where('code', 'like', "%{$search}%")
-                    ->orWhereHas('order', fn ($query) => $query->where('buyer_name', 'like', "%{$search}%"))))
-            ->orderBy('code')
-            ->paginate(50)
-            ->withQueryString();
+            ->select(['id', 'event_id', 'event_order_id', 'event_ticket_type_id', 'code', 'status', 'is_checked_in', 'checked_in_at'])
+            ->with(['ticketType:id,name', 'order:id,buyer_name'])
+            ->where('is_checked_in', true)
+            ->latest('checked_in_at')
+            ->latest('id')
+            ->limit(10)
+            ->get();
 
         return view('events.scanner', [
             'account' => $account,
             'event' => $event,
             'tickets' => $tickets,
-            'search' => $search,
         ]);
     }
 

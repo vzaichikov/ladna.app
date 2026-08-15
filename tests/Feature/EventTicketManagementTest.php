@@ -94,11 +94,17 @@ class EventTicketManagementTest extends TestCase
             ->get(route('dashboard.accounts.events.ticket-types.index', [$account, $event]))
             ->assertForbidden();
 
-        $this->actingAs($receptionist)
+        $scannerResponse = $this->actingAs($receptionist)
             ->get(route('dashboard.accounts.events.scanner', [$account, $event]))
             ->assertOk()
             ->assertSee(__('app.event_scanner'))
+            ->assertSee(route('dashboard.accounts.events.attendance', [$account, $event]), false)
             ->assertDontSee(__('app.event_ticket_types'));
+
+        $scannerResponse->assertSeeInOrder([
+            route('dashboard.accounts.events.scanner', [$account, $event]),
+            route('dashboard.accounts.events.attendance', [$account, $event]),
+        ], false);
     }
 
     public function test_published_event_protects_used_and_last_active_ticket_types(): void

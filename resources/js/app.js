@@ -2,6 +2,7 @@ import { createIcons, icons } from 'lucide';
 import Panzoom from '@panzoom/panzoom';
 import SimplePhoneMask from 'simple-phone-mask';
 import 'summernote/dist/summernote-lite.css';
+import { initEventAttendance } from './event-attendance';
 import { initEventScanner } from './event-scanner';
 import { initFestivalStreamPlayer } from './festival-stream-player';
 
@@ -8367,6 +8368,7 @@ function initFieldHelp(root = document) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    initEventAttendance();
     initFestivalStreamPlayer();
     initFestivalStreamStatus();
     initFestivalAnnouncementModal();
@@ -8692,6 +8694,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirmationReasonContainer && confirmationReasonInput) {
             confirmationReasonContainer.classList.toggle('hidden', !pendingConfirmationReasonRequired);
             confirmationReasonInput.value = '';
+            const reasonMaxLength = Number.parseInt(
+                source.dataset.confirmReasonMaxlength
+                    || form.dataset.confirmReasonMaxlength
+                    || '5000',
+                10,
+            );
+            confirmationReasonInput.maxLength = Number.isFinite(reasonMaxLength) && reasonMaxLength > 0
+                ? reasonMaxLength
+                : 5000;
             confirmationReasonInput.placeholder = source.dataset.confirmReasonPlaceholder
                 || form.dataset.confirmReasonPlaceholder
                 || '';

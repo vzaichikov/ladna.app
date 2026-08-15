@@ -50,7 +50,7 @@
             <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('app.festival_category_eligibility_copy') }}</p>
         </div>
         <div class="mt-5 grid gap-5 sm:grid-cols-2">
-            <label>
+            <label class="sm:col-span-2">
                 <span class="crm-label">{{ __('app.festival_competition_format') }}</span>
                 <select name="competition_format" required class="crm-field">
                     @foreach (\App\Enums\FestivalCompetitionFormat::cases() as $format)
@@ -58,17 +58,6 @@
                     @endforeach
                 </select>
                 @error('competition_format') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-            <label>
-                <span class="crm-label">{{ __('app.festival_minimum_entries_to_run') }}</span>
-                <input type="number" min="1" max="10000" name="minimum_entries_to_run" value="{{ old('minimum_entries_to_run', $category?->minimum_entries_to_run ?? 1) }}" required class="crm-field">
-                @error('minimum_entries_to_run') <span class="crm-help">{{ $message }}</span> @enderror
-            </label>
-            <label>
-                <span class="crm-label">{{ __('app.festival_maximum_accepted_entries') }}</span>
-                <input type="number" min="1" max="10000" name="maximum_accepted_entries" value="{{ old('maximum_accepted_entries', $category?->maximum_accepted_entries) }}" class="crm-field">
-                <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_maximum_accepted_entries_help') }}</span>
-                @error('maximum_accepted_entries') <span class="crm-help">{{ $message }}</span> @enderror
             </label>
             <label>
                 <span class="crm-label">{{ __('app.minimum_members') }}</span>
@@ -80,6 +69,35 @@
                 <input type="number" min="1" max="100" name="max_members" value="{{ old('max_members', $category?->max_members ?? 1) }}" required class="crm-field">
                 @error('max_members') <span class="crm-help">{{ $message }}</span> @enderror
             </label>
+        </div>
+    </section>
+
+    <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+        <div>
+            <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_category_application_counts') }}</h2>
+            <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('app.festival_category_entry_limits_copy') }}</p>
+        </div>
+        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+            <label>
+                <span class="crm-label">{{ __('app.festival_minimum_entries_to_run') }}</span>
+                <input type="number" min="1" max="10000" name="minimum_entries_to_run" value="{{ old('minimum_entries_to_run', $category?->minimum_entries_to_run ?? 1) }}" required class="crm-field">
+                @error('minimum_entries_to_run') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+            <label>
+                <span class="crm-label">{{ __('app.festival_maximum_accepted_entries') }}</span>
+                <input type="number" min="1" max="10000" name="maximum_accepted_entries" value="{{ old('maximum_accepted_entries', $category?->maximum_accepted_entries) }}" class="crm-field">
+                <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __('app.festival_maximum_accepted_entries_help') }}</span>
+                @error('maximum_accepted_entries') <span class="crm-help">{{ $message }}</span> @enderror
+            </label>
+        </div>
+    </section>
+
+    <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
+        <div>
+            <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_age_limits') }}</h2>
+            <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('app.festival_category_age_limits_copy') }}</p>
+        </div>
+        <div class="mt-5 grid gap-5 sm:grid-cols-2">
             <label>
                 <span class="crm-label">{{ __('app.minimum_age') }}</span>
                 <input type="number" min="0" max="100" name="min_age" value="{{ old('min_age', $category?->min_age) }}" class="crm-field">

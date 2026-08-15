@@ -20,18 +20,19 @@
 
     if ($canScan) {
         $items[] = ['key' => 'scanner', 'label' => __('app.event_scanner'), 'href' => route('dashboard.accounts.events.scanner', [$account, $event])];
+        $items[] = ['key' => 'attendance', 'label' => __('app.event_attendance'), 'href' => route('dashboard.accounts.events.attendance', [$account, $event])];
     }
 @endphp
 
-<nav aria-label="{{ __('app.event_navigation') }}" class="overflow-x-auto rounded-xl border border-stone-200 bg-white p-1 shadow-xs">
-    <div class="flex min-w-max gap-1">
+<nav aria-label="{{ __('app.event_navigation') }}" class="overflow-x-auto pb-1">
+    <div class="flex min-w-max gap-2">
         @foreach ($items as $item)
             <a
                 href="{{ $item['href'] }}"
                 @class([
-                    'rounded-lg px-3 py-2 text-sm font-semibold transition',
-                    'bg-brand-600 text-white shadow-sm' => $active === $item['key'],
-                    'text-slate-600 hover:bg-brand-50 hover:text-slate-950' => $active !== $item['key'],
+                    'whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition',
+                    'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20' => $active === $item['key'],
+                    'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => $active !== $item['key'],
                 ])
                 @if ($active === $item['key']) aria-current="page" @endif
             >

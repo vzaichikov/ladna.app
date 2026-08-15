@@ -45,6 +45,7 @@ class EventManagementTest extends TestCase
             route('dashboard.accounts.events.tickets.issue.create', [$account, $event]),
             route('dashboard.accounts.events.orders.index', [$account, $event]),
             route('dashboard.accounts.events.scanner', [$account, $event]),
+            route('dashboard.accounts.events.attendance', [$account, $event]),
         ];
 
         foreach ($eventPages as $url) {
@@ -57,7 +58,7 @@ class EventManagementTest extends TestCase
                 ->get($url)
                 ->assertOk()
                 ->assertSee('data-event-admin-page', false)
-                ->assertSee('mx-auto max-w-7xl space-y-6', false);
+                ->assertSee('w-full min-w-0 space-y-6', false);
         }
 
         $slugEditUrl = str_replace($eventPath, "/events/{$event->slug}", route('dashboard.accounts.events.edit', [$account, $event]));

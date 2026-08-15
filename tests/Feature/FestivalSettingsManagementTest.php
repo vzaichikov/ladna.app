@@ -585,10 +585,21 @@ class FestivalSettingsManagementTest extends TestCase
             ->assertSeeInOrder([
                 __('app.festival_category_details'),
                 __('app.festival_category_eligibility'),
+                __('app.festival_category_application_counts'),
+                __('app.festival_age_limits'),
                 __('app.festival_category_performance'),
                 __('app.festival_category_registration'),
                 __('app.festival_category_requirements'),
             ])
+            ->assertSeeInOrder([
+                'name="competition_format"',
+                'name="min_members"',
+                'name="max_members"',
+                'name="minimum_entries_to_run"',
+                'name="maximum_accepted_entries"',
+                'name="min_age"',
+                'name="max_age"',
+            ], false)
             ->assertSee('data-studio-rules-editor', false)
             ->assertSee('name="festival_direction_id"', false)
             ->assertSee('name="maximum_accepted_entries"', false)

@@ -198,6 +198,12 @@ final class AppBreadcrumbs
                 $eventPage,
                 $this->item(__('app.scanner')),
             ],
+            'dashboard.accounts.events.attendance' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.event_attendance')),
+            ],
             default => throw new LogicException("No event breadcrumb definition exists for route [{$routeName}]."),
         };
     }

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.137.0',
+                'date' => '2026-08-15',
+                'title' => 'Live Event admission and clearer ticket operations',
+                'items' => ['Event teams can keep a dedicated Entrance monitor open on a computer or tablet with compact red and green ticket cards, live total and passed counts, and automatic five-second updates while another staff member scans tickets on a phone.', 'The mobile Event scanner now stays compact with only the 10 latest entered guests. Event pages use the full workspace width and button navigation, while order pages show tickets directly beneath each order with modal actions plus expanded payment and fiscalization details.', 'Festival category settings now separate competition format and team size, application-count thresholds, and participant age limits into clearer focused sections.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.136.0',
                 'date' => '2026-08-15',
                 'title' => 'Organizer-approved Festival applications',
@@ -1192,6 +1199,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.137.0',
+                'date' => '2026-08-15',
+                'title' => 'Вхід на подію наживо та зрозуміліша робота з квитками',
+                'items' => ['Команда події може відкрити окремий Монітор входу на компʼютері або планшеті: компактні червоні й зелені картки квитків, лічильники всього та гостей, які пройшли, автоматично оновлюються кожні пʼять секунд, поки інший працівник сканує квитки телефоном.', 'Мобільний сканер події залишається компактним і показує лише 10 останніх гостей на вході. Сторінки подій використовують усю ширину робочої області та кнопкову навігацію, а в замовленнях квитки видно одразу під замовленням разом із модальними діями й розширеними даними оплати та фіскалізації.', 'У налаштуваннях категорії фестивалю формат змагання й склад команди, пороги кількості заявок та вікові межі учасників тепер розділені на зрозумілі тематичні блоки.'],
+                'meta' => 'Очікується релізний коміт.',
+            ],
             [
                 'version' => '0.136.0',
                 'date' => '2026-08-15',

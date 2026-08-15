@@ -16,7 +16,10 @@ use App\Models\Customer;
 use App\Models\EmailDelivery;
 use App\Models\Event;
 use App\Models\EventOrder;
+use App\Models\EventOrderItem;
+use App\Models\EventTicket;
 use App\Models\EventTicketType;
+use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\User;
 use App\Support\Mail\TransactionalMailDispatcher;
@@ -51,6 +54,91 @@ class EventTicketingTest extends TestCase
             ->assertOk()
             ->assertSee(__('app.email_delivery_status_sent'))
             ->assertDontSee(' · sent · ', false);
+    }
+
+    public function test_event_order_page_renders_ticket_rows_payment_fiscalization_and_modal_actions(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $event = Event::factory()->published()->for($account)->create();
+        $ticketType = EventTicketType::factory()->for($account)->for($event)->create();
+        $order = EventOrder::factory()->for($account)->for($event)->create([
+            'provider' => IntegrationProvider::Liqpay->value,
+            'status' => EventOrderStatus::Paid->value,
+            'amount_cents' => 65000,
+            'gateway_invoice_id' => 'invoice-event-123',
+            'gateway_payment_id' => 'payment-event-456',
+            'gateway_status' => 'success',
+            'paid_at' => now(),
+            'expires_at' => null,
+        ]);
+        $item = EventOrderItem::factory()->create([
+            'account_id' => $account->id,
+            'event_id' => $event->id,
+            'event_order_id' => $order->id,
+            'event_ticket_type_id' => $ticketType->id,
+            'ticket_type_name' => 'Front row',
+            'unit_price_cents' => 65000,
+            'total_cents' => 65000,
+        ]);
+        $ticket = EventTicket::factory()->create([
+            'account_id' => $account->id,
+            'event_id' => $event->id,
+            'event_order_id' => $order->id,
+            'event_order_item_id' => $item->id,
+            'event_ticket_type_id' => $ticketType->id,
+            'code' => 'EVT-FRONT-ROW',
+        ]);
+        FiscalReceipt::factory()
+            ->forAccountScope($account)
+            ->fiscalized('FN-EVENT-LIST-1')
+            ->create([
+                'payment_type' => $order->getMorphClass(),
+                'payment_id' => $order->id,
+                'attempts' => 2,
+            ]);
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.events.orders.index', [$account, $event]))
+            ->assertOk()
+            ->assertSee('data-event-order-row="'.$order->id.'"', false)
+            ->assertSee('data-event-ticket-row="'.$ticket->id.'"', false)
+            ->assertSee('Front row')
+            ->assertSee('EVT-FRONT-ROW')
+            ->assertSee('invoice-event-123')
+            ->assertSee('payment-event-456')
+            ->assertSee('FN-EVENT-LIST-1')
+            ->assertSee(route('dashboard.accounts.events.orders.resend', [$account, $event, $order]), false)
+            ->assertSee(route('dashboard.accounts.events.orders.refund', [$account, $event, $order]), false)
+            ->assertSee(route('dashboard.accounts.events.orders.tickets.void', [$account, $event, $order, $ticket]), false);
+
+        $html = $response->getContent();
+        $this->assertStringNotContainsString('<details', $html);
+        $this->assertSame(3, substr_count($html, 'data-confirm-action'));
+        $this->assertSame(2, substr_count($html, 'data-confirm-reason-output'));
+        $this->assertSame(2, substr_count($html, 'data-confirm-reason-maxlength="2000"'));
+        $this->assertLessThan(strpos($html, 'EVT-FRONT-ROW'), strpos($html, $order->order_id));
+    }
+
+    public function test_event_order_list_is_paginated_twenty_per_page_and_retains_query_string(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create();
+        $account->addOwner($owner);
+        $event = Event::factory()->published()->for($account)->create();
+        EventOrder::factory()->count(21)->for($account)->for($event)->create();
+
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.events.orders.index', [
+            $account,
+            $event,
+            'audit' => 'payments',
+        ]))->assertOk();
+
+        $orders = $response->viewData('orders');
+        $this->assertSame(20, $orders->count());
+        $this->assertSame(20, $orders->perPage());
+        $this->assertStringContainsString('audit=payments', $orders->url(2));
     }
 
     public function test_public_checkout_uses_the_person_name_label(): void

@@ -3,7 +3,7 @@
 @section('title', __('app.event_issued_tickets').' - '.$event->title)
 
 @section('content')
-<div class="mx-auto max-w-7xl space-y-6" data-event-admin-page>
+<div class="w-full min-w-0 space-y-6" data-event-admin-page>
     <x-ui.page-header :title="__('app.event_issued_tickets')" :copy="__('app.event_issued_tickets_help')">
         @if ($canIssue)
             <x-slot:actions>

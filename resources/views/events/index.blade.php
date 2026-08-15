@@ -3,7 +3,7 @@
 @section('title', __('app.events').' - '.$account->name)
 
 @section('content')
-<div class="mx-auto max-w-7xl space-y-6" data-event-admin-page>
+<div class="w-full min-w-0 space-y-6" data-event-admin-page>
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <h1 class="crm-page-title mt-1">{{ __('app.events') }}</h1>
@@ -16,11 +16,15 @@
         @endif
     </div>
 
-    <nav class="flex gap-1 overflow-x-auto rounded-lg bg-stone-100 p-1" aria-label="{{ __('app.events') }}">
+    <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.events') }}">
         @foreach (['upcoming', 'draft', 'past', 'cancelled'] as $value)
             <a href="{{ route('dashboard.accounts.events.index', ['account' => $account, 'tab' => $value, ...$locationQuery]) }}"
-               class="crm-tab whitespace-nowrap"
-               aria-selected="{{ $tab === $value ? 'true' : 'false' }}">
+               @class([
+                    'whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition',
+                    'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20' => $tab === $value,
+                    'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => $tab !== $value,
+               ])
+               @if ($tab === $value) aria-current="page" @endif>
                 {{ __('app.event_tab_'.$value) }}
             </a>
         @endforeach
