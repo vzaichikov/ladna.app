@@ -29,7 +29,7 @@
             <p class="crm-page-copy">{{ __('app.sms_account_copy') }}</p>
         </div>
         @unless ($platformView)
-            <x-ui.button :href="route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging'])" variant="secondary">{{ __('app.sms_settings') }}</x-ui.button>
+            <x-ui.button :href="route('dashboard.accounts.integrations.show', [$account, \App\Enums\IntegrationCategory::Messaging])" variant="secondary">{{ __('app.sms_settings') }}</x-ui.button>
         @endunless
     </div>
 

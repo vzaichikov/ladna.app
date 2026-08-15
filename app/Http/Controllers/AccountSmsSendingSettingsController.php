@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\IntegrationCategory;
 use App\Http\Requests\UpdateAccountSmsSendingSettingsRequest;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
@@ -18,10 +19,7 @@ class AccountSmsSendingSettingsController extends Controller
         );
 
         return redirect()
-            ->route('dashboard.accounts.integrations.index', [
-                'account' => $account,
-                'tab' => 'messaging',
-            ])
+            ->route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging])
             ->with('status', __('app.sms_sending_settings_updated'));
     }
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\IntegrationCategory;
 use App\Enums\SmsSendingMode;
 use App\Enums\StudioPermission;
 use App\Models\Account;
@@ -72,7 +73,7 @@ class CustomerNotificationSettingsTest extends TestCase
             ->assertSee(__('app.customer_otp_enable_hint'))
             ->assertSee(__('app.otp_off'))
             ->assertSee(__('app.customer_otp_own_gateway_setup_help'))
-            ->assertSee(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']), false)
+            ->assertSee(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]), false)
             ->assertSee('name="allow_otp"', false)
             ->assertSee(__('app.notification_scenarios'))
             ->assertSee('name="class_reminder_hours_before"', false)

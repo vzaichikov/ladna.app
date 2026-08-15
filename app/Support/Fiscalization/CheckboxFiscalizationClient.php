@@ -4,7 +4,9 @@ namespace App\Support\Fiscalization;
 
 use App\Enums\FiscalReceiptStatus;
 use App\Models\IntegrationSetting;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
@@ -88,7 +90,12 @@ class CheckboxFiscalizationClient
             ->asJson()
             ->timeout(10)
             ->connectTimeout(3)
-            ->retry([100, 300], throw: false);
+            ->retry(
+                [100, 300],
+                when: static fn (\Throwable $exception): bool => $exception instanceof ConnectionException
+                    || ($exception instanceof RequestException && $exception->response->serverError()),
+                throw: false,
+            );
     }
 
     private function authorizedRequest(string $token): PendingRequest

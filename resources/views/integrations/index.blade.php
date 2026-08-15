@@ -10,21 +10,25 @@
         </div>
     </div>
 
-    <nav class="mt-6 flex gap-2 overflow-x-auto border-b border-slate-200" aria-label="{{ __('app.integration_categories') }}">
-        @foreach ($categories as $categoryKey => $category)
-            @php
-                $isActive = $activeCategory->value === $categoryKey;
-                $tabParameters = [...$tabRouteParameters, 'tab' => $categoryKey];
-            @endphp
-            <a
-                href="{{ route($tabRoute, $tabParameters) }}"
-                @if ($isActive) data-active-scroll-target @endif
-                class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $isActive ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
-            >
-                {{ __($category['label_key']) }}
-            </a>
-        @endforeach
-    </nav>
+    @if ($account ?? null)
+        <x-integration-category-navigation :account="$account" :active-category="$activeCategory" class="mt-6" />
+    @else
+        <nav class="mt-6 flex gap-2 overflow-x-auto border-b border-slate-200" aria-label="{{ __('app.integration_categories') }}">
+            @foreach ($categories as $categoryKey => $category)
+                @php
+                    $isActive = $activeCategory->value === $categoryKey;
+                    $tabParameters = [...$tabRouteParameters, 'tab' => $categoryKey];
+                @endphp
+                <a
+                    href="{{ route($tabRoute, $tabParameters) }}"
+                    @if ($isActive) data-active-scroll-target @endif
+                    class="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $isActive ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
+                >
+                    {{ __($category['label_key']) }}
+                </a>
+            @endforeach
+        </nav>
+    @endif
 
     @if ($centralSmsProviderUpdateRoute ?? null)
         @php
@@ -293,7 +297,13 @@
                     </div>
                 @endif
 
-                <div class="flex justify-end border-t border-slate-100 px-5 py-4">
+                <div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4">
+                    @if (($account ?? null) && $providerKey === \App\Enums\IntegrationProvider::Checkbox->value)
+                        <x-ui.button :href="route('dashboard.accounts.integrations.checkbox-logs.index', $account)" variant="secondary">
+                            <x-ui.icon name="history" class="h-4 w-4" />
+                            {{ __('app.open_checkbox_receipt_log') }}
+                        </x-ui.button>
+                    @endif
                     <x-ui.button type="submit">
                         {{ __('app.save') }}
                     </x-ui.button>

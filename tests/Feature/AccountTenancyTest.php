@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\IntegrationCategory;
 use App\Models\Account;
 use App\Models\Location;
 use App\Models\TelegramBotInstallation;
@@ -378,7 +379,7 @@ class AccountTenancyTest extends TestCase
             ->assertDontSee(route('dashboard.accounts.trainers.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.trainer-types.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.tariff-payments.show', $account), false)
-            ->assertDontSee(route('dashboard.accounts.integrations.index', $account), false);
+            ->assertDontSee(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment]), false);
     }
 
     public function test_legacy_account_edit_route_redirects_to_separate_pages(): void

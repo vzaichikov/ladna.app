@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountMode;
+use App\Enums\IntegrationCategory;
 use App\Enums\SmsDeliveryPurpose;
 use App\Enums\SmsDeliveryStatus;
 use App\Enums\SmsSendingMode;
@@ -60,7 +61,7 @@ class SmsAccountSettingsTest extends TestCase
             ->get(route('dashboard.accounts.sms-account.show', $account))
             ->assertOk()
             ->assertSee(__('app.sms_account'))
-            ->assertSee(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']), false)
+            ->assertSee(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]), false)
             ->assertSee('4444 **** **** 1111')
             ->assertDontSee(__('app.sms_first_top_up_card_copy'));
 

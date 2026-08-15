@@ -315,7 +315,7 @@
             [
                 'label' => __('app.integrations'),
                 'icon' => 'integrations',
-                'href' => route('dashboard.accounts.integrations.index', $activeAccount),
+                'href' => route('dashboard.accounts.integrations.show', [$activeAccount, \App\Enums\IntegrationCategory::Payment]),
                 'active' => request()->routeIs('dashboard.accounts.integrations.*'),
             ],
         ] : []),

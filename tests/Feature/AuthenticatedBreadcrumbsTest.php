@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\IntegrationCategory;
 use App\Models\Account;
 use App\Models\FestivalCategory;
 use App\Models\FestivalDirection;
@@ -50,6 +51,40 @@ class AuthenticatedBreadcrumbsTest extends TestCase
             ['label' => 'Locations', 'href' => route('dashboard.accounts.locations.index', $account), 'current' => false],
             ['label' => 'Edit: Podil studio', 'href' => null, 'current' => true],
         ], $this->breadcrumbItems($response));
+    }
+
+    public function test_integration_category_and_checkbox_log_breadcrumbs_use_canonical_pages(): void
+    {
+        $account = Account::factory()->create(['default_language' => 'en']);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $integrationUrl = route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment]);
+        $fiscalizationUrl = route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Fiscalization]);
+
+        $fiscalization = $this->withSession(['locale' => 'en'])
+            ->actingAs($owner)
+            ->get($fiscalizationUrl);
+
+        $fiscalization->assertOk();
+        $this->assertSame([
+            ['label' => 'Workspace', 'href' => route('dashboard.index'), 'current' => false],
+            ['label' => $account->name, 'href' => route('dashboard.accounts.show', $account), 'current' => false],
+            ['label' => 'Integrations', 'href' => $integrationUrl, 'current' => false],
+            ['label' => 'Fiscalization', 'href' => null, 'current' => true],
+        ], $this->breadcrumbItems($fiscalization));
+
+        $logs = $this->withSession(['locale' => 'en'])
+            ->actingAs($owner)
+            ->get(route('dashboard.accounts.integrations.checkbox-logs.index', $account));
+
+        $logs->assertOk();
+        $this->assertSame([
+            ['label' => 'Workspace', 'href' => route('dashboard.index'), 'current' => false],
+            ['label' => $account->name, 'href' => route('dashboard.accounts.show', $account), 'current' => false],
+            ['label' => 'Integrations', 'href' => $integrationUrl, 'current' => false],
+            ['label' => 'Fiscalization', 'href' => $fiscalizationUrl, 'current' => false],
+            ['label' => 'Checkbox receipt log', 'href' => null, 'current' => true],
+        ], $this->breadcrumbItems($logs));
     }
 
     public function test_festival_judging_and_deep_settings_trails_are_complete(): void

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\IntegrationCategory;
 use App\Enums\ScheduleKind;
 use App\Enums\SubscriptionStatus;
 use App\Models\Account;
@@ -71,7 +72,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(186, $classifiedRouteNames);
+        $this->assertCount(188, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -84,8 +85,11 @@ class MultiLocationPageSmokeTest extends TestCase
             $this->actingAs($fixtures['owner']);
 
             foreach ($this->accountOnlyHtmlRoutes() as $routeName) {
+                $parameters = $routeName === 'dashboard.accounts.integrations.show'
+                    ? [$account, IntegrationCategory::Payment]
+                    : $account;
                 $this->assertPageRenders(
-                    route($routeName, $account),
+                    route($routeName, $parameters),
                     $routeName,
                     $activeLocationCount > 1,
                 );
@@ -389,7 +393,8 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.general-settings.edit',
             'dashboard.accounts.group-classes.create',
             'dashboard.accounts.group-classes.index',
-            'dashboard.accounts.integrations.index',
+            'dashboard.accounts.integrations.checkbox-logs.index',
+            'dashboard.accounts.integrations.show',
             'dashboard.accounts.internal-classes.create',
             'dashboard.accounts.internal-classes.index',
             'dashboard.accounts.locations.create',
@@ -600,6 +605,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.judging.index',
             'dashboard.accounts.festivals.score-sheets.edit',
             'dashboard.accounts.festivals.timeline.index',
+            'dashboard.accounts.integrations.index',
             'dashboard.accounts.studio-settings.index',
         ];
     }

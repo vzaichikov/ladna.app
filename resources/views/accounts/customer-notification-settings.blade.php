@@ -37,7 +37,7 @@
         @if ($customerAuthReadiness['sms_mode'] === \App\Enums\SmsSendingMode::OwnGateway->value)
             <p class="mt-4 text-sm leading-6 text-slate-600">
                 {{ __('app.customer_otp_own_gateway_setup_help') }}
-                <a href="{{ route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']) }}" class="font-semibold text-violet-crm-700 underline decoration-violet-300 underline-offset-2 hover:text-violet-crm-900">
+                <a href="{{ route('dashboard.accounts.integrations.show', [$account, \App\Enums\IntegrationCategory::Messaging]) }}" class="font-semibold text-violet-crm-700 underline decoration-violet-300 underline-offset-2 hover:text-violet-crm-900">
                     {{ __('app.customer_otp_own_gateway_setup_link') }}
                 </a>
             </p>

@@ -2,6 +2,7 @@
 
 namespace App\Support\Breadcrumbs;
 
+use App\Enums\IntegrationCategory;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use Illuminate\Database\Eloquent\Model;
@@ -85,6 +86,29 @@ final class AppBreadcrumbs
 
         if (Str::startsWith($routeName, 'dashboard.accounts.reports.')) {
             return $this->report($request, $routeName, $account, $base);
+        }
+
+        if ($routeName === 'dashboard.accounts.integrations.show') {
+            $category = $request->route('category');
+
+            if (! $category instanceof IntegrationCategory) {
+                throw new LogicException('The current breadcrumb route requires a bound IntegrationCategory.');
+            }
+
+            return [
+                ...$base,
+                $this->item(__('app.integrations'), route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment])),
+                $this->item(__($category->labelKey())),
+            ];
+        }
+
+        if ($routeName === 'dashboard.accounts.integrations.checkbox-logs.index') {
+            return [
+                ...$base,
+                $this->item(__('app.integrations'), route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment])),
+                $this->item(__('app.integration_category_fiscalization'), route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Fiscalization])),
+                $this->item(__('app.checkbox_receipt_log')),
+            ];
         }
 
         if ($routeName === 'dashboard.accounts.rooms.people-counter-mask.edit') {

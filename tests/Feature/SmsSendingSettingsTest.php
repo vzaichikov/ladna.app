@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationScope;
 use App\Enums\SmsSendingMode;
 use App\Models\Account;
@@ -21,7 +22,7 @@ class SmsSendingSettingsTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
+            ->get(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]))
             ->assertOk()
             ->assertSee('name="sms_sending_mode"', false)
             ->assertSee(__('app.sms_sending_mode_disabled'))
@@ -57,10 +58,7 @@ class SmsSendingSettingsTest extends TestCase
                 'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
                 'sms_provider' => 'smsclub',
             ])
-            ->assertRedirect(route('dashboard.accounts.integrations.index', [
-                'account' => $account,
-                'tab' => 'messaging',
-            ]));
+            ->assertRedirect(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]));
 
         $this->assertDatabaseHas('customer_auth_settings', [
             'account_id' => $account->id,
@@ -70,7 +68,7 @@ class SmsSendingSettingsTest extends TestCase
         $this->assertSame('saved-secret', $setting->fresh()->credentials['bearer_token']);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
+            ->get(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]))
             ->assertOk()
             ->assertSee('name="sms_provider"', false)
             ->assertSee('name="credentials[bearer_token]"', false)

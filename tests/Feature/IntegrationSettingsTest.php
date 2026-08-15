@@ -333,7 +333,7 @@ class IntegrationSettingsTest extends TestCase
         ]);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
+            ->get(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]))
             ->assertOk()
             ->assertDontSee(__('app.integration_category_authentication'), false)
             ->assertDontSee('Email delivery')
@@ -349,7 +349,7 @@ class IntegrationSettingsTest extends TestCase
                     'sms_sender' => 'CharmCRM',
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']));
+            ->assertRedirect(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]));
 
         $setting = IntegrationSetting::forAccount($account)->where('provider', 'turbosms')->firstOrFail();
 
@@ -372,7 +372,7 @@ class IntegrationSettingsTest extends TestCase
         ]);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
+            ->get(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]))
             ->assertOk()
             ->assertSee('name="credentials[api_key]"', false)
             ->assertSee('name="credentials[sms_sender]"', false)
@@ -396,7 +396,7 @@ class IntegrationSettingsTest extends TestCase
                     'sms_route' => 'legacy-route',
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']));
+            ->assertRedirect(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]));
 
         $setting = IntegrationSetting::forAccount($account)
             ->where('provider', 'sendpulse')
@@ -421,19 +421,39 @@ class IntegrationSettingsTest extends TestCase
         ]);
     }
 
-    public function test_account_integrations_do_not_show_empty_authentication_category(): void
+    public function test_account_integrations_use_category_pages_and_legacy_query_redirects(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create();
         $account->addOwner($owner);
 
+        $paymentUrl = route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment]);
+        $fiscalizationUrl = route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Fiscalization]);
+        $messagingUrl = route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.integrations.index', $account))
+            ->assertRedirect($paymentUrl);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
+            ->assertRedirect($messagingUrl);
+
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'authentication']))
+            ->assertRedirect($paymentUrl);
+
+        $this->actingAs($owner)
+            ->get($fiscalizationUrl)
             ->assertOk()
             ->assertDontSee(__('app.integration_category_authentication'), false)
             ->assertDontSee('Google OAuth')
             ->assertDontSee('Cloudflare Turnstile')
-            ->assertSee('Monopay');
+            ->assertSee($paymentUrl, false)
+            ->assertSee($fiscalizationUrl, false)
+            ->assertSee($messagingUrl, false)
+            ->assertSee('aria-current="page"', false)
+            ->assertSee(route('dashboard.accounts.integrations.checkbox-logs.index', $account), false);
     }
 
     public function test_account_owner_cannot_access_another_accounts_integrations(): void
@@ -447,6 +467,10 @@ class IntegrationSettingsTest extends TestCase
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.integrations.index', $otherAccount))
+            ->assertForbidden();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.integrations.show', [$otherAccount, IntegrationCategory::Payment]))
             ->assertForbidden();
 
         $this->actingAs($owner)
@@ -488,7 +512,7 @@ class IntegrationSettingsTest extends TestCase
                     'sms_sender' => 'NewSender',
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']));
+            ->assertRedirect(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]));
 
         $setting = IntegrationSetting::forAccount($account)->where('provider', 'turbosms')->firstOrFail();
         $this->assertSame('old-secret', $setting->credentials['api_token']);
@@ -502,7 +526,7 @@ class IntegrationSettingsTest extends TestCase
                     'sms_sender' => 'NewSender',
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']));
+            ->assertRedirect(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Messaging]));
 
         $setting->refresh();
         $this->assertSame('new-secret', $setting->credentials['api_token']);
@@ -555,7 +579,7 @@ class IntegrationSettingsTest extends TestCase
             ->update(['credentials' => 'encrypted-with-another-app-key']);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.integrations.index', $account))
+            ->get(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment]))
             ->assertOk()
             ->assertSee(__('app.integration_credentials_unreadable'));
 
@@ -567,7 +591,7 @@ class IntegrationSettingsTest extends TestCase
                     'invoice_validity_seconds' => 3600,
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'payment']));
+            ->assertRedirect(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment]));
 
         $setting->refresh();
 

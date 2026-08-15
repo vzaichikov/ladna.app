@@ -112,6 +112,60 @@ class FiscalizationTest extends TestCase
         $this->assertNotNull($receipt);
         $this->assertSame(FiscalReceiptStatus::Failed, $receipt->status);
         $this->assertSame('Cashier shift is closed.', $receipt->last_error);
+        $this->assertCount(1, collect(Http::recorded())->filter(fn (array $record): bool => $record[0]->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'));
+    }
+
+    public function test_checkbox_retries_transient_server_errors_before_fiscalizing(): void
+    {
+        $account = Account::factory()->create();
+        $this->enableAccountFiscalization($account);
+        $purchase = $this->customerPurchase($account, [
+            'status' => CustomerPurchaseStatus::PaymentPaid->value,
+            'paid_at' => now(),
+        ]);
+        $receiptId = '22222222-2222-2222-2222-222222222222';
+
+        Http::fake([
+            'https://api.checkbox.ua/api/v1/cashier/signin' => Http::response(['access_token' => 'checkbox-token']),
+            'https://api.checkbox.ua/api/v1/cashier/shift' => Http::response(['status' => 'OPENED']),
+            'https://api.checkbox.ua/api/v1/receipts/sell' => Http::sequence()
+                ->push(['message' => 'Temporary outage'], 500)
+                ->push(['id' => $receiptId, 'status' => 'CREATED'], 201),
+            'https://api.checkbox.ua/api/v1/receipts/'.$receiptId => Http::response([
+                'id' => $receiptId,
+                'status' => 'DONE',
+                'fiscal_code' => 'FN-AFTER-RETRY',
+            ]),
+        ]);
+
+        $receipt = app(FiscalReceiptService::class)->fiscalizeCustomerPurchase($purchase);
+
+        $this->assertNotNull($receipt);
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt->status);
+        $this->assertSame(1, $receipt->attempts);
+        $this->assertCount(2, collect(Http::recorded())->filter(fn (array $record): bool => $record[0]->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'));
+    }
+
+    public function test_checkbox_connection_failure_is_retried_and_recorded_as_failed(): void
+    {
+        $account = Account::factory()->create();
+        $this->enableAccountFiscalization($account);
+        $purchase = $this->customerPurchase($account, [
+            'status' => CustomerPurchaseStatus::PaymentPaid->value,
+            'paid_at' => now(),
+        ]);
+
+        Http::fake([
+            'https://api.checkbox.ua/api/v1/cashier/signin' => Http::failedConnection('Checkbox connection timed out.'),
+        ]);
+
+        $receipt = app(FiscalReceiptService::class)->fiscalizeCustomerPurchase($purchase);
+
+        $this->assertNotNull($receipt);
+        $this->assertSame(FiscalReceiptStatus::Failed, $receipt->status);
+        $this->assertSame(1, $receipt->attempts);
+        $this->assertStringContainsString('Checkbox connection timed out.', (string) $receipt->last_error);
+        $this->assertCount(3, collect(Http::recorded())->filter(fn (array $record): bool => $record[0]->url() === 'https://api.checkbox.ua/api/v1/cashier/signin'));
     }
 
     public function test_saas_payment_success_callback_uses_platform_fiscalization_settings(): void
@@ -299,7 +353,7 @@ class FiscalizationTest extends TestCase
         $order = app(CreateEventOrder::class)->execute($event, [
             'buyer_name' => 'Ticket Buyer',
             'buyer_email' => 'ticket-buyer@example.com',
-            'buyer_phone' => '+380501112233',
+            'buyer_phone' => '+380 (50) 111-22-33',
             'provider' => IntegrationProvider::Liqpay->value,
             'items' => [['ticket_type_id' => $ticketType->id, 'quantity' => 1]],
             'accept_terms' => true,
@@ -321,6 +375,35 @@ class FiscalizationTest extends TestCase
             && data_get($request->data(), 'goods.0.good.name') === 'Summer Workshop'
             && data_get($request->data(), 'delivery.email') === 'ticket-buyer@example.com'
             && data_get($request->data(), 'delivery.phone') === '+380501112233');
+    }
+
+    public function test_checkbox_omits_an_incompatible_delivery_phone_and_keeps_email(): void
+    {
+        $account = Account::factory()->create();
+        $this->enableAccountFiscalization($account);
+        $event = Event::factory()->published()->for($account)->create(['title' => 'International Workshop']);
+        $ticketType = EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 50000,
+            'inventory' => 10,
+        ]);
+        $order = app(CreateEventOrder::class)->execute($event, [
+            'buyer_name' => 'International Buyer',
+            'buyer_email' => 'international-buyer@example.com',
+            'buyer_phone' => '+1 (202) 555-0199',
+            'provider' => IntegrationProvider::Liqpay->value,
+            'items' => [['ticket_type_id' => $ticketType->id, 'quantity' => 1]],
+            'accept_terms' => true,
+        ], 'en');
+        $this->fakeCheckboxSuccess('FN-EVENT-EMAIL-ONLY');
+
+        app(CompleteEventOrder::class)->execute(
+            $order,
+            $this->paidCallback($order->order_id, $order->amount_cents, $order->currency),
+        );
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
+            && data_get($request->data(), 'delivery.email') === 'international-buyer@example.com'
+            && ! data_get($request->data(), 'delivery.phone'));
     }
 
     public function test_paid_festival_admission_is_fiscalized_once_with_frozen_items_and_buyer_delivery(): void
@@ -817,16 +900,6 @@ class FiscalizationTest extends TestCase
                 'status' => 'OPENED',
             ]),
             'https://api.checkbox.ua/api/v1/receipts/sell' => Http::sequence()
-                ->push([
-                    'id' => $receiptId,
-                    'status' => 'ERROR',
-                    'message' => $message,
-                ], 422)
-                ->push([
-                    'id' => $receiptId,
-                    'status' => 'ERROR',
-                    'message' => $message,
-                ], 422)
                 ->push([
                     'id' => $receiptId,
                     'status' => 'ERROR',

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountIntegrationController;
 use App\Http\Controllers\AccountSmsSendingSettingsController;
+use App\Http\Controllers\CheckboxFiscalReceiptLogController;
 use App\Http\Controllers\ClassBookingController;
 use App\Http\Controllers\ClassBookingPaymentController;
 use App\Http\Controllers\ClosedClassBookingCorrectionController;
@@ -19,6 +20,11 @@ Route::resource('accounts.schedule-series', ScheduleSeriesController::class)
     ->scoped();
 Route::get('accounts/{account}/integrations', [AccountIntegrationController::class, 'index'])
     ->name('accounts.integrations.index');
+Route::get('accounts/{account}/integrations/fiscalization/checkbox/logs', CheckboxFiscalReceiptLogController::class)
+    ->name('accounts.integrations.checkbox-logs.index');
+Route::get('accounts/{account}/integrations/{category}', [AccountIntegrationController::class, 'show'])
+    ->whereIn('category', ['payment', 'fiscalization', 'messaging'])
+    ->name('accounts.integrations.show');
 Route::put('accounts/{account}/integrations/sms-sending', [AccountSmsSendingSettingsController::class, 'update'])
     ->name('accounts.integrations.sms-sending.update');
 Route::put('accounts/{account}/integrations/{provider}', [AccountIntegrationController::class, 'update'])

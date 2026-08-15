@@ -22,6 +22,7 @@ use App\Models\FestivalTicketOrder;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\SmsTopUpPayment;
+use App\Support\PhoneNumberNormalizer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
@@ -31,6 +32,7 @@ class FiscalReceiptService
     public function __construct(
         private readonly FiscalizationAvailability $availability,
         private readonly CheckboxFiscalizationClient $checkbox,
+        private readonly PhoneNumberNormalizer $phoneNumberNormalizer,
     ) {}
 
     public function skipReasonFor(CustomerPurchase|CustomerPurchaseRefund|EventOrder|AccountSubscriptionPayment|SmsTopUpPayment|FestivalEditionPurchase|FestivalTicketOrder|FestivalPaymentAttempt $payment): ?string
@@ -348,7 +350,7 @@ class FiscalReceiptService
         }
 
         if ($payment instanceof EventOrder || $payment instanceof FestivalTicketOrder) {
-            return array_filter([
+            return $this->normalizedDelivery([
                 'email' => $payment->buyer_email,
                 'phone' => $payment->buyer_phone,
             ]);
@@ -357,7 +359,7 @@ class FiscalReceiptService
         if ($payment instanceof FestivalPaymentAttempt) {
             $payment->loadMissing('charge.entry.portalUser');
 
-            return array_filter([
+            return $this->normalizedDelivery([
                 'email' => $payment->charge?->entry?->portalUser?->email,
                 'phone' => $payment->charge?->entry?->portalUser?->phone,
             ]);
@@ -395,7 +397,28 @@ class FiscalReceiptService
             $delivery['phone'] = (string) $payment->customer->phone;
         }
 
-        return $delivery;
+        return $this->normalizedDelivery($delivery);
+    }
+
+    /**
+     * @param  array<string, string|null>  $delivery
+     * @return array<string, string>
+     */
+    private function normalizedDelivery(array $delivery): array
+    {
+        $normalized = [];
+        $email = trim((string) ($delivery['email'] ?? ''));
+        $phone = (string) ($delivery['phone'] ?? '');
+
+        if ($email !== '') {
+            $normalized['email'] = $email;
+        }
+
+        if ($this->phoneNumberNormalizer->isValid($phone, 'UA')) {
+            $normalized['phone'] = (string) $this->phoneNumberNormalizer->normalize($phone, 'UA');
+        }
+
+        return $normalized;
     }
 
     private function paymentProviderLabel(string $provider): string

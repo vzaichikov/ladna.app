@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.139.0',
+                'date' => '2026-08-15',
+                'title' => 'Focused integration settings and Checkbox diagnostics',
+                'items' => ['Studio integration settings now use dedicated Payments, Fiscalization, and Messaging pages with clear button navigation and breadcrumbs.', 'The Checkbox settings card now opens a searchable receipt log with receipt statuses, attempts, safe request summaries, and validation details without exposing contact data or integration secrets.', 'Fiscal receipts normalize valid Ukrainian delivery numbers before sending them to Checkbox, omit incompatible numbers, and retry only connection or temporary server failures instead of repeating validation errors.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.138.0',
                 'date' => '2026-08-15',
                 'title' => 'Human-confirmed ticket admission',
@@ -1206,6 +1213,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.139.0',
+                'date' => '2026-08-15',
+                'title' => 'Окремі налаштування інтеграцій і діагностика Checkbox',
+                'items' => ['Налаштування інтеграцій студії тепер мають окремі сторінки «Оплати», «Фіскалізація» та «Повідомлення» зі зрозумілою кнопковою навігацією та хлібними крихтами.', 'Із картки налаштувань Checkbox тепер можна відкрити журнал чеків із пошуком, статусами, спробами, безпечним зведенням запиту й деталями валідації без розкриття контактних даних або секретів інтеграції.', 'Перед надсиланням фіскального чека Ladna нормалізує коректні українські номери доставки, не надсилає несумісні номери та повторює лише помилки з’єднання або тимчасові помилки сервера, а не помилки валідації.'],
+                'meta' => 'Очікує коміт релізу.',
+            ],
             [
                 'version' => '0.138.0',
                 'date' => '2026-08-15',

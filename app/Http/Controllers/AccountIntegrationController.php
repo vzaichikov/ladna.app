@@ -19,31 +19,42 @@ class AccountIntegrationController extends Controller
     public function index(
         Request $request,
         Account $account,
+    ): RedirectResponse {
+        abort_unless($account->isOwnedBy($request->user()), 403);
+
+        $category = IntegrationCatalog::activeCategory($request->query('tab'), IntegrationScope::Account);
+
+        return redirect()->route('dashboard.accounts.integrations.show', [$account, $category]);
+    }
+
+    public function show(
+        Request $request,
+        Account $account,
+        IntegrationCategory $category,
         CustomerAuthAvailability $customerAuthAvailability,
     ): View {
         abort_unless($account->isOwnedBy($request->user()), 403);
 
         $categories = IntegrationCatalog::categories(IntegrationScope::Account);
-        $activeCategory = IntegrationCatalog::activeCategory($request->query('tab'), IntegrationScope::Account);
+        abort_unless(array_key_exists($category->value, $categories), 404);
+
         $settings = IntegrationSetting::forAccount($account)
             ->orderBy('provider')
             ->get()
             ->keyBy(fn (IntegrationSetting $setting): string => $setting->provider->value);
-        $smsSettings = $activeCategory === IntegrationCategory::Messaging
+        $smsSettings = $category === IntegrationCategory::Messaging
             ? $customerAuthAvailability->settingsFor($account)
             : null;
 
         return view('integrations.index', [
             'account' => $account,
-            'title' => __('app.integrations'),
-            'heading' => __('app.studio_owner_integrations'),
+            'title' => __($category->labelKey()),
+            'heading' => __($category->labelKey()),
             'copy' => __('app.studio_owner_integrations_copy'),
             'categories' => $categories,
-            'activeCategory' => $activeCategory,
-            'providers' => IntegrationCatalog::providersForCategory($activeCategory, IntegrationScope::Account),
+            'activeCategory' => $category,
+            'providers' => IntegrationCatalog::providersForCategory($category, IntegrationScope::Account),
             'settings' => $settings,
-            'tabRoute' => 'dashboard.accounts.integrations.index',
-            'tabRouteParameters' => ['account' => $account],
             'updateRoute' => 'dashboard.accounts.integrations.update',
             'updateRouteParameters' => ['account' => $account],
             'smsSendingModes' => SmsSendingMode::cases(),
@@ -73,7 +84,7 @@ class AccountIntegrationController extends Controller
         );
 
         return redirect()
-            ->route('dashboard.accounts.integrations.index', ['account' => $account, 'tab' => $category->value])
+            ->route('dashboard.accounts.integrations.show', [$account, $category])
             ->with('status', __('app.integration_updated'));
     }
 }
