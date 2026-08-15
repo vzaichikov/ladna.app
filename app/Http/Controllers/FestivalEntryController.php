@@ -8,6 +8,7 @@ use App\Actions\Festivals\ReassignFestivalEntryCategory;
 use App\Actions\Festivals\RepriceFestivalEntryCharges;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
 use App\Enums\FestivalEntryStatus;
+use App\Enums\FestivalWorkflowStepType;
 use App\Http\Requests\FestivalEntryRequest;
 use App\Models\Account;
 use App\Models\FestivalCategory;
@@ -82,9 +83,13 @@ class FestivalEntryController extends Controller
         ]);
         $providers = app(PaymentGatewayRegistry::class)->availableSettingsFor($account);
         $workflowStates = $workflowState->forEntry($festivalEntry);
-        $selectedStep = $workflowState->current($festivalEntry) ?? $festivalEntry->steps->last();
+        $summary = $festivalEntry->steps->first(fn ($step): bool => $step->workflowStep->type === FestivalWorkflowStepType::Summary);
+        $selectedStep = in_array($festivalEntry->status, [FestivalEntryStatus::Accepted, FestivalEntryStatus::ChangesPending, FestivalEntryStatus::Rejected], true)
+            ? ($summary ?? $festivalEntry->steps->last())
+            : ($workflowState->current($festivalEntry) ?? $festivalEntry->steps->last());
+        $postConfirmationRequirements = $workflowState->postConfirmationRequirements($workflowStates);
 
-        return view('festivals.portal.entry', compact('account', 'portalUser', 'festivalEntry', 'providers', 'workflowStates', 'selectedStep') + ['entry' => $festivalEntry]);
+        return view('festivals.portal.entry', compact('account', 'portalUser', 'festivalEntry', 'providers', 'workflowStates', 'selectedStep', 'postConfirmationRequirements') + ['entry' => $festivalEntry]);
     }
 
     public function edit(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryWorkflowState $workflowState, ReassignFestivalEntryCategory $reassignCategory): View

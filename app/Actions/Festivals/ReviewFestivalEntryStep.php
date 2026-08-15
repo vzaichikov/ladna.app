@@ -2,14 +2,12 @@
 
 namespace App\Actions\Festivals;
 
-use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalQualificationStatus;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalWorkflowReviewEffect;
-use App\Models\FestivalCategory;
 use App\Models\FestivalEntryStep;
 use App\Models\User;
 use App\Support\Festivals\FestivalEntryStepCompletion;
@@ -25,6 +23,7 @@ class ReviewFestivalEntryStep
         private readonly ActivateFestivalParticipationCharges $activateParticipationCharges,
         private readonly FestivalEntryStepCompletion $completion,
         private readonly ReserveFestivalEntryTrack $reserveTrack,
+        private readonly FullyDeclineFestivalEntry $fullyDecline,
     ) {}
 
     /** @param array<string, string> $requirementNotes */
@@ -38,6 +37,11 @@ class ReviewFestivalEntryStep
         }
         if ($decision === 'request_changes' && (blank($correctionDueAt) || now()->greaterThanOrEqualTo($correctionDueAt))) {
             throw ValidationException::withMessages(['correction_due_at' => __('validation.after', ['date' => 'now'])]);
+        }
+        if ($decision === 'reject_entry') {
+            $this->fullyDecline->execute($step->entry()->firstOrFail(), $reviewer, (string) $comment);
+
+            return $step->refresh();
         }
 
         $reviewDedupeToken = (string) Str::uuid();
@@ -75,20 +79,6 @@ class ReviewFestivalEntryStep
                     $step->entry->forceFill(['qualification_status' => FestivalQualificationStatus::Passed, 'status' => FestivalEntryStatus::UnderReview])->save();
                     $this->activateParticipationCharges->execute($step->entry, $step->reviewed_at ?? now());
                 }
-                if ($postConfirmationReview
-                    && $step->entry->steps()->where('status', '!=', FestivalEntryStepStatus::Approved->value)->doesntExist()
-                    && $step->entry->charges()->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value])->doesntExist()) {
-                    $category = FestivalCategory::query()
-                        ->whereKey($step->entry->festival_category_id)
-                        ->where('account_id', $step->entry->account_id)
-                        ->where('festival_edition_id', $step->entry->festival_edition_id)
-                        ->lockForUpdate()
-                        ->firstOrFail();
-                    if ($category->applicationCapacityReached(excludingEntry: $step->entry)) {
-                        throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
-                    }
-                    $step->entry->forceFill(['status' => FestivalEntryStatus::Accepted])->save();
-                }
             } elseif ($decision === 'request_changes') {
                 $step->forceFill(['status' => FestivalEntryStepStatus::ChangesRequested, 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_notes' => $comment, 'correction_due_at' => $correctionDueAt])->save();
                 if (! $postConfirmationReview) {
@@ -106,20 +96,6 @@ class ReviewFestivalEntryStep
                 if (! $postConfirmationReview && $step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification) {
                     $step->entry->forceFill(['qualification_status' => FestivalQualificationStatus::Pending, 'status' => FestivalEntryStatus::Submitted])->save();
                 }
-            } else {
-                $step->forceFill(['status' => FestivalEntryStepStatus::Rejected, 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_notes' => $comment])->save();
-                $step->entry->forceFill([
-                    'status' => FestivalEntryStatus::Rejected,
-                    'qualification_status' => $step->workflowStep->review_effect === FestivalWorkflowReviewEffect::Qualification ? FestivalQualificationStatus::Failed : $step->entry->qualification_status,
-                    'rejected_at' => now(),
-                    'reviewed_at' => now(),
-                    'reviewed_by' => $reviewer->id,
-                    'review_notes' => $comment,
-                    'track_artist' => null,
-                    'track_title' => null,
-                    'normalized_track_key' => null,
-                    'track_reserved_at' => null,
-                ])->save();
             }
 
             $this->activity->record($step, 'entry_step.'.$decision, $step->entry->edition, $reviewer, [

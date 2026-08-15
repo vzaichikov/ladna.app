@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Festivals\ManageFestivalWorkflowStep;
 use App\Enums\FestivalWorkflowReviewMode;
 use App\Enums\FestivalWorkflowStepType;
 use App\Http\Requests\FestivalMoveRequest;
@@ -12,6 +13,7 @@ use App\Models\FestivalWorkflow;
 use App\Models\FestivalWorkflowStep;
 use App\Support\Festivals\FestivalSettingsOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -34,7 +36,7 @@ class FestivalWorkflowStepController extends Controller
             'review_mode' => collect(FestivalWorkflowReviewMode::cases())->pluck('value')->contains($request->query('review_mode')) ? $request->query('review_mode') : '',
         ];
         $steps = $festivalWorkflow->steps()
-            ->withCount(['requirementDefinitions', 'chargeDefinitions'])
+            ->withCount(['entrySteps', 'requirementDefinitions', 'chargeDefinitions'])
             ->when($filters['q'] !== '', fn ($query) => $query->where('title', 'like', '%'.$filters['q'].'%'))
             ->when($filters['status'] !== '', fn ($query) => $query->where('is_active', $filters['status'] === 'active'))
             ->when($filters['type'] !== '', fn ($query) => $query->where('type', $filters['type']))
@@ -64,15 +66,10 @@ class FestivalWorkflowStepController extends Controller
         ]), $permissions);
     }
 
-    public function store(FestivalWorkflowStepRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow): RedirectResponse
+    public function store(FestivalWorkflowStepRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, ManageFestivalWorkflowStep $manager): RedirectResponse
     {
         $this->assertWorkflow($account, $festivalEdition, $festivalWorkflow);
-        $data = $request->validated();
-        $festivalWorkflow->steps()->create([
-            'account_id' => $account->id,
-            ...$data,
-            'is_active' => $data['is_active'] ?? true,
-        ]);
+        $manager->create($festivalWorkflow, $request->validated());
 
         return $this->redirect($account, $festivalEdition, $festivalWorkflow);
     }
@@ -85,31 +82,48 @@ class FestivalWorkflowStepController extends Controller
         return $this->formView($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep, $permissions);
     }
 
-    public function update(FestivalWorkflowStepRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep): RedirectResponse
+    public function update(FestivalWorkflowStepRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep, ManageFestivalWorkflowStep $manager): RedirectResponse
     {
         $this->assertStep($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep);
-        $data = $request->validated();
-        $festivalWorkflowStep->update([...$data, 'is_active' => $data['is_active'] ?? false]);
+        $manager->update($festivalWorkflowStep, $request->validated());
 
         return $this->redirect($account, $festivalEdition, $festivalWorkflow);
     }
 
-    public function toggle(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep): RedirectResponse
+    public function toggle(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep, ManageFestivalWorkflowStep $manager): RedirectResponse
     {
         $this->authorizeManager($request, $account);
         $this->assertStep($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep);
-        $festivalWorkflowStep->update(['is_active' => ! $festivalWorkflowStep->is_active]);
+        $manager->toggle($festivalWorkflowStep);
 
         return back()->with('status', __('app.festival_status_saved'));
     }
 
-    public function move(FestivalMoveRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep): RedirectResponse
+    public function move(FestivalMoveRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep, ManageFestivalWorkflowStep $manager): RedirectResponse
     {
         $this->authorizeManager($request, $account);
         $this->assertStep($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep);
-        $this->settingsOrder->move($festivalWorkflowStep, $festivalWorkflow->steps(), $request->validated('direction'));
+        $manager->move($festivalWorkflowStep, $request->validated('direction'));
 
         return back()->with('status', __('app.festival_order_saved'));
+    }
+
+    public function destroy(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep, ManageFestivalWorkflowStep $manager): RedirectResponse
+    {
+        $this->authorizeManager($request, $account);
+        $this->assertStep($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep);
+
+        try {
+            $manager->delete($festivalWorkflowStep);
+        } catch (QueryException $exception) {
+            if (($exception->errorInfo[0] ?? null) !== '23000') {
+                throw $exception;
+            }
+
+            return back()->withErrors(['festival_workflow_step' => __('app.festival_workflow_step_dependency_block')]);
+        }
+
+        return back()->with('status', __('app.festival_workflow_step_deleted'));
     }
 
     /**
@@ -122,6 +136,7 @@ class FestivalWorkflowStepController extends Controller
             'edition' => $edition,
             'workflow' => $workflow,
             'step' => $step,
+            'hasSummaryStep' => $workflow->steps()->where('type', FestivalWorkflowStepType::Summary->value)->exists(),
             'workspacePermissions' => $permissions,
         ]);
     }
@@ -160,7 +175,7 @@ class FestivalWorkflowStepController extends Controller
 
     private function redirect(Account $account, FestivalEdition $edition, FestivalWorkflow $workflow): RedirectResponse
     {
-        return redirect()->route('dashboard.accounts.festivals.workflow-steps.index', [$account, $edition, $workflow])
+        return redirect()->route('dashboard.accounts.festivals.workflows.edit', [$account, $edition, $workflow])
             ->with('status', __('app.festival_workflow_step_saved'));
     }
 }

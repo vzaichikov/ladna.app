@@ -11,6 +11,7 @@ use App\Models\FestivalWorkflowStep;
 use App\Support\FestivalCodeGenerator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class FestivalWorkflowStepRequest extends FormRequest
 {
@@ -58,5 +59,32 @@ class FestivalWorkflowStepRequest extends FormRequest
             'due_at' => ['nullable', 'date', 'after:opens_at'],
             'is_active' => ['sometimes', 'boolean'],
         ];
+    }
+
+    /** @return array<int, callable(Validator): void> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $workflow = $this->route('festivalWorkflow');
+            $step = $this->route('festivalWorkflowStep');
+
+            if (! $workflow instanceof FestivalWorkflow) {
+                return;
+            }
+
+            $requestedSummary = $this->input('type') === FestivalWorkflowStepType::Summary->value;
+            if ($step instanceof FestivalWorkflowStep
+                && $step->type === FestivalWorkflowStepType::Summary
+                && (! $requestedSummary || ! $this->boolean('is_active'))) {
+                $validator->errors()->add('type', __('app.festival_summary_step_protected'));
+            }
+
+            if ($requestedSummary && $workflow->steps()
+                ->where('type', FestivalWorkflowStepType::Summary->value)
+                ->when($step instanceof FestivalWorkflowStep, fn ($query) => $query->whereKeyNot($step->id))
+                ->exists()) {
+                $validator->errors()->add('type', __('app.festival_summary_step_unique'));
+            }
+        }];
     }
 }

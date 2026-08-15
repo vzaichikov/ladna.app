@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\FestivalAdmissionTypeController;
 use App\Http\Controllers\FestivalAnnouncementController;
+use App\Http\Controllers\FestivalApplicationDecisionController;
 use App\Http\Controllers\FestivalApplicationMediaReportController;
 use App\Http\Controllers\FestivalBattleController;
 use App\Http\Controllers\FestivalBattleVoteController;
@@ -65,6 +66,8 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('{festivalEdition:id}/applications', [FestivalWorkspaceController::class, 'applications'])->whereNumber('festivalEdition')->name('applications');
     Route::get('{festivalEdition:id}/applications/media-report', FestivalApplicationMediaReportController::class)->whereNumber('festivalEdition')->name('applications.media-report');
     Route::get('{festivalEdition:id}/applications/{festivalEntry}', [FestivalWorkspaceController::class, 'application'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.show');
+    Route::patch('{festivalEdition:id}/applications/{festivalEntry}/fully-confirm', [FestivalApplicationDecisionController::class, 'confirm'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.fully-confirm');
+    Route::patch('{festivalEdition:id}/applications/{festivalEntry}/fully-decline', [FestivalApplicationDecisionController::class, 'decline'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.fully-decline');
     Route::delete('{festivalEdition:id}/applications/{festivalEntry}', [FestivalWorkspaceController::class, 'destroyApplication'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.destroy');
     Route::get('{festivalEdition:id}/performances', [FestivalWorkspaceController::class, 'performances'])->whereNumber('festivalEdition')->name('performances');
     Route::get('{festivalEdition:id}/performances/{festivalEntry}', [FestivalWorkspaceController::class, 'performance'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('performances.show');
@@ -153,6 +156,7 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::put('{festivalEdition:id}/settings/workflows/{festivalWorkflow}/steps/{festivalWorkflowStep}', [FestivalWorkflowStepController::class, 'update'])->whereNumber('festivalEdition')->name('workflow-steps.update');
     Route::patch('{festivalEdition:id}/settings/workflows/{festivalWorkflow}/steps/{festivalWorkflowStep}/toggle', [FestivalWorkflowStepController::class, 'toggle'])->whereNumber('festivalEdition')->name('workflow-steps.toggle');
     Route::patch('{festivalEdition:id}/settings/workflows/{festivalWorkflow}/steps/{festivalWorkflowStep}/move', [FestivalWorkflowStepController::class, 'move'])->whereNumber('festivalEdition')->name('workflow-steps.move');
+    Route::delete('{festivalEdition:id}/settings/workflows/{festivalWorkflow}/steps/{festivalWorkflowStep}', [FestivalWorkflowStepController::class, 'destroy'])->whereNumber('festivalEdition')->name('workflow-steps.destroy');
     Route::post('{festivalEdition:id}/settings/scenes', [FestivalStageController::class, 'store'])->whereNumber('festivalEdition')->name('stages.store');
     Route::put('{festivalEdition:id}/settings/scenes/{festivalStage}', [FestivalStageController::class, 'update'])->whereNumber('festivalEdition')->name('stages.update');
     Route::patch('{festivalEdition:id}/settings/scenes/{festivalStage}/toggle', [FestivalStageController::class, 'toggle'])->whereNumber('festivalEdition')->name('stages.toggle');

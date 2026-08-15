@@ -48,4 +48,9 @@ class FestivalWorkflowStep extends Model
     {
         return $this->hasMany(FestivalChargeDefinition::class);
     }
+
+    public function entrySteps(): HasMany
+    {
+        return $this->hasMany(FestivalEntryStep::class);
+    }
 }

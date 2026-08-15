@@ -2,10 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\FestivalWorkflowStepType;
 use App\Models\Account;
 use App\Models\FestivalChargeDefinition;
+use App\Models\FestivalEdition;
+use App\Models\FestivalWorkflowStep;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class FestivalChargeDefinitionRequest extends FormRequest
 {
@@ -44,5 +48,24 @@ class FestivalChargeDefinitionRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:10000'],
         ];
+    }
+
+    /** @return array<int, callable(Validator): void> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $edition = $this->route('festivalEdition');
+            if (! $edition instanceof FestivalEdition) {
+                return;
+            }
+
+            if (FestivalWorkflowStep::query()
+                ->whereKey($this->integer('festival_workflow_step_id'))
+                ->whereHas('workflow', fn ($query) => $query->where('festival_edition_id', $edition->id))
+                ->where('type', FestivalWorkflowStepType::Summary->value)
+                ->exists()) {
+                $validator->errors()->add('festival_workflow_step_id', __('app.festival_summary_step_definitions_blocked'));
+            }
+        }];
     }
 }

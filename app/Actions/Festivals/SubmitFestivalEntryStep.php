@@ -46,6 +46,9 @@ class SubmitFestivalEntryStep
                 ->firstOrFail();
             $entry->setRelation('category', $category);
             $step = FestivalEntryStep::query()->with(['workflowStep', 'requirements.definition', 'requirements.submissions', 'charges'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
+            if ($step->workflowStep->type === FestivalWorkflowStepType::Summary) {
+                throw ValidationException::withMessages(['step' => __('app.festival_summary_organizer_confirmation_required')]);
+            }
             $this->workflowState->assertMutable($entry, $step);
             $this->completion->assertRequirementsComplete($step);
             $this->completion->assertChargesComplete($step);
@@ -71,17 +74,7 @@ class SubmitFestivalEntryStep
                 $step->requirements()->where('status', FestivalRequirementStatus::Submitted->value)->update(['status' => FestivalRequirementStatus::Accepted->value, 'reviewed_at' => now()]);
             }
 
-            if ($step->workflowStep->type === FestivalWorkflowStepType::Summary && $automatic) {
-                if ($category->applicationCapacityReached()) {
-                    throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
-                }
-                $entry->forceFill([
-                    'status' => FestivalEntryStatus::Accepted,
-                    'accepted_at' => now(),
-                    'registration_completed_at' => now(),
-                ])->save();
-                $this->notifications->queueForEntry($entry, 'entry_reviewed', ['entry_code' => $entry->code, 'status' => FestivalEntryStatus::Accepted->value]);
-            } elseif (! $postConfirmationReview && $entry->status !== FestivalEntryStatus::Submitted) {
+            if (! $postConfirmationReview && $entry->status !== FestivalEntryStatus::Submitted) {
                 $entry->forceFill(['status' => FestivalEntryStatus::UnderReview])->save();
             }
 

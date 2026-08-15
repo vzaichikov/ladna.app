@@ -6,6 +6,47 @@
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <x-ui.page-header :title="__('app.festival_application')" :copy="$entry->entry_name.' · '.$entry->code">
         <x-slot:actions>
+            @if ($tab === 'details' && $workspacePermissions['registrations'] && in_array($entry->status, [\App\Enums\FestivalEntryStatus::Submitted, \App\Enums\FestivalEntryStatus::UnderReview, \App\Enums\FestivalEntryStatus::ChangesPending], true))
+                <form
+                    method="POST"
+                    action="{{ route('dashboard.accounts.festivals.applications.fully-confirm', [$account, $edition, $entry]) }}"
+                    data-confirm-action
+                    data-confirm-title="{{ __('app.festival_full_confirm_title') }}"
+                    data-confirm-body="{{ __('app.festival_full_confirm_copy') }}"
+                    data-confirm-accept="{{ __('app.festival_full_confirm') }}"
+                    data-confirm-icon="circle-check"
+                    data-confirm-variant="success"
+                >
+                    @csrf
+                    @method('PATCH')
+                    <x-ui.button type="submit" variant="success">
+                        <x-ui.icon name="circle-check" class="h-4 w-4" />{{ __('app.festival_full_confirm') }}
+                    </x-ui.button>
+                </form>
+            @endif
+            @if ($tab === 'details' && $workspacePermissions['registrations'] && ! in_array($entry->status, [\App\Enums\FestivalEntryStatus::Rejected, \App\Enums\FestivalEntryStatus::Withdrawn], true))
+                <form
+                    method="POST"
+                    action="{{ route('dashboard.accounts.festivals.applications.fully-decline', [$account, $edition, $entry]) }}"
+                    data-confirm-action
+                    data-confirm-title="{{ __('app.festival_full_decline_title') }}"
+                    data-confirm-body="{{ __('app.festival_full_decline_copy') }}"
+                    data-confirm-accept="{{ __('app.festival_full_decline') }}"
+                    data-confirm-icon="circle-x"
+                    data-confirm-variant="danger"
+                    data-confirm-reason-required="true"
+                    data-confirm-reason-label="{{ __('app.festival_full_decline_reason') }}"
+                    data-confirm-reason-placeholder="{{ __('app.festival_full_decline_reason_placeholder') }}"
+                    data-confirm-reason-help="{{ __('app.festival_full_decline_reason_help') }}"
+                >
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="reason" value="{{ old('reason') }}" data-confirm-reason-output>
+                    <x-ui.button type="submit" variant="danger">
+                        <x-ui.icon name="circle-x" class="h-4 w-4" />{{ __('app.festival_full_decline') }}
+                    </x-ui.button>
+                </form>
+            @endif
             @if ($canDeleteApplication)
                 <form
                     method="POST"
@@ -43,6 +84,12 @@
         <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
     @enderror
     @error('approval')
+        <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
+    @enderror
+    @error('reason')
+        <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
+    @enderror
+    @error('festival_category_id')
         <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
     @enderror
 

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.136.0',
+                'date' => '2026-08-15',
+                'title' => 'Organizer-approved Festival applications',
+                'items' => ['Festival applications are now accepted only through an organizer\'s final confirmation after every required step, qualification, and payment is complete. Participants receive a read-only Summary with the exact accepted, awaiting-review, correction, or declined result.', 'Participants can update specifically permitted fields from the accepted Summary until their configured deadlines. The application moves into the requested-corrections queue, notifies the Festival-owning studio through its configured channels once per correction cycle, and returns to accepted after organizer reapproval.', 'Organizers can fully confirm or decline an application with a required reason from its header, while Festival scenario editing now includes ordered step creation, editing, activation, reordering, and safe deletion with the protected Summary always last.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.135.0',
                 'date' => '2026-08-15',
                 'title' => 'Festival media playback and reporting',
@@ -1185,6 +1192,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.136.0',
+                'date' => '2026-08-15',
+                'title' => 'Затвердження заявок фестивалю організатором',
+                'items' => ['Заявку фестивалю тепер може остаточно прийняти лише організатор після завершення всіх обов’язкових кроків, кваліфікації та оплат. Учасник бачить підсумковий крок лише для читання з точним результатом: очікування рішення, прийняття, виправлення або відхилення.', 'Учасник може змінювати окремо дозволені поля з прийнятого підсумку до встановленого строку. Заявка переходить у чергу запитаних виправлень, один раз за цикл сповіщає студію-власника фестивалю через налаштовані канали та повертається до прийнятих після повторного схвалення організатором.', 'Організатори можуть повністю підтвердити або обґрунтовано відхилити заявку з її заголовка, а редагування сценарію фестивалю тепер містить додавання, редагування, увімкнення, упорядкування та безпечне видалення кроків із захищеним Підсумком завжди наприкінці.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.135.0',
                 'date' => '2026-08-15',

@@ -8,6 +8,7 @@ import { initFestivalStreamPlayer } from './festival-stream-player';
 let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
 let pendingConfirmationPhrase = null;
+let pendingConfirmationReasonRequired = false;
 let publicScheduleAbortController = null;
 let publicCalendarSwipeStart = null;
 let publicBookingModalOpener = null;
@@ -78,12 +79,19 @@ function closeDeleteConfirmation(modal) {
 
     const phraseContainer = modal.querySelector('[data-confirm-phrase-container]');
     const phraseInput = modal.querySelector('[data-confirm-phrase-input]');
+    const reasonContainer = modal.querySelector('[data-confirm-reason-container]');
+    const reasonInput = modal.querySelector('[data-confirm-reason-input]');
     const acceptButton = modal.querySelector('[data-confirm-accept]');
 
     phraseContainer?.classList.add('hidden');
+    reasonContainer?.classList.add('hidden');
 
     if (phraseInput) {
         phraseInput.value = '';
+    }
+
+    if (reasonInput) {
+        reasonInput.value = '';
     }
 
     if (acceptButton) {
@@ -93,6 +101,7 @@ function closeDeleteConfirmation(modal) {
     pendingDeleteForm = null;
     pendingConfirmationSubmitter = null;
     pendingConfirmationPhrase = null;
+    pendingConfirmationReasonRequired = false;
     confirmationModalOpener?.focus();
     confirmationModalOpener = null;
 }
@@ -5095,6 +5104,11 @@ async function submitAsyncForm(form) {
                 const replacement = replaceFestivalRequirementCard(payload.requirement_html, fallbackRequirementCard);
                 const replacementForm = replacement?.querySelector('form[data-async-form]') ?? null;
                 setAsyncStatus(payload.message, 'success', replacementForm);
+
+                if (payload.reload) {
+                    window.setTimeout(() => window.location.reload(), 50);
+                }
+
                 return;
             }
 
@@ -8597,8 +8611,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmationPhraseLabel = modal?.querySelector('[data-confirm-phrase-label]');
     const confirmationPhraseInput = modal?.querySelector('[data-confirm-phrase-input]');
     const confirmationPhraseHelp = modal?.querySelector('[data-confirm-phrase-help]');
+    const confirmationReasonContainer = modal?.querySelector('[data-confirm-reason-container]');
+    const confirmationReasonLabel = modal?.querySelector('[data-confirm-reason-label]');
+    const confirmationReasonInput = modal?.querySelector('[data-confirm-reason-input]');
+    const confirmationReasonHelp = modal?.querySelector('[data-confirm-reason-help]');
 
     const formNeedsConfirmation = (form) => form?.matches('[data-confirm-delete], [data-confirm-action]') && form.dataset.confirmed !== 'true';
+    const syncConfirmationAcceptState = () => {
+        const phraseInvalid = Boolean(pendingConfirmationPhrase)
+            && confirmationPhraseInput?.value !== pendingConfirmationPhrase;
+        const reasonInvalid = pendingConfirmationReasonRequired
+            && !confirmationReasonInput?.value.trim();
+
+        acceptButton.disabled = phraseInvalid || reasonInvalid;
+    };
     const applyConfirmationCopy = (form, submitter = null) => {
         const source = submitter?.dataset ? submitter : form;
 
@@ -8645,7 +8671,6 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmationPhraseInput.placeholder = source.dataset.confirmPhrasePlaceholder
                 || form.dataset.confirmPhrasePlaceholder
                 || '';
-            acceptButton.disabled = Boolean(pendingConfirmationPhrase);
         }
 
         if (confirmationPhraseLabel) {
@@ -8661,6 +8686,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 || confirmationPhraseHelp.dataset.defaultText
                 || confirmationPhraseHelp.textContent;
         }
+
+        pendingConfirmationReasonRequired = (source.dataset.confirmReasonRequired || form.dataset.confirmReasonRequired) === 'true';
+
+        if (confirmationReasonContainer && confirmationReasonInput) {
+            confirmationReasonContainer.classList.toggle('hidden', !pendingConfirmationReasonRequired);
+            confirmationReasonInput.value = '';
+            confirmationReasonInput.placeholder = source.dataset.confirmReasonPlaceholder
+                || form.dataset.confirmReasonPlaceholder
+                || '';
+        }
+
+        if (confirmationReasonLabel) {
+            confirmationReasonLabel.textContent = source.dataset.confirmReasonLabel
+                || form.dataset.confirmReasonLabel
+                || confirmationReasonLabel.dataset.defaultText
+                || confirmationReasonLabel.textContent;
+        }
+
+        if (confirmationReasonHelp) {
+            confirmationReasonHelp.textContent = source.dataset.confirmReasonHelp
+                || form.dataset.confirmReasonHelp
+                || confirmationReasonHelp.dataset.defaultText
+                || confirmationReasonHelp.textContent;
+        }
+
+        syncConfirmationAcceptState();
     };
 
     if (!modal || !cancelButton || !acceptButton) {
@@ -8708,15 +8759,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (pendingConfirmationPhrase && confirmationPhraseInput) {
             confirmationPhraseInput.focus();
+        } else if (pendingConfirmationReasonRequired && confirmationReasonInput) {
+            confirmationReasonInput.focus();
         } else {
             acceptButton.focus();
         }
     });
 
     confirmationPhraseInput?.addEventListener('input', () => {
-        acceptButton.disabled = Boolean(pendingConfirmationPhrase)
-            && confirmationPhraseInput.value !== pendingConfirmationPhrase;
+        syncConfirmationAcceptState();
     });
+    confirmationReasonInput?.addEventListener('input', syncConfirmationAcceptState);
 
     cancelButton.addEventListener('click', () => closeDeleteConfirmation(modal));
 
@@ -8731,7 +8784,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const focusable = [...modal.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+        const focusable = [...modal.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
             .filter((element) => !element.closest('.hidden'));
         const first = focusable[0];
         const last = focusable.at(-1);
@@ -8806,10 +8859,23 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+
+        if (pendingConfirmationReasonRequired && !confirmationReasonInput?.value.trim()) {
+            confirmationReasonInput?.focus();
+
+            return;
+        }
+
         const approvalOutput = pendingDeleteForm.querySelector('[data-confirm-approval-output]');
 
         if (approvalOutput && confirmationPhraseInput) {
             approvalOutput.value = confirmationPhraseInput.value;
+        }
+
+        const reasonOutput = pendingDeleteForm.querySelector('[data-confirm-reason-output]');
+
+        if (reasonOutput && confirmationReasonInput) {
+            reasonOutput.value = confirmationReasonInput.value.trim();
         }
 
         pendingDeleteForm.dataset.confirmed = 'true';

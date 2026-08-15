@@ -499,6 +499,14 @@ class FestivalNotificationDeliveryTest extends TestCase
             'telegram_chat_id' => 'festival-owner-chat',
             'telegram_user_id' => 'festival-owner-user',
         ]);
+        $otherAccount = Account::factory()->create();
+        $otherOwner = User::factory()->create();
+        $otherAccount->addOwner($otherOwner);
+        $otherAuthorization = TelegramChatAuthorization::factory()->for($otherAccount)->for($otherOwner)->create([
+            'telegram_bot_installation_id' => $installation->id,
+            'telegram_chat_id' => 'other-studio-owner-chat',
+            'telegram_user_id' => 'other-studio-owner-user',
+        ]);
         FestivalNotificationSetting::query()->create([
             'account_id' => $account->id,
             'type' => FestivalNotificationType::EntrySubmitted,
@@ -518,6 +526,7 @@ class FestivalNotificationDeliveryTest extends TestCase
         $this->assertSame(FestivalNotificationType::EntrySubmitted->value, $alert->payload['notification_type']);
         $this->assertStringContainsString($entry->entry_name, (string) $alert->text);
         $this->assertStringContainsString(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]), (string) $alert->text);
+        $this->assertFalse(TelegramAlert::query()->where('telegram_chat_authorization_id', $otherAuthorization->id)->exists());
 
         $this->artisan('telegram-alerts:send')->assertSuccessful();
 

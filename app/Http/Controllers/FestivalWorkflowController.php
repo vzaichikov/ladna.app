@@ -117,10 +117,15 @@ class FestivalWorkflowController extends Controller
      */
     private function formView(Account $account, FestivalEdition $edition, FestivalWorkflow $workflow, array $permissions): View
     {
+        $steps = $workflow->exists
+            ? $workflow->steps()->withCount(['entrySteps', 'requirementDefinitions', 'chargeDefinitions'])->get()
+            : collect();
+
         return view('festivals.staff.settings.workflow-form', [
             'account' => $account,
             'edition' => $edition,
             'workflow' => $workflow,
+            'steps' => $steps,
             'workspacePermissions' => $permissions,
         ]);
     }

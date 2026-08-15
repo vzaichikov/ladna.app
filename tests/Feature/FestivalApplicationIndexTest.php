@@ -81,7 +81,7 @@ class FestivalApplicationIndexTest extends TestCase
             FestivalEntryStepStatus::Draft,
         ]);
         [$correctionEntry] = $this->createEntry($fixture, 'Corrections requested', FestivalEntryStatus::ChangesPending, [
-            FestivalEntryStepStatus::ChangesRequested,
+            FestivalEntryStepStatus::Submitted,
             FestivalEntryStepStatus::Draft,
             FestivalEntryStepStatus::Draft,
             FestivalEntryStepStatus::Draft,

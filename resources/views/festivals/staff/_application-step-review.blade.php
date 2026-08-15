@@ -12,7 +12,14 @@
     ></div>
 
     <h3 class="font-semibold text-slate-950">{{ __('app.festival_application_review') }}</h3>
-    @if($currentStep)
+    @if($entry->status === \App\Enums\FestivalEntryStatus::Rejected)
+        <div class="mt-3 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">
+            <strong>{{ __('app.festival_summary_rejected_title') }}</strong>
+            @if($entry->review_notes)
+                <p class="mt-1 whitespace-pre-line">{{ $entry->review_notes }}</p>
+            @endif
+        </div>
+    @elseif($currentStep)
         <div class="mt-3 rounded-xl border border-stone-200 bg-white p-4">
             <p class="text-xs font-semibold text-brand-700">{{ __('app.festival_current_step') }}</p>
             <strong class="mt-1 block">{{ $currentStep->workflowStep->title }}</strong>
@@ -52,6 +59,12 @@
             </form>
         @endif
     @else
-        <p class="mt-3 rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{{ __('app.festival_registration_complete') }}</p>
+        @if($entry->status === \App\Enums\FestivalEntryStatus::Accepted)
+            <p class="mt-3 rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{{ __('app.festival_registration_complete') }}</p>
+        @elseif($entry->status === \App\Enums\FestivalEntryStatus::ChangesPending)
+            <p class="mt-3 rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-800">{{ __('app.festival_summary_changes_pending_title') }}</p>
+        @else
+            <p class="mt-3 rounded-xl bg-sky-50 p-4 text-sm font-semibold text-sky-800">{{ __('app.festival_summary_awaiting_title') }}</p>
+        @endif
     @endif
 </section>

@@ -15,18 +15,7 @@
         <label><span class="crm-label">{{ __('app.festival_review_mode') }}</span><select name="review_mode" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach (\App\Enums\FestivalWorkflowReviewMode::cases() as $mode)<option value="{{ $mode->value }}" @selected($filters['review_mode'] === $mode->value)>{{ __('app.festival_review_mode_'.$mode->value) }}</option>@endforeach</select></label>
     </x-ui.filter-bar>
 
-    <x-ui.panel padding="none" class="overflow-hidden">
-        @forelse ($steps as $step)
-            @php($globalIndex = ($steps->firstItem() ?? 1) + $loop->index)
-            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center">
-                <div><div class="flex flex-wrap items-center gap-2"><h2 class="font-semibold text-slate-950">{{ $step->title }}</h2>@unless ($step->is_active)<span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{{ __('app.inactive') }}</span>@endunless</div><p class="mt-1 text-sm text-slate-500">{{ __('app.festival_step_type_'.$step->type->value) }} · {{ __('app.festival_review_mode_'.$step->review_mode->value) }}</p></div>
-                <p class="text-sm text-slate-500">{{ trans_choice('app.festival_dependency_usage_count', $step->requirement_definitions_count + $step->charge_definitions_count, ['count' => $step->requirement_definitions_count + $step->charge_definitions_count]) }}</p>
-                <x-festivals.settings-actions :active="$step->is_active" :toggle-route="route('dashboard.accounts.festivals.workflow-steps.toggle', [$account, $edition, $workflow, $step])" :move-route="route('dashboard.accounts.festivals.workflow-steps.move', [$account, $edition, $workflow, $step])" :edit-route="route('dashboard.accounts.festivals.workflow-steps.edit', [$account, $edition, $workflow, $step])" :show-ordering="! $hasFilters" :can-move-up="$globalIndex > 1" :can-move-down="$globalIndex < $steps->total()" />
-            </div>
-        @empty
-            <x-ui.empty-state :title="$hasFilters ? __('app.no_data') : __('app.festival_workflow_steps_empty')" icon="list-tree" class="m-5">{{ $hasFilters ? __('app.festival_filtered_empty_copy') : __('app.festival_workflow_steps_empty_copy') }}</x-ui.empty-state>
-        @endforelse
-    </x-ui.panel>
+    <x-festivals.workflow-steps-list :$account :$edition :$workflow :$steps :has-filters="$hasFilters" />
     <div>{{ $steps->links() }}</div>
 </x-festivals.staff.workspace>
 @endsection

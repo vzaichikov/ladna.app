@@ -267,6 +267,7 @@ class FestivalApplicationIndex
             )
             ->selectRaw(
                 'CASE
+                    WHEN '.$entryAlias.'.status = ? THEN ?
                     WHEN '.$entryAlias.'.status NOT IN (?, ?) AND application_current_steps.current_step_status = ? THEN ?
                     WHEN '.$entryAlias.'.status NOT IN (?, ?) AND application_current_steps.current_step_status = ? THEN ?
                     WHEN '.$entryAlias.'.status NOT IN (?, ?) AND application_current_steps.current_step_status = ? AND COALESCE(application_current_charges.incomplete_count, 0) > 0 THEN ?
@@ -275,6 +276,8 @@ class FestivalApplicationIndex
                     ELSE ?
                 END as queue_key',
                 [
+                    FestivalEntryStatus::ChangesPending->value,
+                    self::QueueCorrectionsRequested,
                     ...$terminalStatuses,
                     FestivalEntryStepStatus::Submitted->value,
                     self::QueueAwaitingReview,

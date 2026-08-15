@@ -22,8 +22,12 @@
                     <x-ui.icon name="refresh-cw" class="h-4 w-4" />
                     {{ __('app.refresh') }}
                 </x-ui.button>
-                @if ($entry->registration_completed_at)
+                @if ($entry->status === \App\Enums\FestivalEntryStatus::Accepted)
                     <span class="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800">{{ __('app.festival_registration_complete') }}</span>
+                @elseif ($entry->status === \App\Enums\FestivalEntryStatus::ChangesPending)
+                    <span class="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900">{{ __('app.festival_entry_status_changes_pending') }}</span>
+                @elseif ($entry->status === \App\Enums\FestivalEntryStatus::Rejected)
+                    <span class="rounded-full bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-800">{{ __('app.festival_entry_status_rejected') }}</span>
                 @endif
             </div>
         </header>
@@ -74,6 +78,12 @@
         @if($selectedStep)
             @php
                 $selectedState = $workflowStates->first(fn($state) => $state['step']->is($selectedStep));
+                $summarySelected = $selectedStep->workflowStep->type === \App\Enums\FestivalWorkflowStepType::Summary;
+                $displayState = $selectedState;
+                if (! $summarySelected && ($entry->registration_completed_at || $entry->status === \App\Enums\FestivalEntryStatus::Rejected)) {
+                    $displayState['mutable'] = false;
+                    $displayState['requirement_mutability'] = collect($displayState['requirement_mutability'])->map(fn () => false)->all();
+                }
                 $submitFormId = 'festival-entry-step-submit-'.$selectedStep->id;
                 $submitLabel = $selectedStep->status === \App\Enums\FestivalEntryStepStatus::ChangesRequested
                     || $selectedStep->workflowStep->review_mode === \App\Enums\FestivalWorkflowReviewMode::Organizer
@@ -86,19 +96,19 @@
                     <span class="self-start rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">{{ __('app.festival_step_status_'.$selectedStep->status->value) }}</span>
                 </div>
 
-                @if($selectedStep->status === \App\Enums\FestivalEntryStepStatus::ChangesRequested)
+                @if(! $summarySelected && $selectedStep->status === \App\Enums\FestivalEntryStepStatus::ChangesRequested)
                     <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                         <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                             <div>
                                 <strong>{{ __('app.festival_review_comment') }}</strong>
                                 <p class="mt-1 whitespace-pre-line">{{ $selectedStep->review_notes }}</p>
                                 @if($selectedStep->correction_due_at)<p class="mt-2 font-semibold">{{ __('app.festival_correction_due_at') }}: {{ $selectedStep->correction_due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }}</p>@endif
-                                @if($selectedState['mutable'] && !$selectedState['has_blocking_charges'])
+                                @if($displayState['mutable'] && !$displayState['has_blocking_charges'])
                                     <p class="mt-3 font-semibold">{{ __('app.festival_correction_submit_required') }}</p>
                                 @endif
                             </div>
-                            @if($selectedState['mutable'] && !$selectedState['has_blocking_charges'])
-                                <x-ui.button type="submit" size="lg" class="w-full shrink-0 sm:w-auto" :form="$submitFormId" data-festival-progress-action :disabled="!$selectedState['requirements_complete']">{{ __('app.submit') }}</x-ui.button>
+                            @if($displayState['mutable'] && !$displayState['has_blocking_charges'])
+                                <x-ui.button type="submit" size="lg" class="w-full shrink-0 sm:w-auto" :form="$submitFormId" data-festival-progress-action :disabled="!$displayState['requirements_complete']">{{ __('app.submit') }}</x-ui.button>
                             @endif
                         </div>
                     </div>
@@ -106,41 +116,99 @@
                     <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{{ $selectedStep->review_notes }}</div>
                 @endif
 
-                @if($selectedStep->workflowStep->type === \App\Enums\FestivalWorkflowStepType::Application && $selectedState['mutable'])
-                    <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm"><div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><span>{{ $entry->entry_name }} · {{ $entry->participants->map->displayName()->join(', ') }}</span><a href="{{ route('festival.portal.entries.edit', [$account->slug, $entry]) }}" class="font-semibold text-brand-700">{{ __('app.edit') }}</a></div></div>
-                @endif
-
-                <div class="mt-6 space-y-4">
-                    @foreach($selectedStep->requirements as $requirement)
-                        @include('festivals.portal._requirement-card', compact('account', 'portalUser', 'entry', 'selectedStep', 'selectedState', 'requirement'))
-                    @endforeach
-                </div>
-
-                @if($selectedStep->charges->isNotEmpty())
-                    <div class="mt-6 border-t border-stone-200 pt-5">
-                        <h3 class="text-lg font-semibold">{{ __('app.festival_payments') }}</h3>
-                        <div class="mt-3 space-y-3">
-                            @foreach($selectedStep->charges as $charge)
-                                @include('festivals.portal._charge-card', compact('account', 'entry', 'selectedState', 'providers', 'charge'))
-                            @endforeach
+                @if ($summarySelected)
+                    @if ($entry->status === \App\Enums\FestivalEntryStatus::Accepted)
+                        <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
+                            <h3 class="text-lg font-semibold">{{ __('app.festival_summary_accepted_title') }}</h3>
+                            <p class="mt-1 text-sm">{{ __('app.festival_summary_accepted_copy') }}</p>
                         </div>
+                    @elseif ($entry->status === \App\Enums\FestivalEntryStatus::ChangesPending)
+                        <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
+                            <h3 class="text-lg font-semibold">{{ __('app.festival_summary_changes_pending_title') }}</h3>
+                            <p class="mt-1 text-sm">{{ __('app.festival_summary_changes_pending_copy') }}</p>
+                        </div>
+                    @elseif ($entry->status === \App\Enums\FestivalEntryStatus::Rejected)
+                        <div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-5 text-rose-950">
+                            <h3 class="text-lg font-semibold">{{ __('app.festival_summary_rejected_title') }}</h3>
+                            @if ($entry->review_notes)<p class="mt-2 whitespace-pre-line text-sm">{{ $entry->review_notes }}</p>@endif
+                        </div>
+                    @else
+                        <div class="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-5 text-sky-950">
+                            <h3 class="text-lg font-semibold">{{ __('app.festival_summary_awaiting_title') }}</h3>
+                            <p class="mt-1 text-sm">{{ __('app.festival_summary_awaiting_copy') }}</p>
+                        </div>
+                    @endif
+
+                    <dl class="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
+                        <div><dt class="font-semibold text-slate-500">{{ __('app.festival_application') }}</dt><dd class="mt-1 text-slate-950">{{ $entry->entry_name }} · {{ $entry->code }}</dd></div>
+                        <div><dt class="font-semibold text-slate-500">{{ __('app.festival_category') }}</dt><dd class="mt-1 text-slate-950">{{ $directionName }} · {{ $categoryName }}</dd></div>
+                        <div class="sm:col-span-2"><dt class="font-semibold text-slate-500">{{ __('app.festival_roster') }}</dt><dd class="mt-1 text-slate-950">{{ $entry->participants->map->displayName()->join(', ') }}</dd></div>
+                    </dl>
+
+                    @if ($postConfirmationRequirements->isNotEmpty())
+                        <div class="mt-6 border-t border-stone-200 pt-5">
+                            <h3 class="text-lg font-semibold">{{ __('app.festival_summary_editable_fields') }}</h3>
+                            <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_summary_editable_fields_copy') }}</p>
+                            <div class="mt-4 space-y-4">
+                                @foreach ($postConfirmationRequirements as $postConfirmationField)
+                                    @include('festivals.portal._requirement-card', [
+                                        'account' => $account,
+                                        'portalUser' => $portalUser,
+                                        'entry' => $entry,
+                                        'selectedStep' => $selectedStep,
+                                        'selectedState' => $selectedState,
+                                        'requirement' => $postConfirmationField['requirement'],
+                                        'requirementStep' => $postConfirmationField['step'],
+                                        'requirementState' => $postConfirmationField['state'],
+                                    ])
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                @else
+                    @if($selectedStep->workflowStep->type === \App\Enums\FestivalWorkflowStepType::Application && $displayState['mutable'])
+                        <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm"><div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><span>{{ $entry->entry_name }} · {{ $entry->participants->map->displayName()->join(', ') }}</span><a href="{{ route('festival.portal.entries.edit', [$account->slug, $entry]) }}" class="font-semibold text-brand-700">{{ __('app.edit') }}</a></div></div>
+                    @endif
+
+                    <div class="mt-6 space-y-4">
+                        @foreach($selectedStep->requirements as $requirement)
+                            @include('festivals.portal._requirement-card', [
+                                'account' => $account,
+                                'portalUser' => $portalUser,
+                                'entry' => $entry,
+                                'selectedStep' => $selectedStep,
+                                'selectedState' => $displayState,
+                                'requirement' => $requirement,
+                            ])
+                        @endforeach
                     </div>
-                @endif
 
-                @if($entry->chargeAdjustments->where('status', 'pending')->isNotEmpty())
-                    @php($pendingRefundsByCurrency = $entry->chargeAdjustments->where('status', 'pending')->groupBy(fn ($adjustment) => strtoupper($adjustment->currency)))
-                    <div class="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900"><strong>{{ __('app.festival_refund_pending') }}</strong><span class="ml-2">@foreach($pendingRefundsByCurrency as $currency => $adjustments)@if(! $loop->first) · @endif{{ \App\Support\MoneyFormatter::format((int) $adjustments->sum('amount_cents'), $currency) }}@endforeach</span></div>
-                @endif
+                    @if($selectedStep->charges->isNotEmpty())
+                        <div class="mt-6 border-t border-stone-200 pt-5">
+                            <h3 class="text-lg font-semibold">{{ __('app.festival_payments') }}</h3>
+                            <div class="mt-3 space-y-3">
+                                @foreach($selectedStep->charges as $charge)
+                                    @include('festivals.portal._charge-card', ['account' => $account, 'entry' => $entry, 'selectedState' => $displayState, 'providers' => $providers, 'charge' => $charge])
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
 
-                @if($selectedState['mutable'] && !$selectedState['has_blocking_charges'])
-                    <form id="{{ $submitFormId }}" method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6">
-                        @csrf
-                        @if ($errors->default->any())
-                            <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{{ $errors->default->first() }}</div>
-                        @endif
-                        <p data-festival-progress-blocked-message @class(['mb-3 text-right text-sm font-semibold text-amber-800', 'hidden' => $selectedState['requirements_complete']])>{{ __('app.festival_complete_required_fields_first') }}</p>
-                        <div class="flex justify-end"><x-ui.button type="submit" size="lg" data-festival-progress-action :disabled="!$selectedState['requirements_complete']">{{ $submitLabel }}</x-ui.button></div>
-                    </form>
+                    @if($entry->chargeAdjustments->where('status', 'pending')->isNotEmpty())
+                        @php($pendingRefundsByCurrency = $entry->chargeAdjustments->where('status', 'pending')->groupBy(fn ($adjustment) => strtoupper($adjustment->currency)))
+                        <div class="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900"><strong>{{ __('app.festival_refund_pending') }}</strong><span class="ml-2">@foreach($pendingRefundsByCurrency as $currency => $adjustments)@if(! $loop->first) · @endif{{ \App\Support\MoneyFormatter::format((int) $adjustments->sum('amount_cents'), $currency) }}@endforeach</span></div>
+                    @endif
+
+                    @if($displayState['mutable'] && !$displayState['has_blocking_charges'])
+                        <form id="{{ $submitFormId }}" method="POST" action="{{ route('festival.portal.entry-steps.submit', [$account->slug, $entry, $selectedStep]) }}" class="mt-6">
+                            @csrf
+                            @if ($errors->default->any())
+                                <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{{ $errors->default->first() }}</div>
+                            @endif
+                            <p data-festival-progress-blocked-message @class(['mb-3 text-right text-sm font-semibold text-amber-800', 'hidden' => $displayState['requirements_complete']])>{{ __('app.festival_complete_required_fields_first') }}</p>
+                            <div class="flex justify-end"><x-ui.button type="submit" size="lg" data-festival-progress-action :disabled="!$displayState['requirements_complete']">{{ $submitLabel }}</x-ui.button></div>
+                        </form>
+                    @endif
                 @endif
             </section>
         @endif

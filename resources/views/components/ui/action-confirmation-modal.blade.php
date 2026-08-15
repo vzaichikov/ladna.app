@@ -41,6 +41,23 @@
             </p>
         </div>
 
+        <div class="mt-5 hidden" data-confirm-reason-container>
+            <label for="confirmation-reason" class="crm-label" data-confirm-reason-label data-default-text="{{ __('app.reason') }}">
+                {{ __('app.reason') }}
+            </label>
+            <textarea
+                id="confirmation-reason"
+                rows="4"
+                maxlength="5000"
+                class="crm-field min-h-28"
+                aria-describedby="confirmation-reason-help"
+                data-confirm-reason-input
+            ></textarea>
+            <p id="confirmation-reason-help" class="mt-2 text-sm leading-6 text-slate-500" data-confirm-reason-help data-default-text="{{ __('app.confirmation_reason_help') }}">
+                {{ __('app.confirmation_reason_help') }}
+            </p>
+        </div>
+
         <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <x-ui.button type="button" variant="secondary" data-confirm-cancel>
                 {{ __('app.cancel') }}

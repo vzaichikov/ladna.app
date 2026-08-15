@@ -5,9 +5,11 @@ namespace App\Http\Requests;
 use App\Enums\FestivalFieldScope;
 use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementType;
+use App\Enums\FestivalWorkflowStepType;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalRequirementDefinition;
+use App\Models\FestivalWorkflowStep;
 use App\Support\FestivalCodeGenerator;
 use App\Support\Festivals\FestivalRequirementDeadlineResolver;
 use Illuminate\Foundation\Http\FormRequest;
@@ -125,6 +127,14 @@ class FestivalRequirementRequest extends FormRequest
             $edition = $this->route('festivalEdition');
             if (! $edition instanceof FestivalEdition) {
                 return;
+            }
+
+            if (FestivalWorkflowStep::query()
+                ->whereKey($this->integer('festival_workflow_step_id'))
+                ->whereHas('workflow', fn ($query) => $query->where('festival_edition_id', $edition->id))
+                ->where('type', FestivalWorkflowStepType::Summary->value)
+                ->exists()) {
+                $validator->errors()->add('festival_workflow_step_id', __('app.festival_summary_step_definitions_blocked'));
             }
 
             $referenceFields = ['due_reference'];

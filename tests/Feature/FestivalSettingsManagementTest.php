@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\ProvisionFestivalWorkflow;
 use App\Enums\AccountRole;
 use App\Enums\FestivalEntryStatus;
+use App\Enums\FestivalWorkflowStepType;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\FestivalCategory;
@@ -391,8 +393,8 @@ class FestivalSettingsManagementTest extends TestCase
     public function test_referenced_workflow_step_can_be_deactivated(): void
     {
         [$account, $edition, $owner] = $this->festival();
-        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
-        $step = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+        $workflow = app(ProvisionFestivalWorkflow::class)->execute($edition, 'Referenced workflow');
+        $step = $workflow->steps->firstWhere('code', 'technical_form');
         FestivalRequirementDefinition::factory()->for($edition)->create([
             'account_id' => $account->id,
             'festival_workflow_step_id' => $step->id,
@@ -408,6 +410,124 @@ class FestivalSettingsManagementTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->assertFalse($step->refresh()->is_active);
+    }
+
+    public function test_workflow_edit_manages_ordered_steps_and_protects_the_summary_invariant(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $workflow = app(ProvisionFestivalWorkflow::class)->execute($edition, 'Managed workflow');
+        $summary = $workflow->steps->firstWhere('type', FestivalWorkflowStepType::Summary);
+        $workflowEditRoute = route('dashboard.accounts.festivals.workflows.edit', [$account, $edition, $workflow]);
+
+        $this->actingAs($owner)
+            ->get($workflowEditRoute)
+            ->assertOk()
+            ->assertSee(__('app.festival_workflow_steps_impact_copy'))
+            ->assertSee(route('dashboard.accounts.festivals.workflow-steps.create', [$account, $edition, $workflow]), false)
+            ->assertSee($summary->title);
+
+        $payload = [
+            'title' => 'Costume details',
+            'type' => 'form',
+            'sort_order' => 9999,
+            'review_mode' => 'organizer',
+            'review_effect' => 'none',
+            'description' => 'Applicant costume details.',
+            'is_active' => 1,
+        ];
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.workflow-steps.store', [$account, $edition, $workflow]), $payload)
+            ->assertRedirect($workflowEditRoute)
+            ->assertSessionHasNoErrors();
+        $step = $workflow->steps()->where('title', 'Costume details')->firstOrFail();
+        $this->assertLessThan($summary->refresh()->sort_order, $step->sort_order);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.workflow-steps.update', [$account, $edition, $workflow, $step]), [
+                ...$payload,
+                'title' => 'Updated costume details',
+            ])
+            ->assertRedirect($workflowEditRoute)
+            ->assertSessionHasNoErrors();
+        $this->assertSame('Updated costume details', $step->refresh()->title);
+
+        $previousStep = $workflow->steps()
+            ->where('type', '!=', FestivalWorkflowStepType::Summary->value)
+            ->where('sort_order', '<', $step->sort_order)
+            ->reorder('sort_order', 'desc')
+            ->orderByDesc('id')
+            ->firstOrFail();
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.workflow-steps.move', [$account, $edition, $workflow, $step]), ['direction' => 'up'])
+            ->assertSessionHasNoErrors();
+        $this->assertLessThan($previousStep->refresh()->sort_order, $step->refresh()->sort_order);
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.workflow-steps.toggle', [$account, $edition, $workflow, $step]))
+            ->assertSessionHasNoErrors();
+        $this->assertFalse($step->refresh()->is_active);
+
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.workflow-steps.destroy', [$account, $edition, $workflow, $step]))
+            ->assertSessionHasNoErrors();
+        $this->assertModelMissing($step);
+
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.workflow-steps.toggle', [$account, $edition, $workflow, $summary]))
+            ->assertSessionHasErrors('festival_workflow_step');
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.workflow-steps.move', [$account, $edition, $workflow, $summary]), ['direction' => 'up'])
+            ->assertSessionHasErrors('festival_workflow_step');
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.workflow-steps.destroy', [$account, $edition, $workflow, $summary]))
+            ->assertSessionHasErrors('festival_workflow_step');
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.workflow-steps.update', [$account, $edition, $workflow, $summary]), [
+                ...$payload,
+                'title' => $summary->title,
+            ])
+            ->assertSessionHasErrors('type');
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.workflow-steps.store', [$account, $edition, $workflow]), [
+                ...$payload,
+                'title' => 'Second Summary',
+                'type' => 'summary',
+            ])
+            ->assertSessionHasErrors('type');
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), [
+                'festival_workflow_step_id' => $summary->id,
+                'type' => 'custom_document',
+                'subject_scope' => 'entry',
+                'input_type' => 'short_text',
+                'name' => 'Invalid Summary field',
+                'pricing_mode' => 'none',
+                'max_size_kb' => 20480,
+                'is_required' => 1,
+                'is_active' => 1,
+            ])
+            ->assertSessionHasErrors('festival_workflow_step_id');
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.charge-definitions.store', [$account, $edition]), [
+                'festival_workflow_step_id' => $summary->id,
+                'kind' => 'custom',
+                'name' => 'Invalid Summary fee',
+                'amount' => '10.00',
+                'pricing_mode' => 'fixed',
+                'due_policy' => 'fixed',
+                'is_active' => 1,
+            ])
+            ->assertSessionHasErrors('festival_workflow_step_id');
+
+        $usedStep = $workflow->steps->firstWhere('code', 'application');
+        FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $usedStep->id,
+        ]);
+        $this->actingAs($owner)
+            ->delete(route('dashboard.accounts.festivals.workflow-steps.destroy', [$account, $edition, $workflow, $usedStep]))
+            ->assertSessionHasErrors('festival_workflow_step');
+        $this->assertModelExists($usedStep);
     }
 
     public function test_direction_codes_are_collision_safe_stable_hidden_and_orderable(): void

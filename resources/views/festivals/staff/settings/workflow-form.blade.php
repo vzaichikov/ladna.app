@@ -19,5 +19,22 @@
             <div class="flex flex-wrap gap-2 sm:col-span-2"><x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" />{{ __('app.save') }}</x-ui.button><x-ui.button :href="route('dashboard.accounts.festivals.settings.workflows', [$account, $edition])" variant="secondary">{{ __('app.cancel') }}</x-ui.button></div>
         </form>
     </x-ui.panel>
+
+    @if ($workflow->exists)
+        <section class="mt-6" aria-labelledby="festival-workflow-steps-title">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h2 id="festival-workflow-steps-title" class="text-xl font-semibold text-slate-950">{{ __('app.festival_workflow_steps') }}</h2>
+                    <p class="mt-1 max-w-3xl text-sm text-slate-600">{{ __('app.festival_workflow_steps_impact_copy') }}</p>
+                </div>
+                <x-ui.button :href="route('dashboard.accounts.festivals.workflow-steps.create', [$account, $edition, $workflow])">
+                    <x-ui.icon name="plus" class="h-4 w-4" />{{ __('app.festival_add_workflow_step') }}
+                </x-ui.button>
+            </div>
+            <div class="mt-4">
+                <x-festivals.workflow-steps-list :$account :$edition :$workflow :$steps />
+            </div>
+        </section>
+    @endif
 </x-festivals.staff.workspace>
 @endsection

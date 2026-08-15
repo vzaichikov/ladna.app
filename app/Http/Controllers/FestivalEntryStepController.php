@@ -6,6 +6,7 @@ use App\Actions\Festivals\ReassignFestivalEntryCategory;
 use App\Actions\Festivals\ReviewFestivalEntryStep;
 use App\Actions\Festivals\StoreFestivalResponse;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
+use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
 use App\Http\Requests\FestivalEntryCategoryReassignmentRequest;
 use App\Http\Requests\FestivalEntryStepRequest;
@@ -31,14 +32,16 @@ class FestivalEntryStepController extends Controller
         $this->assertPortalEntry($festivalEntry, $festivalEntryStep, $portalUser);
         $festivalEntry->load($this->entryRelations());
         $selectedStep = $festivalEntry->steps->firstWhere('id', $festivalEntryStep->id);
+        $workflowStates = $workflowState->forEntry($festivalEntry);
 
         return view('festivals.portal.entry', [
             'account' => $account,
             'portalUser' => $portalUser,
             'entry' => $festivalEntry,
             'providers' => app(PaymentGatewayRegistry::class)->availableSettingsFor($account),
-            'workflowStates' => $workflowState->forEntry($festivalEntry),
+            'workflowStates' => $workflowStates,
             'selectedStep' => $selectedStep,
+            'postConfirmationRequirements' => $workflowState->postConfirmationRequirements($workflowStates),
         ]);
     }
 
@@ -47,6 +50,7 @@ class FestivalEntryStepController extends Controller
         [, $portalUser] = $this->portalContext($request, $accountSlug);
         $this->assertPortalEntry($festivalEntry, $festivalEntryStep, $portalUser);
         abort_unless($festivalEntryRequirement->festival_entry_step_id === $festivalEntryStep->id, 404);
+        $wasAccepted = $festivalEntry->status === FestivalEntryStatus::Accepted;
         $store->execute($festivalEntryRequirement, $portalUser, $request->input('value'));
 
         if ($request->expectsJson()) {
@@ -57,6 +61,7 @@ class FestivalEntryStepController extends Controller
 
             return response()->json([
                 'message' => __('app.festival_response_saved'),
+                'reload' => $wasAccepted && $festivalEntry->status === FestivalEntryStatus::ChangesPending,
                 'requirement_id' => $festivalEntryRequirement->id,
                 'requirement_html' => view('festivals.portal._requirement-card', [
                     'account' => $request->attributes->get('festivalAccount'),

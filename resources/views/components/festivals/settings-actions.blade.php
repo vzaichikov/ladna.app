@@ -11,6 +11,8 @@
     'deleteLabel' => null,
     'deleteConfirmTitle' => null,
     'deleteConfirmBody' => null,
+    'showEdit' => true,
+    'showToggle' => true,
 ])
 
 <div {{ $attributes->class(['flex flex-wrap items-center justify-end gap-2']) }}>
@@ -35,18 +37,22 @@
         </form>
     @endif
 
-    <x-ui.action-button :href="$editRoute" icon="edit" :label="__('app.edit')" />
+    @if ($showEdit)
+        <x-ui.action-button :href="$editRoute" icon="edit" :label="__('app.edit')" />
+    @endif
 
-    <form method="POST" action="{{ $toggleRoute }}">
-        @csrf
-        @method('PATCH')
-        <x-ui.action-button
-            type="submit"
-            :variant="$active ? 'danger' : 'success'"
-            :icon="$active ? 'power' : 'circle-check'"
-            :label="$active ? __('app.deactivate') : __('app.activate')"
-        />
-    </form>
+    @if ($showToggle)
+        <form method="POST" action="{{ $toggleRoute }}">
+            @csrf
+            @method('PATCH')
+            <x-ui.action-button
+                type="submit"
+                :variant="$active ? 'danger' : 'success'"
+                :icon="$active ? 'power' : 'circle-check'"
+                :label="$active ? __('app.deactivate') : __('app.activate')"
+            />
+        </form>
+    @endif
 
     @if ($deleteRoute)
         <form

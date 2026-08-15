@@ -1,16 +1,18 @@
 @php
     $definition = $requirement->definition;
+    $requirementStep = $requirementStep ?? $selectedStep;
+    $requirementState = $requirementState ?? $selectedState;
     $inputType = $definition->input_type;
     $subjectLabel = $requirement->participant?->displayName()
         ?? ($definition->subject_scope === \App\Enums\FestivalFieldScope::Registrant ? $portalUser->displayName() : $entry->entry_name);
     $latest = $requirement->submissions->first();
     $currentValue = $latest?->value_json['value'] ?? null;
     $isRejected = $requirement->status === \App\Enums\FestivalRequirementStatus::Rejected;
-    $requirementMutable = $selectedState['requirement_mutability'][$requirement->id] ?? $selectedState['mutable'];
+    $requirementMutable = $requirementState['requirement_mutability'][$requirement->id] ?? $requirementState['mutable'];
     $requirementBlocking = $definition->is_required || $inputType === \App\Enums\FestivalRequirementInputType::Agreement;
-    $requirementComplete = $selectedState['requirement_completeness'][$requirement->id] ?? false;
-    $editableUntil = $selectedState['editable_until'][$requirement->id] ?? null;
-    $dueAt = $selectedState['due_at'][$requirement->id] ?? null;
+    $requirementComplete = $requirementState['requirement_completeness'][$requirement->id] ?? false;
+    $editableUntil = $requirementState['editable_until'][$requirement->id] ?? null;
+    $dueAt = $requirementState['due_at'][$requirement->id] ?? null;
     $statusClass = match ($requirement->status) {
         \App\Enums\FestivalRequirementStatus::Missing,
         \App\Enums\FestivalRequirementStatus::Rejected => 'crm-status-danger',
@@ -71,7 +73,7 @@
         @else
             <form
                 method="POST"
-                action="{{ route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $selectedStep, $requirement]) }}"
+                action="{{ route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $requirementStep, $requirement]) }}"
                 data-async-form
                 class="mt-4"
             >

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Festivals\StoreFestivalSubmission;
+use App\Enums\FestivalEntryStatus;
 use App\Http\Requests\FestivalSubmissionRequest;
 use App\Models\Account;
 use App\Models\FestivalEntry;
@@ -20,6 +21,7 @@ class FestivalSubmissionController extends Controller
         $portalUser = $request->user('festival');
         abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser, 404);
         abort_unless($festivalEntry->account_id === $account->id && $festivalEntry->festival_portal_user_id === $portalUser->id && $festivalEntryRequirement->festival_entry_id === $festivalEntry->id, 404);
+        $wasAccepted = $festivalEntry->status === FestivalEntryStatus::Accepted;
         $store->execute($festivalEntryRequirement, $portalUser, $request->file('file'));
 
         if ($request->expectsJson()) {
@@ -30,6 +32,7 @@ class FestivalSubmissionController extends Controller
 
             return response()->json([
                 'message' => __('app.festival_submission_saved'),
+                'reload' => $wasAccepted && $festivalEntry->status === FestivalEntryStatus::ChangesPending,
                 'requirement_id' => $festivalEntryRequirement->id,
                 'requirement_html' => view('festivals.portal._requirement-card', [
                     'account' => $account,

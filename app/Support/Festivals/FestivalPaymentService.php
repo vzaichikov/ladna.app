@@ -203,7 +203,7 @@ class FestivalPaymentService
                 }
                 $this->notifications->queueForEntry($attempt->charge->entry, 'payment_paid', ['charge' => $attempt->charge->name, 'entry_code' => $attempt->charge->entry->code]);
             } elseif ($status !== FestivalPaymentStatus::Pending
-                && ! in_array($attempt->charge->status, [FestivalChargeStatus::Paid, FestivalChargeStatus::PaidRequiresRefund], true)
+                && ! in_array($attempt->charge->status, [FestivalChargeStatus::Paid, FestivalChargeStatus::PaidRequiresRefund, FestivalChargeStatus::Cancelled, FestivalChargeStatus::Refunded], true)
                 && ! $attempt->charge->paymentAttempts()
                     ->whereKeyNot($attempt->id)
                     ->where('status', FestivalPaymentStatus::Pending->value)
