@@ -27,6 +27,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Activate `ladna-domain` for Ladna business-domain work: SaaS/studio/customer roles, tenancy, permissions, subscriptions, class passes, schedules, trainers, customers, bookings, or Charmpole demo data.
 - Activate `ladna-festival-domain` for any Festival framework work: Series and editions, Festival portal identities, participants, entries, categories, requirements, payments, schedules, judging, results, admission, QR, notifications, or Festival interfaces.
+- Activate `ladna-payment-checkout-ui` for public Event, class-pass, or Festival checkout presentation involving responsive payment blocks, provider buttons, wallet/card marks, agreements, or payment-status UI.
 - Activate `ladna-testing` for Ladna manual QA, browser/Playwright checks, screenshot capture, or rendered UI verification.
 - Activate `ladna-trello-card` only when the user explicitly asks to view, inspect, fix, or implement a specific Ladna Trello card. Do not activate it for ordinary development or generic bug discussions.
 - Activate `ladna-versioning` before every commit or push: update `VERSION` and `config/changelog.php` with the correct semantic version bump and release note for `/changelog.en.html` and `/changelog.ua.html`.

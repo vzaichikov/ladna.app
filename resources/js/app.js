@@ -1030,6 +1030,55 @@ function initPhoneMasks(root = document) {
             noResults.textContent = input.dataset.phoneMaskNoResults || messageSource?.dataset.phoneMaskNoResults || 'No countries found.';
         }
 
+        if (input.hasAttribute('data-phone-mask-reject-national-zero')) {
+            const messageElement = input._spmMsgEl || null;
+            let hasNationalZeroError = false;
+
+            const validateNationalZero = () => {
+                const digits = input.value.replace(/\D/g, '');
+                const selectedPhoneCode = wrapper
+                    ?.querySelector('.spm-dropdown-option.spm-option-selected')
+                    ?.dataset.code
+                    ?.replace(/\D/g, '') || (input.dataset.countryCode === 'UA' ? '380' : '');
+                const hasValueAfterPhoneCode = digits !== '' && digits !== selectedPhoneCode;
+                const hasInvalidUkrainianPrefix = selectedPhoneCode === '380'
+                    && hasValueAfterPhoneCode
+                    && (!digits.startsWith('380') || digits.startsWith('3800'));
+
+                input.setCustomValidity(hasInvalidUkrainianPrefix
+                    ? input.dataset.phoneMaskNationalZeroError || 'Enter the number after +380 without the leading 0.'
+                    : '');
+
+                if (hasInvalidUkrainianPrefix) {
+                    input.classList.remove('spm-valid');
+                    input.classList.add('spm-invalid');
+
+                    if (messageElement) {
+                        messageElement.textContent = input.dataset.phoneMaskNationalZeroError || 'Enter the number after +380 without the leading 0.';
+                        messageElement.className = 'spm-validation-message';
+                        messageElement.style.display = 'block';
+                    }
+
+                    hasNationalZeroError = true;
+
+                    return;
+                }
+
+                if (hasNationalZeroError) {
+                    input.classList.remove('spm-invalid');
+
+                    if (messageElement && ! messageElement.classList.contains('spm-valid-msg')) {
+                        messageElement.style.display = 'none';
+                    }
+
+                    hasNationalZeroError = false;
+                }
+            };
+
+            input.addEventListener('input', validateNationalZero);
+            input.addEventListener('blur', validateNationalZero);
+        }
+
         if (initialValue.trim() !== '') {
             input.value = initialValue;
             input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -8367,6 +8416,274 @@ function initFieldHelp(root = document) {
     });
 }
 
+function initEventTicketCheckouts(root = document) {
+    root.querySelectorAll('[data-event-ticket-checkout]').forEach((form) => {
+        if (form.dataset.eventTicketCheckoutReady === 'true') {
+            return;
+        }
+
+        form.dataset.eventTicketCheckoutReady = 'true';
+        const counters = [...form.querySelectorAll('[data-event-ticket-counter]')];
+        const selectedCount = form.querySelector('[data-event-selected-count]');
+        const selectedTotal = form.querySelector('[data-event-selected-total]');
+        const noSelection = form.querySelector('[data-event-payment-no-selection]');
+        const freePayment = form.querySelector('[data-event-payment-free]');
+        const paidPayment = form.querySelector('[data-event-payment-paid]');
+        const paidSelectionHelp = form.querySelector('[data-event-payment-select-help]');
+        const freeAction = form.querySelector('[data-event-free-action]');
+        const paidActions = [...form.querySelectorAll('[data-event-paid-action]')];
+        const hasPaidTicketOptions = form.dataset.eventHasPaidTicketOptions === 'true';
+        const eventCapacity = Number.parseInt(form.dataset.eventCapacity || '', 10);
+        const currency = form.dataset.currency || 'UAH';
+        const locale = form.dataset.locale || document.documentElement.lang || 'uk';
+        let moneyFormatter;
+
+        try {
+            moneyFormatter = new Intl.NumberFormat(locale, {
+                style: 'currency',
+                currency,
+                currencyDisplay: 'symbol',
+            });
+        } catch {
+            moneyFormatter = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        const quantityFor = (counter) => {
+            const input = counter.querySelector('[data-event-ticket-quantity]');
+            const maximum = Number.parseInt(counter.dataset.maxQuantity || '0', 10);
+            const quantity = Number.parseInt(input?.value || '0', 10);
+
+            return Math.min(Math.max(Number.isFinite(quantity) ? quantity : 0, 0), Number.isFinite(maximum) ? maximum : 0);
+        };
+
+        const totalQuantity = () => counters.reduce((total, counter) => total + quantityFor(counter), 0);
+        const unitPriceFor = (counter) => {
+            const quantity = quantityFor(counter);
+            const regularPrice = Number.parseInt(counter.dataset.regularPriceCents || counter.dataset.priceCents || '0', 10);
+            const earlyBirdPrice = Number.parseInt(counter.dataset.earlyBirdPriceCents || '', 10);
+            const earlyBirdMaxQuantity = Number.parseInt(counter.dataset.earlyBirdMaxQuantity || '0', 10);
+
+            if (quantity > 0 && Number.isFinite(earlyBirdPrice) && quantity <= earlyBirdMaxQuantity) {
+                return earlyBirdPrice;
+            }
+
+            return Number.isFinite(regularPrice) ? regularPrice : 0;
+        };
+
+        const sync = () => {
+            const quantity = totalQuantity();
+            const totalCents = counters.reduce(
+                (total, counter) => total + quantityFor(counter) * unitPriceFor(counter),
+                0,
+            );
+
+            counters.forEach((counter) => {
+                const input = counter.querySelector('[data-event-ticket-quantity]');
+                const output = counter.querySelector('[data-event-ticket-count]');
+                const decrement = counter.querySelector('[data-event-ticket-decrement]');
+                const increment = counter.querySelector('[data-event-ticket-increment]');
+                const value = quantityFor(counter);
+                const maximum = Number.parseInt(counter.dataset.maxQuantity || '0', 10);
+                const capacityReached = Number.isFinite(eventCapacity) && quantity >= eventCapacity;
+
+                if (input) {
+                    input.value = String(value);
+                }
+
+                if (output) {
+                    output.value = String(value);
+                    output.textContent = String(value);
+                }
+
+                if (decrement) {
+                    decrement.disabled = Boolean(input?.disabled) || value <= 0;
+                }
+
+                if (increment) {
+                    increment.disabled = Boolean(input?.disabled) || value >= maximum || capacityReached;
+                }
+            });
+
+            if (selectedCount) {
+                selectedCount.textContent = String(quantity);
+            }
+
+            if (selectedTotal) {
+                selectedTotal.textContent = moneyFormatter.format(totalCents / 100);
+            }
+
+            const hasSelection = quantity > 0;
+            const isFree = hasSelection && totalCents === 0;
+            const showPaidPayment = (!hasSelection && hasPaidTicketOptions) || (hasSelection && !isFree);
+            noSelection?.classList.toggle('hidden', hasSelection || hasPaidTicketOptions);
+            freePayment?.classList.toggle('hidden', !isFree);
+            paidPayment?.classList.toggle('hidden', !showPaidPayment);
+            paidSelectionHelp?.classList.toggle('hidden', hasSelection);
+
+            if (freeAction) {
+                freeAction.disabled = !isFree;
+            }
+
+            paidActions.forEach((button) => {
+                button.disabled = !hasSelection || isFree;
+            });
+        };
+
+        counters.forEach((counter) => {
+            const input = counter.querySelector('[data-event-ticket-quantity]');
+            const decrement = counter.querySelector('[data-event-ticket-decrement]');
+            const increment = counter.querySelector('[data-event-ticket-increment]');
+
+            decrement?.addEventListener('click', () => {
+                if (!input) {
+                    return;
+                }
+
+                input.value = String(Math.max(quantityFor(counter) - 1, 0));
+                sync();
+            });
+
+            increment?.addEventListener('click', () => {
+                if (!input || (Number.isFinite(eventCapacity) && totalQuantity() >= eventCapacity)) {
+                    return;
+                }
+
+                input.value = String(quantityFor(counter) + 1);
+                sync();
+            });
+        });
+
+        if (Number.isFinite(eventCapacity)) {
+            let remainingCapacity = Math.max(eventCapacity, 0);
+
+            counters.forEach((counter) => {
+                const input = counter.querySelector('[data-event-ticket-quantity]');
+                const quantity = Math.min(quantityFor(counter), remainingCapacity);
+
+                if (input) {
+                    input.value = String(quantity);
+                }
+
+                remainingCapacity -= quantity;
+            });
+        }
+
+        sync();
+    });
+}
+
+function initEventOrderPolling(root = document) {
+    root.querySelectorAll('[data-event-order-poll]').forEach((container) => {
+        if (container.dataset.eventOrderPollReady === 'true') {
+            return;
+        }
+
+        container.dataset.eventOrderPollReady = 'true';
+        const statusUrl = container.dataset.statusUrl;
+        const refreshUrl = container.dataset.refreshUrl || window.location.href;
+        const message = container.querySelector('[data-event-order-poll-message]');
+        const timeoutActions = container.querySelector('[data-event-order-poll-timeout]');
+        const deadline = Date.now() + 60000;
+
+        const stopPolling = () => {
+            timeoutActions?.classList.remove('hidden');
+
+            if (message) {
+                message.textContent = container.dataset.timeoutMessage || message.textContent;
+            }
+        };
+
+        const poll = async () => {
+            if (!container.isConnected || Date.now() >= deadline) {
+                stopPolling();
+
+                return;
+            }
+
+            try {
+                const response = await fetch(statusUrl, {
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                });
+
+                if (response.ok) {
+                    const payload = await response.json();
+
+                    if (payload.status !== 'pending' || payload.terminal || payload.tickets_ready) {
+                        window.location.replace(refreshUrl);
+
+                        return;
+                    }
+                }
+            } catch {}
+
+            window.setTimeout(poll, 2000);
+        };
+
+        window.setTimeout(poll, 2000);
+    });
+}
+
+function initEventTicketPdfSharing(root = document) {
+    root.querySelectorAll('[data-event-ticket-pdf-share]').forEach((button) => {
+        if (button.dataset.eventTicketPdfShareReady === 'true') {
+            return;
+        }
+
+        button.dataset.eventTicketPdfShareReady = 'true';
+        button.addEventListener('click', async () => {
+            const container = button.closest('[data-event-ticket-screen]');
+            const downloadLink = container?.querySelector('[data-event-ticket-pdf-download]');
+            const errorMessage = container?.querySelector('[data-event-ticket-share-error]');
+            const label = button.querySelector('[data-event-ticket-share-label]');
+            const fallbackDownload = () => downloadLink?.click();
+
+            button.disabled = true;
+            errorMessage?.classList.add('hidden');
+
+            if (label) {
+                label.textContent = label.dataset.loadingLabel || label.textContent;
+            }
+
+            try {
+                const response = await fetch(button.dataset.pdfUrl, {
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/pdf' },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`PDF request failed: ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                const file = new File([blob], button.dataset.pdfFilename || 'event-tickets.pdf', {
+                    type: blob.type || 'application/pdf',
+                });
+                const shareData = { files: [file], title: button.dataset.shareTitle || document.title };
+
+                if (navigator.share && navigator.canShare?.(shareData)) {
+                    await navigator.share(shareData);
+                } else {
+                    fallbackDownload();
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    errorMessage?.classList.remove('hidden');
+                    fallbackDownload();
+                }
+            } finally {
+                button.disabled = false;
+
+                if (label) {
+                    label.textContent = label.dataset.defaultLabel || label.textContent;
+                }
+            }
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initEventAttendance();
     initFestivalStreamPlayer();
@@ -8377,6 +8694,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initFestivalTimeline();
     initEventScanner();
     initEventForms();
+    initEventTicketCheckouts();
+    initEventOrderPolling();
+    initEventTicketPdfSharing();
     createIcons({ icons });
     initSlugAutofill();
     initColorPickers();

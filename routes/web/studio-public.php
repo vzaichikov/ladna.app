@@ -13,6 +13,9 @@ use App\Http\Middleware\EnsurePublicSubscriptionIsActive;
 use App\Http\Middleware\PreventReadOnlyDemoMutations;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/event-checkout/google/callback', [PublicEventCheckoutController::class, 'googleCallback'])
+    ->middleware('throttle:30,1')
+    ->name('public.event-checkout.google.callback');
 Route::get('/{accountSlug}', PublicStudioLandingController::class)
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.studio');
@@ -25,9 +28,18 @@ Route::get('/{accountSlug}/events/{eventSlug}', [PublicEventController::class, '
 Route::post('/{accountSlug}/events/{eventSlug}/checkout', [PublicEventCheckoutController::class, 'store'])
     ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:event-checkout'])
     ->name('public.events.checkout');
+Route::post('/{accountSlug}/events/{eventSlug}/checkout/google', [PublicEventCheckoutController::class, 'google'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
+    ->name('public.events.checkout.google');
 Route::get('/{accountSlug}/event-orders/{accessToken}', [PublicEventCheckoutController::class, 'order'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.event-orders.show');
+Route::get('/{accountSlug}/event-orders/{accessToken}/status', [PublicEventCheckoutController::class, 'status'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
+    ->name('public.event-orders.status');
+Route::get('/{accountSlug}/event-orders/{accessToken}/tickets.pdf', [PublicEventCheckoutController::class, 'pdf'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
+    ->name('public.event-orders.pdf');
 Route::get('/{accountSlug}/event-orders/{accessToken}/tickets/{ticketCode}/qr', [PublicEventCheckoutController::class, 'ticketQr'])
     ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
     ->name('public.event-tickets.qr');

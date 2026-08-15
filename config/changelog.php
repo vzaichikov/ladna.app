@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.140.0',
+                'date' => '2026-08-15',
+                'title' => 'Complete public Event ticket checkout',
+                'items' => ['Public Event pages now provide a mobile Buy tickets shortcut, a full-width two-column checkout, accessible quantity controls, repeated email confirmation, optional Google email prefill, and validated masked phone entry.', 'Paid Event checkout now matches the proven class-pass payment presentation with the exact Pay by card action plus Google Pay, Apple Pay, Visa, and Mastercard marks for payment methods configured by the studio.', 'After confirmed payment, guests receive every ticket and private access link by email, can view all valid QR tickets, and can privately share, download, print, or save a one-ticket-per-page PDF while delayed callbacks and non-success states remain accurate.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.139.1',
                 'date' => '2026-08-15',
                 'title' => 'Simpler mobile Event scanning',
@@ -1220,6 +1227,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.140.0',
+                'date' => '2026-08-15',
+                'title' => 'Повне публічне оформлення квитків на події',
+                'items' => ['Публічні сторінки подій тепер мають мобільну кнопку «Купити квитки», повношироке двоколонкове оформлення, доступні лічильники кількості, повтор email, необов’язкове заповнення email через Google та перевірений телефон із маскою.', 'Оплата квитків тепер повторює перевірений вигляд оплати абонементів: точна дія «Сплатити карткою», Google Pay, Apple Pay, Visa й Mastercard для способів оплати, налаштованих студією.', 'Після підтвердженої оплати гість отримує всі квитки й приватне посилання на email, бачить дійсні QR-коди та може приватно поділитися, завантажити, надрукувати або зберегти PDF з одним квитком на сторінку, а затримані й неуспішні стани оплати відображаються коректно.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.139.1',
                 'date' => '2026-08-15',

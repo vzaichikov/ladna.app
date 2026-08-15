@@ -1177,4 +1177,38 @@
     [data-qr-print-url] {
         max-width: 150mm;
     }
+
+    [data-event-ticket-print] {
+        min-height: auto;
+    }
+
+    [data-event-ticket-screen] {
+        display: none !important;
+    }
+
+    [data-event-ticket-print-pages] {
+        display: block !important;
+    }
+
+    [data-event-ticket-print-page] {
+        display: flex;
+        min-height: calc(100vh - 32mm);
+        break-after: page;
+        page-break-after: always;
+        align-items: center;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+    }
+
+    [data-event-ticket-print-page]:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    [data-event-ticket-print-qr] {
+        width: 95mm;
+        height: 95mm;
+        margin-top: 10mm;
+    }
 }
