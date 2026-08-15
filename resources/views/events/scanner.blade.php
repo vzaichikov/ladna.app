@@ -10,9 +10,12 @@
     data-scan-url="{{ route('dashboard.accounts.events.scanner.scan', [$account, $event]) }}"
     data-csrf-token="{{ csrf_token() }}"
     data-camera-error="{{ __('app.event_camera_error') }}"
+    data-camera-automatic="{{ __('app.event_camera_automatic') }}"
     data-camera-name-template="{{ __('app.event_camera_name', ['number' => '__NUMBER__']) }}"
     data-request-error="{{ __('app.event_scanner_request_failed') }}"
     data-check-out-reason="{{ __('app.event_check_out_reason_prompt') }}"
+    data-torch-enable="{{ __('app.event_torch_enable') }}"
+    data-torch-disable="{{ __('app.event_torch_disable') }}"
 >
     <header>
         <h1 class="crm-page-title">{{ $event->title }}</h1>
@@ -27,7 +30,7 @@
             <div class="grid gap-3 bg-white p-4 sm:grid-cols-[1fr_auto_auto]">
                 <select data-scanner-camera class="crm-field mt-0"><option>{{ __('app.event_camera_loading') }}</option></select>
                 <x-ui.button type="button" data-scanner-start>{{ __('app.event_scanner_start') }}</x-ui.button>
-                <x-ui.button type="button" data-scanner-torch variant="secondary" class="hidden">{{ __('app.event_torch') }}</x-ui.button>
+                <x-ui.button type="button" data-scanner-torch variant="secondary" class="hidden" aria-pressed="false">{{ __('app.event_torch_enable') }}</x-ui.button>
             </div>
         </div>
         <div class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
