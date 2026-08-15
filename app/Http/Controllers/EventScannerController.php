@@ -112,26 +112,6 @@ class EventScannerController extends Controller
         }, 3);
     }
 
-    public function checkOut(Request $request, Account $account, Event $event, EventTicket $eventTicket): JsonResponse
-    {
-        $this->authorizeScanner($request, $account, $event);
-        abort_unless($eventTicket->event_id === $event->id && $eventTicket->account_id === $account->id, 404);
-        $validated = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
-
-        return DB::transaction(function () use ($eventTicket, $request, $validated): JsonResponse {
-            $ticket = EventTicket::query()->whereKey($eventTicket->id)->lockForUpdate()->firstOrFail();
-
-            if (! $ticket->is_checked_in) {
-                return response()->json(['state' => 'not_checked_in', 'message' => __('app.event_scan_not_checked_in')], 422);
-            }
-
-            $ticket->forceFill(['is_checked_in' => false, 'checked_in_at' => null])->save();
-            $this->audit($ticket, $request, 'check_out', 'door_list', $validated['reason']);
-
-            return response()->json(['state' => 'checked_out', 'message' => __('app.event_scan_checked_out')]);
-        }, 3);
-    }
-
     private function authorizeScanner(Request $request, Account $account, Event $event): void
     {
         abort_unless($event->account_id === $account->id, 404);

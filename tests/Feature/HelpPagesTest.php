@@ -90,6 +90,8 @@ class HelpPagesTest extends TestCase
             ->assertSee('Монітор входу', false)
             ->assertSee('10 останніх гостей', false)
             ->assertSee('Дані оновлюються автоматично', false)
+            ->assertDontSee('Відмітити вихід', false)
+            ->assertDontSee('Вихід гостя відмічається', false)
             ->assertSee('assets/help/screenshots/events-list.png', false)
             ->assertSee('assets/help/screenshots/event-editor.png', false)
             ->assertSee('assets/help/screenshots/event-tickets.png', false)

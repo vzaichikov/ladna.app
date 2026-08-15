@@ -96,7 +96,7 @@ class EventScannerTest extends TestCase
             ->assertJsonPath('state', 'wrong_event');
     }
 
-    public function test_door_list_check_out_and_manager_void_are_reasoned_and_audited(): void
+    public function test_receptionist_cannot_void_ticket_and_manager_void_is_reasoned_and_audited(): void
     {
         $account = Account::factory()->create();
         $owner = User::factory()->create();
@@ -112,28 +112,6 @@ class EventScannerTest extends TestCase
             'accept_terms' => true,
         ], 'uk');
         $ticket = $order->tickets()->firstOrFail();
-
-        $this->actingAs($receptionist)
-            ->postJson(route('dashboard.accounts.events.scanner.scan', [$account, $event]), [
-                'code' => $ticket->code,
-                'source' => 'door_list',
-                'confirm' => true,
-            ])
-            ->assertOk();
-
-        $this->actingAs($receptionist)
-            ->postJson(route('dashboard.accounts.events.scanner.check-out', [$account, $event, $ticket]), [
-                'reason' => 'Guest needs to re-enter later.',
-            ])
-            ->assertOk()
-            ->assertJsonPath('state', 'checked_out');
-
-        $this->assertDatabaseHas('event_ticket_check_ins', [
-            'event_ticket_id' => $ticket->id,
-            'action' => 'check_out',
-            'reason' => 'Guest needs to re-enter later.',
-            'actor_name' => $receptionist->name,
-        ]);
 
         $this->actingAs($receptionist)
             ->post(route('dashboard.accounts.events.orders.tickets.void', [$account, $event, $order, $ticket]), [
@@ -185,6 +163,8 @@ class EventScannerTest extends TestCase
             ->assertSee(__('app.event_latest_entries'))
             ->assertSee('data-scanner-modal', false)
             ->assertSee(__('app.ticket_scanner_confirm_pass'))
+            ->assertDontSee('<h1 class="crm-page-title">'.$event->title.'</h1>', false)
+            ->assertDontSee('data-door-checkout', false)
             ->assertDontSee('name="search"', false);
 
         $latestTickets = $response->viewData('tickets');

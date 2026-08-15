@@ -13,15 +13,9 @@
     data-camera-automatic="{{ __('app.event_camera_automatic') }}"
     data-camera-name-template="{{ __('app.event_camera_name', ['number' => '__NUMBER__']) }}"
     data-request-error="{{ __('app.event_scanner_request_failed') }}"
-    data-check-out-reason="{{ __('app.event_check_out_reason_prompt') }}"
     data-torch-enable="{{ __('app.event_torch_enable') }}"
     data-torch-disable="{{ __('app.event_torch_disable') }}"
 >
-    <header>
-        <h1 class="crm-page-title">{{ $event->title }}</h1>
-        <p class="crm-page-copy">{{ __('app.event_scanner_online_only') }}</p>
-    </header>
-
     <x-ui.event-navigation :account="$account" :event="$event" active="scanner" />
 
     <section class="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
@@ -44,9 +38,8 @@
         <h2 class="text-lg font-semibold">{{ __('app.event_latest_entries') }}</h2>
         <div class="mt-3 divide-y divide-stone-100">
             @foreach ($tickets as $ticket)
-                <div class="flex items-center justify-between gap-3 py-3" data-ticket-row>
+                <div class="py-3" data-ticket-row>
                     <div class="min-w-0"><strong class="block truncate">{{ $ticket->order?->buyer_name }}</strong><p class="mt-1 truncate text-sm text-slate-500">{{ $ticket->ticketType?->name }} · <span class="font-mono">{{ $ticket->code }}</span></p></div>
-                    <x-ui.button type="button" variant="secondary" size="sm" class="shrink-0" data-door-checkout data-checkout-url="{{ route('dashboard.accounts.events.scanner.check-out', [$account, $event, $ticket]) }}">{{ __('app.event_check_out') }}</x-ui.button>
                 </div>
             @endforeach
         </div>

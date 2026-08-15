@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.139.1',
+                'date' => '2026-08-15',
+                'title' => 'Simpler mobile Event scanning',
+                'items' => ['The Event ticket scanner now opens closer to the camera by removing its repeated page heading and keeps the phone-friendly latest-entry list focused on the 10 most recent guests without exit controls.', 'Event admission now uses a clear entry-only workflow: the obsolete Mark exit action has been removed from the scanner while ticket validity, duplicate detection, and the live Entrance monitor continue to work as before.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.139.0',
                 'date' => '2026-08-15',
                 'title' => 'Focused integration settings and Checkbox diagnostics',
@@ -1213,6 +1220,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.139.1',
+                'date' => '2026-08-15',
+                'title' => 'Простіше мобільне сканування подій',
+                'items' => ['Сканер квитків події тепер відкривається ближче до камери без повторного заголовка сторінки, а компактний список на телефоні показує лише 10 останніх гостей без дій для виходу.', 'Вхід на подію тепер має зрозумілий односторонній процес: зайву дію «Відмітити вихід» прибрано зі сканера, а перевірка дійсності квитка, захист від повторного проходу та Монітор входу працюють як раніше.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.139.0',
                 'date' => '2026-08-15',
