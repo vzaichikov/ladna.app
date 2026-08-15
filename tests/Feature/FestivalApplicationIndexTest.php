@@ -273,6 +273,7 @@ class FestivalApplicationIndexTest extends TestCase
             ->assertSee($targetEntry->entry_name)
             ->assertSee('data-queue-pill="not_submitted"', false)
             ->assertSee('min-w-max flex-nowrap', false)
+            ->assertSee('-mx-1 overflow-x-auto px-1 pb-2 pt-1', false)
             ->assertSee('<optgroup label="'.$fixture['workflow']->name.'">', false)
             ->assertViewHas('filters', [
                 'q' => 'Fourth step',

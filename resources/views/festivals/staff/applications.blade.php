@@ -20,7 +20,7 @@
         </div>
 
         <div class="mt-5">
-            <div class="-mx-1 overflow-x-auto px-1 pb-2">
+            <div class="-mx-1 overflow-x-auto px-1 pb-2 pt-1">
                 <nav class="flex min-w-max flex-nowrap gap-2 sm:min-w-0 sm:flex-wrap" aria-label="{{ __('app.festival_application_work_queues') }}">
                     <a
                         href="{{ route('dashboard.accounts.festivals.applications', array_merge([$account, $edition], $preservedApplicationFilters)) }}"
