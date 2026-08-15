@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\FestivalAdmissionTypeController;
 use App\Http\Controllers\FestivalAnnouncementController;
+use App\Http\Controllers\FestivalApplicationMediaReportController;
 use App\Http\Controllers\FestivalBattleController;
 use App\Http\Controllers\FestivalBattleVoteController;
 use App\Http\Controllers\FestivalBrandingController;
@@ -62,6 +63,7 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('{festivalEdition:id}/users/{festivalPortalUser}/participants/{festivalParticipant}/archive', [FestivalPortalRosterController::class, 'archive'])->whereNumber('festivalEdition')->name('users.participants.archive');
     Route::patch('{festivalEdition:id}/users/{festivalPortalUser}/participants/{festivalParticipant}/archive', [FestivalPortalRosterController::class, 'destroy'])->whereNumber('festivalEdition')->name('users.participants.destroy');
     Route::get('{festivalEdition:id}/applications', [FestivalWorkspaceController::class, 'applications'])->whereNumber('festivalEdition')->name('applications');
+    Route::get('{festivalEdition:id}/applications/media-report', FestivalApplicationMediaReportController::class)->whereNumber('festivalEdition')->name('applications.media-report');
     Route::get('{festivalEdition:id}/applications/{festivalEntry}', [FestivalWorkspaceController::class, 'application'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.show');
     Route::delete('{festivalEdition:id}/applications/{festivalEntry}', [FestivalWorkspaceController::class, 'destroyApplication'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.destroy');
     Route::get('{festivalEdition:id}/performances', [FestivalWorkspaceController::class, 'performances'])->whereNumber('festivalEdition')->name('performances');

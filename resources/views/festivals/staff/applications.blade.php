@@ -4,7 +4,15 @@
 
 @section('content')
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
-    <x-ui.page-header :title="__('app.festival_applications_title')" :copy="__('app.festival_applications_copy')" />
+    <x-ui.page-header :title="__('app.festival_applications_title')" :copy="__('app.festival_applications_copy')">
+        @if ($workspacePermissions['registrations'])
+            <x-slot:actions>
+                <x-ui.button :href="route('dashboard.accounts.festivals.applications.media-report', [$account, $edition])" variant="secondary">
+                    <x-ui.icon name="video" class="h-4 w-4" />{{ __('app.festival_media_report') }}
+                </x-ui.button>
+            </x-slot:actions>
+        @endif
+    </x-ui.page-header>
 
     <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
         @php

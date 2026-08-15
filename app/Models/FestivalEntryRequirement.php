@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['account_id', 'festival_entry_id', 'festival_entry_step_id', 'festival_requirement_definition_id', 'festival_participant_id', 'subject_key', 'status', 'reviewed_by', 'reviewed_at', 'review_notes'])]
 class FestivalEntryRequirement extends Model
@@ -42,6 +43,11 @@ class FestivalEntryRequirement extends Model
     public function submissions(): HasMany
     {
         return $this->hasMany(FestivalSubmission::class)->latest('id');
+    }
+
+    public function latestSubmission(): HasOne
+    {
+        return $this->hasOne(FestivalSubmission::class)->latestOfMany();
     }
 
     public function hasSubmittedResponse(): bool

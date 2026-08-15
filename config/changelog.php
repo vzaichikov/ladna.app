@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.135.0',
+                'date' => '2026-08-15',
+                'title' => 'Festival media playback and reporting',
+                'items' => ['Festival teams can now listen to uploaded music and watch uploaded video directly inside application review cards without opening a separate page. Private files remain protected, support playback seeking, and retain their Download action.', 'Registration fields can be selected for the new Media report, allowing organizers to show configurable performer, track-title, participant, and other metadata alongside uploaded audio and video.', 'The registration-only Media report lists active applications once each, supports application and applicant search plus category filtering, and keeps rejected or withdrawn applications and unsupported files out of the report.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.134.0',
                 'date' => '2026-08-15',
                 'title' => 'Actionable Festival application queues',
@@ -1178,6 +1185,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.135.0',
+                'date' => '2026-08-15',
+                'title' => 'Відтворення та звітність медіафайлів фестивалю',
+                'items' => ['Команда фестивалю тепер може прослуховувати завантажену музику й переглядати відео прямо в картці перевірки заявки без переходу на окрему сторінку. Приватні файли залишаються захищеними, підтримують перемотування та зберігають дію Завантажити.', 'Поля реєстрації можна додати до нового Медіазвіту, щоб показувати налаштовувані дані про виконавця, назву треку, учасника та інші відомості поруч із завантаженими аудіо й відео.', 'Доступний лише команді реєстрації Медіазвіт показує кожну активну заявку один раз, підтримує пошук заявки чи заявника та фільтр категорії, а відхилені або відкликані заявки й непідтримувані файли до нього не потрапляють.'],
+                'meta' => 'Очікує коміту релізу.',
+            ],
             [
                 'version' => '0.134.0',
                 'date' => '2026-08-15',

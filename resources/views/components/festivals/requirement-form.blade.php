@@ -221,10 +221,16 @@
                 <input id="requirement-allow-post-confirmation-edits" type="checkbox" name="allow_post_confirmation_edits" value="1" @checked($allowPostConfirmationEdits)>
                 <x-ui.field-label for="requirement-allow-post-confirmation-edits" :label="__('app.festival_allow_post_confirmation_edits')" :help="__('app.festival_allow_post_confirmation_edits_help')" />
             </div>
+            <input type="hidden" name="show_in_media_report" value="0">
+            <div class="flex min-w-52 items-center gap-2">
+                <input id="requirement-show-in-media-report" type="checkbox" name="show_in_media_report" value="1" @checked(old('show_in_media_report', $requirement?->show_in_media_report ?? false))>
+                <x-ui.field-label for="requirement-show-in-media-report" :label="__('app.festival_show_in_media_report')" :help="__('app.festival_show_in_media_report_help')" />
+            </div>
         </div>
         <x-ui.field-error name="is_required" />
         <x-ui.field-error name="is_active" />
         <x-ui.field-error name="allow_post_confirmation_edits" />
+        <x-ui.field-error name="show_in_media_report" />
 
         <div class="mt-4 grid gap-4 sm:grid-cols-2">
             <div>

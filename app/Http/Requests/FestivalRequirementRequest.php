@@ -113,6 +113,7 @@ class FestivalRequirementRequest extends FormRequest
             'max_duration_seconds' => ['nullable', 'integer', 'gte:min_duration_seconds'],
             'is_required' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
+            'show_in_media_report' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:10000'],
         ];
     }

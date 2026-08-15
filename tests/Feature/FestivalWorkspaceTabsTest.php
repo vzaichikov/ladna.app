@@ -52,6 +52,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $routes = [
             'dashboard.accounts.festivals.show' => 'festival_tab_overview',
             'dashboard.accounts.festivals.applications' => 'festival_tab_applications',
+            'dashboard.accounts.festivals.applications.media-report' => 'festival_tab_applications',
             'dashboard.accounts.festivals.performances' => 'festival_tab_performances',
             'dashboard.accounts.festivals.program' => 'festival_tab_program',
             'dashboard.accounts.festivals.timeline.show' => 'festival_timeline_title',
@@ -1265,6 +1266,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         foreach ([
             'dashboard.accounts.festivals.show',
             'dashboard.accounts.festivals.applications',
+            'dashboard.accounts.festivals.applications.media-report',
             'dashboard.accounts.festivals.performances',
             'dashboard.accounts.festivals.program',
             'dashboard.accounts.festivals.judging.index',

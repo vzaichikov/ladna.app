@@ -341,6 +341,14 @@ final class AppBreadcrumbs
             return [...$base, $tickets, $this->item(__('app.breadcrumb_edit_item', ['item' => $this->modelLabel($admissionType, __('app.festival_ticket_type'))]))];
         }
 
+        if ($routeName === 'dashboard.accounts.festivals.applications.media-report') {
+            return [
+                ...$base,
+                $this->item(__('app.festival_tab_applications'), route('dashboard.accounts.festivals.applications', [$account, $edition])),
+                $this->item(__('app.festival_media_report')),
+            ];
+        }
+
         if ($routeName === 'dashboard.accounts.festivals.applications.show') {
             $entry = $this->modelParameter($request, 'festivalEntry');
 

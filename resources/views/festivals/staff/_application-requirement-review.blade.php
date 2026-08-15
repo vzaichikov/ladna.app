@@ -29,13 +29,16 @@
                 {{ __('app.festival_requirement_status_'.$requirement->status->value) }}
             </span>
         </div>
-        @if ($latestSubmission?->path)
+        @if ($latestSubmission?->path && $latestSubmission->playbackKind() === null)
             <div class="flex flex-wrap items-center gap-3 text-xs font-semibold">
                 <a href="{{ route('dashboard.accounts.festivals.submissions.view', [$account, $latestSubmission]) }}" target="_blank" rel="noopener noreferrer" class="text-brand-700 hover:text-brand-800">{{ __('app.open') }} · {{ $latestSubmission->original_name }}</a>
                 <a href="{{ route('dashboard.accounts.festivals.submissions.download', [$account, $latestSubmission]) }}" class="text-brand-700 hover:text-brand-800">{{ __('app.download') }}</a>
             </div>
         @endif
     </div>
+    @if ($latestSubmission?->path && $latestSubmission->playbackKind() !== null)
+        <x-festivals.submission-media :$account :submission="$latestSubmission" class="mt-3" />
+    @endif
     @if ($latestSubmission && ! $latestSubmission->path)
         <x-festivals.response-value :definition="$requirement->definition" :value="$latestSubmission->value_json['value'] ?? null" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm text-slate-700" />
     @endif

@@ -71,7 +71,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(183, $classifiedRouteNames);
+        $this->assertCount(184, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -488,6 +488,7 @@ class MultiLocationPageSmokeTest extends TestCase
     {
         return [
             'dashboard.accounts.festivals.applications' => 'festival_edition',
+            'dashboard.accounts.festivals.applications.media-report' => 'festival_edition',
             'dashboard.accounts.festivals.applications.show' => 'festival_entry',
             'dashboard.accounts.festivals.admission-types.create' => 'festival_edition',
             'dashboard.accounts.festivals.admission-types.edit' => 'festival_admission_type',

@@ -8,27 +8,12 @@ use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FestivalFileController extends Controller
 {
-    /** @var list<string> */
-    private const INLINE_PREVIEW_MIME_TYPES = [
-        'audio/mpeg',
-        'audio/mp4',
-        'audio/ogg',
-        'audio/wav',
-        'audio/x-wav',
-        'image/avif',
-        'image/gif',
-        'image/jpeg',
-        'image/png',
-        'image/webp',
-        'video/mp4',
-        'video/ogg',
-        'video/webm',
-    ];
-
     public function submission(Request $request, Account $account, FestivalSubmission $festivalSubmission): StreamedResponse
     {
         $this->authorizeSubmission($request, $account, $festivalSubmission);
@@ -36,16 +21,33 @@ class FestivalFileController extends Controller
         return Storage::disk($festivalSubmission->disk)->download($festivalSubmission->path, $festivalSubmission->original_name, ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }
 
-    public function viewSubmission(Request $request, Account $account, FestivalSubmission $festivalSubmission): StreamedResponse
+    public function viewSubmission(Request $request, Account $account, FestivalSubmission $festivalSubmission): BinaryFileResponse|StreamedResponse
     {
         $this->authorizeSubmission($request, $account, $festivalSubmission);
 
-        if (! in_array(strtolower((string) $festivalSubmission->mime_type), self::INLINE_PREVIEW_MIME_TYPES, true)) {
+        if (! $festivalSubmission->isInlinePreviewable()) {
             return Storage::disk($festivalSubmission->disk)->download($festivalSubmission->path, $festivalSubmission->original_name, [
                 'Cache-Control' => 'private, no-store',
                 'Content-Type' => 'application/octet-stream',
                 'X-Content-Type-Options' => 'nosniff',
             ]);
+        }
+
+        if ($festivalSubmission->playbackKind() !== null && config("filesystems.disks.{$festivalSubmission->disk}.driver") === 'local') {
+            $disk = Storage::disk($festivalSubmission->disk);
+            abort_unless($disk->exists($festivalSubmission->path), 404);
+            $response = new BinaryFileResponse(
+                $disk->path($festivalSubmission->path),
+                headers: [
+                    'Cache-Control' => 'private, no-store',
+                    'Content-Type' => strtolower((string) $festivalSubmission->mime_type),
+                    'X-Content-Type-Options' => 'nosniff',
+                ],
+                public: false,
+            );
+            $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE, (string) $festivalSubmission->original_name);
+
+            return $response;
         }
 
         return Storage::disk($festivalSubmission->disk)->response($festivalSubmission->path, $festivalSubmission->original_name, [

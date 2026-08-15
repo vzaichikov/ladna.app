@@ -116,6 +116,7 @@ class FestivalSettingsManagementTest extends TestCase
             'festival_workflow_step_id' => $step->id,
             'stage' => 'qualification',
         ]);
+        $this->assertFalse($requirement->show_in_media_report);
 
         $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.requirements.edit', [$account, $edition, $requirement]));
 
@@ -130,11 +131,13 @@ class FestivalSettingsManagementTest extends TestCase
             ->assertSee(__('app.festival_requirement_section_response'))
             ->assertSee(__('app.festival_requirement_section_commercial'))
             ->assertSee(__('app.festival_requirement_section_availability'))
+            ->assertSee('name="show_in_media_report"', false)
+            ->assertSee(__('app.festival_show_in_media_report_help'))
             ->assertSee('value="agreement"', false)
             ->assertSee(__('app.festival_input_agreement'));
         $this->assertSame(5, substr_count($response->getContent(), 'data-requirement-section'));
-        $this->assertSame(23, substr_count($response->getContent(), 'data-field-help-toggle'));
-        $this->assertSame(23, substr_count($response->getContent(), 'data-field-help-popover'));
+        $this->assertSame(24, substr_count($response->getContent(), 'data-field-help-toggle'));
+        $this->assertSame(24, substr_count($response->getContent(), 'data-field-help-popover'));
 
         $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]), [
             'festival_workflow_step_id' => $step->id,
@@ -146,6 +149,7 @@ class FestivalSettingsManagementTest extends TestCase
             'max_size_kb' => 20480,
             'is_required' => 0,
             'is_active' => 1,
+            'show_in_media_report' => 1,
             'due_reference' => 'registration_opens_at',
             'due_offset_days' => 3,
             'allow_post_confirmation_edits' => 1,
@@ -156,6 +160,7 @@ class FestivalSettingsManagementTest extends TestCase
         $this->assertSame('qualification', $requirement->refresh()->stage);
         $this->assertSame('agreement', $requirement->input_type->value);
         $this->assertTrue($requirement->is_required);
+        $this->assertTrue($requirement->show_in_media_report);
         $this->assertSame([
             'reference' => 'registration_opens_at',
             'offset_days' => 3,
@@ -170,6 +175,20 @@ class FestivalSettingsManagementTest extends TestCase
         $firstResolvedDueAt = $resolver->dueAt($requirement);
         $edition->forceFill(['registration_opens_at' => $edition->registration_opens_at->copy()->addDays(7)])->save();
         $this->assertTrue($firstResolvedDueAt->copy()->addDays(7)->equalTo($resolver->dueAt($requirement->unsetRelation('edition'))));
+
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]), [
+            'festival_workflow_step_id' => $step->id,
+            'type' => 'custom_document',
+            'subject_scope' => 'entry',
+            'input_type' => 'agreement',
+            'name' => 'Updated field',
+            'pricing_mode' => 'none',
+            'max_size_kb' => 20480,
+            'is_required' => 0,
+            'is_active' => 1,
+            'show_in_media_report' => 0,
+        ])->assertSessionHasNoErrors();
+        $this->assertFalse($requirement->refresh()->show_in_media_report);
     }
 
     public function test_content_sections_use_the_rich_text_editor_and_can_be_permanently_deleted_with_tenant_guards(): void

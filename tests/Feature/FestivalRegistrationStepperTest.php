@@ -46,6 +46,7 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 
 class FestivalRegistrationStepperTest extends TestCase
@@ -462,7 +463,8 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertSee('https://music.example/preview');
 
         $viewResponse = $this->get(route('dashboard.accounts.festivals.submissions.view', [$account, $submission]));
-        $viewResponse->assertOk()->assertStreamed();
+        $viewResponse->assertOk()->assertHeader('accept-ranges', 'bytes');
+        $this->assertInstanceOf(BinaryFileResponse::class, $viewResponse->baseResponse);
         $this->assertStringStartsWith('inline;', (string) $viewResponse->headers->get('content-disposition'));
         $downloadResponse = $this->get(route('dashboard.accounts.festivals.submissions.download', [$account, $submission]));
         $downloadResponse->assertOk()->assertStreamed();
