@@ -147,7 +147,7 @@ class CustomerClassPassTest extends TestCase
         $this->assertSame(100000, (int) CustomerPurchase::whereBelongsTo($customerClassPass)->sum('amount_cents'));
     }
 
-    public function test_unpaid_manual_class_pass_does_not_show_fully_paid_message_to_user_without_payment_permission(): void
+    public function test_unpaid_manual_class_pass_shows_permission_warning_to_user_without_payment_permission(): void
     {
         [, $account, $customer, $plan, , $location] = $this->passContext();
         $customerClassPass = app(IssueCustomerClassPass::class)->execute(
@@ -166,8 +166,36 @@ class CustomerClassPassTest extends TestCase
             ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
             ->assertOk()
             ->assertSee(__('app.class_pass_unpaid'))
+            ->assertSee(__('app.class_pass_payment_permission_required'))
             ->assertDontSee(__('app.class_pass_fully_paid'))
-            ->assertDontSee(__('app.class_pass_record_payment'));
+            ->assertDontSee(__('app.class_pass_record_payment'))
+            ->assertDontSee('name="amount"', false);
+
+        $this->actingAs($passManager)
+            ->post(route('dashboard.accounts.customer-class-passes.payments.store', [$account, $customerClassPass]), [
+                'location_id' => $location->id,
+                'amount' => '100',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(0, $customerClassPass->purchases()->count());
+
+        $account->memberships()
+            ->where('user_id', $passManager->id)
+            ->firstOrFail()
+            ->update([
+                'permissions' => [
+                    StudioPermission::ManageCustomerClassPasses->value,
+                    StudioPermission::RecordCustomerPayments->value,
+                ],
+            ]);
+
+        $this->actingAs($passManager)
+            ->get(route('dashboard.accounts.customer-class-passes.edit', [$account, $customerClassPass]))
+            ->assertOk()
+            ->assertSee(__('app.class_pass_record_payment'))
+            ->assertSee('name="amount"', false)
+            ->assertDontSee(__('app.class_pass_payment_permission_required'));
     }
 
     public function test_online_purchase_payment_state_is_not_changed_by_pass_lifecycle_update(): void

@@ -4336,6 +4336,7 @@ return [
     'class_pass_payment_amount' => 'Сума оплати',
     'class_pass_record_payment' => 'Зафіксувати оплату',
     'class_pass_payment_recorded' => 'Оплату абонемента зафіксовано.',
+    'class_pass_payment_permission_required' => 'Щоб внести оплату, потрібне право «Фіксувати оплати клієнтів». Власниця студії може увімкнути його у правах доступу працівника.',
     'class_pass_fully_paid' => 'Цей абонемент повністю оплачено.',
     'class_pass_online_payment_locked' => 'Абонементи з онлайн-оплатою закриваються через callback платіжної системи.',
     'class_pass_payment_amount_required' => 'Вкажіть суму оплати.',

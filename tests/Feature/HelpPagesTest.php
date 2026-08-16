@@ -358,12 +358,20 @@ class HelpPagesTest extends TestCase
             ->assertSee('Частково оплачено', false)
             ->assertSee('Сума оплати', false)
             ->assertSee('Зафіксувати оплату', false)
+            ->assertSee('Фіксувати оплати клієнтів', false)
+            ->assertSee('Права доступу', false)
+            ->assertSee('Оплати й фінанси', false)
+            ->assertSee('не відкриває фінансові звіти', false)
             ->assertSee('Каса готівки в студії', false)
             ->assertSee('Не оплачено', false)
             ->assertSee('assets/help/screenshots/class-pass-payment.png', false)
             ->assertSee('відфільтруйте історію за потрібною локацією', false)
             ->assertDontSee('customer_purchases', false)
             ->assertDontSee('endpoint', false);
+
+        $result = app(OwnerHelpIndex::class)->search('як внести оплату за абонемент який був виписаний в борг', 1);
+
+        $this->assertSame('passes-prices', $result[0]['slug'] ?? null);
     }
 
     public function test_passes_prices_help_explains_cancelling_mistaken_customer_pass(): void

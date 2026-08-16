@@ -4336,6 +4336,7 @@ return [
     'class_pass_payment_amount' => 'Payment amount',
     'class_pass_record_payment' => 'Record payment',
     'class_pass_payment_recorded' => 'Class pass payment recorded.',
+    'class_pass_payment_permission_required' => 'Recording a payment requires the “Record customer payments” permission. The studio owner can enable it in the staff member’s access rights.',
     'class_pass_fully_paid' => 'This class pass is fully paid.',
     'class_pass_online_payment_locked' => 'Online payment passes are settled by payment callbacks.',
     'class_pass_payment_amount_required' => 'Enter a payment amount.',

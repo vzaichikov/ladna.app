@@ -160,6 +160,10 @@
                                 {{ __('app.class_pass_record_payment') }}
                             </x-ui.button>
                         </form>
+                    @else
+                        <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+                            {{ __('app.class_pass_payment_permission_required') }}
+                        </div>
                     @endcan
                 @elseif ($customerClassPass->source !== 'manual')
                     <div class="mt-5 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-slate-600">{{ __('app.class_pass_online_payment_locked') }}</div>
