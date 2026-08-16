@@ -6,7 +6,8 @@
 
 @php
     $canManage = auth()->user()?->can('manageEvents', $account) ?? false;
-    $canScan = auth()->user()?->can('checkInEventTickets', $account) ?? false;
+    $canLegacyScan = auth()->user()?->can('checkInEventTickets', $account) ?? false;
+    $canDoor = auth()->user()?->can('doorStaff', $account) ?? false;
     $items = [];
 
     if ($canManage) {
@@ -18,8 +19,11 @@
         ];
     }
 
-    if ($canScan) {
+    if ($canLegacyScan || $canDoor) {
         $items[] = ['key' => 'scanner', 'label' => __('app.event_scanner'), 'href' => route('dashboard.accounts.events.scanner', [$account, $event])];
+    }
+
+    if ($canDoor) {
         $items[] = ['key' => 'attendance', 'label' => __('app.event_attendance'), 'href' => route('dashboard.accounts.events.attendance', [$account, $event])];
     }
 @endphp

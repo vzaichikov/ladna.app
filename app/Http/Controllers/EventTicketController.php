@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\EventOrderSource;
 use App\Enums\EventTicketStatus;
 use App\Models\Account;
 use App\Models\Event;
@@ -21,7 +22,7 @@ class EventTicketController extends Controller
         $checkIn = in_array($request->query('check_in'), ['checked_in', 'not_checked_in'], true)
             ? (string) $request->query('check_in')
             : null;
-        $source = in_array($request->query('source'), ['manual', 'online'], true)
+        $source = in_array($request->query('source'), array_column(EventOrderSource::cases(), 'value'), true)
             ? (string) $request->query('source')
             : null;
         $tickets = $event->tickets()
@@ -31,7 +32,7 @@ class EventTicketController extends Controller
             ])
             ->with([
                 'ticketType:id,name',
-                'order:id,order_id,buyer_name,buyer_email,buyer_phone,provider,issued_by,amount_cents,currency,created_at',
+                'order:id,order_id,source,buyer_name,buyer_email,buyer_phone,provider,issued_by,amount_cents,currency,created_at',
                 'order.issuedBy:id,name',
             ])
             ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
@@ -45,8 +46,7 @@ class EventTicketController extends Controller
             ->when($status, fn ($query, string $value) => $query->where('status', $value))
             ->when($checkIn === 'checked_in', fn ($query) => $query->where('is_checked_in', true))
             ->when($checkIn === 'not_checked_in', fn ($query) => $query->where('is_checked_in', false))
-            ->when($source === 'manual', fn ($query) => $query->whereHas('order', fn ($query) => $query->whereNotNull('issued_by')))
-            ->when($source === 'online', fn ($query) => $query->whereHas('order', fn ($query) => $query->whereNull('issued_by')))
+            ->when($source, fn ($query, string $value) => $query->whereHas('order', fn ($query) => $query->where('source', $value)))
             ->latest('id')
             ->paginate(20)
             ->withQueryString();

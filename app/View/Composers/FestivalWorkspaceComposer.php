@@ -55,7 +55,8 @@ class FestivalWorkspaceComposer
                 'items' => [
                     $this->item('program', 'dashboard.accounts.festivals.program', 'festival_tab_program', 'calendar-days', $permissions['schedule'], $active, $account, $edition),
                     $this->item('timeline', 'dashboard.accounts.festivals.timeline.index', 'festival_timeline_title', 'timer', $permissions['schedule'], $active, $account, $edition),
-                    $this->item('tickets', 'dashboard.accounts.festivals.tickets', 'festival_tab_tickets_entrance', 'qr-code', $permissions['finance'] || $permissions['ticket_check_in'], $active, $account, $edition),
+                    $this->item('tickets', 'dashboard.accounts.festivals.tickets', 'festival_tab_tickets_entrance', 'qr-code', $permissions['finance'] || $permissions['ticket_check_in'] || $permissions['door_staff'], $active, $account, $edition),
+                    $this->item('entrance', 'dashboard.accounts.festivals.attendance', 'festival_entrance_monitor', 'scan-line', $permissions['door_staff'], $active, $account, $edition),
                     $this->item('online-stream', 'dashboard.accounts.festivals.online-stream.edit', 'festival_stream_settings', 'video', $permissions['finance'], $active, $account, $edition),
                     $this->item('communication', 'dashboard.accounts.festivals.communication', 'festival_tab_communication', 'bell', $permissions['manage'], $active, $account, $edition),
                 ],
@@ -133,6 +134,7 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.judging.battle-votes.*') => 'judging-battle-votes',
             request()->routeIs('dashboard.accounts.festivals.judging.battles.*') => 'judging-battles',
             request()->routeIs('dashboard.accounts.festivals.judging.results.*') => 'judging-results',
+            request()->routeIs('dashboard.accounts.festivals.attendance*', 'dashboard.accounts.festivals.entrance.*') => 'entrance',
             request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.tickets.issue*', 'dashboard.accounts.festivals.admission-types.*', 'dashboard.accounts.festivals.scanner*') => 'tickets',
             request()->routeIs('dashboard.accounts.festivals.online-stream.*') => 'online-stream',
             request()->routeIs('dashboard.accounts.festivals.communication') => 'communication',

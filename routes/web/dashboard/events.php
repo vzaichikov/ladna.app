@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\EventEntranceController;
 use App\Http\Controllers\EventOrderController;
 use App\Http\Controllers\EventScannerController;
 use App\Http\Controllers\EventTicketController;
@@ -35,3 +36,8 @@ Route::get('accounts/{account}/events/{event:id}/scanner', [EventScannerControll
 Route::post('accounts/{account}/events/{event:id}/scanner/scan', [EventScannerController::class, 'scan'])->middleware('throttle:event-scanner')->scopeBindings()->name('accounts.events.scanner.scan');
 Route::get('accounts/{account}/events/{event:id}/attendance', [EventTicketOverviewController::class, 'show'])->scopeBindings()->name('accounts.events.attendance');
 Route::get('accounts/{account}/events/{event:id}/attendance/data', [EventTicketOverviewController::class, 'data'])->scopeBindings()->name('accounts.events.attendance.data');
+Route::post('accounts/{account}/events/{event:id}/attendance/tickets/{eventTicket}/undo', [EventTicketOverviewController::class, 'undo'])->middleware('throttle:event-scanner')->scopeBindings()->name('accounts.events.attendance.tickets.undo');
+Route::get('accounts/{account}/events/{event:id}/entrance/search', [EventEntranceController::class, 'search'])->middleware('throttle:120,1')->scopeBindings()->name('accounts.events.entrance.search');
+Route::post('accounts/{account}/events/{event:id}/entrance/tickets/cash', [EventEntranceController::class, 'cashSale'])->middleware('throttle:event-checkout')->scopeBindings()->name('accounts.events.entrance.cash');
+Route::post('accounts/{account}/events/{event:id}/entrance/tickets/card', [EventEntranceController::class, 'cardSale'])->middleware('throttle:event-checkout')->scopeBindings()->name('accounts.events.entrance.card');
+Route::get('accounts/{account}/events/{event:id}/entrance/poster', [EventEntranceController::class, 'poster'])->scopeBindings()->name('accounts.events.entrance.poster');

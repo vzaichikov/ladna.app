@@ -320,7 +320,7 @@ class EventTicketManagementTest extends TestCase
         $this->assertTicketFilter($owner, $account, $event, ['status' => 'voided'], [$onlineTicket->id]);
         $this->assertTicketFilter($owner, $account, $event, ['check_in' => 'checked_in'], [$manualTicket->id]);
         $this->assertTicketFilter($owner, $account, $event, ['source' => 'manual'], [$manualTicket->id]);
-        $this->assertTicketFilter($owner, $account, $event, ['source' => 'online'], [$onlineTicket->id]);
+        $this->assertTicketFilter($owner, $account, $event, ['source' => 'checkout'], [$onlineTicket->id]);
 
         $otherAccount = Account::factory()->create();
         $otherEvent = Event::factory()->published()->for($otherAccount)->create();
@@ -349,14 +349,14 @@ class EventTicketManagementTest extends TestCase
             $account,
             $event,
             'q' => 'Bulk Guest',
-            'source' => 'online',
+            'source' => 'checkout',
         ]))->assertOk();
 
         $tickets = $response->viewData('tickets');
         $this->assertSame(20, $tickets->count());
         $this->assertSame($newestTicketId, $tickets->first()->id);
         $this->assertStringContainsString('q=Bulk%20Guest', $tickets->url(2));
-        $this->assertStringContainsString('source=online', $tickets->url(2));
+        $this->assertStringContainsString('source=checkout', $tickets->url(2));
     }
 
     public function test_email_less_manual_order_renders_without_resend_action(): void

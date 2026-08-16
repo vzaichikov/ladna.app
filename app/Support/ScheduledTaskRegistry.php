@@ -119,6 +119,16 @@ class ScheduledTaskRegistry
                 'frequency_key' => 'scheduled_task_frequency_every_minute',
                 'description_key' => 'scheduled_task_event_orders_expire_description',
                 'overlap_minutes' => 5,
+                'single_server' => true,
+            ],
+            [
+                'key' => 'festival_ticket_orders_expire',
+                'command' => 'festival-ticket-orders:expire',
+                'expression' => '* * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_minute',
+                'description_key' => 'scheduled_task_festival_ticket_orders_expire_description',
+                'overlap_minutes' => 5,
+                'single_server' => true,
             ],
             [
                 'key' => 'festival_notifications_dispatch',

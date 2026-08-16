@@ -16,6 +16,6 @@ class FestivalTicketOrderFactory extends Factory
     {
         $accessToken = Str::random(64);
 
-        return ['account_id' => fn (array $attributes) => FestivalEdition::findOrFail($attributes['festival_edition_id'])->account_id, 'festival_edition_id' => FestivalEdition::factory(), 'order_id' => 'FTO-'.Str::upper(Str::random(12)), 'status' => 'pending', 'buyer_name' => fake()->name(), 'buyer_email' => fake()->safeEmail(), 'locale' => 'uk', 'amount_cents' => 0, 'currency' => 'UAH', 'access_token_encrypted' => $accessToken, 'access_token_hash' => hash('sha256', $accessToken), 'expires_at' => now()->addMinutes(30), 'terms_accepted_at' => now(), 'terms_hash' => hash('sha256', 'festival-ticket-terms-v1')];
+        return ['account_id' => fn (array $attributes) => FestivalEdition::findOrFail($attributes['festival_edition_id'])->account_id, 'festival_edition_id' => FestivalEdition::factory(), 'source' => 'checkout', 'order_id' => 'FTO-'.Str::upper(Str::random(12)), 'status' => 'pending', 'buyer_name' => fake()->name(), 'buyer_email' => fake()->safeEmail(), 'locale' => 'uk', 'amount_cents' => 0, 'currency' => 'UAH', 'access_token_encrypted' => $accessToken, 'access_token_hash' => hash('sha256', $accessToken), 'expires_at' => now()->addMinutes(30), 'terms_accepted_at' => now(), 'terms_hash' => hash('sha256', 'festival-ticket-terms-v1')];
     }
 }

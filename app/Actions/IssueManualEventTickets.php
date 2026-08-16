@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Enums\EventOrderSource;
 use App\Enums\EventOrderStatus;
 use App\Enums\EventStatus;
 use App\Models\Account;
@@ -63,6 +64,7 @@ class IssueManualEventTickets
             $order = EventOrder::query()->create([
                 'account_id' => $account->id,
                 'event_id' => $event->id,
+                'source' => EventOrderSource::Manual,
                 'provider' => $isPaid ? 'manual_'.$input['payment_method'] : null,
                 'order_id' => 'EV-'.Str::upper(Str::random(20)),
                 'status' => EventOrderStatus::Paid,

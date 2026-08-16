@@ -266,7 +266,8 @@ class FiscalReceiptService
             'id' => $externalUuid,
             'goods' => $goods,
             'payments' => [[
-                'type' => $payment instanceof CustomerPurchaseRefund && $payment->isCash()
+                'type' => ($payment instanceof CustomerPurchaseRefund && $payment->isCash())
+                    || (($payment instanceof EventOrder || $payment instanceof FestivalTicketOrder) && $payment->provider === 'entrance_cash')
                     ? 'CASH'
                     : 'CASHLESS',
                 'value' => $payment->amount_cents,

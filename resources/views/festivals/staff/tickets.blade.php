@@ -9,9 +9,12 @@
             @if ($workspacePermissions['finance'])
                 <x-ui.button :href="route('dashboard.accounts.festivals.tickets.issue', [$account, $edition])"><x-ui.icon name="ticket" class="h-4 w-4" /> {{ __('app.festival_issue_tickets') }}</x-ui.button>
             @endif
-            @if ($workspacePermissions['ticket_check_in'])
+            @if ($workspacePermissions['ticket_check_in'] || (auth()->user()?->can('doorStaff', $account) ?? false))
                 <x-ui.button :href="route('dashboard.accounts.festivals.scanner', [$account, $edition])"><x-ui.icon name="qr-code" class="h-4 w-4" /> {{ __('app.festival_open_scanner') }}</x-ui.button>
             @endif
+            @can('doorStaff', $account)
+                <x-ui.button :href="route('dashboard.accounts.festivals.attendance', [$account, $edition])" variant="secondary"><x-ui.icon name="monitor" class="h-4 w-4" /> {{ __('app.festival_entrance_monitor') }}</x-ui.button>
+            @endcan
         </x-slot:actions>
     </x-ui.page-header>
 
@@ -28,6 +31,7 @@
         <nav class="flex gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1" aria-label="{{ __('app.festival_ticket_tabs') }}">
             <a href="{{ route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']) }}" class="whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold {{ $tab === 'types' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950' }}" @if($tab === 'types') aria-current="page" @endif>{{ __('app.festival_ticket_types_tab') }}</a>
             <a href="{{ route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold']) }}" class="whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold {{ $tab === 'sold' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950' }}" @if($tab === 'sold') aria-current="page" @endif>{{ __('app.festival_bought_tickets_tab') }}</a>
+            <a href="{{ route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'orders']) }}" class="whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold {{ $tab === 'orders' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950' }}" @if($tab === 'orders') aria-current="page" @endif>{{ __('app.festival_ticket_orders_tab') }}</a>
         </nav>
 
         @if ($tab === 'types')
@@ -50,7 +54,9 @@
                         <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">{{ __('app.festival_ticket_type') }}</th><th class="px-4 py-3">{{ __('app.status') }}</th><th class="px-4 py-3">{{ __('app.festival_inventory') }}</th><th class="px-4 py-3">{{ __('app.festival_sold_held') }}</th><th class="px-4 py-3">{{ __('app.festival_remaining') }}</th><th class="px-4 py-3">{{ __('app.price') }}</th><th class="px-4 py-3">{{ __('app.festival_sales_window') }}</th><th class="px-4 py-3">{{ __('app.festival_lock_state') }}</th><th class="px-4 py-3 text-right">{{ __('app.actions') }}</th></tr></thead>
                         <tbody class="divide-y divide-stone-100">
                             @forelse ($admissionTypes as $admissionType)
-                                @php($availability = $admissionAvailability[$admissionType->id])
+                                @php
+                                    $availability = $admissionAvailability[$admissionType->id];
+                                @endphp
                                 <tr class="align-top">
                                     <td class="px-4 py-4"><strong class="text-slate-950">{{ $admissionType->name }}</strong>@if($admissionType->description)<p class="mt-1 max-w-xs text-xs text-slate-500">{{ $admissionType->description }}</p>@endif</td>
                                     <td class="px-4 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $admissionType->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-700' }}">{{ $admissionType->is_active ? __('app.active') : __('app.inactive') }}</span></td>
@@ -80,7 +86,7 @@
                 </div>
             </x-ui.panel>
             <div>{{ $admissionTypes->links() }}</div>
-        @else
+        @elseif ($tab === 'sold')
             <div><h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_bought_tickets_tab') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_bought_tickets_copy') }}</p></div>
             @if ($refundRequiredOrders->isNotEmpty())
                 <section class="rounded-2xl border border-rose-200 bg-rose-50 p-5">
@@ -107,8 +113,10 @@
 
             <div class="space-y-4">
                 @forelse ($tickets as $ticket)
-                    @php($order = $ticket->order)
-                    @php($receipt = $order->fiscalReceipt)
+                    @php
+                        $order = $ticket->order;
+                        $receipt = $order->fiscalReceipt;
+                    @endphp
                     <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="font-mono text-base text-slate-950">{{ $ticket->code }}</strong><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ __('app.festival_ticket_status_'.$ticket->status->value) }}</span><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $order->source === \App\Enums\FestivalTicketOrderSource::Manual ? 'bg-violet-100 text-violet-800' : 'bg-sky-100 text-sky-800' }}">{{ __('app.festival_ticket_source_'.$order->source->value) }}</span><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $ticket->is_checked_in ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-700' }}">{{ $ticket->is_checked_in ? __('app.festival_checked_in') : __('app.festival_not_checked_in') }}</span></div><h3 class="mt-3 text-lg font-semibold text-slate-950">{{ $ticket->holder_name ?: $order->buyer_name }}</h3><p class="mt-1 break-words text-sm text-slate-600">{{ $order->buyer_name }} · {{ $order->buyer_email }}@if($order->buyer_phone) · {{ $order->buyer_phone }}@endif</p></div>
@@ -147,6 +155,64 @@
                 @endforelse
             </div>
             <div>{{ $tickets->links() }}</div>
+        @else
+            <div>
+                <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_ticket_orders_tab') }}</h2>
+                <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_ticket_orders_copy') }}</p>
+            </div>
+
+            <x-ui.filter-bar :action="route('dashboard.accounts.festivals.tickets', [$account, $edition])" :reset-href="route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'orders'])" class="xl:grid-cols-4">
+                <input type="hidden" name="tab" value="orders">
+                <label><span class="crm-label">{{ __('app.search') }}</span><input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_order_search_placeholder') }}"></label>
+                <label><span class="crm-label">{{ __('app.status') }}</span><select name="status" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach(\App\Enums\FestivalTicketOrderStatus::cases() as $status)<option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.festival_order_'.$status->value) }}</option>@endforeach</select></label>
+                <label><span class="crm-label">{{ __('app.festival_ticket_source') }}</span><select name="source" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach(\App\Enums\FestivalTicketOrderSource::cases() as $source)<option value="{{ $source->value }}" @selected($filters['source'] === $source->value)>{{ __('app.festival_ticket_source_'.$source->value) }}</option>@endforeach</select></label>
+                <label><span class="crm-label">{{ __('app.payment_provider') }}</span><select name="provider" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach($orderProviderOptions as $provider)<option value="{{ $provider }}" @selected($filters['provider'] === $provider)>{{ config('integrations.providers.'.$provider.'.label', $provider) }}</option>@endforeach</select></label>
+            </x-ui.filter-bar>
+
+            <div class="space-y-4" data-festival-ticket-orders>
+                @forelse ($orders as $order)
+                    @php
+                        $orderStatusClass = match ($order->status) {
+                            \App\Enums\FestivalTicketOrderStatus::Paid => 'crm-status-active',
+                            \App\Enums\FestivalTicketOrderStatus::Pending => 'crm-status-scheduled',
+                            \App\Enums\FestivalTicketOrderStatus::Failed, \App\Enums\FestivalTicketOrderStatus::PaidRequiresRefund => 'crm-status-danger',
+                            default => 'crm-status-muted',
+                        };
+                    @endphp
+                    <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm" data-festival-order-row="{{ $order->id }}">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <strong class="break-all font-mono text-sm text-slate-950">{{ $order->order_id }}</strong>
+                                    <span class="{{ $orderStatusClass }}">{{ __('app.festival_order_'.$order->status->value) }}</span>
+                                    <span class="crm-status-muted">{{ __('app.festival_ticket_source_'.$order->source->value) }}</span>
+                                </div>
+                                <h3 class="mt-3 text-lg font-semibold text-slate-950">{{ $order->buyer_name }}</h3>
+                                <p class="mt-1 break-words text-sm text-slate-600">{{ $order->buyer_email }}@if($order->buyer_phone) · {{ $order->buyer_phone }}@endif</p>
+                                <p class="mt-2 text-xs text-slate-500">{{ $order->created_at->timezone($edition->timezone)->format('d.m.Y H:i') }}</p>
+                            </div>
+                            <div class="lg:text-right">
+                                <strong class="text-lg text-slate-950">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</strong>
+                                <p class="mt-1 text-xs text-slate-500">{{ config('integrations.providers.'.$order->provider.'.label', $order->provider ?: '—') }}</p>
+                            </div>
+                        </div>
+
+                        <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_order_items') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->items->map(fn ($item) => $item->admission_name.' × '.$item->quantity)->join(', ') }}</dd><span class="mt-1 block text-xs text-slate-500">{{ __('app.festival_tickets_issued') }}: {{ $order->tickets_count }}</span></div>
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.ticket_payment_invoice_deadline') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->payment_expires_at?->timezone($edition->timezone)->format('d.m.Y H:i:s') ?? '—' }}</dd></div>
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.ticket_inventory_reservation_deadline') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->expires_at?->timezone($edition->timezone)->format('d.m.Y H:i:s') ?? '—' }}</dd></div>
+                            <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_payment_identifiers') }}</dt><dd class="mt-1 break-all font-mono text-xs text-slate-900">{{ $order->gateway_invoice_id ?: '—' }}</dd><span class="mt-1 block break-all font-mono text-xs text-slate-500">{{ $order->gateway_payment_id ?: '—' }}</span></div>
+                        </dl>
+
+                        @if ($order->failure_reason)
+                            <p class="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{{ $order->failure_reason }}</p>
+                        @endif
+                    </article>
+                @empty
+                    <x-ui.empty-state icon="receipt">{{ __('app.festival_ticket_orders_empty') }}</x-ui.empty-state>
+                @endforelse
+            </div>
+            <div>{{ $orders->links() }}</div>
         @endif
     @else
         <div class="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-sm text-sky-900"><div class="flex items-start gap-3"><x-ui.icon name="qr-code" class="mt-0.5 h-5 w-5 shrink-0" /><div><strong>{{ __('app.festival_scanner_access_title') }}</strong><p class="mt-1">{{ __('app.festival_scanner_access_copy') }}</p></div></div></div>

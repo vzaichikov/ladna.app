@@ -11,6 +11,7 @@ use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
+use App\Models\FestivalNotification;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTariffPackage;
@@ -156,8 +157,9 @@ class FestivalAdmissionTest extends TestCase
         $this->assertSame(1, $ticket->scans()->where('action', 'check_in')->count());
     }
 
-    public function test_late_paid_order_becomes_refund_required_without_issuing_tickets(): void
+    public function test_late_monopay_venue_order_issues_once_when_inventory_was_resold(): void
     {
+        Queue::fake();
         [$account, $edition] = $this->festival();
         $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 1]);
         $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
@@ -167,9 +169,57 @@ class FestivalAdmissionTest extends TestCase
 
         $late = FestivalTicketOrder::factory()->for($edition)->create(['account_id' => $account->id, 'provider' => 'monopay', 'amount_cents' => 30000, 'expires_at' => now()->subMinute()]);
         $late->items()->create(['account_id' => $account->id, 'festival_admission_type_id' => $type->id, 'admission_name' => $type->name, 'unit_price_cents' => 30000, 'quantity' => 1, 'total_cents' => 30000]);
+        $callback = new PaymentCallbackResult(orderId: $late->order_id, status: PaymentCallbackStatus::Paid, amountCents: 30000, currency: $late->currency);
+        app(FestivalPaymentService::class)->completeOrder($late, $callback);
+        app(FestivalPaymentService::class)->completeOrder($late, $callback);
+
+        $this->assertSame(FestivalTicketOrderStatus::Paid, $late->refresh()->status);
+        $this->assertSame(1, $late->tickets()->count());
+        $this->assertSame(2, $edition->tickets()->count());
+        $this->assertSame(1, FestivalNotification::query()->where('festival_ticket_order_id', $late->id)->count());
+    }
+
+    public function test_late_non_monopay_order_requires_refund_when_inventory_was_resold(): void
+    {
+        Queue::fake();
+        [$account, $edition] = $this->festival();
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 1]);
+        $first = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => FestivalTicketOrderStatus::Paid,
+            'expires_at' => null,
+        ]);
+        $first->items()->create(['account_id' => $account->id, 'festival_admission_type_id' => $type->id, 'admission_name' => $type->name, 'unit_price_cents' => 30000, 'quantity' => 1, 'total_cents' => 30000]);
+        app(FestivalTicketIssuer::class)->execute($first);
+
+        $late = FestivalTicketOrder::factory()->for($edition)->create(['account_id' => $account->id, 'provider' => 'liqpay', 'amount_cents' => 30000, 'status' => FestivalTicketOrderStatus::Expired, 'expires_at' => now()->subMinute()]);
+        $late->items()->create(['account_id' => $account->id, 'festival_admission_type_id' => $type->id, 'admission_name' => $type->name, 'unit_price_cents' => 30000, 'quantity' => 1, 'total_cents' => 30000]);
+
         app(FestivalPaymentService::class)->completeOrder($late, new PaymentCallbackResult(orderId: $late->order_id, status: PaymentCallbackStatus::Paid, amountCents: 30000, currency: $late->currency));
 
         $this->assertSame(FestivalTicketOrderStatus::PaidRequiresRefund, $late->refresh()->status);
+        $this->assertSame(0, $late->tickets()->count());
+    }
+
+    public function test_late_monopay_order_requires_refund_after_the_festival_ends(): void
+    {
+        Queue::fake();
+        [$account, $edition] = $this->festival();
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'inventory' => 2]);
+        $late = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'provider' => 'monopay',
+            'amount_cents' => 30000,
+            'status' => FestivalTicketOrderStatus::Expired,
+            'expires_at' => now()->subMinute(),
+        ]);
+        $late->items()->create(['account_id' => $account->id, 'festival_admission_type_id' => $type->id, 'admission_name' => $type->name, 'unit_price_cents' => 30000, 'quantity' => 1, 'total_cents' => 30000]);
+        $edition->update(['ends_at' => now()->subMinute()]);
+
+        app(FestivalPaymentService::class)->completeOrder($late, new PaymentCallbackResult(orderId: $late->order_id, status: PaymentCallbackStatus::Paid, amountCents: 30000, currency: $late->currency));
+
+        $this->assertSame(FestivalTicketOrderStatus::PaidRequiresRefund, $late->refresh()->status);
+        $this->assertSame('festival_unavailable', $late->failure_reason);
         $this->assertSame(0, $late->tickets()->count());
     }
 

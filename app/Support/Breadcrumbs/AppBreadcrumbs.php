@@ -228,6 +228,13 @@ final class AppBreadcrumbs
                 $eventPage,
                 $this->item(__('app.event_attendance')),
             ],
+            'dashboard.accounts.events.entrance.poster' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.event_attendance'), route('dashboard.accounts.events.attendance', [$account, $event])),
+                $this->item(__('app.entrance_payment_poster_title')),
+            ],
             default => throw new LogicException("No event breadcrumb definition exists for route [{$routeName}]."),
         };
     }
@@ -422,6 +429,7 @@ final class AppBreadcrumbs
             'dashboard.accounts.festivals.performances' => 'app.festival_tab_performances',
             'dashboard.accounts.festivals.program' => 'app.festival_tab_program',
             'dashboard.accounts.festivals.tickets' => 'app.festival_tickets',
+            'dashboard.accounts.festivals.attendance' => 'app.festival_entrance_monitor',
             'dashboard.accounts.festivals.online-stream.edit' => 'app.festival_stream_settings',
             'dashboard.accounts.festivals.online-stream.update' => 'app.festival_stream_settings',
             'dashboard.accounts.festivals.online-stream.reset-leases' => 'app.festival_stream_settings',
@@ -437,6 +445,14 @@ final class AppBreadcrumbs
                 ...$base,
                 $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition])),
                 $this->item(__('app.scanner')),
+            ];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.entrance.poster') {
+            return [
+                ...$base,
+                $this->item(__('app.festival_entrance_monitor'), route('dashboard.accounts.festivals.attendance', [$account, $edition])),
+                $this->item(__('app.entrance_payment_poster_title')),
             ];
         }
 

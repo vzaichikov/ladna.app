@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\RecordEventCashEntry;
+use App\Enums\EventOrderSource;
 use App\Enums\EventOrderStatus;
 use App\Enums\EventStatus;
 use App\Enums\EventTicketStatus;
 use App\Models\Account;
 use App\Models\Event;
+use App\Models\EventCashEntry;
 use App\Models\EventOrder;
 use App\Models\EventTicket;
 use App\Support\Fiscalization\FiscalizationAvailability;
@@ -69,13 +72,18 @@ class EventOrderController extends Controller
         return back()->with('status', __('app.event_tickets_resent'));
     }
 
-    public function refund(Request $request, Account $account, Event $event, EventOrder $eventOrder): RedirectResponse
-    {
+    public function refund(
+        Request $request,
+        Account $account,
+        Event $event,
+        EventOrder $eventOrder,
+        RecordEventCashEntry $cashEntries,
+    ): RedirectResponse {
         $this->ensureScope($account, $event, $eventOrder);
         abort_unless($request->user()?->can('manageEvents', $account), 403);
         $validated = $request->validate(['reason' => ['required', 'string', 'max:2000']]);
 
-        DB::transaction(function () use ($eventOrder, $request, $validated): void {
+        DB::transaction(function () use ($eventOrder, $request, $validated, $cashEntries): void {
             $eventOrder = EventOrder::query()->whereKey($eventOrder->id)->lockForUpdate()->firstOrFail();
             abort_unless(in_array($eventOrder->status, [
                 EventOrderStatus::Paid,
@@ -89,6 +97,16 @@ class EventOrderController extends Controller
                 'refund_reason' => $validated['reason'],
             ])->save();
             $eventOrder->tickets()->update(['status' => 'refunded', 'is_checked_in' => false, 'checked_in_at' => null]);
+
+            if ($eventOrder->source === EventOrderSource::Entrance && $eventOrder->provider === 'entrance_cash') {
+                $cashEntries->execute(
+                    $eventOrder,
+                    $request->user(),
+                    EventCashEntry::DirectionOut,
+                    EventCashEntry::PurposeEntranceTicketRefund,
+                    $validated['reason'],
+                );
+            }
         });
 
         return back()->with('status', __('app.event_refund_recorded'));

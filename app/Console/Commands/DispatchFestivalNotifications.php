@@ -9,13 +9,12 @@ use App\Jobs\SendFestivalNotification;
 use App\Models\FestivalAnnouncement;
 use App\Models\FestivalNotification;
 use App\Models\FestivalPortalUser;
-use App\Models\FestivalTicketOrder;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 #[Signature('festivals:dispatch-notifications {--limit=100}')]
-#[Description('Fill and dispatch due Festival notifications and expire stale admission holds')]
+#[Description('Fill and dispatch due Festival notifications')]
 class DispatchFestivalNotifications extends Command
 {
     private const int StaleSendingAfterMinutes = 5;
@@ -37,7 +36,6 @@ class DispatchFestivalNotifications extends Command
             $announcement->forceFill(['status' => 'sent', 'sent_at' => now()])->save();
         }
 
-        FestivalTicketOrder::query()->where('status', 'pending')->where('expires_at', '<=', now())->update(['status' => 'expired']);
         $recovered = FestivalNotification::query()
             ->where('status', FestivalNotificationStatus::Sending->value)
             ->where('updated_at', '<=', now()->subMinutes(self::StaleSendingAfterMinutes))

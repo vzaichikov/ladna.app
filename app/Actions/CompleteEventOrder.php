@@ -4,6 +4,8 @@ namespace App\Actions;
 
 use App\Enums\EmailScenario;
 use App\Enums\EventOrderStatus;
+use App\Enums\EventStatus;
+use App\Enums\IntegrationProvider;
 use App\Models\Event;
 use App\Models\EventOrder;
 use App\Models\EventOrderItem;
@@ -26,19 +28,8 @@ class CompleteEventOrder
 
     public function execute(EventOrder $order, PaymentCallbackResult $callback): EventOrder
     {
-        $becamePaid = false;
-        $becameRequiresRefund = false;
-        $completed = DB::transaction(function () use ($order, $callback, &$becamePaid, &$becameRequiresRefund): EventOrder {
+        [$completed, $transition] = DB::transaction(function () use ($order, $callback): array {
             $order = EventOrder::query()->with(['event', 'items.ticketType'])->whereKey($order->id)->lockForUpdate()->firstOrFail();
-
-            if (in_array($order->status, [
-                EventOrderStatus::Paid,
-                EventOrderStatus::RefundRequired,
-                EventOrderStatus::PaidRequiresRefund,
-                EventOrderStatus::Refunded,
-            ], true)) {
-                return $order;
-            }
 
             if ($callback->orderId !== $order->order_id
                 || ($callback->amountCents !== null && $callback->amountCents !== $order->amount_cents)
@@ -46,42 +37,69 @@ class CompleteEventOrder
                 throw new InvalidPaymentCallbackException('Callback does not match event order.');
             }
 
+            $isTerminal = $order->refunded_at !== null || in_array($order->status, [
+                EventOrderStatus::Paid,
+                EventOrderStatus::RefundRequired,
+                EventOrderStatus::Refunded,
+            ], true) || ($order->status === EventOrderStatus::PaidRequiresRefund
+                && $order->provider !== IntegrationProvider::Monopay->value);
+
+            if ($isTerminal
+                || ($order->status === EventOrderStatus::PaidRequiresRefund && $callback->status !== PaymentCallbackStatus::Paid)) {
+                return [$order, null];
+            }
+
             if ($callback->status === PaymentCallbackStatus::Paid) {
                 $event = Event::query()->whereKey($order->event_id)->lockForUpdate()->firstOrFail();
                 $types = EventTicketType::query()->whereKey($order->items->pluck('event_ticket_type_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
-                $otherReserved = (int) EventOrderItem::query()
-                    ->where('event_id', $event->id)
-                    ->where('event_order_id', '!=', $order->id)
-                    ->whereHas('order', fn ($query) => $query
-                        ->whereIn('status', [EventOrderStatus::Pending->value, EventOrderStatus::Paid->value, EventOrderStatus::RefundRequired->value])
-                        ->where(fn ($query) => $query->where('status', '!=', EventOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
-                    ->sum('quantity');
-                $capacityAvailable = $event->capacity === null || $otherReserved + $order->items->sum('quantity') <= $event->capacity;
-                $typeCapacityAvailable = $order->items->every(function ($item) use ($types, $order): bool {
-                    $otherQuantity = (int) EventOrderItem::query()
-                        ->where('event_ticket_type_id', $item->event_ticket_type_id)
+                $lateMonopayPayment = $order->provider === IntegrationProvider::Monopay->value
+                    && ($order->status !== EventOrderStatus::Pending
+                        || $order->payment_expires_at?->isPast()
+                        || $order->expires_at?->isPast());
+                $eventAcceptsPayment = $event->status === EventStatus::Published && $event->starts_at->isFuture();
+                $capacityAvailable = true;
+                $typeCapacityAvailable = true;
+
+                if (! $lateMonopayPayment) {
+                    $otherReserved = (int) EventOrderItem::query()
+                        ->where('event_id', $event->id)
                         ->where('event_order_id', '!=', $order->id)
                         ->whereHas('order', fn ($query) => $query
                             ->whereIn('status', [EventOrderStatus::Pending->value, EventOrderStatus::Paid->value, EventOrderStatus::RefundRequired->value])
                             ->where(fn ($query) => $query->where('status', '!=', EventOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
                         ->sum('quantity');
+                    $capacityAvailable = $event->capacity === null || $otherReserved + $order->items->sum('quantity') <= $event->capacity;
+                    $typeCapacityAvailable = $order->items->every(function ($item) use ($types, $order): bool {
+                        $otherQuantity = (int) EventOrderItem::query()
+                            ->where('event_ticket_type_id', $item->event_ticket_type_id)
+                            ->where('event_order_id', '!=', $order->id)
+                            ->whereHas('order', fn ($query) => $query
+                                ->whereIn('status', [EventOrderStatus::Pending->value, EventOrderStatus::Paid->value, EventOrderStatus::RefundRequired->value])
+                                ->where(fn ($query) => $query->where('status', '!=', EventOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
+                            ->sum('quantity');
 
-                    return $otherQuantity + $item->quantity <= $types[$item->event_ticket_type_id]->inventory;
-                });
+                        return $otherQuantity + $item->quantity <= $types[$item->event_ticket_type_id]->inventory;
+                    });
+                }
 
-                if (! $capacityAvailable || ! $typeCapacityAvailable) {
-                    $becameRequiresRefund = true;
+                if (! $eventAcceptsPayment || ! $capacityAvailable || ! $typeCapacityAvailable) {
                     $order->forceFill([
                         'status' => EventOrderStatus::PaidRequiresRefund,
                         'paid_at' => $callback->paidAt ?? now(),
+                        'expires_at' => null,
+                        'gateway_invoice_id' => $callback->gatewayInvoiceId,
+                        'gateway_payment_id' => $callback->gatewayPaymentId,
+                        'gateway_status' => $callback->gatewayStatus,
                         'last_callback_payload' => $callback->payload,
-                        'failure_reason' => __('app.event_late_payment_no_capacity'),
+                        'failure_reason' => $eventAcceptsPayment
+                            ? __('app.event_late_payment_no_capacity')
+                            : __('app.event_late_payment_event_unavailable'),
+                        'failed_at' => null,
                     ])->save();
 
-                    return $order->refresh();
+                    return [$order->refresh(), 'requires_refund'];
                 }
 
-                $becamePaid = true;
                 $order->forceFill([
                     'status' => EventOrderStatus::Paid,
                     'paid_at' => $callback->paidAt ?? now(),
@@ -91,10 +109,11 @@ class CompleteEventOrder
                     'gateway_status' => $callback->gatewayStatus,
                     'last_callback_payload' => $callback->payload,
                     'failure_reason' => null,
+                    'failed_at' => null,
                 ])->save();
                 $this->issueTickets->execute($order);
 
-                return $order->refresh()->load('tickets');
+                return [$order->refresh()->load('tickets'), 'paid'];
             }
 
             $order->forceFill([
@@ -110,18 +129,20 @@ class CompleteEventOrder
                 'failed_at' => $callback->status === PaymentCallbackStatus::Failed ? now() : null,
             ])->save();
 
-            return $order->refresh();
+            return [$order->refresh(), null];
         }, 3);
 
-        if ($becamePaid) {
-            $this->mailDispatcher->eventTicketsIssued($completed);
+        if ($transition === 'paid') {
+            if (filled($completed->buyer_email)) {
+                $this->mailDispatcher->eventTicketsIssued($completed);
+            }
 
             try {
                 $this->fiscalReceipts->fiscalizeEventOrder($completed);
             } catch (Throwable $exception) {
                 report($exception);
             }
-        } elseif ($becameRequiresRefund) {
+        } elseif ($transition === 'requires_refund') {
             $this->mailDispatcher->eventBuyerNotice($completed, EmailScenario::EventPaymentAttention);
         }
 

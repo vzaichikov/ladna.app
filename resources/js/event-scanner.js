@@ -30,7 +30,7 @@ export function initEventScanner() {
     const modalConfirm = modal?.querySelector('[data-scanner-modal-confirm]');
     const modalConfirmLabel = modal?.querySelector('[data-scanner-modal-confirm-label]');
     const modalDismissButtons = [...(modal?.querySelectorAll('[data-scanner-modal-dismiss]') ?? [])];
-    const reader = new BrowserMultiFormatReader();
+    const reader = video && camera ? new BrowserMultiFormatReader() : null;
     let controls = null;
     let lastValue = null;
     let lastScannedAt = 0;
@@ -40,7 +40,6 @@ export function initEventScanner() {
     let modalBusy = false;
     let modalOpener = null;
     let pendingConfirmation = null;
-    let reloadAfterModalClose = false;
 
     const toneClasses = {
         success: {
@@ -60,12 +59,20 @@ export function initEventScanner() {
     const iconToneClasses = Object.values(toneClasses).flatMap((tone) => tone.icon.split(' '));
 
     const showResult = (message, state = 'error') => {
+        if (!result) {
+            return;
+        }
+
         result.textContent = message;
         result.className = `mt-5 rounded-xl p-4 text-sm font-semibold ${['checked_in', 'checked_out'].includes(state) ? 'bg-emerald-50 text-emerald-900' : state === 'already_checked_in' ? 'bg-amber-50 text-amber-900' : 'bg-rose-50 text-rose-900'}`;
     };
 
     const updateTorchButton = (enabled) => {
         torchEnabled = enabled;
+        if (!torch) {
+            return;
+        }
+
         torch.setAttribute('aria-pressed', enabled ? 'true' : 'false');
         torch.textContent = enabled ? root.dataset.torchDisable : root.dataset.torchEnable;
     };
@@ -139,12 +146,19 @@ export function initEventScanner() {
     };
 
     const openModal = (options) => {
+        if (!modal) {
+            showResult(options.message, options.tone === 'success' ? 'checked_in' : 'error');
+
+            return;
+        }
+
         if (!modalOpen) {
             modalOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             document.body.classList.add('overflow-hidden');
             modalOpen = true;
+            root.dispatchEvent(new CustomEvent('entrance:busy', { bubbles: true, detail: { busy: true } }));
         }
 
         renderModal(options);
@@ -164,11 +178,7 @@ export function initEventScanner() {
         modalOpen = false;
         pendingConfirmation = null;
         lastScannedAt = Date.now();
-
-        if (reloadAfterModalClose) {
-            window.location.reload();
-            return;
-        }
+        root.dispatchEvent(new CustomEvent('entrance:busy', { bubbles: true, detail: { busy: false } }));
 
         modalOpener?.focus();
         modalOpener = null;
@@ -200,8 +210,6 @@ export function initEventScanner() {
     };
 
     const presentPayload = (payload, code, source) => {
-        reloadAfterModalClose = payload.state === 'checked_in' && source === 'door_list';
-
         if (payload.state === 'awaiting_confirmation') {
             navigator.vibrate?.(80);
             openModal({
@@ -216,6 +224,7 @@ export function initEventScanner() {
 
         if (payload.state === 'checked_in') {
             navigator.vibrate?.(120);
+            root.dispatchEvent(new CustomEvent('entrance:changed', { bubbles: true, detail: { payload } }));
             openModal({
                 tone: 'success',
                 title: modal.dataset.confirmedTitle,
@@ -254,6 +263,10 @@ export function initEventScanner() {
     };
 
     const loadCameras = async (selectedDeviceId = '') => {
+        if (!camera) {
+            return;
+        }
+
         const devices = await BrowserCodeReader.listVideoInputDevices();
         const options = document.createDocumentFragment();
         const automaticOption = document.createElement('option');
@@ -279,6 +292,10 @@ export function initEventScanner() {
     };
 
     const begin = async () => {
+        if (!reader || !camera || !video || !torch) {
+            return;
+        }
+
         await controls?.stop?.();
         controls = null;
         torch.classList.add('hidden');
@@ -314,11 +331,13 @@ export function initEventScanner() {
         }
     };
 
-    loadCameras().catch(() => showResult(root.dataset.cameraError));
+    if (camera && video) {
+        loadCameras().catch(() => showResult(root.dataset.cameraError));
+    }
 
-    start.addEventListener('click', () => begin().catch(() => showResult(root.dataset.cameraError)));
-    camera.addEventListener('change', () => begin().catch(() => showResult(root.dataset.cameraError)));
-    torch.addEventListener('click', async () => {
+    start?.addEventListener('click', () => begin().catch(() => showResult(root.dataset.cameraError)));
+    camera?.addEventListener('change', () => begin().catch(() => showResult(root.dataset.cameraError)));
+    torch?.addEventListener('click', async () => {
         if (!controls?.switchTorch) {
             return;
         }
@@ -332,7 +351,7 @@ export function initEventScanner() {
             showResult(root.dataset.cameraError);
         }
     });
-    manual.addEventListener('submit', async (event) => {
+    manual?.addEventListener('submit', async (event) => {
         event.preventDefault();
 
         if (requestInProgress || modalOpen) {
@@ -349,12 +368,12 @@ export function initEventScanner() {
     });
 
     modalDismissButtons.forEach((button) => button.addEventListener('click', closeModal));
-    modal.addEventListener('click', (event) => {
+    modal?.addEventListener('click', (event) => {
         if (event.target === modal) {
             closeModal();
         }
     });
-    modal.addEventListener('keydown', (event) => {
+    modal?.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             event.preventDefault();
             closeModal();
@@ -382,7 +401,7 @@ export function initEventScanner() {
             first.focus();
         }
     });
-    modalConfirm.addEventListener('click', async () => {
+    modalConfirm?.addEventListener('click', async () => {
         if (!pendingConfirmation || modalBusy) {
             return;
         }
@@ -397,22 +416,42 @@ export function initEventScanner() {
         }
     });
 
-    root.querySelectorAll('[data-door-checkin]').forEach((button) => {
-        button.addEventListener('click', async () => {
-            if (requestInProgress || modalOpen) {
-                return;
-            }
+    root.addEventListener('entrance:scan', async (event) => {
+        const code = String(event.detail?.code ?? '').trim();
 
-            button.disabled = true;
-            requestInProgress = true;
+        if (!code || requestInProgress || modalOpen) {
+            return;
+        }
 
-            try {
-                await previewTicket(button.dataset.ticketCode, 'door_list');
-            } finally {
-                requestInProgress = false;
-                button.disabled = false;
-            }
-        });
+        if (event.detail?.opener instanceof HTMLElement) {
+            modalOpener = event.detail.opener;
+        }
+
+        requestInProgress = true;
+
+        try {
+            await previewTicket(code, event.detail?.source || 'door_list');
+        } finally {
+            requestInProgress = false;
+        }
+    });
+
+    root.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-door-checkin]');
+
+        if (!button || !root.contains(button) || requestInProgress || modalOpen) {
+            return;
+        }
+
+        button.disabled = true;
+        requestInProgress = true;
+
+        try {
+            await previewTicket(button.dataset.ticketCode, button.dataset.scanSource || 'door_list');
+        } finally {
+            requestInProgress = false;
+            button.disabled = false;
+        }
     });
 
     root.querySelectorAll('[data-door-checkout]').forEach((button) => {

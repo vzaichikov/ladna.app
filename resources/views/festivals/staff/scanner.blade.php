@@ -17,7 +17,13 @@
         data-torch-enable="{{ __('app.festival_torch_enable') }}"
         data-torch-disable="{{ __('app.festival_torch_disable') }}"
     >
-        <x-ui.page-header :title="__('app.festival_scanner')" :copy="__('app.festival_scanner_online_only')" />
+        <x-ui.page-header :title="__('app.festival_scanner')" :copy="__('app.festival_scanner_online_only')">
+            @can('doorStaff', $account)
+                <x-slot:actions>
+                    <x-ui.button :href="route('dashboard.accounts.festivals.attendance', [$account, $festivalEdition])" variant="secondary"><x-ui.icon name="monitor" class="h-4 w-4" />{{ __('app.festival_entrance_monitor') }}</x-ui.button>
+                </x-slot:actions>
+            @endcan
+        </x-ui.page-header>
 
         <section class="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
             <div class="overflow-hidden rounded-2xl border border-stone-200 bg-slate-950 shadow-crm">
@@ -38,30 +44,16 @@
             </div>
         </section>
 
-        <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <h2 class="text-xl font-semibold">{{ __('app.festival_door_list') }}</h2>
-                <form method="GET" class="flex gap-2"><input name="search" value="{{ $search }}" placeholder="{{ __('app.search') }}" class="crm-field mt-0 sm:w-64"><x-ui.button type="submit" variant="secondary">{{ __('app.search') }}</x-ui.button></form>
-            </div>
-            <div class="mt-5 divide-y divide-stone-100">
-                @foreach ($tickets as $ticket)
-                    <div class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div><strong>{{ $ticket->order?->buyer_name }}</strong><p class="mt-1 text-sm text-slate-500">{{ $ticket->admissionType?->name }} · <span class="font-mono">{{ $ticket->code }}</span></p></div>
-                        <div class="flex items-center gap-2">
-                            <span class="{{ $ticket->status !== \App\Enums\FestivalTicketStatus::Valid ? 'crm-status-danger' : ($ticket->is_checked_in ? 'crm-status-active' : 'crm-status-muted') }}">{{ __('app.festival_ticket_status_'.$ticket->status->value) }} · {{ $ticket->is_checked_in ? __('app.festival_checked_in') : __('app.festival_not_checked_in') }}</span>
-                            @if ($ticket->status === \App\Enums\FestivalTicketStatus::Valid)
-                                @if ($ticket->is_checked_in)
-                                    <x-ui.button type="button" variant="secondary" size="sm" data-door-checkout data-checkout-url="{{ route('dashboard.accounts.festivals.scanner.check-out', [$account, $festivalEdition, $ticket]) }}">{{ __('app.festival_check_out') }}</x-ui.button>
-                                @else
-                                    <x-ui.button type="button" variant="secondary" size="sm" data-door-checkin data-ticket-code="{{ $ticket->code }}">{{ __('app.festival_check_in') }}</x-ui.button>
-                                @endif
-                            @endif
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-            {{ $tickets->links() }}
-        </section>
+        @if (isset($entranceTools))
+            <x-ui.entrance-tools
+                :search-url="$entranceTools['search_url']"
+                :cash-sale-url="$entranceTools['cash_sale_url']"
+                :card-sale-url="$entranceTools['card_sale_url']"
+                :ticket-types="$entranceTools['ticket_types']"
+                :payment-providers="$entranceTools['payment_providers']"
+                :currency="$festivalEdition->currency"
+            />
+        @endif
 
         <x-ui.ticket-scanner-modal />
     </div>

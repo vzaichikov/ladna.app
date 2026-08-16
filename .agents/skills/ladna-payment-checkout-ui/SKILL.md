@@ -26,6 +26,7 @@ description: Standardize Ladna public payment, ticket checkout, and ticket deliv
 - Place every blocking or help message immediately above the action it explains. Keep the action label stable; do not replace it with instructional copy or rely on a browser-native validation tooltip as the only guidance.
 - Keep providers account-scoped and credential-ready through the existing payment registry. Do not introduce a parallel provider configuration path.
 - Handle no-selection, free, no-provider, pending, paid, failed, cancelled, and refund-required states explicitly. Do not present a browser return as confirmed payment before the persisted callback state is paid.
+- Keep expired ticket payment attempts auditable and label them explicitly as “Time to pay passed” / “Час на оплату минув”. Never delete or hide an attempt merely because its inventory reservation ended.
 - On pending confirmation pages, keep a clear link back to the originating Event or sellable page so a guest can leave or start another checkout. Do not imply that returning edits the already-created pending order.
 - Show provider and agreement validation errors inside the payment block without losing buyer input.
 - Keep internal attempt, gateway payload, callback, queue, and retry implementation language out of customer-facing copy.
@@ -49,6 +50,14 @@ description: Standardize Ladna public payment, ticket checkout, and ticket deliv
 - Treat the signed server webhook and persisted order status as authoritative. Poll the private status endpoint and never issue tickets from a frame message or browser return.
 - Keep a direct separate-page payment link as fallback, restrict `frame-src` to the trusted Monobank origin, and return private/no-store/no-referrer/nosniff headers on the iframe page.
 
+## Ticket Payment Timing
+
+- For Event and Festival admission tickets, use the account Monopay integration's `invoice_validity_seconds` as the exact invoice lifetime. Fall back to 1,800 seconds when it is absent and retain inventory for a fixed additional five-minute callback grace period.
+- Stop iframe and resumable payment actions at the invoice deadline. The grace period only keeps the inventory reservation while waiting for an authoritative callback; it does not extend the guest's payment action.
+- Expire Event and Festival ticket reservations through their dedicated minutely scheduler commands. Expiry changes the visible order status and releases inventory but preserves the order and all payment identifiers as audit facts.
+- A newly received or replayed valid Monopay paid callback may revive an expired, failed, cancelled, or unrefunded paid-requires-refund ticket order. Ticket issuance, mail, and fiscalization must stay idempotent. Active future Event and active Festival venue orders intentionally accept that late payment even when released inventory was resold; inactive surfaces and online-stream conflicts still require a refund.
+- Do not apply this ticket timing policy to class passes, Festival participant/step charges, Festival SaaS purchases, subscriptions, SMS, or other redirected payment flows.
+
 ## Ticket Return And Delivery
 
 - Give Event and Festival venue-ticket orders a complete private return flow under the account plus access-token scope: pending confirmation, explicit terminal failure/refund states, and a paid ticket table with one valid ticket and QR per row.
@@ -65,4 +74,5 @@ description: Standardize Ladna public payment, ticket checkout, and ticket deliv
 - Capture desktop and mobile screenshots and inspect recent browser logs.
 - When shared primitives change, rerun the Event, class-pass purchase, and Festival payment UI tests without changing their domain behavior.
 - For Monopay iframe v2, assert the platform-only shared ticket flag, disabled request without `displayType`, enabled Event and Festival admission requests with `displayType: iframe`, private route/token isolation, trusted origin and CSP, responsive mobile/desktop iframe and deep-link hooks, absence of a duplicate outer payment CTA, separate-page fallback wording, resume behavior, and unchanged class-pass, Festival participant/step, subscription, and other non-ticket payment requests.
+- For ticket timing, assert configured and fallback invoice validity, the exact gateway payload, five-minute reservation grace, both minutely single-server expiry tasks, payment-action cutoff, preserved expired audit rows, late Monopay over-capacity issuance, inactive-surface refund handling, and duplicate callback idempotency.
 - For ticket delivery, assert pending and every terminal status, tenant/token isolation, entrance-ticket filtering, private response headers, QR contents, PDF filename, no buyer PII, native-share download fallback hooks, and PDF page count equal to the number of valid printable tickets.

@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Enums\EventOrderSource;
 use App\Enums\EventOrderStatus;
 use App\Enums\EventStatus;
 use App\Models\Event;
@@ -58,6 +59,7 @@ class CreateEventOrder
             $order = EventOrder::query()->create([
                 'account_id' => $event->account_id,
                 'event_id' => $event->id,
+                'source' => EventOrderSource::Checkout,
                 'provider' => $input['provider'] ?? null,
                 'order_id' => 'EV-'.Str::upper(Str::random(20)),
                 'buyer_name' => $input['buyer_name'],

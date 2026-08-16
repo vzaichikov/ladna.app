@@ -2,20 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\EventOrderStatus;
-use App\Enums\EventStatus;
-use App\Enums\EventTicketStatus;
+use App\Actions\EventTicketScanner;
 use App\Models\Account;
 use App\Models\Event;
-use App\Models\EventTicket;
+use App\Models\IntegrationSetting;
+use App\Support\MoneyFormatter;
+use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class EventScannerController extends Controller
 {
-    public function show(Request $request, Account $account, Event $event): View
+    public function show(Request $request, Account $account, Event $event, PaymentGatewayRegistry $gateways): View
     {
         $this->authorizeScanner($request, $account, $event);
         $tickets = $event->tickets()
@@ -31,115 +30,74 @@ class EventScannerController extends Controller
             'account' => $account,
             'event' => $event,
             'tickets' => $tickets,
+            ...($request->user()?->can('doorStaff', $account)
+                ? ['entranceTools' => $this->entranceTools($account, $event, $gateways)]
+                : []),
         ]);
     }
 
-    public function scan(Request $request, Account $account, Event $event): JsonResponse
+    public function scan(Request $request, Account $account, Event $event, EventTicketScanner $scanner): JsonResponse
     {
         $this->authorizeScanner($request, $account, $event);
-        $validated = $request->validate([
+        $data = $request->validate([
             'code' => ['required', 'string', 'max:2048'],
-            'source' => ['nullable', 'in:qr,manual,door_list'],
+            'source' => ['nullable', 'in:qr,manual,door_list,guest_search,monitor,entrance_sale'],
             'confirm' => ['sometimes', 'boolean'],
         ]);
-        $value = trim($validated['code']);
-        $confirmed = (bool) ($validated['confirm'] ?? false);
-        $ticket = EventTicket::query()
-            ->where('account_id', $account->id)
-            ->where(fn ($query) => $query
-                ->where('token_hash', hash('sha256', $value))
-                ->orWhere('code', strtoupper($value)))
-            ->first();
+        $result = $scanner->checkIn(
+            $event,
+            $data['code'],
+            $request->user(),
+            $data['source'] ?? 'qr',
+            $request->ip(),
+            (bool) ($data['confirm'] ?? false),
+        );
+        $status = match ($result['state']) {
+            'invalid' => 404,
+            'already_checked_in' => 409,
+            'wrong_event', 'cancelled_event', 'void' => 422,
+            default => 200,
+        };
 
-        if (! $ticket) {
-            return response()->json(['state' => 'invalid', 'message' => __('app.event_scan_invalid')], 404);
-        }
-
-        if ($ticket->event_id !== $event->id) {
-            return response()->json(['state' => 'wrong_event', 'message' => __('app.event_scan_wrong_event')], 422);
-        }
-
-        return DB::transaction(function () use ($ticket, $event, $request, $validated, $confirmed): JsonResponse {
-            $ticketQuery = EventTicket::query()->with(['order', 'ticketType'])->whereKey($ticket->id);
-
-            if ($confirmed) {
-                $ticketQuery->lockForUpdate();
-            }
-
-            $ticket = $ticketQuery->firstOrFail();
-
-            if ($event->status === EventStatus::Cancelled || $event->status === EventStatus::Archived) {
-                return response()->json(['state' => 'cancelled_event', 'message' => __('app.event_scan_cancelled')], 422);
-            }
-
-            if ($ticket->status !== EventTicketStatus::Valid || in_array($ticket->order->status, [
-                EventOrderStatus::Refunded,
-                EventOrderStatus::RefundRequired,
-                EventOrderStatus::PaidRequiresRefund,
-            ], true)) {
-                return response()->json(['state' => 'void', 'message' => __('app.event_scan_void')], 422);
-            }
-
-            if ($ticket->is_checked_in) {
-                $last = $ticket->checkIns()->latest('occurred_at')->first();
-
-                return response()->json([
-                    'state' => 'already_checked_in',
-                    'message' => __('app.event_scan_duplicate'),
-                    'checked_in_at' => $ticket->checked_in_at?->toIso8601String(),
-                    'checked_in_at_label' => $ticket->checked_in_at?->timezone($event->timezone)->format('d.m.Y H:i'),
-                    'operator' => $last?->actor_name,
-                    'ticket' => $this->ticketSummary($ticket),
-                ], 409);
-            }
-
-            if (! $confirmed) {
-                return response()->json([
-                    'state' => 'awaiting_confirmation',
-                    'message' => __('app.event_scan_ready'),
-                    'ticket' => $this->ticketSummary($ticket),
-                ]);
-            }
-
-            $ticket->forceFill(['is_checked_in' => true, 'checked_in_at' => now()])->save();
-            $this->audit($ticket, $request, 'check_in', $validated['source'] ?? 'qr');
-
-            return response()->json([
-                'state' => 'checked_in',
-                'message' => __('app.event_scan_success'),
-                'ticket' => $this->ticketSummary($ticket),
-            ]);
-        }, 3);
+        return response()->json($result, $status);
     }
 
     private function authorizeScanner(Request $request, Account $account, Event $event): void
     {
         abort_unless($event->account_id === $account->id, 404);
-        abort_unless($request->user()?->can('checkInEventTickets', $account), 403);
+        abort_unless(
+            $request->user()?->can('checkInEventTickets', $account)
+                || $request->user()?->can('doorStaff', $account),
+            403,
+        );
     }
 
-    private function audit(EventTicket $ticket, Request $request, string $action, string $source, ?string $reason = null): void
+    /** @return array<string, mixed> */
+    private function entranceTools(Account $account, Event $event, PaymentGatewayRegistry $gateways): array
     {
-        $ticket->checkIns()->create([
-            'account_id' => $ticket->account_id,
-            'event_id' => $ticket->event_id,
-            'user_id' => $request->user()?->id,
-            'action' => $action,
-            'source' => $source,
-            'actor_name' => $request->user()?->name ?? __('app.unknown'),
-            'actor_email' => $request->user()?->email,
-            'reason' => $reason,
-            'occurred_at' => now(),
-        ]);
-    }
+        $providers = $gateways->availableSettingsFor($account);
+        $ticketTypes = $event->ticketTypes()
+            ->where('is_active', true)
+            ->withSoldOrHeldQuantity()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($ticketType): array => [
+                'id' => $ticketType->id,
+                'name' => $ticketType->name,
+                'price_label' => MoneyFormatter::format($ticketType->price_cents, $event->currency),
+                'remaining' => $ticketType->remainingQuantity(),
+            ]);
 
-    /** @return array{code: string, type: string|null, customer: string} */
-    private function ticketSummary(EventTicket $ticket): array
-    {
         return [
-            'code' => $ticket->code,
-            'type' => $ticket->ticketType?->name,
-            'customer' => $ticket->order?->buyer_name ?? __('app.unknown'),
+            'search_url' => route('dashboard.accounts.events.entrance.search', [$account, $event]),
+            'cash_sale_url' => route('dashboard.accounts.events.entrance.cash', [$account, $event]),
+            'card_sale_url' => route('dashboard.accounts.events.entrance.card', [$account, $event]),
+            'ticket_types' => $ticketTypes,
+            'payment_providers' => $providers->map(fn (IntegrationSetting $setting): array => [
+                'value' => $setting->provider->value,
+                'label' => config('integrations.providers.'.$setting->provider->value.'.label', $setting->provider->value),
+            ]),
         ];
     }
 }

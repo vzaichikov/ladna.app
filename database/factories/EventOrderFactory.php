@@ -25,6 +25,7 @@ class EventOrderFactory extends Factory
         return [
             'account_id' => Account::factory(),
             'event_id' => Event::factory(),
+            'source' => 'checkout',
             'order_id' => 'EV-'.Str::upper(Str::random(20)),
             'status' => 'pending',
             'buyer_name' => fake()->name(),

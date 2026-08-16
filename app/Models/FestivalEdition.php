@@ -260,6 +260,11 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalTicketOrder::class);
     }
 
+    public function cashEntries(): HasMany
+    {
+        return $this->hasMany(FestivalCashEntry::class);
+    }
+
     public function festivalTicketOrders(): HasMany
     {
         return $this->ticketOrders();

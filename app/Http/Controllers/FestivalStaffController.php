@@ -73,6 +73,7 @@ class FestivalStaffController extends Controller
                 'manageFestivalSchedule',
                 'manageFestivalFinance',
                 'checkInFestivalTickets',
+                'doorStaff',
             ])->contains(fn (string $ability): bool => (bool) $request->user()?->can($ability, $account));
 
             $editions = FestivalEdition::query()
@@ -455,7 +456,7 @@ class FestivalStaffController extends Controller
 
     private function authorizeAccess(Request $request, Account $account): void
     {
-        abort_unless(collect(['manageFestivals', 'manageFestivalRegistrations', 'manageFestivalSchedule', 'manageFestivalFinance', 'judgeFestivals', 'checkInFestivalTickets'])->contains(fn (string $ability): bool => (bool) $request->user()?->can($ability, $account)), 403);
+        abort_unless(collect(['manageFestivals', 'manageFestivalRegistrations', 'manageFestivalSchedule', 'manageFestivalFinance', 'judgeFestivals', 'checkInFestivalTickets', 'doorStaff'])->contains(fn (string $ability): bool => (bool) $request->user()?->can($ability, $account)), 403);
     }
 
     private function assertEdition(Account $account, FestivalEdition $edition): void

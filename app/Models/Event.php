@@ -107,6 +107,11 @@ class Event extends Model
         return $this->hasMany(EventTicket::class);
     }
 
+    public function cashEntries(): HasMany
+    {
+        return $this->hasMany(EventCashEntry::class);
+    }
+
     public function eventTickets(): HasMany
     {
         return $this->tickets();

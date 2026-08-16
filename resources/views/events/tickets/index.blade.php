@@ -63,8 +63,9 @@
             <span class="crm-label">{{ __('app.event_ticket_source') }}</span>
             <select name="source" class="crm-field">
                 <option value="">{{ __('app.all') }}</option>
-                <option value="manual" @selected($filters['source'] === 'manual')>{{ __('app.event_ticket_source_manual') }}</option>
-                <option value="online" @selected($filters['source'] === 'online')>{{ __('app.event_ticket_source_online') }}</option>
+                @foreach (\App\Enums\EventOrderSource::cases() as $source)
+                    <option value="{{ $source->value }}" @selected($filters['source'] === $source->value)>{{ __('app.event_ticket_source_'.$source->value) }}</option>
+                @endforeach
             </select>
         </label>
     </x-ui.filter-bar>
@@ -118,7 +119,7 @@
                                     @endif
                                 </td>
                                 <td class="px-5 py-4">
-                                    @if ($order?->isManuallyIssued())
+                                    @if ($order?->source === \App\Enums\EventOrderSource::Manual)
                                         <span class="crm-status-muted">{{ __('app.event_ticket_source_manual') }}</span>
                                         <p class="mt-2 text-xs text-slate-500">
                                             {{ $order->amount_cents > 0
@@ -128,8 +129,13 @@
                                         @if ($order->issuedBy)
                                             <p class="mt-1 text-xs text-slate-500">{{ __('app.event_issued_by', ['name' => $order->issuedBy->name]) }}</p>
                                         @endif
+                                    @elseif ($order?->source === \App\Enums\EventOrderSource::Entrance)
+                                        <span class="crm-status-warning">{{ __('app.event_ticket_source_entrance') }}</span>
+                                        @if ($order->issuedBy)
+                                            <p class="mt-1 text-xs text-slate-500">{{ __('app.event_issued_by', ['name' => $order->issuedBy->name]) }}</p>
+                                        @endif
                                     @else
-                                        <span class="crm-status-active">{{ __('app.event_ticket_source_online') }}</span>
+                                        <span class="crm-status-active">{{ __('app.event_ticket_source_checkout') }}</span>
                                     @endif
                                     <p class="mt-2 whitespace-nowrap text-xs font-semibold text-slate-700">{{ \App\Support\MoneyFormatter::format($order?->amount_cents, $order?->currency ?? $event->currency) }}</p>
                                 </td>

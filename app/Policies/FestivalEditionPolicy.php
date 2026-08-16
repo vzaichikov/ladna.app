@@ -19,6 +19,7 @@ class FestivalEditionPolicy
             StudioPermission::ManageFestivalFinance,
             StudioPermission::JudgeFestivals,
             StudioPermission::CheckInFestivalTickets,
+            StudioPermission::DoorStaff,
         ] as $permission) {
             if ($account->userCan($user, $permission)) {
                 return true;

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'event_id', 'event_ticket_id', 'user_id', 'action', 'source', 'actor_name', 'actor_email', 'reason', 'occurred_at'])]
+#[Fillable(['account_id', 'event_id', 'event_ticket_id', 'user_id', 'action', 'source', 'request_ip', 'actor_name', 'actor_email', 'reason', 'occurred_at'])]
 class EventTicketCheckIn extends Model
 {
     /** @use HasFactory<EventTicketCheckInFactory> */

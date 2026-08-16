@@ -1,5 +1,9 @@
 @php
     $routeName = request()->route()?->getName() ?? '';
+    $hideDesktopSidebar = request()->routeIs(
+        'dashboard.accounts.events.attendance',
+        'dashboard.accounts.festivals.attendance',
+    );
     $festivalWorkspace = $festivalWorkspace ?? null;
     $isFestivalWorkspace = is_array($festivalWorkspace) && ($festivalWorkspace['edition'] ?? null) instanceof \App\Models\FestivalEdition;
     $festivalWorkspaceEdition = $isFestivalWorkspace ? $festivalWorkspace['edition'] : null;
@@ -75,6 +79,7 @@
     $canInteractWithTelegramBot = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::InteractWithTelegramBot);
     $canManageEvents = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageEvents);
     $canCheckInEventTickets = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::CheckInEventTickets);
+    $canWorkAtDoor = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::DoorStaff);
     $canViewFestivals = $showAccountNav && $activeAccount->enable_festivals && collect([
         \App\Enums\StudioPermission::ManageFestivals,
         \App\Enums\StudioPermission::ManageFestivalRegistrations,
@@ -82,6 +87,7 @@
         \App\Enums\StudioPermission::ManageFestivalFinance,
         \App\Enums\StudioPermission::JudgeFestivals,
         \App\Enums\StudioPermission::CheckInFestivalTickets,
+        \App\Enums\StudioPermission::DoorStaff,
     ])->contains(fn ($permission) => $activeAccount->userCan($authUser, $permission));
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
@@ -361,7 +367,7 @@
     ] : [];
 
     $studioEventsNav = $showAccountNav ? [
-        ...($canManageEvents || $canCheckInEventTickets ? [[
+        ...($canManageEvents || $canCheckInEventTickets || $canWorkAtDoor ? [[
             'label' => __('app.events'),
             'icon' => 'calendar-days',
             'href' => route('dashboard.accounts.events.index', $activeAccount),
@@ -490,7 +496,7 @@
 
             <aside
                 data-sidebar
-                class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col overflow-y-auto {{ $isFestivalWorkspace ? 'bg-[#10233F] bg-[linear-gradient(180deg,#10233F_0%,#0B172B_62%,#10233F_100%)]' : 'bg-[#3B223F] bg-[linear-gradient(180deg,#3B223F_0%,#2B1731_58%,#3B223F_100%)]' }} px-4 py-5 text-white shadow-2xl transition-transform duration-200 lg:translate-x-0"
+                class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col overflow-y-auto {{ $isFestivalWorkspace ? 'bg-[#10233F] bg-[linear-gradient(180deg,#10233F_0%,#0B172B_62%,#10233F_100%)]' : 'bg-[#3B223F] bg-[linear-gradient(180deg,#3B223F_0%,#2B1731_58%,#3B223F_100%)]' }} px-4 py-5 text-white shadow-2xl transition-transform duration-200 {{ $hideDesktopSidebar ? 'lg:hidden' : 'lg:translate-x-0' }}"
             >
                 <div class="flex items-center justify-between gap-3 px-1">
                     @if ($isFestivalWorkspace)
@@ -758,7 +764,7 @@
                 </div>
             </aside>
 
-            <div class="min-h-screen min-w-0 flex-1 lg:pl-72">
+            <div class="min-h-screen min-w-0 flex-1 {{ $hideDesktopSidebar ? '' : 'lg:pl-72' }}">
                 <x-ui.pwa-install-button />
 
                 <header class="sticky top-0 z-20 border-b border-stone-200/80 bg-white/90 backdrop-blur">
@@ -864,7 +870,7 @@
             </div>
         </div>
 
-        <x-ui.update-reload-toast :revision="$applicationRevision" desktop-offset />
+        <x-ui.update-reload-toast :revision="$applicationRevision" :desktop-offset="! $hideDesktopSidebar" />
 
         @stack('modals')
 

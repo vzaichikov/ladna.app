@@ -24,8 +24,14 @@ class EventController extends Controller
         Account $account,
         WorkingLocationContext $workingLocationContext,
     ): View {
-        abort_unless($request->user()?->can('manageEvents', $account) || $request->user()?->can('checkInEventTickets', $account), 403);
+        abort_unless(
+            $request->user()?->can('manageEvents', $account)
+                || $request->user()?->can('checkInEventTickets', $account)
+                || $request->user()?->can('doorStaff', $account),
+            403,
+        );
         $canManage = (bool) $request->user()?->can('manageEvents', $account);
+        $canDoorStaff = (bool) $request->user()?->can('doorStaff', $account);
         $selectedLocationId = $workingLocationContext->filterLocationId($account, includeInactive: true);
         $tab = in_array($request->query('tab'), ['upcoming', 'draft', 'past', 'cancelled'], true)
             ? (string) $request->query('tab')
@@ -55,6 +61,8 @@ class EventController extends Controller
             'events' => $events,
             'tab' => $tab,
             'canManage' => $canManage,
+            'canDoorStaff' => $canDoorStaff,
+            'canScan' => $canDoorStaff || (bool) $request->user()?->can('checkInEventTickets', $account),
             'locations' => $account->locations()->orderBy('name')->get(['id', 'name', 'is_active']),
             'selectedLocationId' => $selectedLocationId,
             'locationQuery' => $request->query->has('location_id')

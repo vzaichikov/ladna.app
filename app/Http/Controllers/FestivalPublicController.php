@@ -15,6 +15,7 @@ use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalQrToken;
 use App\Support\Festivals\FestivalTimelinePresenter;
 use App\Support\Payments\MonopayGateway;
+use App\Support\Payments\PaymentCheckout;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -94,7 +95,7 @@ class FestivalPublicController extends Controller
             : collect();
         $statusUrl = route('public.festival-orders.status', [$account->slug, $accessToken]);
         $pdfUrl = route('public.festival-orders.pdf', [$account->slug, $accessToken]);
-        $paymentUrl = $this->paymentIsAvailable($order) && $this->iframeCheckoutData($order) !== null
+        $paymentUrl = $this->paymentIsAvailable($order) && $this->paymentLauncherData($order) !== null
             ? route('public.festival-orders.payment', [$account->slug, $accessToken])
             : null;
 
@@ -111,6 +112,21 @@ class FestivalPublicController extends Controller
 
         if (! $this->paymentIsAvailable($order)) {
             return redirect()->to($returnUrl);
+        }
+
+        $launcher = $this->paymentLauncherData($order);
+        abort_if($launcher === null, 404);
+
+        if ($launcher['type'] === 'redirect') {
+            return redirect()->away($launcher['url']);
+        }
+
+        if ($launcher['type'] === 'form') {
+            $checkout = PaymentCheckout::form($launcher['url'], $launcher['fields'], method: $launcher['method']);
+
+            return response()
+                ->view('payments.redirect-form', compact('account', 'checkout'))
+                ->withHeaders($this->privateHeaders());
         }
 
         $iframeCheckout = $this->iframeCheckoutData($order);
@@ -139,6 +155,12 @@ class FestivalPublicController extends Controller
             ->whereBelongsTo($account)
             ->where('access_token_hash', hash('sha256', $accessToken))
             ->with('edition:id,status,cancelled_at')
+            ->with(['tickets' => fn ($query) => $query
+                ->where('status', FestivalTicketStatus::Valid->value)
+                ->whereHas('admissionType', fn ($query) => $query->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value))
+                ->with('admissionType:id,name')
+                ->orderBy('id')
+                ->limit(1)])
             ->withCount([
                 'tickets as valid_tickets_count' => fn ($query) => $query
                     ->where('status', FestivalTicketStatus::Valid->value)
@@ -155,6 +177,11 @@ class FestivalPublicController extends Controller
             'tickets_ready' => $ticketsAvailable && (int) $order->valid_tickets_count > 0,
             'festival_cancelled' => $order->edition->cancelled_at !== null
                 || $order->edition->status === FestivalEditionStatus::Archived,
+            'ticket' => $ticketsAvailable && $order->tickets->isNotEmpty() ? [
+                'code' => $order->tickets->first()->code,
+                'type' => $order->tickets->first()->admissionType?->name,
+                'customer' => $order->tickets->first()->holder_name ?: $order->buyer_name,
+            ] : null,
         ])->withHeaders($this->privateHeaders());
     }
 
@@ -239,9 +266,13 @@ class FestivalPublicController extends Controller
 
     private function paymentIsAvailable(FestivalTicketOrder $order): bool
     {
+        $paymentDeadline = $order->payment_expires_at ?? $order->expires_at;
+
         return $order->status === FestivalTicketOrderStatus::Pending
             && in_array($order->edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress], true)
-            && $order->edition->cancelled_at === null;
+            && $order->edition->cancelled_at === null
+            && $order->edition->ends_at->isFuture()
+            && ($paymentDeadline === null || $paymentDeadline->isFuture());
     }
 
     /**
@@ -263,6 +294,30 @@ class FestivalPublicController extends Controller
         $origin = MonopayGateway::trustedIframeOrigin($pageUrl);
 
         return $origin ? ['page_url' => $pageUrl, 'origin' => $origin] : null;
+    }
+
+    /** @return array{type: string, url: string, method: string, fields: array<string, mixed>}|null */
+    private function paymentLauncherData(FestivalTicketOrder $order): ?array
+    {
+        $launcher = data_get($order->gateway_checkout_payload, '_launcher');
+
+        if (! is_array($launcher)
+            || ! in_array($launcher['type'] ?? null, ['redirect', 'form', 'iframe'], true)
+            || ! is_string($launcher['url'] ?? null)
+            || ! str_starts_with($launcher['url'], 'https://')) {
+            $iframe = $this->iframeCheckoutData($order);
+
+            return $iframe ? ['type' => 'iframe', 'url' => $iframe['page_url'], 'method' => 'GET', 'fields' => []] : null;
+        }
+
+        return [
+            'type' => $launcher['type'],
+            'url' => $launcher['url'],
+            'method' => in_array(strtoupper((string) ($launcher['method'] ?? 'GET')), ['GET', 'POST'], true)
+                ? strtoupper((string) ($launcher['method'] ?? 'GET'))
+                : 'POST',
+            'fields' => is_array($launcher['fields'] ?? null) ? $launcher['fields'] : [],
+        ];
     }
 
     /**

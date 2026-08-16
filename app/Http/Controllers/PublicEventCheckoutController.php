@@ -16,6 +16,7 @@ use App\Support\Events\EventGoogleEmailPrefill;
 use App\Support\Events\EventQrCode;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\Payments\MonopayGateway;
+use App\Support\Payments\PaymentCheckout;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -68,11 +69,6 @@ class PublicEventCheckoutController extends Controller
             $checkout = $startPayment->execute($order, $setting);
         } catch (Throwable $exception) {
             report($exception);
-            $order->forceFill([
-                'status' => EventOrderStatus::Failed,
-                'failure_reason' => $exception->getMessage(),
-                'failed_at' => now(),
-            ])->save();
             throw ValidationException::withMessages(['provider' => __('app.payment_start_failed')]);
         }
 
@@ -154,10 +150,8 @@ class PublicEventCheckoutController extends Controller
 
         $statusUrl = route('public.event-orders.status', [$account->slug, $accessToken]);
         $pdfUrl = route('public.event-orders.pdf', [$account->slug, $accessToken]);
-        $iframeCheckout = $this->iframeCheckoutData($order);
-        $paymentUrl = $order->status === EventOrderStatus::Pending
-            && $order->event->status === EventStatus::Published
-            && $iframeCheckout !== null
+        $paymentUrl = $this->paymentIsAvailable($order)
+            && $this->paymentLauncherData($order) !== null
                 ? route('public.event-orders.payment', [$account->slug, $accessToken])
                 : null;
 
@@ -176,8 +170,23 @@ class PublicEventCheckoutController extends Controller
             ->firstOrFail();
         $returnUrl = route('public.event-orders.show', [$account->slug, $accessToken]);
 
-        if ($order->status !== EventOrderStatus::Pending || $order->event->status !== EventStatus::Published) {
+        if (! $this->paymentIsAvailable($order)) {
             return redirect()->to($returnUrl);
+        }
+
+        $launcher = $this->paymentLauncherData($order);
+        abort_if($launcher === null, 404);
+
+        if ($launcher['type'] === 'redirect') {
+            return redirect()->away($launcher['url']);
+        }
+
+        if ($launcher['type'] === 'form') {
+            $checkout = PaymentCheckout::form($launcher['url'], $launcher['fields'], method: $launcher['method']);
+
+            return response()
+                ->view('payments.redirect-form', compact('account', 'checkout'))
+                ->withHeaders($this->privateHeaders());
         }
 
         $iframeCheckout = $this->iframeCheckoutData($order);
@@ -208,6 +217,11 @@ class PublicEventCheckoutController extends Controller
             ->whereBelongsTo($account)
             ->where('access_token_hash', hash('sha256', $accessToken))
             ->with('event:id,status')
+            ->with(['tickets' => fn ($query) => $query
+                ->where('status', EventTicketStatus::Valid->value)
+                ->with('ticketType:id,name')
+                ->orderBy('id')
+                ->limit(1)])
             ->withCount([
                 'tickets as valid_tickets_count' => fn ($query) => $query->where('status', EventTicketStatus::Valid->value),
             ])
@@ -230,6 +244,11 @@ class PublicEventCheckoutController extends Controller
             'paid' => $status['paid'],
             'tickets_ready' => $status['paid'] && (int) $order->valid_tickets_count > 0,
             'event_cancelled' => $order->event->status === EventStatus::Cancelled,
+            'ticket' => $status['paid'] && $order->tickets->isNotEmpty() ? [
+                'code' => $order->tickets->first()->code,
+                'type' => $order->tickets->first()->ticketType?->name,
+                'customer' => $order->buyer_name,
+            ] : null,
         ])->withHeaders($this->privateHeaders());
     }
 
@@ -310,6 +329,16 @@ class PublicEventCheckoutController extends Controller
             && $order->event->status === EventStatus::Published;
     }
 
+    private function paymentIsAvailable(EventOrder $order): bool
+    {
+        $paymentDeadline = $order->payment_expires_at ?? $order->expires_at;
+
+        return $order->status === EventOrderStatus::Pending
+            && $order->event->status === EventStatus::Published
+            && $order->event->starts_at->isFuture()
+            && ($paymentDeadline === null || $paymentDeadline->isFuture());
+    }
+
     /**
      * @return array{page_url: string, origin: string}|null
      */
@@ -329,6 +358,30 @@ class PublicEventCheckoutController extends Controller
         $origin = MonopayGateway::trustedIframeOrigin($pageUrl);
 
         return $origin ? ['page_url' => $pageUrl, 'origin' => $origin] : null;
+    }
+
+    /** @return array{type: string, url: string, method: string, fields: array<string, mixed>}|null */
+    private function paymentLauncherData(EventOrder $order): ?array
+    {
+        $launcher = data_get($order->gateway_checkout_payload, '_launcher');
+
+        if (! is_array($launcher)
+            || ! in_array($launcher['type'] ?? null, ['redirect', 'form', 'iframe'], true)
+            || ! is_string($launcher['url'] ?? null)
+            || ! str_starts_with($launcher['url'], 'https://')) {
+            $iframe = $this->iframeCheckoutData($order);
+
+            return $iframe ? ['type' => 'iframe', 'url' => $iframe['page_url'], 'method' => 'GET', 'fields' => []] : null;
+        }
+
+        return [
+            'type' => $launcher['type'],
+            'url' => $launcher['url'],
+            'method' => in_array(strtoupper((string) ($launcher['method'] ?? 'GET')), ['GET', 'POST'], true)
+                ? strtoupper((string) ($launcher['method'] ?? 'GET'))
+                : 'POST',
+            'fields' => is_array($launcher['fields'] ?? null) ? $launcher['fields'] : [],
+        ];
     }
 
     /**

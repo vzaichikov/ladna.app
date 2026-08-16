@@ -289,6 +289,9 @@
                             @if ($hasSecretValue)
                                 <span class="mt-1 block text-xs font-semibold text-emerald-700">{{ __('app.secret_configured') }}</span>
                             @endif
+                            @if (isset($field['help_key']))
+                                <span class="mt-1 block text-xs leading-5 text-slate-500">{{ __($field['help_key']) }}</span>
+                            @endif
                             @error($errorName)
                                 <span class="crm-help">{{ $message }}</span>
                             @enderror

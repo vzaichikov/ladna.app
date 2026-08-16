@@ -11,6 +11,9 @@
     $selectedLocation = $locations->firstWhere('id', $selectedLocationId);
     $publicPageIsAvailable = $event->exists && in_array($event->status, [\App\Enums\EventStatus::Published, \App\Enums\EventStatus::Cancelled], true);
     $publicEventUrl = $publicPageIsAvailable ? route('public.events.show', [$account->slug, $event->slug]) : null;
+    $canPrintEntrancePoster = $event->exists
+        && $event->status === \App\Enums\EventStatus::Published
+        && (auth()->user()?->can('doorStaff', $account) ?? false);
 @endphp
 <div class="w-full min-w-0 space-y-6" data-event-admin-page>
     <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -28,6 +31,12 @@
                     <x-ui.button type="button" variant="secondary" data-copy-button data-copy-value="{{ $publicEventUrl }}" data-copy-success-label="{{ __('app.copied') }}">
                         <x-ui.icon name="copy" class="h-4 w-4" />
                         <span data-copy-label>{{ __('app.copy_link') }}</span>
+                    </x-ui.button>
+                @endif
+                @if ($canPrintEntrancePoster)
+                    <x-ui.button :href="route('dashboard.accounts.events.entrance.poster', [$account, $event])" variant="secondary" target="_blank" rel="noopener">
+                        <x-ui.icon name="printer" class="h-4 w-4" />
+                        {{ __('app.entrance_print_payment_qr') }}
                     </x-ui.button>
                 @endif
             </div>

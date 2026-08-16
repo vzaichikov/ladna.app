@@ -143,4 +143,22 @@ class ScheduledTaskStatusTest extends TestCase
         $this->assertSame(5, $definition['overlap_minutes']);
         $this->assertTrue($definition['single_server']);
     }
+
+    public function test_ticket_reservation_expiry_tasks_run_every_minute_on_one_server(): void
+    {
+        $definitions = collect(app(ScheduledTaskRegistry::class)->definitions())->keyBy('key');
+
+        foreach ([
+            'event_orders_expire' => 'event-orders:expire',
+            'festival_ticket_orders_expire' => 'festival-ticket-orders:expire',
+        ] as $key => $command) {
+            $definition = $definitions->get($key);
+
+            $this->assertNotNull($definition);
+            $this->assertSame($command, $definition['command']);
+            $this->assertSame('* * * * *', $definition['expression']);
+            $this->assertSame(5, $definition['overlap_minutes']);
+            $this->assertTrue($definition['single_server']);
+        }
+    }
 }

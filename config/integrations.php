@@ -25,7 +25,7 @@ return [
             'category' => 'payment',
             'fields' => [
                 'api_token' => ['label_key' => 'app.integration_field_api_token', 'type' => 'password', 'sensitive' => true, 'required_when_enabled' => true, 'max' => 2048],
-                'invoice_validity_seconds' => ['label_key' => 'app.integration_field_invoice_validity_seconds', 'type' => 'integer', 'min' => 60, 'max' => 2592000],
+                'invoice_validity_seconds' => ['label_key' => 'app.integration_field_invoice_validity_seconds', 'help_key' => 'app.integration_field_invoice_validity_seconds_help', 'type' => 'integer', 'min' => 60, 'max' => 2592000],
                 'qr_id' => ['label_key' => 'app.integration_field_qr_id', 'type' => 'text', 'max' => 255],
             ],
         ],

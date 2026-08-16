@@ -75,7 +75,7 @@ class FestivalTicketScanner
                 return ['state' => 'not_checked_in', 'message' => __('app.festival_scan_not_checked_in')];
             }
             $ticket->forceFill(['is_checked_in' => false, 'checked_in_at' => null])->save();
-            $this->audit($ticket, $actor, 'check_out', 'door_list', $ip, $reason);
+            $this->audit($ticket, $actor, 'check_out', 'monitor', $ip, $reason);
 
             return ['state' => 'checked_out', 'message' => __('app.festival_scan_checked_out')];
         }, 3);

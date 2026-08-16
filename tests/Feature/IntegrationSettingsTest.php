@@ -34,6 +34,7 @@ class IntegrationSettingsTest extends TestCase
             ->assertSee('name="event_iframe_v2_enabled"', false)
             ->assertSee(__('app.monopay_event_iframe_v2_enabled'))
             ->assertSee(__('app.monopay_event_iframe_v2_help'))
+            ->assertSee(__('app.integration_field_invoice_validity_seconds_help'))
             ->assertDontSee('credentials[payment_type]', false)
             ->assertDontSee('credentials[submerchant_code]', false)
             ->assertDontSee('credentials[webhook_public_key]', false);

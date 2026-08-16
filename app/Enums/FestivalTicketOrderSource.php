@@ -6,4 +6,5 @@ enum FestivalTicketOrderSource: string
 {
     case Checkout = 'checkout';
     case Manual = 'manual';
+    case Entrance = 'entrance';
 }

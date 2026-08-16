@@ -27,6 +27,7 @@ enum StudioPermission: string
     case ManageFestivalFinance = 'manage_festival_finance';
     case JudgeFestivals = 'judge_festivals';
     case CheckInFestivalTickets = 'check_in_festival_tickets';
+    case DoorStaff = 'door_staff';
     case InteractWithTelegramBot = 'interact_with_telegram_bot';
 
     public function labelKey(): string
@@ -70,6 +71,7 @@ enum StudioPermission: string
             self::ManageFestivalFinance,
             self::JudgeFestivals,
             self::CheckInFestivalTickets,
+            self::DoorStaff,
             self::InteractWithTelegramBot => 'events_and_tools',
         };
     }
@@ -99,7 +101,8 @@ enum StudioPermission: string
             self::ManageEvents,
             self::ManageFestivals,
             self::ManageFestivalRegistrations,
-            self::ManageFestivalSchedule => 'high',
+            self::ManageFestivalSchedule,
+            self::DoorStaff => 'high',
             default => 'standard',
         };
     }

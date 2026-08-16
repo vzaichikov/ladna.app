@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.142.0',
+                'date' => '2026-08-16',
+                'title' => 'Entrance operations and auditable ticket reservations',
+                'items' => ['Event and Festival door teams now have a unified entrance workspace with guest search, live attendance monitoring, explicit admission correction, and printable payment posters.', 'Authorized door staff can sell tickets for cash or create a card-payment QR, while Ladna preserves order sources, staff actions, request facts, and separate Event/Festival cash-entry history.', 'Event and Festival admission reservations now follow each studio’s Monopay invoice lifetime plus a five-minute callback grace period. Expired attempts remain visible, and a verified late Monopay payment can issue tickets exactly once for an active occasion even after released inventory was resold.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.141.0',
                 'date' => '2026-08-16',
                 'title' => 'Embedded Event and Festival ticket payments',
@@ -1234,6 +1241,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.142.0',
+                'date' => '2026-08-16',
+                'title' => 'Робота на вході й аудитовані резерви квитків',
+                'items' => ['Команди входу подій і фестивалів отримали єдиний робочий простір із пошуком гостей, монітором відвідування наживо, явним виправленням проходу та плакатами для оплати.', 'Уповноважені працівники можуть продати квиток за готівку або створити QR для оплати карткою, а Ladna зберігає джерело замовлення, дії працівника, факти запиту й окрему історію готівки події або фестивалю.', 'Резерв квитків на події та фестивалі тепер використовує строк дії інвойсу Monopay студії та додаткові п’ять хвилин очікування callback. Прострочені спроби залишаються в історії, а підтверджена пізня оплата може рівно один раз видати квитки на чинний захід навіть після повторного продажу звільнених місць.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.141.0',
                 'date' => '2026-08-16',

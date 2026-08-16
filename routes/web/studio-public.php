@@ -4,6 +4,7 @@ use App\Http\Controllers\PublicBookingController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicEventCheckoutController;
 use App\Http\Controllers\PublicEventController;
+use App\Http\Controllers\PublicEventEntranceController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\PublicStudioLandingController;
@@ -25,6 +26,12 @@ Route::get('/{accountSlug}/events', [PublicEventController::class, 'index'])
 Route::get('/{accountSlug}/events/{eventSlug}', [PublicEventController::class, 'show'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.events.show');
+Route::get('/{accountSlug}/events/{eventSlug}/entrance', [PublicEventEntranceController::class, 'show'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->name('public.events.entrance');
+Route::post('/{accountSlug}/events/{eventSlug}/entrance', [PublicEventEntranceController::class, 'store'])
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:event-checkout'])
+    ->name('public.events.entrance.store');
 Route::post('/{accountSlug}/events/{eventSlug}/checkout', [PublicEventCheckoutController::class, 'store'])
     ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:event-checkout'])
     ->name('public.events.checkout');

@@ -3,6 +3,7 @@ import Panzoom from '@panzoom/panzoom';
 import SimplePhoneMask from 'simple-phone-mask';
 import 'summernote/dist/summernote-lite.css';
 import { initEventAttendance } from './event-attendance';
+import { initEntranceOperations } from './entrance-operations';
 import { initEventScanner } from './event-scanner';
 import { initFestivalStreamPlayer } from './festival-stream-player';
 
@@ -8784,6 +8785,7 @@ function initEventTicketPdfSharing(root = document) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initEventAttendance();
+    initEntranceOperations();
     initFestivalStreamPlayer();
     initFestivalStreamStatus();
     initFestivalAnnouncementModal();

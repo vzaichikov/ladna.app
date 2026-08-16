@@ -5,6 +5,7 @@ namespace App\Actions\Festivals;
 use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
@@ -134,6 +135,7 @@ class CreateFestivalTicketOrder
                 'account_id' => $edition->account_id,
                 'festival_edition_id' => $edition->id,
                 'festival_portal_user_id' => $portalUser->id,
+                'source' => FestivalTicketOrderSource::Checkout,
                 'provider' => $input['provider'],
                 'order_id' => 'FTO-'.Str::upper(Str::random(18)),
                 'buyer_name' => $portalUser->displayName(),

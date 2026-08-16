@@ -159,12 +159,15 @@ class FestivalNotificationOutbox
             'payload' => $this->storedPayload($payload, $message),
             'available_at' => now(),
         ];
-        $notification = $this->createChannel(FestivalNotificationChannel::Email, $dedupeBase, [
-            ...$attributes,
-            'text' => $message->emailText(),
-        ]);
+        $notification = null;
+        if (filter_var($order->buyer_email, FILTER_VALIDATE_EMAIL)) {
+            $notification = $this->createChannel(FestivalNotificationChannel::Email, $dedupeBase, [
+                ...$attributes,
+                'text' => $message->emailText(),
+            ]);
+        }
 
-        if ($this->smsIsEnabled($order->account_id, $type)) {
+        if (filled($order->buyer_phone) && $this->smsIsEnabled($order->account_id, $type)) {
             $this->createChannel(FestivalNotificationChannel::Sms, $dedupeBase, [
                 ...$attributes,
                 'text' => $message->smsText,

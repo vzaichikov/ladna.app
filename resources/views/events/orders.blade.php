@@ -73,8 +73,8 @@
                                 <td class="px-5 py-4">
                                     <strong class="block break-all font-mono text-xs text-slate-950">{{ $order->order_id }}</strong>
                                     <span class="mt-2 block whitespace-nowrap text-xs text-slate-500">{{ $formatDateTime($order->created_at) }}</span>
-                                    <span class="mt-2 inline-flex {{ $order->isManuallyIssued() ? 'crm-status-muted' : 'crm-status-active' }}">
-                                        {{ $order->isManuallyIssued() ? __('app.event_ticket_source_manual') : __('app.event_ticket_source_online') }}
+                                    <span class="mt-2 inline-flex {{ $order->source === \App\Enums\EventOrderSource::Manual ? 'crm-status-muted' : ($order->source === \App\Enums\EventOrderSource::Entrance ? 'crm-status-warning' : 'crm-status-active') }}">
+                                        {{ __('app.event_ticket_source_'.$order->source->value) }}
                                     </span>
                                     @if ($order->issuedBy)
                                         <span class="mt-2 block text-xs text-slate-500">{{ __('app.event_issued_by', ['name' => $order->issuedBy->name]) }}</span>
@@ -115,6 +115,12 @@
                                         </div>
                                         @if ($order->paid_at)
                                             <div><dt class="inline font-semibold text-slate-700">{{ __('app.event_paid_at') }}:</dt> <dd class="inline">{{ $formatDateTime($order->paid_at) }}</dd></div>
+                                        @endif
+                                        @if ($order->payment_expires_at)
+                                            <div><dt class="inline font-semibold text-slate-700">{{ __('app.ticket_payment_invoice_deadline') }}:</dt> <dd class="inline">{{ $formatDateTime($order->payment_expires_at) }}</dd></div>
+                                        @endif
+                                        @if ($order->expires_at)
+                                            <div><dt class="inline font-semibold text-slate-700">{{ __('app.ticket_inventory_reservation_deadline') }}:</dt> <dd class="inline">{{ $formatDateTime($order->expires_at) }}</dd></div>
                                         @endif
                                         @if ($order->gateway_status)
                                             <div><dt class="inline font-semibold text-slate-700">{{ __('app.event_payment_gateway_status') }}:</dt> <dd class="inline">{{ $order->gateway_status }}</dd></div>

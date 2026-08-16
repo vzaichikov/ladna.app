@@ -14,6 +14,7 @@ use App\Http\Controllers\FestivalPublicController;
 use App\Http\Controllers\FestivalStreamAccessController;
 use App\Http\Controllers\FestivalSubmissionController;
 use App\Http\Controllers\FestivalTimelineController;
+use App\Http\Controllers\PublicFestivalEntranceController;
 use App\Http\Middleware\AuthenticateFestivalPortal;
 use App\Http\Middleware\EnsureFestivalEditionWritable;
 use App\Http\Middleware\EnsureFestivalPortalRole;
@@ -26,6 +27,8 @@ use Illuminate\Support\Facades\Route;
 Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabled::class, EnsureFestivalEditionWritable::class])->group(function (): void {
     Route::get('/{accountSlug}/festivals', [FestivalPublicController::class, 'index'])->name('public.festivals.index');
     Route::get('/{accountSlug}/festivals/{editionSlug}', [FestivalPublicController::class, 'show'])->name('public.festivals.show');
+    Route::get('/{accountSlug}/festivals/{editionSlug}/entrance', [PublicFestivalEntranceController::class, 'show'])->name('public.festivals.entrance');
+    Route::post('/{accountSlug}/festivals/{editionSlug}/entrance', [PublicFestivalEntranceController::class, 'store'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-checkout'])->name('public.festivals.entrance.store');
     Route::get('/{accountSlug}/festivals/{editionSlug}/timeline', [FestivalTimelineController::class, 'publicFragment'])->name('public.festivals.timeline');
     Route::post('/{accountSlug}/festivals/{editionSlug}/admission', [FestivalAdmissionController::class, 'store'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-checkout'])->name('public.festivals.admission.store');
     Route::get('/{accountSlug}/festival-orders/{accessToken}', [FestivalPublicController::class, 'order'])->name('public.festival-orders.show');

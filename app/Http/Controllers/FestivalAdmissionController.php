@@ -42,7 +42,6 @@ class FestivalAdmissionController extends Controller
             $checkout = $payments->startOrder($order);
         } catch (Throwable $exception) {
             report($exception);
-            $order->forceFill(['status' => FestivalTicketOrderStatus::Failed, 'failed_at' => now(), 'failure_reason' => $exception->getMessage()])->save();
             throw ValidationException::withMessages(['provider' => __('app.payment_start_failed')]);
         }
 

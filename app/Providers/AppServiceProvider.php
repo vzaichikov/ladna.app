@@ -80,6 +80,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manageFestivalFinance', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageFestivalFinance));
         Gate::define('judgeFestivals', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::JudgeFestivals));
         Gate::define('checkInFestivalTickets', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::CheckInFestivalTickets));
+        Gate::define('doorStaff', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::DoorStaff));
 
         Password::defaults(fn (): Password => Password::min(6));
 

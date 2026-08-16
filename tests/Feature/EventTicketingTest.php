@@ -228,7 +228,7 @@ class EventTicketingTest extends TestCase
         app(CreateEventOrder::class)->execute($event, $this->payload($type->id, 1), 'uk');
     }
 
-    public function test_late_paid_callback_requires_refund_when_expired_capacity_was_resold(): void
+    public function test_late_non_monopay_callback_requires_refund_when_expired_capacity_was_resold(): void
     {
         $account = Account::factory()->create();
         $event = Event::factory()->published()->for($account)->create(['capacity' => 1]);
@@ -253,6 +253,73 @@ class EventTicketingTest extends TestCase
         $this->assertSame(EventOrderStatus::Paid, $replacementOrder->status);
         $this->assertSame(EventOrderStatus::PaidRequiresRefund, $completed->status);
         $this->assertSame(0, $completed->tickets()->count());
+    }
+
+    public function test_late_monopay_callback_issues_once_even_when_expired_capacity_was_resold(): void
+    {
+        Mail::fake();
+        $account = Account::factory()->create();
+        $event = Event::factory()->published()->for($account)->create(['capacity' => 1]);
+        $type = EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 50000,
+            'inventory' => 1,
+        ]);
+        $lateOrder = app(CreateEventOrder::class)->execute($event, $this->payload($type->id, 1), 'uk');
+        $lateOrder->forceFill([
+            'provider' => IntegrationProvider::Monopay->value,
+            'status' => EventOrderStatus::Expired,
+            'payment_expires_at' => now()->subMinutes(6),
+            'expires_at' => now()->subMinute(),
+            'failed_at' => now()->subMinute(),
+        ])->save();
+        $type->update(['price_cents' => 0]);
+        $replacementOrder = app(CreateEventOrder::class)->execute($event, $this->payload($type->id, 1), 'uk');
+        $callback = new PaymentCallbackResult(
+            orderId: $lateOrder->order_id,
+            status: PaymentCallbackStatus::Paid,
+            gatewayStatus: 'success',
+            amountCents: 50000,
+            currency: 'UAH',
+            gatewayInvoiceId: 'late-mono-invoice',
+            payload: ['status' => 'success'],
+        );
+
+        $first = app(CompleteEventOrder::class)->execute($lateOrder, $callback);
+        $second = app(CompleteEventOrder::class)->execute($lateOrder, $callback);
+
+        $this->assertSame(EventOrderStatus::Paid, $replacementOrder->status);
+        $this->assertSame(EventOrderStatus::Paid, $first->status);
+        $this->assertSame(EventOrderStatus::Paid, $second->status);
+        $this->assertSame(1, $lateOrder->tickets()->count());
+        $this->assertSame(2, EventTicket::query()->where('event_id', $event->id)->count());
+        $this->assertNull($lateOrder->refresh()->failed_at);
+        $this->assertSame(1, EmailDelivery::query()->where('event_order_id', $lateOrder->id)->count());
+        Mail::assertQueued(TransactionalMail::class, 1);
+    }
+
+    public function test_monopay_callback_requires_refund_when_event_no_longer_accepts_ticket_payments(): void
+    {
+        $account = Account::factory()->create();
+        $event = Event::factory()->published()->for($account)->create(['starts_at' => now()->addHour()]);
+        $type = EventTicketType::factory()->for($account)->for($event)->create(['price_cents' => 50000, 'inventory' => 2]);
+        $order = app(CreateEventOrder::class)->execute($event, $this->payload($type->id, 1), 'uk');
+        $order->forceFill([
+            'provider' => IntegrationProvider::Monopay->value,
+            'status' => EventOrderStatus::Expired,
+            'expires_at' => now()->subMinute(),
+        ])->save();
+        $event->update(['starts_at' => now()->subMinute()]);
+
+        $completed = app(CompleteEventOrder::class)->execute($order, new PaymentCallbackResult(
+            orderId: $order->order_id,
+            status: PaymentCallbackStatus::Paid,
+            amountCents: $order->amount_cents,
+            currency: $order->currency,
+        ));
+
+        $this->assertSame(EventOrderStatus::PaidRequiresRefund, $completed->status);
+        $this->assertSame(0, $completed->tickets()->count());
+        $this->assertSame(__('app.event_late_payment_event_unavailable'), $completed->failure_reason);
     }
 
     public function test_ticket_email_displays_and_attaches_each_qr_without_persisting_qr_payloads(): void

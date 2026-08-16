@@ -34,6 +34,17 @@
         </div>
     </section>
 
+    @if (isset($entranceTools))
+        <x-ui.entrance-tools
+            :search-url="$entranceTools['search_url']"
+            :cash-sale-url="$entranceTools['cash_sale_url']"
+            :card-sale-url="$entranceTools['card_sale_url']"
+            :ticket-types="$entranceTools['ticket_types']"
+            :payment-providers="$entranceTools['payment_providers']"
+            :currency="$event->currency"
+        />
+    @endif
+
     <section class="rounded-2xl border border-stone-200 bg-white p-4 shadow-crm">
         <h2 class="text-lg font-semibold">{{ __('app.event_latest_entries') }}</h2>
         <div class="mt-3 divide-y divide-stone-100">

@@ -44,7 +44,9 @@ class MonopayGateway implements PaymentGateway
             ],
             'redirectUrl' => $checkout->returnUrl,
             'webHookUrl' => $checkout->callbackUrl,
-            'validity' => (int) max(60, now()->diffInSeconds($checkout->expiresAt, false)),
+            'validity' => $checkout->validitySeconds !== null
+                ? max(60, min(2592000, $checkout->validitySeconds))
+                : (int) max(60, now()->diffInSeconds($checkout->expiresAt, false)),
             'paymentType' => 'debit',
         ];
 
