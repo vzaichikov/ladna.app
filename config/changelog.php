@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.143.0',
+                'date' => '2026-08-16',
+                'title' => 'Dedicated Entry and Festival staff access',
+                'items' => ['Studio owners and platform administrators can now manage separate Entry/Festival staff accounts with central Ladna login and fixed per-studio operational access.', 'Entry/Festival staff can operate Event scanners and the complete entrance desk, plus Festival scanning, entrance monitoring, live timeline controls, and online translation setup without access to unrelated studio management.', 'Only published current or upcoming Events and published or in-progress Festivals are available, including an exact 24-hour post-event operations window.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.142.0',
                 'date' => '2026-08-16',
                 'title' => 'Entrance operations and auditable ticket reservations',
@@ -1241,6 +1248,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.143.0',
+                'date' => '2026-08-16',
+                'title' => 'Окремий доступ для персоналу входу та фестивалю',
+                'items' => ['Власники студій і адміністратори платформи тепер можуть керувати окремими обліковими записами персоналу входу/фестивалю з центральним входом до Ladna та фіксованим операційним доступом у межах студії.', 'Персонал входу/фестивалю може працювати зі сканером і повним входом на подіях, а також зі скануванням, монітором входу, живим таймлайном та налаштуванням онлайн-трансляції фестивалю без доступу до стороннього керування студією.', 'Доступні лише опубліковані поточні або майбутні події та опубліковані чи активні фестивалі, включно з точним 24-годинним операційним вікном після завершення.'],
+                'meta' => 'Очікується релізний коміт.',
+            ],
             [
                 'version' => '0.142.0',
                 'date' => '2026-08-16',

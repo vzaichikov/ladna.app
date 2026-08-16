@@ -24,7 +24,7 @@
 
     <section class="mt-6 grid gap-4 xl:grid-cols-2">
         @forelse ($accounts as $account)
-            <a href="{{ route('dashboard.accounts.show', $account) }}" class="group rounded-xl border border-stone-200 bg-white p-5 shadow-crm transition hover:-translate-y-0.5 hover:border-violet-crm-100 hover:shadow-lg">
+            <a href="{{ $accountDestinations[$account->id] }}" class="group rounded-xl border border-stone-200 bg-white p-5 shadow-crm transition hover:-translate-y-0.5 hover:border-violet-crm-100 hover:shadow-lg">
                 <div class="flex items-start justify-between gap-4">
                     <div class="flex items-center gap-4">
                         <span class="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-50 ring-1 ring-stone-200">

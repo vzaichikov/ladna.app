@@ -8,6 +8,7 @@ use App\Actions\Festivals\RedeemFestivalEditionPurchase;
 use App\Actions\Festivals\SaveFestivalEdition;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEditionPurchaseStatus;
+use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalQualificationStatus;
@@ -30,6 +31,8 @@ use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalSeries;
 use App\Models\FestivalWorkflowStep;
+use App\Models\User;
+use App\Support\EventFestivalStaffAccess;
 use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalSaasAccess;
 use App\Support\Festivals\FestivalWorkspaceAccess;
@@ -46,9 +49,15 @@ use Illuminate\View\View;
 
 class FestivalStaffController extends Controller
 {
-    public function index(Request $request, Account $account, FestivalSaasAccess $saasAccess): View
-    {
-        $this->authorizeAccess($request, $account);
+    public function index(
+        Request $request,
+        Account $account,
+        FestivalSaasAccess $saasAccess,
+        EventFestivalStaffAccess $staffAccess,
+    ): View {
+        $user = $request->user();
+        $isEventFestivalStaff = $user instanceof User && $staffAccess->isStaff($user, $account);
+        $this->authorizeAccess($request, $account, $isEventFestivalStaff);
         $canManage = (bool) $request->user()?->can('manageFestivals', $account);
         $isOwner = $account->isOwnedBy($request->user());
         $requestedTab = $request->query('tab');
@@ -78,12 +87,15 @@ class FestivalStaffController extends Controller
 
             $editions = FestivalEdition::query()
                 ->whereBelongsTo($account)
-                ->when(! $hasNonJudgeAccess, fn ($query) => $query->whereHas('judgeAssignments', fn ($assignment) => $assignment
+                ->when(! $hasNonJudgeAccess && ! $isEventFestivalStaff, fn ($query) => $query->whereHas('judgeAssignments', fn ($assignment) => $assignment
                     ->where('user_id', $request->user()?->id)
                     ->where('is_active', true)))
+                ->when($isEventFestivalStaff, fn ($query) => $query
+                    ->whereIn('status', [FestivalEditionStatus::Published->value, FestivalEditionStatus::InProgress->value])
+                    ->where('ends_at', '>=', now()->subDay()))
                 ->with(['series', 'coverMedia'])
                 ->withCount(['entries', 'admissionTypes'])
-                ->latest('starts_at')
+                ->orderBy('starts_at', $isEventFestivalStaff ? 'asc' : 'desc')
                 ->paginate(12, ['*'], 'festivals_page')
                 ->withQueryString();
         } elseif ($tab === 'series') {
@@ -116,6 +128,7 @@ class FestivalStaffController extends Controller
             'isOwner' => $isOwner,
             'festivalPackages' => $festivalPackages,
             'festivalPurchases' => $festivalPurchases,
+            'isEventFestivalStaff' => $isEventFestivalStaff,
         ]);
     }
 
@@ -454,9 +467,14 @@ class FestivalStaffController extends Controller
         return back()->with('status', __('app.festival_charge_reviewed'));
     }
 
-    private function authorizeAccess(Request $request, Account $account): void
+    private function authorizeAccess(Request $request, Account $account, bool $isEventFestivalStaff = false): void
     {
-        abort_unless(collect(['manageFestivals', 'manageFestivalRegistrations', 'manageFestivalSchedule', 'manageFestivalFinance', 'judgeFestivals', 'checkInFestivalTickets', 'doorStaff'])->contains(fn (string $ability): bool => (bool) $request->user()?->can($ability, $account)), 403);
+        abort_unless(
+            $isEventFestivalStaff
+                || collect(['manageFestivals', 'manageFestivalRegistrations', 'manageFestivalSchedule', 'manageFestivalFinance', 'judgeFestivals', 'checkInFestivalTickets', 'doorStaff'])
+                    ->contains(fn (string $ability): bool => (bool) $request->user()?->can($ability, $account)),
+            403,
+        );
     }
 
     private function assertEdition(Account $account, FestivalEdition $edition): void

@@ -8,6 +8,8 @@ use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalTicket;
 use App\Models\IntegrationSetting;
+use App\Models\User;
+use App\Support\EventFestivalStaffAccess;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\MoneyFormatter;
 use App\Support\Payments\PaymentGatewayRegistry;
@@ -17,6 +19,8 @@ use Illuminate\View\View;
 
 class FestivalTicketScannerController extends Controller
 {
+    public function __construct(private readonly EventFestivalStaffAccess $staffAccess) {}
+
     public function show(
         Request $request,
         Account $account,
@@ -32,7 +36,7 @@ class FestivalTicketScannerController extends Controller
 
         return view('festivals.staff.scanner', compact('account', 'festivalEdition', 'tickets', 'search') + [
             'workspacePermissions' => $workspaceAccess->permissions($request->user(), $account, $festivalEdition),
-            ...($request->user()?->can('doorStaff', $account)
+            ...($request->user()?->can('doorStaff', $account) || $this->hasStaffAccess($request, $account, $festivalEdition)
                 ? ['entranceTools' => $this->entranceTools($account, $festivalEdition, $gateways)]
                 : []),
         ]);
@@ -64,7 +68,11 @@ class FestivalTicketScannerController extends Controller
     public function checkOut(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalTicket $festivalTicket, FestivalTicketScanner $scanner): JsonResponse
     {
         abort_unless($festivalEdition->account_id === $account->id, 404);
-        abort_unless($request->user()?->can('doorStaff', $account), 403);
+        abort_unless(
+            $request->user()?->can('doorStaff', $account)
+                || $this->hasStaffAccess($request, $account, $festivalEdition),
+            403,
+        );
         $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
         $result = $scanner->checkOut($festivalEdition, $festivalTicket, $request->user(), $data['reason'], $request->ip());
 
@@ -76,9 +84,17 @@ class FestivalTicketScannerController extends Controller
         abort_unless($edition->account_id === $account->id, 404);
         abort_unless(
             $request->user()?->can('checkInFestivalTickets', $account)
-                || $request->user()?->can('doorStaff', $account),
+                || $request->user()?->can('doorStaff', $account)
+                || $this->hasStaffAccess($request, $account, $edition),
             403,
         );
+    }
+
+    private function hasStaffAccess(Request $request, Account $account, FestivalEdition $edition): bool
+    {
+        $user = $request->user();
+
+        return $user instanceof User && $this->staffAccess->canAccessFestival($user, $account, $edition);
     }
 
     /** @return array<string, mixed> */

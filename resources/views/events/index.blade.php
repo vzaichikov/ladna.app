@@ -16,19 +16,21 @@
         @endif
     </div>
 
-    <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.events') }}">
-        @foreach (['upcoming', 'draft', 'past', 'cancelled'] as $value)
-            <a href="{{ route('dashboard.accounts.events.index', ['account' => $account, 'tab' => $value, ...$locationQuery]) }}"
-               @class([
-                    'whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition',
-                    'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20' => $tab === $value,
-                    'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => $tab !== $value,
-               ])
-               @if ($tab === $value) aria-current="page" @endif>
-                {{ __('app.event_tab_'.$value) }}
-            </a>
-        @endforeach
-    </nav>
+    @unless ($isEventFestivalStaff)
+        <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.events') }}">
+            @foreach (['upcoming', 'draft', 'past', 'cancelled'] as $value)
+                <a href="{{ route('dashboard.accounts.events.index', ['account' => $account, 'tab' => $value, ...$locationQuery]) }}"
+                   @class([
+                        'whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition',
+                        'border-brand-600 bg-brand-600 text-white shadow-sm shadow-brand-600/20' => $tab === $value,
+                        'border-stone-200 bg-white text-slate-700 hover:border-brand-100 hover:bg-brand-50' => $tab !== $value,
+                   ])
+                   @if ($tab === $value) aria-current="page" @endif>
+                    {{ __('app.event_tab_'.$value) }}
+                </a>
+            @endforeach
+        </nav>
+    @endunless
 
     @include('locations._working-filter', ['preserveQuery' => ['tab' => $tab]])
 
@@ -69,6 +71,9 @@
                         @endif
                     @endif
                     <x-ui.button :href="route('dashboard.accounts.events.scanner', [$account, $event])" variant="secondary">{{ __('app.event_scanner') }}</x-ui.button>
+                    @if ($canDoorStaff)
+                        <x-ui.button :href="route('dashboard.accounts.events.attendance', [$account, $event])" variant="secondary">{{ __('app.event_attendance') }}</x-ui.button>
+                    @endif
                 </div>
             </article>
         @empty

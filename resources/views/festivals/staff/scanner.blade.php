@@ -18,11 +18,11 @@
         data-torch-disable="{{ __('app.festival_torch_disable') }}"
     >
         <x-ui.page-header :title="__('app.festival_scanner')" :copy="__('app.festival_scanner_online_only')">
-            @can('doorStaff', $account)
+            @if (auth()->user()?->can('doorStaff', $account) || ($workspacePermissions['event_festival_staff'] ?? false))
                 <x-slot:actions>
                     <x-ui.button :href="route('dashboard.accounts.festivals.attendance', [$account, $festivalEdition])" variant="secondary"><x-ui.icon name="monitor" class="h-4 w-4" />{{ __('app.festival_entrance_monitor') }}</x-ui.button>
                 </x-slot:actions>
-            @endcan
+            @endif
         </x-ui.page-header>
 
         <section class="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">

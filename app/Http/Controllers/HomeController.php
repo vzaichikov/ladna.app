@@ -143,7 +143,7 @@ class HomeController extends Controller
             ->get();
 
         if ($accounts->count() === 1) {
-            return redirect()->route('dashboard.accounts.show', $accounts->first());
+            return redirect()->to($this->accountDestination($accounts->first()));
         }
 
         if ($accounts->isNotEmpty()) {
@@ -155,6 +155,15 @@ class HomeController extends Controller
         }
 
         return null;
+    }
+
+    private function accountDestination(Account $account): string
+    {
+        if ($account->pivot?->role === AccountRole::EventFestivalStaff) {
+            return route('dashboard.accounts.events.index', $account);
+        }
+
+        return route('dashboard.accounts.show', $account);
     }
 
     private function redirectForAuthenticatedCustomer(Request $request): ?RedirectResponse

@@ -9,6 +9,8 @@ use App\Enums\EventStatus;
 use App\Http\Requests\SaveEventRequest;
 use App\Models\Account;
 use App\Models\Event;
+use App\Models\User;
+use App\Support\EventFestivalStaffAccess;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
@@ -23,17 +25,21 @@ class EventController extends Controller
         Request $request,
         Account $account,
         WorkingLocationContext $workingLocationContext,
+        EventFestivalStaffAccess $staffAccess,
     ): View {
+        $user = $request->user();
+        $isEventFestivalStaff = $user instanceof User && $staffAccess->isStaff($user, $account);
         abort_unless(
             $request->user()?->can('manageEvents', $account)
                 || $request->user()?->can('checkInEventTickets', $account)
-                || $request->user()?->can('doorStaff', $account),
+                || $request->user()?->can('doorStaff', $account)
+                || $isEventFestivalStaff,
             403,
         );
         $canManage = (bool) $request->user()?->can('manageEvents', $account);
-        $canDoorStaff = (bool) $request->user()?->can('doorStaff', $account);
+        $canDoorStaff = (bool) $request->user()?->can('doorStaff', $account) || $isEventFestivalStaff;
         $selectedLocationId = $workingLocationContext->filterLocationId($account, includeInactive: true);
-        $tab = in_array($request->query('tab'), ['upcoming', 'draft', 'past', 'cancelled'], true)
+        $tab = ! $isEventFestivalStaff && in_array($request->query('tab'), ['upcoming', 'draft', 'past', 'cancelled'], true)
             ? (string) $request->query('tab')
             : 'upcoming';
         $events = $account->events()
@@ -47,10 +53,11 @@ class EventController extends Controller
                 EventOrderStatus::RefundRequired->value,
                 EventOrderStatus::PaidRequiresRefund->value,
             ])], 'amount_cents')
-            ->when($tab === 'upcoming', fn ($query) => $query->where('status', EventStatus::Published->value)->where('ends_at', '>=', now()))
-            ->when($tab === 'draft', fn ($query) => $query->where('status', EventStatus::Draft->value))
-            ->when($tab === 'past', fn ($query) => $query->where('status', EventStatus::Published->value)->where('ends_at', '<', now()))
-            ->when($tab === 'cancelled', fn ($query) => $query->whereIn('status', [EventStatus::Cancelled->value, EventStatus::Archived->value]))
+            ->when($isEventFestivalStaff, fn ($query) => $query->where('status', EventStatus::Published->value)->where('ends_at', '>=', now()->subDay()))
+            ->when(! $isEventFestivalStaff && $tab === 'upcoming', fn ($query) => $query->where('status', EventStatus::Published->value)->where('ends_at', '>=', now()))
+            ->when(! $isEventFestivalStaff && $tab === 'draft', fn ($query) => $query->where('status', EventStatus::Draft->value))
+            ->when(! $isEventFestivalStaff && $tab === 'past', fn ($query) => $query->where('status', EventStatus::Published->value)->where('ends_at', '<', now()))
+            ->when(! $isEventFestivalStaff && $tab === 'cancelled', fn ($query) => $query->whereIn('status', [EventStatus::Cancelled->value, EventStatus::Archived->value]))
             ->when($selectedLocationId, fn ($query, int $locationId) => $query->where('location_id', $locationId))
             ->orderBy($tab === 'past' ? 'starts_at' : 'starts_at', $tab === 'past' ? 'desc' : 'asc')
             ->paginate(20)
@@ -62,6 +69,7 @@ class EventController extends Controller
             'tab' => $tab,
             'canManage' => $canManage,
             'canDoorStaff' => $canDoorStaff,
+            'isEventFestivalStaff' => $isEventFestivalStaff,
             'canScan' => $canDoorStaff || (bool) $request->user()?->can('checkInEventTickets', $account),
             'locations' => $account->locations()->orderBy('name')->get(['id', 'name', 'is_active']),
             'selectedLocationId' => $selectedLocationId,

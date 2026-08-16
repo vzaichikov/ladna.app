@@ -5,13 +5,14 @@ use App\Http\Middleware\EnsureOwnerOnboardingComplete;
 use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Http\Middleware\PreventReadOnlyDemoMutations;
 use App\Http\Middleware\RecordAccountActivity;
+use App\Http\Middleware\RestrictEventFestivalStaffRoutes;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/app/dashboard/accounts/{account}/working-location', WorkingLocationController::class)
-    ->middleware(['auth:web', EnsureOwnerOnboardingComplete::class])
+    ->middleware(['auth:web', EnsureOwnerOnboardingComplete::class, RestrictEventFestivalStaffRoutes::class])
     ->name('dashboard.accounts.working-location.update');
 
-Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, PreventReadOnlyDemoMutations::class, PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
+Route::middleware(['auth:web', EnsureOwnerOnboardingComplete::class, RestrictEventFestivalStaffRoutes::class, PreventReadOnlyDemoMutations::class, PreventExpiredSubscriptionMutations::class, RecordAccountActivity::class])
     ->prefix('app/dashboard')
     ->name('dashboard.')
     ->group(function (): void {

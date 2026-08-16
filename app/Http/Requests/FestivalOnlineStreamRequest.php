@@ -4,7 +4,10 @@ namespace App\Http\Requests;
 
 use App\Enums\FestivalStreamProvider;
 use App\Models\Account;
+use App\Models\FestivalEdition;
+use App\Models\User;
 use App\Rules\FestivalYouTubeUrl;
+use App\Support\EventFestivalStaffAccess;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -14,11 +17,24 @@ class FestivalOnlineStreamRequest extends FormRequest
     /**
      * Determine if the user is authorized to make this request.
      */
-    public function authorize(): bool
+    public function authorize(EventFestivalStaffAccess $staffAccess): bool
     {
         $account = $this->route('account');
 
-        return $account instanceof Account && (bool) $this->user()?->can('manageFestivalFinance', $account);
+        if (! $account instanceof Account) {
+            return false;
+        }
+
+        if ((bool) $this->user()?->can('manageFestivalFinance', $account)) {
+            return true;
+        }
+
+        $user = $this->user();
+        $edition = $this->route('festivalEdition');
+
+        return $user instanceof User
+            && $edition instanceof FestivalEdition
+            && $staffAccess->canAccessFestival($user, $account, $edition);
     }
 
     /**

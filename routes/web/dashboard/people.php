@@ -5,6 +5,7 @@ use App\Http\Controllers\CustomerBulkTransferController;
 use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerSearchController;
+use App\Http\Controllers\EventFestivalStaffController;
 use App\Http\Controllers\StudioSettingsController;
 use App\Http\Controllers\TrainerController;
 use App\Http\Controllers\TrainerPrivateTimeframeController;
@@ -39,6 +40,10 @@ Route::delete('accounts/{account}/trainers/{trainer}/substitutions/{trainerSubst
     ->name('accounts.trainers.substitutions.destroy');
 Route::get('accounts/{account}/trainer-private-timeframes', [TrainerPrivateTimeframeController::class, 'mine'])
     ->name('accounts.trainer-private-timeframes.mine');
+Route::resource('accounts.event-festival-staff', EventFestivalStaffController::class)
+    ->parameters(['event-festival-staff' => 'membership'])
+    ->except(['show'])
+    ->scoped();
 Route::get('accounts/{account}/trainers/{trainer}/private-timeframes', [TrainerPrivateTimeframeController::class, 'edit'])
     ->name('accounts.trainers.private-timeframes.edit');
 Route::post('accounts/{account}/trainers/{trainer}/private-timeframes/toggle', [TrainerPrivateTimeframeController::class, 'toggle'])

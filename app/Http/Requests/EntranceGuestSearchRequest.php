@@ -3,6 +3,10 @@
 namespace App\Http\Requests;
 
 use App\Models\Account;
+use App\Models\Event;
+use App\Models\FestivalEdition;
+use App\Models\User;
+use App\Support\EventFestivalStaffAccess;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -11,12 +15,33 @@ class EntranceGuestSearchRequest extends FormRequest
     /**
      * Determine if the user is authorized to make this request.
      */
-    public function authorize(): bool
+    public function authorize(EventFestivalStaffAccess $staffAccess): bool
     {
         $account = $this->route('account');
 
-        return $account instanceof Account
-            && (bool) $this->user()?->can('doorStaff', $account);
+        if (! $account instanceof Account) {
+            return false;
+        }
+
+        if ((bool) $this->user()?->can('doorStaff', $account)) {
+            return true;
+        }
+
+        $user = $this->user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        $event = $this->route('event');
+        if ($event instanceof Event) {
+            return $staffAccess->canAccessEvent($user, $account, $event);
+        }
+
+        $edition = $this->route('festivalEdition');
+
+        return $edition instanceof FestivalEdition
+            && $staffAccess->canAccessFestival($user, $account, $edition);
     }
 
     /**

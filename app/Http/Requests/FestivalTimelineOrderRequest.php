@@ -3,15 +3,31 @@
 namespace App\Http\Requests;
 
 use App\Models\Account;
+use App\Models\FestivalEdition;
+use App\Models\User;
+use App\Support\EventFestivalStaffAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
 class FestivalTimelineOrderRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(EventFestivalStaffAccess $staffAccess): bool
     {
         $account = $this->route('account');
 
-        return $account instanceof Account && (bool) $this->user()?->can('manageFestivalSchedule', $account);
+        if (! $account instanceof Account) {
+            return false;
+        }
+
+        if ((bool) $this->user()?->can('manageFestivalSchedule', $account)) {
+            return true;
+        }
+
+        $user = $this->user();
+        $edition = $this->route('festivalEdition');
+
+        return $user instanceof User
+            && $edition instanceof FestivalEdition
+            && $staffAccess->canAccessFestival($user, $account, $edition);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Mobile;
 
+use App\Enums\AccountRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Mobile\CustomerEmailLoginRequest;
 use App\Http\Requests\Api\Mobile\CustomerOtpSendRequest;
@@ -48,7 +49,9 @@ class MobileAuthController extends Controller
         }
 
         $memberships = $user->accountMemberships
-            ->filter(fn ($membership): bool => $membership->account !== null && $membership->account->status->value === 'active')
+            ->filter(fn ($membership): bool => $membership->role !== AccountRole::EventFestivalStaff
+                && $membership->account !== null
+                && $membership->account->status->value === 'active')
             ->values();
 
         if ($memberships->isEmpty()) {

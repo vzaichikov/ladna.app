@@ -16,8 +16,10 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrder;
 use App\Models\IntegrationSetting;
+use App\Models\User;
 use App\Support\Entrance\EntrancePresenter;
 use App\Support\Entrance\EntranceQrCode;
+use App\Support\EventFestivalStaffAccess;
 use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\MoneyFormatter;
@@ -30,7 +32,10 @@ use Throwable;
 
 class FestivalEntranceController extends Controller
 {
-    public function __construct(private readonly EntrancePresenter $presenter) {}
+    public function __construct(
+        private readonly EntrancePresenter $presenter,
+        private readonly EventFestivalStaffAccess $staffAccess,
+    ) {}
 
     public function attendance(
         Request $request,
@@ -193,7 +198,12 @@ class FestivalEntranceController extends Controller
         EntranceQrCode $qrCode,
     ): View {
         $this->assertEditionScope($account, $festivalEdition);
-        abort_unless(request()->user()?->can('doorStaff', $account), 403);
+        $user = request()->user();
+        abort_unless(
+            request()->user()?->can('doorStaff', $account)
+                || ($user instanceof User && $this->staffAccess->canAccessFestival($user, $account, $festivalEdition)),
+            403,
+        );
         $paymentSettings = $gateways->availableSettingsFor($account);
         abort_if($paymentSettings->isEmpty(), 422, __('app.no_payment_methods_available'));
 
@@ -264,12 +274,22 @@ class FestivalEntranceController extends Controller
     private function assertEditionScope(Account $account, FestivalEdition $edition): void
     {
         abort_unless($edition->account_id === $account->id, 404);
+        $user = request()->user();
+
+        if ($user instanceof User && $this->staffAccess->isStaff($user, $account)) {
+            abort_unless($this->staffAccess->canAccessFestival($user, $account, $edition), 403);
+        }
     }
 
     private function authorizeDoorStaff(Request $request, Account $account, FestivalEdition $edition): void
     {
         $this->assertEditionScope($account, $edition);
-        abort_unless($request->user()?->can('doorStaff', $account), 403);
+        $user = $request->user();
+        abort_unless(
+            $request->user()?->can('doorStaff', $account)
+                || ($user instanceof User && $this->staffAccess->canAccessFestival($user, $account, $edition)),
+            403,
+        );
     }
 
     /** @return array<string, mixed> */

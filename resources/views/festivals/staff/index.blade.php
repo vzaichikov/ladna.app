@@ -41,8 +41,9 @@
         <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             @forelse ($editions as $edition)
                 @php($coverUrl = $edition->coverMedia?->url())
+                @php($editionOpenUrl = $isEventFestivalStaff ? route('dashboard.accounts.festivals.scanner', [$account, $edition]) : route('dashboard.accounts.festivals.show', [$account, $edition]))
                 <article class="group overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-crm transition duration-200 hover:-translate-y-0.5 hover:shadow-xl">
-                    <a href="{{ route('dashboard.accounts.festivals.show', [$account, $edition]) }}" class="relative block aspect-[16/9] overflow-hidden bg-[linear-gradient(135deg,#10233F_0%,#23405F_58%,#D9A441_145%)]">
+                    <a href="{{ $editionOpenUrl }}" class="relative block aspect-[16/9] overflow-hidden bg-[linear-gradient(135deg,#10233F_0%,#23405F_58%,#D9A441_145%)]">
                         @if ($coverUrl)
                             <img src="{{ $coverUrl }}" alt="{{ $edition->title }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.025]">
                             <span class="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-slate-950/5 to-transparent"></span>
@@ -55,21 +56,30 @@
                     </a>
 
                     <div class="p-5">
-                        <h2 class="text-xl font-semibold text-slate-950"><a href="{{ route('dashboard.accounts.festivals.show', [$account, $edition]) }}" class="hover:text-brand-700">{{ $edition->title }}</a></h2>
+                        <h2 class="text-xl font-semibold text-slate-950"><a href="{{ $editionOpenUrl }}" class="hover:text-brand-700">{{ $edition->title }}</a></h2>
                         <p class="mt-2 text-sm font-medium text-slate-600">{{ $edition->starts_at->timezone($edition->timezone)->format('d.m.Y H:i') }}</p>
                         @if ($edition->venue_name)
                             <p class="mt-1 truncate text-sm text-slate-500">{{ $edition->venue_name }}</p>
                         @endif
 
-                        <div class="mt-5 grid grid-cols-2 gap-3">
-                            <div class="rounded-xl bg-slate-50 p-3"><span class="block text-xs text-slate-500">{{ __('app.festival_entries') }}</span><strong class="mt-1 block">{{ $edition->entries_count }}</strong></div>
-                            <div class="rounded-xl bg-slate-50 p-3"><span class="block text-xs text-slate-500">{{ __('app.festival_admission_types') }}</span><strong class="mt-1 block">{{ $edition->admission_types_count }}</strong></div>
-                        </div>
+                        @unless ($isEventFestivalStaff)
+                            <div class="mt-5 grid grid-cols-2 gap-3">
+                                <div class="rounded-xl bg-slate-50 p-3"><span class="block text-xs text-slate-500">{{ __('app.festival_entries') }}</span><strong class="mt-1 block">{{ $edition->entries_count }}</strong></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><span class="block text-xs text-slate-500">{{ __('app.festival_admission_types') }}</span><strong class="mt-1 block">{{ $edition->admission_types_count }}</strong></div>
+                            </div>
+                        @endunless
 
                         <div class="mt-5 flex flex-wrap gap-2">
-                            <x-ui.button :href="route('dashboard.accounts.festivals.show', [$account, $edition])" variant="secondary">{{ __('app.open') }}</x-ui.button>
-                            @if (in_array($edition->status->value, ['published', 'in_progress', 'completed'], true))
-                                <x-ui.button :href="route('public.festivals.show', [$account->slug, $edition->slug])" variant="secondary" target="_blank">{{ __('app.festival_public_page') }}</x-ui.button>
+                            @if ($isEventFestivalStaff)
+                                <x-ui.button :href="route('dashboard.accounts.festivals.scanner', [$account, $edition])" variant="secondary">{{ __('app.festival_staff_scanner') }}</x-ui.button>
+                                <x-ui.button :href="route('dashboard.accounts.festivals.attendance', [$account, $edition])" variant="secondary">{{ __('app.festival_staff_entrance_monitor') }}</x-ui.button>
+                                <x-ui.button :href="route('dashboard.accounts.festivals.timeline.index', [$account, $edition])" variant="secondary">{{ __('app.festival_staff_live_timeline') }}</x-ui.button>
+                                <x-ui.button :href="route('dashboard.accounts.festivals.online-stream.edit', [$account, $edition])" variant="secondary">{{ __('app.festival_staff_online_translation') }}</x-ui.button>
+                            @else
+                                <x-ui.button :href="route('dashboard.accounts.festivals.show', [$account, $edition])" variant="secondary">{{ __('app.open') }}</x-ui.button>
+                                @if (in_array($edition->status->value, ['published', 'in_progress', 'completed'], true))
+                                    <x-ui.button :href="route('public.festivals.show', [$account->slug, $edition->slug])" variant="secondary" target="_blank">{{ __('app.festival_public_page') }}</x-ui.button>
+                                @endif
                             @endif
                         </div>
                     </div>

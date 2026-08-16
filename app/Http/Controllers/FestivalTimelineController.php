@@ -71,7 +71,7 @@ class FestivalTimelineController extends Controller
 
     public function fill(Request $request, Account $account, FestivalEdition $festivalEdition, FillFestivalTimelines $fill): RedirectResponse
     {
-        $this->authorizeSchedule($request, $account, $festivalEdition);
+        $this->authorizeSchedule($request, $account, $festivalEdition, allowEventFestivalStaff: false);
         $fill->execute($festivalEdition, $this->actor($request));
 
         return redirect()->route('dashboard.accounts.festivals.timeline.index', [$account, $festivalEdition])
@@ -80,7 +80,7 @@ class FestivalTimelineController extends Controller
 
     public function start(Request $request, Account $account, FestivalEdition $festivalEdition, StartFestivalTimelines $start): RedirectResponse
     {
-        $this->authorizeSchedule($request, $account, $festivalEdition);
+        $this->authorizeSchedule($request, $account, $festivalEdition, allowEventFestivalStaff: false);
         $start->execute($festivalEdition, $this->actor($request));
 
         return redirect()->route('dashboard.accounts.festivals.timeline.index', [$account, $festivalEdition])
@@ -179,6 +179,7 @@ class FestivalTimelineController extends Controller
             'account' => $edition->account,
             'edition' => $edition,
             'stage' => $stage,
+            'workspacePermissions' => $this->workspaceAccess->permissions(request()->user(), $edition->account, $edition),
             'timeline' => $timeline,
             'timelineView' => $timeline ? $this->presenter->scene($timeline) : null,
             'timelineFragmentUrl' => route('dashboard.accounts.festivals.timeline.fragment', [$edition->account_id, $edition, $stage]),
@@ -186,11 +187,19 @@ class FestivalTimelineController extends Controller
     }
 
     /** @return array<string, bool> */
-    private function authorizeSchedule(Request $request, Account $account, FestivalEdition $edition): array
-    {
+    private function authorizeSchedule(
+        Request $request,
+        Account $account,
+        FestivalEdition $edition,
+        bool $allowEventFestivalStaff = true,
+    ): array {
         abort_unless($edition->account_id === $account->id, 404);
         $permissions = $this->workspaceAccess->permissions($request->user(), $account, $edition);
-        abort_unless($permissions['schedule'], 403);
+        abort_unless($permissions['timeline_operator'], 403);
+
+        if (! $allowEventFestivalStaff && $permissions['event_festival_staff']) {
+            abort(403);
+        }
 
         return $permissions;
     }

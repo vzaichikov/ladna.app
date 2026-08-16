@@ -36,34 +36,36 @@
 
         <div class="flex flex-wrap gap-2">
             @if (! $timeline?->started_at)
-                <form method="POST" action="{{ route('dashboard.accounts.festivals.timeline.fill', [$account, $edition]) }}"
-                    data-confirm-action
-                    data-confirm-title="{{ __('app.festival_timeline_fill') }}"
-                    data-confirm-body="{{ __('app.festival_timeline_fill_confirmation') }}"
-                    data-confirm-accept="{{ __('app.festival_timeline_fill') }}"
-                    data-confirm-icon="refresh-cw"
-                    data-confirm-variant="danger">
-                    @csrf
-                    <x-ui.button type="submit" variant="danger">
-                        <x-ui.icon name="refresh-cw" class="h-4 w-4" />
-                        {{ __('app.festival_timeline_fill') }}
-                    </x-ui.button>
-                </form>
-                @if ($timeline && $edition->status === \App\Enums\FestivalEditionStatus::Published)
-                    <form method="POST" action="{{ route('dashboard.accounts.festivals.timeline.start', [$account, $edition]) }}"
+                @unless ($workspacePermissions['event_festival_staff'] ?? false)
+                    <form method="POST" action="{{ route('dashboard.accounts.festivals.timeline.fill', [$account, $edition]) }}"
                         data-confirm-action
-                        data-confirm-title="{{ __('app.festival_timeline_start') }}"
-                        data-confirm-body="{{ __('app.festival_timeline_start_confirmation') }}"
-                        data-confirm-accept="{{ __('app.festival_timeline_start') }}"
-                        data-confirm-icon="play"
-                        data-confirm-variant="success">
+                        data-confirm-title="{{ __('app.festival_timeline_fill') }}"
+                        data-confirm-body="{{ __('app.festival_timeline_fill_confirmation') }}"
+                        data-confirm-accept="{{ __('app.festival_timeline_fill') }}"
+                        data-confirm-icon="refresh-cw"
+                        data-confirm-variant="danger">
                         @csrf
-                        <x-ui.button type="submit" variant="success">
-                            <x-ui.icon name="play" class="h-4 w-4" />
-                            {{ __('app.festival_timeline_start') }}
+                        <x-ui.button type="submit" variant="danger">
+                            <x-ui.icon name="refresh-cw" class="h-4 w-4" />
+                            {{ __('app.festival_timeline_fill') }}
                         </x-ui.button>
                     </form>
-                @endif
+                    @if ($timeline && $edition->status === \App\Enums\FestivalEditionStatus::Published)
+                        <form method="POST" action="{{ route('dashboard.accounts.festivals.timeline.start', [$account, $edition]) }}"
+                            data-confirm-action
+                            data-confirm-title="{{ __('app.festival_timeline_start') }}"
+                            data-confirm-body="{{ __('app.festival_timeline_start_confirmation') }}"
+                            data-confirm-accept="{{ __('app.festival_timeline_start') }}"
+                            data-confirm-icon="play"
+                            data-confirm-variant="success">
+                            @csrf
+                            <x-ui.button type="submit" variant="success">
+                                <x-ui.icon name="play" class="h-4 w-4" />
+                                {{ __('app.festival_timeline_start') }}
+                            </x-ui.button>
+                        </form>
+                    @endif
+                @endunless
             @elseif (! $timeline->completed_at)
                 @if ($timeline->paused_at)
                     <form method="POST" action="{{ route('dashboard.accounts.festivals.timeline.resume', [$account, $edition, $stage]) }}" data-timeline-action="resume">

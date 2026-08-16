@@ -6,6 +6,8 @@ use App\Actions\EventTicketScanner;
 use App\Models\Account;
 use App\Models\Event;
 use App\Models\IntegrationSetting;
+use App\Models\User;
+use App\Support\EventFestivalStaffAccess;
 use App\Support\MoneyFormatter;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +16,8 @@ use Illuminate\View\View;
 
 class EventScannerController extends Controller
 {
+    public function __construct(private readonly EventFestivalStaffAccess $staffAccess) {}
+
     public function show(Request $request, Account $account, Event $event, PaymentGatewayRegistry $gateways): View
     {
         $this->authorizeScanner($request, $account, $event);
@@ -30,7 +34,7 @@ class EventScannerController extends Controller
             'account' => $account,
             'event' => $event,
             'tickets' => $tickets,
-            ...($request->user()?->can('doorStaff', $account)
+            ...($request->user()?->can('doorStaff', $account) || $this->hasStaffAccess($request, $account, $event)
                 ? ['entranceTools' => $this->entranceTools($account, $event, $gateways)]
                 : []),
         ]);
@@ -67,9 +71,17 @@ class EventScannerController extends Controller
         abort_unless($event->account_id === $account->id, 404);
         abort_unless(
             $request->user()?->can('checkInEventTickets', $account)
-                || $request->user()?->can('doorStaff', $account),
+                || $request->user()?->can('doorStaff', $account)
+                || $this->hasStaffAccess($request, $account, $event),
             403,
         );
+    }
+
+    private function hasStaffAccess(Request $request, Account $account, Event $event): bool
+    {
+        $user = $request->user();
+
+        return $user instanceof User && $this->staffAccess->canAccessEvent($user, $account, $event);
     }
 
     /** @return array<string, mixed> */

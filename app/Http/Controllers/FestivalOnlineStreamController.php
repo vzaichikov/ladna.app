@@ -294,12 +294,12 @@ class FestivalOnlineStreamController extends Controller
                 ->every(fn (string $key): bool => trim((string) config("services.festival_stream.{$key}")) !== '');
     }
 
-    /** @return array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} */
+    /** @return array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool, door_staff: bool, event_festival_staff: bool, timeline_operator: bool, stream_administrator: bool} */
     private function financePermissions(Request $request, Account $account, FestivalEdition $edition): array
     {
         $this->assertEdition($account, $edition);
         $permissions = $this->workspaceAccess->permissions($request->user(), $account, $edition);
-        abort_unless($permissions['finance'], 403);
+        abort_unless($permissions['stream_administrator'], 403);
 
         return $permissions;
     }

@@ -21,6 +21,10 @@
     }
 
     $accountMembership = $showAccountNav && $authUser ? $activeAccount->membershipFor($authUser) : null;
+    $isEventFestivalStaff = $accountMembership?->role === \App\Enums\AccountRole::EventFestivalStaff;
+    $accountHomeHref = $isEventFestivalStaff
+        ? route('dashboard.accounts.events.index', $activeAccount)
+        : ($activeAccount ? route('dashboard.accounts.show', $activeAccount) : route('dashboard.index'));
     $trainerProfile = $accountMembership?->role === \App\Enums\AccountRole::Trainer
         ? $activeAccount->trainers()->with('trainerType')->whereBelongsTo($authUser, 'user')->first()
         : null;
@@ -80,7 +84,7 @@
     $canManageEvents = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::ManageEvents);
     $canCheckInEventTickets = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::CheckInEventTickets);
     $canWorkAtDoor = $showAccountNav && $authUser && $activeAccount->userCan($authUser, \App\Enums\StudioPermission::DoorStaff);
-    $canViewFestivals = $showAccountNav && $activeAccount->enable_festivals && collect([
+    $canViewFestivals = $showAccountNav && $activeAccount->enable_festivals && ($isEventFestivalStaff || collect([
         \App\Enums\StudioPermission::ManageFestivals,
         \App\Enums\StudioPermission::ManageFestivalRegistrations,
         \App\Enums\StudioPermission::ManageFestivalSchedule,
@@ -88,7 +92,12 @@
         \App\Enums\StudioPermission::JudgeFestivals,
         \App\Enums\StudioPermission::CheckInFestivalTickets,
         \App\Enums\StudioPermission::DoorStaff,
-    ])->contains(fn ($permission) => $activeAccount->userCan($authUser, $permission));
+    ])->contains(fn ($permission) => $activeAccount->userCan($authUser, $permission)));
+    $canManageEventFestivalStaff = $showAccountNav && ($isPlatformAdmin || in_array(
+        $accountMembership?->role,
+        [\App\Enums\AccountRole::Owner, \App\Enums\AccountRole::Admin],
+        true,
+    ));
     $canViewReports = $showAccountNav && $authUser && $authUser->can('viewReports', $activeAccount);
     $showAssistantWidget = $canInteractWithTelegramBot && \App\Models\PlatformAiSetting::ownerAssistantEnabled();
     $assistantImageInferenceEnabled = $showAssistantWidget && \App\Models\PlatformAiSetting::imageInferenceEnabled();
@@ -97,7 +106,7 @@
     $canViewPayments = $canViewStudioFinancialReports;
     $canViewTariffPayments = ! $isReadOnlyDemo && $showAccountNav && $authUser && $activeAccount->isOwnedBy($authUser);
     $subscriptionAccess = $showAccountNav ? app(\App\Support\SaasBilling\AccountSubscriptionAccess::class) : null;
-    $subscriptionWarning = ! $isReadOnlyDemo && $showAccountNav && $subscriptionAccess?->shouldShowWarning($activeAccount);
+    $subscriptionWarning = ! $isEventFestivalStaff && ! $isReadOnlyDemo && $showAccountNav && $subscriptionAccess?->shouldShowWarning($activeAccount);
     $subscriptionCanEdit = ! $showAccountNav || $subscriptionAccess?->canEditStudio($activeAccount);
     $subscriptionWarningMessage = match (true) {
         $showAccountNav && $subscriptionAccess?->requiresInitialDemoPayment($activeAccount) => __('app.demo_payment_required_readonly'),
@@ -367,7 +376,7 @@
     ] : [];
 
     $studioEventsNav = $showAccountNav ? [
-        ...($canManageEvents || $canCheckInEventTickets || $canWorkAtDoor ? [[
+        ...($canManageEvents || $canCheckInEventTickets || $canWorkAtDoor || $isEventFestivalStaff ? [[
             'label' => __('app.events'),
             'icon' => 'calendar-days',
             'href' => route('dashboard.accounts.events.index', $activeAccount),
@@ -378,6 +387,12 @@
             'icon' => 'trophy',
             'href' => route('dashboard.accounts.festivals.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.festivals.*'),
+        ]] : []),
+        ...($canManageEventFestivalStaff && ! $isEventFestivalStaff ? [[
+            'label' => __('app.event_festival_staff'),
+            'icon' => 'user',
+            'href' => route('dashboard.accounts.event-festival-staff.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.event-festival-staff.*'),
         ]] : []),
     ] : [];
 
@@ -405,6 +420,15 @@
             'active' => request()->routeIs('dashboard.accounts.telegram-connections.*'),
         ]] : []),
     ] : [];
+
+    if ($isEventFestivalStaff) {
+        $studioNav = [];
+        $financeNav = [];
+        $sidebarLinksNav = [];
+        $studioSettingsNav = [];
+        $accountSettingsNav = [];
+        $studioLogsNav = [];
+    }
 
     $platformSettingsNav = $isPlatformAdmin ? [
         [
@@ -510,7 +534,7 @@
                             </span>
                         </a>
                     @elseif ($sidebarAccount)
-                        <a href="{{ route('dashboard.accounts.show', $sidebarAccount) }}" class="flex min-w-0 items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-white/5">
+                        <a href="{{ $accountHomeHref }}" class="flex min-w-0 items-center gap-3 rounded-xl px-1 py-1 transition hover:bg-white/5">
                             <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[#FAF8F5] p-2 shadow-[0_10px_24px_rgba(20,10,24,0.22)] ring-1 ring-white/60">
                                 <img src="{{ $sidebarAccount->logoUrl() }}" alt="" class="max-h-full max-w-full object-contain">
                             </span>
@@ -730,7 +754,7 @@
                     @endif
 
                     @if ($isFestivalWorkspace)
-                        <a href="{{ route('dashboard.accounts.show', $activeAccount) }}" class="flex items-center gap-3 rounded-xl border border-white/10 bg-white/10 p-3 text-sm font-semibold text-white transition hover:bg-white/15">
+                        <a href="{{ $accountHomeHref }}" class="flex items-center gap-3 rounded-xl border border-white/10 bg-white/10 p-3 text-sm font-semibold text-white transition hover:bg-white/15">
                             <x-ui.icon name="chevron-left" class="h-5 w-5 text-amber-300" />
                             <span>{{ __('app.festival_workspace_back_to_studio') }}</span>
                         </a>
@@ -777,7 +801,7 @@
                         </div>
 
                         <div class="flex min-w-0 items-center gap-2 sm:gap-3">
-                            @if ($showAccountNav && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*'))
+                            @if ($showAccountNav && ! $isEventFestivalStaff && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*'))
                                 <form method="POST" action="{{ route('dashboard.accounts.working-location.update', $activeAccount) }}" class="min-w-0">
                                     @csrf
                                     <input type="hidden" name="redirect_to" value="{{ request()->getRequestUri() }}">

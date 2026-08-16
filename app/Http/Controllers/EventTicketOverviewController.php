@@ -11,6 +11,8 @@ use App\Models\Event;
 use App\Models\EventCashEntry;
 use App\Models\EventTicket;
 use App\Models\IntegrationSetting;
+use App\Models\User;
+use App\Support\EventFestivalStaffAccess;
 use App\Support\MoneyFormatter;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +21,8 @@ use Illuminate\View\View;
 
 class EventTicketOverviewController extends Controller
 {
+    public function __construct(private readonly EventFestivalStaffAccess $staffAccess) {}
+
     public function show(Request $request, Account $account, Event $event, PaymentGatewayRegistry $gateways): View
     {
         $this->authorizeOverview($request, $account, $event);
@@ -63,7 +67,12 @@ class EventTicketOverviewController extends Controller
     private function authorizeOverview(Request $request, Account $account, Event $event): void
     {
         $this->assertEventScope($account, $event);
-        abort_unless($request->user()?->can('doorStaff', $account), 403);
+        $user = $request->user();
+        abort_unless(
+            $request->user()?->can('doorStaff', $account)
+                || ($user instanceof User && $this->staffAccess->canAccessEvent($user, $account, $event)),
+            403,
+        );
     }
 
     /**
@@ -140,6 +149,11 @@ class EventTicketOverviewController extends Controller
     private function assertEventScope(Account $account, Event $event): void
     {
         abort_unless($event->account_id === $account->id, 404);
+        $user = request()->user();
+
+        if ($user instanceof User && $this->staffAccess->isStaff($user, $account)) {
+            abort_unless($this->staffAccess->canAccessEvent($user, $account, $event), 403);
+        }
     }
 
     /** @return array<string, mixed> */

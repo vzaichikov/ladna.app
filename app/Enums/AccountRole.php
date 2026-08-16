@@ -9,6 +9,7 @@ enum AccountRole: string
     case Manager = 'manager';
     case Trainer = 'trainer';
     case Receptionist = 'receptionist';
+    case EventFestivalStaff = 'event_festival_staff';
 
     /**
      * @return array<int, StudioPermission>
@@ -53,6 +54,7 @@ enum AccountRole: string
                 StudioPermission::DoorStaff,
                 StudioPermission::RecordCustomerPayments,
             ],
+            self::EventFestivalStaff => [],
         };
     }
 

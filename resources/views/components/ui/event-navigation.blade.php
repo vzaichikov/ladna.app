@@ -8,6 +8,9 @@
     $canManage = auth()->user()?->can('manageEvents', $account) ?? false;
     $canLegacyScan = auth()->user()?->can('checkInEventTickets', $account) ?? false;
     $canDoor = auth()->user()?->can('doorStaff', $account) ?? false;
+    $eventFestivalStaffAccess = app(\App\Support\EventFestivalStaffAccess::class);
+    $isEventFestivalStaff = auth()->user() instanceof \App\Models\User
+        && $eventFestivalStaffAccess->isStaff(auth()->user(), $account);
     $items = [];
 
     if ($canManage) {
@@ -19,11 +22,11 @@
         ];
     }
 
-    if ($canLegacyScan || $canDoor) {
+    if ($canLegacyScan || $canDoor || $isEventFestivalStaff) {
         $items[] = ['key' => 'scanner', 'label' => __('app.event_scanner'), 'href' => route('dashboard.accounts.events.scanner', [$account, $event])];
     }
 
-    if ($canDoor) {
+    if ($canDoor || $isEventFestivalStaff) {
         $items[] = ['key' => 'attendance', 'label' => __('app.event_attendance'), 'href' => route('dashboard.accounts.events.attendance', [$account, $event])];
     }
 @endphp

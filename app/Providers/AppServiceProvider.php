@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Enums\AccountRole;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\FestivalEdition;
@@ -71,6 +72,12 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('viewActivityLog', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ViewActivityLog));
         Gate::define('markAttendance', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::MarkAttendance));
         Gate::define('manageTrainers', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageTrainers));
+        Gate::define('manageEventFestivalStaff', function ($user, Account $account): bool {
+            $membership = $account->membershipFor($user);
+
+            return $membership !== null
+                && in_array($membership->role, [AccountRole::Owner, AccountRole::Admin], true);
+        });
         Gate::define('manageStudioSettings', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageStudioSettings));
         Gate::define('manageEvents', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::ManageEvents));
         Gate::define('checkInEventTickets', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::CheckInEventTickets));

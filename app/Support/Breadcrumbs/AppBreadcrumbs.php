@@ -2,9 +2,12 @@
 
 namespace App\Support\Breadcrumbs;
 
+use App\Enums\AccountRole;
 use App\Enums\IntegrationCategory;
 use App\Models\Account;
+use App\Models\AccountMembership;
 use App\Models\FestivalEdition;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -51,16 +54,17 @@ final class AppBreadcrumbs
     private function account(Request $request, string $routeName): array
     {
         $account = $this->accountParameter($request);
+        $isEventFestivalStaff = $this->isEventFestivalStaff($request, $account);
         $base = $request->user()?->isPlatformAdmin()
             ? [
                 $this->item(__('app.platform_admin'), route('platform.index')),
                 $this->item(__('app.accounts'), route('platform.accounts.index')),
                 $this->item($account->name, route('platform.accounts.show', $account)),
             ]
-            : [
+            : ($isEventFestivalStaff ? [] : [
                 $this->item(__('app.workspace'), route('dashboard.index')),
                 $this->item($account->name, route('dashboard.accounts.show', $account)),
-            ];
+            ]);
 
         if ($routeName === 'dashboard.accounts.show') {
             $base[array_key_last($base)] = $this->item($account->name);
@@ -167,7 +171,9 @@ final class AppBreadcrumbs
         $event = $this->modelParameter($request, 'event');
         $events = $this->item(__('app.events'), route('dashboard.accounts.events.index', $account));
         $eventLabel = $this->modelLabel($event, __('app.event'));
-        $eventPage = $this->item($eventLabel, route('dashboard.accounts.events.edit', [$account, $event]));
+        $eventPage = $this->item($eventLabel, $this->isEventFestivalStaff($request, $account)
+            ? route('dashboard.accounts.events.scanner', [$account, $event])
+            : route('dashboard.accounts.events.edit', [$account, $event]));
 
         return match ($routeName) {
             'dashboard.accounts.events.edit' => [
@@ -317,6 +323,7 @@ final class AppBreadcrumbs
     private function festival(Request $request, string $routeName): array
     {
         $account = $this->accountParameter($request);
+        $isEventFestivalStaff = $this->isEventFestivalStaff($request, $account);
         $festivalIndex = route('dashboard.accounts.festivals.index', $account);
 
         if ($routeName === 'dashboard.accounts.festivals.index') {
@@ -349,8 +356,29 @@ final class AppBreadcrumbs
         $edition = $this->editionParameter($request);
         $base = [
             $this->item(__('app.festivals'), $festivalIndex),
-            $this->item($edition->title, route('dashboard.accounts.festivals.show', [$account, $edition])),
+            $this->item($edition->title, $isEventFestivalStaff
+                ? route('dashboard.accounts.festivals.scanner', [$account, $edition])
+                : route('dashboard.accounts.festivals.show', [$account, $edition])),
         ];
+
+        if ($isEventFestivalStaff) {
+            return match ($routeName) {
+                'dashboard.accounts.festivals.scanner' => [...$base, $this->item(__('app.festival_staff_scanner'))],
+                'dashboard.accounts.festivals.attendance' => [...$base, $this->item(__('app.festival_staff_entrance_monitor'))],
+                'dashboard.accounts.festivals.entrance.poster' => [
+                    ...$base,
+                    $this->item(__('app.festival_staff_entrance_monitor'), route('dashboard.accounts.festivals.attendance', [$account, $edition])),
+                    $this->item(__('app.entrance_payment_poster_title')),
+                ],
+                'dashboard.accounts.festivals.timeline.show' => [
+                    ...$base,
+                    $this->item(__('app.festival_staff_live_timeline'), route('dashboard.accounts.festivals.timeline.index', [$account, $edition])),
+                    $this->item($this->modelLabel($this->modelParameter($request, 'festivalStage'), __('app.festival_scene'))),
+                ],
+                'dashboard.accounts.festivals.online-stream.edit' => [...$base, $this->item(__('app.festival_staff_online_translation'))],
+                default => throw new LogicException("No Event/Festival staff breadcrumb definition exists for route [{$routeName}]."),
+            };
+        }
 
         if ($routeName === 'dashboard.accounts.festivals.show') {
             $base[1] = $this->item($edition->title);
@@ -952,6 +980,7 @@ final class AppBreadcrumbs
             'trainers' => ['label' => 'app.trainers', 'parameter' => 'trainer'],
             'customers' => ['label' => 'app.customers', 'parameter' => 'customer'],
             'customer-class-passes' => ['label' => 'app.customer_class_passes', 'parameter' => 'customerClassPass'],
+            'event-festival-staff' => ['label' => 'app.event_festival_staff', 'parameter' => 'membership'],
             'salary-models' => ['label' => 'app.salary_models', 'parameter' => 'salaryModel'],
         ];
     }
@@ -1000,6 +1029,14 @@ final class AppBreadcrumbs
         return $account;
     }
 
+    private function isEventFestivalStaff(Request $request, Account $account): bool
+    {
+        $user = $request->user();
+
+        return $user instanceof User
+            && $account->membershipFor($user)?->role === AccountRole::EventFestivalStaff;
+    }
+
     private function editionParameter(Request $request): FestivalEdition
     {
         $edition = $request->route('festivalEdition');
@@ -1024,6 +1061,16 @@ final class AppBreadcrumbs
 
     private function modelLabel(Model $model, string $fallback): string
     {
+        if ($model instanceof AccountMembership) {
+            $name = $model->relationLoaded('user')
+                ? $model->user?->name
+                : $model->user()->value('name');
+
+            if (is_string($name) && trim($name) !== '') {
+                return $name;
+            }
+        }
+
         foreach (['name', 'title', 'display_name', 'entry_name', 'code', 'order_id'] as $attribute) {
             $value = $model->getAttribute($attribute);
 

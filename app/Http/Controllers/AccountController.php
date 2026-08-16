@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AccountRole;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
 use App\Support\AccountApiTokenAbilityAuthorizer;
 use App\Support\Ai\AiConversationImageCleaner;
+use App\Support\EventFestivalStaffAccess;
 use App\Support\PublicScheduleViewRegistry;
 use App\Support\Pwa\StudioPwaIconGenerator;
 use App\Support\ReservedPublicSlugs;
@@ -21,20 +23,23 @@ use Illuminate\View\View;
 
 class AccountController extends Controller
 {
-    public function index(): View|RedirectResponse
+    public function index(Request $request): View|RedirectResponse
     {
-        $accounts = request()->user()
+        $accounts = $request->user()
             ->accounts()
             ->withCount('locations')
             ->orderBy('name')
             ->get();
 
-        if (! request()->user()->isPlatformAdmin() && $accounts->count() === 1) {
-            return redirect()->route('dashboard.accounts.show', $accounts->first());
+        if (! $request->user()->isPlatformAdmin() && $accounts->count() === 1) {
+            return redirect()->to($this->accountDestination($accounts->first()));
         }
 
         return view('accounts.index', [
             'accounts' => $accounts,
+            'accountDestinations' => $accounts->mapWithKeys(fn (Account $account): array => [
+                $account->id => $this->accountDestination($account),
+            ]),
         ]);
     }
 
@@ -78,8 +83,14 @@ class AccountController extends Controller
         Account $account,
         StudioDashboardData $studioDashboardData,
         WorkingLocationContext $workingLocationContext,
-    ): View {
+        EventFestivalStaffAccess $staffAccess,
+    ): View|RedirectResponse {
         $this->authorize('view', $account);
+
+        if ($staffAccess->isStaff($request->user(), $account)) {
+            return redirect()->route('dashboard.accounts.events.index', $account);
+        }
+
         $workingLocation = $workingLocationContext->location($account);
 
         return view('accounts.show', [
@@ -88,6 +99,15 @@ class AccountController extends Controller
             'hasMultipleWorkingLocations' => $workingLocationContext->locations($account)->count() > 1,
             ...$studioDashboardData->forAccount($account, $request->user(), $workingLocation?->id),
         ]);
+    }
+
+    private function accountDestination(Account $account): string
+    {
+        if ($account->pivot?->role === AccountRole::EventFestivalStaff) {
+            return route('dashboard.accounts.events.index', $account);
+        }
+
+        return route('dashboard.accounts.show', $account);
     }
 
     public function edit(Request $request, Account $account): RedirectResponse

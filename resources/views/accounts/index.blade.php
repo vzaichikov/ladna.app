@@ -18,7 +18,7 @@
 
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($accounts as $account)
-            <a href="{{ route('dashboard.accounts.show', $account) }}" class="crm-row transition hover:bg-violet-crm-50/50 sm:grid-cols-[1fr_180px_auto] sm:items-center">
+            <a href="{{ $accountDestinations[$account->id] }}" class="crm-row transition hover:bg-violet-crm-50/50 sm:grid-cols-[1fr_180px_auto] sm:items-center">
                 <div class="flex items-center gap-4">
                     <span class="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-50">
                         <img src="{{ $account->logoUrl() }}" alt="" class="max-h-7 max-w-7 object-contain">

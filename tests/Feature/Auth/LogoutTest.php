@@ -47,8 +47,12 @@ class LogoutTest extends TestCase
                 'permissions' => null,
             ]);
 
+            $destination = $role === AccountRole::EventFestivalStaff
+                ? route('dashboard.accounts.events.index', $account)
+                : route('dashboard.accounts.show', $account);
+
             $this->actingAs($user)
-                ->get(route('dashboard.accounts.show', $account))
+                ->get($destination)
                 ->assertOk()
                 ->assertSee('action="'.route('logout').'"', false)
                 ->assertSee('data-sidebar-logout', false)

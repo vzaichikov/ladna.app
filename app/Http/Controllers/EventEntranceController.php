@@ -12,8 +12,10 @@ use App\Models\Account;
 use App\Models\Event;
 use App\Models\EventOrder;
 use App\Models\EventTicket;
+use App\Models\User;
 use App\Support\Entrance\EntrancePresenter;
 use App\Support\Entrance\EntranceQrCode;
+use App\Support\EventFestivalStaffAccess;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
@@ -22,7 +24,10 @@ use Throwable;
 
 class EventEntranceController extends Controller
 {
-    public function __construct(private readonly EntrancePresenter $presenter) {}
+    public function __construct(
+        private readonly EntrancePresenter $presenter,
+        private readonly EventFestivalStaffAccess $staffAccess,
+    ) {}
 
     public function search(EntranceGuestSearchRequest $request, Account $account, Event $event): JsonResponse
     {
@@ -144,7 +149,12 @@ class EventEntranceController extends Controller
         EntranceQrCode $qrCode,
     ): View {
         $this->assertEventScope($account, $event);
-        abort_unless(request()->user()?->can('doorStaff', $account), 403);
+        $user = request()->user();
+        abort_unless(
+            request()->user()?->can('doorStaff', $account)
+                || ($user instanceof User && $this->staffAccess->canAccessEvent($user, $account, $event)),
+            403,
+        );
         $paymentSettings = $gateways->availableSettingsFor($account);
         abort_if($paymentSettings->isEmpty(), 422, __('app.no_payment_methods_available'));
 
@@ -213,6 +223,11 @@ class EventEntranceController extends Controller
     private function assertEventScope(Account $account, Event $event): void
     {
         abort_unless($event->account_id === $account->id, 404);
+        $user = request()->user();
+
+        if ($user instanceof User && $this->staffAccess->isStaff($user, $account)) {
+            abort_unless($this->staffAccess->canAccessEvent($user, $account, $event), 403);
+        }
     }
 
     /** @return array<string, string> */

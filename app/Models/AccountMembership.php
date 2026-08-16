@@ -43,6 +43,10 @@ class AccountMembership extends Pivot
             return true;
         }
 
+        if ($this->role === AccountRole::EventFestivalStaff) {
+            return false;
+        }
+
         $permissions = $this->permissions;
 
         if ($permissions === null) {
