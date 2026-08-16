@@ -1004,9 +1004,10 @@ function initPhoneMasks(root = document) {
 
         const initialValue = input.value;
         const messageSource = input.closest('[data-phone-mask-error]') ?? document.body;
+        const phoneMaskErrorMessage = input.dataset.phoneMaskError || messageSource?.dataset.phoneMaskError || 'Enter a complete phone number.';
         input.dataset.phoneMaskReady = 'true';
 
-        new SimplePhoneMask(`#${input.id}`, {
+        const phoneMask = new SimplePhoneMask(`#${input.id}`, {
             countryCode: input.dataset.countryCode || 'UA',
             showFlag: true,
             allowCountrySelect: true,
@@ -1014,7 +1015,7 @@ function initPhoneMasks(root = document) {
             showSearch: true,
             validate: input.dataset.phoneMaskValidate !== 'false',
             preferredCountries: ['UA', 'PL', 'US', 'GB', 'DE', 'FR'],
-            errorMessage: input.dataset.phoneMaskError || messageSource?.dataset.phoneMaskError || 'Enter a complete phone number.',
+            errorMessage: phoneMaskErrorMessage,
             successMessage: input.dataset.phoneMaskSuccess || messageSource?.dataset.phoneMaskSuccess || 'Phone number looks good.',
         });
 
@@ -1030,59 +1031,67 @@ function initPhoneMasks(root = document) {
             noResults.textContent = input.dataset.phoneMaskNoResults || messageSource?.dataset.phoneMaskNoResults || 'No countries found.';
         }
 
-        if (input.hasAttribute('data-phone-mask-reject-national-zero')) {
-            const messageElement = input._spmMsgEl || null;
-            let hasNationalZeroError = false;
+        const messageElement = input._spmMsgEl || null;
+        const nationalZeroErrorMessage = input.dataset.phoneMaskNationalZeroError || 'Enter the number after +380 without the leading 0.';
+        let hasNationalZeroError = false;
 
-            const validateNationalZero = () => {
-                const digits = input.value.replace(/\D/g, '');
-                const selectedPhoneCode = wrapper
-                    ?.querySelector('.spm-dropdown-option.spm-option-selected')
-                    ?.dataset.code
-                    ?.replace(/\D/g, '') || (input.dataset.countryCode === 'UA' ? '380' : '');
-                const hasValueAfterPhoneCode = digits !== '' && digits !== selectedPhoneCode;
-                const hasInvalidUkrainianPrefix = selectedPhoneCode === '380'
-                    && hasValueAfterPhoneCode
-                    && (!digits.startsWith('380') || digits.startsWith('3800'));
+        const validatePhoneMask = () => {
+            const digits = input.value.replace(/\D/g, '');
+            const selectedPhoneCode = phoneMask.countryCode;
+            const expectedDigits = selectedPhoneCode.length + (phoneMask.maskPattern.match(/_/g) || []).length;
+            const hasIncompleteRequiredPhone = input.required && digits.length !== expectedDigits;
+            const hasValueAfterPhoneCode = digits !== '' && digits !== selectedPhoneCode;
+            const hasInvalidUkrainianPrefix = input.hasAttribute('data-phone-mask-reject-national-zero')
+                && selectedPhoneCode === '380'
+                && hasValueAfterPhoneCode
+                && (!digits.startsWith('380') || digits.startsWith('3800'));
 
-                input.setCustomValidity(hasInvalidUkrainianPrefix
-                    ? input.dataset.phoneMaskNationalZeroError || 'Enter the number after +380 without the leading 0.'
-                    : '');
+            input.setCustomValidity(hasInvalidUkrainianPrefix
+                ? nationalZeroErrorMessage
+                : (hasIncompleteRequiredPhone ? phoneMaskErrorMessage : ''));
 
-                if (hasInvalidUkrainianPrefix) {
-                    input.classList.remove('spm-valid');
-                    input.classList.add('spm-invalid');
+            if (hasInvalidUkrainianPrefix) {
+                input.classList.remove('spm-valid');
+                input.classList.add('spm-invalid');
 
-                    if (messageElement) {
-                        messageElement.textContent = input.dataset.phoneMaskNationalZeroError || 'Enter the number after +380 without the leading 0.';
-                        messageElement.className = 'spm-validation-message';
-                        messageElement.style.display = 'block';
-                    }
-
-                    hasNationalZeroError = true;
-
-                    return;
+                if (messageElement) {
+                    messageElement.textContent = nationalZeroErrorMessage;
+                    messageElement.className = 'spm-validation-message';
+                    messageElement.style.display = 'block';
                 }
 
-                if (hasNationalZeroError) {
-                    input.classList.remove('spm-invalid');
+                hasNationalZeroError = true;
 
-                    if (messageElement && ! messageElement.classList.contains('spm-valid-msg')) {
-                        messageElement.style.display = 'none';
-                    }
+                return;
+            }
 
-                    hasNationalZeroError = false;
+            if (hasNationalZeroError) {
+                input.classList.remove('spm-invalid');
+
+                if (messageElement && ! messageElement.classList.contains('spm-valid-msg')) {
+                    messageElement.style.display = 'none';
                 }
-            };
 
-            input.addEventListener('input', validateNationalZero);
-            input.addEventListener('blur', validateNationalZero);
-        }
+                hasNationalZeroError = false;
+            }
+        };
+
+        input.addEventListener('input', validatePhoneMask);
+        input.addEventListener('blur', validatePhoneMask);
+        wrapper?.addEventListener('click', (event) => {
+            if (!(event.target instanceof Element) || !event.target.closest('.spm-dropdown-option')) {
+                return;
+            }
+
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
 
         if (initialValue.trim() !== '') {
             input.value = initialValue;
             input.dispatchEvent(new Event('input', { bubbles: true }));
         }
+
+        validatePhoneMask();
     });
 }
 
@@ -8429,7 +8438,8 @@ function initEventTicketCheckouts(root = document) {
         const noSelection = form.querySelector('[data-event-payment-no-selection]');
         const freePayment = form.querySelector('[data-event-payment-free]');
         const paidPayment = form.querySelector('[data-event-payment-paid]');
-        const paidSelectionHelp = form.querySelector('[data-event-payment-select-help]');
+        const selectionHelp = [...form.querySelectorAll('[data-event-payment-select-help]')];
+        const requiredFieldsHelp = [...form.querySelectorAll('[data-event-payment-required-help]')];
         const freeAction = form.querySelector('[data-event-free-action]');
         const paidActions = [...form.querySelectorAll('[data-event-paid-action]')];
         const hasPaidTicketOptions = form.dataset.eventHasPaidTicketOptions === 'true';
@@ -8457,6 +8467,17 @@ function initEventTicketCheckouts(root = document) {
         };
 
         const totalQuantity = () => counters.reduce((total, counter) => total + quantityFor(counter), 0);
+        const requiredFieldsComplete = () => [...form.querySelectorAll('[required]')].every((control) => {
+            if (control.disabled) {
+                return true;
+            }
+
+            if (control instanceof HTMLInputElement && ['checkbox', 'radio'].includes(control.type)) {
+                return control.checked && control.validity.valid;
+            }
+
+            return String(control.value ?? '').trim() !== '' && control.validity.valid;
+        });
         const unitPriceFor = (counter) => {
             const quantity = quantityFor(counter);
             const regularPrice = Number.parseInt(counter.dataset.regularPriceCents || counter.dataset.priceCents || '0', 10);
@@ -8515,19 +8536,24 @@ function initEventTicketCheckouts(root = document) {
             const hasSelection = quantity > 0;
             const isFree = hasSelection && totalCents === 0;
             const showPaidPayment = (!hasSelection && hasPaidTicketOptions) || (hasSelection && !isFree);
+            const requiredDetailsComplete = requiredFieldsComplete();
             noSelection?.classList.toggle('hidden', hasSelection || hasPaidTicketOptions);
             freePayment?.classList.toggle('hidden', !isFree);
             paidPayment?.classList.toggle('hidden', !showPaidPayment);
-            paidSelectionHelp?.classList.toggle('hidden', hasSelection);
+            selectionHelp.forEach((message) => message.classList.toggle('hidden', hasSelection));
+            requiredFieldsHelp.forEach((message) => message.classList.toggle('hidden', !hasSelection || requiredDetailsComplete));
 
             if (freeAction) {
-                freeAction.disabled = !isFree;
+                freeAction.disabled = !isFree || !requiredDetailsComplete;
             }
 
             paidActions.forEach((button) => {
-                button.disabled = !hasSelection || isFree;
+                button.disabled = !hasSelection || isFree || !requiredDetailsComplete;
             });
         };
+
+        form.addEventListener('input', sync);
+        form.addEventListener('change', sync);
 
         counters.forEach((counter) => {
             const input = counter.querySelector('[data-event-ticket-quantity]');
@@ -8573,16 +8599,16 @@ function initEventTicketCheckouts(root = document) {
 }
 
 function initEventOrderPolling(root = document) {
-    root.querySelectorAll('[data-event-order-poll]').forEach((container) => {
-        if (container.dataset.eventOrderPollReady === 'true') {
+    root.querySelectorAll('[data-event-order-poll], [data-ticket-order-poll]').forEach((container) => {
+        if (container.dataset.ticketOrderPollReady === 'true') {
             return;
         }
 
-        container.dataset.eventOrderPollReady = 'true';
+        container.dataset.ticketOrderPollReady = 'true';
         const statusUrl = container.dataset.statusUrl;
         const refreshUrl = container.dataset.refreshUrl || window.location.href;
-        const message = container.querySelector('[data-event-order-poll-message]');
-        const timeoutActions = container.querySelector('[data-event-order-poll-timeout]');
+        const message = container.querySelector('[data-event-order-poll-message], [data-ticket-order-poll-message]');
+        const timeoutActions = container.querySelector('[data-event-order-poll-timeout], [data-ticket-order-poll-timeout]');
         const deadline = Date.now() + 60000;
 
         const stopPolling = () => {
@@ -8625,18 +8651,90 @@ function initEventOrderPolling(root = document) {
     });
 }
 
-function initEventTicketPdfSharing(root = document) {
-    root.querySelectorAll('[data-event-ticket-pdf-share]').forEach((button) => {
-        if (button.dataset.eventTicketPdfShareReady === 'true') {
+function initEventOrderReturnNavigation(root = document) {
+    if (!root.querySelector('[data-event-order-return], [data-ticket-order-return]') || window.self === window.top) {
+        return;
+    }
+
+    try {
+        if (window.top.location.origin === window.location.origin) {
+            window.top.location.replace(window.location.href);
+        }
+    } catch {}
+}
+
+function initEventMonopayIframes(root = document) {
+    root.querySelectorAll('[data-event-monopay-iframe], [data-ticket-monopay-iframe]').forEach((container) => {
+        if (container.dataset.ticketMonopayIframeReady === 'true') {
             return;
         }
 
-        button.dataset.eventTicketPdfShareReady = 'true';
+        container.dataset.ticketMonopayIframeReady = 'true';
+        const iframeOrigin = container.dataset.iframeOrigin;
+        const returnUrl = container.dataset.returnUrl;
+
+        if (!iframeOrigin || !returnUrl) {
+            return;
+        }
+
+        const iframe = container.querySelector('[data-event-monopay-frame], [data-ticket-monopay-frame]');
+
+        if (!iframe) {
+            return;
+        }
+
+        window.addEventListener('message', (event) => {
+            if (event.origin !== iframeOrigin || event.source !== iframe.contentWindow) {
+                return;
+            }
+
+            let payload = event.data;
+
+            if (typeof payload === 'string') {
+                try {
+                    payload = JSON.parse(payload || '{}');
+                } catch {
+                    return;
+                }
+            }
+
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+
+            if (payload.message === 'close-button') {
+                window.location.assign(returnUrl);
+
+                return;
+            }
+
+            if (payload.message !== 'monopay-link' || typeof payload.value !== 'string') {
+                return;
+            }
+
+            try {
+                const deepLink = new URL(payload.value);
+
+                if (deepLink.protocol === 'monobank:') {
+                    window.location.assign(deepLink.href);
+                }
+            } catch {}
+        });
+    });
+}
+
+function initEventTicketPdfSharing(root = document) {
+    root.querySelectorAll('[data-event-ticket-pdf-share], [data-ticket-pdf-share]').forEach((button) => {
+        if (button.dataset.ticketPdfShareReady === 'true') {
+            return;
+        }
+
+        button.dataset.ticketPdfShareReady = 'true';
         button.addEventListener('click', async () => {
-            const container = button.closest('[data-event-ticket-screen]');
-            const downloadLink = container?.querySelector('[data-event-ticket-pdf-download]');
-            const errorMessage = container?.querySelector('[data-event-ticket-share-error]');
-            const label = button.querySelector('[data-event-ticket-share-label]');
+            const container = button.closest('[data-event-ticket-screen], [data-ticket-screen]');
+            const downloadLink = container?.querySelector('[data-event-ticket-pdf-download], [data-ticket-pdf-download]');
+            const errorMessage = container?.querySelector('[data-event-ticket-share-error], [data-ticket-share-error]');
+            const label = button.querySelector('[data-event-ticket-share-label], [data-ticket-share-label]');
             const fallbackDownload = () => downloadLink?.click();
 
             button.disabled = true;
@@ -8658,7 +8756,7 @@ function initEventTicketPdfSharing(root = document) {
                 }
 
                 const blob = await response.blob();
-                const file = new File([blob], button.dataset.pdfFilename || 'event-tickets.pdf', {
+                const file = new File([blob], button.dataset.pdfFilename || 'tickets.pdf', {
                     type: blob.type || 'application/pdf',
                 });
                 const shareData = { files: [file], title: button.dataset.shareTitle || document.title };
@@ -8695,6 +8793,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initEventScanner();
     initEventForms();
     initEventTicketCheckouts();
+    initEventMonopayIframes();
+    initEventOrderReturnNavigation();
     initEventOrderPolling();
     initEventTicketPdfSharing();
     createIcons({ icons });

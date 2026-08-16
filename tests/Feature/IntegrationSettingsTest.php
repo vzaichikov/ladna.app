@@ -10,6 +10,7 @@ use App\Models\IntegrationSetting;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\Payments\MonopayCheckoutSettings;
 use App\Support\Sms\SmsServiceSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,9 @@ class IntegrationSettingsTest extends TestCase
             ->assertSee(__('app.integration_category_email'), false)
             ->assertSee('Monopay')
             ->assertSee('LiqPay')
+            ->assertSee('name="event_iframe_v2_enabled"', false)
+            ->assertSee(__('app.monopay_event_iframe_v2_enabled'))
+            ->assertSee(__('app.monopay_event_iframe_v2_help'))
             ->assertDontSee('credentials[payment_type]', false)
             ->assertDontSee('credentials[submerchant_code]', false)
             ->assertDontSee('credentials[webhook_public_key]', false);
@@ -41,6 +45,7 @@ class IntegrationSettingsTest extends TestCase
                     'api_token' => 'mono-platform-secret',
                     'invoice_validity_seconds' => 3600,
                 ],
+                'event_iframe_v2_enabled' => '1',
             ])
             ->assertRedirect(route('platform.integrations.index', ['tab' => 'payment']));
 
@@ -54,6 +59,22 @@ class IntegrationSettingsTest extends TestCase
         $this->assertArrayNotHasKey('payment_type', $setting->credentials);
         $this->assertArrayNotHasKey('submerchant_code', $setting->credentials);
         $this->assertArrayNotHasKey('webhook_public_key', $setting->credentials);
+        $this->assertTrue(app(MonopayCheckoutSettings::class)->eventIframeV2Enabled());
+        $this->assertTrue(app(MonopayCheckoutSettings::class)->ticketIframeV2Enabled());
+
+        $this->actingAs($platformAdmin)
+            ->put(route('platform.integrations.update', 'monopay'), [
+                'is_enabled' => '1',
+                'credentials' => [
+                    'invoice_validity_seconds' => 3600,
+                ],
+                'event_iframe_v2_enabled' => '0',
+            ])
+            ->assertRedirect(route('platform.integrations.index', ['tab' => 'payment']));
+
+        $this->assertFalse(app(MonopayCheckoutSettings::class)->eventIframeV2Enabled());
+        $this->assertFalse(app(MonopayCheckoutSettings::class)->ticketIframeV2Enabled());
+        $this->assertSame('mono-platform-secret', $setting->refresh()->credentials['api_token']);
     }
 
     public function test_checkbox_uses_only_license_login_and_password(): void
@@ -581,7 +602,8 @@ class IntegrationSettingsTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment]))
             ->assertOk()
-            ->assertSee(__('app.integration_credentials_unreadable'));
+            ->assertSee(__('app.integration_credentials_unreadable'))
+            ->assertDontSee('name="event_iframe_v2_enabled"', false);
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.integrations.update', [$account, 'monopay']), [

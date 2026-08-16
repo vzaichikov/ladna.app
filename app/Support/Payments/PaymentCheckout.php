@@ -33,8 +33,21 @@ class PaymentCheckout
         return new self('form', $url, $method, $fields, $gatewayPayload);
     }
 
+    /**
+     * @param  array<string, mixed>  $gatewayPayload
+     */
+    public static function iframe(string $url, array $gatewayPayload = []): self
+    {
+        return new self('iframe', $url, gatewayPayload: $gatewayPayload);
+    }
+
     public function isRedirect(): bool
     {
         return $this->type === 'redirect';
+    }
+
+    public function isIframe(): bool
+    {
+        return $this->type === 'iframe';
     }
 }

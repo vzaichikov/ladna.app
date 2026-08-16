@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
+use App\Support\Payments\MonopayCheckoutSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -141,6 +142,7 @@ class CustomerPurchaseFlowTest extends TestCase
 
     public function test_monopay_purchase_creates_invoice_and_redirects_to_provider(): void
     {
+        app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
         [$account, $location, $plan, $customer] = $this->purchaseContext();
         $this->accountIntegration($account, IntegrationProvider::Monopay, [
             'api_token' => 'mono-token',
@@ -174,6 +176,7 @@ class CustomerPurchaseFlowTest extends TestCase
             && $request->data()['amount'] === $plan->price_cents
             && $request->data()['merchantPaymInfo']['reference'] === $purchase->order_id
             && $request->data()['paymentType'] === 'debit'
+            && ! array_key_exists('displayType', $request->data())
             && ! array_key_exists('code', $request->data()));
     }
 

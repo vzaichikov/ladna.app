@@ -1178,19 +1178,23 @@
         max-width: 150mm;
     }
 
-    [data-event-ticket-print] {
+    [data-event-ticket-print],
+    [data-ticket-print] {
         min-height: auto;
     }
 
-    [data-event-ticket-screen] {
+    [data-event-ticket-screen],
+    [data-ticket-screen] {
         display: none !important;
     }
 
-    [data-event-ticket-print-pages] {
+    [data-event-ticket-print-pages],
+    [data-ticket-print-pages] {
         display: block !important;
     }
 
-    [data-event-ticket-print-page] {
+    [data-event-ticket-print-page],
+    [data-ticket-print-page] {
         display: flex;
         min-height: calc(100vh - 32mm);
         break-after: page;
@@ -1201,12 +1205,14 @@
         text-align: center;
     }
 
-    [data-event-ticket-print-page]:last-child {
+    [data-event-ticket-print-page]:last-child,
+    [data-ticket-print-page]:last-child {
         break-after: auto;
         page-break-after: auto;
     }
 
-    [data-event-ticket-print-qr] {
+    [data-event-ticket-print-qr],
+    [data-ticket-print-qr] {
         width: 95mm;
         height: 95mm;
         margin-top: 10mm;

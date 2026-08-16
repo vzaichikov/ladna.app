@@ -7,11 +7,15 @@ use App\Models\IntegrationSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Uri;
+use League\Uri\Contracts\UriException;
 use Symfony\Component\HttpFoundation\Response;
 
 class MonopayGateway implements PaymentGateway
 {
     private const BASE_URL = 'https://api.monobank.ua';
+
+    private const CHECKOUT_HOST = 'pay.monobank.ua';
 
     public function provider(): IntegrationProvider
     {
@@ -48,6 +52,10 @@ class MonopayGateway implements PaymentGateway
             $payload['qrId'] = (string) $credentials['qr_id'];
         }
 
+        if ($checkout->preferIframe) {
+            $payload['displayType'] = 'iframe';
+        }
+
         $response = Http::withHeaders(['X-Token' => (string) $credentials['api_token']])
             ->acceptJson()
             ->asJson()
@@ -60,10 +68,36 @@ class MonopayGateway implements PaymentGateway
             throw new PaymentGatewayException('Monopay invoice creation failed.');
         }
 
-        return PaymentCheckout::redirect((string) $response->json('pageUrl'), [
+        $pageUrl = (string) $response->json('pageUrl');
+        $gatewayPayload = [
             'request' => $payload,
             'response' => $response->json(),
-        ]);
+        ];
+
+        if ($checkout->preferIframe) {
+            if (! self::trustedIframeOrigin($pageUrl)) {
+                throw new PaymentGatewayException('Monopay iframe checkout URL is invalid.');
+            }
+
+            return PaymentCheckout::iframe($pageUrl, $gatewayPayload);
+        }
+
+        return PaymentCheckout::redirect($pageUrl, $gatewayPayload);
+    }
+
+    public static function trustedIframeOrigin(string $pageUrl): ?string
+    {
+        try {
+            $uri = Uri::of($pageUrl);
+        } catch (UriException) {
+            return null;
+        }
+
+        if ($uri->scheme() !== 'https' || $uri->host() !== self::CHECKOUT_HOST || $uri->port() !== null) {
+            return null;
+        }
+
+        return 'https://'.self::CHECKOUT_HOST;
     }
 
     public function orderIdFromCallback(Request $request): ?string

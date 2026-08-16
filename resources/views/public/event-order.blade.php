@@ -29,7 +29,7 @@
             default => 'bg-rose-100 text-rose-800',
         };
 @endphp
-<main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8 text-slate-950 sm:px-8">
+<main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8 text-slate-950 sm:px-8" data-event-order-return>
     <section class="mx-auto max-w-6xl" @if ($ticketsReady) data-print-section data-event-ticket-print @endif>
         <div data-event-ticket-screen>
             <x-ui.public-studio-header :account="$account" class="mb-6" />
@@ -70,6 +70,18 @@
                             <x-ui.button :href="request()->fullUrl()" variant="secondary" size="sm">
                                 <x-ui.icon name="refresh-cw" class="h-4 w-4" />
                                 {{ __('app.event_order_refresh') }}
+                            </x-ui.button>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            @if ($paymentUrl ?? null)
+                                <x-ui.button :href="$paymentUrl" variant="success" size="sm">
+                                    <x-ui.icon name="credit-card" class="h-4 w-4" />
+                                    {{ __('app.event_monopay_resume_payment') }}
+                                </x-ui.button>
+                            @endif
+                            <x-ui.button :href="route('public.events.show', [$account->slug, $event->slug])" variant="secondary" size="sm" data-event-order-return-to-event>
+                                <x-ui.icon name="arrow-left" class="h-4 w-4" />
+                                {{ __('app.event_order_return_to_event') }}
                             </x-ui.button>
                         </div>
                     </div>

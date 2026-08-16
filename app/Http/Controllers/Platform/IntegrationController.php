@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Platform;
 
 use App\Enums\IntegrationCategory;
+use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateCentralSmsProviderRequest;
@@ -11,6 +12,7 @@ use App\Models\IntegrationSetting;
 use App\Models\SystemSetting;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\IntegrationCatalog;
+use App\Support\Payments\MonopayCheckoutSettings;
 use App\Support\Sms\SmsServiceSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,8 +20,11 @@ use Illuminate\View\View;
 
 class IntegrationController extends Controller
 {
-    public function index(Request $request, CustomerAuthAvailability $availability): View
-    {
+    public function index(
+        Request $request,
+        CustomerAuthAvailability $availability,
+        MonopayCheckoutSettings $monopayCheckoutSettings,
+    ): View {
         $categories = IntegrationCatalog::categories(IntegrationScope::Platform);
         $activeCategory = IntegrationCatalog::activeCategory($request->query('tab'), IntegrationScope::Platform);
         $settings = IntegrationSetting::platform()
@@ -44,6 +49,7 @@ class IntegrationController extends Controller
             'centralSmsProviderUpdateRoute' => $activeCategory === IntegrationCategory::Messaging
                 ? 'platform.integrations.central-sms-provider.update'
                 : null,
+            'monopayEventIframeV2Enabled' => $monopayCheckoutSettings->eventIframeV2Enabled(),
         ]);
     }
 
@@ -75,6 +81,7 @@ class IntegrationController extends Controller
         UpdatePlatformIntegrationRequest $request,
         string $provider,
         SmsServiceSettings $smsServiceSettings,
+        MonopayCheckoutSettings $monopayCheckoutSettings,
     ): RedirectResponse {
         $category = IntegrationCatalog::providerCategory($provider);
 
@@ -90,6 +97,10 @@ class IntegrationController extends Controller
                 ...$request->payload(),
             ],
         );
+
+        if ($provider === IntegrationProvider::Monopay->value) {
+            $monopayCheckoutSettings->saveEventIframeV2Enabled($request->eventIframeV2Enabled());
+        }
 
         if (
             $category === IntegrationCategory::Messaging

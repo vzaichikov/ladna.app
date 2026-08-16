@@ -34,6 +34,9 @@ Route::post('/{accountSlug}/events/{eventSlug}/checkout/google', [PublicEventChe
 Route::get('/{accountSlug}/event-orders/{accessToken}', [PublicEventCheckoutController::class, 'order'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.event-orders.show');
+Route::get('/{accountSlug}/event-orders/{accessToken}/payment', [PublicEventCheckoutController::class, 'payment'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
+    ->name('public.event-orders.payment');
 Route::get('/{accountSlug}/event-orders/{accessToken}/status', [PublicEventCheckoutController::class, 'status'])
     ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
     ->name('public.event-orders.status');

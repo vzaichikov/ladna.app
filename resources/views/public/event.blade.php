@@ -177,8 +177,8 @@
                                 </div>
                             @endif
                             <label class="block sm:col-span-2">
-                                <span class="crm-label">{{ __('app.phone_optional') }}</span>
-                                <input type="tel" name="buyer_phone" value="{{ old('buyer_phone') }}" autocomplete="tel" class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}" data-phone-mask-reject-national-zero data-phone-mask-national-zero-error="{{ __('app.event_phone_national_zero_error') }}">
+                                <span class="crm-label">{{ __('app.phone') }}</span>
+                                <input type="tel" name="buyer_phone" value="{{ old('buyer_phone') }}" required autocomplete="tel" class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}" data-phone-mask-reject-national-zero data-phone-mask-national-zero-error="{{ __('app.event_phone_national_zero_error') }}">
                                 <x-ui.field-error name="buyer_phone" />
                             </label>
                         </div>
@@ -210,10 +210,15 @@
                         <x-ui.field-error name="accept_terms" class="mt-2" />
 
                         <div class="mt-5 {{ $hasPaidTicketOptions ? 'hidden' : '' }}" data-event-payment-no-selection>
-                            <x-ui.button type="button" variant="success" size="lg" class="w-full" disabled>{{ __('app.event_select_tickets_to_continue') }}</x-ui.button>
+                            <p class="mb-3 text-sm font-semibold text-amber-800" data-event-payment-select-help aria-live="polite">{{ __('app.event_select_tickets_to_continue') }}</p>
+                            <x-ui.button type="button" variant="success" size="lg" class="w-full" disabled>
+                                <x-ui.icon name="ticket-check" class="h-5 w-5" />
+                                {{ __('app.event_get_tickets') }}
+                            </x-ui.button>
                         </div>
 
                         <div class="mt-5 hidden" data-event-payment-free>
+                            <p class="mb-3 hidden text-sm font-semibold text-amber-800" data-event-payment-required-help="free" aria-live="polite">{{ __('app.event_complete_required_fields_first') }}</p>
                             <x-ui.button type="submit" variant="success" size="lg" class="w-full" data-event-free-action disabled>
                                 <x-ui.icon name="ticket-check" class="h-5 w-5" />
                                 {{ __('app.event_get_tickets') }}
@@ -221,8 +226,9 @@
                         </div>
 
                         <div class="mt-5 {{ $hasPaidTicketOptions ? '' : 'hidden' }}" data-event-payment-paid>
-                            <p class="mb-3 text-sm font-semibold text-slate-500" data-event-payment-select-help>{{ __('app.event_select_tickets_to_continue') }}</p>
+                            <p class="mb-3 text-sm font-semibold text-amber-800" data-event-payment-select-help aria-live="polite">{{ __('app.event_select_tickets_to_continue') }}</p>
                             @if ($paymentSettings->isNotEmpty())
+                                <p class="mb-3 hidden text-sm font-semibold text-amber-800" data-event-payment-required-help="paid" aria-live="polite">{{ __('app.event_complete_required_fields_first') }}</p>
                                 <div class="space-y-3">
                                     @foreach ($paymentSettings as $setting)
                                         @php

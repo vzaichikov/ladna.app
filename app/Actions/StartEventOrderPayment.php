@@ -2,8 +2,10 @@
 
 namespace App\Actions;
 
+use App\Enums\IntegrationProvider;
 use App\Models\EventOrder;
 use App\Models\IntegrationSetting;
+use App\Support\Payments\MonopayCheckoutSettings;
 use App\Support\Payments\PaymentCheckout;
 use App\Support\Payments\PaymentCheckoutRequest;
 use App\Support\Payments\PaymentGatewayException;
@@ -11,7 +13,10 @@ use App\Support\Payments\PaymentGatewayRegistry;
 
 class StartEventOrderPayment
 {
-    public function __construct(private readonly PaymentGatewayRegistry $gateways) {}
+    public function __construct(
+        private readonly PaymentGatewayRegistry $gateways,
+        private readonly MonopayCheckoutSettings $monopayCheckoutSettings,
+    ) {}
 
     public function execute(EventOrder $order, IntegrationSetting $setting): PaymentCheckout
     {
@@ -34,6 +39,8 @@ class StartEventOrderPayment
             returnUrl: route('public.event-orders.show', [$order->account->slug, $order->access_token_encrypted]),
             callbackUrl: route('api.v1.event-payments.callbacks', $gateway->provider()->value),
             expiresAt: $order->expires_at ?? now()->addMinutes(30),
+            preferIframe: $gateway->provider() === IntegrationProvider::Monopay
+                && $this->monopayCheckoutSettings->ticketIframeV2Enabled(),
         ), $setting);
         $payload = $checkout->gatewayPayload;
         $response = is_array($payload['response'] ?? null) ? $payload['response'] : [];

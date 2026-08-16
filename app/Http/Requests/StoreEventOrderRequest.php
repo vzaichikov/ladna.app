@@ -38,7 +38,7 @@ class StoreEventOrderRequest extends FormRequest
             'buyer_email' => ['required', 'email:rfc', 'max:255', 'confirmed'],
             'buyer_email_confirmation' => ['required', 'email:rfc', 'max:255'],
             'buyer_phone' => [
-                'nullable',
+                'required',
                 'string',
                 'max:50',
                 function (string $attribute, mixed $value, Closure $fail): void {

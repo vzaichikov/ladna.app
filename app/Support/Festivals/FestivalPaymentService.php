@@ -12,6 +12,7 @@ use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalTicketOrderStatus;
+use App\Enums\IntegrationProvider;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCharge;
@@ -25,6 +26,7 @@ use App\Models\FestivalTicketOrderItem;
 use App\Models\IntegrationSetting;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\InvalidPaymentCallbackException;
+use App\Support\Payments\MonopayCheckoutSettings;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use App\Support\Payments\PaymentCheckout;
@@ -47,6 +49,7 @@ class FestivalPaymentService
         private readonly FestivalEntryWorkflowState $workflowState,
         private readonly SubmitFestivalEntryStep $submitEntryStep,
         private readonly FestivalActivityRecorder $activity,
+        private readonly MonopayCheckoutSettings $monopayCheckoutSettings,
     ) {}
 
     public function startCharge(FestivalCharge $charge, string $provider): PaymentCheckout
@@ -149,11 +152,11 @@ class FestivalPaymentService
             buyerEmail: $order->buyer_email,
             buyerPhone: $order->buyer_phone,
             locale: $order->locale,
-            returnUrl: $order->festival_portal_user_id
-                ? route('festival.portal.guest.dashboard', $order->account->slug)
-                : route('public.festival-orders.show', [$order->account->slug, $order->access_token_encrypted]),
+            returnUrl: route('public.festival-orders.show', [$order->account->slug, $order->access_token_encrypted]),
             callbackUrl: route('api.v1.festival-payments.callbacks', $gateway->provider()->value),
             expiresAt: $order->expires_at ?? now()->addMinutes(30),
+            preferIframe: $gateway->provider() === IntegrationProvider::Monopay
+                && $this->monopayCheckoutSettings->ticketIframeV2Enabled(),
         ), $setting);
         $order->forceFill(['gateway_checkout_payload' => $checkout->gatewayPayload])->save();
 

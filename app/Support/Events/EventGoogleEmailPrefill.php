@@ -40,7 +40,7 @@ class EventGoogleEmailPrefill
             'client_id' => (string) ($credentials['client_id'] ?? ''),
             'redirect_uri' => $this->callbackUrl(),
             'response_type' => 'code',
-            'scope' => 'openid email',
+            'scope' => 'openid profile email',
             'state' => $state,
             'access_type' => 'online',
             'prompt' => 'select_account',
@@ -78,7 +78,10 @@ class EventGoogleEmailPrefill
         ];
     }
 
-    public function verifiedEmail(Request $request): string
+    /**
+     * @return array{email: string, name: string|null}
+     */
+    public function verifiedProfile(Request $request): array
     {
         if (blank($request->query('code'))) {
             throw new RuntimeException('Google OAuth authorization code is missing.');
@@ -128,7 +131,15 @@ class EventGoogleEmailPrefill
             throw new RuntimeException('Google OAuth did not return a verified email.');
         }
 
-        return $email;
+        $name = Str::of((string) $userResponse->json('name'))
+            ->trim()
+            ->limit(255, '')
+            ->toString();
+
+        return [
+            'email' => $email,
+            'name' => filled($name) ? $name : null,
+        ];
     }
 
     private function callbackUrl(): string

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.141.0',
+                'date' => '2026-08-16',
+                'title' => 'Embedded Event and Festival ticket payments',
+                'items' => ['Platform owners can optionally enable embedded Monopay checkout for Event and Festival admission tickets on desktop and mobile. Existing redirect checkout remains available, while class passes and Festival application payments continue to use their established redirect flow.', 'Ticket payment actions remain unavailable until the ticket quantity, buyer name, confirmed email, required validated phone, and agreement are complete. Google prefill can restore the guest name and email, embedded payment opens automatically, and a separate secure payment page remains available as a fallback.', 'Festival admission orders now provide a private payment-confirmation page, valid venue-ticket QR table, and protected PDF sharing, download, and printing with one ticket per page. Online-stream tickets remain available only through the guest cabinet.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.140.0',
                 'date' => '2026-08-15',
                 'title' => 'Complete public Event ticket checkout',
@@ -1227,6 +1234,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.141.0',
+                'date' => '2026-08-16',
+                'title' => 'Вбудована оплата квитків на події та фестивалі',
+                'items' => ['Власник платформи може окремо ввімкнути вбудовану оплату Monopay для квитків на події та фестивалі на компʼютерах і телефонах. Звичайний перехід на сторінку оплати збережено, а абонементи й оплати заявок фестивалю й надалі використовують свій усталений сценарій із переходом.', 'Дії оплати квитків недоступні, доки не вибрано кількість, не заповнено імʼя, підтверджений email, обовʼязковий перевірений телефон і згоду. Google може заповнити імʼя та email гостя, вбудована оплата відкривається автоматично, а окрема безпечна сторінка оплати залишається резервним варіантом.', 'Замовлення фестивальних квитків тепер мають приватну сторінку підтвердження оплати, таблицю дійсних QR-квитків на майданчик і захищене поширення, завантаження та друк PDF з одним квитком на сторінку. Квитки на онлайн-трансляцію залишаються доступними лише в кабінеті гостя.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.140.0',
                 'date' => '2026-08-15',

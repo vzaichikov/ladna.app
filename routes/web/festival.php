@@ -29,6 +29,9 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
     Route::get('/{accountSlug}/festivals/{editionSlug}/timeline', [FestivalTimelineController::class, 'publicFragment'])->name('public.festivals.timeline');
     Route::post('/{accountSlug}/festivals/{editionSlug}/admission', [FestivalAdmissionController::class, 'store'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-checkout'])->name('public.festivals.admission.store');
     Route::get('/{accountSlug}/festival-orders/{accessToken}', [FestivalPublicController::class, 'order'])->name('public.festival-orders.show');
+    Route::get('/{accountSlug}/festival-orders/{accessToken}/payment', [FestivalPublicController::class, 'orderPayment'])->middleware('throttle:120,1')->name('public.festival-orders.payment');
+    Route::get('/{accountSlug}/festival-orders/{accessToken}/status', [FestivalPublicController::class, 'orderStatus'])->middleware('throttle:120,1')->name('public.festival-orders.status');
+    Route::get('/{accountSlug}/festival-orders/{accessToken}/tickets.pdf', [FestivalPublicController::class, 'orderPdf'])->middleware('throttle:30,1')->name('public.festival-orders.pdf');
     Route::get('/{accountSlug}/festival-orders/{accessToken}/tickets/{ticketCode}/qr', [FestivalPublicController::class, 'ticketQr'])->middleware('throttle:120,1')->name('public.festival-tickets.qr');
     Route::get('/{accountSlug}/festival-documents/{festivalDocument}', [FestivalFileController::class, 'document'])->name('public.festival-documents.download');
 

@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\FestivalAdmissionDeliveryMode;
+use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
+use App\Enums\IntegrationProvider;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalTicketOrder;
@@ -11,6 +14,10 @@ use App\Models\FestivalTimeline;
 use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalQrToken;
 use App\Support\Festivals\FestivalTimelinePresenter;
+use App\Support\Payments\MonopayGateway;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -70,22 +77,204 @@ class FestivalPublicController extends Controller
         ]);
     }
 
-    public function order(Request $request, string $accountSlug, string $accessToken, FestivalQrToken $qr): View
+    public function order(Request $request, string $accountSlug, string $accessToken, FestivalQrToken $qr): Response
     {
         $account = $this->account($request, $accountSlug);
-        $order = FestivalTicketOrder::query()->whereBelongsTo($account)->where('access_token_hash', hash('sha256', $accessToken))->with(['edition', 'items', 'tickets.admissionType'])->firstOrFail();
-        $qrCodes = $order->tickets->filter(fn ($ticket): bool => $ticket->status === FestivalTicketStatus::Valid)->mapWithKeys(fn ($ticket): array => [$ticket->id => $qr->dataUri($ticket)]);
+        $order = $this->ticketOrder($account, $accessToken, [
+            'edition',
+            'items',
+            'tickets.admissionType',
+            'tickets.orderItem',
+        ]);
+        $qrCodes = $this->ticketsAreAvailable($order)
+            ? $order->tickets
+                ->filter(fn ($ticket): bool => $ticket->status === FestivalTicketStatus::Valid
+                    && $ticket->admissionType?->delivery_mode === FestivalAdmissionDeliveryMode::Venue)
+                ->mapWithKeys(fn ($ticket): array => [$ticket->id => $qr->dataUri($ticket)])
+            : collect();
+        $statusUrl = route('public.festival-orders.status', [$account->slug, $accessToken]);
+        $pdfUrl = route('public.festival-orders.pdf', [$account->slug, $accessToken]);
+        $paymentUrl = $this->paymentIsAvailable($order) && $this->iframeCheckoutData($order) !== null
+            ? route('public.festival-orders.payment', [$account->slug, $accessToken])
+            : null;
 
-        return view('festivals.public.order', compact('account', 'order', 'qrCodes'));
+        return response()
+            ->view('festivals.public.order', compact('account', 'order', 'qrCodes', 'statusUrl', 'pdfUrl', 'paymentUrl'))
+            ->withHeaders($this->privateHeaders());
+    }
+
+    public function orderPayment(Request $request, string $accountSlug, string $accessToken): RedirectResponse|Response
+    {
+        $account = $this->account($request, $accountSlug);
+        $order = $this->ticketOrder($account, $accessToken, ['edition']);
+        $returnUrl = route('public.festival-orders.show', [$account->slug, $accessToken]);
+
+        if (! $this->paymentIsAvailable($order)) {
+            return redirect()->to($returnUrl);
+        }
+
+        $iframeCheckout = $this->iframeCheckoutData($order);
+        abort_if($iframeCheckout === null, 404);
+
+        return response()
+            ->view('festivals.public.order-payment', [
+                'account' => $account,
+                'order' => $order,
+                'pageUrl' => $iframeCheckout['page_url'],
+                'iframeOrigin' => $iframeCheckout['origin'],
+                'returnUrl' => $returnUrl,
+                'statusUrl' => route('public.festival-orders.status', [$account->slug, $accessToken]),
+            ])
+            ->withHeaders([
+                ...$this->privateHeaders(),
+                'Content-Security-Policy' => "frame-src {$iframeCheckout['origin']}; frame-ancestors 'self'",
+                'Permissions-Policy' => "payment=(self \"{$iframeCheckout['origin']}\")",
+            ]);
+    }
+
+    public function orderStatus(Request $request, string $accountSlug, string $accessToken): JsonResponse
+    {
+        $account = $this->account($request, $accountSlug);
+        $order = FestivalTicketOrder::query()
+            ->whereBelongsTo($account)
+            ->where('access_token_hash', hash('sha256', $accessToken))
+            ->with('edition:id,status,cancelled_at')
+            ->withCount([
+                'tickets as valid_tickets_count' => fn ($query) => $query
+                    ->where('status', FestivalTicketStatus::Valid->value)
+                    ->whereHas('admissionType', fn ($query) => $query->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)),
+            ])
+            ->firstOrFail();
+        $ticketsAvailable = $this->ticketsAreAvailable($order);
+        $terminal = $order->status !== FestivalTicketOrderStatus::Pending;
+
+        return response()->json([
+            'status' => $order->status->value,
+            'terminal' => $terminal,
+            'paid' => $ticketsAvailable,
+            'tickets_ready' => $ticketsAvailable && (int) $order->valid_tickets_count > 0,
+            'festival_cancelled' => $order->edition->cancelled_at !== null
+                || $order->edition->status === FestivalEditionStatus::Archived,
+        ])->withHeaders($this->privateHeaders());
+    }
+
+    public function orderPdf(Request $request, string $accountSlug, string $accessToken, FestivalQrToken $qr): Response
+    {
+        $account = $this->account($request, $accountSlug);
+        $order = FestivalTicketOrder::query()
+            ->whereBelongsTo($account)
+            ->where('access_token_hash', hash('sha256', $accessToken))
+            ->where('status', FestivalTicketOrderStatus::Paid->value)
+            ->whereHas('edition', fn ($query) => $query
+                ->whereNull('cancelled_at')
+                ->where('status', '!=', FestivalEditionStatus::Archived->value))
+            ->with([
+                'edition',
+                'tickets' => fn ($query) => $query
+                    ->where('status', FestivalTicketStatus::Valid->value)
+                    ->whereHas('admissionType', fn ($query) => $query->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value))
+                    ->with(['admissionType', 'orderItem']),
+            ])
+            ->firstOrFail();
+
+        abort_if($order->tickets->isEmpty(), 404);
+
+        $qrCodes = $order->tickets->mapWithKeys(fn ($ticket): array => [$ticket->id => $qr->dataUri($ticket)]);
+        $venue = collect([$order->edition->venue_name, $order->edition->venue_address])->filter()->join(' · ');
+        $pdf = Pdf::setOptions([
+            'isRemoteEnabled' => false,
+            'isPhpEnabled' => false,
+            'isJavascriptEnabled' => false,
+        ], true)
+            ->setPaper('a4', 'portrait')
+            ->loadView('festivals.public.tickets-pdf', compact('account', 'order', 'qrCodes', 'venue'));
+
+        return $pdf
+            ->download('festival-tickets-'.$order->order_id.'.pdf')
+            ->withHeaders($this->privateHeaders());
     }
 
     public function ticketQr(Request $request, string $accountSlug, string $accessToken, string $ticketCode, FestivalQrToken $qr): Response
     {
         $account = $this->account($request, $accountSlug);
-        $order = FestivalTicketOrder::query()->whereBelongsTo($account)->where('access_token_hash', hash('sha256', $accessToken))->where('status', FestivalTicketOrderStatus::Paid->value)->firstOrFail();
-        $ticket = $order->tickets()->where('code', $ticketCode)->where('status', FestivalTicketStatus::Valid->value)->firstOrFail();
+        $order = FestivalTicketOrder::query()
+            ->whereBelongsTo($account)
+            ->where('access_token_hash', hash('sha256', $accessToken))
+            ->where('status', FestivalTicketOrderStatus::Paid->value)
+            ->whereHas('edition', fn ($query) => $query
+                ->whereNull('cancelled_at')
+                ->where('status', '!=', FestivalEditionStatus::Archived->value))
+            ->firstOrFail();
+        $ticket = $order->tickets()
+            ->where('code', $ticketCode)
+            ->where('status', FestivalTicketStatus::Valid->value)
+            ->whereHas('admissionType', fn ($query) => $query->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value))
+            ->firstOrFail();
 
-        return response($qr->png($ticket), 200, ['Content-Type' => 'image/png', 'Content-Disposition' => 'inline; filename="'.$ticket->code.'.png"', 'Cache-Control' => 'private, no-store, max-age=0', 'X-Content-Type-Options' => 'nosniff']);
+        return response($qr->png($ticket), 200, [
+            'Content-Type' => 'image/png',
+            'Content-Disposition' => 'inline; filename="'.$ticket->code.'.png"',
+            ...$this->privateHeaders(),
+        ]);
+    }
+
+    /**
+     * @param  list<string>  $with
+     */
+    private function ticketOrder(Account $account, string $accessToken, array $with = []): FestivalTicketOrder
+    {
+        return FestivalTicketOrder::query()
+            ->whereBelongsTo($account)
+            ->where('access_token_hash', hash('sha256', $accessToken))
+            ->with($with)
+            ->firstOrFail();
+    }
+
+    private function ticketsAreAvailable(FestivalTicketOrder $order): bool
+    {
+        return $order->status === FestivalTicketOrderStatus::Paid
+            && $order->edition->cancelled_at === null
+            && $order->edition->status !== FestivalEditionStatus::Archived;
+    }
+
+    private function paymentIsAvailable(FestivalTicketOrder $order): bool
+    {
+        return $order->status === FestivalTicketOrderStatus::Pending
+            && in_array($order->edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress], true)
+            && $order->edition->cancelled_at === null;
+    }
+
+    /**
+     * @return array{page_url: string, origin: string}|null
+     */
+    private function iframeCheckoutData(FestivalTicketOrder $order): ?array
+    {
+        if ($order->provider !== IntegrationProvider::Monopay->value
+            || data_get($order->gateway_checkout_payload, 'request.displayType') !== 'iframe') {
+            return null;
+        }
+
+        $pageUrl = data_get($order->gateway_checkout_payload, 'response.pageUrl');
+
+        if (! is_string($pageUrl)) {
+            return null;
+        }
+
+        $origin = MonopayGateway::trustedIframeOrigin($pageUrl);
+
+        return $origin ? ['page_url' => $pageUrl, 'origin' => $origin] : null;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function privateHeaders(): array
+    {
+        return [
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Referrer-Policy' => 'no-referrer',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
     }
 
     private function account(Request $request, string $slug): Account

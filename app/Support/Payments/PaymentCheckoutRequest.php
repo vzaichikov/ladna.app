@@ -18,5 +18,6 @@ class PaymentCheckoutRequest
         public readonly string $returnUrl,
         public readonly string $callbackUrl,
         public readonly Carbon $expiresAt,
+        public readonly bool $preferIframe = false,
     ) {}
 }

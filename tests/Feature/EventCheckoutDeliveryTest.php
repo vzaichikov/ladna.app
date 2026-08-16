@@ -17,6 +17,7 @@ use App\Models\EventTicketType;
 use App\Models\FestivalPortalUser;
 use App\Models\IntegrationSetting;
 use App\Models\User;
+use App\Support\Payments\MonopayCheckoutSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -70,6 +71,9 @@ class EventCheckoutDeliveryTest extends TestCase
             ->assertSee('type="hidden" name="items['.$ticketType->id.']"', false)
             ->assertDontSee('type="number"', false)
             ->assertSee('name="buyer_email_confirmation"', false)
+            ->assertSee('name="buyer_phone" value="" required', false)
+            ->assertSee(__('app.phone'))
+            ->assertDontSee(__('app.phone_optional'))
             ->assertSee('data-phone-mask', false)
             ->assertSee('data-phone-mask-reject-national-zero', false)
             ->assertSee(__('app.event_ticket_email_delivery_title'))
@@ -82,6 +86,9 @@ class EventCheckoutDeliveryTest extends TestCase
             ->assertSee('alt="Visa"', false)
             ->assertSee('alt="Mastercard"', false)
             ->assertSee('data-event-payment-select-help', false)
+            ->assertSee('data-event-payment-required-help', false)
+            ->assertSee(__('app.event_complete_required_fields_first'))
+            ->assertSeeInOrder(['data-event-payment-required-help="paid"', 'data-event-paid-action'], false)
             ->assertSee('name="provider" value="monopay"', false)
             ->assertSee('name="provider" value="liqpay"', false)
             ->assertSee('LiqPay')
@@ -91,6 +98,25 @@ class EventCheckoutDeliveryTest extends TestCase
             ->get(route('public.events.show', [$account->slug, $event->slug]))
             ->assertOk()
             ->assertSee('Сплатити карткою');
+    }
+
+    public function test_free_event_blocking_help_is_rendered_above_its_disabled_action(): void
+    {
+        $account = Account::factory()->create();
+        $event = Event::factory()->published()->for($account)->create();
+        EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 0,
+            'inventory' => 5,
+        ]);
+
+        $page = $this->get(route('public.events.show', [$account->slug, $event->slug]));
+
+        $page->assertOk()
+            ->assertSeeInOrder(['data-event-payment-required-help="free"', 'data-event-free-action'], false);
+        $this->assertMatchesRegularExpression(
+            '/<button(?=[^>]*data-event-free-action)(?=[^>]*disabled)[^>]*>/s',
+            (string) $page->getContent(),
+        );
     }
 
     public function test_paid_event_checkout_renders_an_explicit_unavailable_provider_state(): void
@@ -108,7 +134,110 @@ class EventCheckoutDeliveryTest extends TestCase
             ->assertSee(__('app.no_payment_methods_available'));
     }
 
-    public function test_checkout_normalizes_matching_emails_and_optional_phone_without_losing_id_keyed_old_input(): void
+    public function test_events_monopay_checkout_keeps_the_existing_redirect_when_v2_is_disabled(): void
+    {
+        [$account, $event, $ticketType] = $this->paidEventCheckoutContext();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'event-mono-v1',
+                'pageUrl' => 'https://pay.monobank.ua/invoice/event-mono-v1',
+                'status' => 'created',
+            ]),
+        ]);
+
+        $this->from(route('public.events.show', [$account->slug, $event->slug]))
+            ->post(route('public.events.checkout', [$account->slug, $event->slug]), $this->paidEventPayload($ticketType))
+            ->assertRedirect('https://pay.monobank.ua/invoice/event-mono-v1');
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
+            && ! array_key_exists('displayType', $request->data()));
+    }
+
+    public function test_events_monopay_v2_creates_an_iframe_invoice_and_private_payment_page(): void
+    {
+        app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
+        [$account, $event, $ticketType] = $this->paidEventCheckoutContext();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'event-mono-v2',
+                'pageUrl' => 'https://pay.monobank.ua/invoice/event-mono-v2',
+                'status' => 'created',
+            ]),
+        ]);
+
+        $checkout = $this->from(route('public.events.show', [$account->slug, $event->slug]))
+            ->post(route('public.events.checkout', [$account->slug, $event->slug]), $this->paidEventPayload($ticketType));
+        $order = EventOrder::query()->whereBelongsTo($account)->sole();
+        $paymentUrl = route('public.event-orders.payment', [$account->slug, $order->access_token_encrypted]);
+        $returnUrl = route('public.event-orders.show', [$account->slug, $order->access_token_encrypted]);
+
+        $checkout->assertRedirect($paymentUrl);
+        $this->assertSame('iframe', data_get($order->gateway_checkout_payload, 'request.displayType'));
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
+            && $request->data()['displayType'] === 'iframe');
+
+        $this->get($paymentUrl)
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('Content-Security-Policy', "frame-src https://pay.monobank.ua; frame-ancestors 'self'")
+            ->assertHeader('Permissions-Policy', 'payment=(self "https://pay.monobank.ua")')
+            ->assertSee('data-event-monopay-iframe', false)
+            ->assertSee('src="https://pay.monobank.ua/invoice/event-mono-v2"', false)
+            ->assertSee('allow="payment *"', false)
+            ->assertSee('width="100%"', false)
+            ->assertSee('height="700"', false)
+            ->assertSee('class="h-[700px] w-full max-w-[600px] rounded-3xl border-0 bg-white md:h-[600px]', false)
+            ->assertDontSee('data-event-monopay-mobile-fallback', false)
+            ->assertSee('data-event-order-poll', false)
+            ->assertDontSee('alt="Google Pay"', false)
+            ->assertDontSee('alt="Apple Pay"', false)
+            ->assertSee(__('app.event_monopay_open_direct'))
+            ->assertSee('alt="Visa"', false)
+            ->assertSee('alt="Mastercard"', false);
+
+        $this->get($returnUrl)
+            ->assertOk()
+            ->assertSee($paymentUrl, false)
+            ->assertSee(__('app.event_monopay_resume_payment'))
+            ->assertSee('data-event-order-return-to-event', false)
+            ->assertSee(route('public.events.show', [$account->slug, $event->slug]), false)
+            ->assertSee(__('app.event_order_return_to_event'));
+
+        $otherAccount = Account::factory()->create();
+        $this->get(route('public.event-orders.payment', [$otherAccount->slug, $order->access_token_encrypted]))
+            ->assertNotFound();
+
+        $order->update(['status' => EventOrderStatus::Failed]);
+        $this->get($paymentUrl)->assertRedirect($returnUrl);
+    }
+
+    public function test_events_monopay_v2_rejects_an_untrusted_iframe_checkout_url(): void
+    {
+        app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
+        [$account, $event, $ticketType] = $this->paidEventCheckoutContext();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'event-mono-invalid-host',
+                'pageUrl' => 'https://payments.example.test/event-mono-invalid-host',
+                'status' => 'created',
+            ]),
+        ]);
+
+        $this->from(route('public.events.show', [$account->slug, $event->slug]))
+            ->post(route('public.events.checkout', [$account->slug, $event->slug]), $this->paidEventPayload($ticketType))
+            ->assertRedirect(route('public.events.show', [$account->slug, $event->slug]))
+            ->assertSessionHasErrors('provider');
+
+        $this->assertSame(EventOrderStatus::Failed, EventOrder::query()->whereBelongsTo($account)->sole()->status);
+    }
+
+    public function test_checkout_normalizes_matching_emails_and_requires_a_valid_phone_without_losing_id_keyed_old_input(): void
     {
         Mail::fake();
         $account = Account::factory()->create(['country_code' => 'UA']);
@@ -133,6 +262,18 @@ class EventCheckoutDeliveryTest extends TestCase
         $this->assertSame('Guest Buyer', $order->buyer_name);
         $this->assertSame('guest@example.com', $order->buyer_email);
         $this->assertSame('+380671234567', $order->buyer_phone);
+
+        $this->from(route('public.events.show', [$account->slug, $event->slug]))
+            ->post(route('public.events.checkout', [$account->slug, $event->slug]), [
+                'buyer_name' => 'Missing Phone Buyer',
+                'buyer_email' => 'missing-phone@example.com',
+                'buyer_email_confirmation' => 'missing-phone@example.com',
+                'items' => [$ticketType->id => 1],
+                'accept_terms' => '1',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors(['buyer_phone'])
+            ->assertSessionHasInput('items', [$ticketType->id => 1]);
 
         $this->from(route('public.events.show', [$account->slug, $event->slug]))
             ->post(route('public.events.checkout', [$account->slug, $event->slug]), [
@@ -176,14 +317,13 @@ class EventCheckoutDeliveryTest extends TestCase
         ];
 
         $start = $this->post(route('public.events.checkout.google', [$account->slug, $event->slug]), [
-            'buyer_name' => 'Preserved Guest',
             'buyer_phone' => '+380671234567',
             'items' => [$ticketType->id => 2],
         ])->assertRedirect()->assertSessionHasNoErrors();
         $location = (string) $start->headers->get('Location');
         $this->assertStringStartsWith('https://accounts.google.com/o/oauth2/v2/auth?', $location);
         parse_str(parse_url($location, PHP_URL_QUERY) ?: '', $query);
-        $this->assertSame('openid email', $query['scope']);
+        $this->assertSame('openid profile email', $query['scope']);
         $this->assertSame(route('public.event-checkout.google.callback'), $query['redirect_uri']);
         $state = (string) $query['state'];
 
@@ -192,6 +332,7 @@ class EventCheckoutDeliveryTest extends TestCase
             'oauth2.googleapis.com/token' => Http::response(['access_token' => 'event-google-token']),
             'openidconnect.googleapis.com/v1/userinfo' => Http::response([
                 'sub' => 'google-subject',
+                'name' => 'Verified Guest',
                 'email' => 'Verified.Guest@Example.com',
                 'email_verified' => true,
             ]),
@@ -203,6 +344,7 @@ class EventCheckoutDeliveryTest extends TestCase
 
         $this->get($callback)
             ->assertRedirect(route('public.events.show', [$account->slug, $event->slug]))
+            ->assertSessionHasInput('buyer_name', 'Verified Guest')
             ->assertSessionHasInput('buyer_email', 'verified.guest@example.com')
             ->assertSessionHasInput('buyer_email_confirmation', 'verified.guest@example.com')
             ->assertSessionHasInput('items', [$ticketType->id => 2]);
@@ -441,6 +583,40 @@ class EventCheckoutDeliveryTest extends TestCase
                 'client_secret' => 'event-google-secret',
             ],
         ]);
+    }
+
+    /**
+     * @return array{0: Account, 1: Event, 2: EventTicketType}
+     */
+    private function paidEventCheckoutContext(): array
+    {
+        $account = Account::factory()->create();
+        $event = Event::factory()->published()->for($account)->create();
+        $ticketType = EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 25000,
+            'inventory' => 5,
+        ]);
+        $this->accountPaymentIntegration($account, IntegrationProvider::Monopay, [
+            'api_token' => 'event-mono-token',
+        ]);
+
+        return [$account, $event, $ticketType];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function paidEventPayload(EventTicketType $ticketType): array
+    {
+        return [
+            'buyer_name' => 'Iframe Buyer',
+            'buyer_email' => 'iframe-buyer@example.com',
+            'buyer_email_confirmation' => 'iframe-buyer@example.com',
+            'buyer_phone' => '+380671234567',
+            'items' => [$ticketType->id => 1],
+            'provider' => IntegrationProvider::Monopay->value,
+            'accept_terms' => '1',
+        ];
     }
 
     /**

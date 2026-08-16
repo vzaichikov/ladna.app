@@ -35,7 +35,7 @@ class FestivalAdmissionController extends Controller
                 $tickets->execute($lockedOrder);
             }, 3);
 
-            return redirect()->route('festival.portal.guest.dashboard', $accountSlug);
+            return redirect()->route('public.festival-orders.show', [$accountSlug, $order->access_token_encrypted]);
         }
 
         try {
@@ -44,6 +44,10 @@ class FestivalAdmissionController extends Controller
             report($exception);
             $order->forceFill(['status' => FestivalTicketOrderStatus::Failed, 'failed_at' => now(), 'failure_reason' => $exception->getMessage()])->save();
             throw ValidationException::withMessages(['provider' => __('app.payment_start_failed')]);
+        }
+
+        if ($checkout->isIframe()) {
+            return redirect()->route('public.festival-orders.payment', [$accountSlug, $order->access_token_encrypted]);
         }
 
         return $checkout->isRedirect() ? redirect()->away($checkout->url) : view('payments.redirect-form', compact('account', 'checkout'));

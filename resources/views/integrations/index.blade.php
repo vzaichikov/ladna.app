@@ -297,6 +297,29 @@
                     </div>
                 @endif
 
+                @if (! ($account ?? null) && $providerKey === \App\Enums\IntegrationProvider::Monopay->value)
+                    <div class="border-t border-slate-100 px-5 py-4">
+                        <label for="monopay-event-iframe-v2-enabled" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <input type="hidden" name="event_iframe_v2_enabled" value="0">
+                            <input
+                                id="monopay-event-iframe-v2-enabled"
+                                name="event_iframe_v2_enabled"
+                                value="1"
+                                type="checkbox"
+                                class="crm-checkbox mt-0.5"
+                                @checked((bool) old('event_iframe_v2_enabled', $monopayEventIframeV2Enabled ?? false))
+                            >
+                            <span>
+                                <span class="block text-sm font-semibold text-slate-900">{{ __('app.monopay_event_iframe_v2_enabled') }}</span>
+                                <span class="mt-1 block text-sm leading-6 text-slate-500">{{ __('app.monopay_event_iframe_v2_help') }}</span>
+                            </span>
+                        </label>
+                        @error('event_iframe_v2_enabled')
+                            <span class="crm-help">{{ $message }}</span>
+                        @enderror
+                    </div>
+                @endif
+
                 <div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4">
                     @if (($account ?? null) && $providerKey === \App\Enums\IntegrationProvider::Checkbox->value)
                         <x-ui.button :href="route('dashboard.accounts.integrations.checkbox-logs.index', $account)" variant="secondary">

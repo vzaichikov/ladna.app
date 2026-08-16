@@ -1,4 +1,4 @@
 interface:
   display_name: "Ladna Payment Checkout UI"
-  short_description: "Standardize public payment checkout presentation"
-  default_prompt: "Use $ladna-payment-checkout-ui to build or review a Ladna public payment block."
+  short_description: "Standardize public checkout and ticket delivery"
+  default_prompt: "Use $ladna-payment-checkout-ui to build or review a Ladna public payment, ticket iframe, or private ticket delivery flow."
