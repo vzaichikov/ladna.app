@@ -129,11 +129,20 @@
             @forelse ($entries as $entry)
                 @php
                     $qualificationReady = in_array($entry->qualification_status, [\App\Enums\FestivalQualificationStatus::NotRequired, \App\Enums\FestivalQualificationStatus::Passed], true);
-                    $entryIsReady = $entry->status === \App\Enums\FestivalEntryStatus::Accepted
+                    $readinessLabel = match (true) {
+                        $entry->status !== \App\Enums\FestivalEntryStatus::Accepted => __('app.festival_readiness_application_not_accepted'),
+                        ! $qualificationReady => __('app.festival_readiness_qualification_incomplete'),
+                        $entry->blocking_requirements_count > 0 => __('app.festival_readiness_requirements_incomplete'),
+                        $entry->blocking_charges_count > 0 => __('app.festival_readiness_charges_unsettled'),
+                        $entry->performance_slots_count === 0 => __('app.festival_readiness_performance_missing'),
+                        $entry->scheduled_performance_slots_count === 0 => __('app.festival_readiness_performance_time_missing'),
+                        default => __('app.festival_ready'),
+                    };
+                    $entryIsReady = $entry->scheduled_performance_slots_count > 0
+                        && $entry->status === \App\Enums\FestivalEntryStatus::Accepted
                         && $qualificationReady
                         && $entry->blocking_requirements_count === 0
-                        && $entry->blocking_charges_count === 0
-                        && $entry->scheduled_performance_slots_count > 0;
+                        && $entry->blocking_charges_count === 0;
                     $currentStep = $entry->current_step_id
                         ? $entry->steps->firstWhere('id', (int) $entry->current_step_id)
                         : null;
@@ -155,7 +164,7 @@
                                     </span>
                                 @endif
                                 <span class="{{ $entryIsReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900' }} rounded-full px-2.5 py-1 text-xs font-semibold">
-                                    {{ $entryIsReady ? __('app.festival_ready') : __('app.festival_not_ready') }}
+                                    {{ $readinessLabel }}
                                 </span>
                             </div>
                             <h3 class="mt-2 truncate text-lg font-semibold text-slate-950">{{ $entry->entry_name }}</h3>

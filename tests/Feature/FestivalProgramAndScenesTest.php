@@ -477,6 +477,11 @@ class FestivalProgramAndScenesTest extends TestCase
             'status' => 'accepted',
         ]);
 
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('Needs a time')
+            ->assertSee(__('app.festival_readiness_performance_missing'));
+
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
             'mode' => 'missing',
         ])->assertRedirect();
@@ -487,7 +492,7 @@ class FestivalProgramAndScenesTest extends TestCase
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications', [$account, $edition]))
             ->assertOk()
             ->assertSee('Needs a time')
-            ->assertSee(__('app.festival_not_ready'));
+            ->assertSee(__('app.festival_readiness_performance_time_missing'));
 
         $program = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]));
         $program->assertOk()
