@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Enums\AccountSubscriptionPaymentType;
 use App\Enums\SubscriptionBillingInterval;
+use App\Enums\SubscriptionBillingMode;
+use App\Enums\SubscriptionPlanType;
 use App\Enums\SubscriptionStatus;
 use App\Enums\SystemRole;
 use App\Models\Account;
@@ -14,6 +16,7 @@ use App\Models\SubscriptionPriceVersion;
 use App\Models\User;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
+use App\Support\SaasBilling\AssignAccountPromoTariff;
 use App\Support\SaasBilling\AssignAccountSubscriptionTariff;
 use App\Support\SaasBilling\CompleteAccountSubscriptionPayment;
 use App\Support\SaasBilling\CreateBillingV2Payment;
@@ -119,6 +122,178 @@ class BillingV2TariffAssignmentTest extends TestCase
         $this->assertTrue($changed->auto_renew_enabled);
         $this->assertTrue($changed->next_payment_at->equalTo($trialEndsAt));
         $this->assertDatabaseCount('account_subscription_payments', 0);
+    }
+
+    public function test_platform_admin_can_grant_an_active_private_promo_tariff_to_a_billing_v2_studio(): void
+    {
+        $admin = User::factory()->create(['system_role' => SystemRole::PlatformAdmin]);
+        $ordinaryUser = User::factory()->create();
+        [, $publicPrice] = $this->publishedTariff('Ladna Studio', 90_000, true);
+        $promoPlan = SubscriptionPlan::factory()->create([
+            'name' => 'Ladna Promo',
+            'plan_type' => SubscriptionPlanType::Promo,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => false,
+            'is_active' => true,
+        ]);
+        SubscriptionPlan::factory()->create([
+            'name' => 'Public promo',
+            'plan_type' => SubscriptionPlanType::Promo,
+            'public_signup_enabled' => true,
+            'requires_recurring_payment' => false,
+            'is_active' => true,
+        ]);
+        SubscriptionPlan::factory()->create([
+            'name' => 'Inactive promo',
+            'plan_type' => SubscriptionPlanType::Promo,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => false,
+            'is_active' => false,
+        ]);
+        $account = Account::factory()->create();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        Location::factory()->for($account)->create(['is_active' => true]);
+        $subscription = app(StartAccountTrial::class)->execute($account, $publicPrice);
+        $subscription->forceFill([
+            'billing_interval_v2' => SubscriptionBillingInterval::Annual,
+            'auto_renew_enabled' => true,
+            'next_payment_at' => $subscription->trial_ends_at,
+        ])->save();
+        $trialStartedAt = $subscription->trial_started_at->copy();
+        $trialEndsAt = $subscription->trial_ends_at->copy();
+
+        $this->actingAs($admin)
+            ->get(route('platform.accounts.show', $account))
+            ->assertOk()
+            ->assertSee('Ladna Promo')
+            ->assertSee('value="'.$promoPlan->id.'"', false)
+            ->assertDontSee('Public promo')
+            ->assertDontSee('Inactive promo');
+
+        $this->actingAs($ordinaryUser)
+            ->patch(route('platform.accounts.billing.promo-tariff.update', $account), [
+                'subscription_plan_id' => $promoPlan->id,
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->patch(route('platform.accounts.billing.promo-tariff.update', $account), [
+                'subscription_plan_id' => $promoPlan->id,
+            ])
+            ->assertRedirect(route('platform.accounts.show', $account))
+            ->assertSessionHas('status', __('app.promo_tariff_granted'));
+
+        $granted = $subscription->refresh();
+        $this->assertSame($promoPlan->id, $granted->subscription_plan_id);
+        $this->assertSame(SubscriptionStatus::Active, $granted->status);
+        $this->assertSame(SubscriptionBillingMode::Legacy, $granted->billing_mode);
+        $this->assertNull($granted->subscription_price_version_id);
+        $this->assertNull($granted->pending_subscription_price_version_id);
+        $this->assertNull($granted->pending_tariff_change_at);
+        $this->assertNull($granted->billing_interval_v2);
+        $this->assertNull($granted->ends_at);
+        $this->assertNull($granted->next_payment_at);
+        $this->assertFalse($granted->auto_renew_enabled);
+        $this->assertTrue($granted->trial_started_at->equalTo($trialStartedAt));
+        $this->assertTrue($granted->trial_ends_at->equalTo($trialEndsAt));
+        $this->assertDatabaseCount('account_subscription_payments', 0);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.tariff-payments.show', $account))
+            ->assertOk()
+            ->assertSee(__('app.subscription_plan_type_promo'))
+            ->assertSee(__('app.subscription_promo_copy'));
+    }
+
+    public function test_promo_tariff_can_be_granted_to_a_studio_without_a_subscription(): void
+    {
+        $admin = User::factory()->create(['system_role' => SystemRole::PlatformAdmin]);
+        $account = Account::factory()->create();
+        $promoPlan = SubscriptionPlan::factory()->create([
+            'plan_type' => SubscriptionPlanType::Promo,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => false,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->patch(route('platform.accounts.billing.promo-tariff.update', $account), [
+                'subscription_plan_id' => $promoPlan->id,
+            ])
+            ->assertRedirect(route('platform.accounts.show', $account));
+
+        $subscription = $account->subscription()->firstOrFail();
+        $this->assertSame($promoPlan->id, $subscription->subscription_plan_id);
+        $this->assertSame(SubscriptionStatus::Active, $subscription->status);
+        $this->assertSame(SubscriptionBillingMode::Legacy, $subscription->billing_mode);
+        $this->assertNull($subscription->ends_at);
+        $this->assertFalse($subscription->auto_renew_enabled);
+    }
+
+    public function test_promo_tariff_grant_rejects_invalid_targets_and_in_flight_payments(): void
+    {
+        $admin = User::factory()->create(['system_role' => SystemRole::PlatformAdmin]);
+        [$standardPlan, $standardPrice] = $this->publishedTariff('Ladna Studio', 90_000, true);
+        $promoPlan = SubscriptionPlan::factory()->create([
+            'plan_type' => SubscriptionPlanType::Promo,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => false,
+            'is_active' => true,
+        ]);
+        $publicPromoPlan = SubscriptionPlan::factory()->create([
+            'plan_type' => SubscriptionPlanType::Promo,
+            'public_signup_enabled' => true,
+            'requires_recurring_payment' => false,
+            'is_active' => true,
+        ]);
+        $account = Account::factory()->create();
+        Location::factory()->for($account)->create(['is_active' => true]);
+        $subscription = app(StartAccountTrial::class)->execute($account, $standardPrice);
+
+        $this->actingAs($admin)
+            ->patch(route('platform.accounts.billing.promo-tariff.update', $account), [
+                'subscription_plan_id' => $standardPlan->id,
+            ])
+            ->assertSessionHasErrors('subscription_plan_id');
+
+        $this->actingAs($admin)
+            ->patch(route('platform.accounts.billing.promo-tariff.update', $account), [
+                'subscription_plan_id' => $publicPromoPlan->id,
+            ])
+            ->assertSessionHasErrors('subscription_plan_id');
+
+        AccountSubscriptionPayment::factory()
+            ->for($account)
+            ->for($subscription, 'subscription')
+            ->for($standardPlan, 'plan')
+            ->create();
+
+        $this->actingAs($admin)
+            ->patch(route('platform.accounts.billing.promo-tariff.update', $account), [
+                'subscription_plan_id' => $promoPlan->id,
+            ])
+            ->assertSessionHasErrors('promo_tariff');
+
+        $unchanged = $subscription->refresh();
+        $this->assertSame($standardPlan->id, $unchanged->subscription_plan_id);
+        $this->assertSame(SubscriptionBillingMode::LocationV2, $unchanged->billing_mode);
+    }
+
+    public function test_protected_demo_cannot_receive_a_promo_tariff(): void
+    {
+        $promoPlan = SubscriptionPlan::factory()->create([
+            'plan_type' => SubscriptionPlanType::Promo,
+            'public_signup_enabled' => false,
+            'requires_recurring_payment' => false,
+            'is_active' => true,
+        ]);
+        $demoAccount = Account::factory()->demoReadonly()->create();
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('The protected demo account cannot change tariff.');
+
+        app(AssignAccountPromoTariff::class)->execute($demoAccount, $promoPlan);
     }
 
     public function test_owner_trial_label_uses_the_assigned_price_version_duration_in_both_locales(): void

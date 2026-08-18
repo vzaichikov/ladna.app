@@ -3,6 +3,7 @@
 use App\Http\Controllers\Platform\AccountBillingEnrollmentController;
 use App\Http\Controllers\Platform\AccountBillingTariffController;
 use App\Http\Controllers\Platform\AccountFestivalCapabilityController;
+use App\Http\Controllers\Platform\AccountPromoTariffController;
 use App\Http\Controllers\Platform\AccountSmsController as PlatformAccountSmsController;
 use App\Http\Controllers\Platform\AiProviderModelController as PlatformAiProviderModelController;
 use App\Http\Controllers\Platform\AiUsageController as PlatformAiUsageController;
@@ -70,6 +71,8 @@ Route::middleware(['auth:web', 'can:accessPlatform', PreventReadOnlyDemoMutation
             ->name('accounts.billing.enroll');
         Route::patch('accounts/{account}/billing/tariff', AccountBillingTariffController::class)
             ->name('accounts.billing.tariff.update');
+        Route::patch('accounts/{account}/billing/promo-tariff', AccountPromoTariffController::class)
+            ->name('accounts.billing.promo-tariff.update');
         Route::patch('accounts/{account}/festival-capability', AccountFestivalCapabilityController::class)
             ->name('accounts.festival-capability.update');
         Route::get('accounts/{account}/studio-possibilities', [StudioPossibilitiesController::class, 'edit'])

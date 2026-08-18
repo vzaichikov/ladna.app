@@ -110,6 +110,14 @@ class PlatformAccountController extends Controller
             'assignablePriceVersions' => config('ladna.saas_billing_v2_enabled')
                 ? $this->assignablePriceVersions()
                 : collect(),
+            'assignablePromoPlans' => SubscriptionPlan::query()
+                ->active()
+                ->promo()
+                ->where('public_signup_enabled', false)
+                ->where('requires_recurring_payment', false)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 

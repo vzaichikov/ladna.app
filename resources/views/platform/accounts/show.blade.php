@@ -170,6 +170,35 @@
         </x-ui.panel>
     @endif
 
+    @if ($assignablePromoPlans->isNotEmpty() && ! $account->isReadOnlyDemo())
+        <x-ui.panel padding="lg" class="mt-6 border-violet-crm-100 bg-brand-50/50">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <div class="crm-page-kicker">{{ __('app.subscription_plan_type_promo') }}</div>
+                    <h2 class="mt-1 text-lg font-semibold text-slate-950">{{ __('app.promo_tariff_grant') }}</h2>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{{ __('app.promo_tariff_grant_help') }}</p>
+                </div>
+                <form method="POST" action="{{ route('platform.accounts.billing.promo-tariff.update', $account) }}" class="w-full max-w-xl">
+                    @csrf
+                    @method('PATCH')
+                    <label class="block">
+                        <span class="crm-label">{{ __('app.subscription_plan') }}</span>
+                        <select name="subscription_plan_id" required class="crm-field">
+                            @foreach ($assignablePromoPlans as $promoPlan)
+                                <option value="{{ $promoPlan->id }}" @selected((int) old('subscription_plan_id', $account->subscription?->subscription_plan_id) === $promoPlan->id)>
+                                    {{ $promoPlan->name }} · {{ __('app.private_tariff') }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('subscription_plan_id') <span class="crm-help">{{ $message }}</span> @enderror
+                        @error('promo_tariff') <span class="crm-help">{{ $message }}</span> @enderror
+                    </label>
+                    <x-ui.button type="submit" class="mt-3">{{ __('app.grant_promo_tariff') }}</x-ui.button>
+                </form>
+            </div>
+        </x-ui.panel>
+    @endif
+
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         <div class="border-b border-stone-100 p-5">
             <h2 class="text-lg font-semibold text-slate-950">{{ __('app.payment_history') }}</h2>
