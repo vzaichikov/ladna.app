@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Actions\Festivals\CreateFestivalTicketOrder;
 use App\Actions\Festivals\FestivalTicketIssuer;
+use App\Actions\Festivals\ResolveFestivalGuest;
 use App\Enums\AccountStatus;
 use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalStreamOverride;
@@ -137,7 +138,7 @@ class FestivalOnlineStreamingTest extends TestCase
             $create->execute($edition, $this->orderInput($type), $registrant);
             $this->fail('A Registrant was accepted as the ticket cabinet owner.');
         } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('items', $exception->errors());
+            $this->assertArrayHasKey('buyer_email', $exception->errors());
         }
 
         $order = $create->execute($edition, $this->orderInput($type), $guest);
@@ -664,34 +665,38 @@ class FestivalOnlineStreamingTest extends TestCase
         $this->assertViewerAccessDenied($access, $cookie, $stream->path);
     }
 
-    public function test_guest_watch_and_cabinet_are_exact_owner_and_account_scoped(): void
+    public function test_private_order_watch_and_release_are_exact_token_owner_and_account_scoped(): void
     {
         [$account, $edition] = $this->festival();
         $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
         $type = FestivalAdmissionType::factory()->online($stream)->create(['name' => 'Private online access']);
         $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
-        $otherGuest = FestivalPortalUser::factory()->guest()->for($account)->create();
         [$order, $entitlement] = $this->issuedOnlineOrder($stream, $type, $guest);
         $this->assertSame(1, $guest->ticketOrders()->count());
         $this->assertSame(1, $guest->ticketOrders()->whereBelongsTo($account)->count());
+        $watchUrl = route('public.festival-orders.stream.watch', [$account->slug, $order->access_token_encrypted, $entitlement]);
+        $releaseUrl = route('public.festival-orders.stream.release', [$account->slug, $order->access_token_encrypted, $entitlement]);
 
-        $this->actingAs($guest, 'festival')->get(route('festival.portal.guest.dashboard', $account->slug))
+        $this->get(route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]))
             ->assertOk()
-            ->assertSee($order->order_id)
+            ->assertSee($watchUrl, false)
+            ->assertSee($releaseUrl, false)
             ->assertSee('Private online access');
-        $this->actingAs($guest, 'festival')->get(route('festival.portal.guest.stream.watch', [$account->slug, $entitlement]))
+        $this->get($watchUrl)
             ->assertRedirectContains('https://stream.ladna.test/festival-stream/bootstrap?token=');
         $this->assertSame(1, $entitlement->leases()->count());
-        $this->actingAs($guest, 'festival')->delete(route('festival.portal.guest.stream.release', [$account->slug, $entitlement]))
-            ->assertSessionHasNoErrors();
+        $this->delete($releaseUrl)
+            ->assertRedirect(route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]));
         $this->assertSame(0, $entitlement->leases()->count());
 
-        $this->actingAs($otherGuest, 'festival')->get(route('festival.portal.guest.dashboard', $account->slug))
-            ->assertOk()
-            ->assertDontSee($order->order_id)
-            ->assertDontSee(route('festival.portal.guest.stream.watch', [$account->slug, $entitlement]));
-        $this->actingAs($otherGuest, 'festival')->get(route('festival.portal.guest.stream.watch', [$account->slug, $entitlement]))
-            ->assertNotFound();
+        $this->get(route('public.festival-orders.stream.watch', [$account->slug, 'wrong-token', $entitlement]))->assertNotFound();
+
+        $otherGuest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        [$otherOrder] = $this->issuedOnlineOrder($stream, $type, $otherGuest);
+        $this->get(route('public.festival-orders.stream.watch', [$account->slug, $otherOrder->access_token_encrypted, $entitlement]))->assertNotFound();
+
+        $otherAccount = Account::factory()->create(['enable_festivals' => true]);
+        $this->get(route('public.festival-orders.stream.watch', [$otherAccount->slug, $order->access_token_encrypted, $entitlement]))->assertNotFound();
     }
 
     public function test_publisher_auth_and_mediamtx_status_use_the_dedicated_service_contract(): void
@@ -956,7 +961,7 @@ class FestivalOnlineStreamingTest extends TestCase
         $gateways = Mockery::mock(PaymentGatewayRegistry::class);
         $gateways->shouldReceive('availableSettingsFor')->andReturn(collect([$setting]));
 
-        return new CreateFestivalTicketOrder($gateways);
+        return new CreateFestivalTicketOrder($gateways, app(ResolveFestivalGuest::class));
     }
 
     /** @return array{FestivalTicketOrder, FestivalStreamEntitlement} */
@@ -995,6 +1000,7 @@ class FestivalOnlineStreamingTest extends TestCase
         return [
             'buyer_name' => 'Online Guest',
             'buyer_email' => 'online@example.test',
+            'buyer_phone' => '+380501112233',
             'provider' => 'monopay',
             'items' => [['admission_type_id' => $type->id, 'quantity' => $quantity]],
             'terms' => true,

@@ -11,11 +11,13 @@ use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTimeline;
+use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalQrToken;
 use App\Support\Festivals\FestivalTimelinePresenter;
 use App\Support\Payments\MonopayGateway;
 use App\Support\Payments\PaymentCheckout;
+use App\Support\Payments\PaymentGatewayRegistry;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -40,10 +42,12 @@ class FestivalPublicController extends Controller
         string $editionSlug,
         FestivalLandingRegistry $landingRegistry,
         FestivalTimelinePresenter $timelinePresenter,
+        PaymentGatewayRegistry $gateways,
+        CustomerAuthAvailability $authAvailability,
     ): View {
         $account = $this->account($request, $accountSlug);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)
-            ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'stages', 'admissionTypes' => fn ($query) => $query->availableForSale(), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
+            ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'stages', 'admissionTypes' => fn ($query) => $query->availableForSale()->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
             ->firstOrFail();
         $landingTemplateKey = $landingRegistry->effectiveTemplateKey($edition, $account);
         $landingPaletteKey = $landingRegistry->effectivePaletteKey($edition);
@@ -63,6 +67,42 @@ class FestivalPublicController extends Controller
             : collect();
         $publicTimelineViews = $timelinePresenter->scenes($publicTimelines, true);
         $timelinePollingUrl = route('public.festivals.timeline', [$account->slug, $edition->slug]);
+        $festivalAdmissionOptions = $edition->admissionTypes->map(function ($type): array {
+            $price = $type->currentPrice();
+            $remainingQuantity = $type->remainingQuantity();
+            $maxQuantity = min($type->max_per_order, $remainingQuantity);
+            $earlyBirdAvailable = $price['tier'] === 'early_bird';
+            $earlyBirdMaxQuantity = $maxQuantity;
+
+            if ($earlyBirdAvailable && $type->early_bird_quota !== null) {
+                $earlyBirdSoldOrHeld = (int) $type->orderItems()
+                    ->where('price_tier', 'early_bird')
+                    ->whereHas('order', fn ($query) => $query
+                        ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value])
+                        ->where(fn ($query) => $query
+                            ->where('status', '!=', FestivalTicketOrderStatus::Pending->value)
+                            ->orWhere('expires_at', '>', now())))
+                    ->sum('quantity');
+                $earlyBirdMaxQuantity = min($maxQuantity, max(0, $type->early_bird_quota - $earlyBirdSoldOrHeld));
+            }
+
+            return [
+                'id' => $type->id,
+                'name' => $type->name,
+                'description' => $type->description,
+                'price_cents' => $price['price_cents'],
+                'regular_price_cents' => $type->price_cents,
+                'early_bird_price_cents' => $earlyBirdAvailable ? $type->early_bird_price_cents : null,
+                'early_bird_max_quantity' => $earlyBirdAvailable ? $earlyBirdMaxQuantity : 0,
+                'early_bird_available' => $earlyBirdAvailable,
+                'remaining_quantity' => $remainingQuantity,
+                'max_quantity' => $maxQuantity,
+                'sales_open' => $type->saleIsOpen(),
+                'exclusive' => $type->delivery_mode === FestivalAdmissionDeliveryMode::OnlineStream,
+            ];
+        });
+        $festivalPaymentSettings = $gateways->availableSettingsFor($account);
+        $festivalGoogleEmailPrefillAvailable = $authAvailability->googleSetting() !== null;
 
         return view($landingTemplate['view'], [
             ...compact(
@@ -73,6 +113,9 @@ class FestivalPublicController extends Controller
                 'publicTimelineViews',
                 'timelineWithinDates',
                 'timelinePollingUrl',
+                'festivalAdmissionOptions',
+                'festivalPaymentSettings',
+                'festivalGoogleEmailPrefillAvailable',
             ),
             ...$publicTemplateData,
         ]);
@@ -86,6 +129,7 @@ class FestivalPublicController extends Controller
             'items',
             'tickets.admissionType',
             'tickets.orderItem',
+            'tickets.streamEntitlement.stream',
         ]);
         $qrCodes = $this->ticketsAreAvailable($order)
             ? $order->tickets

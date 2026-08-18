@@ -16,9 +16,13 @@
             ->where('status', \App\Enums\FestivalTicketStatus::Valid)
             ->filter(fn ($ticket) => $ticket->admissionType?->delivery_mode === \App\Enums\FestivalAdmissionDeliveryMode::Venue)
         : collect();
-    $hasValidOnlineTicket = $isPaidSuccess && $order->tickets
-        ->where('status', \App\Enums\FestivalTicketStatus::Valid)
-        ->contains(fn ($ticket) => $ticket->admissionType?->delivery_mode === \App\Enums\FestivalAdmissionDeliveryMode::OnlineStream);
+    $validOnlineTickets = $isPaidSuccess
+        ? $order->tickets
+            ->where('status', \App\Enums\FestivalTicketStatus::Valid)
+            ->filter(fn ($ticket) => $ticket->admissionType?->delivery_mode === \App\Enums\FestivalAdmissionDeliveryMode::OnlineStream
+                && $ticket->streamEntitlement !== null)
+        : collect();
+    $hasValidOnlineTicket = $validOnlineTickets->isNotEmpty();
     $ticketsReady = $validTickets->isNotEmpty();
     $pdfFilename = 'festival-tickets-'.$order->order_id.'.pdf';
     $venue = collect([$edition->venue_name, $edition->venue_address])->filter()->join(' · ');
@@ -37,6 +41,10 @@
     <section class="mx-auto max-w-6xl" @if ($ticketsReady) data-print-section data-ticket-print @endif>
         <div data-ticket-screen>
             <x-ui.public-studio-header :account="$account" class="mb-6" />
+
+            @if (session('status'))
+                <div class="mb-6 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900" role="status">{{ session('status') }}</div>
+            @endif
 
             <header class="rounded-2xl border border-stone-200 bg-white p-6 shadow-crm sm:p-8">
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -64,9 +72,24 @@
                     <div class="mt-6 rounded-2xl bg-emerald-50 p-5 text-emerald-950">
                         <h2 class="text-2xl font-semibold">{{ __('app.festival_order_thank_you') }}</h2>
                         <p class="mt-2 text-sm leading-6">{{ __('app.festival_order_online_ticket_ready') }}</p>
-                        <x-ui.button :href="route('festival.portal.guest.dashboard', $account->slug)" variant="secondary" size="sm" class="mt-4">
-                            {{ __('app.festival_order_open_ticket_cabinet') }}
-                        </x-ui.button>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            @foreach ($validOnlineTickets as $ticket)
+                                <div class="w-full rounded-xl border border-emerald-200 bg-white/70 p-3">
+                                    <p class="mb-3 text-sm font-semibold">{{ $ticket->orderItem?->admission_name ?? $ticket->admissionType?->name }}</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <x-ui.button :href="route('public.festival-orders.stream.watch', [$account->slug, $order->access_token_encrypted, $ticket->streamEntitlement])" variant="success" size="sm">
+                                            <x-ui.icon name="play" class="h-4 w-4" />
+                                            {{ __('app.festival_watch_stream') }}
+                                        </x-ui.button>
+                                        <form method="POST" action="{{ route('public.festival-orders.stream.release', [$account->slug, $order->access_token_encrypted, $ticket->streamEntitlement]) }}">
+                                            @csrf
+                                            @method('DELETE')
+                                            <x-ui.button type="submit" variant="secondary" size="sm">{{ __('app.festival_stream_release_devices') }}</x-ui.button>
+                                        </form>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 @elseif ($order->status === \App\Enums\FestivalTicketOrderStatus::Pending)
                     <div
@@ -96,7 +119,7 @@
                                     {{ __('app.festival_monopay_resume_payment') }}
                                 </x-ui.button>
                             @endif
-                            <x-ui.button :href="route('festival.portal.guest.dashboard', $account->slug)" variant="secondary" size="sm" data-festival-order-return-to-tickets>
+                            <x-ui.button :href="route('public.festivals.show', [$account->slug, $edition->slug]).'#festival-admission'" variant="secondary" size="sm" data-festival-order-return-to-tickets>
                                 <x-ui.icon name="arrow-left" class="h-4 w-4" />
                                 {{ __('app.festival_order_return_to_tickets') }}
                             </x-ui.button>

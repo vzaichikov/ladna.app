@@ -22,13 +22,7 @@
     <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ $category->direction->name }}</p>
     <h3 class="mt-1 font-semibold text-slate-950">{{ $category->name }}</h3>
     <dl class="mt-3 flex flex-wrap gap-2 text-xs text-slate-700">
-        <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $category->min_members, 'max' => $category->max_members]) }}</dd></div>
-        @if($category->min_age !== null || $category->max_age !== null)
-            <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_age_limits') }}</dt><dd>{{ __('app.festival_age_range', ['min' => $category->min_age ?? '—', 'max' => $category->max_age ?? '—']) }}</dd></div>
-        @endif
-        @if($category->min_duration_seconds !== null || $category->max_duration_seconds !== null)
-            <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_performance_duration') }}</dt><dd>{{ __('app.festival_duration_range', ['min' => $category->min_duration_seconds ?? '—', 'max' => $category->max_duration_seconds ?? '—']) }}</dd></div>
-        @endif
+        <x-festivals.category-limit-chips :category="$category" />
         @if($category->registration_closes_at)
             <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_registration_closes_at') }}</dt><dd>{{ __('app.festival_category_deadline_value', ['date' => $category->registration_closes_at->timezone($edition->timezone)->format('d.m.Y H:i'), 'timezone' => $edition->timezone]) }}</dd></div>
         @endif

@@ -4,25 +4,23 @@ namespace App\Http\Controllers;
 
 use App\Actions\Festivals\SyncFestivalProfileParticipant;
 use App\Enums\FestivalPortalRole;
-use App\Enums\FestivalStreamProvider;
 use App\Http\Requests\FestivalOtpVerifyRequest;
 use App\Http\Requests\FestivalPortalProfileRequest;
 use App\Http\Requests\FestivalProfilePhoneOtpSendRequest;
+use App\Http\Requests\UpdateFestivalApplicationProfileRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalNotification;
 use App\Models\FestivalPortalUser;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
-use App\Support\Festivals\FestivalMediaMtxGateway;
 use App\Support\Festivals\FestivalOtpService;
-use App\Support\Payments\PaymentGatewayRegistry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Throwable;
 
 class FestivalPortalController extends Controller
 {
@@ -65,44 +63,6 @@ class FestivalPortalController extends Controller
             ->get();
 
         return view('festivals.portal.judge-dashboard', compact('account', 'portalUser', 'assignments'));
-    }
-
-    public function guestDashboard(Request $request, string $accountSlug, PaymentGatewayRegistry $gateways, FestivalMediaMtxGateway $mediaMtx): View
-    {
-        [$account, $portalUser] = $this->context($request, $accountSlug);
-        abort_unless($portalUser->role === FestivalPortalRole::Guest, 403);
-        $orders = $portalUser->ticketOrders()
-            ->whereBelongsTo($account)
-            ->with(['edition.coverMedia', 'items.admissionType.onlineStream', 'tickets.admissionType', 'tickets.streamEntitlement.stream'])
-            ->latest()
-            ->get();
-        $editions = FestivalEdition::query()
-            ->whereBelongsTo($account)
-            ->published()
-            ->whereHas('admissionTypes', fn ($query) => $query->availableForSale())
-            ->with(['admissionTypes' => fn ($query) => $query->availableForSale()->with('onlineStream')])
-            ->orderBy('starts_at')
-            ->get();
-        $providers = $gateways->availableSettingsFor($account);
-        $streamStatuses = $orders->flatMap->tickets
-            ->pluck('streamEntitlement.stream')
-            ->filter()
-            ->unique('id')
-            ->mapWithKeys(function ($stream) use ($mediaMtx): array {
-                if ($stream->provider === FestivalStreamProvider::YouTube) {
-                    return [$stream->id => ['provider' => FestivalStreamProvider::YouTube->value]];
-                }
-
-                try {
-                    return [$stream->id => $mediaMtx->status($stream)];
-                } catch (Throwable $exception) {
-                    report($exception);
-
-                    return [$stream->id => null];
-                }
-            });
-
-        return view('festivals.portal.guest-dashboard', compact('account', 'portalUser', 'orders', 'editions', 'providers', 'streamStatuses'));
     }
 
     public function editProfile(Request $request, string $accountSlug, CustomerAuthAvailability $availability): View
@@ -188,6 +148,45 @@ class FestivalPortalController extends Controller
             : $this->dashboardRoute($portalUser);
 
         return redirect()->route($route, $account->slug)->with('status', __('app.festival_profile_saved'));
+    }
+
+    public function updateApplicationProfile(
+        UpdateFestivalApplicationProfileRequest $request,
+        string $accountSlug,
+        SyncFestivalProfileParticipant $syncParticipant,
+    ): JsonResponse|RedirectResponse {
+        [$account, $portalUser] = $this->context($request, $accountSlug);
+        abort_unless($portalUser->role === FestivalPortalRole::Registrant, 403);
+        $data = $request->validated();
+
+        DB::transaction(function () use ($account, $portalUser, $data, $syncParticipant): void {
+            $lockedPortalUser = FestivalPortalUser::query()
+                ->whereKey($portalUser->id)
+                ->where('account_id', $account->id)
+                ->where('role', FestivalPortalRole::Registrant->value)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $dateOfBirth = $lockedPortalUser->profileParticipant()
+                ->lockForUpdate()
+                ->first()
+                ?->date_of_birth
+                ?->toDateString();
+
+            $lockedPortalUser->update($data);
+            $syncParticipant->execute($lockedPortalUser, $dateOfBirth);
+        }, 3);
+
+        $portalUser->refresh();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => __('app.festival_profile_saved'),
+                'resource_id' => $portalUser->id,
+                'fragment_html' => view('festivals.portal._entry-profile-summary', compact('account', 'portalUser'))->render(),
+            ]);
+        }
+
+        return back()->with('status', __('app.festival_profile_saved'));
     }
 
     public function sendProfilePhoneOtp(
@@ -364,7 +363,7 @@ class FestivalPortalController extends Controller
         return match ($portalUser->role) {
             FestivalPortalRole::Registrant => 'festival.portal.profile.edit',
             FestivalPortalRole::Judge => 'festival.portal.judge.profile.edit',
-            FestivalPortalRole::Guest => 'festival.portal.guest.profile.edit',
+            FestivalPortalRole::Guest => 'public.festivals.index',
         };
     }
 
@@ -373,7 +372,7 @@ class FestivalPortalController extends Controller
         return match ($portalUser->role) {
             FestivalPortalRole::Registrant => 'festival.portal.dashboard',
             FestivalPortalRole::Judge => 'festival.portal.judge.dashboard',
-            FestivalPortalRole::Guest => 'festival.portal.guest.dashboard',
+            FestivalPortalRole::Guest => 'public.festivals.index',
         };
     }
 }

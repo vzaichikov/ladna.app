@@ -63,6 +63,7 @@ class FestivalOtpAuthenticationTest extends TestCase
         $this->get(route('festival.portal.profile.edit', $account->slug))
             ->assertOk()
             ->assertDontSee('data-festival-profile-phone-step', false)
+            ->assertSee('data-phone-mask-validate="false"', false)
             ->assertSee(__('app.festival_profile_step_label', ['current' => 3, 'total' => 3]));
     }
 
@@ -85,6 +86,7 @@ class FestivalOtpAuthenticationTest extends TestCase
             ->assertOk()
             ->assertSee('role="tablist"', false)
             ->assertSee('data-active-method="phone"', false)
+            ->assertSee('data-phone-mask-validate="false"', false)
             ->assertSeeInOrder([
                 'data-customer-auth-tab="phone"',
                 'data-customer-auth-tab="email"',
@@ -97,6 +99,7 @@ class FestivalOtpAuthenticationTest extends TestCase
             ->assertOk()
             ->assertDontSee('data-customer-auth-tabs', false)
             ->assertDontSee('data-customer-auth-tab="phone"', false)
+            ->assertSee('data-phone-mask-validate="false"', false)
             ->assertDontSee(__('app.festival_profile_step_label', ['current' => 1, 'total' => 3]));
     }
 
@@ -125,33 +128,21 @@ class FestivalOtpAuthenticationTest extends TestCase
         $this->assertGuest('festival');
     }
 
-    public function test_guest_otp_is_role_bound_even_when_a_registrant_uses_the_same_phone(): void
+    public function test_guest_otp_endpoints_are_not_publicly_available(): void
     {
         $account = $this->otpAccount();
-        FestivalPortalUser::factory()->for($account)->create([
-            'phone' => '+380503334455',
-            'phone_normalized' => '+380503334455',
-        ]);
-        Http::fake([
-            'challenges.cloudflare.com/*' => Http::response(['success' => true]),
-            'api.turbosms.ua/*' => Http::response(['response_result' => [['message_id' => 'festival-guest-otp']]]),
-        ]);
+        Http::fake();
 
-        $this->post(route('festival.guest.login.otp.send', $account->slug), [
+        $this->post('/'.$account->slug.'/festival/guest/login/otp', [
             'phone' => '0503334455',
             'cf-turnstile-response' => 'turnstile-token',
-        ])->assertRedirect(route('festival.guest.login.otp.challenge', $account->slug));
+        ])->assertNotFound();
 
-        $challenge = FestivalOtpChallenge::query()->whereBelongsTo($account)->latest('id')->firstOrFail();
-        $this->assertSame(FestivalPortalRole::Guest, $challenge->role);
-        $this->post(route('festival.guest.login.otp.verify', $account->slug), [
-            'phone' => '+380503334455',
-            'code' => '123456',
-        ])->assertRedirect(route('festival.portal.guest.dashboard', $account->slug));
-
-        $guest = FestivalPortalUser::query()->whereBelongsTo($account)->forRole(FestivalPortalRole::Guest)->sole();
-        $this->assertSame('+380503334455', $guest->phone_normalized);
-        $this->assertAuthenticatedAs($guest, 'festival');
+        $this->assertDatabaseMissing('festival_otp_challenges', [
+            'account_id' => $account->id,
+            'role' => FestivalPortalRole::Guest->value,
+        ]);
+        Http::assertNothingSent();
     }
 
     public function test_festival_and_customer_otp_challenges_cannot_consume_each_other(): void
@@ -298,6 +289,7 @@ class FestivalOtpAuthenticationTest extends TestCase
         $this->get(route('festival.portal.profile.edit', $account->slug))
             ->assertOk()
             ->assertSee('data-festival-profile-phone-step', false)
+            ->assertSee('data-phone-mask-validate="false"', false)
             ->assertSee(__('app.festival_profile_step_label', ['current' => 2, 'total' => 3]))
             ->assertSee('name="phone"', false)
             ->assertDontSee('name="first_name"', false)

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.144.0',
+                'date' => '2026-08-18',
+                'title' => 'Simpler Festival applications and guest checkout',
+                'items' => ['Festival category limits now use participant-friendly labels for participant counts, ages, and minutes, while participant profile copy is clearer throughout the portal.', 'Applicants can verify their phone in one action and edit their name, city, or studio in a focused modal without losing an unfinished application.', 'Festival guests can now buy tickets directly with their name, confirmed email, optional Google prefill, and phone number without a guest cabinet or one-time code. Private order links continue to provide venue tickets and protected online-stream access.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.143.0',
                 'date' => '2026-08-16',
                 'title' => 'Dedicated Entry and Festival staff access',
@@ -1248,6 +1255,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.144.0',
+                'date' => '2026-08-18',
+                'title' => 'Простіші заявки й купівля квитків фестивалю',
+                'items' => ['Обмеження категорій фестивалю тепер показують зрозумілі значення кількості учасників, віку та тривалості у хвилинах, а тексти профілю учасника стали чіткішими.', 'Учасник може підтвердити телефон однією дією та змінити імʼя, місто або студію у компактному вікні без втрати незавершеної заявки.', 'Гості фестивалю тепер купують квитки напряму за імʼям, підтвердженим email, необовʼязковим заповненням через Google і номером телефону — без кабінету гостя та одноразового коду. Приватне посилання на замовлення й надалі надає квитки на майданчик і захищений доступ до онлайн-трансляції.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.143.0',
                 'date' => '2026-08-16',

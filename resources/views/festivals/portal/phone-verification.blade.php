@@ -69,7 +69,7 @@
                         @csrf
                         <label class="block">
                             <span class="crm-label">{{ __('app.phone') }}</span>
-                            <input name="phone" type="tel" value="{{ $phoneValue }}" required autofocus class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}">
+                            <input name="phone" type="tel" value="{{ $phoneValue }}" required autofocus class="crm-field" data-phone-mask data-phone-mask-validate="false" data-country-code="{{ $account->country_code ?? 'UA' }}">
                             <x-ui.field-error name="phone" />
                         </label>
                         <x-ui.button type="submit" class="w-full justify-center">{{ __('app.customer_google_phone_send_code') }}</x-ui.button>

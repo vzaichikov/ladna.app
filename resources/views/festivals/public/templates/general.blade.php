@@ -2,13 +2,68 @@
 
 @section('festivalContent')
 @php($cover = $edition->media->firstWhere('is_cover', true))
-<main class="min-h-screen festival-page"><section class="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-12"><x-ui.public-studio-header :account="$account" />
-    <header class="mt-8 overflow-hidden rounded-3xl festival-border festival-surface border shadow-crm">@if($cover?->url())<img src="{{ $cover->url() }}" alt="{{ $cover->alt_text ?: $edition->title }}" class="max-h-[32rem] w-full object-cover">@endif<div class="grid gap-8 p-6 sm:p-10 lg:grid-cols-[1fr_21rem]"><div><p class="text-sm font-semibold festival-primary-text">{{ $edition->series->name }}</p><h1 class="mt-2 text-4xl font-semibold leading-tight sm:text-6xl">{{ $edition->title }}</h1>@if($edition->summary)<p class="mt-5 max-w-3xl text-lg leading-8 festival-muted">{{ $edition->summary }}</p>@endif<div class="mt-6 flex flex-wrap gap-2"><x-ui.button :href="route('festival.login', $account->slug)" class="festival-primary-button">{{ __('app.festival_participant_cabinet') }}</x-ui.button><x-ui.button :href="route('festival.judge.login', $account->slug)" variant="secondary" class="festival-secondary-button">{{ __('app.festival_judge_cabinet') }}</x-ui.button><x-ui.button :href="route('public.festivals.index', $account->slug)" variant="ghost" class="festival-ghost-button">{{ __('app.all_festivals') }}</x-ui.button></div></div><aside class="rounded-2xl festival-border festival-page festival-text border p-5"><strong class="text-xl">{{ $edition->starts_at->timezone($edition->timezone)->format('d.m.Y') }}</strong><p class="mt-1 text-lg">{{ $edition->starts_at->timezone($edition->timezone)->format('H:i') }}–{{ $edition->ends_at->timezone($edition->timezone)->format('H:i') }}</p><p class="mt-4 text-sm leading-6">{{ $edition->venue_name }}<br>{{ $edition->venue_address }}</p>@if($edition->venue_map_url)<a href="{{ $edition->venue_map_url }}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-block text-sm font-semibold underline">{{ __('app.open_map') }}</a>@endif</aside></div></header>
-    <div class="mt-8">@include('festivals.public._timeline')</div>
-    <div class="mt-8 grid gap-8 lg:grid-cols-[1fr_23rem]"><div class="space-y-6">@if($edition->description_html)<article class="prose festival-prose max-w-none rounded-2xl festival-border festival-surface border p-6 shadow-crm sm:p-8">{!! $edition->description_html !!}</article>@endif @foreach($edition->sections as $section)<article class="rounded-2xl festival-border festival-surface border p-6 shadow-crm"><h2 class="text-2xl font-semibold">{{ $section->title }}</h2><div class="prose festival-prose mt-4 max-w-none">{!! $section->body_html !!}</div></article>@endforeach @if($edition->rules_html)<article id="festival-rules" class="scroll-mt-6 rounded-2xl festival-border festival-surface border p-6 shadow-crm"><h2 class="text-2xl font-semibold">{{ __('app.festival_rules') }}</h2><div class="prose festival-prose mt-4 max-w-none">{!! $edition->rules_html !!}</div></article>@endif
-        @if($edition->results->isNotEmpty())<section class="rounded-2xl festival-border festival-surface border p-6 shadow-crm"><h2 class="text-2xl font-semibold">{{ __('app.festival_results') }}</h2><div class="mt-4 overflow-x-auto"><table class="min-w-full text-sm"><thead><tr><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">{{ __('app.performance') }}</th><th class="px-3 py-2 text-left">{{ __('app.festival_category') }}</th><th class="px-3 py-2 text-right">{{ __('app.festival_score') }}</th></tr></thead><tbody>@foreach($edition->results->sortBy('rank') as $result)<tr class="border-t festival-border"><td class="px-3 py-3 font-semibold">{{ $result->rank }}</td><td class="px-3 py-3">{{ $result->entry->entry_name }}</td><td class="px-3 py-3">{{ $result->entry->category->name }}</td><td class="px-3 py-3 text-right">{{ $result->total_score }}</td></tr>@endforeach</tbody></table></div></section>@endif</div>
-        <aside class="lg:sticky lg:top-6 lg:self-start"><section class="rounded-2xl festival-border festival-surface border p-5 shadow-crm"><h2 class="text-2xl font-semibold">{{ __('app.festival_admission') }}</h2><p class="mt-3 text-sm festival-muted">{{ __('app.festival_buy_in_cabinet') }}</p><div class="mt-4 space-y-3">@forelse($edition->admissionTypes as $type)@php($price = $type->currentPrice())<div class="rounded-xl border festival-border p-4"><strong class="block">{{ $type->name }}</strong><span class="text-sm festival-muted">{{ \App\Support\MoneyFormatter::format($price['price_cents'], $account->default_currency) }} · {{ $type->remainingQuantity() }} {{ __('app.left') }}</span></div>@empty<p class="text-sm festival-muted">{{ __('app.festival_admission_unavailable') }}</p>@endforelse</div>
-            @if($edition->admissionTypes->isNotEmpty())<x-ui.button :href="route('festival.guest.login', $account->slug)" class="festival-primary-button mt-5 w-full">{{ __('app.festival_open_ticket_cabinet') }}</x-ui.button>@endif</section></aside>
-    </div>
-</section></main>
+<main class="min-h-screen festival-page">
+    <section class="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
+        <x-ui.public-studio-header :account="$account" />
+
+        <header class="mt-8 overflow-hidden rounded-3xl border festival-border festival-surface shadow-crm">
+            @if ($cover?->url())
+                <img src="{{ $cover->url() }}" alt="{{ $cover->alt_text ?: $edition->title }}" class="max-h-[32rem] w-full object-cover">
+            @endif
+            <div class="grid gap-8 p-6 sm:p-10 lg:grid-cols-[1fr_21rem]">
+                <div>
+                    <p class="text-sm font-semibold festival-primary-text">{{ $edition->series->name }}</p>
+                    <h1 class="mt-2 text-4xl font-semibold leading-tight sm:text-6xl">{{ $edition->title }}</h1>
+                    @if ($edition->summary)<p class="mt-5 max-w-3xl text-lg leading-8 festival-muted">{{ $edition->summary }}</p>@endif
+                    <div class="mt-6 flex flex-wrap gap-2">
+                        <x-ui.button :href="route('festival.login', $account->slug)" class="festival-primary-button">{{ __('app.festival_participant_cabinet') }}</x-ui.button>
+                        <x-ui.button :href="route('festival.judge.login', $account->slug)" variant="secondary" class="festival-secondary-button">{{ __('app.festival_judge_cabinet') }}</x-ui.button>
+                        <x-ui.button :href="route('public.festivals.index', $account->slug)" variant="ghost" class="festival-ghost-button">{{ __('app.all_festivals') }}</x-ui.button>
+                    </div>
+                </div>
+                <aside class="rounded-2xl border festival-border festival-page p-5 festival-text">
+                    <strong class="text-xl">{{ $edition->starts_at->timezone($edition->timezone)->format('d.m.Y') }}</strong>
+                    <p class="mt-1 text-lg">{{ $edition->starts_at->timezone($edition->timezone)->format('H:i') }}–{{ $edition->ends_at->timezone($edition->timezone)->format('H:i') }}</p>
+                    <p class="mt-4 text-sm leading-6">{{ $edition->venue_name }}<br>{{ $edition->venue_address }}</p>
+                    @if ($edition->venue_map_url)<a href="{{ $edition->venue_map_url }}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-block text-sm font-semibold underline">{{ __('app.open_map') }}</a>@endif
+                    @if ($festivalAdmissionOptions->isNotEmpty())
+                        <x-ui.button href="#festival-admission" class="festival-primary-button mt-5 w-full">{{ __('app.buy_tickets') }}</x-ui.button>
+                    @endif
+                </aside>
+            </div>
+        </header>
+
+        <div class="mt-8">@include('festivals.public._timeline')</div>
+        <div class="mt-8 space-y-6">
+            @if ($edition->description_html)
+                <article class="prose festival-prose max-w-none rounded-2xl border festival-border festival-surface p-6 shadow-crm sm:p-8">{!! $edition->description_html !!}</article>
+            @endif
+            @foreach ($edition->sections as $section)
+                <article class="rounded-2xl border festival-border festival-surface p-6 shadow-crm">
+                    <h2 class="text-2xl font-semibold">{{ $section->title }}</h2>
+                    <div class="prose festival-prose mt-4 max-w-none">{!! $section->body_html !!}</div>
+                </article>
+            @endforeach
+            @if ($edition->rules_html)
+                <article id="festival-rules" class="scroll-mt-6 rounded-2xl border festival-border festival-surface p-6 shadow-crm">
+                    <h2 class="text-2xl font-semibold">{{ __('app.festival_rules') }}</h2>
+                    <div class="prose festival-prose mt-4 max-w-none">{!! $edition->rules_html !!}</div>
+                </article>
+            @endif
+            @if ($edition->results->isNotEmpty())
+                <section class="rounded-2xl border festival-border festival-surface p-6 shadow-crm">
+                    <h2 class="text-2xl font-semibold">{{ __('app.festival_results') }}</h2>
+                    <div class="mt-4 overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead><tr><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">{{ __('app.performance') }}</th><th class="px-3 py-2 text-left">{{ __('app.festival_category') }}</th><th class="px-3 py-2 text-right">{{ __('app.festival_score') }}</th></tr></thead>
+                            <tbody>@foreach ($edition->results->sortBy('rank') as $result)<tr class="border-t festival-border"><td class="px-3 py-3 font-semibold">{{ $result->rank }}</td><td class="px-3 py-3">{{ $result->entry->entry_name }}</td><td class="px-3 py-3">{{ $result->entry->category->name }}</td><td class="px-3 py-3 text-right">{{ $result->total_score }}</td></tr>@endforeach</tbody>
+                        </table>
+                    </div>
+                </section>
+            @endif
+        </div>
+
+        @include('festivals.public._admission-checkout')
+    </section>
+</main>
 @endsection

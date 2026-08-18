@@ -102,7 +102,7 @@
             <x-ui.panel padding="none" class="overflow-hidden">
                 @forelse ($portalUser->participants as $participant)
                     <div class="crm-row lg:grid-cols-[minmax(0,1fr)_160px_auto] lg:items-center">
-                        <div><p class="font-semibold text-slate-950">{{ $participant->displayName() }}</p><p class="mt-1 text-sm text-slate-500">{{ $participant->date_of_birth->format('d.m.Y') }}@if($participant->is_profile_owner) · {{ __('app.festival_profile') }}@endif</p></div>
+                        <div><p class="font-semibold text-slate-950">{{ $participant->displayName() }}</p><p class="mt-1 text-sm text-slate-500">{{ $participant->date_of_birth->format('d.m.Y') }}@if($participant->is_profile_owner) · {{ __('app.festival_participant_profile') }}@endif</p></div>
                         <div class="text-sm text-slate-500">{{ trans_choice('app.festival_entries_usage_count', $participant->entries_count, ['count' => $participant->entries_count]) }}@if($participant->archived_at)<span class="mt-1 block">{{ __('app.archived') }}</span>@endif</div>
                         <div class="flex justify-end gap-2">
                             @unless($participant->is_profile_owner)

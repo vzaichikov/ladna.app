@@ -232,6 +232,7 @@ class FestivalPortalAuthController extends Controller
     {
         try {
             ['account' => $account, 'role' => $role, 'user' => $googleUser] = $google->userFromCallback($request);
+            abort_unless(in_array($role, [FestivalPortalRole::Registrant, FestivalPortalRole::Judge], true), 404);
             abort_unless($availability->methodsFor($account)->google, 404);
             $portalUser = $this->resolveGoogleIdentity($account, $role, $googleUser);
         } catch (RuntimeException|ValidationException) {
@@ -248,7 +249,9 @@ class FestivalPortalAuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route($this->loginRoute($role), $accountSlug);
+        return $role === FestivalPortalRole::Guest
+            ? redirect()->route('public.festivals.index', $accountSlug)
+            : redirect()->route($this->loginRoute($role), $accountSlug);
     }
 
     private function resolveGoogleIdentity(Account $account, FestivalPortalRole $role, GoogleUserData $googleUser): FestivalPortalUser
@@ -361,7 +364,7 @@ class FestivalPortalAuthController extends Controller
     private function role(string $role): FestivalPortalRole
     {
         $portalRole = FestivalPortalRole::tryFrom($role);
-        abort_unless($portalRole, 404);
+        abort_unless(in_array($portalRole, [FestivalPortalRole::Registrant, FestivalPortalRole::Judge], true), 404);
 
         return $portalRole;
     }
@@ -371,7 +374,7 @@ class FestivalPortalAuthController extends Controller
         return match ($role) {
             FestivalPortalRole::Registrant => 'festival.login',
             FestivalPortalRole::Judge => 'festival.judge.login',
-            FestivalPortalRole::Guest => 'festival.guest.login',
+            FestivalPortalRole::Guest => 'public.festivals.index',
         };
     }
 
@@ -380,7 +383,7 @@ class FestivalPortalAuthController extends Controller
         return match ($role) {
             FestivalPortalRole::Registrant => 'festival.portal.dashboard',
             FestivalPortalRole::Judge => 'festival.portal.judge.dashboard',
-            FestivalPortalRole::Guest => 'festival.portal.guest.dashboard',
+            FestivalPortalRole::Guest => 'public.festivals.index',
         };
     }
 
@@ -389,7 +392,7 @@ class FestivalPortalAuthController extends Controller
         return match ($role) {
             FestivalPortalRole::Registrant => 'festival.login.'.$suffix,
             FestivalPortalRole::Judge => 'festival.judge.login.'.$suffix,
-            FestivalPortalRole::Guest => 'festival.guest.login.'.$suffix,
+            FestivalPortalRole::Guest => 'public.festivals.index',
         };
     }
 

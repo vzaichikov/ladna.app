@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Actions\Festivals\CreateFestivalTicketOrder;
 use App\Actions\Festivals\FestivalTicketIssuer;
 use App\Actions\Festivals\FestivalTicketScanner;
+use App\Actions\Festivals\ResolveFestivalGuest;
 use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Models\Account;
@@ -468,13 +469,20 @@ class FestivalAdmissionTest extends TestCase
             ->with(Mockery::on(fn (Account $candidate): bool => $candidate->is($account)))
             ->andReturn(collect([$setting]));
 
-        return new CreateFestivalTicketOrder($gateways);
+        return new CreateFestivalTicketOrder($gateways, app(ResolveFestivalGuest::class));
     }
 
     /** @return array<string, mixed> */
     private function orderInput(FestivalAdmissionType $type, int $quantity, string $email = 'buyer@example.com'): array
     {
-        return ['buyer_name' => 'Festival Guest', 'buyer_email' => $email, 'provider' => 'monopay', 'items' => [['admission_type_id' => $type->id, 'quantity' => $quantity]], 'terms' => true];
+        return [
+            'buyer_name' => 'Festival Guest',
+            'buyer_email' => $email,
+            'buyer_phone' => '+380501112233',
+            'provider' => 'monopay',
+            'items' => [['admission_type_id' => $type->id, 'quantity' => $quantity]],
+            'terms' => true,
+        ];
     }
 
     /** @param array<string, mixed> $overrides */

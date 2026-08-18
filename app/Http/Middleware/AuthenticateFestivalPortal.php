@@ -23,7 +23,6 @@ class AuthenticateFestivalPortal
         $portalUser = $request->user('festival');
         $expectedRole = match (true) {
             $request->routeIs('festival.portal.judge.*', 'festival.portal.judging.*', 'festival.portal.battle-votes.*') => FestivalPortalRole::Judge,
-            $request->routeIs('festival.portal.guest.*') => FestivalPortalRole::Guest,
             default => FestivalPortalRole::Registrant,
         };
 
@@ -62,7 +61,7 @@ class AuthenticateFestivalPortal
         return match ($role) {
             FestivalPortalRole::Registrant => 'festival.login',
             FestivalPortalRole::Judge => 'festival.judge.login',
-            FestivalPortalRole::Guest => 'festival.guest.login',
+            FestivalPortalRole::Guest => 'public.festivals.index',
         };
     }
 }

@@ -2,11 +2,9 @@
 
 @php
     $isJudge = $role === \App\Enums\FestivalPortalRole::Judge;
-    $isGuest = $role === \App\Enums\FestivalPortalRole::Guest;
     $isRegistrant = $role === \App\Enums\FestivalPortalRole::Registrant;
     $routePrefix = match ($role) {
         \App\Enums\FestivalPortalRole::Judge => 'festival.judge.login',
-        \App\Enums\FestivalPortalRole::Guest => 'festival.guest.login',
         default => 'festival.login',
     };
     $mascotAsset = $isJudge
@@ -14,7 +12,7 @@
         : 'assets/brand/mascot/ladna-mascot-festival-champion-cutout.png';
 @endphp
 
-@section('title', ($isJudge ? __('app.festival_judge_login') : ($isGuest ? __('app.festival_guest_login') : __('app.festival_participant_login'))).' - '.$account->name)
+@section('title', ($isJudge ? __('app.festival_judge_login') : __('app.festival_participant_login')).' - '.$account->name)
 
 @push('head')
     @if ($methods->otp && $stage !== 'otp_code')
@@ -42,8 +40,8 @@
             @if($isRegistrant)
                 <p class="text-sm font-semibold uppercase tracking-wide text-brand-600" data-festival-profile-step-label>{{ __('app.festival_profile_step_label', ['current' => $stage === 'otp_code' ? 2 : 1, 'total' => $methods->otp ? 3 : 2]) }}</p>
             @endif
-            <h1 class="text-3xl font-semibold">{{ $isJudge ? __('app.festival_judge_login') : ($isGuest ? __('app.festival_guest_login') : __('app.festival_participant_login')) }}</h1>
-            <p class="mt-3 leading-7 text-slate-600">{{ $isJudge ? __('app.festival_judge_login_copy') : ($isGuest ? __('app.festival_guest_login_copy') : __('app.festival_participant_login_copy')) }}</p>
+            <h1 class="text-3xl font-semibold">{{ $isJudge ? __('app.festival_judge_login') : __('app.festival_participant_login') }}</h1>
+            <p class="mt-3 leading-7 text-slate-600">{{ $isJudge ? __('app.festival_judge_login_copy') : __('app.festival_participant_login_copy') }}</p>
 
             @if (session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
             @if ($errors->any() && ($isJudge || ! $errors->hasAny(['code', 'email', 'password', 'phone', 'cf-turnstile-response'])))<div class="mt-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $errors->first() }}</div>@endif
@@ -82,7 +80,7 @@
                         <div class="my-5 flex items-center gap-3 text-xs uppercase tracking-wide text-slate-400"><span class="h-px flex-1 bg-stone-200"></span>{{ __('app.or') }}<span class="h-px flex-1 bg-stone-200"></span></div>
                         <form method="POST" action="{{ route($routePrefix.'.otp.send', $account->slug) }}" class="space-y-4">
                             @csrf
-                            <label class="block"><span class="crm-label">{{ __('app.phone') }}</span><input name="phone" type="tel" value="{{ old('phone') }}" required class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}"></label>
+                            <label class="block"><span class="crm-label">{{ __('app.phone') }}</span><input name="phone" type="tel" value="{{ old('phone') }}" required class="crm-field" data-phone-mask data-phone-mask-validate="false" data-country-code="{{ $account->country_code ?? 'UA' }}"></label>
                             <div class="cf-turnstile" data-sitekey="{{ $methods->turnstileSiteKey }}"></div>
                             <x-ui.button type="submit" variant="secondary" class="w-full">{{ __('app.send_code') }}</x-ui.button>
                         </form>
@@ -123,7 +121,7 @@
                                 <section id="festival-auth-panel-phone" data-customer-auth-panel="phone" @if($hasTabbedLogin) role="tabpanel" aria-labelledby="festival-auth-tab-phone" @endif @class(['hidden' => $hasTabbedLogin && $activeLoginMethod !== 'phone'])>
                                     <form method="POST" action="{{ route($routePrefix.'.otp.send', $account->slug) }}" class="space-y-4">
                                         @csrf
-                                        <label class="block"><span class="crm-label">{{ __('app.phone') }}</span><input name="phone" type="tel" value="{{ old('phone') }}" required class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}"><x-ui.field-error name="phone" /></label>
+                                        <label class="block"><span class="crm-label">{{ __('app.phone') }}</span><input name="phone" type="tel" value="{{ old('phone') }}" required class="crm-field" data-phone-mask data-phone-mask-validate="false" data-country-code="{{ $account->country_code ?? 'UA' }}"><x-ui.field-error name="phone" /></label>
                                         <div class="cf-turnstile" data-sitekey="{{ $methods->turnstileSiteKey }}"></div>
                                         <x-ui.field-error name="cf-turnstile-response" />
                                         <x-ui.button type="submit" class="w-full">{{ __('app.login') }}</x-ui.button>

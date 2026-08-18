@@ -55,9 +55,8 @@
                             <span class="text-slate-500">· {{ __('app.festival_category_accepted_total') }}</span>
                         </p>
                         <dl class="mt-4 flex flex-wrap gap-2 text-xs text-slate-700">
-                            <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $category->min_members, 'max' => $category->max_members]) }}</dd></div>
+                            <x-festivals.category-limit-chips :category="$category" />
                             @if ($category->maximum_accepted_entries !== null)<div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_maximum_accepted_entries') }}</dt><dd>{{ __('app.festival_maximum_accepted_entries_value', ['maximum' => $category->maximum_accepted_entries]) }}</dd></div>@endif
-                            @if ($category->min_age !== null || $category->max_age !== null)<div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_age_limits') }}</dt><dd>{{ __('app.festival_age_range', ['min' => $category->min_age ?? '—', 'max' => $category->max_age ?? '—']) }}</dd></div>@endif
                             @if ($category->registration_closes_at)<div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_registration_closes_at') }}</dt><dd>{{ __('app.festival_category_deadline_value', ['date' => $category->registration_closes_at->timezone($edition->timezone)->format('d.m.Y H:i'), 'timezone' => $edition->timezone]) }}</dd></div>@endif
                         </dl>
                     </div>

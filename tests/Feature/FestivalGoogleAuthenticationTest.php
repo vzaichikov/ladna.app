@@ -85,25 +85,16 @@ class FestivalGoogleAuthenticationTest extends TestCase
         $this->assertAuthenticatedAs($judge, 'festival');
     }
 
-    public function test_guest_google_registration_is_separate_from_the_same_registrant_identity(): void
+    public function test_guest_google_login_endpoint_is_not_publicly_available(): void
     {
         $this->enableGoogle();
         $account = Account::factory()->create(['enable_festivals' => true]);
-        $registrant = FestivalPortalUser::factory()->for($account)->create([
-            'email' => 'shared.google@example.com',
-            'email_normalized' => 'shared.google@example.com',
-            'google_id' => 'shared-google-subject',
+
+        $this->get('/'.$account->slug.'/festival/guest/login/google')->assertNotFound();
+        $this->assertDatabaseMissing('festival_portal_users', [
+            'account_id' => $account->id,
+            'role' => FestivalPortalRole::Guest->value,
         ]);
-        $state = $this->oauthState(route('festival.guest.login.google', $account->slug));
-        $this->fakeGoogle('shared-google-subject', 'shared.google@example.com', true, 'Shared Google');
-
-        $this->get(route('festival.google.callback', ['state' => $state, 'code' => 'authorization-code']))
-            ->assertRedirect(route('festival.portal.guest.dashboard', $account->slug));
-
-        $guest = FestivalPortalUser::query()->whereBelongsTo($account)->forRole(FestivalPortalRole::Guest)->sole();
-        $this->assertNotSame($registrant->id, $guest->id);
-        $this->assertSame('shared-google-subject', $guest->google_id);
-        $this->assertAuthenticatedAs($guest, 'festival');
     }
 
     public function test_unknown_judge_unverified_email_and_wrong_role_are_rejected_without_profile_creation(): void

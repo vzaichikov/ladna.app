@@ -31,6 +31,106 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_public_festival_checkout_creates_an_internal_guest_and_issues_a_free_ticket_without_login_otp_or_provider(): void
+    {
+        [$account, $edition] = $this->festival();
+        $type = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'delivery_mode' => FestivalAdmissionDeliveryMode::Venue,
+            'price_cents' => 0,
+            'inventory' => 10,
+            'max_per_order' => 10,
+        ]);
+
+        $response = $this->post(route('public.festivals.admission.store', [$account->slug, $edition->slug]), [
+            'buyer_name' => 'Olena Viewer',
+            'buyer_email' => ' Viewer@Example.com ',
+            'buyer_email_confirmation' => 'viewer@example.com',
+            'buyer_phone' => '050 111 22 33',
+            'items' => [$type->id => 1],
+            'terms' => '1',
+        ]);
+
+        $order = FestivalTicketOrder::query()->whereBelongsTo($account)->sole();
+        $guest = FestivalPortalUser::query()->whereBelongsTo($account)->where('role', 'guest')->sole();
+        $response->assertRedirect(route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]));
+        $this->assertSame(FestivalTicketOrderStatus::Paid, $order->status);
+        $this->assertNull($order->provider);
+        $this->assertSame('Olena Viewer', $order->buyer_name);
+        $this->assertSame('viewer@example.com', $order->buyer_email);
+        $this->assertSame('+380501112233', $order->buyer_phone);
+        $this->assertSame($guest->id, $order->festival_portal_user_id);
+        $this->assertSame('viewer@example.com', $guest->email_normalized);
+        $this->assertSame('+380501112233', $guest->phone_normalized);
+        $this->assertSame(1, $order->tickets()->count());
+        $this->assertDatabaseMissing('festival_otp_challenges', ['account_id' => $account->id]);
+    }
+
+    public function test_public_festival_checkout_requires_matching_email_and_a_valid_phone_before_creating_identity_or_order(): void
+    {
+        [$account, $edition] = $this->festival();
+        $type = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'price_cents' => 0,
+        ]);
+
+        $this->from(route('public.festivals.show', [$account->slug, $edition->slug]))
+            ->post(route('public.festivals.admission.store', [$account->slug, $edition->slug]), [
+                'buyer_name' => 'Invalid Viewer',
+                'buyer_email' => 'viewer@example.com',
+                'buyer_email_confirmation' => 'different@example.com',
+                'buyer_phone' => 'not-a-phone',
+                'items' => [$type->id => 1],
+                'terms' => '1',
+            ])
+            ->assertSessionHasErrors(['buyer_email', 'buyer_phone']);
+
+        $this->assertSame(0, FestivalTicketOrder::query()->whereBelongsTo($account)->count());
+        $this->assertSame(0, FestivalPortalUser::query()->whereBelongsTo($account)->where('role', 'guest')->count());
+    }
+
+    public function test_festival_google_prefill_is_one_time_and_does_not_create_a_guest_or_order(): void
+    {
+        $this->enableGoogle();
+        [$account, $edition] = $this->festival();
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id]);
+
+        $start = $this->post(route('public.festivals.admission.google', [$account->slug, $edition->slug]), [
+            'buyer_phone' => '+380501112233',
+            'items' => [$type->id => 2],
+            'terms' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $location = (string) $start->headers->get('Location');
+        $this->assertStringStartsWith('https://accounts.google.com/o/oauth2/v2/auth?', $location);
+        parse_str(parse_url($location, PHP_URL_QUERY) ?: '', $query);
+        $this->assertSame(route('public.festival-admission.google.callback'), $query['redirect_uri']);
+
+        Http::preventStrayRequests();
+        Http::fake([
+            'oauth2.googleapis.com/token' => Http::response(['access_token' => 'festival-google-token']),
+            'openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'sub' => 'festival-google-subject',
+                'name' => 'Verified Viewer',
+                'email' => 'Verified.Viewer@Example.com',
+                'email_verified' => true,
+            ]),
+        ]);
+        $callback = route('public.festival-admission.google.callback', [
+            'state' => $query['state'],
+            'code' => 'one-use-code',
+        ]);
+
+        $this->get($callback)
+            ->assertRedirect(route('public.festivals.show', [$account->slug, $edition->slug]))
+            ->assertSessionHasInput('buyer_name', 'Verified Viewer')
+            ->assertSessionHasInput('buyer_email', 'verified.viewer@example.com')
+            ->assertSessionHasInput('buyer_email_confirmation', 'verified.viewer@example.com')
+            ->assertSessionHasInput('items', [$type->id => 2]);
+        $this->get($callback)->assertRedirect(route('home'))->assertSessionHasErrors('google');
+        $this->assertSame(0, FestivalPortalUser::query()->whereBelongsTo($account)->count());
+        $this->assertSame(0, FestivalTicketOrder::query()->whereBelongsTo($account)->count());
+    }
+
     public function test_festival_monopay_ticket_checkout_uses_the_shared_iframe_flow_when_enabled(): void
     {
         app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
@@ -44,7 +144,7 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
             ]),
         ]);
 
-        $checkout = $this->actingAs($guest, 'festival')->post(
+        $checkout = $this->post(
             route('public.festivals.admission.store', [$account->slug, $edition->slug]),
             $this->festivalCheckoutPayload($guest, $type),
         );
@@ -80,7 +180,7 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
             ->assertOk()
             ->assertSee('data-ticket-order-poll', false)
             ->assertSee($paymentUrl, false)
-            ->assertSee(route('festival.portal.guest.dashboard', $account->slug), false)
+            ->assertSee(route('public.festivals.show', [$account->slug, $edition->slug]).'#festival-admission', false)
             ->assertSee(__('app.festival_order_return_to_tickets'));
 
         $otherAccount = Account::factory()->create(['enable_festivals' => true]);
@@ -104,11 +204,10 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
             ]),
         ]);
 
-        $this->actingAs($guest, 'festival')
-            ->post(
-                route('public.festivals.admission.store', [$account->slug, $edition->slug]),
-                $this->festivalCheckoutPayload($guest, $type),
-            )
+        $this->post(
+            route('public.festivals.admission.store', [$account->slug, $edition->slug]),
+            $this->festivalCheckoutPayload($guest, $type),
+        )
             ->assertRedirect('https://pay.monobank.ua/invoice/festival-mono-v1');
 
         Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
@@ -286,7 +385,10 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
             'inventory' => 10,
             'max_per_order' => 10,
         ]);
-        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create([
+            'phone' => '+380501112233',
+            'phone_normalized' => '+380501112233',
+        ]);
         $this->accountPaymentIntegration($account, IntegrationProvider::Monopay, ['api_token' => 'festival-mono-token']);
 
         return [$account, $edition, $type, $guest];
@@ -314,11 +416,27 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
         return [
             'buyer_name' => $guest->displayName(),
             'buyer_email' => $guest->email,
+            'buyer_email_confirmation' => $guest->email,
             'buyer_phone' => $guest->phone,
             'provider' => IntegrationProvider::Monopay->value,
             'items' => [['admission_type_id' => $type->id, 'quantity' => 1]],
             'terms' => '1',
         ];
+    }
+
+    private function enableGoogle(): void
+    {
+        IntegrationSetting::query()->create([
+            'scope_type' => IntegrationScope::Platform->value,
+            'scope_id' => 0,
+            'provider' => 'google_oauth',
+            'category' => IntegrationCategory::Authentication->value,
+            'is_enabled' => true,
+            'credentials' => [
+                'client_id' => 'festival-google-client',
+                'client_secret' => 'festival-google-secret',
+            ],
+        ]);
     }
 
     private function orderItem(FestivalTicketOrder $order, FestivalAdmissionType $type, int $quantity): FestivalTicketOrderItem

@@ -29,7 +29,7 @@ class EnsureFestivalProfileComplete
             && ! $this->availability->methodsFor($account)->otp);
 
         if ($portalUser instanceof FestivalPortalUser && ! $portalUser->profileIsComplete($requiresVerifiedPhone)) {
-            if ($request->routeIs('festival.portal.profile.*', 'festival.portal.judge.profile.*', 'festival.portal.guest.profile.*', 'festival.portal.logout', 'festival.logout')) {
+            if ($request->routeIs('festival.portal.profile.*', 'festival.portal.judge.profile.*', 'festival.portal.logout', 'festival.logout')) {
                 return $next($request);
             }
 
@@ -37,7 +37,7 @@ class EnsureFestivalProfileComplete
                 match ($portalUser->role) {
                     FestivalPortalRole::Registrant => 'festival.portal.profile.edit',
                     FestivalPortalRole::Judge => 'festival.portal.judge.profile.edit',
-                    FestivalPortalRole::Guest => 'festival.portal.guest.profile.edit',
+                    FestivalPortalRole::Guest => 'public.festivals.index',
                 },
                 ['accountSlug' => $request->route('accountSlug')],
             )

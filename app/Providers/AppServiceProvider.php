@@ -197,6 +197,10 @@ class AppServiceProvider extends ServiceProvider
                 return Limit::perMinute(120)->by($request->ip());
             }
 
+            if ($request->routeIs('public.festival-orders.stream.watch')) {
+                return Limit::perMinute(10)->by(hash('sha256', (string) $request->route('accessToken')).'|'.$request->ip());
+            }
+
             $userId = $request->routeIs('dashboard.accounts.festivals.online-stream.preview')
                 ? $request->user()?->getAuthIdentifier()
                 : $request->user('festival')?->getAuthIdentifier();

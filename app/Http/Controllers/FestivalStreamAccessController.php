@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalStreamProvider;
+use App\Enums\FestivalTicketOrderStatus;
+use App\Enums\FestivalTicketStatus;
 use App\Models\Account;
 use App\Models\FestivalOnlineStream;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalStreamEntitlement;
+use App\Models\FestivalTicketOrder;
 use App\Support\Festivals\FestivalStreamAccessService;
 use App\Support\Festivals\FestivalStreamViewer;
 use App\Support\Festivals\FestivalYouTubeVideo;
@@ -21,12 +24,9 @@ class FestivalStreamAccessController extends Controller
 {
     public function __construct(private readonly FestivalStreamAccessService $access) {}
 
-    public function watch(Request $request, string $accountSlug, FestivalStreamEntitlement $festivalStreamEntitlement): RedirectResponse
+    public function watch(Request $request, string $accountSlug, string $accessToken, FestivalStreamEntitlement $festivalStreamEntitlement): RedirectResponse
     {
-        $account = $request->attributes->get('festivalAccount');
-        $portalUser = $this->guest($request, $account, $accountSlug);
-        abort_unless($festivalStreamEntitlement->account_id === $account->id
-            && $festivalStreamEntitlement->festival_portal_user_id === $portalUser->id, 404);
+        [, $portalUser] = $this->orderGuest($request, $accountSlug, $accessToken, $festivalStreamEntitlement);
         $entitlement = $this->access->acquireLease($festivalStreamEntitlement, $portalUser, (string) $request->ip());
         $token = $this->access->bootstrapToken($entitlement, (string) $request->ip());
         $gateway = rtrim((string) config('services.festival_stream.public_url'), '/');
@@ -98,15 +98,14 @@ class FestivalStreamAccessController extends Controller
         return response()->noContent();
     }
 
-    public function release(Request $request, string $accountSlug, FestivalStreamEntitlement $festivalStreamEntitlement): RedirectResponse
+    public function release(Request $request, string $accountSlug, string $accessToken, FestivalStreamEntitlement $festivalStreamEntitlement): RedirectResponse
     {
-        $account = $request->attributes->get('festivalAccount');
-        $portalUser = $this->guest($request, $account, $accountSlug);
-        abort_unless($festivalStreamEntitlement->account_id === $account->id
-            && $festivalStreamEntitlement->festival_portal_user_id === $portalUser->id, 404);
+        [$account, $portalUser] = $this->orderGuest($request, $accountSlug, $accessToken, $festivalStreamEntitlement);
         $this->access->releaseLeases($festivalStreamEntitlement, $portalUser);
 
-        return back()->with('status', __('app.festival_stream_devices_released'));
+        return redirect()
+            ->route('public.festival-orders.show', [$account->slug, $accessToken])
+            ->with('status', __('app.festival_stream_devices_released'));
     }
 
     public function gatewayAuthorize(Request $request): Response
@@ -182,15 +181,34 @@ class FestivalStreamAccessController extends Controller
         return $configured !== '' && $secret !== '' && hash_equals($configured, $secret);
     }
 
-    private function guest(Request $request, mixed $account, string $accountSlug): FestivalPortalUser
-    {
+    /** @return array{Account, FestivalPortalUser} */
+    private function orderGuest(
+        Request $request,
+        string $accountSlug,
+        string $accessToken,
+        FestivalStreamEntitlement $entitlement,
+    ): array {
+        $account = $request->attributes->get('festivalAccount');
         abort_unless($account instanceof Account && $account->slug === $accountSlug, 404);
-        $portalUser = $request->user('festival');
+        $order = FestivalTicketOrder::query()
+            ->whereBelongsTo($account)
+            ->where('access_token_hash', hash('sha256', $accessToken))
+            ->where('status', FestivalTicketOrderStatus::Paid->value)
+            ->with('portalUser')
+            ->whereHas('tickets', fn ($query) => $query
+                ->where('status', FestivalTicketStatus::Valid->value)
+                ->whereHas('admissionType', fn ($query) => $query
+                    ->where('delivery_mode', FestivalAdmissionDeliveryMode::OnlineStream->value))
+                ->whereHas('streamEntitlement', fn ($query) => $query
+                    ->whereKey($entitlement->id)
+                    ->where('account_id', $account->id)))
+            ->firstOrFail();
+        $portalUser = $order->portalUser;
         abort_unless($portalUser instanceof FestivalPortalUser
             && $portalUser->account_id === $account->id
-            && $portalUser->role === FestivalPortalRole::Guest
-            && $portalUser->is_active, 403);
+            && $portalUser->id === $entitlement->festival_portal_user_id
+            && $portalUser->is_active, 404);
 
-        return $portalUser;
+        return [$account, $portalUser];
     }
 }

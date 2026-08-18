@@ -30,13 +30,7 @@
                         <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ $entry->category->direction->name }}</p>
                         <h3 class="mt-1 text-lg font-semibold text-slate-950">{{ $entry->category->name }}</h3>
                         <dl class="mt-3 flex flex-wrap gap-2 text-xs text-slate-700">
-                            <div class="rounded-full bg-white px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $entry->category->min_members, 'max' => $entry->category->max_members]) }}</dd></div>
-                            @if($entry->category->min_age !== null || $entry->category->max_age !== null)
-                                <div class="rounded-full bg-white px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_age_limits') }}</dt><dd>{{ __('app.festival_age_range', ['min' => $entry->category->min_age ?? '—', 'max' => $entry->category->max_age ?? '—']) }}</dd></div>
-                            @endif
-                            @if($entry->category->min_duration_seconds !== null || $entry->category->max_duration_seconds !== null)
-                                <div class="rounded-full bg-white px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_performance_duration') }}</dt><dd>{{ __('app.festival_duration_range', ['min' => $entry->category->min_duration_seconds ?? '—', 'max' => $entry->category->max_duration_seconds ?? '—']) }}</dd></div>
-                            @endif
+                            <x-festivals.category-limit-chips :category="$entry->category" surface="white" />
                             @if($entry->category->registration_closes_at)
                                 <div class="rounded-full bg-white px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_registration_closes_at') }}</dt><dd>{{ __('app.festival_category_deadline_value', ['date' => $entry->category->registration_closes_at->timezone($edition->timezone)->format('d.m.Y H:i'), 'timezone' => $edition->timezone]) }}</dd></div>
                             @endif
@@ -78,13 +72,7 @@
                                                     <p class="mb-3 text-sm font-semibold text-rose-700">{{ __('app.festival_category_full') }}</p>
                                                 @endif
                                                 <dl class="flex flex-wrap gap-2 text-xs text-slate-700">
-                                                    <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_roster') }}</dt><dd>{{ __('app.festival_participants_range', ['min' => $category->min_members, 'max' => $category->max_members]) }}</dd></div>
-                                                    @if($category->min_age !== null || $category->max_age !== null)
-                                                        <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_age_limits') }}</dt><dd>{{ __('app.festival_age_range', ['min' => $category->min_age ?? '—', 'max' => $category->max_age ?? '—']) }}</dd></div>
-                                                    @endif
-                                                    @if($category->min_duration_seconds !== null || $category->max_duration_seconds !== null)
-                                                        <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_performance_duration') }}</dt><dd>{{ __('app.festival_duration_range', ['min' => $category->min_duration_seconds ?? '—', 'max' => $category->max_duration_seconds ?? '—']) }}</dd></div>
-                                                    @endif
+                                                    <x-festivals.category-limit-chips :category="$category" />
                                                     @if($category->registration_closes_at)
                                                         <div class="rounded-full bg-slate-100 px-3 py-1.5"><dt class="sr-only">{{ __('app.festival_registration_closes_at') }}</dt><dd>{{ __('app.festival_category_deadline_value', ['date' => $category->registration_closes_at->timezone($edition->timezone)->format('d.m.Y H:i'), 'timezone' => $edition->timezone]) }}</dd></div>
                                                     @endif
@@ -119,16 +107,7 @@
                 </div>
             </section>
 
-            <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
-                <h2 class="text-xl font-semibold">{{ __('app.festival_profile_contacts') }}</h2>
-                <p class="mt-1 text-sm text-slate-500">{{ $portalUser->displayName() }} · {{ $portalUser->email }}</p>
-                <dl class="mt-4 grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
-                    <div><dt class="font-semibold text-slate-500">{{ __('app.phone') }}</dt><dd class="mt-1 text-slate-950">{{ $portalUser->phone }}</dd></div>
-                    <div><dt class="font-semibold text-slate-500">{{ __('app.city') }}</dt><dd class="mt-1 text-slate-950">{{ $portalUser->city }}</dd></div>
-                    <div><dt class="font-semibold text-slate-500">{{ __('app.studio') }}</dt><dd class="mt-1 text-slate-950">{{ $portalUser->studio_name }}</dd></div>
-                </dl>
-                <a href="{{ route('festival.portal.profile.edit', $account->slug) }}" class="mt-3 inline-flex text-sm font-semibold text-brand-700">{{ __('app.edit_profile') }}</a>
-            </section>
+            @include('festivals.portal._entry-profile-summary')
 
             <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
                 <div class="flex items-center justify-between gap-4"><h2 class="text-xl font-semibold">{{ __('app.festival_roster') }}</h2><a href="{{ route('festival.portal.participants.index', $account->slug) }}" class="text-sm font-semibold text-brand-700">{{ __('app.add') }}</a></div>
@@ -143,6 +122,46 @@
 
             <div class="flex justify-end"><x-ui.button type="submit" size="lg">{{ __('app.save_and_continue') }}</x-ui.button></div>
         </form>
+
+        <div
+            id="festival-quick-profile-modal"
+            class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/45 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="festival-quick-profile-title"
+            data-festival-quick-profile-modal
+            data-open="{{ $errors->hasAny(['first_name', 'last_name', 'city', 'studio_name']) ? 'true' : 'false' }}"
+        >
+            <div class="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+                <div class="flex items-start justify-between gap-4">
+                    <h2 id="festival-quick-profile-title" class="text-xl font-semibold text-slate-950">{{ __('app.edit_profile') }}</h2>
+                    <button type="button" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 crm-focus" aria-label="{{ __('app.close') }}" data-festival-quick-profile-close><x-ui.icon name="x" class="h-5 w-5" /></button>
+                </div>
+
+                <form method="POST" action="{{ route('festival.portal.profile.application.update', $account->slug) }}" class="mt-6 space-y-5" data-async-form data-festival-quick-profile-form>
+                    @csrf
+                    @method('PUT')
+                    <div
+                        data-async-form-status
+                        data-error-message="{{ __('app.async_request_failed') }}"
+                        data-validation-message="{{ __('app.async_validation_failed') }}"
+                        class="hidden"
+                        role="status"
+                        aria-live="polite"
+                    ></div>
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <label class="block"><span class="crm-label">{{ __('app.first_name') }}</span><input name="first_name" value="{{ old('first_name', $portalUser->first_name) }}" required maxlength="255" autocomplete="given-name" class="crm-field"><x-ui.field-error name="first_name" /></label>
+                        <label class="block"><span class="crm-label">{{ __('app.last_name') }}</span><input name="last_name" value="{{ old('last_name', $portalUser->last_name) }}" required maxlength="255" autocomplete="family-name" class="crm-field"><x-ui.field-error name="last_name" /></label>
+                        <label class="block"><span class="crm-label">{{ __('app.city') }}</span><input name="city" value="{{ old('city', $portalUser->city) }}" required maxlength="255" autocomplete="address-level2" class="crm-field"><x-ui.field-error name="city" /></label>
+                        <label class="block"><span class="crm-label">{{ __('app.festival_studio_school') }}</span><input name="studio_name" value="{{ old('studio_name', $portalUser->studio_name) }}" required maxlength="255" autocomplete="organization" class="crm-field"><x-ui.field-error name="studio_name" /></label>
+                    </div>
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <x-ui.button type="button" variant="secondary" data-festival-quick-profile-close>{{ __('app.cancel') }}</x-ui.button>
+                        <x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </main>
 @endsection

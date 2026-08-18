@@ -342,7 +342,7 @@ class FestivalNotificationDeliveryTest extends TestCase
         $this->assertSame(FestivalNotificationStatus::Sent, $notification->refresh()->status);
     }
 
-    public function test_new_guest_ticket_notification_links_to_the_cabinet_without_storing_a_bearer(): void
+    public function test_guest_owned_ticket_notification_links_to_the_private_order_without_storing_a_bearer(): void
     {
         [$account, $edition] = $this->festival();
         $guest = FestivalPortalUser::factory()->guest()->for($account)->create(['locale' => 'en']);
@@ -356,7 +356,7 @@ class FestivalNotificationDeliveryTest extends TestCase
             'buyer_email' => $guest->email,
             'locale' => 'en',
         ]);
-        $expectedUrl = route('festival.portal.guest.dashboard', $account->slug);
+        $expectedUrl = route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);
 
         $notification = app(FestivalNotificationOutbox::class)->queueForTicketOrder($order, [
             'tickets_count' => 1,

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AccountRole;
 use App\Models\Account;
 use App\Models\FestivalActivityLog;
+use App\Models\FestivalAdmissionType;
 use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalContentSection;
 use App\Models\FestivalEdition;
@@ -200,6 +201,7 @@ class FestivalLandingBrandingTest extends TestCase
             'rules_html' => '<p>Velvet rules sentinel</p>',
             'published_at' => now(),
         ]);
+        FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id]);
         FestivalMedia::query()->create([
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
@@ -223,8 +225,9 @@ class FestivalLandingBrandingTest extends TestCase
             ->assertSee(__('app.buy_tickets'))
             ->assertSee(route('festival.login', $account->slug), false)
             ->assertSee(route('festival.judge.login', $account->slug), false)
-            ->assertSee(route('festival.guest.login', $account->slug), false)
-            ->assertDontSee(route('public.festivals.admission.store', [$account->slug, $edition->slug]), false)
+            ->assertDontSee('/festival/guest/login', false)
+            ->assertSee(route('public.festivals.admission.store', [$account->slug, $edition->slug]), false)
+            ->assertSee('data-festival-ticket-checkout', false)
             ->assertDontSee(__('app.all_festivals'))
             ->assertSee(__('app.powered_by_ladna'));
 

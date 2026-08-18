@@ -238,52 +238,11 @@
             </section>
         @endif
 
-        <section id="festival-admission" class="velvet-admission">
-            <div class="velvet-admission-copy">
-                <p>{{ $edition->series->name }}</p>
-                <h2>{{ __('app.festival_admission') }}</h2>
-                <div class="mt-6 space-y-2 festival-muted">
-                    <p>{{ $startsAt->format('d.m.Y') }} · {{ $startsAt->format('H:i') }}–{{ $endsAt->format('H:i') }}</p>
-                    <p>{{ $edition->venue_name }}@if ($edition->venue_address), {{ $edition->venue_address }}@endif</p>
-                    @if ($edition->venue_map_url)
-                        <a href="{{ $edition->venue_map_url }}" target="_blank" rel="noopener noreferrer" class="velvet-text-link">
-                            {{ __('app.open_map') }}
-                        </a>
-                    @endif
-                </div>
-            </div>
-
-            <section class="velvet-ticket-form">
-                @if ($errors->any())
-                    <div class="rounded-lg border border-rose-700 bg-rose-950/60 p-4 text-sm text-rose-100">
-                        <ul class="list-disc space-y-1 pl-5">
-                            @foreach ($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-
-                <div class="space-y-3">
-                    @forelse ($edition->admissionTypes as $type)
-                        @php($price = $type->currentPrice())
-                        <div class="velvet-ticket-row">
-                            <span>
-                                <strong>{{ $type->name }}</strong>
-                                <small>{{ \App\Support\MoneyFormatter::format($price['price_cents'], $account->default_currency) }} · {{ $type->remainingQuantity() }} {{ __('app.left') }}</small>
-                            </span>
-                        </div>
-                    @empty
-                        <p class="festival-muted">{{ __('app.festival_admission_unavailable') }}</p>
-                    @endforelse
-                </div>
-
-                @if ($edition->admissionTypes->isNotEmpty())
-                    <p class="mt-5 festival-muted">{{ __('app.festival_buy_in_cabinet') }}</p>
-                    <a href="{{ route('festival.guest.login', $account->slug) }}" class="velvet-button velvet-button-primary mt-5 w-full">{{ __('app.festival_open_ticket_cabinet') }}</a>
-                @endif
-            </section>
-        </section>
+        <div class="velvet-section-heading mt-8">
+            <p>{{ $edition->series->name }}</p>
+            <h2>{{ __('app.festival_admission') }}</h2>
+        </div>
+        @include('festivals.public._admission-checkout')
     </div>
 </main>
 
@@ -306,8 +265,5 @@
     </a>
     <a href="{{ route('festival.judge.login', $account->slug) }}" class="velvet-footer-login">
         {{ __('app.festival_judge_cabinet') }}
-    </a>
-    <a href="{{ route('festival.guest.login', $account->slug) }}" class="velvet-footer-login">
-        {{ __('app.festival_guest_cabinet') }}
     </a>
 @endsection

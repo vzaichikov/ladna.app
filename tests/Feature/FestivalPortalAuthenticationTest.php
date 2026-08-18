@@ -9,6 +9,7 @@ use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -75,31 +76,18 @@ class FestivalPortalAuthenticationTest extends TestCase
             ->assertRedirect(route('festival.judge.login', $account->slug));
     }
 
-    public function test_guest_email_login_is_role_bound_and_opens_only_the_ticket_cabinet(): void
+    public function test_public_guest_cabinet_and_login_routes_are_removed_while_internal_guest_records_remain_supported(): void
     {
         $account = Account::factory()->create(['enable_festivals' => true]);
-        $registrant = FestivalPortalUser::factory()->for($account)->create([
-            'email' => 'shared.viewer@example.com',
-            'email_normalized' => 'shared.viewer@example.com',
-            'password' => 'registrant-secret',
-        ]);
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
 
-        $this->post(route('festival.guest.login.email', $account->slug), [
-            'email' => 'shared.viewer@example.com',
-            'password' => 'guest-secret',
-        ])->assertRedirect(route('festival.portal.guest.dashboard', $account->slug));
+        $this->assertFalse(Route::has('festival.guest.login'));
+        $this->assertFalse(Route::has('festival.guest.login.email'));
+        $this->assertFalse(Route::has('festival.portal.guest.dashboard'));
+        $this->assertSame(FestivalPortalRole::Guest, $guest->role);
+        $this->assertDatabaseHas('festival_portal_users', ['id' => $guest->id, 'role' => FestivalPortalRole::Guest->value]);
 
-        $guest = FestivalPortalUser::query()->whereBelongsTo($account)->forRole(FestivalPortalRole::Guest)->sole();
-        $this->assertNotSame($registrant->id, $guest->id);
-        $this->assertTrue(Hash::check('guest-secret', (string) $guest->password));
-        $this->assertAuthenticatedAs($guest, 'festival');
-
-        $this->get(route('festival.portal.dashboard', $account->slug))->assertForbidden();
-        $this->get(route('festival.portal.guest.dashboard', $account->slug))
-            ->assertRedirect(route('festival.portal.guest.profile.edit', $account->slug));
-
-        $this->post(route('festival.portal.logout', $account->slug))
-            ->assertRedirect(route('festival.guest.login', $account->slug));
+        $this->get('/'.$account->slug.'/festival/guest/login')->assertNotFound();
     }
 
     public function test_unknown_judge_and_passwordless_existing_profile_cannot_be_claimed(): void
@@ -204,6 +192,7 @@ class FestivalPortalAuthenticationTest extends TestCase
         $form->assertOk()
             ->assertSee('novalidate', false)
             ->assertSee('data-server-validation-scroll', false)
+            ->assertSee(__('app.festival_participant_profile'))
             ->assertSeeInOrder([
                 'value="adult_athlete"',
                 'value="coach"',
@@ -388,7 +377,8 @@ class FestivalPortalAuthenticationTest extends TestCase
             'studio_name' => $portalUser->studio_name,
             'locale' => 'en',
         ])->assertRedirect(route('festival.portal.dashboard', $account->slug))
-            ->assertSessionHasNoErrors();
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', __('app.festival_profile_saved'));
 
         $this->assertSame('guardian', $portalUser->refresh()->registrant_type->value);
         $this->assertSame('Updated city', $portalUser->city);
@@ -514,7 +504,12 @@ class FestivalPortalAuthenticationTest extends TestCase
         $profileUrl = route('festival.portal.judge.profile.edit', $account->slug);
 
         $this->actingAs($judge, 'festival')
-            ->from($profileUrl)
+            ->get($profileUrl)
+            ->assertOk()
+            ->assertSee(__('app.festival_profile'))
+            ->assertDontSee(__('app.festival_participant_profile'));
+
+        $this->from($profileUrl)
             ->put(route('festival.portal.judge.profile.update', $account->slug), [
                 'registrant_type' => 'adult_athlete',
                 'date_of_birth' => '2000-01-01',

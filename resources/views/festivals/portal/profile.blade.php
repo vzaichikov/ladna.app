@@ -2,11 +2,9 @@
 
 @php
     $isJudge = $portalUser->role === \App\Enums\FestivalPortalRole::Judge;
-    $isGuest = $portalUser->role === \App\Enums\FestivalPortalRole::Guest;
     $isRegistrant = $portalUser->role === \App\Enums\FestivalPortalRole::Registrant;
     $profileRoutePrefix = match ($portalUser->role) {
         \App\Enums\FestivalPortalRole::Judge => 'festival.portal.judge.profile',
-        \App\Enums\FestivalPortalRole::Guest => 'festival.portal.guest.profile',
         default => 'festival.portal.profile',
     };
     $selectedRegistrantType = old('registrant_type', $portalUser->registrant_type?->value);
@@ -26,8 +24,8 @@
         @include('festivals.portal._nav')
         <header class="mt-8">
             @if($participantProfileStep)<p class="text-sm font-semibold uppercase tracking-wide text-brand-600" data-festival-profile-step-label>{{ __('app.festival_profile_step_label', $participantProfileStep) }}</p>@endif
-            <h1 @class(['mt-1' => $isParticipantProfileCompletion, 'text-3xl font-semibold sm:text-4xl'])>{{ __('app.festival_profile') }}</h1>
-            <p class="mt-2 text-slate-600">{{ $isJudge ? __('app.festival_role_judge') : ($isGuest ? __('app.festival_role_guest') : __('app.festival_role_registrant')) }}</p>
+            <h1 @class(['mt-1' => $isParticipantProfileCompletion, 'text-3xl font-semibold sm:text-4xl'])>{{ $isRegistrant ? __('app.festival_participant_profile') : __('app.festival_profile') }}</h1>
+            <p class="mt-2 text-slate-600">{{ $isJudge ? __('app.festival_role_judge') : __('app.festival_role_registrant') }}</p>
         </header>
         @if(session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
 
@@ -51,10 +49,8 @@
                     @endif
                     <label for="first-name"><span class="crm-label">{{ __('app.first_name') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="first-name" name="first_name" value="{{ old('first_name', $portalUser->first_name) }}" required class="crm-field"><x-ui.field-error name="first_name" /></label>
                     <label for="last-name"><span class="crm-label">{{ __('app.last_name') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="last-name" name="last_name" value="{{ old('last_name', $portalUser->last_name) }}" required class="crm-field"><x-ui.field-error name="last_name" /></label>
-                    @unless($isGuest)
-                        <label for="patronymic"><span class="crm-label">{{ __('app.patronymic') }}</span><input id="patronymic" name="patronymic" value="{{ old('patronymic', $portalUser->patronymic) }}" class="crm-field"><x-ui.field-error name="patronymic" /></label>
-                        <label for="stage-name"><span class="crm-label">{{ __('app.festival_stage_name') }}</span><input id="stage-name" name="stage_name" value="{{ old('stage_name', $portalUser->stage_name) }}" class="crm-field"><x-ui.field-error name="stage_name" /></label>
-                    @endunless
+                    <label for="patronymic"><span class="crm-label">{{ __('app.patronymic') }}</span><input id="patronymic" name="patronymic" value="{{ old('patronymic', $portalUser->patronymic) }}" class="crm-field"><x-ui.field-error name="patronymic" /></label>
+                    <label for="stage-name"><span class="crm-label">{{ __('app.festival_stage_name') }}</span><input id="stage-name" name="stage_name" value="{{ old('stage_name', $portalUser->stage_name) }}" class="crm-field"><x-ui.field-error name="stage_name" /></label>
                     @if($isRegistrant)
                         <label for="date-of-birth" data-festival-participant-birth-date>
                             <span class="crm-label">{{ __('app.date_of_birth') }}<span class="text-rose-600 {{ $isParticipant ? '' : 'hidden' }}" aria-hidden="true" data-required-marker data-participant-required-marker>*</span></span>
@@ -70,7 +66,7 @@
                 <div class="mt-5 grid gap-5 sm:grid-cols-2">
                     <label for="email"><span class="crm-label">{{ __('app.email') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="email" type="email" name="email" value="{{ old('email', $portalUser->email) }}" required class="crm-field"><x-ui.field-error name="email" /></label>
                     <div>
-                        <label for="phone"><span class="crm-label">{{ __('app.phone') }}@if($isRegistrant)<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span>@endif</span><input id="phone" name="phone" value="{{ $phoneValue }}" @required($isRegistrant) @readonly($phoneChallengeActive) class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}" @if($isRegistrant) data-festival-profile-phone @endif><x-ui.field-error name="phone" /></label>
+                        <label for="phone"><span class="crm-label">{{ __('app.phone') }}@if($isRegistrant)<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span>@endif</span><input id="phone" name="phone" value="{{ $phoneValue }}" @required($isRegistrant) @readonly($phoneChallengeActive) class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}" @if($isRegistrant) data-festival-profile-phone data-phone-mask-validate="false" @endif><x-ui.field-error name="phone" /></label>
                         @if($profilePhoneVerification)
                             <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" data-profile-phone-verification @if($phoneVerificationHasPhone) data-profile-phone-merge @endif>
                                 <p class="font-semibold">{{ __('app.festival_phone_verification_required') }}</p>

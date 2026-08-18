@@ -5175,6 +5175,10 @@ async function submitAsyncForm(form) {
             if (payload.fragment_html) {
                 const replacement = replaceFestivalApplicationFragment(payload.fragment_html, fallbackFestivalApplicationFragment);
                 setAsyncStatus(payload.message, 'success', replacement);
+                form.dispatchEvent(new CustomEvent('async-form:success', {
+                    bubbles: true,
+                    detail: { payload, replacement },
+                }));
                 return;
             }
 
@@ -7533,6 +7537,112 @@ function initFestivalAnnouncementModal() {
     }
 }
 
+function initFestivalQuickProfileModal() {
+    const modal = document.querySelector('[data-festival-quick-profile-modal]');
+    const form = modal?.querySelector('[data-festival-quick-profile-form]');
+
+    if (!modal || !form || modal.dataset.festivalQuickProfileReady === 'true') {
+        return;
+    }
+
+    modal.dataset.festivalQuickProfileReady = 'true';
+    let modalOpener = null;
+
+    const focusableElements = () => [...modal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => !element.closest('.hidden'));
+    const syncFormValues = (summary = document.querySelector('[data-festival-quick-profile-summary]')) => {
+        if (!summary) {
+            return;
+        }
+
+        const values = {
+            first_name: summary.dataset.profileFirstName,
+            last_name: summary.dataset.profileLastName,
+            city: summary.dataset.profileCity,
+            studio_name: summary.dataset.profileStudioName,
+        };
+
+        Object.entries(values).forEach(([name, value]) => {
+            const field = form.elements.namedItem(name);
+
+            if (field instanceof HTMLInputElement) {
+                field.value = value ?? '';
+            }
+        });
+    };
+    const open = (opener = null, reset = true) => {
+        modalOpener = opener;
+
+        if (reset) {
+            clearAsyncFormErrors(form);
+            syncFormValues();
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+        window.requestAnimationFrame(() => form.querySelector('input:not([disabled]):not([type="hidden"])')?.focus());
+    };
+    const close = (restoreTarget = null) => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+
+        const target = restoreTarget ?? (modalOpener?.isConnected ? modalOpener : document.querySelector('[data-festival-quick-profile-open]'));
+        target?.focus();
+        modalOpener = null;
+    };
+
+    document.addEventListener('click', (event) => {
+        const opener = event.target.closest('[data-festival-quick-profile-open]');
+
+        if (opener) {
+            open(opener);
+        }
+    });
+    modal.querySelectorAll('[data-festival-quick-profile-close]').forEach((button) => {
+        button.addEventListener('click', () => close());
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            close();
+        }
+    });
+    modal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            close();
+            return;
+        }
+
+        if (event.key !== 'Tab') {
+            return;
+        }
+
+        const focusable = focusableElements();
+        const first = focusable[0];
+        const last = focusable.at(-1);
+
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+        }
+    });
+    form.addEventListener('async-form:success', (event) => {
+        const replacement = event.detail?.replacement;
+
+        syncFormValues(replacement);
+        close(replacement?.querySelector('[data-festival-quick-profile-open]'));
+    });
+
+    if (modal.dataset.open === 'true') {
+        open(null, false);
+    }
+}
+
 function initFestivalProgram() {
     const program = document.querySelector('[data-festival-program]');
     const modal = document.querySelector('[data-festival-program-modal]');
@@ -8468,6 +8578,20 @@ function initEventTicketCheckouts(root = document) {
         };
 
         const totalQuantity = () => counters.reduce((total, counter) => total + quantityFor(counter), 0);
+        const counterIsExclusive = (counter) => counter.dataset.festivalExclusiveTicket === 'true';
+        const clearConflictingCounters = (selectedCounter) => {
+            counters.forEach((counter) => {
+                if (counter === selectedCounter || (! counterIsExclusive(selectedCounter) && ! counterIsExclusive(counter))) {
+                    return;
+                }
+
+                const input = counter.querySelector('[data-event-ticket-quantity]');
+
+                if (input) {
+                    input.value = '0';
+                }
+            });
+        };
         const requiredFieldsComplete = () => [...form.querySelectorAll('[required]')].every((control) => {
             if (control.disabled) {
                 return true;
@@ -8575,10 +8699,17 @@ function initEventTicketCheckouts(root = document) {
                     return;
                 }
 
+                clearConflictingCounters(counter);
                 input.value = String(quantityFor(counter) + 1);
                 sync();
             });
         });
+
+        const selectedExclusiveCounter = counters.find((counter) => counterIsExclusive(counter) && quantityFor(counter) > 0);
+
+        if (selectedExclusiveCounter) {
+            clearConflictingCounters(selectedExclusiveCounter);
+        }
 
         if (Number.isFinite(eventCapacity)) {
             let remainingCapacity = Math.max(eventCapacity, 0);
@@ -8789,6 +8920,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFestivalStreamPlayer();
     initFestivalStreamStatus();
     initFestivalAnnouncementModal();
+    initFestivalQuickProfileModal();
     initFestivalSceneTabs();
     initFestivalProgram();
     initFestivalTimeline();

@@ -167,8 +167,8 @@ class HelpPagesTest extends TestCase
                 'assets/help/screenshots/festival-branding.png',
             ],
             'festival-users-access' => [
-                'Користувачі, ролі та кабінети',
-                'Кабінет гостя',
+                'Користувачі, ролі та доступ',
+                'не має публічного кабінету чи входу',
                 'Моя команда',
                 'вкладка Сповіщення',
                 'активного призначення',
@@ -208,7 +208,8 @@ class HelpPagesTest extends TestCase
                 'assets/help/screenshots/festival-judging-criteria.png',
             ],
             'festival-tickets-entrance' => [
-                'Кабінеті гостя',
+                'без входу та OTP',
+                'приватним посиланням із листа',
                 'Видати відсутні',
                 'Повторний запуск не дублює',
                 'Два телефони не можуть одночасно прийняти той самий квиток',

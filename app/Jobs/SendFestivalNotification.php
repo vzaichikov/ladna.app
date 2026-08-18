@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
-use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\SmsDeliveryPurpose;
 use App\Mail\FestivalPortalMail;
@@ -121,11 +120,7 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
                     return;
                 }
                 $actionLabel = __('app.festival_open_tickets', locale: $locale);
-                $actionUrl = $order->source !== FestivalTicketOrderSource::Manual
-                    && $notification->festival_portal_user_id !== null
-                    && $notification->festival_portal_user_id === $order->festival_portal_user_id
-                    ? route('festival.portal.guest.dashboard', $account->slug)
-                    : route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);
+                $actionUrl = route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);
             }
             $mailSettings = $mailSettingsResolver->resolve();
             $mail = (new FestivalPortalMail(

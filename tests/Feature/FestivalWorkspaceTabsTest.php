@@ -840,8 +840,12 @@ class FestivalWorkspaceTabsTest extends TestCase
         $firstCategory->update([
             'festival_direction_id' => $movedDirection->id,
             'requirements_html' => '<p>Live staff condition.</p>',
-            'min_members' => 2,
-            'max_members' => 4,
+            'min_members' => 1,
+            'max_members' => 1,
+            'min_age' => 18,
+            'max_age' => null,
+            'min_duration_seconds' => 150,
+            'max_duration_seconds' => 195,
             'registration_closes_at' => $categoryDeadline,
         ]);
 
@@ -852,7 +856,10 @@ class FestivalWorkspaceTabsTest extends TestCase
         $currentRules->assertOk()
             ->assertSee('Moved direction')
             ->assertSee('Live staff condition.', false)
-            ->assertSee(__('app.festival_participants_range', ['min' => 2, 'max' => 4]))
+            ->assertSee(trans_choice('app.festival_participants_count', 1, ['count' => 1]))
+            ->assertSee(__('app.festival_age_minimum', ['min' => 18]))
+            ->assertSee(__('app.festival_duration_range', ['min' => '2:30', 'max' => '3:15']))
+            ->assertDontSee('150–195')
             ->assertSee(__('app.festival_category_deadline_value', [
                 'date' => $categoryDeadline->timezone($edition->timezone)->format('d.m.Y H:i'),
                 'timezone' => $edition->timezone,
