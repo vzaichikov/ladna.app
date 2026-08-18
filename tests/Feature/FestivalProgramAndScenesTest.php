@@ -6,6 +6,7 @@ use App\Actions\Festivals\FillFestivalTimelines;
 use App\Actions\Festivals\SaveFestivalScheduleSlot;
 use App\Enums\AccountRole;
 use App\Enums\FestivalEditionPurchaseStatus;
+use App\Enums\FestivalEntryStatus;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\FestivalActivityLog;
@@ -209,6 +210,82 @@ class FestivalProgramAndScenesTest extends TestCase
         $this->assertCount(1, $response->viewData('programTree')[0]['children']);
 
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => 999999]))->assertNotFound();
+    }
+
+    public function test_manual_program_items_only_accept_fully_confirmed_entries(): void
+    {
+        [$account, $edition, $category, $owner, $portalUser] = $this->festival();
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
+        $accepted = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Fully confirmed performance',
+            'status' => FestivalEntryStatus::Accepted->value,
+        ]);
+        $underReview = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Still under review',
+            'status' => FestivalEntryStatus::UnderReview->value,
+        ]);
+
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]));
+
+        $response->assertOk()
+            ->assertSee('Fully confirmed performance')
+            ->assertDontSee('Still under review');
+        $this->assertSame([$accepted->id], $response->viewData('entries')->pluck('id')->all());
+
+        $startsAt = now($edition->timezone)->addMonth()->startOfHour();
+        $input = [
+            'festival_stage_id' => $stage->id,
+            'festival_entry_id' => $underReview->id,
+            'type' => 'performance',
+            'starts_at' => $startsAt->format('Y-m-d H:i:s'),
+            'ends_at' => $startsAt->copy()->addMinutes(10)->format('Y-m-d H:i:s'),
+        ];
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.schedule.store', [$account, $edition]), $input)
+            ->assertSessionHasErrors('festival_entry_id');
+        $this->assertDatabaseMissing('festival_schedule_slots', ['festival_entry_id' => $underReview->id]);
+
+        try {
+            $this->saveItem($edition, $owner, $input);
+            $this->fail('An application that is not fully confirmed was added to the program.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('festival_entry_id', $exception->errors());
+            $this->assertDatabaseMissing('festival_schedule_slots', ['festival_entry_id' => $underReview->id]);
+        }
+
+        $input['festival_entry_id'] = $accepted->id;
+        $slot = $this->saveItem($edition, $owner, $input);
+        $accepted->update(['status' => FestivalEntryStatus::ChangesPending->value]);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.schedule.update', [$account, $edition, $slot]), [
+                ...$input,
+                'editing_item_id' => $slot->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $editResponse = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]));
+        $editResponse->assertOk()
+            ->assertSee('festival_entry_label', escape: false)
+            ->assertSee($accepted->code.' \u00b7 Fully confirmed performance', escape: false);
+        $this->assertSame([], $editResponse->viewData('entries')->pluck('id')->all());
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.schedule.update', [$account, $edition, $slot]), [
+                ...$input,
+                'festival_entry_id' => $underReview->id,
+                'editing_item_id' => $slot->id,
+            ])
+            ->assertSessionHasErrors('festival_entry_id');
+        $this->assertSame($accepted->id, $slot->refresh()->festival_entry_id);
     }
 
     public function test_missing_generation_reuses_headers_preserves_manual_items_and_is_idempotent(): void

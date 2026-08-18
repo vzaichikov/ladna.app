@@ -7657,6 +7657,7 @@ function initFestivalProgram() {
     const methodInput = form?.querySelector('[data-festival-program-method]');
     const editingIdInput = form?.querySelector('[data-festival-program-editing-id]');
     const typeInput = form?.querySelector('[data-festival-program-type]');
+    const entryInput = form?.elements.namedItem('festival_entry_id');
     const rootList = program.querySelector('[data-festival-program-list][data-parent-id=""]');
     const status = program.querySelector('[data-festival-program-status]');
     const generationTrigger = document.querySelector('[data-festival-program-generate]');
@@ -7786,6 +7787,7 @@ function initFestivalProgram() {
     };
 
     const resetAddForm = () => {
+        entryInput?.querySelector('[data-festival-program-current-entry]')?.remove();
         form.reset();
         form.action = modal.dataset.storeAction;
         methodInput.disabled = true;
@@ -7798,11 +7800,19 @@ function initFestivalProgram() {
     const openEditForm = (button) => {
         const item = JSON.parse(button.dataset.programItem ?? '{}');
 
+        entryInput?.querySelector('[data-festival-program-current-entry]')?.remove();
         form.reset();
         form.action = button.dataset.updateAction;
         methodInput.disabled = false;
         editingIdInput.value = item.id ?? '';
         title.textContent = modal.dataset.editTitle;
+
+        if (entryInput instanceof HTMLSelectElement && item.festival_entry_id && ! entryInput.querySelector(`option[value="${CSS.escape(String(item.festival_entry_id))}"]`)) {
+            const currentEntry = new Option(item.festival_entry_label ?? '', String(item.festival_entry_id), true, true);
+            currentEntry.dataset.festivalProgramCurrentEntry = '';
+            entryInput.add(currentEntry);
+        }
+
         ['type', 'festival_entry_id', 'festival_category_id', 'parent_id', 'name', 'starts_at', 'ends_at', 'notes', 'is_published'].forEach((name) => {
             setFieldValue(name, item[name]);
         });

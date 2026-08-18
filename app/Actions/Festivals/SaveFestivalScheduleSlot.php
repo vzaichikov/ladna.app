@@ -2,6 +2,7 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalScheduleSlotType;
 use App\Models\FestivalCategory;
@@ -45,6 +46,11 @@ class SaveFestivalScheduleSlot
                 : null;
             $slot = $slot?->exists ? FestivalScheduleSlot::query()->whereKey($slot->id)->where('festival_edition_id', $edition->id)->lockForUpdate()->firstOrFail() : new FestivalScheduleSlot;
             $wasExisting = $slot->exists;
+
+            if ($entry && $entry->status !== FestivalEntryStatus::Accepted && (! $wasExisting || $slot->festival_entry_id !== $entry->id)) {
+                throw ValidationException::withMessages(['festival_entry_id' => __('app.festival_performances_copy')]);
+            }
+
             $before = $wasExisting ? $slot->only(['festival_stage_id', 'festival_entry_id', 'festival_category_id', 'parent_id', 'type', 'name', 'starts_at', 'ends_at', 'sort_order', 'published_at']) : [];
             $previousEntry = $wasExisting && $slot->festival_entry_id
                 ? FestivalEntry::query()->with('portalUser')->whereKey($slot->festival_entry_id)->first()

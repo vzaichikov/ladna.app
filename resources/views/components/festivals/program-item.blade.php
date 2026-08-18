@@ -22,6 +22,7 @@
         'id' => $item->id,
         'type' => $item->type->value,
         'festival_entry_id' => $item->festival_entry_id,
+        'festival_entry_label' => $item->entry ? $item->entry->code.' · '.$item->entry->entry_name : null,
         'festival_category_id' => $item->festival_category_id,
         'parent_id' => $item->parent_id,
         'name' => $item->name,

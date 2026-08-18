@@ -229,7 +229,7 @@ class FestivalWorkspaceController extends Controller
             : collect();
         $entries = FestivalEntry::query()
             ->where('festival_edition_id', $festivalEdition->id)
-            ->whereIn('status', [FestivalEntryStatus::Submitted->value, FestivalEntryStatus::UnderReview->value, FestivalEntryStatus::ChangesPending->value, FestivalEntryStatus::Accepted->value])
+            ->where('status', FestivalEntryStatus::Accepted->value)
             ->orderBy('entry_name')
             ->get(['id', 'festival_edition_id', 'code', 'entry_name']);
         $categories = $festivalEdition->categories()->orderBy('name')->get(['id', 'festival_edition_id', 'name']);

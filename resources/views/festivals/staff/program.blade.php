@@ -231,6 +231,9 @@
                             <span class="crm-label">{{ __('app.performance') }}</span>
                             <select name="festival_entry_id" class="crm-field">
                                 <option value="">{{ __('app.select_option') }}</option>
+                                @if ($editingItem?->entry && ! $entries->contains('id', $editingItem->entry->id))
+                                    <option value="{{ $editingItem->entry->id }}" data-festival-program-current-entry @selected((int) old('festival_entry_id', $editingItem->festival_entry_id) === $editingItem->entry->id)>{{ $editingItem->entry->code }} · {{ $editingItem->entry->entry_name }}</option>
+                                @endif
                                 @foreach ($entries as $entry)
                                     <option value="{{ $entry->id }}" @selected((int) old('festival_entry_id', $editingItem?->festival_entry_id) === $entry->id)>{{ $entry->code }} · {{ $entry->entry_name }}</option>
                                 @endforeach
