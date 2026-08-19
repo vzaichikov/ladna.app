@@ -23,6 +23,7 @@ use App\Support\CustomerAuth\GoogleOAuthClient;
 use App\Support\CustomerAuth\GoogleUserData;
 use App\Support\CustomerAuth\TurnstileVerifier;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\PublicClassPassCheckoutContext;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
 use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,6 +41,8 @@ use RuntimeException;
 
 class CustomerAuthController extends Controller
 {
+    public function __construct(private readonly PublicClassPassCheckoutContext $classPassCheckoutContext) {}
+
     public function create(CustomerStudioAccess $studioAccess, AccountSubscriptionAccess $subscriptionAccess): View|RedirectResponse
     {
         $customer = $this->currentCustomer();
@@ -186,8 +189,7 @@ class CustomerAuthController extends Controller
 
         session()->put($this->otpPhoneSessionKey($account), $result->challenge?->phone ?? $phones->normalize($request->validated('phone'), $account->country_code));
 
-        return redirect()
-            ->route('customer.otp.challenge', $account->slug)
+        return $this->checkoutOrRoute($account, 'customer.otp.challenge')
             ->with('status', __('app.customer_otp_sent'))
             ->with('otp_resend_seconds', $result->secondsUntilResend);
     }
@@ -198,7 +200,7 @@ class CustomerAuthController extends Controller
         $phone = session($this->otpPhoneSessionKey($account));
 
         if (! is_string($phone) || $phone === '') {
-            return redirect()->route('customer.studio.login', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.studio.login');
         }
 
         return $this->loginView($account, $availability, 'otp_code', $phone);
@@ -218,20 +220,18 @@ class CustomerAuthController extends Controller
         $phone = session($this->otpPhoneSessionKey($account));
 
         if (! is_string($phone) || $phone === '') {
-            return redirect()->route('customer.studio.login', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.studio.login');
         }
 
         $result = $otp->send($account, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
 
         if (! $result->ok) {
-            return redirect()
-                ->route('customer.otp.challenge', $account->slug)
+            return $this->checkoutOrRoute($account, 'customer.otp.challenge')
                 ->withErrors(['code' => $result->message ?? __('app.customer_otp_send_failed')])
                 ->with('otp_resend_seconds', $result->secondsUntilResend);
         }
 
-        return redirect()
-            ->route('customer.otp.challenge', $account->slug)
+        return $this->checkoutOrRoute($account, 'customer.otp.challenge')
             ->with('status', __('app.customer_otp_sent'))
             ->with('otp_resend_seconds', $result->secondsUntilResend);
     }
@@ -241,7 +241,7 @@ class CustomerAuthController extends Controller
         $account = $this->account($accountSlug);
         session()->forget($this->otpPhoneSessionKey($account));
 
-        return redirect()->route('customer.studio.login', $account->slug);
+        return $this->checkoutOrRoute($account, 'customer.studio.login');
     }
 
     public function verifyOtp(
@@ -319,7 +319,7 @@ class CustomerAuthController extends Controller
 
         $this->storePendingGoogleCustomer($account, $googleUser, $customer);
 
-        return redirect()->route('customer.google.phone', $account->slug);
+        return $this->checkoutOrRoute($account, 'customer.google.phone');
     }
 
     public function googlePhone(string $accountSlug): View|RedirectResponse
@@ -327,7 +327,7 @@ class CustomerAuthController extends Controller
         $account = $this->account($accountSlug);
 
         if (! $this->pendingGoogleCustomer($account)) {
-            return redirect()->route('customer.studio.login', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.studio.login');
         }
 
         return view('customer-auth.google-phone', [
@@ -345,7 +345,7 @@ class CustomerAuthController extends Controller
         $account = $this->account($accountSlug);
 
         if (! $this->pendingGoogleCustomer($account)) {
-            return redirect()->route('customer.studio.login', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.studio.login');
         }
 
         $result = $otp->send(
@@ -363,8 +363,7 @@ class CustomerAuthController extends Controller
 
         session()->put($this->googlePhoneSessionKey($account), $result->challenge?->phone ?? $phones->normalize($request->validated('phone'), $account->country_code));
 
-        return redirect()
-            ->route('customer.google.phone', $account->slug)
+        return $this->checkoutOrRoute($account, 'customer.google.phone')
             ->with('status', __('app.customer_otp_sent'))
             ->with('otp_resend_seconds', $result->secondsUntilResend);
     }
@@ -377,26 +376,24 @@ class CustomerAuthController extends Controller
         $account = $this->account($accountSlug);
 
         if (! $this->pendingGoogleCustomer($account)) {
-            return redirect()->route('customer.studio.login', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.studio.login');
         }
 
         $phone = session($this->googlePhoneSessionKey($account));
 
         if (! is_string($phone) || $phone === '') {
-            return redirect()->route('customer.google.phone', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.google.phone');
         }
 
         $result = $otp->send($account, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
 
         if (! $result->ok) {
-            return redirect()
-                ->route('customer.google.phone', $account->slug)
+            return $this->checkoutOrRoute($account, 'customer.google.phone')
                 ->withErrors(['code' => $result->message ?? __('app.customer_otp_send_failed')])
                 ->with('otp_resend_seconds', $result->secondsUntilResend);
         }
 
-        return redirect()
-            ->route('customer.google.phone', $account->slug)
+        return $this->checkoutOrRoute($account, 'customer.google.phone')
             ->with('status', __('app.customer_otp_sent'))
             ->with('otp_resend_seconds', $result->secondsUntilResend);
     }
@@ -406,7 +403,7 @@ class CustomerAuthController extends Controller
         $account = $this->account($accountSlug);
         session()->forget($this->googlePhoneSessionKey($account));
 
-        return redirect()->route('customer.google.phone', $account->slug);
+        return $this->checkoutOrRoute($account, 'customer.google.phone');
     }
 
     public function verifyGooglePhoneOtp(
@@ -419,7 +416,7 @@ class CustomerAuthController extends Controller
         $pendingGoogleCustomer = $this->pendingGoogleCustomer($account);
 
         if (! $pendingGoogleCustomer) {
-            return redirect()->route('customer.studio.login', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.studio.login');
         }
 
         $phone = session($this->googlePhoneSessionKey($account), $request->validated('phone'));
@@ -558,8 +555,7 @@ class CustomerAuthController extends Controller
             session()->put($this->profilePhoneSessionKey($account), $validated['phone']);
             session()->forget($this->profilePhoneChallengeSessionKey($account));
 
-            return redirect()
-                ->route('customer.profile.complete', $account->slug)
+            return $this->checkoutOrRoute($account, 'customer.profile.complete')
                 ->withInput($request->safe()->except(['password', 'password_confirmation']))
                 ->with('phone_merge_required', true);
         }
@@ -581,13 +577,11 @@ class CustomerAuthController extends Controller
         ]);
 
         if ($customer->profileIsComplete()) {
-            return redirect()
-                ->intended(route('customer.dashboard', $account->slug))
+            return $this->checkoutOrIntended($account)
                 ->with('status', __('app.customer_profile_updated'));
         }
 
-        return redirect()
-            ->route('customer.profile.complete', $account->slug)
+        return $this->checkoutOrRoute($account, 'customer.profile.complete')
             ->with('status', __('app.customer_profile_updated'));
     }
 
@@ -600,22 +594,20 @@ class CustomerAuthController extends Controller
         $phone = $this->profilePhone($account);
 
         if (! $phone) {
-            return redirect()->route('customer.profile.complete', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.profile.complete');
         }
 
         $result = $otp->send($account, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
 
         if (! $result->ok) {
-            return redirect()
-                ->route('customer.profile.complete', $account->slug)
+            return $this->checkoutOrRoute($account, 'customer.profile.complete')
                 ->withErrors(['phone' => $result->message ?? __('app.customer_otp_send_failed')])
                 ->with('otp_resend_seconds', $result->secondsUntilResend);
         }
 
         session()->put($this->profilePhoneChallengeSessionKey($account), true);
 
-        return redirect()
-            ->route('customer.profile.complete', $account->slug)
+        return $this->checkoutOrRoute($account, 'customer.profile.complete')
             ->with('status', __('app.customer_otp_sent'))
             ->with('otp_resend_seconds', $result->secondsUntilResend);
     }
@@ -629,22 +621,20 @@ class CustomerAuthController extends Controller
         $phone = $this->profilePhone($account);
 
         if (! $phone) {
-            return redirect()->route('customer.profile.complete', $account->slug);
+            return $this->checkoutOrRoute($account, 'customer.profile.complete');
         }
 
         $result = $otp->send($account, $phone, (string) $request->ip(), substr((string) $request->userAgent(), 0, 1000));
 
         if (! $result->ok) {
-            return redirect()
-                ->route('customer.profile.complete', $account->slug)
+            return $this->checkoutOrRoute($account, 'customer.profile.complete')
                 ->withErrors(['code' => $result->message ?? __('app.customer_otp_send_failed')])
                 ->with('otp_resend_seconds', $result->secondsUntilResend);
         }
 
         session()->put($this->profilePhoneChallengeSessionKey($account), true);
 
-        return redirect()
-            ->route('customer.profile.complete', $account->slug)
+        return $this->checkoutOrRoute($account, 'customer.profile.complete')
             ->with('status', __('app.customer_otp_sent'))
             ->with('otp_resend_seconds', $result->secondsUntilResend);
     }
@@ -657,7 +647,7 @@ class CustomerAuthController extends Controller
             $this->profilePhoneChallengeSessionKey($account),
         ]);
 
-        return redirect()->route('customer.profile.complete', $account->slug);
+        return $this->checkoutOrRoute($account, 'customer.profile.complete');
     }
 
     public function verifyProfilePhoneOtp(
@@ -815,6 +805,12 @@ class CustomerAuthController extends Controller
         Auth::guard('customer')->login($customer);
         app(CustomerRememberTokenService::class)->issue($customer);
 
+        if ($checkoutUrl = $this->classPassCheckoutContext->urlFor($account)) {
+            $redirect = redirect()->to($checkoutUrl);
+
+            return $status ? $redirect->with('status', $status) : $redirect;
+        }
+
         if ($customer->profileIsComplete()) {
             $redirect = redirect()->intended(route('customer.dashboard', $account->slug));
 
@@ -824,6 +820,24 @@ class CustomerAuthController extends Controller
         $redirect = redirect()->route('customer.profile.complete', $account->slug);
 
         return $status ? $redirect->with('status', $status) : $redirect;
+    }
+
+    private function checkoutOrRoute(Account $account, string $routeName): RedirectResponse
+    {
+        $checkoutUrl = $this->classPassCheckoutContext->urlFor($account);
+
+        return $checkoutUrl
+            ? redirect()->to($checkoutUrl)
+            : redirect()->route($routeName, $account->slug);
+    }
+
+    private function checkoutOrIntended(Account $account): RedirectResponse
+    {
+        $checkoutUrl = $this->classPassCheckoutContext->urlFor($account);
+
+        return $checkoutUrl
+            ? redirect()->to($checkoutUrl)
+            : redirect()->intended(route('customer.dashboard', $account->slug));
     }
 
     private function currentCustomer(): ?Customer

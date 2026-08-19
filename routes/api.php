@@ -26,7 +26,7 @@ Route::prefix('v1/public/{accountSlug}/{locationSlug}')
         Route::get('/schedule/week', [PublicScheduleController::class, 'week'])->name('api.v1.public.schedule.week');
         Route::get('/schedule', [PublicScheduleController::class, 'schedule'])->name('api.v1.public.schedule');
         Route::get('/classes', [PublicScheduleController::class, 'classes'])->name('api.v1.public.classes');
-        Route::get('/price', PublicPriceController::class)->name('api.v1.public.price');
+        Route::get('/price', PublicPriceController::class)->middleware('throttle:120,1')->name('api.v1.public.price');
     });
 
 Route::post('v1/website-leads', WebsiteLeadController::class)

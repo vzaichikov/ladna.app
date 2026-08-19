@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.146.0',
+                'date' => '2026-08-19',
+                'title' => 'External class-pass catalog and focused checkout',
+                'items' => ['Every class pass in the public price API now includes an absolute Ladna checkout link, so external studio websites can replace retired payment links while keeping the complete Ladna plan configuration.', 'The new preselected checkout keeps studio sign-in or registration, profile completion, studio rules, configured payment methods, payment confirmation, and the issued class-pass code in one focused flow that works on desktop and mobile.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.145.0',
                 'date' => '2026-08-19',
                 'title' => 'Exact weekly schedules for external websites',
@@ -1262,6 +1269,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.146.0',
+                'date' => '2026-08-19',
+                'title' => 'Каталог абонементів і зручне зовнішнє оформлення',
+                'items' => ['Кожен абонемент у публічному API прайсу тепер містить абсолютне посилання на оформлення в Ladna, тому зовнішні сайти студій можуть замінити застарілі платіжні посилання зі збереженням усіх налаштувань абонемента.', 'Нове оформлення вибраного абонемента поєднує вхід або реєстрацію клієнта, заповнення профілю, правила студії, налаштовані способи оплати, підтвердження платежу та код виданого абонемента в одному зручному сценарії на компʼютері й телефоні.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.145.0',
                 'date' => '2026-08-19',

@@ -10,6 +10,7 @@ use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Support\ScheduleKindRegistry;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class CreateCustomerPurchase
 {
@@ -17,7 +18,7 @@ class CreateCustomerPurchase
         Account $account,
         Customer $customer,
         ClassPassPlan $classPassPlan,
-        IntegrationProvider $provider,
+        IntegrationProvider|string $provider,
         ?Location $location = null,
     ): CustomerPurchase {
         if ($customer->account_id !== $account->id || $classPassPlan->account_id !== $account->id) {
@@ -33,13 +34,19 @@ class CreateCustomerPurchase
             abort(404);
         }
 
+        $providerValue = $provider instanceof IntegrationProvider ? $provider->value : $provider;
+
+        if ($providerValue === '' || (! ($provider instanceof IntegrationProvider) && $providerValue !== CustomerPurchase::ProviderFree)) {
+            throw new InvalidArgumentException('Unsupported customer purchase provider.');
+        }
+
         return $account->customerPurchases()->create([
             'customer_id' => $customer->id,
             'location_id' => $location?->id,
             'class_pass_plan_id' => $classPassPlan->id,
-            'provider' => $provider->value,
+            'provider' => $providerValue,
             'payment_source' => CustomerPurchase::SourceOnlineCheckout,
-            'order_id' => $this->orderId($provider),
+            'order_id' => $this->orderId($providerValue),
             'status' => 'payment_started',
             'plan_name' => $classPassPlan->name,
             'plan_slug' => $classPassPlan->slug,
@@ -53,8 +60,8 @@ class CreateCustomerPurchase
         ]);
     }
 
-    private function orderId(IntegrationProvider $provider): string
+    private function orderId(string $provider): string
     {
-        return Str::upper(Str::substr($provider->value, 0, 3)).'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(10));
+        return Str::upper(Str::substr($provider, 0, 3)).'-'.now()->format('YmdHis').'-'.Str::upper(Str::random(10));
     }
 }

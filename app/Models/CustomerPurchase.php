@@ -24,6 +24,8 @@ class CustomerPurchase extends Model
 
     public const ProviderStudioCash = 'studio_cash';
 
+    public const ProviderFree = 'free';
+
     public const SourceOnlineCheckout = 'online_checkout';
 
     public const SourceManualCashClassPass = 'manual_cash_class_pass';

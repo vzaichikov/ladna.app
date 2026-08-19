@@ -117,15 +117,30 @@ class PublicPriceTest extends TestCase
             ->assertJsonPath('data.0.sections.0.plans.0.name', $plans['group']->name)
             ->assertJsonPath('data.0.sections.0.plans.0.schedule_kind', 'group_class')
             ->assertJsonPath('data.0.sections.0.plans.0.total_validity_days', 120)
+            ->assertJsonPath('data.0.sections.0.plans.0.checkout_url', route('public.class-pass-plans.checkout', [
+                $account->slug,
+                $location->slug,
+                $plans['group']->slug,
+            ]))
             ->assertJsonPath('data.1.key', 'private_lesson')
             ->assertJsonPath('data.1.sections.0.key', 'all')
             ->assertJsonPath('data.1.sections.0.title', '')
             ->assertJsonPath('data.1.sections.0.plans.0.schedule_kind', 'private_lesson')
+            ->assertJsonPath('data.1.sections.0.plans.0.checkout_url', route('public.class-pass-plans.checkout', [
+                $account->slug,
+                $location->slug,
+                $plans['private']->slug,
+            ]))
             ->assertJsonPath('data.1.sections.0.plans.0.trainer_types.0.name', 'Top trainer')
             ->assertJsonPath('data.2.key', 'room_rental')
             ->assertJsonPath('data.2.sections.0.key', 'all')
             ->assertJsonPath('data.2.sections.0.title', '')
             ->assertJsonPath('data.2.sections.0.plans.0.schedule_kind', 'room_rental')
+            ->assertJsonPath('data.2.sections.0.plans.0.checkout_url', route('public.class-pass-plans.checkout', [
+                $account->slug,
+                $location->slug,
+                $plans['rental']->slug,
+            ]))
             ->assertJsonPath('data.2.sections.0.plans.0.rooms.0.slug', 'big-hall')
             ->assertJsonMissing(['name' => $plans['inactive']->name])
             ->assertJsonMissing(['key' => 'morning'])

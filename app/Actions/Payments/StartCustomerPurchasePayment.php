@@ -12,8 +12,11 @@ class StartCustomerPurchasePayment
 {
     public function __construct(private readonly PaymentGatewayRegistry $gateways) {}
 
-    public function execute(CustomerPurchase $purchase, IntegrationSetting $setting): PaymentCheckout
-    {
+    public function execute(
+        CustomerPurchase $purchase,
+        IntegrationSetting $setting,
+        ?string $returnUrl = null,
+    ): PaymentCheckout {
         $gateway = $this->gateways->get($purchase->provider);
         $purchase->loadMissing(['account', 'customer']);
         $checkout = $gateway->start(new PaymentCheckoutRequest(
@@ -25,7 +28,7 @@ class StartCustomerPurchasePayment
             buyerEmail: $purchase->customer->email,
             buyerPhone: $purchase->customer->phone,
             locale: app()->getLocale(),
-            returnUrl: route('customer.purchases.return', [$purchase->account->slug, $purchase]),
+            returnUrl: $returnUrl ?? route('customer.purchases.return', [$purchase->account->slug, $purchase]),
             callbackUrl: route('api.v1.payments.callbacks', $gateway->provider()->value),
             expiresAt: $purchase->expires_at ?? now()->addHour(),
         ), $setting);

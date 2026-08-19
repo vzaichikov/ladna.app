@@ -7,11 +7,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ClassPassPlanResource;
 use App\Models\Account;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PublicPriceController extends Controller
 {
-    public function __invoke(string $accountSlug, string $locationSlug, BuildPublicPriceList $buildPublicPriceList): JsonResponse
-    {
+    public function __invoke(
+        Request $request,
+        string $accountSlug,
+        string $locationSlug,
+        BuildPublicPriceList $buildPublicPriceList,
+    ): JsonResponse {
         $account = Account::active()->where('slug', $accountSlug)->firstOrFail();
         $location = $account->locations()
             ->where('slug', $locationSlug)
@@ -26,7 +31,14 @@ class PublicPriceController extends Controller
                 'sections' => $group['sections']->map(fn (array $section): array => [
                     'key' => $section['key'],
                     'title' => $section['title'],
-                    'plans' => ClassPassPlanResource::collection($section['plans'])->resolve(),
+                    'plans' => $section['plans']->map(fn ($classPassPlan): array => [
+                        ...(new ClassPassPlanResource($classPassPlan))->resolve($request),
+                        'checkout_url' => route('public.class-pass-plans.checkout', [
+                            $account->slug,
+                            $location->slug,
+                            $classPassPlan->slug,
+                        ]),
+                    ])->values(),
                 ])->values(),
             ])
             ->values();

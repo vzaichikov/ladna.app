@@ -8741,7 +8741,7 @@ function initEventTicketCheckouts(root = document) {
 }
 
 function initEventOrderPolling(root = document) {
-    root.querySelectorAll('[data-event-order-poll], [data-ticket-order-poll]').forEach((container) => {
+    root.querySelectorAll('[data-event-order-poll], [data-ticket-order-poll], [data-class-pass-checkout-poll]').forEach((container) => {
         if (container.dataset.ticketOrderPollReady === 'true') {
             return;
         }
@@ -8749,12 +8749,13 @@ function initEventOrderPolling(root = document) {
         container.dataset.ticketOrderPollReady = 'true';
         const statusUrl = container.dataset.statusUrl;
         const refreshUrl = container.dataset.refreshUrl || window.location.href;
-        const message = container.querySelector('[data-event-order-poll-message], [data-ticket-order-poll-message]');
-        const timeoutActions = container.querySelector('[data-event-order-poll-timeout], [data-ticket-order-poll-timeout]');
+        const message = container.querySelector('[data-event-order-poll-message], [data-ticket-order-poll-message], [data-class-pass-checkout-poll-message]');
+        const timeoutActions = container.querySelectorAll('[data-event-order-poll-timeout], [data-ticket-order-poll-timeout], [data-class-pass-checkout-poll-timeout], [data-class-pass-checkout-manual-refresh]');
+        const isClassPassCheckout = container.hasAttribute('data-class-pass-checkout-poll');
         const deadline = Date.now() + 60000;
 
         const stopPolling = () => {
-            timeoutActions?.classList.remove('hidden');
+            timeoutActions.forEach((action) => action.classList.remove('hidden'));
 
             if (message) {
                 message.textContent = container.dataset.timeoutMessage || message.textContent;
@@ -8778,7 +8779,11 @@ function initEventOrderPolling(root = document) {
                 if (response.ok) {
                     const payload = await response.json();
 
-                    if (payload.status !== 'pending' || payload.terminal || payload.tickets_ready) {
+                    const isComplete = isClassPassCheckout
+                        ? payload.terminal || payload.paid || payload.class_pass_ready
+                        : payload.status !== 'pending' || payload.terminal || payload.tickets_ready;
+
+                    if (isComplete) {
                         window.location.replace(refreshUrl);
 
                         return;

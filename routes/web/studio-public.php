@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PublicBookingController;
+use App\Http\Controllers\PublicClassPassCheckoutController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicEventCheckoutController;
 use App\Http\Controllers\PublicEventController;
@@ -71,6 +72,23 @@ Route::get('/{accountSlug}/{locationSlug}/schedule/book', [PublicBookingControll
 Route::post('/{accountSlug}/{locationSlug}/schedule/book', [PublicBookingController::class, 'store'])
     ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:public-booking'])
     ->name('public.booking.store');
+Route::get('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}', [PublicClassPassCheckoutController::class, 'show'])
+    ->middleware(EnsurePublicSubscriptionIsActive::class)
+    ->name('public.class-pass-plans.checkout');
+Route::post('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}', [PublicClassPassCheckoutController::class, 'store'])
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
+    ->name('public.class-pass-plans.checkout.store');
+Route::get('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}/purchases/{customerPurchase}/return', [PublicClassPassCheckoutController::class, 'paymentReturn'])
+    ->middleware(['signed', EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
+    ->whereNumber('customerPurchase')
+    ->name('public.class-pass-plans.checkout.return');
+Route::get('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}/purchases/{customerPurchase}/status', [PublicClassPassCheckoutController::class, 'status'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
+    ->whereNumber('customerPurchase')
+    ->name('public.class-pass-plans.checkout.status');
+Route::post('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}/retry', [PublicClassPassCheckoutController::class, 'retry'])
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
+    ->name('public.class-pass-plans.checkout.retry');
 Route::get('/{accountSlug}/{locationSlug}/price', [PublicPriceController::class, 'show'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.price');

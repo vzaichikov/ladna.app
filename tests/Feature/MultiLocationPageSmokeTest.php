@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AccountRole;
 use App\Enums\IntegrationCategory;
 use App\Enums\ScheduleKind;
 use App\Enums\SubscriptionStatus;
 use App\Models\Account;
+use App\Models\AccountMembership;
 use App\Models\ActivityDirection;
 use App\Models\ClassPassPlan;
 use App\Models\ClassPassSegment;
@@ -72,7 +74,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(194, $classifiedRouteNames);
+        $this->assertCount(197, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -138,6 +140,10 @@ class MultiLocationPageSmokeTest extends TestCase
             'enable_festivals' => true,
         ]);
         $account->addOwner($owner);
+        $eventFestivalStaffMembership = AccountMembership::factory()
+            ->for($account)
+            ->for(User::factory())
+            ->create(['role' => AccountRole::EventFestivalStaff->value]);
         $subscriptionPlan = SubscriptionPlan::factory()->create([
             'plan_type' => 'standard',
             'is_active' => true,
@@ -273,6 +279,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'customer' => $customer,
             'event' => $event,
             'event_ticket_type' => $eventTicketType,
+            'event_festival_staff_membership' => $eventFestivalStaffMembership,
             'festival_edition' => $festivalEdition,
             'festival_entry' => $festivalEntry,
             'festival_admission_type' => $festivalAdmissionType,
@@ -387,6 +394,8 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.customer-notification-logs.index',
             'dashboard.accounts.customers.create',
             'dashboard.accounts.customers.index',
+            'dashboard.accounts.event-festival-staff.create',
+            'dashboard.accounts.event-festival-staff.index',
             'dashboard.accounts.events.create',
             'dashboard.accounts.events.index',
             'dashboard.accounts.expenses.index',
@@ -462,6 +471,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.class-pass-segments.edit' => 'class_pass_segment',
             'dashboard.accounts.customer-class-passes.edit' => 'customer_class_pass',
             'dashboard.accounts.customers.edit' => 'customer',
+            'dashboard.accounts.event-festival-staff.edit' => 'event_festival_staff_membership',
             'dashboard.accounts.events.edit' => 'event',
             'dashboard.accounts.events.ticket-types.index' => 'event',
             'dashboard.accounts.events.ticket-types.create' => 'event',
