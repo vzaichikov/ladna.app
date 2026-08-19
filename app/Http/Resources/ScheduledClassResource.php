@@ -15,11 +15,15 @@ class ScheduledClassResource extends JsonResource
     public function toArray(Request $request): array
     {
         $timezone = $this->displayTimezone();
+        $color = $this->classType?->colorAccent('#3B223F') ?? '#3B223F';
+        $textColor = $this->classType?->colorText('#3B223F') ?? '#FFFFFF';
 
         return [
             'id' => $this->id,
             'title' => $this->title,
             'description' => $this->description,
+            'color' => $color,
+            'text_color' => $textColor,
             'starts_at' => $this->starts_at->copy()->timezone($timezone)->toIso8601String(),
             'ends_at' => $this->ends_at->copy()->timezone($timezone)->toIso8601String(),
             'location' => [

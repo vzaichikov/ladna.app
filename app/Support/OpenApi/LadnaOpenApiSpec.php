@@ -36,6 +36,7 @@ class LadnaOpenApiSpec
             ],
             'paths' => [
                 '/api/v1/public/{accountSlug}/{locationSlug}/schedule' => $this->publicSchedulePath('Returns upcoming public group classes for a studio location.'),
+                '/api/v1/public/{accountSlug}/{locationSlug}/schedule/week' => $this->publicScheduleWeekPath(),
                 '/api/v1/public/{accountSlug}/{locationSlug}/classes' => $this->publicSchedulePath('Alias for the public schedule endpoint.'),
                 '/api/v1/public/{accountSlug}/{locationSlug}/price' => $this->publicPricePath(),
                 '/api/v1/mobile/studios/{accountSlug}' => $this->mobileStudioPath(),
@@ -276,6 +277,55 @@ class LadnaOpenApiSpec
                     '404' => ['$ref' => '#/components/responses/NotFound'],
                 ],
                 'x-codeSamples' => $this->codeSamples('GET', '/api/v1/public/ladna-demo/demo-location/schedule'),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function publicScheduleWeekPath(): array
+    {
+        return [
+            'get' => [
+                'tags' => ['Public schedule'],
+                'summary' => 'Returns the exact public class schedule for one Monday-to-Sunday calendar week.',
+                'parameters' => [
+                    ...$this->publicPathParameters(),
+                    [
+                        'name' => 'date',
+                        'in' => 'query',
+                        'required' => false,
+                        'description' => 'Any date inside the requested week. Defaults to today in the studio location timezone.',
+                        'schema' => ['type' => 'string', 'format' => 'date'],
+                        'example' => '2026-08-19',
+                    ],
+                ],
+                'responses' => [
+                    '200' => [
+                        'description' => 'Seven schedule days and their concrete public classes.',
+                        'content' => [
+                            'application/json' => [
+                                'schema' => [
+                                    'type' => 'object',
+                                    'properties' => [
+                                        'data' => [
+                                            'type' => 'array',
+                                            'minItems' => 7,
+                                            'maxItems' => 7,
+                                            'items' => ['$ref' => '#/components/schemas/PublicScheduleDay'],
+                                        ],
+                                        'meta' => ['$ref' => '#/components/schemas/PublicScheduleWeekMeta'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
+                    '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '422' => ['$ref' => '#/components/responses/ValidationError'],
+                ],
+                'x-codeSamples' => $this->codeSamples('GET', '/api/v1/public/ladna-demo/demo-location/schedule/week?date=2026-08-19'),
             ],
         ];
     }
@@ -1641,6 +1691,8 @@ class LadnaOpenApiSpec
                     'id' => ['type' => 'integer'],
                     'title' => ['type' => 'string'],
                     'description' => ['type' => ['string', 'null']],
+                    'color' => ['type' => 'string', 'pattern' => '^#[0-9A-F]{6}$', 'description' => 'Resolved class accent color for schedule rendering.'],
+                    'text_color' => ['type' => 'string', 'pattern' => '^#[0-9A-F]{6}$', 'description' => 'Readable text color for the resolved class accent color.'],
                     'starts_at' => ['type' => 'string', 'format' => 'date-time'],
                     'ends_at' => ['type' => 'string', 'format' => 'date-time'],
                     'location' => ['$ref' => '#/components/schemas/NamedEntity'],
@@ -1653,6 +1705,27 @@ class LadnaOpenApiSpec
                     'available_spots' => ['type' => ['integer', 'null']],
                     'booking_cutoff_minutes' => ['type' => ['integer', 'null']],
                     'status' => ['type' => 'string', 'example' => 'scheduled'],
+                ],
+            ],
+            'PublicScheduleDay' => [
+                'type' => 'object',
+                'required' => ['date', 'iso_weekday', 'classes'],
+                'properties' => [
+                    'date' => ['type' => 'string', 'format' => 'date'],
+                    'iso_weekday' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 7],
+                    'classes' => [
+                        'type' => 'array',
+                        'items' => ['$ref' => '#/components/schemas/ScheduledClass'],
+                    ],
+                ],
+            ],
+            'PublicScheduleWeekMeta' => [
+                'type' => 'object',
+                'required' => ['timezone', 'week_start', 'week_end'],
+                'properties' => [
+                    'timezone' => ['type' => 'string', 'example' => 'Europe/Kyiv'],
+                    'week_start' => ['type' => 'string', 'format' => 'date'],
+                    'week_end' => ['type' => 'string', 'format' => 'date'],
                 ],
             ],
             'PriceGroup' => [

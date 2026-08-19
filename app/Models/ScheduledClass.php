@@ -142,12 +142,11 @@ class ScheduledClass extends Model
             ->latestOfMany();
     }
 
-    public function scopePublicUpcoming(Builder $query): Builder
+    public function scopePublicSchedule(Builder $query): Builder
     {
         return $query
             ->where('is_public', true)
             ->where('status', ScheduledClassStatus::Scheduled->value)
-            ->where('starts_at', '>=', now())
             ->whereHas('account', fn (Builder $query) => $query
                 ->where('status', AccountStatus::Active->value)
                 ->where(function (Builder $query): void {
@@ -168,6 +167,13 @@ class ScheduledClass extends Model
                     ->orWhereHas('scheduleSeries', fn (Builder $query) => $query->where('status', ScheduleSeriesStatus::Active->value));
             })
             ->orderBy('starts_at');
+    }
+
+    public function scopePublicUpcoming(Builder $query): Builder
+    {
+        return $query
+            ->publicSchedule()
+            ->where('starts_at', '>=', now());
     }
 
     public function scopePeopleCounterTrackable(Builder $query): Builder

@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1/public/{accountSlug}/{locationSlug}')
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->group(function (): void {
+        Route::get('/schedule/week', [PublicScheduleController::class, 'week'])->name('api.v1.public.schedule.week');
         Route::get('/schedule', [PublicScheduleController::class, 'schedule'])->name('api.v1.public.schedule');
         Route::get('/classes', [PublicScheduleController::class, 'classes'])->name('api.v1.public.classes');
         Route::get('/price', PublicPriceController::class)->name('api.v1.public.price');

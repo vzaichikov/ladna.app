@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.145.0',
+                'date' => '2026-08-19',
+                'title' => 'Exact weekly schedules for external websites',
+                'items' => ['Studios can now connect an exact Monday-to-Sunday public JSON schedule to an external website. Each of the seven days includes every concrete public class with local times, class-type colors, readable text colors, trainer names and absolute photo URLs; an optional date selects another week without the previous 30-class limit.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.144.0',
                 'date' => '2026-08-18',
                 'title' => 'Simpler Festival applications and guest checkout',
@@ -1255,6 +1262,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.145.0',
+                'date' => '2026-08-19',
+                'title' => 'Точний тижневий розклад для зовнішніх сайтів',
+                'items' => ['Студії тепер можуть підключити до зовнішнього сайту точний публічний JSON-розклад від понеділка до неділі. Кожен із семи днів містить усі фактичні публічні заняття з локальним часом, кольорами типів занять, читабельними кольорами тексту, іменами тренерів та абсолютними URL фотографій; необов’язкова дата вибирає інший тиждень без попереднього обмеження у 30 занять.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.144.0',
                 'date' => '2026-08-18',
