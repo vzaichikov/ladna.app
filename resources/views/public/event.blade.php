@@ -118,6 +118,19 @@
                                             @if ($ticketType['early_bird_available'])<span class="font-medium text-emerald-700"> · {{ __('app.event_early_bird') }}</span>@endif
                                             <span class="font-medium text-slate-500"> · {{ __('app.event_ticket_remaining_count', ['count' => $ticketType['remaining_quantity']]) }}</span>
                                         </p>
+                                        @if ($ticketType['early_bird_available'])
+                                            <p class="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold leading-5 text-emerald-800" data-event-early-bird-availability>
+                                                @if ($ticketType['early_bird_quota'] !== null)
+                                                    {{ __('app.event_early_bird_limited_availability', [
+                                                        'remaining' => $ticketType['early_bird_remaining_quantity'],
+                                                        'quota' => $ticketType['early_bird_quota'],
+                                                        'date' => $ticketType['early_bird_ends_at_label'],
+                                                    ]) }}
+                                                @else
+                                                    {{ __('app.event_early_bird_availability_until', ['date' => $ticketType['early_bird_ends_at_label']]) }}
+                                                @endif
+                                            </p>
+                                        @endif
                                         @if (! $ticketType['sales_open'])<p class="mt-1 text-xs font-semibold text-amber-700">{{ __('app.event_sales_window_closed') }}</p>@endif
                                         @if ($ticketType['remaining_quantity'] === 0)<p class="mt-1 text-xs font-semibold text-rose-700">{{ __('app.event_sold_out') }}</p>@endif
                                     </div>

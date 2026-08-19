@@ -64,7 +64,7 @@ class PublicEventController extends Controller
             : max(0, $event->capacity - (int) $this->reservedOrderItems(
                 EventOrderItem::query()->where('event_id', $event->id)
             )->sum('quantity'));
-        $checkoutTicketTypes = $event->ticketTypes->map(function (EventTicketType $ticketType) use ($eventRemainingCapacity): array {
+        $checkoutTicketTypes = $event->ticketTypes->map(function (EventTicketType $ticketType) use ($event, $eventRemainingCapacity): array {
             $remainingQuantity = max(0, $ticketType->inventory - (int) $ticketType->getAttribute('sold_or_held_quantity'));
             $remainingQuantity = min($remainingQuantity, $eventRemainingCapacity ?? PHP_INT_MAX);
             $salesOpen = $ticketType->salesAreOpen();
@@ -72,9 +72,12 @@ class PublicEventController extends Controller
             $earlyBirdPeriodIsOpen = $ticketType->early_bird_price_cents !== null
                 && $ticketType->early_bird_ends_at?->isFuture();
             $earlyBirdRemainingQuantity = $earlyBirdPeriodIsOpen
-                ? ($ticketType->early_bird_quota === null
-                    ? $maxQuantity
-                    : max(0, $ticketType->early_bird_quota - (int) $ticketType->getAttribute('early_bird_sold_or_held_quantity')))
+                ? min(
+                    $remainingQuantity,
+                    $ticketType->early_bird_quota === null
+                        ? $remainingQuantity
+                        : max(0, $ticketType->early_bird_quota - (int) $ticketType->getAttribute('early_bird_sold_or_held_quantity')),
+                )
                 : 0;
             $earlyBirdMaxQuantity = min($maxQuantity, $earlyBirdRemainingQuantity);
             $earlyBirdAvailable = $earlyBirdMaxQuantity > 0;
@@ -89,6 +92,12 @@ class PublicEventController extends Controller
                 'early_bird_available' => $earlyBirdAvailable,
                 'early_bird_max_quantity' => $earlyBirdMaxQuantity,
                 'early_bird_price_cents' => $earlyBirdAvailable ? $ticketType->early_bird_price_cents : null,
+                'early_bird_quota' => $ticketType->early_bird_quota,
+                'early_bird_remaining_quantity' => $earlyBirdRemainingQuantity,
+                'early_bird_ends_at_label' => $ticketType->early_bird_ends_at
+                    ?->copy()
+                    ->timezone($event->timezone)
+                    ->format('d.m.Y H:i'),
                 'regular_price_cents' => $ticketType->price_cents,
                 'price_cents' => $earlyBirdAvailable ? $ticketType->early_bird_price_cents : $ticketType->price_cents,
             ];

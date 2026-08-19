@@ -1722,6 +1722,8 @@ return [
     'event_early_ends' => 'Early bird ends',
     'event_early_quota' => 'Early bird quota',
     'event_early_bird' => 'Early bird',
+    'event_early_bird_limited_availability' => 'Early bird: :remaining of :quota tickets left, available until :date.',
+    'event_early_bird_availability_until' => 'Early bird is available until :date.',
     'event_sales_starts' => 'Sales open',
     'event_sales_ends' => 'Sales close',
     'event_max_per_order' => 'Limit per order',

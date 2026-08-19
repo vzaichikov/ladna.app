@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.147.0',
+                'date' => '2026-08-20',
+                'title' => 'Clear Early-bird ticket availability',
+                'items' => ['Public Event ticket cards now show guests the live Early-bird quantity remaining, the original Early-bird quota, and the exact local cutoff date and time. The notice disappears automatically when the quota is exhausted or the offer expires.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.146.0',
                 'date' => '2026-08-19',
                 'title' => 'External class-pass catalog and focused checkout',
@@ -1269,6 +1276,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.147.0',
+                'date' => '2026-08-20',
+                'title' => 'Зрозуміла доступність квитків Early bird',
+                'items' => ['На публічних картках квитків події гості тепер бачать поточний залишок Early bird, початкову квоту та точні локальні дату й час завершення пропозиції. Повідомлення автоматично зникає після вичерпання квоти або завершення строку.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.146.0',
                 'date' => '2026-08-19',

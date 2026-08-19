@@ -13,6 +13,7 @@ use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Event;
 use App\Models\EventOrder;
+use App\Models\EventOrderItem;
 use App\Models\EventTicketType;
 use App\Models\FestivalPortalUser;
 use App\Models\IntegrationSetting;
@@ -117,6 +118,85 @@ class EventCheckoutDeliveryTest extends TestCase
             '/<button(?=[^>]*data-event-free-action)(?=[^>]*disabled)[^>]*>/s',
             (string) $page->getContent(),
         );
+    }
+
+    public function test_public_event_shows_the_early_bird_quantity_and_local_cutoff_until_the_quota_is_exhausted(): void
+    {
+        $account = Account::factory()->create(['default_language' => 'en']);
+        $event = Event::factory()->published()->for($account)->create([
+            'capacity' => 40,
+            'timezone' => 'Europe/Kyiv',
+        ]);
+        $earlyBirdEndsAt = now()->addDay()->startOfMinute();
+        $limitedTicketType = EventTicketType::factory()->for($account)->for($event)->create([
+            'name' => 'Limited early bird',
+            'inventory' => 40,
+            'price_cents' => 70000,
+            'early_bird_price_cents' => 60000,
+            'early_bird_ends_at' => $earlyBirdEndsAt,
+            'early_bird_quota' => 20,
+        ]);
+        EventTicketType::factory()->for($account)->for($event)->create([
+            'name' => 'Date-only early bird',
+            'inventory' => 40,
+            'price_cents' => 70000,
+            'early_bird_price_cents' => 60000,
+            'early_bird_ends_at' => $earlyBirdEndsAt,
+            'early_bird_quota' => null,
+        ]);
+        $order = EventOrder::factory()->for($account)->for($event)->create([
+            'status' => EventOrderStatus::Paid,
+            'expires_at' => null,
+        ]);
+        $earlyBirdItem = EventOrderItem::factory()->create([
+            'account_id' => $account->id,
+            'event_id' => $event->id,
+            'event_order_id' => $order->id,
+            'event_ticket_type_id' => $limitedTicketType->id,
+            'ticket_type_name' => $limitedTicketType->name,
+            'price_tier' => 'early_bird',
+            'unit_price_cents' => 60000,
+            'quantity' => 3,
+            'total_cents' => 180000,
+        ]);
+        $cutoff = $earlyBirdEndsAt->copy()->timezone($event->timezone)->format('d.m.Y H:i');
+
+        $this->withSession(['locale' => 'en'])
+            ->get(route('public.events.show', [$account->slug, $event->slug]))
+            ->assertOk()
+            ->assertSee(trans('app.event_early_bird_limited_availability', [
+                'remaining' => 17,
+                'quota' => 20,
+                'date' => $cutoff,
+            ], 'en'))
+            ->assertSee(trans('app.event_early_bird_availability_until', ['date' => $cutoff], 'en'))
+            ->assertSeeInOrder(['Limited early bird', '17 of 20 tickets left'], false);
+
+        $this->withSession(['locale' => 'uk'])
+            ->get(route('public.events.show', [$account->slug, $event->slug]))
+            ->assertOk()
+            ->assertSee(trans('app.event_early_bird_limited_availability', [
+                'remaining' => 17,
+                'quota' => 20,
+                'date' => $cutoff,
+            ], 'uk'));
+
+        $earlyBirdItem->update([
+            'quantity' => 20,
+            'total_cents' => 1200000,
+        ]);
+
+        $page = $this->withSession(['locale' => 'en'])
+            ->get(route('public.events.show', [$account->slug, $event->slug]))
+            ->assertOk()
+            ->assertDontSee(trans('app.event_early_bird_limited_availability', [
+                'remaining' => 0,
+                'quota' => 20,
+                'date' => $cutoff,
+            ], 'en'))
+            ->assertSee(trans('app.event_early_bird_availability_until', ['date' => $cutoff], 'en'));
+
+        $this->assertSame(1, substr_count((string) $page->getContent(), 'data-event-early-bird-availability'));
     }
 
     public function test_paid_event_checkout_renders_an_explicit_unavailable_provider_state(): void

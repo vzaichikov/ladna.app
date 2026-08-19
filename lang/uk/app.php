@@ -1722,6 +1722,8 @@ return [
     'event_early_ends' => 'Завершення Early bird',
     'event_early_quota' => 'Квота Early bird',
     'event_early_bird' => 'Early bird',
+    'event_early_bird_limited_availability' => 'Early bird: залишилось :remaining із :quota квитків, діє до :date.',
+    'event_early_bird_availability_until' => 'Early bird діє до :date.',
     'event_sales_starts' => 'Продаж від',
     'event_sales_ends' => 'Продаж до',
     'event_max_per_order' => 'Максимум в одному замовленні',
