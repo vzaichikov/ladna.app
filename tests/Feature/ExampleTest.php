@@ -54,7 +54,7 @@ class ExampleTest extends TestCase
             ->get(route('login', absolute: false))
             ->assertStatus(200)
             ->assertSee('Увійдіть, щоб керувати розкладом')
-            ->assertSee('Вхід для тренерів, персоналу входу/фестивалю та власників студії')
+            ->assertSee('Вхід для персоналу та власників студії')
             ->assertSee('Вхід для клієнтів')
             ->assertSee('href="'.route('customer.login').'"', false)
             ->assertSee('name="remember" type="checkbox" value="1" checked', false)

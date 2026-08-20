@@ -2140,7 +2140,7 @@ return [
     ],
     'auth_welcome_back' => 'Вітаємо знову!',
     'auth_login_subtitle' => 'Увійдіть у свій акаунт',
-    'staff_owner_login_heading' => 'Вхід для тренерів, персоналу входу/фестивалю та власників студії',
+    'staff_owner_login_heading' => 'Вхід для персоналу та власників студії',
     'staff_owner_login_cta' => 'Вхід для команди',
     'customer_login_cta' => 'Вхід для клієнтів',
     'auth_email_placeholder' => 'you@studio.com',
