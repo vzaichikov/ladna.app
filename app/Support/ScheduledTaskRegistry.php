@@ -147,6 +147,15 @@ class ScheduledTaskRegistry
                 'overlap_minutes' => 30,
             ],
             [
+                'key' => 'passport_purge',
+                'command' => 'passport:purge --expired --hours=168',
+                'expression' => '30 0 * * *',
+                'frequency_key' => 'scheduled_task_frequency_daily',
+                'description_key' => 'scheduled_task_passport_purge_description',
+                'overlap_minutes' => 30,
+                'single_server' => true,
+            ],
+            [
                 'key' => 'people_counter_capture',
                 'command' => 'people-counter:capture',
                 'expression' => '*/7 * * * *',

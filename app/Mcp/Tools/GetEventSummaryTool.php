@@ -15,10 +15,16 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('get-event-summary')]
-#[Description('Returns a read-only operational summary for one event ID in the bearer token account scope, including ticket-type inventory and no buyer contacts.')]
+#[Description('Returns a read-only operational summary for one event ID in the connected studio scope, including ticket-type inventory and no buyer contacts.')]
 class GetEventSummaryTool extends Tool
 {
     public function handle(

@@ -6,7 +6,6 @@ use App\Enums\AccountRole;
 use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
-use App\Support\AccountApiTokenAbilityAuthorizer;
 use App\Support\Ai\AiConversationImageCleaner;
 use App\Support\EventFestivalStaffAccess;
 use App\Support\PublicScheduleViewRegistry;
@@ -121,17 +120,15 @@ class AccountController extends Controller
         return redirect()->route('dashboard.accounts.owner-profile.edit', $account);
     }
 
-    public function editBrand(
-        Request $request,
-        Account $account,
-        AccountApiTokenAbilityAuthorizer $abilityAuthorizer,
-    ): View|RedirectResponse {
+    public function editBrand(Request $request, Account $account): View|RedirectResponse
+    {
         $this->authorize('update', $account);
 
         $legacyRoute = match ($request->query('tab')) {
             'qr' => route('dashboard.accounts.qr-links.show', $account),
             'customer_notifications' => route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']),
             'ai' => route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram']),
+            'api' => route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']),
             default => null,
         };
 
@@ -139,22 +136,13 @@ class AccountController extends Controller
             return redirect($legacyRoute);
         }
 
-        $allowedTabs = ['formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view', 'api'];
+        $allowedTabs = ['formats', 'opening_hours', 'rules', 'pass_rules', 'schedule_view'];
         $activeTab = in_array($request->query('tab'), $allowedTabs, true) ? $request->query('tab') : 'business';
-
-        $apiTokens = $activeTab === 'api'
-            ? $account->apiTokens()->latest()->get()
-            : collect();
 
         return view('accounts.brand-edit', [
             'account' => $account,
             'activeTab' => $activeTab,
             'publicScheduleViewOptions' => PublicScheduleViewRegistry::options(),
-            'apiTokens' => $apiTokens,
-            'apiTokenAbilities' => $abilityAuthorizer->grantableAbilities($account, $request->user()),
-            'apiTokenSecretAccess' => $apiTokens->mapWithKeys(fn ($token): array => [
-                $token->id => $abilityAuthorizer->canManageSecrets($account, $request->user(), $token),
-            ]),
         ]);
     }
 

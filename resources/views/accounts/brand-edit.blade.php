@@ -18,7 +18,6 @@
             'rules' => __('app.studio_rules_and_offer'),
             'pass_rules' => __('app.class_passes_and_classes'),
             'schedule_view' => __('app.public_schedule_view'),
-            'api' => __('app.api'),
         ] as $tabKey => $tabLabel)
             <a
                 href="{{ route('dashboard.accounts.general-settings.edit', $tabKey === 'business' ? $account : [$account, 'tab' => $tabKey]) }}"
@@ -89,8 +88,6 @@
                 {{ __('app.save') }}
             </x-ui.button>
         </form>
-    @elseif ($activeTab === 'api')
-        @include('accounts.api-tokens', ['apiTokens' => $apiTokens])
     @else
         <form method="POST" action="{{ route('dashboard.accounts.update', $account) }}" enctype="multipart/form-data" class="mt-6 max-w-6xl space-y-5">
             @csrf

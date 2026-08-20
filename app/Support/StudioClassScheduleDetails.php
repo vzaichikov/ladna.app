@@ -7,6 +7,8 @@ use App\Enums\ScheduledClassStatus;
 use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
+use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -23,6 +25,7 @@ class StudioClassScheduleDetails
         bool $includeCancelledBookings = false,
         int $classLimit = 40,
         int $bookingLimitPerClass = 30,
+        ?Closure $scheduledClassScope = null,
     ): array {
         $timezone = $account->timezone ?: config('app.timezone');
         $accountDay = $day->copy()->timezone($timezone)->startOfDay();
@@ -32,6 +35,7 @@ class StudioClassScheduleDetails
             $includeCancelledClasses,
             max(1, $classLimit) + 1,
             $includeCancelledBookings,
+            $scheduledClassScope,
         );
         $truncated = $classes->count() > $classLimit;
         $mappedClasses = $classes
@@ -69,12 +73,19 @@ class StudioClassScheduleDetails
     /**
      * @return EloquentCollection<int, ScheduledClass>
      */
-    private function classesForDay(Account $account, Carbon $day, bool $includeCancelledClasses, int $limit, bool $includeCancelledBookings): EloquentCollection
-    {
+    private function classesForDay(
+        Account $account,
+        Carbon $day,
+        bool $includeCancelledClasses,
+        int $limit,
+        bool $includeCancelledBookings,
+        ?Closure $scheduledClassScope,
+    ): EloquentCollection {
         return ScheduledClass::query()
             ->whereBelongsTo($account)
             ->whereBetween('starts_at', [$day->copy()->timezone('UTC'), $day->copy()->endOfDay()->timezone('UTC')])
             ->when(! $includeCancelledClasses, fn ($query) => $query->where('status', ScheduledClassStatus::Scheduled->value))
+            ->when($scheduledClassScope, fn (Builder $query): Builder => $scheduledClassScope($query))
             ->with([
                 'location:id,account_id,name,timezone',
                 'room:id,account_id,location_id,name',

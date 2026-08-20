@@ -6,6 +6,7 @@ use App\Http\Controllers\DismissFestivalPoweredBannerController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LegalPageController;
+use App\Http\Controllers\McpConnectionGuideController;
 use App\Http\Controllers\PwaController;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -29,6 +30,15 @@ Route::get('/privacy.en.html', [LegalPageController::class, 'privacyEnglish'])->
 Route::get('/privacy.ua.html', [LegalPageController::class, 'privacyUkrainian'])->name('privacy.ua');
 Route::get('/api-docs', [ApiDocumentationController::class, 'show'])->name('api-docs.show');
 Route::get('/api-docs/openapi.json', [ApiDocumentationController::class, 'openApi'])->name('api-docs.openapi');
+Route::controller(McpConnectionGuideController::class)
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class, SetLocale::class])
+    ->middleware('cache.headers:public;max_age=300;stale_while_revalidate=600;etag')
+    ->group(function (): void {
+        Route::get('/connect-ai/{account:slug}', 'show')
+            ->name('mcp.connection-guide.show');
+        Route::get('/connect-ai/{account:slug}/instructions.md', 'markdown')
+            ->name('mcp.connection-guide.markdown');
+    });
 Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class, SetLocale::class])
     ->group(function (): void {
         Route::get('/app/app-version.json', [PwaController::class, 'version'])->name('pwa.version');

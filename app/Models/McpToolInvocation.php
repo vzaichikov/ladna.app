@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'account_api_token_id', 'ai_conversation_id', 'ai_conversation_message_id', 'tool_name', 'required_ability', 'status', 'input', 'output', 'error_message', 'started_at', 'finished_at'])]
+#[Fillable(['account_id', 'account_api_token_id', 'mcp_oauth_connection_id', 'actor_user_id', 'actor_role', 'actor_name', 'actor_email', 'credential_type', 'oauth_access_token_id', 'oauth_client_id', 'ai_conversation_id', 'ai_conversation_message_id', 'tool_name', 'required_ability', 'status', 'input', 'output', 'error_message', 'started_at', 'finished_at'])]
 class McpToolInvocation extends Model
 {
     use HasFactory;
@@ -35,6 +35,16 @@ class McpToolInvocation extends Model
     public function accountApiToken(): BelongsTo
     {
         return $this->belongsTo(AccountApiToken::class);
+    }
+
+    public function mcpOAuthConnection(): BelongsTo
+    {
+        return $this->belongsTo(McpOAuthConnection::class);
+    }
+
+    public function actorUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_user_id');
     }
 
     public function conversation(): BelongsTo

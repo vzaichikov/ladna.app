@@ -398,7 +398,7 @@ class AccountTenancyTest extends TestCase
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api']))
-            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']));
+            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']));
     }
 
     public function test_locations_are_scoped_to_their_parent_account(): void

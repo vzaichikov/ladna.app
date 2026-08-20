@@ -15,8 +15,14 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('get-payroll-overview')]
 #[Description('Returns payroll cadence and immutable closed or voided payroll-run snapshots. Closing a run accrues salary but does not record an actual payout.')]
 class GetPayrollOverviewTool extends Tool

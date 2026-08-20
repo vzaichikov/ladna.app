@@ -6,6 +6,7 @@ use App\Http\Controllers\AccountAssistantController;
 use App\Http\Controllers\AccountCustomerNotificationController;
 use App\Http\Controllers\AccountCustomerTelegramBotController;
 use App\Http\Controllers\AccountCustomerTelegramWebhookController;
+use App\Http\Controllers\AccountMcpConnectionController;
 use App\Http\Controllers\AccountSmsAccountController;
 use App\Http\Controllers\AccountSmsAutoTopUpController;
 use App\Http\Controllers\AccountSmsTopUpController;
@@ -37,6 +38,14 @@ Route::post('accounts/{account}/api-tokens/{accountApiToken}/regenerate', [Accou
     ->name('accounts.api-tokens.regenerate');
 Route::delete('accounts/{account}/api-tokens/{accountApiToken}', [AccountApiTokenController::class, 'destroy'])
     ->name('accounts.api-tokens.destroy');
+Route::get('accounts/{account}/connections', [AccountMcpConnectionController::class, 'index'])
+    ->name('accounts.connections.index');
+Route::delete('accounts/{account}/connections/ai/{mcpOAuthConnection}', [AccountMcpConnectionController::class, 'destroy'])
+    ->name('accounts.connections.mcp-connections.destroy');
+Route::get('accounts/{account}/ai-connections', [AccountMcpConnectionController::class, 'legacyIndex'])
+    ->name('accounts.mcp-connections.index');
+Route::delete('accounts/{account}/ai-connections/{mcpOAuthConnection}', [AccountMcpConnectionController::class, 'destroy'])
+    ->name('accounts.mcp-connections.destroy');
 Route::put('accounts/{account}/customer-notification-settings', [CustomerNotificationSettingsController::class, 'update'])
     ->name('accounts.customer-notification-settings.update');
 Route::put('accounts/{account}/customer-telegram-bot', [AccountCustomerTelegramBotController::class, 'update'])

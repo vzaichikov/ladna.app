@@ -356,6 +356,12 @@
     ] : [];
 
     $accountSettingsNav = $showAccountNav ? [
+        [
+            'label' => __('app.connections_title'),
+            'icon' => 'sparkles',
+            'href' => route('dashboard.accounts.connections.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.connections.*', 'dashboard.accounts.mcp-connections.*'),
+        ],
         ...($canManageStudioSettings ? [[
             'label' => __('app.my_account'),
             'icon' => 'user',
@@ -801,7 +807,7 @@
                         </div>
 
                         <div class="flex min-w-0 items-center gap-2 sm:gap-3">
-                            @if ($showAccountNav && ! $isEventFestivalStaff && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*'))
+                            @if ($showAccountNav && ! $isEventFestivalStaff && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*', 'dashboard.accounts.connections.*', 'dashboard.accounts.mcp-connections.*'))
                                 <form method="POST" action="{{ route('dashboard.accounts.working-location.update', $activeAccount) }}" class="min-w-0">
                                     @csrf
                                     <input type="hidden" name="redirect_to" value="{{ request()->getRequestUri() }}">

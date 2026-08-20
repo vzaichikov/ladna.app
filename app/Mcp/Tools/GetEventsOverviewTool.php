@@ -16,10 +16,16 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('get-events-overview')]
-#[Description('Returns bounded event lifecycle, inventory, ticket, check-in, revenue, and refund-obligation summaries in the bearer token account scope without buyer contacts.')]
+#[Description('Returns bounded event lifecycle, inventory, ticket, check-in, revenue, and refund-obligation summaries in the connected studio scope without buyer contacts.')]
 class GetEventsOverviewTool extends Tool
 {
     public function handle(

@@ -296,6 +296,11 @@ class Account extends Model
         return $this->hasMany(AccountApiToken::class);
     }
 
+    public function mcpOAuthConnections(): HasMany
+    {
+        return $this->hasMany(McpOAuthConnection::class);
+    }
+
     public function aiSetting(): HasOne
     {
         return $this->hasOne(AccountAiSetting::class);

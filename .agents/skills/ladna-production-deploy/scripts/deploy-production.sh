@@ -172,6 +172,19 @@ git pull --ff-only origin "$BRANCH"
 composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 php artisan optimize:clear --no-interaction
 
+passport_private_key="storage/oauth-private.key"
+passport_public_key="storage/oauth-public.key"
+
+if [[ ! -f "$passport_private_key" && ! -f "$passport_public_key" ]]; then
+    php artisan passport:keys --no-interaction
+    echo "Passport signing keys generated."
+elif [[ ! -f "$passport_private_key" || ! -f "$passport_public_key" ]]; then
+    echo "Passport signing key pair is incomplete. Refusing to continue." >&2
+    exit 1
+else
+    echo "Passport signing keys already exist and were preserved."
+fi
+
 npm ci --include=dev --ignore-scripts
 npm run build
 

@@ -27,6 +27,10 @@ Route::get('accounts/{account}/qr-links', AccountQrLinksController::class)
 Route::get('accounts/{account}/notification-settings', [AccountNotificationSettingsController::class, 'edit'])
     ->name('accounts.notification-settings.edit');
 Route::get('accounts/{account}/brand', function (Request $request, Account $account): RedirectResponse {
+    if ($request->query('tab') === 'api') {
+        return redirect()->route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']);
+    }
+
     return redirect()->route('dashboard.accounts.general-settings.edit', ['account' => $account] + $request->query());
 })
     ->name('accounts.brand.edit');

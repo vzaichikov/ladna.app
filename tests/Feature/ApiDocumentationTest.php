@@ -6,14 +6,45 @@ use Tests\TestCase;
 
 class ApiDocumentationTest extends TestCase
 {
-    public function test_api_documentation_page_renders_endpoints_and_code_examples(): void
+    public function test_api_documentation_defaults_to_the_public_api_tab(): void
     {
-        $this->get(route('api-docs.show'))
+        $response = $this->get(route('api-docs.show'));
+
+        $response
             ->assertOk()
             ->assertSee(__('app.api_documentation'))
+            ->assertSee('data-api-docs-tab="public"', false)
+            ->assertSee('data-api-docs-tab="restricted"', false)
+            ->assertSee('data-api-docs-tab="mcp"', false)
+            ->assertSee('data-api-docs-tab="connect"', false)
+            ->assertSee('aria-current="page"', false)
             ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/schedule')
             ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/schedule/week')
             ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/price')
+            ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/classes')
+            ->assertDontSee('/api/v1/mobile/auth/staff/login')
+            ->assertDontSee('/api/v1/website-leads')
+            ->assertDontSee('/mcp/ladna-studio')
+            ->assertSee('PHP')
+            ->assertSee('Python')
+            ->assertSee('JS')
+            ->assertDontSee('Authorization: Bearer ladna_your_token');
+    }
+
+    public function test_unknown_api_documentation_tab_falls_back_to_public_api(): void
+    {
+        $this->get(route('api-docs.show', ['tab' => 'unknown']))
+            ->assertOk()
+            ->assertSee(__('app.api_docs_public_title'))
+            ->assertSee('/api/v1/public/{accountSlug}/{locationSlug}/price')
+            ->assertDontSee('/mcp/ladna-studio');
+    }
+
+    public function test_restricted_api_tab_renders_only_non_public_non_mcp_endpoints(): void
+    {
+        $this->get(route('api-docs.show', ['tab' => 'restricted']))
+            ->assertOk()
+            ->assertSee(__('app.api_docs_restricted_title'))
             ->assertSee('/api/v1/mobile/auth/staff/login')
             ->assertSee('/api/v1/mobile/schedule')
             ->assertSee('/api/v1/mobile/bookings/{classBooking}')
@@ -23,6 +54,20 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('/api/v1/website-leads')
             ->assertSee('/api/v1/festival-payments/{provider}/callbacks')
             ->assertSee('Receives a payment provider callback for a Festival performance charge or spectator admission order')
+            ->assertDontSee('/api/v1/public/{accountSlug}/{locationSlug}/schedule')
+            ->assertDontSee('/mcp/ladna-studio')
+            ->assertSee(__('app.api_docs_example_website_lead'))
+            ->assertSee('PHP')
+            ->assertSee('Python')
+            ->assertSee('JS')
+            ->assertSee('Authorization: Bearer ladna_your_token');
+    }
+
+    public function test_mcp_tab_renders_only_the_mcp_endpoint_and_examples(): void
+    {
+        $this->get(route('api-docs.show', ['tab' => 'mcp']))
+            ->assertOk()
+            ->assertSee(__('app.api_docs_mcp_title'))
             ->assertSee('/mcp/ladna-studio')
             ->assertSee('describe-ladna-skills')
             ->assertSee('get-class-bookings-for-day')
@@ -38,10 +83,37 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('get-payroll-overview')
             ->assertSee('get-events-overview')
             ->assertSee('get-event-summary')
+            ->assertSee(__('app.api_docs_mcp_oauth_title'))
+            ->assertSee(__('app.api_docs_mcp_catalog_title'))
+            ->assertSee(__('app.api_docs_mcp_group_finance'))
+            ->assertSee(__('app.api_docs_mcp_service_title'))
             ->assertSee('PHP')
             ->assertSee('Python')
             ->assertSee('JS')
-            ->assertSee('Authorization: Bearer ladna_your_token');
+            ->assertSee('Authorization: Bearer ladna_your_token')
+            ->assertDontSee('/api/v1/public/{accountSlug}/{locationSlug}/schedule')
+            ->assertDontSee('/api/v1/website-leads')
+            ->assertDontSee('/api/v1/mobile/auth/staff/login');
+    }
+
+    public function test_connect_tab_renders_plain_language_owner_instructions(): void
+    {
+        $this->get(route('api-docs.show', ['tab' => 'connect']))
+            ->assertOk()
+            ->assertSee(__('app.api_docs_connect_title'))
+            ->assertSee(__('app.api_docs_connect_chatgpt_title'))
+            ->assertSee(__('app.api_docs_connect_step_1_title'))
+            ->assertSee(__('app.api_docs_connect_step_2_title'))
+            ->assertSee(__('app.api_docs_connect_step_3_title'))
+            ->assertSee(__('app.api_docs_connect_step_4_title'))
+            ->assertSee(__('app.api_docs_connect_test_prompt'))
+            ->assertSee(route('mcp.ladna-studio'))
+            ->assertSee('data-copy-source', false)
+            ->assertDontSee(__('app.openapi_json'))
+            ->assertDontSee('<pre', false)
+            ->assertDontSee('Authorization: Bearer ladna_your_token')
+            ->assertDontSee('/api/v1/public/{accountSlug}/{locationSlug}/schedule')
+            ->assertDontSee('/api/v1/website-leads');
     }
 
     public function test_openapi_json_documents_public_and_lead_endpoints(): void
@@ -94,6 +166,8 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.responses.400.description', 'The callback signature, order identifier, amount, currency, or state is invalid.')
             ->assertJsonPath('paths./mcp/ladna-studio.post.tags.0', 'MCP')
             ->assertJsonPath('paths./mcp/ladna-studio.post.security.0.AccountBearerToken', [])
+            ->assertJsonPath('paths./mcp/ladna-studio/{accountSlug}.post.security.0.LadnaUserOAuth.0', 'mcp:use')
+            ->assertJsonPath('paths./mcp/ladna-studio/{accountSlug}.post.parameters.0.name', 'accountSlug')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.class_bookings_for_day.value.params.name', 'get-class-bookings-for-day')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.owner_help_search.value.params.name', 'search-owner-help')
             ->assertJsonPath('paths./mcp/ladna-studio.post.requestBody.content.application/json.examples.owner_help_search.value.params.arguments.query', 'як додати клієнта')
@@ -153,6 +227,7 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.responses.SubscriptionExpired.content.application/json.schema.properties.code.enum.1', 'demo_payment_required')
             ->assertJsonPath('components.responses.DemoReadOnly.content.application/json.schema.properties.code.example', 'demo_readonly')
             ->assertJsonPath('components.securitySchemes.AccountBearerToken.scheme', 'bearer')
+            ->assertJsonPath('components.securitySchemes.LadnaUserOAuth.flows.authorizationCode.scopes.mcp:use', 'Use the connected Ladna studio tools allowed by the current user role.')
             ->assertJsonPath('components.securitySchemes.MobileBearerToken.bearerFormat', 'Ladna native mobile session token')
             ->assertJsonPath('components.schemas.MobileStaffLoginRequest.required.0', 'email')
             ->assertJsonPath('components.schemas.MobileCustomerProfilePhoneOtpSendRequest.required.0', 'phone')

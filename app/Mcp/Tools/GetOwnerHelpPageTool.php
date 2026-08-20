@@ -13,8 +13,14 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('get-owner-help-page')]
 #[Description('Returns one Ladna owner help page by slug from the curated help config.')]
 class GetOwnerHelpPageTool extends Tool

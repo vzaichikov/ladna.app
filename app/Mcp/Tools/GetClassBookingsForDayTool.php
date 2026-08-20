@@ -4,10 +4,12 @@ namespace App\Mcp\Tools;
 
 use App\Enums\AccountApiTokenAbility;
 use App\Enums\McpToolInvocationStatus;
+use App\Enums\StudioPermission;
 use App\Support\Mcp\McpAccountContext;
 use App\Support\StudioClassScheduleDetails;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -15,10 +17,16 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('get-class-bookings-for-day')]
-#[Description('Returns scheduled classes for a studio calendar day with trainer, location, room, capacity, and booked customer names in the bearer token account scope.')]
+#[Description('Returns scheduled classes for a calendar day with trainer, location, room, capacity, and booked customer names in the connected studio scope.')]
 class GetClassBookingsForDayTool extends Tool
 {
     public function handle(Request $request, McpAccountContext $context, StudioClassScheduleDetails $details): Response|ResponseFactory
@@ -31,7 +39,7 @@ class GetClassBookingsForDayTool extends Tool
         ]);
 
         try {
-            $context->ensureAbility(AccountApiTokenAbility::McpCustomersRead);
+            $context->ensureAbility(AccountApiTokenAbility::McpCustomersRead, StudioPermission::ManageBookings);
 
             $account = $context->account();
             $timezone = $account->timezone ?: config('app.timezone');
@@ -41,6 +49,7 @@ class GetClassBookingsForDayTool extends Tool
                 $day,
                 (bool) ($validated['include_cancelled_classes'] ?? false),
                 (bool) ($validated['include_cancelled_bookings'] ?? false),
+                scheduledClassScope: fn (Builder $query): Builder => $context->constrainScheduledClassesForActor($query),
             );
 
             $context->recordInvocation(

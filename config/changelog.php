@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.148.0',
+                'date' => '2026-08-20',
+                'title' => 'Studio connections for AI assistants',
+                'items' => ['Each studio now has a Connections area with its exact Ladna link, simple ChatGPT and Claude setup steps, a copyable helper prompt, and a separate API keys tab for authorized managers.', 'Studio owners and permissioned staff can securely connect an AI assistant through Ladna sign-in without sharing passwords or access keys. Every connection remains read-only, follows the user’s live studio permissions, and can be disconnected from the studio panel.', 'A shareable studio guide and model-readable instructions make setup easier in other compatible AI applications, while the existing service-key MCP connection remains available for technical integrations.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.147.0',
                 'date' => '2026-08-20',
                 'title' => 'Clear Early-bird ticket availability',
@@ -1276,6 +1283,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.148.0',
+                'date' => '2026-08-20',
+                'title' => 'Підключення AI-асистентів до студії',
+                'items' => ['У кожної студії з’явився розділ «Підключення» з точним посиланням Ladna, простими кроками для ChatGPT і Claude, готовою підказкою для копіювання та окремою вкладкою API-ключів для уповноважених керівників.', 'Власники студії та працівники з відповідними дозволами можуть безпечно підключити AI-асистента через вхід у Ladna — без передавання паролів або ключів доступу. Підключення працює лише для читання, враховує актуальні права працівника та відключається у панелі студії.', 'Публічна інструкція студії та окрема версія для AI-моделей спрощують налаштування в інших сумісних застосунках, а попереднє MCP-підключення зі службовим ключем залишається доступним для технічних інтеграцій.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.147.0',
                 'date' => '2026-08-20',

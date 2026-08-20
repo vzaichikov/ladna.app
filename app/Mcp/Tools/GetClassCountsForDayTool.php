@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Enums\AccountApiTokenAbility;
 use App\Enums\McpToolInvocationStatus;
 use App\Enums\ScheduledClassStatus;
+use App\Enums\StudioPermission;
 use App\Models\ScheduledClass;
 use App\Support\Mcp\McpAccountContext;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -15,10 +16,16 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('get-class-counts-for-day')]
-#[Description('Returns studio class counts for a calendar day in the bearer token account scope.')]
+#[Description('Returns studio class counts for a calendar day in the connected studio scope.')]
 class GetClassCountsForDayTool extends Tool
 {
     /**
@@ -32,7 +39,11 @@ class GetClassCountsForDayTool extends Tool
             'include_cancelled' => ['nullable', 'boolean'],
         ]);
 
-        $context->ensureAbility(AccountApiTokenAbility::McpRead);
+        $context->ensureAbility(
+            AccountApiTokenAbility::McpRead,
+            [StudioPermission::ManageSchedule, StudioPermission::ManageBookings],
+            false,
+        );
 
         try {
             $account = $context->account();
@@ -42,12 +53,15 @@ class GetClassCountsForDayTool extends Tool
             $end = $day->copy()->endOfDay()->timezone('UTC');
             $includeCancelled = (bool) ($validated['include_cancelled'] ?? false);
 
-            $classes = ScheduledClass::query()
+            $classesQuery = ScheduledClass::query()
                 ->whereBelongsTo($account)
                 ->whereBetween('starts_at', [$start, $end])
                 ->when(! $includeCancelled, fn ($query) => $query->where('status', ScheduledClassStatus::Scheduled->value))
                 ->with(['location:id,account_id,name', 'classType:id,account_id,name,schedule_kind'])
-                ->orderBy('starts_at')
+                ->orderBy('starts_at');
+
+            $classes = $context
+                ->constrainScheduledClassesForActor($classesQuery)
                 ->get();
 
             $payload = [

@@ -16,7 +16,7 @@ class AccountApiTokenController extends Controller
     {
         $accountApiTokenIssuer->issue($account, (string) $request->validated('name'), $request->abilityValues());
 
-        return redirect()->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api'])
+        return redirect()->route('dashboard.accounts.connections.index', [$account, 'tab' => 'api'])
             ->with('status', __('app.api_token_created'));
     }
 
@@ -32,7 +32,7 @@ class AccountApiTokenController extends Controller
         abort_unless($abilityAuthorizer->canManageSecrets($account, $request->user(), $accountApiToken), 403);
         $accountApiTokenIssuer->regenerate($accountApiToken);
 
-        return redirect()->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api'])
+        return redirect()->route('dashboard.accounts.connections.index', [$account, 'tab' => 'api'])
             ->with('status', __('app.api_token_regenerated'));
     }
 
@@ -42,7 +42,7 @@ class AccountApiTokenController extends Controller
         $this->ensureBelongsToAccount($account, $accountApiToken);
         $accountApiToken->update(['is_active' => false]);
 
-        return redirect()->route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api'])
+        return redirect()->route('dashboard.accounts.connections.index', [$account, 'tab' => 'api'])
             ->with('status', __('app.api_token_revoked'));
     }
 

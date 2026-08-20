@@ -45,6 +45,11 @@ return [
             'provider' => 'users',
         ],
 
+        'api' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
+
         'customer' => [
             'driver' => 'session',
             'provider' => 'customers',

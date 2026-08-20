@@ -19,10 +19,16 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('search-payments')]
-#[Description('Searches bounded customer payments, customer refunds, and event payments in the bearer token account scope. Contacts are masked and gateway secrets are never returned.')]
+#[Description('Searches bounded customer payments, customer refunds, and event payments in the connected studio scope. Contacts are masked and gateway secrets are never returned.')]
 class SearchPaymentsTool extends Tool
 {
     public function handle(

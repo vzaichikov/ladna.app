@@ -15,8 +15,14 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('get-payment-overview')]
 #[Description('Returns a read-only, currency-grouped overview of customer payments, customer refunds, event payments, outstanding class-pass balances, and fiscal failures for a bounded period in the active finance epoch.')]
 class GetPaymentOverviewTool extends Tool

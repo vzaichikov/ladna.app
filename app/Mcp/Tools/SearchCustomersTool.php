@@ -14,10 +14,16 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('search-customers')]
-#[Description('Searches customers by name or phone fragment in the bearer token account scope and returns masked contact details for disambiguation.')]
+#[Description('Searches customers by name or phone fragment in the connected studio and returns masked contact details for disambiguation.')]
 class SearchCustomersTool extends Tool
 {
     public function handle(

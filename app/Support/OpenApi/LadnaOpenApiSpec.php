@@ -65,6 +65,7 @@ class LadnaOpenApiSpec
                 '/api/v1/website-leads' => $this->websiteLeadPath(),
                 '/api/v1/festival-payments/{provider}/callbacks' => $this->festivalPaymentCallbackPath(),
                 '/mcp/ladna-studio' => $this->mcpStudioPath(),
+                '/mcp/ladna-studio/{accountSlug}' => $this->mcpStudioOAuthPath(),
             ],
             'components' => [
                 'securitySchemes' => [
@@ -79,6 +80,20 @@ class LadnaOpenApiSpec
                         'scheme' => 'bearer',
                         'bearerFormat' => 'Ladna native mobile session token',
                         'description' => 'Bearer token returned by mobile staff or customer authentication endpoints. It is scoped to one studio account and expires automatically.',
+                    ],
+                    'LadnaUserOAuth' => [
+                        'type' => 'oauth2',
+                        'description' => 'Studio staff sign in to Ladna and approve a read-only connection. Available tools are filtered by the user’s live studio permissions.',
+                        'flows' => [
+                            'authorizationCode' => [
+                                'authorizationUrl' => route('passport.authorizations.authorize'),
+                                'tokenUrl' => route('passport.token'),
+                                'refreshUrl' => route('passport.token'),
+                                'scopes' => [
+                                    'mcp:use' => 'Use the connected Ladna studio tools allowed by the current user role.',
+                                ],
+                            ],
+                        ],
                     ],
                 ],
                 'responses' => $this->responses(),
@@ -1118,6 +1133,22 @@ class LadnaOpenApiSpec
                 ])),
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mcpStudioOAuthPath(): array
+    {
+        $path = $this->mcpStudioPath();
+        $path['post']['summary'] = 'Calls read-only Ladna studio MCP tools as a signed-in studio staff member.';
+        $path['post']['description'] = 'OAuth authorization binds the client to the accountSlug studio. Every request rechecks the direct studio membership, role, and live StudioPermission values. Event-only staff are excluded. The tool list is filtered to allowed read tools, and this endpoint does not register mutation tools.';
+        $path['post']['parameters'] = [$this->accountSlugParameter()];
+        $path['post']['security'] = [['LadnaUserOAuth' => ['mcp:use']]];
+        $path['post']['responses']['403'] = ['$ref' => '#/components/responses/Forbidden'];
+        unset($path['post']['x-codeSamples']);
+
+        return $path;
     }
 
     /**

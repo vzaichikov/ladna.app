@@ -15,8 +15,14 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('get-earnings-report')]
 #[Description('Returns recognized earnings for completed lessons and rentals in the active finance epoch, less operational expenses and accrued salary. Class-pass sales are cashflow and are not counted again as lesson earnings.')]
 class GetEarningsReportTool extends Tool

@@ -14,13 +14,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Passport\Contracts\OAuthenticatable;
+use Laravel\Passport\HasApiTokens;
 
 #[Fillable(['name', 'email', 'phone', 'phone_verified_at', 'terms_accepted_at', 'privacy_accepted_at', 'avatar_path', 'password', 'system_role'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+class User extends Authenticatable implements OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * Get the attributes that should be cast.
@@ -56,6 +58,11 @@ class User extends Authenticatable
     public function accountMemberships(): HasMany
     {
         return $this->hasMany(AccountMembership::class);
+    }
+
+    public function mcpOAuthConnections(): HasMany
+    {
+        return $this->hasMany(McpOAuthConnection::class);
     }
 
     public function phoneOtpChallenges(): HasMany

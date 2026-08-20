@@ -1001,6 +1001,7 @@ final class AppBreadcrumbs
             'dashboard.accounts.expenses.index' => 'app.operational_expenses',
             'dashboard.accounts.general-settings.edit' => 'app.studio_settings',
             'dashboard.accounts.integrations.index' => 'app.integrations',
+            'dashboard.accounts.connections.index' => 'app.connections_title',
             'dashboard.accounts.notification-settings.edit' => 'app.notification_settings',
             'dashboard.accounts.owner-profile.edit' => 'app.profile',
             'dashboard.accounts.payments.index' => 'app.payments',

@@ -39,6 +39,7 @@ use App\Support\Sms\ResumeSmsNotificationsAfterTopUp;
 use App\Support\Sms\SmsAutoTopUpService;
 use App\Support\Sms\StudioSmsSender;
 use App\Support\Sms\StudioSmsSendResult;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -556,6 +557,8 @@ class FestivalNotificationDeliveryTest extends TestCase
 
     public function test_announcement_modal_reopens_after_validation_and_scheduled_time_uses_edition_timezone(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-08-20 06:00:00', 'UTC'));
+
         [$account, $edition, $portalUser] = $this->festival();
         $owner = User::factory()->create();
         $account->addOwner($owner);

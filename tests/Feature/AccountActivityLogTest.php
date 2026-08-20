@@ -43,7 +43,7 @@ class AccountActivityLogTest extends TestCase
             ->post(route('dashboard.accounts.api-tokens.store', $account), [
                 'name' => 'Website form',
             ])
-            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']));
+            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']));
 
         $activityLog = AccountActivityLog::whereBelongsTo($account)->firstOrFail();
 
@@ -84,7 +84,7 @@ class AccountActivityLogTest extends TestCase
             ->post(route('dashboard.accounts.api-tokens.store', $account), [
                 'name' => 'Website form',
             ])
-            ->assertRedirect(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']));
+            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']));
 
         $this->assertSame(0, AccountActivityLog::whereBelongsTo($account)->count());
     }

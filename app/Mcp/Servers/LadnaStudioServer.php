@@ -20,6 +20,8 @@ use App\Mcp\Tools\InvestigateCustomerBookingLedgerTool;
 use App\Mcp\Tools\SearchCustomersTool;
 use App\Mcp\Tools\SearchOwnerHelpTool;
 use App\Mcp\Tools\SearchPaymentsTool;
+use App\Support\Mcp\McpAccountContext;
+use App\Support\Mcp\McpOAuthToolAccessPolicy;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Instructions;
 use Laravel\Mcp\Server\Attributes\Name;
@@ -27,10 +29,10 @@ use Laravel\Mcp\Server\Attributes\Version;
 
 #[Name('Ladna Studio Server')]
 #[Version('0.0.1')]
-#[Instructions('Use this server only for Ladna studio operations in the account scope granted by the bearer API token. Do not answer general-purpose questions or request tenant identifiers from the user.')]
+#[Instructions('Use this server only for Ladna studio operations in the connected studio scope. Respect the live permissions of the connected person. Do not answer general-purpose questions or request tenant identifiers from the user.')]
 class LadnaStudioServer extends Server
 {
-    protected array $tools = [
+    public const TOOL_CLASSES = [
         DescribeLadnaSkillsTool::class,
         GetClassBookingsForDayTool::class,
         GetClassCountsForDayTool::class,
@@ -51,7 +53,24 @@ class LadnaStudioServer extends Server
         SearchPaymentsTool::class,
     ];
 
+    protected array $tools = self::TOOL_CLASSES;
+
     protected array $resources = [];
 
     protected array $prompts = [];
+
+    protected function boot(): void
+    {
+        $context = app(McpAccountContext::class);
+
+        if (! $context->isOAuth()) {
+            return;
+        }
+
+        $this->tools = app(McpOAuthToolAccessPolicy::class)->filterTools(
+            $context->account(),
+            $context->actorUser(),
+            $this->tools,
+        );
+    }
 }

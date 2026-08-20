@@ -19,10 +19,16 @@ use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Throwable;
 
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
 #[Name('investigate-customer-booking-ledger')]
-#[Description('Reconstructs a customer booking, class-pass, and outstanding-payment ledger in the bearer token account scope, including all-time ordinary trial-pass eligibility and audited manual-override qualification as of a supplied timestamp. This tool is strictly read-only.')]
+#[Description('Reconstructs a customer booking, class-pass, and outstanding-payment ledger in the connected studio scope, including all-time ordinary trial-pass eligibility and audited manual-override qualification as of a supplied timestamp. This tool is strictly read-only.')]
 class InvestigateCustomerBookingLedgerTool extends Tool
 {
     public function handle(

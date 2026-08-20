@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Enums\AccountRole;
 use App\Enums\StudioPermission;
+use App\Http\Controllers\McpOAuthApprovalController;
+use App\Http\Controllers\McpOAuthDenialController;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\Location;
@@ -13,6 +15,7 @@ use App\Policies\LocationPolicy;
 use App\Support\ApplicationVersion;
 use App\Support\Mail\LadnaTransactionalTransport;
 use App\Support\Mail\MailDeliveryTransportResolver;
+use App\Support\Mcp\McpOAuthAuthorization;
 use App\Support\SystemAppearance;
 use App\Support\WorkingLocationContext;
 use App\View\Composers\AppBreadcrumbComposer;
@@ -28,6 +31,9 @@ use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View as ViewInstance;
+use Laravel\Passport\Http\Controllers\ApproveAuthorizationController;
+use Laravel\Passport\Http\Controllers\DenyAuthorizationController;
+use Laravel\Passport\Passport;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -36,7 +42,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        Passport::ignoreRoutes();
         $this->app->scoped(WorkingLocationContext::class);
+        $this->app->bind(ApproveAuthorizationController::class, McpOAuthApprovalController::class);
+        $this->app->bind(DenyAuthorizationController::class, McpOAuthDenialController::class);
     }
 
     /**
@@ -44,6 +53,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Passport::tokensExpireIn(now()->addHour());
+        Passport::refreshTokensExpireIn(now()->addDays(90));
+        Passport::authorizationView(function (array $parameters) {
+            $request = $parameters['request'];
+            $account = app(McpOAuthAuthorization::class)->remember(
+                $request,
+                $parameters['user'],
+                $parameters['client'],
+                $parameters['authToken'],
+            );
+
+            return view('mcp.authorize', [...$parameters, 'account' => $account]);
+        });
+
         Mail::extend('ladna_transactional', fn (array $config = []): LadnaTransactionalTransport => new LadnaTransactionalTransport(
             $this->app->make(MailDeliveryTransportResolver::class),
         ));
