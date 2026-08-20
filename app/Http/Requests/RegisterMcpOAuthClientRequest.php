@@ -63,9 +63,11 @@ class RegisterMcpOAuthClientRequest extends FormRequest
             return false;
         }
 
-        if (! app()->isProduction()
-            && $scheme === 'http'
-            && in_array(strtolower($host), ['localhost', '127.0.0.1', '[::1]'], true)) {
+        if ($scheme === 'http' && $this->isNativeLoopbackRedirectUri($uri, $host)) {
+            return true;
+        }
+
+        if (! app()->isProduction() && $scheme === 'http' && strtolower($host) === 'localhost') {
             return true;
         }
 
@@ -78,5 +80,14 @@ class RegisterMcpOAuthClientRequest extends FormRequest
 
         return collect(config('mcp.redirect_domains', []))
             ->contains(fn (string $allowedOrigin): bool => hash_equals(rtrim(strtolower($allowedOrigin), '/'), $origin));
+    }
+
+    private function isNativeLoopbackRedirectUri(string $uri, string $host): bool
+    {
+        if (! in_array(strtolower($host), ['127.0.0.1', '[::1]'], true)) {
+            return false;
+        }
+
+        return is_int(parse_url($uri, PHP_URL_PORT));
     }
 }

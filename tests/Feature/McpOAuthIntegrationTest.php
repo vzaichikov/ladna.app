@@ -175,6 +175,72 @@ class McpOAuthIntegrationTest extends TestCase
         $this->assertSame(['authorization_code', 'refresh_token'], $response->json('grant_types'));
     }
 
+    public function test_dynamic_registration_accepts_native_loopback_callbacks_in_production(): void
+    {
+        $account = Account::factory()->create(['slug' => 'dance-room']);
+        $originalEnvironment = app()->environment();
+        $originalRedirectDomains = config('mcp.redirect_domains');
+
+        app()->detectEnvironment(fn (): string => 'production');
+        config()->set('mcp.redirect_domains', [
+            'https://chatgpt.com',
+            'https://claude.ai',
+            'https://claude.com',
+        ]);
+
+        try {
+            foreach ([
+                'http://127.0.0.1:49152/callback/codex-authentication',
+                'http://[::1]:49153/callback/codex-authentication',
+            ] as $redirectUri) {
+                $response = $this->postJson(route('mcp.oauth.register', ['account' => $account->slug]), [
+                    'client_name' => 'Codex',
+                    'redirect_uris' => [$redirectUri],
+                ])->assertCreated();
+
+                $client = Client::query()->findOrFail($response->json('client_id'));
+
+                $this->assertSame($account->id, (int) $client->account_id);
+                $this->assertSame([$redirectUri], $client->redirect_uris);
+            }
+        } finally {
+            app()->detectEnvironment(fn (): string => $originalEnvironment);
+            config()->set('mcp.redirect_domains', $originalRedirectDomains);
+        }
+    }
+
+    public function test_dynamic_registration_rejects_unsafe_loopback_variants_in_production(): void
+    {
+        $account = Account::factory()->create(['slug' => 'dance-room']);
+        $originalEnvironment = app()->environment();
+        $originalRedirectDomains = config('mcp.redirect_domains');
+
+        app()->detectEnvironment(fn (): string => 'production');
+        config()->set('mcp.redirect_domains', [
+            'https://chatgpt.com',
+            'https://claude.ai',
+            'https://claude.com',
+        ]);
+
+        try {
+            foreach ([
+                'http://127.0.0.1/callback/codex-authentication',
+                'http://localhost:49152/callback/codex-authentication',
+                'http://127.0.0.1.evil.example:49152/callback/codex-authentication',
+                'https://127.0.0.1:49152/callback/codex-authentication',
+            ] as $redirectUri) {
+                $this->postJson(route('mcp.oauth.register', ['account' => $account->slug]), [
+                    'client_name' => 'Unknown app',
+                    'redirect_uris' => [$redirectUri],
+                ])->assertBadRequest()
+                    ->assertJsonPath('error', 'invalid_redirect_uri');
+            }
+        } finally {
+            app()->detectEnvironment(fn (): string => $originalEnvironment);
+            config()->set('mcp.redirect_domains', $originalRedirectDomains);
+        }
+    }
+
     public function test_dynamic_registration_rejects_untrusted_and_oversized_redirect_lists(): void
     {
         $account = Account::factory()->create(['slug' => 'dance-room']);

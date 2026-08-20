@@ -16,8 +16,9 @@ return [
     | Redirect Domains
     |--------------------------------------------------------------------------
     |
-    | OAuth clients may redirect only to these exact HTTPS origins. Paths below
-    | an allowed origin are accepted, while wildcards and subdomains are not.
+    | Web OAuth clients may redirect only to these exact HTTPS origins. Native
+    | apps may additionally use an HTTP loopback IP with an explicit port.
+    | Paths below an allowed origin are accepted; wildcards are not.
     |
     */
 
@@ -29,7 +30,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Private-use redirect schemes stay disabled. Ladna accepts the official
-    | HTTPS callback origins above and local HTTP callbacks outside production.
+    | HTTPS callback origins above and standards-based loopback IP callbacks.
     |
     */
 
