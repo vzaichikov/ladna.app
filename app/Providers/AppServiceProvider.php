@@ -112,6 +112,17 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('checkInFestivalTickets', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::CheckInFestivalTickets));
         Gate::define('doorStaff', fn ($user, Account $account): bool => $account->userCan($user, StudioPermission::DoorStaff));
 
+        RateLimiter::for('mcp', fn (Request $request): Limit => Limit::perMinute(120)->by(
+            $request->attributes->get('accountApiToken')?->id ?: $request->ip(),
+        ));
+        RateLimiter::for('mcp-oauth', fn (Request $request): Limit => Limit::perMinute(120)->by(
+            $request->attributes->get('mcpOAuthConnection')?->id ?: $request->ip(),
+        ));
+        RateLimiter::for('mcp-oauth-register', fn (Request $request): Limit => Limit::perHour(10)->by($request->ip()));
+        RateLimiter::for('mcp-oauth-token', fn (Request $request): Limit => Limit::perMinute(30)->by(
+            $request->string('client_id')->toString().'|'.$request->ip(),
+        ));
+
         Password::defaults(fn (): Password => Password::min(6));
 
         View::composer(['layouts.app', 'layouts.public'], function (ViewInstance $view): void {

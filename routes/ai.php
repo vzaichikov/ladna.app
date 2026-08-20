@@ -7,9 +7,7 @@ use App\Http\Middleware\ResolveMcpOAuthConnection;
 use App\Mcp\Servers\LadnaStudioServer;
 use App\Models\Account;
 use App\Support\Mcp\McpOAuthMetadata;
-use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Routing\Middleware\SubstituteBindings;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
@@ -17,19 +15,6 @@ use Laravel\Passport\Http\Controllers\ApproveAuthorizationController;
 use Laravel\Passport\Http\Controllers\AuthorizationController;
 use Laravel\Passport\Http\Controllers\DenyAuthorizationController;
 use Laravel\Passport\Passport;
-
-RateLimiter::for('mcp', fn ($request): Limit => Limit::perMinute(120)->by(
-    $request->attributes->get('accountApiToken')?->id ?: $request->ip(),
-));
-
-RateLimiter::for('mcp-oauth', fn ($request): Limit => Limit::perMinute(120)->by(
-    $request->attributes->get('mcpOAuthConnection')?->id ?: $request->ip(),
-));
-
-RateLimiter::for('mcp-oauth-register', fn ($request): Limit => Limit::perHour(10)->by($request->ip()));
-RateLimiter::for('mcp-oauth-token', fn ($request): Limit => Limit::perMinute(30)->by(
-    $request->string('client_id')->toString().'|'.$request->ip(),
-));
 
 Passport::tokensCan([
     'mcp:use' => 'Use the connected Ladna studio',

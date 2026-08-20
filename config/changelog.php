@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.148.1',
+                'date' => '2026-08-20',
+                'title' => 'Reliable AI assistant setup',
+                'items' => ['AI applications can now complete the first studio connection reliably when Ladna uses its production route cache. Invalid setup addresses return a clear connection error instead of a server error.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.148.0',
                 'date' => '2026-08-20',
                 'title' => 'Studio connections for AI assistants',
@@ -1283,6 +1290,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.148.1',
+                'date' => '2026-08-20',
+                'title' => 'Надійне підключення AI-асистентів',
+                'items' => ['AI-застосунки тепер надійно завершують перше підключення до студії, коли Ladna використовує кеш маршрутів у робочому середовищі. Неприпустима адреса налаштування повертає зрозумілу помилку підключення замість помилки сервера.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.148.0',
                 'date' => '2026-08-20',
