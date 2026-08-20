@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.148.3',
+                'date' => '2026-08-20',
+                'title' => 'Reliable AI assistant sign-in',
+                'items' => ['Codex and other compatible AI assistants can now complete Ladna sign-in and keep their secure studio connection available after access is refreshed.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.148.2',
                 'date' => '2026-08-20',
                 'title' => 'Desktop AI assistant authentication',
@@ -1297,6 +1304,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.148.3',
+                'date' => '2026-08-20',
+                'title' => 'Надійний вхід для AI-асистентів',
+                'items' => ['Codex та інші сумісні AI-асистенти тепер можуть завершити вхід у Ladna й зберігати безпечне підключення до студії після оновлення доступу.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.148.2',
                 'date' => '2026-08-20',

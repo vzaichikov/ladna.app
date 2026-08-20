@@ -53,6 +53,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Passport::tokensCan([
+            'mcp:use' => 'Use the connected Ladna studio',
+            'offline_access' => 'Keep the Ladna connection signed in',
+        ]);
         Passport::tokensExpireIn(now()->addHour());
         Passport::refreshTokensExpireIn(now()->addDays(90));
         Passport::authorizationView(function (array $parameters) {

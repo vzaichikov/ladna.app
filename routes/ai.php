@@ -14,12 +14,6 @@ use Laravel\Passport\Http\Controllers\AccessTokenController;
 use Laravel\Passport\Http\Controllers\ApproveAuthorizationController;
 use Laravel\Passport\Http\Controllers\AuthorizationController;
 use Laravel\Passport\Http\Controllers\DenyAuthorizationController;
-use Laravel\Passport\Passport;
-
-Passport::tokensCan([
-    'mcp:use' => 'Use the connected Ladna studio',
-    'offline_access' => 'Keep the Ladna connection signed in',
-]);
 
 Route::get('/.well-known/oauth-protected-resource', static fn () => response()->json(
     app(McpOAuthMetadata::class)->legacyProtectedResource(),
