@@ -38,6 +38,7 @@ class AccountMcpConnectionTest extends TestCase
         $this->actingAs($trainer)
             ->get(route('dashboard.accounts.connections.index', $account))
             ->assertOk()
+            ->assertSee('ladna-my-dance-studio')
             ->assertSee(route('mcp.ladna-studio.oauth', ['accountSlug' => $account->slug]))
             ->assertSee(route('mcp.connection-guide.show', $account))
             ->assertSee(route('mcp.connection-guide.markdown', $account))

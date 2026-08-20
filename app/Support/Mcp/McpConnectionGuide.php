@@ -11,6 +11,7 @@ class McpConnectionGuide
      * @return array{
      *     studio_name: string,
      *     connection_name: string,
+     *     server_name: string,
      *     connection_url: string,
      *     public_guide_url: string,
      *     instructions_url: string,
@@ -25,6 +26,7 @@ class McpConnectionGuide
     {
         $studioName = $this->safeStudioName($account);
         $connectionName = __('app.mcp_guide_connection_name', ['studio' => $studioName]);
+        $serverName = $this->serverName($account);
         $connectionUrl = route('mcp.ladna-studio.oauth', ['accountSlug' => $account->slug]);
         $publicGuideUrl = route('mcp.connection-guide.show', $account);
         $instructionsUrl = route('mcp.connection-guide.markdown', $account);
@@ -32,12 +34,14 @@ class McpConnectionGuide
         return [
             'studio_name' => $studioName,
             'connection_name' => $connectionName,
+            'server_name' => $serverName,
             'connection_url' => $connectionUrl,
             'public_guide_url' => $publicGuideUrl,
             'instructions_url' => $instructionsUrl,
             'setup_prompt' => __('app.mcp_guide_setup_prompt', [
                 'instructions_url' => $instructionsUrl,
                 'connection_name' => $connectionName,
+                'server_name' => $serverName,
             ]),
             'facts' => [
                 [
@@ -57,9 +61,9 @@ class McpConnectionGuide
                 ],
             ],
             'clients' => [
-                $this->client('chatgpt', 'https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt'),
-                $this->client('claude', 'https://support.anthropic.com/en/articles/11175166-about-custom-integrations-using-remote-mcp'),
-                $this->client('other'),
+                $this->client('chatgpt', $serverName, 'https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt'),
+                $this->client('claude', $serverName, 'https://support.anthropic.com/en/articles/11175166-about-custom-integrations-using-remote-mcp'),
+                $this->client('other', $serverName),
             ],
             'examples' => [
                 [
@@ -106,7 +110,8 @@ class McpConnectionGuide
             '',
             '## '.__('app.mcp_guide_markdown_details'),
             '',
-            '- '.__('app.mcp_guide_markdown_name').': `'.$this->inlineCode($guide['connection_name']).'`',
+            '- '.__('app.mcp_guide_markdown_server_name').': `'.$this->inlineCode($guide['server_name']).'`',
+            '- '.__('app.mcp_guide_markdown_display_name').': `'.$this->inlineCode($guide['connection_name']).'`',
             '- '.__('app.mcp_guide_markdown_url').': `'.$this->inlineCode($guide['connection_url']).'`',
             '- '.__('app.mcp_guide_markdown_sign_in').': '.__('app.mcp_guide_markdown_sign_in_value'),
             '- '.__('app.mcp_guide_markdown_access').': '.__('app.mcp_guide_markdown_access_value'),
@@ -114,10 +119,11 @@ class McpConnectionGuide
             '## '.__('app.mcp_guide_markdown_action_title'),
             '',
             '1. '.__('app.mcp_guide_markdown_action_1'),
-            '2. '.__('app.mcp_guide_markdown_action_2', ['name' => '`'.$this->inlineCode($guide['connection_name']).'`']),
-            '3. '.__('app.mcp_guide_markdown_action_3', ['url' => '`'.$this->inlineCode($guide['connection_url']).'`']),
-            '4. '.__('app.mcp_guide_markdown_action_4'),
+            '2. '.__('app.mcp_guide_markdown_action_2', ['server_name' => '`'.$this->inlineCode($guide['server_name']).'`']),
+            '3. '.__('app.mcp_guide_markdown_action_3', ['display_name' => '`'.$this->inlineCode($guide['connection_name']).'`']),
+            '4. '.__('app.mcp_guide_markdown_action_4', ['url' => '`'.$this->inlineCode($guide['connection_url']).'`']),
             '5. '.__('app.mcp_guide_markdown_action_5'),
+            '6. '.__('app.mcp_guide_markdown_action_6'),
             '',
             '## '.__('app.mcp_guide_markdown_fallback_title'),
             '',
@@ -149,13 +155,15 @@ class McpConnectionGuide
     /**
      * @return array{name: string, copy: string, steps: array<int, string>, help_url: string|null}
      */
-    private function client(string $client, ?string $helpUrl = null): array
+    private function client(string $client, string $serverName, ?string $helpUrl = null): array
     {
         return [
             'name' => __('app.mcp_guide_client_'.$client.'_name'),
             'copy' => __('app.mcp_guide_client_'.$client.'_copy'),
             'steps' => collect(range(1, 4))
-                ->map(fn (int $step): string => __('app.mcp_guide_client_'.$client.'_step_'.$step))
+                ->map(fn (int $step): string => __('app.mcp_guide_client_'.$client.'_step_'.$step, [
+                    'server_name' => $serverName,
+                ]))
                 ->all(),
             'help_url' => $helpUrl,
         ];
@@ -168,6 +176,15 @@ class McpConnectionGuide
             ->squish()
             ->limit(120, '')
             ->toString();
+    }
+
+    private function serverName(Account $account): string
+    {
+        $accountSlug = Str::of(Str::slug($account->slug))
+            ->limit(80, '')
+            ->toString();
+
+        return 'ladna-'.($accountSlug !== '' ? $accountSlug : $account->getKey());
     }
 
     private function markdownEscape(string $value): string
