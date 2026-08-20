@@ -25,7 +25,7 @@ use Throwable;
 #[IsIdempotent]
 #[IsOpenWorld(false)]
 #[Name('describe-ladna-skills')]
-#[Description('Returns a curated account-scoped description of what the Ladna assistant can read, explain, analyze, and prepare for confirmation.')]
+#[Description('Use when deciding which Ladna tool fits a studio request or when the user asks what Ladna can do. Returns a curated account-scoped capability description.')]
 class DescribeLadnaSkillsTool extends Tool
 {
     public function handle(

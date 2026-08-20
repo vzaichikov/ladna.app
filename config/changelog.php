@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.148.4',
+                'date' => '2026-08-20',
+                'title' => 'Natural studio questions for AI assistants',
+                'items' => ['Connected AI assistants now recognize the studio’s exact name, Ladna or Ладна, “my studio,” and common spelling, transliteration, grammatical, or shortened name variants. They prefer live permitted studio data and can choose the capability guide when the correct Ladna tool is unclear.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.148.3',
                 'date' => '2026-08-20',
                 'title' => 'Reliable AI assistant sign-in',
@@ -1304,6 +1311,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.148.4',
+                'date' => '2026-08-20',
+                'title' => 'Природні запити до студії для AI-асистентів',
+                'items' => ['Підключені AI-асистенти тепер розпізнають точну назву студії, Ladna або Ладна, фразу «моя студія», а також поширені варіанти написання, транслітерації, відмінювання та скорочення назви. Вони надають перевагу актуальним дозволеним даним студії та можуть перевірити доступні можливості, коли потрібний інструмент Ladna неочевидний.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.148.3',
                 'date' => '2026-08-20',
