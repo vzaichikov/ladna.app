@@ -58,7 +58,7 @@ class AuthenticatedBreadcrumbsTest extends TestCase
         $account = Account::factory()->create(['default_language' => 'en']);
         $owner = User::factory()->create();
         $account->addOwner($owner);
-        $integrationUrl = route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment]);
+        $integrationUrl = route('dashboard.accounts.integrations.index', $account);
         $fiscalizationUrl = route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Fiscalization]);
 
         $fiscalization = $this->withSession(['locale' => 'en'])
@@ -72,6 +72,17 @@ class AuthenticatedBreadcrumbsTest extends TestCase
             ['label' => 'Integrations', 'href' => $integrationUrl, 'current' => false],
             ['label' => 'Fiscalization', 'href' => null, 'current' => true],
         ], $this->breadcrumbItems($fiscalization));
+
+        $hub = $this->withSession(['locale' => 'en'])
+            ->actingAs($owner)
+            ->get($integrationUrl);
+
+        $hub->assertOk();
+        $this->assertSame([
+            ['label' => 'Workspace', 'href' => route('dashboard.index'), 'current' => false],
+            ['label' => $account->name, 'href' => route('dashboard.accounts.show', $account), 'current' => false],
+            ['label' => 'Integrations', 'href' => null, 'current' => true],
+        ], $this->breadcrumbItems($hub));
 
         $logs = $this->withSession(['locale' => 'en'])
             ->actingAs($owner)

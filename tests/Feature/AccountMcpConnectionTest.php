@@ -36,7 +36,7 @@ class AccountMcpConnectionTest extends TestCase
         ]);
 
         $this->actingAs($trainer)
-            ->get(route('dashboard.accounts.connections.index', $account))
+            ->get(route('dashboard.accounts.integrations.index', $account))
             ->assertOk()
             ->assertSee('ladna-my-dance-studio')
             ->assertSee(route('mcp.ladna-studio.oauth', ['accountSlug' => $account->slug]))
@@ -45,7 +45,12 @@ class AccountMcpConnectionTest extends TestCase
             ->assertSee($trainerConnection->client_name)
             ->assertDontSee('Reception Claude')
             ->assertDontSee(__('app.connections_tab_api'))
+            ->assertDontSee(route('dashboard.accounts.integrations.show', [$account, 'payment']), false)
             ->assertSee(__('app.mcp_connection_permission_note'));
+
+        $this->actingAs($trainer)
+            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
+            ->assertForbidden();
 
         $this->actingAs($trainer)
             ->get(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
@@ -59,25 +64,35 @@ class AccountMcpConnectionTest extends TestCase
         $account->addOwner($owner);
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.connections.index', $account))
+            ->get(route('dashboard.accounts.integrations.index', $account))
             ->assertOk()
             ->assertSee(__('app.connections_tab_ai'))
             ->assertSee(__('app.connections_tab_api'))
+            ->assertSee(__('app.integrations'))
+            ->assertSee(route('dashboard.accounts.integrations.show', [$account, 'payment']), false)
             ->assertSee(route('dashboard.index'))
             ->assertSee(route('dashboard.accounts.show', $account));
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertOk()
             ->assertSee(__('app.api_tokens'));
 
         $this->actingAs($owner)
+            ->get(route('dashboard.accounts.connections.index', $account))
+            ->assertRedirect(route('dashboard.accounts.integrations.index', $account));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']));
+
+        $this->actingAs($owner)
             ->get(route('dashboard.accounts.mcp-connections.index', $account))
-            ->assertRedirect(route('dashboard.accounts.connections.index', $account));
+            ->assertRedirect(route('dashboard.accounts.integrations.index', $account));
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.general-settings.edit', [$account, 'tab' => 'api']))
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']));
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']));
     }
 
     public function test_studio_settings_manager_can_disconnect_a_team_connection_and_revoke_only_that_users_tokens(): void
@@ -122,8 +137,8 @@ class AccountMcpConnectionTest extends TestCase
         $otherToken->save();
 
         $this->actingAs($owner)
-            ->delete(route('dashboard.accounts.connections.mcp-connections.destroy', [$account, $connection]))
-            ->assertRedirect(route('dashboard.accounts.connections.index', $account))
+            ->delete(route('dashboard.accounts.integrations.mcp-connections.destroy', [$account, $connection]))
+            ->assertRedirect(route('dashboard.accounts.integrations.index', $account))
             ->assertSessionHas('status', __('app.mcp_connection_removed'));
 
         $this->assertNotNull($connection->fresh()->revoked_at);
@@ -145,7 +160,7 @@ class AccountMcpConnectionTest extends TestCase
         ]);
 
         $this->actingAs($trainer)
-            ->delete(route('dashboard.accounts.connections.mcp-connections.destroy', [$account, $connection]))
+            ->delete(route('dashboard.accounts.integrations.mcp-connections.destroy', [$account, $connection]))
             ->assertForbidden();
 
         $this->assertNull($connection->fresh()->revoked_at);
@@ -158,11 +173,11 @@ class AccountMcpConnectionTest extends TestCase
         $connection = McpOAuthConnection::factory()->create(['account_id' => $account->id]);
 
         $this->actingAs($platformAdmin)
-            ->get(route('dashboard.accounts.connections.index', $account))
+            ->get(route('dashboard.accounts.integrations.index', $account))
             ->assertForbidden();
 
         $this->actingAs($platformAdmin)
-            ->delete(route('dashboard.accounts.connections.mcp-connections.destroy', [$account, $connection]))
+            ->delete(route('dashboard.accounts.integrations.mcp-connections.destroy', [$account, $connection]))
             ->assertForbidden();
 
         $this->assertNull($connection->fresh()->revoked_at);
@@ -178,7 +193,7 @@ class AccountMcpConnectionTest extends TestCase
         $connection = McpOAuthConnection::factory()->create(['account_id' => $secondAccount->id]);
 
         $this->actingAs($owner)
-            ->delete(route('dashboard.accounts.connections.mcp-connections.destroy', [$firstAccount, $connection]))
+            ->delete(route('dashboard.accounts.integrations.mcp-connections.destroy', [$firstAccount, $connection]))
             ->assertNotFound();
 
         $this->assertNull($connection->fresh()->revoked_at);

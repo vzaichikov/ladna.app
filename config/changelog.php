@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.149.0',
+                'date' => '2026-08-21',
+                'title' => 'One studio hub for integrations',
+                'items' => ['AI assistants, API keys, payments, fiscalization, and messaging are now collected in one Integrations area under Account settings.', 'Each employee still sees only the available connections and settings for their role, while previous Connections and API bookmarks open the new studio hub automatically.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.148.4',
                 'date' => '2026-08-20',
                 'title' => 'Natural studio questions for AI assistants',
@@ -1311,6 +1318,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.149.0',
+                'date' => '2026-08-21',
+                'title' => 'Єдиний розділ інтеграцій студії',
+                'items' => ['AI-помічники, API-ключі, оплати, фіскалізація та повідомлення тепер зібрані в одному розділі «Інтеграції» у налаштуваннях акаунта.', 'Кожен працівник і надалі бачить лише доступні для своєї ролі підключення та налаштування, а попередні посилання на «Підключення» й API автоматично відкривають новий розділ студії.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.148.4',
                 'date' => '2026-08-20',

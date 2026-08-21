@@ -38,7 +38,7 @@ Route::post('accounts/{account}/api-tokens/{accountApiToken}/regenerate', [Accou
     ->name('accounts.api-tokens.regenerate');
 Route::delete('accounts/{account}/api-tokens/{accountApiToken}', [AccountApiTokenController::class, 'destroy'])
     ->name('accounts.api-tokens.destroy');
-Route::get('accounts/{account}/connections', [AccountMcpConnectionController::class, 'index'])
+Route::get('accounts/{account}/connections', [AccountMcpConnectionController::class, 'legacyIndex'])
     ->name('accounts.connections.index');
 Route::delete('accounts/{account}/connections/ai/{mcpOAuthConnection}', [AccountMcpConnectionController::class, 'destroy'])
     ->name('accounts.connections.mcp-connections.destroy');

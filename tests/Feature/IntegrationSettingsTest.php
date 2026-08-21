@@ -443,7 +443,7 @@ class IntegrationSettingsTest extends TestCase
         ]);
     }
 
-    public function test_account_integrations_use_category_pages_and_legacy_query_redirects(): void
+    public function test_account_integrations_use_one_hub_and_preserve_legacy_category_queries(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create();
@@ -455,7 +455,12 @@ class IntegrationSettingsTest extends TestCase
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.integrations.index', $account))
-            ->assertRedirect($paymentUrl);
+            ->assertOk()
+            ->assertSee(__('app.connections_tab_ai'))
+            ->assertSee(__('app.connections_tab_api'))
+            ->assertSee($paymentUrl, false)
+            ->assertSee($fiscalizationUrl, false)
+            ->assertSee($messagingUrl, false);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'messaging']))
@@ -471,6 +476,8 @@ class IntegrationSettingsTest extends TestCase
             ->assertDontSee(__('app.integration_category_authentication'), false)
             ->assertDontSee('Google OAuth')
             ->assertDontSee('Cloudflare Turnstile')
+            ->assertSee(route('dashboard.accounts.integrations.index', $account), false)
+            ->assertSee(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']), false)
             ->assertSee($paymentUrl, false)
             ->assertSee($fiscalizationUrl, false)
             ->assertSee($messagingUrl, false)

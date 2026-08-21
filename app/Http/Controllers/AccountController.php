@@ -128,7 +128,7 @@ class AccountController extends Controller
             'qr' => route('dashboard.accounts.qr-links.show', $account),
             'customer_notifications' => route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'customers']),
             'ai' => route('dashboard.accounts.notification-settings.edit', [$account, 'tab' => 'telegram']),
-            'api' => route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']),
+            'api' => route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']),
             default => null,
         };
 

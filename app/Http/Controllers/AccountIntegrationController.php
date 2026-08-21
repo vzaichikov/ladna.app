@@ -16,17 +16,6 @@ use Illuminate\View\View;
 
 class AccountIntegrationController extends Controller
 {
-    public function index(
-        Request $request,
-        Account $account,
-    ): RedirectResponse {
-        abort_unless($account->isOwnedBy($request->user()), 403);
-
-        $category = IntegrationCatalog::activeCategory($request->query('tab'), IntegrationScope::Account);
-
-        return redirect()->route('dashboard.accounts.integrations.show', [$account, $category]);
-    }
-
     public function show(
         Request $request,
         Account $account,

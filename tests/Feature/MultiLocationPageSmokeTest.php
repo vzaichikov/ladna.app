@@ -454,7 +454,7 @@ class MultiLocationPageSmokeTest extends TestCase
     private function accountWideHtmlRoutes(): array
     {
         return [
-            'dashboard.accounts.connections.index',
+            'dashboard.accounts.integrations.index',
             'dashboard.accounts.festivals.create',
             'dashboard.accounts.festivals.index',
             'dashboard.accounts.festivals.series.create',
@@ -622,7 +622,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.judging.index',
             'dashboard.accounts.festivals.score-sheets.edit',
             'dashboard.accounts.festivals.timeline.index',
-            'dashboard.accounts.integrations.index',
+            'dashboard.accounts.connections.index',
             'dashboard.accounts.mcp-connections.index',
             'dashboard.accounts.studio-settings.index',
         ];

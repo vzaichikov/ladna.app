@@ -1,31 +1,19 @@
 @extends('layouts.app')
 
-@section('title', __('app.connections_title').' - '.$account->name)
+@section('title', __('app.integrations').' - '.$account->name)
 
 @section('content')
     <div class="max-w-6xl">
-        <h1 class="crm-page-title">{{ __('app.connections_title') }}</h1>
-        <p class="crm-page-copy">{{ __('app.connections_copy', ['studio' => $account->name]) }}</p>
+        <h1 class="crm-page-title">{{ __('app.integrations') }}</h1>
+        <p class="crm-page-copy">{{ __('app.studio_owner_integrations_copy') }}</p>
 
-        <nav class="mt-6 flex gap-1 overflow-x-auto border-b border-stone-200" aria-label="{{ __('app.connections_tabs_label') }}">
-            <a
-                href="{{ route('dashboard.accounts.connections.index', $account) }}"
-                class="shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'ai' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
-                @if ($activeTab === 'ai') aria-current="page" @endif
-            >
-                {{ __('app.connections_tab_ai') }}
-            </a>
-
-            @if ($canManageApiKeys)
-                <a
-                    href="{{ route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']) }}"
-                    class="shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition {{ $activeTab === 'api' ? 'border-violet-crm-600 text-violet-crm-700' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-950' }}"
-                    @if ($activeTab === 'api') aria-current="page" @endif
-                >
-                    {{ __('app.connections_tab_api') }}
-                </a>
-            @endif
-        </nav>
+        <x-integration-category-navigation
+            :account="$account"
+            :active-tab="$activeTab"
+            :can-manage-api-keys="$canManageApiKeys"
+            :show-provider-categories="$canManageProviderIntegrations"
+            class="mt-6"
+        />
 
         @if ($activeTab === 'api')
             <div class="mt-6">
@@ -143,7 +131,7 @@
                                     </div>
 
                                     @if ($connection->user_id === $currentUser->id || $canManageTeamConnections)
-                                        <form method="POST" action="{{ route('dashboard.accounts.connections.mcp-connections.destroy', [$account, $connection]) }}" data-confirm-delete data-confirm-title="{{ __('app.mcp_disconnect_title') }}" data-confirm-body="{{ __('app.mcp_disconnect_copy') }}" data-confirm-accept="{{ __('app.mcp_disconnect') }}">
+                                        <form method="POST" action="{{ route('dashboard.accounts.integrations.mcp-connections.destroy', [$account, $connection]) }}" data-confirm-delete data-confirm-title="{{ __('app.mcp_disconnect_title') }}" data-confirm-body="{{ __('app.mcp_disconnect_copy') }}" data-confirm-accept="{{ __('app.mcp_disconnect') }}">
                                             @csrf
                                             @method('DELETE')
                                             <x-ui.button type="submit" variant="danger" size="sm">

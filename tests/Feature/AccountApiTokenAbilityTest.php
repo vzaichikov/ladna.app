@@ -33,7 +33,7 @@ class AccountApiTokenAbilityTest extends TestCase
                     AccountApiTokenAbility::McpBookingsCreate->value,
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']));
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']));
 
         $apiToken = AccountApiToken::whereBelongsTo($account)->firstOrFail();
 
@@ -117,7 +117,7 @@ class AccountApiTokenAbilityTest extends TestCase
                 'name' => 'Allowed payment token',
                 'abilities' => [AccountApiTokenAbility::McpPaymentsRead->value],
             ])
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']));
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']));
 
         $this->assertDatabaseMissing('account_api_tokens', [
             'account_id' => $account->id,
@@ -171,7 +171,7 @@ class AccountApiTokenAbilityTest extends TestCase
                     AccountApiTokenAbility::McpEventsRead->value,
                 ],
             ])
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']));
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']));
 
         $token = AccountApiToken::query()
             ->whereBelongsTo($account)

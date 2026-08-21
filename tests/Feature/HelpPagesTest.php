@@ -654,7 +654,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('Онлайн-оплати', false)
             ->assertSee('Заявки з сайту', false)
             ->assertSee('Як підключити AI-помічника', false)
-            ->assertSee('Підключення → AI-помічники', false)
+            ->assertSee('Налаштування акаунта → Інтеграції → AI-помічники', false)
             ->assertSee('Як створити ключ для сайту або сервісу', false)
             ->assertSee('Де дивитися тариф і оплату Ladna', false)
             ->assertSee('Ключ працює тільки в межах цієї студії', false)

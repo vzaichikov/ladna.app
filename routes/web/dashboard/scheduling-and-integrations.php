@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountIntegrationController;
+use App\Http\Controllers\AccountMcpConnectionController;
 use App\Http\Controllers\AccountSmsSendingSettingsController;
 use App\Http\Controllers\CheckboxFiscalReceiptLogController;
 use App\Http\Controllers\ClassBookingController;
@@ -18,8 +19,10 @@ use Illuminate\Support\Facades\Route;
 Route::resource('accounts.schedule-series', ScheduleSeriesController::class)
     ->except(['show'])
     ->scoped();
-Route::get('accounts/{account}/integrations', [AccountIntegrationController::class, 'index'])
+Route::get('accounts/{account}/integrations', [AccountMcpConnectionController::class, 'index'])
     ->name('accounts.integrations.index');
+Route::delete('accounts/{account}/integrations/ai/{mcpOAuthConnection}', [AccountMcpConnectionController::class, 'destroy'])
+    ->name('accounts.integrations.mcp-connections.destroy');
 Route::get('accounts/{account}/integrations/fiscalization/checkbox/logs', CheckboxFiscalReceiptLogController::class)
     ->name('accounts.integrations.checkbox-logs.index');
 Route::get('accounts/{account}/integrations/{category}', [AccountIntegrationController::class, 'show'])

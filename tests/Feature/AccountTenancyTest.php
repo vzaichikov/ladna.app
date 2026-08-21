@@ -231,10 +231,10 @@ class AccountTenancyTest extends TestCase
                 'Абонементи і ціни',
                 'Тренери',
                 'Рівні тренерів',
-                'Інтеграції',
                 'Загальні налаштування',
                 'Налаштування сповіщень',
                 'Налаштування акаунта',
+                'Інтеграції',
                 'Мій акаунт',
                 'Тариф та платежі',
                 'Події',
@@ -379,6 +379,7 @@ class AccountTenancyTest extends TestCase
             ->assertDontSee(route('dashboard.accounts.trainers.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.trainer-types.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.tariff-payments.show', $account), false)
+            ->assertSee(route('dashboard.accounts.integrations.index', $account), false)
             ->assertDontSee(route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment]), false);
     }
 
@@ -398,7 +399,7 @@ class AccountTenancyTest extends TestCase
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.brand.edit', [$account, 'tab' => 'api']))
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']));
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']));
     }
 
     public function test_locations_are_scoped_to_their_parent_account(): void

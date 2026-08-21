@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\IntegrationScope;
 use App\Models\Account;
 use App\Models\McpOAuthConnection;
 use App\Models\User;
 use App\Support\AccountApiTokenAbilityAuthorizer;
+use App\Support\IntegrationCatalog;
 use App\Support\Mcp\McpConnectionGuide;
 use App\Support\Mcp\McpOAuthConnectionRevoker;
 use App\Support\Mcp\McpOAuthToolAccessPolicy;
@@ -21,8 +23,18 @@ class AccountMcpConnectionController extends Controller
         McpOAuthToolAccessPolicy $accessPolicy,
         AccountApiTokenAbilityAuthorizer $abilityAuthorizer,
         McpConnectionGuide $connectionGuide,
-    ): View {
+    ): View|RedirectResponse {
         $user = $this->eligibleUser($request, $account, $accessPolicy);
+
+        if ($request->filled('tab') && ! in_array($request->query('tab'), ['ai', 'api'], true)) {
+            abort_unless($account->isOwnedBy($user), 403);
+
+            return redirect()->route('dashboard.accounts.integrations.show', [
+                $account,
+                IntegrationCatalog::activeCategory($request->query('tab'), IntegrationScope::Account),
+            ]);
+        }
+
         $activeTab = in_array($request->query('tab'), ['ai', 'api'], true)
             ? $request->query('tab')
             : 'ai';
@@ -55,6 +67,7 @@ class AccountMcpConnectionController extends Controller
                 $token->id => $abilityAuthorizer->canManageSecrets($account, $user, $token),
             ]),
             'canManageApiKeys' => $canManageApiKeys,
+            'canManageProviderIntegrations' => $account->isOwnedBy($user),
             'canManageTeamConnections' => $canManageTeamConnections,
             'connections' => $connections,
             'currentUser' => $user,
@@ -64,9 +77,20 @@ class AccountMcpConnectionController extends Controller
 
     public function legacyIndex(Request $request, Account $account, McpOAuthToolAccessPolicy $accessPolicy): RedirectResponse
     {
-        $this->eligibleUser($request, $account, $accessPolicy);
+        $user = $this->eligibleUser($request, $account, $accessPolicy);
 
-        return redirect()->route('dashboard.accounts.connections.index', $account);
+        if ($request->query('tab') === 'api') {
+            abort_unless($user->can('manageStudioSettings', $account), 403);
+        }
+
+        $tab = in_array($request->query('tab'), ['ai', 'api'], true)
+            ? $request->query('tab')
+            : null;
+
+        return redirect()->route('dashboard.accounts.integrations.index', array_filter([
+            'account' => $account,
+            'tab' => $tab,
+        ]));
     }
 
     public function destroy(
@@ -90,7 +114,7 @@ class AccountMcpConnectionController extends Controller
         abort_unless($canRevoke, 403);
         $revoker->revoke($mcpOAuthConnection);
 
-        return redirect()->route('dashboard.accounts.connections.index', $account)
+        return redirect()->route('dashboard.accounts.integrations.index', $account)
             ->with('status', __('app.mcp_connection_removed'));
     }
 

@@ -27,7 +27,7 @@ class AccountApiTokenTest extends TestCase
             ->post(route('dashboard.accounts.api-tokens.store', $account), [
                 'name' => 'Website form',
             ])
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertSessionHas('status', __('app.api_token_created'));
 
         $apiToken = AccountApiToken::whereBelongsTo($account)->firstOrFail();
@@ -37,7 +37,7 @@ class AccountApiTokenTest extends TestCase
         $this->assertStringStartsWith('ladna_', $apiToken->tokenValue());
 
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertOk()
             ->assertSee('Website form')
             ->assertSee($apiToken->tokenValue());
@@ -53,7 +53,7 @@ class AccountApiTokenTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]))
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertSessionHas('status', __('app.api_token_regenerated'));
 
         $apiToken->refresh();
@@ -63,7 +63,7 @@ class AccountApiTokenTest extends TestCase
 
         $this->actingAs($owner)
             ->delete(route('dashboard.accounts.api-tokens.destroy', [$account, $apiToken]))
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertSessionHas('status', __('app.api_token_revoked'));
 
         $this->assertFalse($apiToken->refresh()->is_active);
@@ -105,11 +105,12 @@ class AccountApiTokenTest extends TestCase
         $regenerateUrl = route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]);
 
         $this->actingAs($manager)
-            ->get(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertOk()
             ->assertSee('Payment automation')
             ->assertDontSee($tokenValue)
-            ->assertDontSee($regenerateUrl);
+            ->assertDontSee($regenerateUrl)
+            ->assertDontSee(route('dashboard.accounts.integrations.show', [$account, 'payment']), false);
 
         $this->actingAs($manager)
             ->post($regenerateUrl)
@@ -119,7 +120,7 @@ class AccountApiTokenTest extends TestCase
 
         $this->actingAs($manager)
             ->delete(route('dashboard.accounts.api-tokens.destroy', [$account, $apiToken]))
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertSessionHas('status', __('app.api_token_revoked'));
 
         $this->assertFalse($apiToken->refresh()->is_active);
@@ -145,14 +146,14 @@ class AccountApiTokenTest extends TestCase
         $tokenValue = $apiToken->tokenValue();
 
         $this->actingAs($manager)
-            ->get(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->get(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertOk()
             ->assertSee($tokenValue)
             ->assertSee(route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]));
 
         $this->actingAs($manager)
             ->post(route('dashboard.accounts.api-tokens.regenerate', [$account, $apiToken]))
-            ->assertRedirect(route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']))
+            ->assertRedirect(route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']))
             ->assertSessionHas('status', __('app.api_token_regenerated'));
 
         $this->assertNotSame($tokenValue, $apiToken->refresh()->tokenValue());

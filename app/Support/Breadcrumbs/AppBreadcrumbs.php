@@ -101,7 +101,7 @@ final class AppBreadcrumbs
 
             return [
                 ...$base,
-                $this->item(__('app.integrations'), route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment])),
+                $this->item(__('app.integrations'), route('dashboard.accounts.integrations.index', $account)),
                 $this->item(__($category->labelKey())),
             ];
         }
@@ -109,7 +109,7 @@ final class AppBreadcrumbs
         if ($routeName === 'dashboard.accounts.integrations.checkbox-logs.index') {
             return [
                 ...$base,
-                $this->item(__('app.integrations'), route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Payment])),
+                $this->item(__('app.integrations'), route('dashboard.accounts.integrations.index', $account)),
                 $this->item(__('app.integration_category_fiscalization'), route('dashboard.accounts.integrations.show', [$account, IntegrationCategory::Fiscalization])),
                 $this->item(__('app.checkbox_receipt_log')),
             ];

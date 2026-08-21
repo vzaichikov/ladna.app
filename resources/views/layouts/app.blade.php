@@ -326,14 +326,6 @@
                 'active' => request()->routeIs('dashboard.accounts.trainer-types.*'),
             ],
         ] : []),
-        ...($canManageClassPassPlans ? [
-            [
-                'label' => __('app.integrations'),
-                'icon' => 'integrations',
-                'href' => route('dashboard.accounts.integrations.show', [$activeAccount, \App\Enums\IntegrationCategory::Payment]),
-                'active' => request()->routeIs('dashboard.accounts.integrations.*'),
-            ],
-        ] : []),
         ...($canManageStudioSettings ? [
             [
                 'label' => __('app.my_brand'),
@@ -357,10 +349,14 @@
 
     $accountSettingsNav = $showAccountNav ? [
         [
-            'label' => __('app.connections_title'),
-            'icon' => 'sparkles',
-            'href' => route('dashboard.accounts.connections.index', $activeAccount),
-            'active' => request()->routeIs('dashboard.accounts.connections.*', 'dashboard.accounts.mcp-connections.*'),
+            'label' => __('app.integrations'),
+            'icon' => 'integrations',
+            'href' => route('dashboard.accounts.integrations.index', $activeAccount),
+            'active' => request()->routeIs(
+                'dashboard.accounts.integrations.*',
+                'dashboard.accounts.connections.*',
+                'dashboard.accounts.mcp-connections.*',
+            ),
         ],
         ...($canManageStudioSettings ? [[
             'label' => __('app.my_account'),
@@ -807,7 +803,7 @@
                         </div>
 
                         <div class="flex min-w-0 items-center gap-2 sm:gap-3">
-                            @if ($showAccountNav && ! $isEventFestivalStaff && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*', 'dashboard.accounts.connections.*', 'dashboard.accounts.mcp-connections.*'))
+                            @if ($showAccountNav && ! $isEventFestivalStaff && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*', 'dashboard.accounts.integrations.index', 'dashboard.accounts.connections.*', 'dashboard.accounts.mcp-connections.*'))
                                 <form method="POST" action="{{ route('dashboard.accounts.working-location.update', $activeAccount) }}" class="min-w-0">
                                     @csrf
                                     <input type="hidden" name="redirect_to" value="{{ request()->getRequestUri() }}">

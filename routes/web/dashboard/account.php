@@ -28,7 +28,7 @@ Route::get('accounts/{account}/notification-settings', [AccountNotificationSetti
     ->name('accounts.notification-settings.edit');
 Route::get('accounts/{account}/brand', function (Request $request, Account $account): RedirectResponse {
     if ($request->query('tab') === 'api') {
-        return redirect()->route('dashboard.accounts.connections.index', [$account, 'tab' => 'api']);
+        return redirect()->route('dashboard.accounts.integrations.index', [$account, 'tab' => 'api']);
     }
 
     return redirect()->route('dashboard.accounts.general-settings.edit', ['account' => $account] + $request->query());
