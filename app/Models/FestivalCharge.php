@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 #[Fillable(['account_id', 'festival_entry_id', 'festival_entry_step_id', 'festival_charge_definition_id', 'festival_entry_requirement_id', 'festival_submission_id', 'pricing_key', 'code', 'kind', 'name', 'status', 'amount_cents', 'currency', 'due_at', 'paid_at', 'cancelled_at', 'refunded_at', 'approved_by', 'notes'])]
 class FestivalCharge extends Model
@@ -20,11 +21,11 @@ class FestivalCharge extends Model
 
     public function hasPaymentHistory(): bool
     {
-        $hasAttempts = $this->relationLoaded('paymentAttempts')
-            ? $this->paymentAttempts->isNotEmpty()
-            : $this->paymentAttempts()->exists();
+        $hasAllocations = $this->relationLoaded('paymentAllocations')
+            ? $this->paymentAllocations->isNotEmpty()
+            : $this->paymentAllocations()->exists();
 
-        return $hasAttempts || ($this->amount_cents > 0 && ($this->paid_at !== null || in_array($this->status, [
+        return $hasAllocations || ($this->amount_cents > 0 && ($this->paid_at !== null || in_array($this->status, [
             FestivalChargeStatus::Paid,
             FestivalChargeStatus::PaidRequiresRefund,
             FestivalChargeStatus::Refunded,
@@ -59,5 +60,25 @@ class FestivalCharge extends Model
     public function paymentAttempts(): HasMany
     {
         return $this->hasMany(FestivalPaymentAttempt::class);
+    }
+
+    public function paymentAllocations(): HasMany
+    {
+        return $this->hasMany(FestivalPaymentAttemptCharge::class);
+    }
+
+    /** @return Collection<int, FestivalPaymentAttempt> */
+    public function allocatedPaymentAttempts(): Collection
+    {
+        $this->loadMissing('paymentAllocations.attempt');
+
+        return $this->paymentAllocations
+            ->filter(fn (FestivalPaymentAttemptCharge $allocation): bool => $allocation->account_id === $this->account_id
+                && $allocation->festival_charge_id === $this->id
+                && $allocation->attempt?->account_id === $this->account_id)
+            ->pluck('attempt')
+            ->filter()
+            ->unique('id')
+            ->values();
     }
 }

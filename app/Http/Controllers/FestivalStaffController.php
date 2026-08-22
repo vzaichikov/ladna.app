@@ -11,6 +11,7 @@ use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalNotificationType;
+use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalQualificationStatus;
 use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
@@ -27,6 +28,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryRequirement;
+use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalSeries;
@@ -428,12 +430,23 @@ class FestivalStaffController extends Controller
         abort_unless($festivalCharge->entry()->where('festival_edition_id', $festivalEdition->id)->exists(), 404);
         abort_unless($request->user()?->can('manageFestivalFinance', $account), 403);
         $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])], 'notes' => ['nullable', 'string', 'max:5000']]);
-        DB::transaction(function () use ($festivalCharge, $data, $request, $activity, $festivalEdition, $notifications): void {
+        DB::transaction(function () use ($festivalCharge, $data, $request, $activity, $festivalEdition, $notifications, $account): void {
             $entry = FestivalEntry::query()
                 ->whereKey($festivalCharge->festival_entry_id)
                 ->where('festival_edition_id', $festivalEdition->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            $hasLiveAttempt = FestivalPaymentAttempt::query()
+                ->where('account_id', $account->id)
+                ->where('status', FestivalPaymentStatus::Pending->value)
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->whereHas('allocations', fn ($query) => $query->where('festival_charge_id', $festivalCharge->id))
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->exists();
+            if ($hasLiveAttempt) {
+                throw ValidationException::withMessages(['decision' => __('app.festival_payment_already_pending')]);
+            }
             $charge = FestivalCharge::query()
                 ->whereKey($festivalCharge->id)
                 ->where('festival_entry_id', $entry->id)
@@ -452,7 +465,7 @@ class FestivalStaffController extends Controller
         }, 3);
 
         if ($request->expectsJson()) {
-            $festivalCharge->refresh()->load('paymentAttempts.fiscalReceipt');
+            $festivalCharge->refresh()->load('paymentAllocations.attempt.fiscalReceipt');
 
             return response()->json([
                 'message' => __('app.festival_charge_reviewed'),

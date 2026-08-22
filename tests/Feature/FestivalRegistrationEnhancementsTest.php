@@ -224,6 +224,12 @@ class FestivalRegistrationEnhancementsTest extends TestCase
             'currency' => 'UAH',
             'expires_at' => now()->addMinutes(10),
         ]);
+        $attempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'amount_cents' => $charge->amount_cents,
+            'currency' => $charge->currency,
+        ]);
         app(FestivalPaymentService::class)->completeAttempt($attempt, new PaymentCallbackResult(
             orderId: 'FCHP-LATE',
             status: PaymentCallbackStatus::Paid,
@@ -268,7 +274,7 @@ class FestivalRegistrationEnhancementsTest extends TestCase
             ->assertRedirect();
         $this->assertSame(60000, $charge->refresh()->amount_cents);
 
-        FestivalPaymentAttempt::query()->create([
+        $attempt = FestivalPaymentAttempt::query()->create([
             'account_id' => $account->id,
             'festival_charge_id' => $charge->id,
             'provider' => 'monopay',
@@ -276,6 +282,12 @@ class FestivalRegistrationEnhancementsTest extends TestCase
             'amount_cents' => 60000,
             'currency' => 'UAH',
             'expires_at' => now()->addMinutes(30),
+        ]);
+        $attempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'amount_cents' => $charge->amount_cents,
+            'currency' => $charge->currency,
         ]);
         $payload['participant_ids'] = [$participants[0]->id];
         $this->actingAs($portalUser, 'festival')
@@ -320,6 +332,12 @@ class FestivalRegistrationEnhancementsTest extends TestCase
             'amount_cents' => $sourceCharge->amount_cents,
             'currency' => $sourceCharge->currency,
             'expires_at' => now()->addMinutes(30),
+        ]);
+        $attempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $sourceCharge->id,
+            'amount_cents' => $sourceCharge->amount_cents,
+            'currency' => $sourceCharge->currency,
         ]);
         try {
             app(ReassignFestivalEntryCategory::class)->execute($entry, $target, $manager, 'Organizer recommendation');

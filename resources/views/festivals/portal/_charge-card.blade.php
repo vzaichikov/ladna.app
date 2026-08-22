@@ -1,21 +1,23 @@
 @php
+    $charge = $paymentGroup['charge'];
+    $chargeStatus = $paymentGroup['status'];
     $paymentBag = 'festival_payment_'.$charge->id;
     $paymentErrors = $errors->getBag($paymentBag);
-    $isPayable = $selectedState['available'] && in_array($charge->status, [\App\Enums\FestivalChargeStatus::Pending, \App\Enums\FestivalChargeStatus::Failed], true);
-    $summaryClass = match ($charge->status) {
+    $isPayable = $selectedState['available'] && in_array($chargeStatus, [\App\Enums\FestivalChargeStatus::Pending, \App\Enums\FestivalChargeStatus::Failed], true);
+    $summaryClass = match ($chargeStatus) {
         \App\Enums\FestivalChargeStatus::Paid => 'border-emerald-300 bg-emerald-50',
         \App\Enums\FestivalChargeStatus::Failed,
         \App\Enums\FestivalChargeStatus::PaidRequiresRefund => 'border-rose-300 bg-rose-50',
         \App\Enums\FestivalChargeStatus::PaymentPending => 'border-amber-300 bg-amber-50',
         default => 'border-stone-200 bg-white',
     };
-    $paymentClass = match ($charge->status) {
+    $paymentClass = match ($chargeStatus) {
         \App\Enums\FestivalChargeStatus::Paid => 'border-emerald-300 bg-emerald-50',
         \App\Enums\FestivalChargeStatus::PaidRequiresRefund => 'border-rose-300 bg-rose-50',
         \App\Enums\FestivalChargeStatus::PaymentPending => 'border-amber-300 bg-amber-50',
         default => 'border-stone-200 bg-white',
     };
-    $statusClass = match ($charge->status) {
+    $statusClass = match ($chargeStatus) {
         \App\Enums\FestivalChargeStatus::Paid => 'crm-status-active',
         \App\Enums\FestivalChargeStatus::Failed,
         \App\Enums\FestivalChargeStatus::PaidRequiresRefund => 'crm-status-danger',
@@ -25,8 +27,8 @@
     $festivalRulesUrl = route('public.festivals.show', [$account->slug, $entry->edition->slug]).'#festival-rules';
 @endphp
 
-<div id="festival-charge-{{ $charge->id }}" data-festival-charge-card class="scroll-mt-6 grid gap-6 lg:grid-cols-[1fr_0.75fr]">
-    <article class="rounded-xl border p-6 shadow-crm {{ $summaryClass }}">
+<div id="festival-charge-{{ $charge->id }}" data-festival-charge-card data-festival-charge-group="{{ $paymentGroup['key'] }}" class="grid min-w-0 grid-cols-1 scroll-mt-6 gap-6 lg:grid-cols-[1fr_0.75fr]">
+    <article class="min-w-0 rounded-xl border p-6 shadow-crm {{ $summaryClass }}">
         <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <div class="text-sm font-semibold uppercase text-brand-600">{{ __('app.festival_payment_for') }}</div>
@@ -35,20 +37,20 @@
                     <p class="mt-3 max-w-2xl whitespace-pre-line text-sm leading-6 text-slate-600">{{ $charge->notes }}</p>
                 @endif
             </div>
-            <span class="{{ $statusClass }}">{{ __('app.festival_charge_status_'.$charge->status->value) }}</span>
+            <span class="{{ $statusClass }}">{{ __('app.festival_charge_status_'.$chargeStatus->value) }}</span>
         </div>
 
-        <div class="mt-6 text-4xl font-semibold text-slate-950">{{ \App\Support\MoneyFormatter::format($charge->amount_cents, $charge->currency) }}</div>
+        <div class="mt-6 text-4xl font-semibold text-slate-950">{{ \App\Support\MoneyFormatter::format($paymentGroup['amount_cents'], $paymentGroup['currency']) }}</div>
 
-        @if ($charge->due_at)
+        @if ($paymentGroup['due_at'])
             <dl class="mt-6 max-w-xs rounded-lg bg-white/70 p-3 text-sm">
                 <dt class="text-slate-500">{{ __('app.festival_payment_due') }}</dt>
-                <dd class="mt-1 font-semibold text-slate-950">{{ $charge->due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }}</dd>
+                <dd class="mt-1 font-semibold text-slate-950">{{ $paymentGroup['due_at']->timezone($entry->edition->timezone)->format('d.m.Y H:i') }}</dd>
             </dl>
         @endif
     </article>
 
-    <aside class="rounded-xl border p-5 shadow-crm {{ $paymentClass }}">
+    <aside class="min-w-0 rounded-xl border p-5 shadow-crm {{ $paymentClass }}">
         <h4 class="text-lg font-semibold text-slate-950">{{ __('app.payment_method') }}</h4>
 
         @if ($paymentErrors->has('provider'))
@@ -57,21 +59,21 @@
             </div>
         @endif
 
-        @if ($charge->status === \App\Enums\FestivalChargeStatus::Paid)
+        @if ($chargeStatus === \App\Enums\FestivalChargeStatus::Paid)
             <div class="mt-4 rounded-xl border border-emerald-300 bg-white/80 px-4 py-5 text-center text-emerald-900">
                 <span class="crm-status-active">{{ __('app.festival_charge_status_paid') }}</span>
             </div>
-        @elseif ($charge->status === \App\Enums\FestivalChargeStatus::PaidRequiresRefund)
+        @elseif ($chargeStatus === \App\Enums\FestivalChargeStatus::PaidRequiresRefund)
             <div class="mt-4 rounded-xl border border-rose-300 bg-white/80 px-4 py-5 text-center text-rose-900">
                 <span class="crm-status-danger">{{ __('app.festival_charge_status_paid_requires_refund') }}</span>
             </div>
-        @elseif ($charge->status === \App\Enums\FestivalChargeStatus::PaymentPending)
+        @elseif ($chargeStatus === \App\Enums\FestivalChargeStatus::PaymentPending)
             <div class="mt-4 rounded-xl border border-amber-300 bg-white/80 px-4 py-5 text-center text-amber-900">
                 <span class="crm-status-warning">{{ __('app.festival_charge_status_payment_pending') }}</span>
                 <p class="mt-3 text-sm font-semibold">{{ __('app.festival_payment_already_pending') }}</p>
             </div>
         @elseif ($isPayable && $providers->isNotEmpty())
-            @if ($charge->status === \App\Enums\FestivalChargeStatus::Failed)
+            @if ($chargeStatus === \App\Enums\FestivalChargeStatus::Failed)
                 <p class="mt-4 text-sm font-semibold text-rose-700">{{ __('app.festival_payment_failed_retry') }}</p>
             @endif
 

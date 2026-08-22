@@ -44,6 +44,7 @@ class ActivateFestivalParticipationCharges
 
                 $amount = $this->resolver->amount($definition, $entry);
                 $charge = FestivalCharge::query()
+                    ->with('paymentAllocations')
                     ->where('festival_entry_id', $entry->id)
                     ->where('festival_charge_definition_id', $definition->id)
                     ->lockForUpdate()
@@ -64,7 +65,7 @@ class ActivateFestivalParticipationCharges
 
                 if ($charge) {
                     if (! in_array($charge->status, [FestivalChargeStatus::Pending, FestivalChargeStatus::Failed, FestivalChargeStatus::Cancelled], true)
-                        || $charge->paymentAttempts()->exists()) {
+                        || $charge->hasPaymentHistory()) {
                         continue;
                     }
                     $charge->forceFill($values)->save();

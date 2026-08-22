@@ -4658,6 +4658,25 @@ function replaceFestivalRequirementCard(cardHtml, fallbackCard) {
     return replacement;
 }
 
+function replaceFestivalPaymentFragment(fragmentHtml, fallbackRequirementCard) {
+    const template = document.createElement('template');
+    template.innerHTML = fragmentHtml.trim();
+    const replacement = template.content.querySelector('[data-festival-payment-fragment]');
+
+    if (!replacement) {
+        return null;
+    }
+
+    const panel = fallbackRequirementCard?.closest('[data-festival-step-panel]');
+    const target = panel?.querySelector('[data-festival-payment-fragment]')
+        ?? document.querySelector('[data-festival-payment-fragment]');
+
+    target?.replaceWith(replacement);
+    createIcons({ icons });
+
+    return replacement;
+}
+
 function syncFestivalStepProgressActions(panel) {
     if (!panel) {
         return;
@@ -5161,6 +5180,10 @@ async function submitAsyncForm(form) {
             }
 
             if (payload.requirement_html) {
+                if (payload.payment_html) {
+                    replaceFestivalPaymentFragment(payload.payment_html, fallbackRequirementCard);
+                }
+
                 const replacement = replaceFestivalRequirementCard(payload.requirement_html, fallbackRequirementCard);
                 const replacementForm = replacement?.querySelector('form[data-async-form]') ?? null;
                 setAsyncStatus(payload.message, 'success', replacementForm);

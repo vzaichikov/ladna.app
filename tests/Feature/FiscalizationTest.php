@@ -311,7 +311,15 @@ class FiscalizationTest extends TestCase
             'code' => 'FCH-FISCAL-'.$entry->id,
             'kind' => 'qualification',
             'name' => 'Festival qualification fee',
-            'amount_cents' => 25000,
+            'amount_cents' => 100,
+            'currency' => 'UAH',
+        ]);
+        $helperCharge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'code' => 'FCH-FISCAL-HELPERS-'.$entry->id,
+            'kind' => 'response_price',
+            'name' => 'Helpers',
+            'amount_cents' => 80000,
             'currency' => 'UAH',
         ]);
         $attempt = FestivalPaymentAttempt::query()->create([
@@ -319,9 +327,21 @@ class FiscalizationTest extends TestCase
             'festival_charge_id' => $charge->id,
             'provider' => IntegrationProvider::Monopay->value,
             'order_id' => 'FCHP-FISCAL-'.$entry->id,
-            'amount_cents' => 25000,
+            'amount_cents' => 80100,
             'currency' => 'UAH',
             'expires_at' => now()->addMinutes(30),
+        ]);
+        $attempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'amount_cents' => 100,
+            'currency' => 'UAH',
+        ]);
+        $attempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $helperCharge->id,
+            'amount_cents' => 80000,
+            'currency' => 'UAH',
         ]);
         $this->fakeCheckboxSuccess('FN-FESTIVAL-ENTRY-1');
 
@@ -335,8 +355,13 @@ class FiscalizationTest extends TestCase
         $this->assertSame('FN-FESTIVAL-ENTRY-1', $receipt->fiscal_number);
         $this->assertSame(IntegrationScope::Account, $receipt->scope_type);
         $this->assertSame($account->id, $receipt->scope_id);
+        $this->assertSame('paid', $helperCharge->refresh()->status->value);
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'
             && data_get($request->data(), 'goods.0.good.name') === 'Festival qualification fee'
+            && data_get($request->data(), 'goods.0.good.price') === 100
+            && data_get($request->data(), 'goods.1.good.name') === 'Helpers'
+            && data_get($request->data(), 'goods.1.good.price') === 80000
+            && data_get($request->data(), 'total_sum') === 80100
             && data_get($request->data(), 'delivery.email') === 'festival-applicant@example.com'
             && data_get($request->data(), 'delivery.phone') === '+380501112233');
     }
@@ -591,6 +616,12 @@ class FiscalizationTest extends TestCase
             'amount_cents' => 25000,
             'currency' => 'UAH',
             'paid_at' => now(),
+        ]);
+        $attempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'amount_cents' => 25000,
+            'currency' => 'UAH',
         ]);
         $this->fakeCheckboxSuccess('FN-FESTIVAL-ENTRY-RECOVERY-1');
 

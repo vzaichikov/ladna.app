@@ -177,16 +177,13 @@
                         @endforeach
                     </div>
 
-                    @if($selectedStep->charges->isNotEmpty())
-                        <div class="mt-6 border-t border-stone-200 pt-5">
-                            <h3 class="text-lg font-semibold">{{ __('app.festival_payments') }}</h3>
-                            <div class="mt-3 space-y-3">
-                                @foreach($selectedStep->charges as $charge)
-                                    @include('festivals.portal._charge-card', ['account' => $account, 'entry' => $entry, 'selectedState' => $displayState, 'providers' => $providers, 'charge' => $charge])
-                                @endforeach
-                            </div>
-                        </div>
-                    @endif
+                    @include('festivals.portal._payment-fragment', [
+                        'account' => $account,
+                        'entry' => $entry,
+                        'selectedState' => $displayState,
+                        'providers' => $providers,
+                        'paymentGroups' => $paymentGroups,
+                    ])
 
                     @if($entry->chargeAdjustments->where('status', 'pending')->isNotEmpty())
                         @php($pendingRefundsByCurrency = $entry->chargeAdjustments->where('status', 'pending')->groupBy(fn ($adjustment) => strtoupper($adjustment->currency)))

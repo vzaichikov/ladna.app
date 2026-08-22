@@ -636,7 +636,7 @@ class FestivalWorkspaceController extends Controller
         }
 
         if ($permissions['finance']) {
-            $entry->load(['charges.paymentAttempts.fiscalReceipt', 'chargeAdjustments']);
+            $entry->load(['charges.paymentAllocations.attempt.fiscalReceipt', 'chargeAdjustments']);
         }
     }
 

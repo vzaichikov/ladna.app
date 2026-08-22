@@ -17,7 +17,7 @@ class RepriceFestivalEntryCharges
         DB::transaction(function () use ($entry): void {
             $entry = FestivalEntry::query()->with(['account', 'participants'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
             $charges = FestivalCharge::query()
-                ->with('definition')
+                ->with(['definition', 'paymentAllocations'])
                 ->where('festival_entry_id', $entry->id)
                 ->whereIn('status', [FestivalChargeStatus::Pending->value, FestivalChargeStatus::Failed->value])
                 ->orderBy('id')
@@ -25,7 +25,7 @@ class RepriceFestivalEntryCharges
                 ->get();
 
             foreach ($charges as $charge) {
-                if ($charge->definition?->pricing_mode !== FestivalChargePricingMode::Roster || $charge->paymentAttempts()->exists()) {
+                if ($charge->definition?->pricing_mode !== FestivalChargePricingMode::Roster || $charge->hasPaymentHistory()) {
                     continue;
                 }
 

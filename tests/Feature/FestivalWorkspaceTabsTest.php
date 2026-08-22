@@ -949,7 +949,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             'amount_cents' => 50000,
             'currency' => 'UAH',
         ]);
-        FestivalPaymentAttempt::query()->create([
+        $protectedAttempt = FestivalPaymentAttempt::query()->create([
             'account_id' => $account->id,
             'festival_charge_id' => $charge->id,
             'provider' => 'monopay',
@@ -957,6 +957,12 @@ class FestivalWorkspaceTabsTest extends TestCase
             'amount_cents' => $charge->amount_cents,
             'currency' => $charge->currency,
             'status' => 'expired',
+        ]);
+        $protectedAttempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'amount_cents' => $charge->amount_cents,
+            'currency' => $charge->currency,
         ]);
         $protectedApplicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $protectedEntry]);
         $protectedDeleteUrl = route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $protectedEntry]);
@@ -1022,14 +1028,20 @@ class FestivalWorkspaceTabsTest extends TestCase
             'amount_cents' => 50000,
             'currency' => 'UAH',
         ]);
-        FestivalPaymentAttempt::query()->create([
+        $declinedAttempt = FestivalPaymentAttempt::query()->create([
             'account_id' => $account->id,
             'festival_charge_id' => $declinedCharge->id,
             'provider' => 'monopay',
             'order_id' => 'FCHP-DELETE-DECLINED',
             'amount_cents' => $declinedCharge->amount_cents,
             'currency' => $declinedCharge->currency,
-            'status' => 'pending',
+            'status' => 'expired',
+        ]);
+        $declinedAttempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $declinedCharge->id,
+            'amount_cents' => $declinedCharge->amount_cents,
+            'currency' => $declinedCharge->currency,
         ]);
         $declinedApplicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $declinedEntry]);
         $declinedDeleteUrl = route('dashboard.accounts.festivals.applications.destroy', [$account, $edition, $declinedEntry]);
@@ -1079,6 +1091,12 @@ class FestivalWorkspaceTabsTest extends TestCase
             'currency' => $manualPaymentCharge->currency,
             'status' => 'paid',
             'paid_at' => now(),
+        ]);
+        $paidAttempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $manualPaymentCharge->id,
+            'amount_cents' => $manualPaymentCharge->amount_cents,
+            'currency' => $manualPaymentCharge->currency,
         ]);
         $fiscalReceipt = FiscalReceipt::factory()
             ->forAccountScope($account)

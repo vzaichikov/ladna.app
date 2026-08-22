@@ -9,13 +9,15 @@ use App\Models\Account;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalPortalUser;
+use App\Support\Festivals\FestivalChargePaymentGroups;
 use App\Support\Festivals\FestivalEntryWorkflowState;
+use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 
 class FestivalSubmissionController extends Controller
 {
-    public function store(FestivalSubmissionRequest $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryRequirement $festivalEntryRequirement, StoreFestivalSubmission $store, FestivalEntryWorkflowState $workflowState): JsonResponse|RedirectResponse
+    public function store(FestivalSubmissionRequest $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryRequirement $festivalEntryRequirement, StoreFestivalSubmission $store, FestivalEntryWorkflowState $workflowState, FestivalChargePaymentGroups $chargePaymentGroups): JsonResponse|RedirectResponse
     {
         $account = $request->attributes->get('festivalAccount');
         $portalUser = $request->user('festival');
@@ -26,9 +28,10 @@ class FestivalSubmissionController extends Controller
 
         if ($request->expectsJson()) {
             $festivalEntryRequirement->refresh()->load(['definition', 'participant', 'submissions', 'entryStep']);
-            $festivalEntry->refresh()->load(['edition', 'steps.workflowStep', 'steps.requirements.definition.edition', 'steps.requirements.submissions', 'steps.charges']);
+            $festivalEntry->refresh()->load(['edition', 'steps.workflowStep', 'steps.requirements.definition.edition', 'steps.requirements.submissions', 'steps.charges.paymentAllocations.attempt']);
             $selectedStep = $festivalEntry->steps->firstWhere('id', $festivalEntryRequirement->festival_entry_step_id);
             $selectedState = $workflowState->forEntry($festivalEntry)->first(fn (array $state): bool => $state['step']->is($selectedStep));
+            $providers = app(PaymentGatewayRegistry::class)->availableSettingsFor($account);
 
             return response()->json([
                 'message' => __('app.festival_submission_saved'),
@@ -41,6 +44,13 @@ class FestivalSubmissionController extends Controller
                     'selectedStep' => $selectedStep,
                     'selectedState' => $selectedState,
                     'requirement' => $festivalEntryRequirement,
+                ])->render(),
+                'payment_html' => view('festivals.portal._payment-fragment', [
+                    'account' => $account,
+                    'entry' => $festivalEntry,
+                    'selectedState' => $selectedState,
+                    'providers' => $providers,
+                    'paymentGroups' => $chargePaymentGroups->forStep($selectedStep),
                 ])->render(),
             ]);
         }

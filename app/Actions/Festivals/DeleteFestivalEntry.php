@@ -22,7 +22,7 @@ class DeleteFestivalEntry
 
     public function requiresPaymentConfirmation(FestivalEntry $entry): bool
     {
-        $entry->loadMissing('charges.paymentAttempts');
+        $entry->loadMissing('charges.paymentAllocations.attempt');
 
         return $this->hasProtectedPaymentHistory($entry, $entry->charges);
     }
@@ -36,7 +36,7 @@ class DeleteFestivalEntry
                 ->lockForUpdate()
                 ->firstOrFail();
             $charges = FestivalCharge::query()
-                ->with('paymentAttempts')
+                ->with('paymentAllocations.attempt')
                 ->where('festival_entry_id', $entry->id)
                 ->orderBy('id')
                 ->lockForUpdate()
@@ -78,15 +78,16 @@ class DeleteFestivalEntry
     private function hasProtectedPaymentHistory(FestivalEntry $entry, Collection $charges): bool
     {
         return $charges->contains(function (FestivalCharge $charge) use ($entry): bool {
+            $attempts = $charge->allocatedPaymentAttempts();
             $hasPaidFact = $charge->paid_at !== null
                 || in_array($charge->status, [
                     FestivalChargeStatus::Paid,
                     FestivalChargeStatus::PaidRequiresRefund,
                     FestivalChargeStatus::Refunded,
                 ], true)
-                || $charge->paymentAttempts->contains(fn ($attempt): bool => $attempt->paid_at !== null || $attempt->status === FestivalPaymentStatus::Paid);
+                || $attempts->contains(fn ($attempt): bool => $attempt->paid_at !== null || $attempt->status === FestivalPaymentStatus::Paid);
 
-            if ($hasPaidFact || $charge->paymentAttempts->isEmpty()) {
+            if ($hasPaidFact || $attempts->isEmpty()) {
                 return $hasPaidFact;
             }
 

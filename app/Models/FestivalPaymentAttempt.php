@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
@@ -29,6 +30,11 @@ class FestivalPaymentAttempt extends Model
     public function charge(): BelongsTo
     {
         return $this->belongsTo(FestivalCharge::class, 'festival_charge_id');
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(FestivalPaymentAttemptCharge::class);
     }
 
     public function fiscalReceipts(): MorphMany

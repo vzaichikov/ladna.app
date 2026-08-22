@@ -307,7 +307,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $this->assertSame($target->id, $entry->refresh()->festival_category_id);
 
         $charge = $entry->charges()->firstOrFail();
-        FestivalPaymentAttempt::query()->create([
+        $attempt = FestivalPaymentAttempt::query()->create([
             'account_id' => $account->id,
             'festival_charge_id' => $charge->id,
             'provider' => 'monopay',
@@ -316,6 +316,12 @@ class FestivalRegistrationWorkflowTest extends TestCase
             'currency' => $charge->currency,
             'status' => 'expired',
             'expires_at' => now()->subMinute(),
+        ]);
+        $attempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'amount_cents' => $charge->amount_cents,
+            'currency' => $charge->currency,
         ]);
         $payload['festival_category_id'] = $source->id;
         $this->actingAs($portalUser, 'festival')
@@ -567,6 +573,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $entry = FestivalEntry::factory()->for($category)->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id, 'festival_portal_user_id' => $portalUser->id]);
         $charge = $entry->charges()->create(['account_id' => $account->id, 'code' => 'FCH-TEST', 'kind' => 'participation', 'name' => 'Fee', 'amount_cents' => 10000, 'currency' => 'UAH']);
         $attempt = FestivalPaymentAttempt::query()->create(['account_id' => $account->id, 'festival_charge_id' => $charge->id, 'provider' => 'monopay', 'order_id' => 'FCHP-TEST', 'amount_cents' => 10000, 'currency' => 'UAH', 'expires_at' => now()->addMinutes(30)]);
+        $attempt->allocations()->create(['account_id' => $account->id, 'festival_charge_id' => $charge->id, 'amount_cents' => 10000, 'currency' => 'UAH']);
         $callback = new PaymentCallbackResult(orderId: 'FCHP-TEST', status: PaymentCallbackStatus::Paid, amountCents: 10000, currency: 'UAH', gatewayPaymentId: 'pay-1');
 
         app(FestivalPaymentService::class)->completeAttempt($attempt, $callback);
@@ -618,6 +625,79 @@ class FestivalRegistrationWorkflowTest extends TestCase
             ->assertSessionHasNoErrors();
         $withdrawnActivity = FestivalActivityLog::query()->where('festival_entry_id', $entry->id)->where('action', 'entry.withdrawn')->sole();
         $this->assertSame($portalUser->id, $withdrawnActivity->actor_portal_user_id);
+    }
+
+    public function test_payment_allocation_backfill_creates_one_exact_fact_for_a_legacy_attempt(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival();
+        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+        ]);
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'code' => 'FCH-BACKFILL-'.$entry->id,
+            'kind' => 'participation',
+            'name' => 'Legacy fee',
+            'amount_cents' => 12345,
+            'currency' => 'UAH',
+        ]);
+        $attempt = FestivalPaymentAttempt::query()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $charge->id,
+            'provider' => 'monopay',
+            'order_id' => 'FCHP-BACKFILL-'.$entry->id,
+            'amount_cents' => 12345,
+            'currency' => 'UAH',
+        ]);
+
+        $this->assertSame(0, $attempt->allocations()->count());
+        $migration = require database_path('migrations/2026_08_22_083438_backfill_festival_payment_attempt_charges.php');
+        $migration->up();
+
+        $this->assertDatabaseHas('festival_payment_attempt_charges', [
+            'account_id' => $account->id,
+            'festival_payment_attempt_id' => $attempt->id,
+            'festival_charge_id' => $charge->id,
+            'amount_cents' => 12345,
+            'currency' => 'UAH',
+        ]);
+        $this->assertSame(1, $attempt->allocations()->count());
+    }
+
+    public function test_cross_tenant_allocation_is_hidden_from_charge_history_and_rejected_by_callbacks(): void
+    {
+        [$firstAccount, $firstEdition, $firstPortalUser] = $this->festival();
+        $firstCategory = FestivalCategory::factory()->for($firstEdition)->create(['account_id' => $firstAccount->id]);
+        $firstEntry = FestivalEntry::factory()->for($firstCategory)->create([
+            'account_id' => $firstAccount->id,
+            'festival_edition_id' => $firstEdition->id,
+            'festival_portal_user_id' => $firstPortalUser->id,
+        ]);
+        $firstCharge = $firstEntry->charges()->create(['account_id' => $firstAccount->id, 'code' => 'FCH-TENANT-FIRST', 'kind' => 'participation', 'name' => 'First fee', 'amount_cents' => 10000, 'currency' => 'UAH']);
+
+        [$secondAccount, $secondEdition, $secondPortalUser] = $this->festival();
+        $secondCategory = FestivalCategory::factory()->for($secondEdition)->create(['account_id' => $secondAccount->id]);
+        $secondEntry = FestivalEntry::factory()->for($secondCategory)->create([
+            'account_id' => $secondAccount->id,
+            'festival_edition_id' => $secondEdition->id,
+            'festival_portal_user_id' => $secondPortalUser->id,
+        ]);
+        $secondCharge = $secondEntry->charges()->create(['account_id' => $secondAccount->id, 'code' => 'FCH-TENANT-SECOND', 'kind' => 'participation', 'name' => 'Second fee', 'amount_cents' => 10000, 'currency' => 'UAH']);
+        $attempt = FestivalPaymentAttempt::query()->create(['account_id' => $secondAccount->id, 'festival_charge_id' => $secondCharge->id, 'provider' => 'monopay', 'order_id' => 'FCHP-TENANT-CORRUPT', 'amount_cents' => 20000, 'currency' => 'UAH']);
+        $attempt->allocations()->create(['account_id' => $secondAccount->id, 'festival_charge_id' => $secondCharge->id, 'amount_cents' => 10000, 'currency' => 'UAH']);
+        $attempt->allocations()->create(['account_id' => $secondAccount->id, 'festival_charge_id' => $firstCharge->id, 'amount_cents' => 10000, 'currency' => 'UAH']);
+
+        $this->assertTrue($firstCharge->fresh()->allocatedPaymentAttempts()->isEmpty());
+        $this->expectException(InvalidPaymentCallbackException::class);
+        app(FestivalPaymentService::class)->completeAttempt($attempt, new PaymentCallbackResult(
+            orderId: $attempt->order_id,
+            status: PaymentCallbackStatus::Paid,
+            amountCents: 20000,
+            currency: 'UAH',
+        ));
     }
 
     public function test_portal_separates_festivals_from_applications_and_reuses_the_cover_on_entry_cards(): void

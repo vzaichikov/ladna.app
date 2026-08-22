@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.150.0',
+                'date' => '2026-08-22',
+                'title' => 'Combined Festival payments and authored Velvet content',
+                'items' => ['Festival applicants now pay a fixed fee and any priced registration-field responses from the same step and currency through one combined checkout. The amount updates immediately after a response is saved.', 'The Velvet Night Festival landing now presents each organizer-authored public content block exactly as configured instead of replacing selected blocks with generated operational data.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.149.0',
                 'date' => '2026-08-21',
                 'title' => 'One studio hub for integrations',
@@ -1318,6 +1325,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.150.0',
+                'date' => '2026-08-22',
+                'title' => 'Об’єднані оплати фестивалю та авторський контент Velvet',
+                'items' => ['Учасники фестивалю тепер сплачують фіксований внесок і всі доплати за відповіді в полях реєстрації з того самого кроку та у тій самій валюті одним платежем. Сума оновлюється одразу після збереження відповіді.', 'Фестивальний шаблон Velvet Night тепер показує кожен авторський публічний блок організатора саме у налаштованому вигляді, не замінюючи окремі блоки згенерованими операційними даними.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.149.0',
                 'date' => '2026-08-21',

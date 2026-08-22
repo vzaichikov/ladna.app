@@ -37,7 +37,7 @@ class ReassignFestivalEntryCategory
 
     public function applicantMayChange(FestivalEntry $entry): bool
     {
-        $entry->loadMissing('charges.paymentAttempts');
+        $entry->loadMissing('charges.paymentAllocations');
 
         return $entry->status === FestivalEntryStatus::Draft && ! $this->applicantPaymentStarted($entry);
     }
@@ -51,7 +51,7 @@ class ReassignFestivalEntryCategory
                 ->lockForUpdate()
                 ->firstOrFail();
             $charges = FestivalCharge::query()
-                ->with('paymentAttempts')
+                ->with('paymentAllocations.attempt')
                 ->where('festival_entry_id', $entry->id)
                 ->orderBy('id')
                 ->lockForUpdate()
@@ -97,7 +97,7 @@ class ReassignFestivalEntryCategory
                     FestivalChargeStatus::PaidRequiresRefund,
                     FestivalChargeStatus::Refunded,
                 ], true);
-                $liveAttempt = $charge->paymentAttempts->contains(fn ($attempt): bool => $attempt->status === FestivalPaymentStatus::Pending && (! $attempt->expires_at || $attempt->expires_at->isFuture()));
+                $liveAttempt = $charge->allocatedPaymentAttempts()->contains(fn ($attempt): bool => $attempt->status === FestivalPaymentStatus::Pending && (! $attempt->expires_at || $attempt->expires_at->isFuture()));
 
                 return $protectedStatus || $liveAttempt;
             });

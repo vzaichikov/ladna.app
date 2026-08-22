@@ -22,7 +22,6 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -47,14 +46,11 @@ class FestivalPublicController extends Controller
     ): View {
         $account = $this->account($request, $accountSlug);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)
-            ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'stages', 'admissionTypes' => fn ($query) => $query->availableForSale()->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
+            ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'admissionTypes' => fn ($query) => $query->availableForSale()->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
             ->firstOrFail();
         $landingTemplateKey = $landingRegistry->effectiveTemplateKey($edition, $account);
         $landingPaletteKey = $landingRegistry->effectivePaletteKey($edition);
         $landingTemplate = $landingRegistry->template($landingTemplateKey);
-        $publicTemplateData = $landingTemplateKey === 'velvet_night'
-            ? $this->velvetPublicContent($edition)
-            : $this->emptyStructuredPublicContent($edition);
         $timelineWithinDates = $timelinePresenter->isWithinLocalDates($edition);
         $publicTimelines = $timelineWithinDates
             ? FestivalTimeline::query()
@@ -104,21 +100,18 @@ class FestivalPublicController extends Controller
         $festivalPaymentSettings = $gateways->availableSettingsFor($account);
         $festivalGoogleEmailPrefillAvailable = $authAvailability->googleSetting() !== null;
 
-        return view($landingTemplate['view'], [
-            ...compact(
-                'account',
-                'edition',
-                'landingTemplateKey',
-                'landingPaletteKey',
-                'publicTimelineViews',
-                'timelineWithinDates',
-                'timelinePollingUrl',
-                'festivalAdmissionOptions',
-                'festivalPaymentSettings',
-                'festivalGoogleEmailPrefillAvailable',
-            ),
-            ...$publicTemplateData,
-        ]);
+        return view($landingTemplate['view'], compact(
+            'account',
+            'edition',
+            'landingTemplateKey',
+            'landingPaletteKey',
+            'publicTimelineViews',
+            'timelineWithinDates',
+            'timelinePollingUrl',
+            'festivalAdmissionOptions',
+            'festivalPaymentSettings',
+            'festivalGoogleEmailPrefillAvailable',
+        ));
     }
 
     public function order(Request $request, string $accountSlug, string $accessToken, FestivalQrToken $qr): Response
@@ -382,91 +375,5 @@ class FestivalPublicController extends Controller
         abort_unless($account instanceof Account && $account->slug === $slug, 404);
 
         return $account;
-    }
-
-    /** @return array<string, Collection> */
-    private function emptyStructuredPublicContent(FestivalEdition $edition): array
-    {
-        return [
-            'publicContentSections' => $edition->sections,
-            'structuredContentSections' => collect(),
-            'publicDates' => collect(),
-            'publicStages' => collect(),
-            'publicFees' => collect(),
-        ];
-    }
-
-    /** @return array<string, Collection> */
-    private function velvetPublicContent(FestivalEdition $edition): array
-    {
-        $edition->load([
-            'workflows' => fn ($query) => $query->where('is_active', true)->with([
-                'steps' => fn ($stepQuery) => $stepQuery->where('is_active', true)->whereNotNull('due_at'),
-            ]),
-            'festivalChargeDefinitions' => fn ($query) => $query->where('is_active', true)->with('workflowStep'),
-            'stages' => fn ($query) => $query->where('is_active', true),
-        ]);
-
-        $structuredContentSections = $edition->sections
-            ->whereIn('key', ['important-dates', 'jury', 'stage', 'payments'])
-            ->keyBy('key');
-
-        return [
-            'publicContentSections' => $edition->sections
-                ->whereNotIn('key', $structuredContentSections->keys()->all())
-                ->values(),
-            'structuredContentSections' => $structuredContentSections,
-            'publicDates' => $this->velvetDates($edition),
-            'publicStages' => $edition->stages,
-            'publicFees' => $edition->festivalChargeDefinitions
-                ->unique(fn ($fee): string => implode('|', [
-                    $fee->name,
-                    (string) $fee->amount_cents,
-                    $fee->currency,
-                    $fee->pricing_mode->value,
-                    (string) $fee->included_members,
-                    (string) $fee->additional_member_amount_cents,
-                ]))
-                ->values(),
-        ];
-    }
-
-    /** @return Collection<int, array{label: string, date: string}> */
-    private function velvetDates(FestivalEdition $edition): Collection
-    {
-        $dates = collect();
-
-        if ($edition->registration_opens_at) {
-            $dates->push(['label' => __('app.festival_registration_opens'), 'at' => $edition->registration_opens_at]);
-        }
-
-        if ($edition->registration_closes_at) {
-            $dates->push(['label' => __('app.festival_registration_closes'), 'at' => $edition->registration_closes_at]);
-        }
-
-        foreach ($edition->workflows->flatMap->steps as $step) {
-            $dates->push(['label' => $step->title, 'at' => $step->due_at]);
-        }
-
-        foreach ($edition->festivalChargeDefinitions as $fee) {
-            $dueAt = $fee->due_at ?? $fee->due_hard_cap_at;
-
-            if ($dueAt) {
-                $dates->push(['label' => $fee->name, 'at' => $dueAt]);
-            }
-        }
-
-        if ($edition->starts_at) {
-            $dates->push(['label' => $edition->title, 'at' => $edition->starts_at]);
-        }
-
-        return $dates
-            ->unique(fn (array $date): string => $date['label'].'|'.$date['at']->timestamp)
-            ->sortBy(fn (array $date): int => $date['at']->timestamp)
-            ->map(fn (array $date): array => [
-                'label' => $date['label'],
-                'date' => $date['at']->copy()->timezone($edition->timezone)->format('d.m.Y'),
-            ])
-            ->values();
     }
 }

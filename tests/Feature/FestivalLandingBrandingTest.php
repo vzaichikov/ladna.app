@@ -17,7 +17,6 @@ use App\Models\FestivalWorkflow;
 use App\Models\FestivalWorkflowStep;
 use App\Models\User;
 use App\Support\Festivals\FestivalLandingRegistry;
-use App\Support\MoneyFormatter;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
@@ -255,7 +254,7 @@ class FestivalLandingBrandingTest extends TestCase
             ->assertSee(__('app.festival_judge_cabinet'));
     }
 
-    public function test_velvet_night_uses_active_structured_data_and_authored_jury_content_without_decorative_numbers(): void
+    public function test_velvet_night_content_blocks_render_only_authored_content_without_operational_data(): void
     {
         [$account, , $edition] = $this->ownerEdition([
             'allowed_festival_landing_templates' => ['velvet_night'],
@@ -357,29 +356,22 @@ class FestivalLandingBrandingTest extends TestCase
         $this->get($publicUrl)
             ->assertOk()
             ->assertSee('Live dates')
-            ->assertSee('03.09.2030')
-            ->assertSee('12.09.2030')
-            ->assertSee('15.09.2030')
-            ->assertSee('20.09.2030')
-            ->assertSee('Live database stage')
-            ->assertSee('Live stage dimensions')
-            ->assertSee(MoneyFormatter::format(12345, 'USD'))
-            ->assertSee(MoneyFormatter::format(32000, 'EUR'))
-            ->assertSee(__('app.festival_public_roster_fee', [
-                'count' => 2,
-                'amount' => MoneyFormatter::format(4000, 'EUR'),
-            ]))
+            ->assertSee('Authored dates sentinel')
+            ->assertSee('Authored stage sentinel')
+            ->assertSee('Authored fees sentinel')
             ->assertSee('Ordinary body sentinel')
             ->assertSee('Live jury')
             ->assertSee('Authored Head Judge')
             ->assertSee('Authored Judge')
+            ->assertDontSee('Live application deadline')
+            ->assertDontSee('Live database stage')
+            ->assertDontSee('Live stage dimensions')
+            ->assertDontSee('Live fixed fee')
+            ->assertDontSee('Live roster fee')
             ->assertDontSee('Inactive Judge Sentinel')
             ->assertDontSee('Inactive step sentinel')
             ->assertDontSee('Inactive stage sentinel')
             ->assertDontSee('Inactive fee sentinel')
-            ->assertDontSee('Authored dates sentinel')
-            ->assertDontSee('Authored stage sentinel')
-            ->assertDontSee('Authored fees sentinel')
             ->assertDontSee('velvet-card-number', false)
             ->assertDontSee('velvet-section-index', false);
 

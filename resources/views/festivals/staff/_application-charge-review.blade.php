@@ -19,9 +19,12 @@
         </div>
         <strong>{{ \App\Support\MoneyFormatter::format($charge->amount_cents, $charge->currency) }}</strong>
     </div>
-    @if ($charge->paymentAttempts->isNotEmpty())
+    @php
+        $allocatedPaymentAttempts = $charge->allocatedPaymentAttempts();
+    @endphp
+    @if ($allocatedPaymentAttempts->isNotEmpty())
         <div class="mt-3 space-y-2">
-            @foreach ($charge->paymentAttempts->sortByDesc('id') as $attempt)
+            @foreach ($allocatedPaymentAttempts->sortByDesc('id') as $attempt)
                 @php
                     $receipt = $attempt->fiscalReceipt;
                 @endphp

@@ -140,7 +140,7 @@ class FiscalizePayments extends Command
             ->whereNotNull('paid_at')
             ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
             ->when($accountId === null, fn ($query) => $query->whereHas('account', fn ($query) => $query->operational()))
-            ->with(['account', 'charge.entry.portalUser', 'fiscalReceipt'])
+            ->with(['account', 'charge.entry.portalUser', 'allocations.charge', 'fiscalReceipt'])
             ->lazyById()
             ->each(function (FestivalPaymentAttempt $attempt) use ($fiscalReceipts, &$processed, &$fiscalized, &$failed, &$skipped): void {
                 [$result, $message] = $this->processPayment('festival-entry', $attempt, $fiscalReceipts);

@@ -22,6 +22,7 @@ use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
 use App\Models\FestivalOnlineStream;
 use App\Models\FestivalPaymentAttempt;
+use App\Models\FestivalPaymentAttemptCharge;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
@@ -59,6 +60,11 @@ class FestivalPaymentService
     public function startCharge(FestivalCharge $charge, string $provider): PaymentCheckout
     {
         return DB::transaction(function () use ($charge, $provider): PaymentCheckout {
+            $requestedCharge = FestivalCharge::query()
+                ->whereKey($charge->id)
+                ->where('festival_entry_id', $charge->festival_entry_id)
+                ->where('account_id', $charge->account_id)
+                ->firstOrFail();
             $entry = FestivalEntry::query()
                 ->with([
                     'portalUser',
@@ -68,74 +74,148 @@ class FestivalPaymentService
                     'steps.requirements.submissions',
                     'steps.charges',
                 ])
-                ->whereKey($charge->festival_entry_id)
+                ->whereKey($requestedCharge->festival_entry_id)
+                ->where('account_id', $requestedCharge->account_id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $charge = FestivalCharge::query()
-                ->whereKey($charge->id)
-                ->where('festival_entry_id', $entry->id)
-                ->lockForUpdate()
-                ->firstOrFail();
-            $charge->setRelation('entry', $entry);
-            if ($charge->festival_entry_step_id !== null) {
+            if ($requestedCharge->festival_entry_step_id !== null) {
                 $entryStep = FestivalEntryStep::query()
                     ->with(['workflowStep', 'requirements.definition.edition', 'requirements.submissions', 'charges'])
-                    ->whereKey($charge->festival_entry_step_id)
+                    ->whereKey($requestedCharge->festival_entry_step_id)
                     ->where('festival_entry_id', $entry->id)
                     ->lockForUpdate()
                     ->firstOrFail();
-                $charge->setRelation('entryStep', $entryStep);
                 $this->workflowState->assertPaymentAvailable($entry, $entryStep);
                 $this->completion->assertRequirementsComplete($entryStep, 'provider');
             }
-            if ($charge->due_at?->isPast()) {
-                throw ValidationException::withMessages(['provider' => __('app.festival_step_deadline_expired')]);
+
+            $scopeChargeIds = $requestedCharge->festival_entry_step_id === null
+                ? collect([$requestedCharge->id])
+                : FestivalCharge::query()
+                    ->where('account_id', $requestedCharge->account_id)
+                    ->where('festival_entry_id', $requestedCharge->festival_entry_id)
+                    ->where('festival_entry_step_id', $requestedCharge->festival_entry_step_id)
+                    ->where('currency', $requestedCharge->currency)
+                    ->orderBy('id')
+                    ->pluck('id');
+            $pendingAttempts = FestivalPaymentAttempt::query()
+                ->with('allocations')
+                ->where('account_id', $requestedCharge->account_id)
+                ->where('status', FestivalPaymentStatus::Pending->value)
+                ->whereHas('allocations', fn ($query) => $query->whereIn('festival_charge_id', $scopeChargeIds))
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $scopeCharges = FestivalCharge::query()
+                ->whereKey($scopeChargeIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $charge = $scopeCharges->firstWhere('id', $requestedCharge->id) ?? throw ValidationException::withMessages([
+                'provider' => __('app.festival_step_payment_required'),
+            ]);
+            $charge->setRelation('entry', $entry);
+            if (isset($entryStep)) {
+                $charge->setRelation('entryStep', $entryStep);
             }
-            if (! in_array($charge->status, [FestivalChargeStatus::Pending, FestivalChargeStatus::Failed], true)) {
+
+            foreach ($pendingAttempts->filter(fn (FestivalPaymentAttempt $pendingAttempt): bool => $pendingAttempt->expires_at?->isPast() === true) as $expiredAttempt) {
+                $expiredAttempt->forceFill(['status' => FestivalPaymentStatus::Expired])->save();
+            }
+            foreach ($scopeCharges->where('status', FestivalChargeStatus::PaymentPending) as $pendingCharge) {
+                $hasLiveAttempt = $pendingAttempts->contains(fn (FestivalPaymentAttempt $pendingAttempt): bool => $pendingAttempt->status === FestivalPaymentStatus::Pending
+                    && ($pendingAttempt->expires_at === null || $pendingAttempt->expires_at->isFuture())
+                    && $pendingAttempt->allocations->contains('festival_charge_id', $pendingCharge->id));
+                if (! $hasLiveAttempt) {
+                    $pendingCharge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
+                }
+            }
+
+            $charges = $requestedCharge->festival_entry_step_id === null
+                ? FestivalCharge::query()
+                    ->whereKey($requestedCharge->id)
+                    ->whereIn('status', [FestivalChargeStatus::Pending->value, FestivalChargeStatus::Failed->value])
+                    ->where('amount_cents', '>', 0)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                : FestivalCharge::query()
+                    ->whereKey($scopeCharges->modelKeys())
+                    ->whereIn('status', [FestivalChargeStatus::Pending->value, FestivalChargeStatus::Failed->value])
+                    ->where('amount_cents', '>', 0)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+            if (! $charges->contains('id', $charge->id)) {
                 throw ValidationException::withMessages(['provider' => __('app.festival_step_payment_required')]);
             }
-            if ($charge->paymentAttempts()->where('status', FestivalPaymentStatus::Pending->value)->where('expires_at', '>', now())->exists()) {
+            if ($charges->contains(fn (FestivalCharge $groupedCharge): bool => $groupedCharge->due_at?->isPast() === true)) {
+                throw ValidationException::withMessages(['provider' => __('app.festival_step_deadline_expired')]);
+            }
+            if (FestivalPaymentAttempt::query()
+                ->where('status', FestivalPaymentStatus::Pending->value)
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->whereHas('allocations', fn ($query) => $query->whereIn('festival_charge_id', $charges->modelKeys()))
+                ->exists()) {
                 throw ValidationException::withMessages(['provider' => __('app.festival_payment_already_pending')]);
             }
 
+            $leadCharge = $charges->first(fn (FestivalCharge $groupedCharge): bool => $groupedCharge->festival_charge_definition_id !== null)
+                ?? $charges->firstOrFail();
+            $leadCharge->setRelation('entry', $entry);
+
             try {
-                $setting = $this->setting($charge->entry->edition->account, $provider);
+                $setting = $this->setting($entry->edition->account, $provider);
             } catch (PaymentGatewayException) {
                 throw ValidationException::withMessages(['provider' => __('app.no_payment_methods_available')]);
             }
             $expiresAt = now()->addMinutes(30);
-            if ($charge->due_at && $charge->due_at->lessThan($expiresAt)) {
-                $expiresAt = $charge->due_at;
+            $earliestDueAt = $charges->whereNotNull('due_at')->min('due_at');
+            if ($earliestDueAt && $earliestDueAt->lessThan($expiresAt)) {
+                $expiresAt = $earliestDueAt;
             }
             $attempt = FestivalPaymentAttempt::query()->create([
-                'account_id' => $charge->account_id,
-                'festival_charge_id' => $charge->id,
+                'account_id' => $leadCharge->account_id,
+                'festival_charge_id' => $leadCharge->id,
                 'provider' => $provider,
                 'order_id' => 'FCHP-'.Str::upper(Str::random(18)),
-                'amount_cents' => $charge->amount_cents,
-                'currency' => $charge->currency,
+                'amount_cents' => (int) $charges->sum('amount_cents'),
+                'currency' => $leadCharge->currency,
                 'expires_at' => $expiresAt,
             ]);
-            $charge->forceFill(['status' => FestivalChargeStatus::PaymentPending])->save();
+            foreach ($charges as $groupedCharge) {
+                $attempt->allocations()->create([
+                    'account_id' => $groupedCharge->account_id,
+                    'festival_charge_id' => $groupedCharge->id,
+                    'amount_cents' => $groupedCharge->amount_cents,
+                    'currency' => $groupedCharge->currency,
+                ]);
+            }
+            FestivalCharge::query()->whereKey($charges->modelKeys())->update([
+                'status' => FestivalChargeStatus::PaymentPending->value,
+                'updated_at' => now(),
+            ]);
             $gateway = $this->gateways->get($provider);
             $checkout = $gateway->start(new PaymentCheckoutRequest(
                 reference: $attempt->order_id,
                 amountCents: $attempt->amount_cents,
                 currency: $attempt->currency,
-                description: $charge->name,
-                buyerName: $charge->entry->portalUser->displayName(),
-                buyerEmail: $charge->entry->portalUser->email,
-                buyerPhone: $charge->entry->portalUser->phone,
-                locale: $charge->entry->portalUser->locale,
-                returnUrl: route('festival.portal.entries.show', [$charge->entry->edition->account->slug, $charge->entry]),
+                description: $leadCharge->name,
+                buyerName: $entry->portalUser->displayName(),
+                buyerEmail: $entry->portalUser->email,
+                buyerPhone: $entry->portalUser->phone,
+                locale: $entry->portalUser->locale,
+                returnUrl: route('festival.portal.entries.show', [$entry->edition->account->slug, $entry]),
                 callbackUrl: route('api.v1.festival-payments.callbacks', $gateway->provider()->value),
                 expiresAt: $attempt->expires_at,
             ), $setting);
             $attempt->forceFill(['gateway_checkout_payload' => $checkout->gatewayPayload])->save();
-            $attempt->setRelation('charge', $charge);
+            $attempt->setRelation('charge', $leadCharge);
             $this->activity->record($attempt, 'payment.started', $entry->edition, $entry->portalUser, [
                 'provider' => $provider,
                 'status' => $attempt->status->value,
+                'charge_count' => $charges->count(),
             ]);
 
             return $checkout;
@@ -208,21 +288,61 @@ class FestivalPaymentService
         $submitStepId = null;
         $becamePaid = false;
         $completed = DB::transaction(function () use ($attempt, $callback, &$submitStepId, &$becamePaid): FestivalPaymentAttempt {
-            $attempt = FestivalPaymentAttempt::query()->with(['charge.entry.portalUser', 'charge.entry.edition', 'charge.entryStep'])->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $attempt = FestivalPaymentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->assertCallback($attempt->order_id, $attempt->amount_cents, $attempt->currency, $callback);
             if ($attempt->status === FestivalPaymentStatus::Paid) {
-                return $attempt;
+                return $attempt->load(['charge.entry.portalUser', 'charge.entry.edition', 'charge.entryStep', 'allocations.charge']);
             }
+
+            $allocations = FestivalPaymentAttemptCharge::query()
+                ->where('festival_payment_attempt_id', $attempt->id)
+                ->orderBy('festival_charge_id')
+                ->lockForUpdate()
+                ->get();
+            if ($allocations->isEmpty()
+                || (int) $allocations->sum('amount_cents') !== $attempt->amount_cents
+                || ! $allocations->contains('festival_charge_id', $attempt->festival_charge_id)
+                || $allocations->contains(fn (FestivalPaymentAttemptCharge $allocation): bool => $allocation->account_id !== $attempt->account_id
+                    || strtoupper($allocation->currency) !== strtoupper($attempt->currency))) {
+                throw new InvalidPaymentCallbackException('Festival payment allocations do not match the payment attempt.');
+            }
+            $chargeIds = $allocations->pluck('festival_charge_id');
+            $charges = FestivalCharge::query()
+                ->with(['entry.portalUser', 'entry.edition', 'entryStep'])
+                ->where('account_id', $attempt->account_id)
+                ->whereKey($chargeIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            if ($charges->count() !== $chargeIds->unique()->count()
+                || $charges->pluck('festival_entry_id')->unique()->count() !== 1
+                || $charges->pluck('festival_entry_step_id')->unique()->count() !== 1
+                || $allocations->contains(function (FestivalPaymentAttemptCharge $allocation) use ($charges): bool {
+                    $allocatedCharge = $charges->firstWhere('id', $allocation->festival_charge_id);
+
+                    return ! $allocatedCharge
+                        || $allocatedCharge->account_id !== $allocation->account_id
+                        || strtoupper($allocatedCharge->currency) !== strtoupper($allocation->currency);
+                })) {
+                throw new InvalidPaymentCallbackException('Festival payment allocations cross payment boundaries.');
+            }
+            $leadCharge = $charges->firstWhere('id', $attempt->festival_charge_id) ?? $charges->firstOrFail();
+            $attempt->setRelation('charge', $leadCharge);
+            $attempt->setRelation('allocations', $allocations->each(
+                fn (FestivalPaymentAttemptCharge $allocation) => $allocation->setRelation('charge', $charges->firstWhere('id', $allocation->festival_charge_id)),
+            ));
 
             $previousStatus = $attempt->status;
 
-            $status = match ($callback->status) {
-                PaymentCallbackStatus::Paid => FestivalPaymentStatus::Paid,
-                PaymentCallbackStatus::Failed => FestivalPaymentStatus::Failed,
-                PaymentCallbackStatus::Cancelled => FestivalPaymentStatus::Cancelled,
-                PaymentCallbackStatus::Expired => FestivalPaymentStatus::Expired,
-                default => FestivalPaymentStatus::Pending,
-            };
+            $status = $previousStatus !== FestivalPaymentStatus::Pending && $callback->status !== PaymentCallbackStatus::Paid
+                ? $previousStatus
+                : match ($callback->status) {
+                    PaymentCallbackStatus::Paid => FestivalPaymentStatus::Paid,
+                    PaymentCallbackStatus::Failed => FestivalPaymentStatus::Failed,
+                    PaymentCallbackStatus::Cancelled => FestivalPaymentStatus::Cancelled,
+                    PaymentCallbackStatus::Expired => FestivalPaymentStatus::Expired,
+                    default => FestivalPaymentStatus::Pending,
+                };
             $attempt->forceFill([
                 'status' => $status,
                 'gateway_invoice_id' => $callback->gatewayInvoiceId,
@@ -236,33 +356,52 @@ class FestivalPaymentService
 
             if ($status === FestivalPaymentStatus::Paid) {
                 $becamePaid = true;
-                $late = $attempt->expires_at?->isPast() || $attempt->charge->due_at?->isPast() || $attempt->charge->cancelled_at !== null;
-                $attempt->charge->forceFill([
-                    'status' => $late ? FestivalChargeStatus::PaidRequiresRefund : FestivalChargeStatus::Paid,
-                    'paid_at' => $callback->paidAt ?? now(),
-                ])->save();
-                if (! $late && $attempt->charge->entryStep) {
-                    $submitStepId = $attempt->charge->entryStep->id;
+                $sharedLate = $attempt->expires_at?->isPast() === true;
+                $allChargesSettled = ! $sharedLate;
+                foreach ($charges as $allocatedCharge) {
+                    $hasOtherPaidAttempt = FestivalPaymentAttempt::query()
+                        ->whereKeyNot($attempt->id)
+                        ->where('status', FestivalPaymentStatus::Paid->value)
+                        ->whereHas('allocations', fn ($query) => $query->where('festival_charge_id', $allocatedCharge->id))
+                        ->exists();
+                    $requiresRefund = $sharedLate
+                        || $hasOtherPaidAttempt
+                        || $allocatedCharge->due_at?->isPast() === true
+                        || $allocatedCharge->cancelled_at !== null;
+                    $allChargesSettled = $allChargesSettled && ! $requiresRefund;
+                    $allocatedCharge->forceFill([
+                        'status' => $requiresRefund ? FestivalChargeStatus::PaidRequiresRefund : FestivalChargeStatus::Paid,
+                        'paid_at' => $callback->paidAt ?? now(),
+                    ])->save();
                 }
-                $this->notifications->queueForEntry($attempt->charge->entry, 'payment_paid', ['charge' => $attempt->charge->name, 'entry_code' => $attempt->charge->entry->code]);
-            } elseif ($status !== FestivalPaymentStatus::Pending
-                && ! in_array($attempt->charge->status, [FestivalChargeStatus::Paid, FestivalChargeStatus::PaidRequiresRefund, FestivalChargeStatus::Cancelled, FestivalChargeStatus::Refunded], true)
-                && ! $attempt->charge->paymentAttempts()
-                    ->whereKeyNot($attempt->id)
-                    ->where('status', FestivalPaymentStatus::Pending->value)
-                    ->exists()) {
-                $attempt->charge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
+                if ($allChargesSettled && $charges->first()->festival_entry_step_id !== null) {
+                    $submitStepId = $charges->first()->festival_entry_step_id;
+                }
+                $this->notifications->queueForEntry($leadCharge->entry, 'payment_paid', ['charge' => $leadCharge->name, 'entry_code' => $leadCharge->entry->code]);
+            } elseif ($status !== FestivalPaymentStatus::Pending) {
+                foreach ($charges as $allocatedCharge) {
+                    $hasPendingAttempt = FestivalPaymentAttempt::query()
+                        ->whereKeyNot($attempt->id)
+                        ->where('status', FestivalPaymentStatus::Pending->value)
+                        ->whereHas('allocations', fn ($query) => $query->where('festival_charge_id', $allocatedCharge->id))
+                        ->exists();
+
+                    if (! $hasPendingAttempt && ! in_array($allocatedCharge->status, [FestivalChargeStatus::Paid, FestivalChargeStatus::PaidRequiresRefund, FestivalChargeStatus::Cancelled, FestivalChargeStatus::Refunded], true)) {
+                        $allocatedCharge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
+                    }
+                }
             }
 
             if ($status !== $previousStatus) {
-                $this->activity->record($attempt, 'payment.status_changed', $attempt->charge->entry->edition, payload: [
+                $this->activity->record($attempt, 'payment.status_changed', $leadCharge->entry->edition, payload: [
                     'from_status' => $previousStatus->value,
                     'to_status' => $status->value,
-                    'charge_status' => $attempt->charge->status->value,
+                    'charge_status' => $leadCharge->refresh()->status->value,
+                    'charge_count' => $charges->count(),
                 ]);
             }
 
-            return $attempt->refresh();
+            return $attempt->refresh()->load(['charge.entry.portalUser', 'charge.entry.edition', 'charge.entryStep', 'allocations.charge']);
         }, 3);
 
         if ($becamePaid) {

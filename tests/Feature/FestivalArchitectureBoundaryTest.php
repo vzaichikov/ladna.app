@@ -27,7 +27,7 @@ class FestivalArchitectureBoundaryTest extends TestCase
     {
         $tables = [
             'festival_series', 'festival_editions', 'festival_portal_users', 'festival_otp_challenges', 'festival_participants',
-            'festival_directions', 'festival_categories', 'festival_entries', 'festival_charges', 'festival_payment_attempts',
+            'festival_directions', 'festival_categories', 'festival_entries', 'festival_charges', 'festival_payment_attempts', 'festival_payment_attempt_charges',
             'festival_schedule_slots', 'festival_timelines', 'festival_timeline_items', 'festival_score_sheets', 'festival_ticket_orders', 'festival_tickets',
             'festival_online_streams', 'festival_stream_entitlements', 'festival_stream_ip_leases',
         ];
@@ -37,6 +37,11 @@ class FestivalArchitectureBoundaryTest extends TestCase
             $this->assertNotContains('customer_id', $columns, "{$table} links to Customer");
             $this->assertNotContains('event_id', $columns, "{$table} links to Event");
         }
+
+        $allocationIndexes = collect(Schema::getIndexes('festival_payment_attempt_charges'));
+        $this->assertTrue($allocationIndexes->contains(
+            fn (array $index): bool => $index['columns'] === ['festival_payment_attempt_id', 'festival_charge_id'] && $index['unique'],
+        ));
     }
 
     public function test_festival_domain_source_has_no_customer_or_event_model_dependency(): void

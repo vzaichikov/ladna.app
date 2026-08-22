@@ -7,11 +7,6 @@
     $fallbackHero = $desktopHero ?? $mobileHero;
     $startsAt = $edition->starts_at->timezone($edition->timezone);
     $endsAt = $edition->ends_at->timezone($edition->timezone);
-    $showImportantDates = $structuredContentSections->has('important-dates');
-    $showJudges = $structuredContentSections->has('jury');
-    $showStages = $structuredContentSections->has('stage');
-    $showFees = $structuredContentSections->has('payments');
-    $hasContentCards = $showImportantDates || $showJudges || $showStages || $showFees || $publicContentSections->isNotEmpty();
 @endphp
 
 <main id="festival-page-top" class="festival-velvet min-h-screen festival-page" tabindex="-1">
@@ -130,63 +125,9 @@
             @endif
         </section>
 
-        @if ($hasContentCards)
+        @if ($edition->sections->isNotEmpty())
             <section class="velvet-content-grid">
-                @if ($showImportantDates)
-                    <article class="velvet-card">
-                        <h2>{{ $structuredContentSections->get('important-dates')->title }}</h2>
-                        <div class="velvet-copy-list velvet-prose mt-5">
-                            @foreach ($publicDates as $date)
-                                <p>{{ $date['label'] }} — {{ $date['date'] }}.</p>
-                            @endforeach
-                        </div>
-                    </article>
-                @endif
-
-                @if ($showJudges)
-                    <article class="velvet-card">
-                        <h2>{{ $structuredContentSections->get('jury')->title }}</h2>
-                        <div class="prose festival-prose velvet-copy-list velvet-prose mt-5 max-w-none">
-                            {!! $structuredContentSections->get('jury')->body_html !!}
-                        </div>
-                    </article>
-                @endif
-
-                @if ($showStages)
-                    <article class="velvet-card">
-                        <h2>{{ $structuredContentSections->get('stage')->title }}</h2>
-                        <div class="velvet-copy-list velvet-prose mt-5">
-                            @foreach ($publicStages as $stage)
-                                <p>
-                                    <strong>{{ $stage->name }}</strong>
-                                    @if ($stage->description)
-                                        <br>{{ $stage->description }}
-                                    @endif
-                                </p>
-                            @endforeach
-                        </div>
-                    </article>
-                @endif
-
-                @if ($showFees)
-                    <article class="velvet-card">
-                        <h2>{{ $structuredContentSections->get('payments')->title }}</h2>
-                        <div class="velvet-copy-list velvet-prose mt-5">
-                            @foreach ($publicFees as $fee)
-                                <p>
-                                    <strong>{{ $fee->name }}</strong> — {{ \App\Support\MoneyFormatter::format($fee->amount_cents, $fee->currency) }}.@if ($fee->pricing_mode === \App\Enums\FestivalChargePricingMode::Roster && $fee->included_members !== null && $fee->additional_member_amount_cents !== null)
-                                        {{ __('app.festival_public_roster_fee', [
-                                            'count' => $fee->included_members,
-                                            'amount' => \App\Support\MoneyFormatter::format($fee->additional_member_amount_cents, $fee->currency),
-                                        ]) }}
-                                    @endif
-                                </p>
-                            @endforeach
-                        </div>
-                    </article>
-                @endif
-
-                @foreach ($publicContentSections as $section)
+                @foreach ($edition->sections as $section)
                     <article class="velvet-card">
                         <h2>{{ $section->title }}</h2>
                         <div class="prose festival-prose velvet-prose mt-5 max-w-none">

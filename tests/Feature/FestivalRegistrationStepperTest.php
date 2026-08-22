@@ -859,6 +859,183 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertDontSee(__('app.festival_submit_and_pay'));
     }
 
+    public function test_fixed_fee_and_priced_helpers_settle_in_one_payment_attempt(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $account->forceFill(['default_currency' => 'UAH'])->save();
+        $paymentWorkflowStep = $workflow->steps->firstWhere('code', 'participation_payment');
+        $this->requirement(
+            $edition,
+            $workflow,
+            'participation_payment',
+            'helpers',
+            'integer',
+            ['mode' => 'per_unit', 'unit_amount_cents' => 40000],
+        )->update(['name' => 'Helpers']);
+        $feeDefinition = FestivalChargeDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $paymentWorkflowStep->id,
+            'kind' => 'participation',
+            'name' => 'Video selection',
+            'amount_cents' => 100,
+            'currency' => 'UAH',
+        ]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Combined payment entry'),
+        );
+        $this->step($entry, 'application')->forceFill([
+            'status' => FestivalEntryStepStatus::Approved,
+            'submitted_at' => now(),
+            'reviewed_at' => now(),
+        ])->save();
+        $entry->refresh()->load('steps.workflowStep', 'steps.requirements.definition', 'steps.charges');
+        $paymentStep = $this->step($entry, 'participation_payment');
+        $helpersRequirement = $paymentStep->requirements->sole();
+        IntegrationSetting::factory()->forAccountScope($account)->create([
+            'provider' => IntegrationProvider::Liqpay,
+            'category' => IntegrationCategory::Payment,
+            'is_enabled' => true,
+            'credentials' => ['public_key' => 'studio-public', 'private_key' => 'studio-private'],
+        ]);
+
+        $saved = $this->actingAs($portalUser, 'festival')->postJson(
+            route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $paymentStep, $helpersRequirement]),
+            ['value' => 2],
+        )->assertOk();
+
+        $paymentHtml = $saved->json('payment_html');
+        $this->assertStringContainsString('801 ₴', $paymentHtml);
+        $this->assertStringContainsString('Video selection', $paymentHtml);
+        $this->assertSame(1, substr_count($paymentHtml, 'data-festival-charge-card'));
+        $charges = $entry->charges()->whereIn('status', [FestivalChargeStatus::Pending->value, FestivalChargeStatus::Failed->value])->orderBy('id')->get();
+        $this->assertCount(2, $charges);
+        $fixedCharge = $charges->firstWhere('festival_charge_definition_id', $feeDefinition->id);
+        $helperCharge = $charges->firstWhere('festival_entry_requirement_id', $helpersRequirement->id);
+        $this->assertNotNull($fixedCharge);
+        $this->assertNotNull($helperCharge);
+        $this->assertSame(100, $fixedCharge->amount_cents);
+        $this->assertSame(80000, $helperCharge->amount_cents);
+
+        $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $fixedCharge]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+            'festival_rules_accepted' => '1',
+        ])->assertOk();
+
+        $attempt = FestivalPaymentAttempt::query()->where('festival_charge_id', $fixedCharge->id)->sole();
+        $this->assertSame(80100, $attempt->amount_cents);
+        $this->assertSame([100, 80000], $attempt->allocations()->orderBy('amount_cents')->pluck('amount_cents')->all());
+        app(FestivalPaymentService::class)->completeAttempt($attempt, new PaymentCallbackResult(
+            orderId: $attempt->order_id,
+            status: PaymentCallbackStatus::Paid,
+            amountCents: 80100,
+            currency: 'UAH',
+        ));
+
+        $this->assertSame(FestivalChargeStatus::Paid, $fixedCharge->refresh()->status);
+        $this->assertSame(FestivalChargeStatus::Paid, $helperCharge->refresh()->status);
+        $this->assertSame(FestivalEntryStepStatus::Approved, $paymentStep->refresh()->status);
+        $this->assertSame(2, $attempt->allocations()->count());
+    }
+
+    public function test_checkout_groups_multiple_charges_only_by_runtime_step_and_currency(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category] = $this->festival();
+        $account->forceFill(['default_currency' => 'UAH'])->save();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Scoped payment entry'),
+        );
+        $paymentStep = $this->step($entry, 'application');
+        $otherStep = $this->step($entry, 'technical_form');
+        $feeDefinition = FestivalChargeDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'is_active' => false,
+            'name' => 'Configured fee',
+            'amount_cents' => 100,
+            'currency' => 'UAH',
+        ]);
+        $charges = collect([
+            $entry->charges()->create(['account_id' => $account->id, 'festival_entry_step_id' => $paymentStep->id, 'festival_charge_definition_id' => $feeDefinition->id, 'code' => 'FCH-SCOPE-FEE-'.$entry->id, 'kind' => 'qualification', 'name' => 'Configured fee', 'amount_cents' => 100, 'currency' => 'UAH']),
+            $entry->charges()->create(['account_id' => $account->id, 'festival_entry_step_id' => $paymentStep->id, 'code' => 'FCH-SCOPE-HELPERS-'.$entry->id, 'kind' => 'response_price', 'name' => 'Helpers', 'amount_cents' => 800, 'currency' => 'UAH']),
+            $entry->charges()->create(['account_id' => $account->id, 'festival_entry_step_id' => $paymentStep->id, 'code' => 'FCH-SCOPE-CHAIRS-'.$entry->id, 'kind' => 'response_price', 'name' => 'Chairs', 'amount_cents' => 200, 'currency' => 'UAH']),
+        ]);
+        $foreignCurrencyCharge = $entry->charges()->create(['account_id' => $account->id, 'festival_entry_step_id' => $paymentStep->id, 'code' => 'FCH-SCOPE-USD-'.$entry->id, 'kind' => 'response_price', 'name' => 'USD extra', 'amount_cents' => 500, 'currency' => 'USD']);
+        $otherStepCharge = $entry->charges()->create(['account_id' => $account->id, 'festival_entry_step_id' => $otherStep->id, 'code' => 'FCH-SCOPE-OTHER-'.$entry->id, 'kind' => 'response_price', 'name' => 'Later extra', 'amount_cents' => 700, 'currency' => 'UAH']);
+        IntegrationSetting::factory()->forAccountScope($account)->create([
+            'provider' => IntegrationProvider::Liqpay,
+            'category' => IntegrationCategory::Payment,
+            'is_enabled' => true,
+            'credentials' => ['public_key' => 'studio-public', 'private_key' => 'studio-private'],
+        ]);
+
+        $page = $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $paymentStep]));
+        $page->assertOk()->assertSee('11 ₴')->assertSee('5 $')->assertDontSee('Later extra');
+        $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charges->first()]), [
+            'provider' => IntegrationProvider::Liqpay->value,
+            'festival_rules_accepted' => '1',
+        ])->assertOk();
+
+        $attempt = FestivalPaymentAttempt::query()->where('festival_charge_id', $charges->first()->id)->sole();
+        $this->assertSame(1100, $attempt->amount_cents);
+        $this->assertSame($charges->pluck('id')->sort()->values()->all(), $attempt->allocations()->pluck('festival_charge_id')->sort()->values()->all());
+        $this->assertSame(FestivalChargeStatus::Pending, $foreignCurrencyCharge->refresh()->status);
+        $this->assertSame(FestivalChargeStatus::Pending, $otherStepCharge->refresh()->status);
+    }
+
+    public function test_expired_group_attempt_is_retryable_and_non_paid_callbacks_do_not_regress_it(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category] = $this->festival();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Expired retry entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $step->id,
+            'code' => 'FCH-EXPIRED-RETRY-'.$entry->id,
+            'kind' => 'qualification',
+            'name' => 'Retry fee',
+            'amount_cents' => 50000,
+            'currency' => strtoupper($account->default_currency),
+        ]);
+        IntegrationSetting::factory()->forAccountScope($account)->create([
+            'provider' => IntegrationProvider::Liqpay,
+            'category' => IntegrationCategory::Payment,
+            'is_enabled' => true,
+            'credentials' => ['public_key' => 'studio-public', 'private_key' => 'studio-private'],
+        ]);
+        $paymentPayload = ['provider' => IntegrationProvider::Liqpay->value, 'festival_rules_accepted' => '1'];
+
+        $this->actingAs($portalUser, 'festival')->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), $paymentPayload)->assertOk();
+        $expiredAttempt = FestivalPaymentAttempt::query()->where('festival_charge_id', $charge->id)->sole();
+        $expiredAttempt->forceFill(['expires_at' => now()->subMinute()])->save();
+        $this->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]))
+            ->assertOk()
+            ->assertSee(__('app.festival_payment_failed_retry'))
+            ->assertSee(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), false);
+
+        $this->post(route('festival.portal.charges.pay', [$account->slug, $entry, $charge]), $paymentPayload)->assertOk();
+        $retryAttempt = FestivalPaymentAttempt::query()->where('festival_charge_id', $charge->id)->latest('id')->firstOrFail();
+        $this->assertSame(FestivalPaymentStatus::Expired, $expiredAttempt->refresh()->status);
+        $this->assertSame(FestivalChargeStatus::PaymentPending, $charge->refresh()->status);
+        app(FestivalPaymentService::class)->completeAttempt($expiredAttempt, new PaymentCallbackResult(
+            orderId: $expiredAttempt->order_id,
+            status: PaymentCallbackStatus::Pending,
+            amountCents: $expiredAttempt->amount_cents,
+            currency: $expiredAttempt->currency,
+        ));
+        $this->assertSame(FestivalPaymentStatus::Expired, $expiredAttempt->refresh()->status);
+        $this->assertSame(FestivalChargeStatus::PaymentPending, $charge->refresh()->status);
+
+        app(FestivalPaymentService::class)->completeAttempt($retryAttempt, new PaymentCallbackResult(
+            orderId: $retryAttempt->order_id,
+            status: PaymentCallbackStatus::Paid,
+            amountCents: $retryAttempt->amount_cents,
+            currency: $retryAttempt->currency,
+        ));
+        $this->assertSame(FestivalChargeStatus::Paid, $charge->refresh()->status);
+    }
+
     public function test_owner_review_renders_only_current_values_and_file_downloads_while_portal_withdraw_is_touch_safe(): void
     {
         Queue::fake();
@@ -1253,6 +1430,63 @@ class FestivalRegistrationStepperTest extends TestCase
             'status' => 'pending',
             'amount_cents' => 2000,
         ]);
+    }
+
+    public function test_unpaid_priced_response_reuses_one_charge_through_zero_and_back(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $this->requirement($edition, $workflow, 'technical_form', 'helpers', 'integer', ['mode' => 'per_unit', 'unit_amount_cents' => 1000]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Mutable priced entry'));
+        $entry->steps()->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))->update([
+            'status' => FestivalEntryStepStatus::Approved->value,
+            'reviewed_at' => now(),
+        ]);
+        $entry->refresh()->load('steps.workflowStep', 'steps.requirements.definition');
+        $requirement = $this->step($entry, 'technical_form')->requirements->sole();
+
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 2);
+        $charge = $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->sole();
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 0);
+        $this->assertSame(FestivalChargeStatus::Cancelled, $charge->refresh()->status);
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 1);
+
+        $this->assertSame(1, $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->count());
+        $this->assertSame(FestivalChargeStatus::Pending, $charge->refresh()->status);
+        $this->assertSame(1000, $charge->amount_cents);
+    }
+
+    public function test_paid_priced_response_increase_creates_a_supplement_and_refund_edits_reuse_the_pending_adjustment(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $this->requirement($edition, $workflow, 'technical_form', 'helpers', 'integer', ['mode' => 'per_unit', 'unit_amount_cents' => 1000]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Supplement entry'));
+        $entry->steps()->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))->update([
+            'status' => FestivalEntryStepStatus::Approved->value,
+            'reviewed_at' => now(),
+        ]);
+        $entry->refresh()->load('steps.workflowStep', 'steps.requirements.definition');
+        $requirement = $this->step($entry, 'technical_form')->requirements->sole();
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 2);
+        $paidCharge = $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->sole();
+        $paidCharge->forceFill(['status' => FestivalChargeStatus::Paid, 'paid_at' => now()])->save();
+
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 3);
+        $supplement = $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->where('status', FestivalChargeStatus::Pending->value)->sole();
+        $this->assertSame(1000, $supplement->amount_cents);
+        $this->assertNull($supplement->pricing_key);
+        $supplement->forceFill(['status' => FestivalChargeStatus::Cancelled, 'cancelled_at' => now()])->save();
+
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 1);
+        $adjustment = $entry->chargeAdjustments()->where('festival_entry_requirement_id', $requirement->id)->sole();
+        $this->assertSame('pending', $adjustment->status);
+        $this->assertSame(1000, $adjustment->amount_cents);
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 2);
+        $this->assertSame('cancelled', $adjustment->refresh()->status);
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, 0);
+
+        $this->assertSame(1, $entry->chargeAdjustments()->where('festival_entry_requirement_id', $requirement->id)->count());
+        $this->assertSame('pending', $adjustment->refresh()->status);
+        $this->assertSame(2000, $adjustment->amount_cents);
     }
 
     public function test_cross_currency_paid_response_repricing_is_rejected_atomically(): void

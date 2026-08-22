@@ -25,6 +25,7 @@ use App\Models\SmsTopUpPayment;
 use App\Support\PhoneNumberNormalizer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use LogicException;
 use Throwable;
 
 class FiscalReceiptService
@@ -251,9 +252,10 @@ class FiscalReceiptService
     {
         $name = $this->itemName($payment);
         $isReturn = $payment instanceof CustomerPurchaseRefund;
-        $goods = $payment instanceof FestivalTicketOrder
-            ? $this->festivalTicketGoods($payment)
-            : [[
+        $goods = match (true) {
+            $payment instanceof FestivalTicketOrder => $this->festivalTicketGoods($payment),
+            $payment instanceof FestivalPaymentAttempt => $this->festivalPaymentAttemptGoods($payment),
+            default => [[
                 'good' => [
                     'code' => $this->paymentReference($payment),
                     'name' => $name,
@@ -261,7 +263,8 @@ class FiscalReceiptService
                 ],
                 'quantity' => 1000,
                 'is_return' => $isReturn,
-            ]];
+            ]],
+        };
         $payload = [
             'id' => $externalUuid,
             'goods' => $goods,
@@ -459,6 +462,33 @@ class FiscalReceiptService
                 'price' => $item->unit_price_cents,
             ],
             'quantity' => $item->quantity * 1000,
+            'is_return' => false,
+        ])->values()->all();
+    }
+
+    /**
+     * @return array<int, array{good: array{code: string, name: string, price: int}, quantity: int, is_return: false}>
+     */
+    private function festivalPaymentAttemptGoods(FestivalPaymentAttempt $attempt): array
+    {
+        $attempt->loadMissing(['charge', 'allocations.charge']);
+
+        if ($attempt->allocations->isEmpty()
+            || (int) $attempt->allocations->sum('amount_cents') !== $attempt->amount_cents
+            || $attempt->allocations->contains(fn ($allocation): bool => $allocation->account_id !== $attempt->account_id
+                || $allocation->charge?->account_id !== $attempt->account_id
+                || strtoupper($allocation->currency) !== strtoupper($attempt->currency)
+                || strtoupper((string) $allocation->charge?->currency) !== strtoupper($attempt->currency))) {
+            throw new LogicException('Festival payment allocations do not match the payment attempt.');
+        }
+
+        return $attempt->allocations->map(fn ($allocation): array => [
+            'good' => [
+                'code' => $attempt->order_id.'-'.$allocation->festival_charge_id,
+                'name' => Str::limit($allocation->charge?->name ?: __('app.festival_payments'), 128, ''),
+                'price' => $allocation->amount_cents,
+            ],
+            'quantity' => 1000,
             'is_return' => false,
         ])->values()->all();
     }

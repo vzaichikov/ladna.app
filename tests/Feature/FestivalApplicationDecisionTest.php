@@ -59,6 +59,12 @@ class FestivalApplicationDecisionTest extends TestCase
             'amount_cents' => $pending->amount_cents,
             'currency' => $pending->currency,
         ]);
+        $attempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $pending->id,
+            'amount_cents' => $pending->amount_cents,
+            'currency' => $pending->currency,
+        ]);
 
         $route = route('dashboard.accounts.festivals.applications.fully-decline', [$account, $edition, $entry]);
         $this->actingAs($owner)->patch($route, ['reason' => '   '])

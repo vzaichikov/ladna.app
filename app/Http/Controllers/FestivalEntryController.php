@@ -17,6 +17,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
+use App\Support\Festivals\FestivalChargePaymentGroups;
 use App\Support\Festivals\FestivalEntryStepCompletion;
 use App\Support\Festivals\FestivalEntryWorkflowState;
 use App\Support\Festivals\FestivalPaymentService;
@@ -57,7 +58,7 @@ class FestivalEntryController extends Controller
         return redirect()->route('festival.portal.entries.show', [$accountSlug, $entry])->with('status', __('app.festival_entry_draft_saved'));
     }
 
-    public function show(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryWorkflowState $workflowState): View
+    public function show(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryWorkflowState $workflowState, FestivalChargePaymentGroups $chargePaymentGroups): View
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $this->assertEntry($festivalEntry, $portalUser);
@@ -69,7 +70,7 @@ class FestivalEntryController extends Controller
             'steps.requirements.definition',
             'steps.requirements.participant',
             'steps.requirements.submissions',
-            'steps.charges.paymentAttempts',
+            'steps.charges.paymentAllocations.attempt',
             'chargeAdjustments',
             'scheduleSlots' => fn ($query) => $query
                 ->whereNotNull('published_at')
@@ -88,8 +89,9 @@ class FestivalEntryController extends Controller
             ? ($summary ?? $festivalEntry->steps->last())
             : ($workflowState->current($festivalEntry) ?? $festivalEntry->steps->last());
         $postConfirmationRequirements = $workflowState->postConfirmationRequirements($workflowStates);
+        $paymentGroups = $selectedStep ? $chargePaymentGroups->forStep($selectedStep) : collect();
 
-        return view('festivals.portal.entry', compact('account', 'portalUser', 'festivalEntry', 'providers', 'workflowStates', 'selectedStep', 'postConfirmationRequirements') + ['entry' => $festivalEntry]);
+        return view('festivals.portal.entry', compact('account', 'portalUser', 'festivalEntry', 'providers', 'workflowStates', 'selectedStep', 'postConfirmationRequirements', 'paymentGroups') + ['entry' => $festivalEntry]);
     }
 
     public function edit(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryWorkflowState $workflowState, ReassignFestivalEntryCategory $reassignCategory): View
@@ -99,7 +101,7 @@ class FestivalEntryController extends Controller
         $this->assertBaseDetailsMutable($festivalEntry, $workflowState);
         $edition = $festivalEntry->edition;
 
-        $festivalEntry->load(['participants', 'category.direction', 'charges.paymentAttempts']);
+        $festivalEntry->load(['participants', 'category.direction', 'charges.paymentAllocations']);
         $canChangeCategory = $reassignCategory->applicantMayChange($festivalEntry);
         $categories = $edition->categories()
             ->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $festivalEntry->festival_category_id))
@@ -268,10 +270,11 @@ class FestivalEntryController extends Controller
                 !== collect($data['participant_ids'])->map(fn (mixed $id): int => (int) $id)->sort()->values()->all();
             if ($participantIdsChanged) {
                 $rosterCharges = $entry->charges()
+                    ->with('paymentAllocations')
                     ->whereHas('definition', fn ($query) => $query->where('pricing_mode', 'roster'))
                     ->lockForUpdate()
                     ->get();
-                if ($rosterCharges->contains(fn (FestivalCharge $charge): bool => $charge->paymentAttempts()->exists())) {
+                if ($rosterCharges->contains(fn (FestivalCharge $charge): bool => $charge->hasPaymentHistory())) {
                     throw ValidationException::withMessages(['participant_ids' => __('app.festival_roster_locked_after_checkout')]);
                 }
             }
