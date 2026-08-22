@@ -89,31 +89,45 @@ class FestivalPaymentService
                 $this->completion->assertRequirementsComplete($entryStep, 'provider');
             }
 
-            $scopeChargeIds = $requestedCharge->festival_entry_step_id === null
+            $preLockStepChargeIds = $requestedCharge->festival_entry_step_id === null
                 ? collect([$requestedCharge->id])
                 : FestivalCharge::query()
                     ->where('account_id', $requestedCharge->account_id)
                     ->where('festival_entry_id', $requestedCharge->festival_entry_id)
                     ->where('festival_entry_step_id', $requestedCharge->festival_entry_step_id)
-                    ->where('currency', $requestedCharge->currency)
                     ->orderBy('id')
                     ->pluck('id');
             $pendingAttempts = FestivalPaymentAttempt::query()
                 ->with('allocations')
                 ->where('account_id', $requestedCharge->account_id)
                 ->where('status', FestivalPaymentStatus::Pending->value)
-                ->whereHas('allocations', fn ($query) => $query->whereIn('festival_charge_id', $scopeChargeIds))
+                ->whereHas('allocations', fn ($query) => $query->whereIn('festival_charge_id', $preLockStepChargeIds))
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
-            $scopeCharges = FestivalCharge::query()
-                ->whereKey($scopeChargeIds)
+            $lockedStepCharges = FestivalCharge::query()
+                ->where('account_id', $requestedCharge->account_id)
+                ->where('festival_entry_id', $requestedCharge->festival_entry_id)
+                ->when(
+                    $requestedCharge->festival_entry_step_id === null,
+                    fn ($query) => $query->whereKey($requestedCharge->id),
+                    fn ($query) => $query->where('festival_entry_step_id', $requestedCharge->festival_entry_step_id),
+                )
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
-            $charge = $scopeCharges->firstWhere('id', $requestedCharge->id) ?? throw ValidationException::withMessages([
+            $charge = $lockedStepCharges->firstWhere('id', $requestedCharge->id) ?? throw ValidationException::withMessages([
                 'provider' => __('app.festival_step_payment_required'),
             ]);
+            $lockedCurrency = strtoupper($charge->currency);
+            $scopeCharges = $lockedStepCharges
+                ->filter(fn (FestivalCharge $scopeCharge): bool => strtoupper($scopeCharge->currency) === $lockedCurrency)
+                ->values();
+            $scopeChargeIds = $scopeCharges->modelKeys();
+            $pendingAttempts = $pendingAttempts
+                ->filter(fn (FestivalPaymentAttempt $pendingAttempt): bool => $pendingAttempt->allocations
+                    ->contains(fn (FestivalPaymentAttemptCharge $allocation): bool => in_array($allocation->festival_charge_id, $scopeChargeIds, true)))
+                ->values();
             $charge->setRelation('entry', $entry);
             if (isset($entryStep)) {
                 $charge->setRelation('entryStep', $entryStep);

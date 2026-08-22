@@ -22,6 +22,7 @@ use App\Http\Middleware\PreventExpiredSubscriptionMutations;
 use App\Models\Account;
 use App\Models\FestivalActivityLog;
 use App\Models\FestivalCategory;
+use App\Models\FestivalCharge;
 use App\Models\FestivalChargeDefinition;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
@@ -43,6 +44,7 @@ use App\Support\Payments\PaymentCallbackStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -980,6 +982,91 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertSame($charges->pluck('id')->sort()->values()->all(), $attempt->allocations()->pluck('festival_charge_id')->sort()->values()->all());
         $this->assertSame(FestivalChargeStatus::Pending, $foreignCurrencyCharge->refresh()->status);
         $this->assertSame(FestivalChargeStatus::Pending, $otherStepCharge->refresh()->status);
+    }
+
+    public function test_checkout_rebuilds_the_currency_group_from_locked_charge_rows(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category] = $this->festival();
+        $account->forceFill(['default_currency' => 'UAH'])->save();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Locked currency entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $feeDefinition = FestivalChargeDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'is_active' => false,
+            'name' => 'Locked fee',
+            'amount_cents' => 100,
+            'currency' => 'UAH',
+        ]);
+        $fixedCharge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $step->id,
+            'festival_charge_definition_id' => $feeDefinition->id,
+            'code' => 'FCH-LOCKED-FEE-'.$entry->id,
+            'kind' => 'qualification',
+            'name' => 'Locked fee',
+            'status' => FestivalChargeStatus::PaymentPending,
+            'amount_cents' => 100,
+            'currency' => 'UAH',
+        ]);
+        $helperCharge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $step->id,
+            'code' => 'FCH-LOCKED-HELPERS-'.$entry->id,
+            'kind' => 'response_price',
+            'name' => 'Helpers',
+            'amount_cents' => 800,
+            'currency' => 'UAH',
+        ]);
+        $expiredAttempt = FestivalPaymentAttempt::query()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $fixedCharge->id,
+            'provider' => IntegrationProvider::Liqpay,
+            'order_id' => 'FCHP-LOCKED-'.$entry->id,
+            'amount_cents' => $fixedCharge->amount_cents,
+            'currency' => 'UAH',
+            'expires_at' => now()->subMinute(),
+        ]);
+        $expiredAttempt->allocations()->create([
+            'account_id' => $account->id,
+            'festival_charge_id' => $fixedCharge->id,
+            'amount_cents' => $fixedCharge->amount_cents,
+            'currency' => 'UAH',
+        ]);
+        IntegrationSetting::factory()->forAccountScope($account)->create([
+            'provider' => IntegrationProvider::Liqpay,
+            'category' => IntegrationCategory::Payment,
+            'is_enabled' => true,
+            'credentials' => ['public_key' => 'studio-public', 'private_key' => 'studio-private'],
+        ]);
+        $eventName = 'eloquent.retrieved: '.FestivalPaymentAttempt::class;
+        $currencyChanged = false;
+        Event::listen($eventName, function (FestivalPaymentAttempt $retrievedAttempt) use ($expiredAttempt, $helperCharge, &$currencyChanged): void {
+            if ($currencyChanged || ! $retrievedAttempt->is($expiredAttempt)) {
+                return;
+            }
+
+            FestivalCharge::query()->whereKey($helperCharge->id)->update(['currency' => 'USD']);
+            $currencyChanged = true;
+        });
+
+        try {
+            $this->actingAs($portalUser, 'festival')->post(route('festival.portal.charges.pay', [$account->slug, $entry, $fixedCharge]), [
+                'provider' => IntegrationProvider::Liqpay->value,
+                'festival_rules_accepted' => '1',
+            ])->assertOk();
+        } finally {
+            Event::forget($eventName);
+        }
+
+        $attempt = FestivalPaymentAttempt::query()->whereKeyNot($expiredAttempt->id)->sole();
+        $this->assertTrue($currencyChanged);
+        $this->assertSame(100, $attempt->amount_cents);
+        $this->assertSame('UAH', $attempt->currency);
+        $this->assertSame([$fixedCharge->id], $attempt->allocations()->pluck('festival_charge_id')->all());
+        $this->assertSame('USD', $helperCharge->refresh()->currency);
+        $this->assertSame(FestivalChargeStatus::Pending, $helperCharge->status);
     }
 
     public function test_expired_group_attempt_is_retryable_and_non_paid_callbacks_do_not_regress_it(): void
