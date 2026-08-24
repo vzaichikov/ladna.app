@@ -6,6 +6,7 @@ use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalRegistrantType;
 use App\Models\Account;
 use App\Models\FestivalPortalUser;
+use App\Rules\FestivalSocialLink;
 use App\Support\PhoneNumberNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -59,17 +60,10 @@ class FestivalPortalProfileRequest extends FormRequest
             'phone_normalized' => ['nullable'],
             'city' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant), 'nullable', 'string', 'max:255'],
             'studio_name' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant), 'nullable', 'string', 'max:255'],
-            'instagram_url' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'url:http,https', 'max:2048'],
-            'telegram_contact' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'string', 'max:255', 'regex:/^(?:@?[A-Za-z0-9_]+|(?:https?:\/\/)?t\.me\/[A-Za-z0-9_]+\/?|\d+)$/i'],
+            'instagram_url' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'string', 'max:2048', FestivalSocialLink::instagram()],
+            'telegram_contact' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'string', 'max:255', FestivalSocialLink::telegram()],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
-        ];
-    }
-
-    public function messages(): array
-    {
-        return [
-            'telegram_contact.regex' => __('app.festival_telegram_contact_invalid'),
         ];
     }
 
@@ -99,6 +93,7 @@ class FestivalPortalProfileRequest extends FormRequest
             'email_normalized' => $email,
             'phone' => $phone,
             'phone_normalized' => $phone,
+            'instagram_url' => filled($this->input('instagram_url')) ? trim((string) $this->input('instagram_url')) : null,
             'telegram_contact' => filled($this->input('telegram_contact')) ? trim((string) $this->input('telegram_contact')) : null,
         ]);
     }

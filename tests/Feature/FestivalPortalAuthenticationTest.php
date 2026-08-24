@@ -295,8 +295,11 @@ class FestivalPortalAuthenticationTest extends TestCase
             ->assertOk()
             ->assertDontSee('data-festival-profile-phone-step', false)
             ->assertSee('data-festival-profile-phone', false)
+            ->assertSee(__('app.festival_instagram_contact_help'))
+            ->assertSee(__('app.festival_instagram_contact_placeholder'))
             ->assertSee('name="telegram_contact"', false)
-            ->assertSee('@username / ID / t.me/username', false)
+            ->assertSee(__('app.festival_telegram_contact_help'))
+            ->assertSee(__('app.festival_telegram_contact_placeholder'))
             ->assertSee(__('app.festival_profile_step_label', ['current' => 2, 'total' => 2]))
             ->assertDontSee('data-profile-phone-verification', false);
 
@@ -320,7 +323,7 @@ class FestivalPortalAuthenticationTest extends TestCase
         $this->get(route('festival.portal.dashboard', $account->slug))->assertOk();
     }
 
-    public function test_participant_telegram_contact_accepts_ids_and_short_links_and_rejects_other_urls(): void
+    public function test_participant_social_contacts_accept_handles_and_profile_urls(): void
     {
         $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
         $portalUser = FestivalPortalUser::factory()->for($account)->create([
@@ -339,6 +342,14 @@ class FestivalPortalAuthenticationTest extends TestCase
             'locale' => 'en',
         ];
 
+        foreach (['@festival.dancer', 'https://www.instagram.com/festival.dancer/'] as $instagramContact) {
+            $this->actingAs($portalUser, 'festival')
+                ->put($profileUrl, $payload + ['instagram_url' => $instagramContact])
+                ->assertSessionHasNoErrors();
+
+            $this->assertSame($instagramContact, $portalUser->refresh()->instagram_url);
+        }
+
         foreach (['123456789', '@festival_user', 'festival_user', 't.me/festival_user', 'https://t.me/festival_user'] as $telegramContact) {
             $this->actingAs($portalUser, 'festival')
                 ->put($profileUrl, $payload + ['telegram_contact' => $telegramContact])
@@ -347,6 +358,8 @@ class FestivalPortalAuthenticationTest extends TestCase
             $this->assertSame($telegramContact, $portalUser->refresh()->telegram_contact);
         }
 
+        $this->put($profileUrl, $payload + ['instagram_url' => 'https://example.com/festival.dancer'])
+            ->assertSessionHasErrors('instagram_url');
         $this->put($profileUrl, $payload + ['telegram_contact' => 'https://example.com/festival_user'])
             ->assertSessionHasErrors('telegram_contact');
     }

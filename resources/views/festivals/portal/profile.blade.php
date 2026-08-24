@@ -14,6 +14,8 @@
     $phoneValue = old('phone', $profilePhoneVerification['phone'] ?? $portalUser->phone);
     $isParticipantProfileCompletion = $isParticipantProfileCompletion ?? false;
     $participantProfileStep = $participantProfileStep ?? null;
+    $instagramSocialLink = \App\Rules\FestivalSocialLink::instagram();
+    $telegramSocialLink = \App\Rules\FestivalSocialLink::telegram();
 @endphp
 
 @section('title', __('app.profile').' - '.$account->name)
@@ -88,8 +90,8 @@
                     @if($isRegistrant)
                         <label for="city"><span class="crm-label">{{ __('app.city') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="city" name="city" value="{{ old('city', $portalUser->city) }}" required class="crm-field"><x-ui.field-error name="city" /></label>
                         <label for="studio-name"><span class="crm-label">{{ __('app.festival_studio_school') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="studio-name" name="studio_name" value="{{ old('studio_name', $portalUser->studio_name) }}" required class="crm-field"><x-ui.field-error name="studio_name" /></label>
-                        <label for="instagram-url"><span class="crm-label">Instagram</span><input id="instagram-url" type="url" name="instagram_url" value="{{ old('instagram_url', $portalUser->instagram_url) }}" class="crm-field"><x-ui.field-error name="instagram_url" /></label>
-                        <label for="telegram-contact"><span class="crm-label">Telegram</span><input id="telegram-contact" name="telegram_contact" value="{{ old('telegram_contact', $portalUser->telegram_contact) }}" placeholder="@username / ID / t.me/username" class="crm-field"><span class="mt-1 block text-sm text-slate-500">{{ __('app.festival_telegram_contact_help') }}</span><x-ui.field-error name="telegram_contact" /></label>
+                        <label for="instagram-url"><span class="crm-label">Instagram</span><input id="instagram-url" name="instagram_url" inputmode="url" value="{{ old('instagram_url', $portalUser->instagram_url) }}" placeholder="{{ $instagramSocialLink->placeholder() }}" class="crm-field"><span class="mt-1 block text-sm text-slate-500">{{ $instagramSocialLink->help() }}</span><x-ui.field-error name="instagram_url" /></label>
+                        <label for="telegram-contact"><span class="crm-label">Telegram</span><input id="telegram-contact" name="telegram_contact" inputmode="url" value="{{ old('telegram_contact', $portalUser->telegram_contact) }}" placeholder="{{ $telegramSocialLink->placeholder() }}" class="crm-field"><span class="mt-1 block text-sm text-slate-500">{{ $telegramSocialLink->help() }}</span><x-ui.field-error name="telegram_contact" /></label>
                     @endif
                 </div>
 

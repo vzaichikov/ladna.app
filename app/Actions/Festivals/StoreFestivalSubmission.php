@@ -4,11 +4,11 @@ namespace App\Actions\Festivals;
 
 use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
-use App\Enums\FestivalRequirementType;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSubmission;
 use App\Support\Festivals\FestivalEntryWorkflowState;
+use App\Support\Festivals\FestivalMediaDuration;
 use App\Support\Festivals\MediaDurationProbe;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +20,7 @@ class StoreFestivalSubmission
 {
     public function __construct(
         private readonly MediaDurationProbe $durationProbe,
+        private readonly FestivalMediaDuration $mediaDuration,
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalEntryWorkflowState $workflowState,
     ) {}
@@ -49,7 +50,7 @@ class StoreFestivalSubmission
             throw ValidationException::withMessages(['file' => __('app.festival_file_type_invalid')]);
         }
 
-        [$minimumDuration, $maximumDuration] = $this->durationBounds($requirement);
+        [$minimumDuration, $maximumDuration] = $this->mediaDuration->bounds($definition, $requirement->entry->category);
         $duration = null;
         if ($minimumDuration !== null || $maximumDuration !== null) {
             try {
@@ -60,7 +61,9 @@ class StoreFestivalSubmission
 
             if (($minimumDuration !== null && $duration < $minimumDuration)
                 || ($maximumDuration !== null && $duration > $maximumDuration)) {
-                throw ValidationException::withMessages(['file' => __('app.festival_file_duration_invalid')]);
+                throw ValidationException::withMessages([
+                    'file' => $this->mediaDuration->invalidMessage($minimumDuration, $maximumDuration, $duration),
+                ]);
             }
         }
 
@@ -112,20 +115,5 @@ class StoreFestivalSubmission
             Storage::disk('local')->delete($path);
             throw $exception;
         }
-    }
-
-    /** @return array{int|null, int|null} */
-    private function durationBounds(FestivalEntryRequirement $requirement): array
-    {
-        $definition = $requirement->definition;
-        $minimumDuration = $definition->min_duration_seconds;
-        $maximumDuration = $definition->max_duration_seconds;
-
-        if ($definition->type === FestivalRequirementType::Music) {
-            $minimumDuration ??= $requirement->entry->category->min_duration_seconds;
-            $maximumDuration ??= $requirement->entry->category->max_duration_seconds;
-        }
-
-        return [$minimumDuration, $maximumDuration];
     }
 }

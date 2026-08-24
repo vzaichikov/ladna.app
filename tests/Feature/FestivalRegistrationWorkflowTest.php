@@ -458,7 +458,13 @@ class FestivalRegistrationWorkflowTest extends TestCase
                 app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('music.mp3'));
                 $this->fail("Music lasting {$duration} seconds should have been rejected.");
             } catch (ValidationException $exception) {
-                $this->assertArrayHasKey('file', $exception->errors());
+                $this->assertSame([
+                    __('app.festival_file_duration_invalid_range', [
+                        'min' => '2:30',
+                        'max' => '3:15',
+                        'actual' => $duration === 149 ? '2:29' : '3:16',
+                    ]),
+                ], $exception->errors()['file']);
             }
         }
 
@@ -496,6 +502,35 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $submission = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('music.mp3'));
 
         $this->assertSame(200, $submission->duration_seconds);
+        Storage::disk('local')->assertExists($submission->path);
+    }
+
+    public function test_uploaded_video_submission_uses_category_duration_bounds(): void
+    {
+        Storage::fake('local');
+        [, $portalUser, $requirement] = $this->fileRequirement(
+            ['min_duration_seconds' => 150, 'max_duration_seconds' => 195],
+            ['type' => FestivalRequirementType::Backdrop->value],
+        );
+        $this->mockMediaDuration(149);
+
+        try {
+            app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('backdrop.mp4'));
+            $this->fail('An uploaded video shorter than the category minimum should have been rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertSame([
+                __('app.festival_file_duration_invalid_range', [
+                    'min' => '2:30',
+                    'max' => '3:15',
+                    'actual' => '2:29',
+                ]),
+            ], $exception->errors()['file']);
+        }
+
+        $this->mockMediaDuration(180);
+        $submission = app(StoreFestivalSubmission::class)->execute($requirement, $portalUser, UploadedFile::fake()->create('backdrop.mp4'));
+
+        $this->assertSame(180, $submission->duration_seconds);
         Storage::disk('local')->assertExists($submission->path);
     }
 

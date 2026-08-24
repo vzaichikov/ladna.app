@@ -15,6 +15,7 @@ use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalRequirementStatus;
+use App\Enums\FestivalRequirementType;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\StudioPermission;
@@ -54,6 +55,35 @@ use Tests\TestCase;
 class FestivalRegistrationStepperTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_media_file_cards_show_the_effective_category_duration(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $category->forceFill([
+            'min_duration_seconds' => 150,
+            'max_duration_seconds' => 195,
+        ])->save();
+
+        $music = $this->requirement($edition, $workflow, 'application', 'performance-music', 'file');
+        $music->forceFill(['type' => FestivalRequirementType::Music])->save();
+        $video = $this->requirement($edition, $workflow, 'application', 'backdrop-video', 'file');
+        $video->forceFill(['type' => FestivalRequirementType::Backdrop])->save();
+        $this->requirement($edition, $workflow, 'application', 'unrestricted-document', 'file');
+
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Media duration entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $page = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]));
+
+        $page->assertOk();
+        $durationLabel = __('app.festival_requirement_duration_label_range', [
+            'min' => '2:30',
+            'max' => '3:15',
+        ]);
+        $this->assertSame(2, substr_count($page->getContent(), e($durationLabel)));
+    }
 
     public function test_response_component_formats_current_typed_values_safely(): void
     {

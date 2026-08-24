@@ -330,7 +330,7 @@ class FestivalPortalUserDirectoryTest extends TestCase
             ->assertOk()
             ->assertSee('value="'.$instagramUrl.'"', false);
 
-        $updatedInstagramUrl = 'https://instagram.com/updated.judge';
+        $updatedInstagramUrl = '@updated.judge';
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.festivals.users.update', [$account, $edition, $judge]), [
                 ...$this->judgePayload($judge, true),

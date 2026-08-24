@@ -13,6 +13,7 @@
     $requirementComplete = $requirementState['requirement_completeness'][$requirement->id] ?? false;
     $editableUntil = $requirementState['editable_until'][$requirement->id] ?? null;
     $dueAt = $requirementState['due_at'][$requirement->id] ?? null;
+    $durationLabel = app(\App\Support\Festivals\FestivalMediaDuration::class)->label($definition, $entry->category);
     $statusClass = match ($requirement->status) {
         \App\Enums\FestivalRequirementStatus::Missing,
         \App\Enums\FestivalRequirementStatus::Rejected => 'crm-status-danger',
@@ -35,6 +36,9 @@
             <span class="ml-2 text-xs text-slate-500">{{ $subjectLabel }}</span>
             @if ($definition->instructions)
                 <p class="mt-1 text-sm text-slate-600">{{ $definition->instructions }}</p>
+            @endif
+            @if ($durationLabel)
+                <span class="mt-2 inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800">{{ $durationLabel }}</span>
             @endif
         </div>
         <span class="{{ $statusClass }} self-start">{{ __('app.festival_requirement_status_'.$requirement->status->value) }}</span>

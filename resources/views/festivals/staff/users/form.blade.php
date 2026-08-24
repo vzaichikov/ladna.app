@@ -68,7 +68,7 @@
                     <label><span class="crm-label">{{ __('app.festival_studio_school') }}</span><input name="studio_name" value="{{ old('studio_name', $portalUser->studio_name) }}" required class="crm-field">@error('studio_name')<span class="crm-help">{{ $message }}</span>@enderror</label>
                 @endif
 
-                @unless ($isGuest)<label><span class="crm-label">{{ __('app.festival_instagram_url') }}</span><input type="url" name="instagram_url" value="{{ old('instagram_url', $portalUser->instagram_url) }}" class="crm-field">@error('instagram_url')<span class="crm-help">{{ $message }}</span>@enderror</label>@endunless
+                @unless ($isGuest)<label><span class="crm-label">{{ __('app.festival_instagram_url') }}</span><input name="instagram_url" inputmode="url" value="{{ old('instagram_url', $portalUser->instagram_url) }}" placeholder="{{ \App\Rules\FestivalSocialLink::instagram()->placeholder() }}" class="crm-field"><span class="mt-1 block text-sm text-slate-500">{{ \App\Rules\FestivalSocialLink::instagram()->help() }}</span>@error('instagram_url')<span class="crm-help">{{ $message }}</span>@enderror</label>@endunless
             </div>
         </section>
 

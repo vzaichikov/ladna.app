@@ -6,6 +6,7 @@ use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalRegistrantType;
 use App\Models\Account;
 use App\Models\FestivalPortalUser;
+use App\Rules\FestivalSocialLink;
 use App\Support\PhoneNumberNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -77,7 +78,7 @@ class UpdateFestivalPortalUserRequest extends FormRequest
             'registrant_type' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser instanceof FestivalPortalUser ? $portalUser->registrant_type : null))],
             'city' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
             'studio_name' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
-            'instagram_url' => [Rule::prohibitedIf($role === FestivalPortalRole::Guest), 'nullable', 'url:http,https', 'max:2048'],
+            'instagram_url' => [Rule::prohibitedIf($role === FestivalPortalRole::Guest), 'nullable', 'string', 'max:2048', FestivalSocialLink::instagram()],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
             'is_active' => ['required', 'boolean'],
@@ -110,6 +111,7 @@ class UpdateFestivalPortalUserRequest extends FormRequest
             'email_normalized' => $email,
             'phone' => $phone,
             'phone_normalized' => $phone,
+            'instagram_url' => filled($this->input('instagram_url')) ? trim((string) $this->input('instagram_url')) : null,
         ]);
     }
 }
