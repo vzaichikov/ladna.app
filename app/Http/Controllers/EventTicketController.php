@@ -27,11 +27,12 @@ class EventTicketController extends Controller
             : null;
         $tickets = $event->tickets()
             ->select([
-                'id', 'event_id', 'event_order_id', 'event_ticket_type_id', 'code', 'status',
+                'id', 'event_id', 'event_order_id', 'event_order_item_id', 'event_ticket_type_id', 'code', 'status',
                 'is_checked_in', 'checked_in_at', 'created_at',
             ])
             ->with([
                 'ticketType:id,name',
+                'orderItem:id,unit_price_cents',
                 'order:id,order_id,source,buyer_name,buyer_email,buyer_phone,provider,issued_by,amount_cents,currency,created_at',
                 'order.issuedBy:id,name',
             ])

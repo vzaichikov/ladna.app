@@ -137,7 +137,7 @@
                                     @else
                                         <span class="crm-status-active">{{ __('app.event_ticket_source_checkout') }}</span>
                                     @endif
-                                    <p class="mt-2 whitespace-nowrap text-xs font-semibold text-slate-700">{{ \App\Support\MoneyFormatter::format($order?->amount_cents, $order?->currency ?? $event->currency) }}</p>
+                                    <p class="mt-2 whitespace-nowrap text-xs font-semibold text-slate-700">{{ \App\Support\MoneyFormatter::format($ticket->orderItem?->unit_price_cents ?? 0, $order?->currency ?? $event->currency) }}</p>
                                 </td>
                                 <td class="px-5 py-4">
                                     <span class="{{ $ticket->status === \App\Enums\EventTicketStatus::Valid ? 'crm-status-active' : 'crm-status-danger' }}">

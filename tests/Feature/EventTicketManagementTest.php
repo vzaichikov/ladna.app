@@ -18,6 +18,7 @@ use App\Models\EventOrder;
 use App\Models\EventTicketType;
 use App\Models\IntegrationSetting;
 use App\Models\User;
+use App\Support\MoneyFormatter;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Mail;
 use Mockery;
@@ -357,6 +358,38 @@ class EventTicketManagementTest extends TestCase
         $this->assertSame($newestTicketId, $tickets->first()->id);
         $this->assertStringContainsString('q=Bulk%20Guest', $tickets->url(2));
         $this->assertStringContainsString('source=checkout', $tickets->url(2));
+    }
+
+    public function test_issued_ticket_list_displays_each_ticket_unit_price_instead_of_the_order_total(): void
+    {
+        [$owner, $account, $event] = $this->managedEvent(published: true);
+        $ticketType = EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 60000,
+            'inventory' => 10,
+        ]);
+        $order = EventOrder::factory()->for($account)->for($event)->create([
+            'status' => EventOrderStatus::Paid,
+            'amount_cents' => 120000,
+            'currency' => 'UAH',
+        ]);
+        $order->items()->create([
+            'account_id' => $account->id,
+            'event_id' => $event->id,
+            'event_ticket_type_id' => $ticketType->id,
+            'ticket_type_name' => $ticketType->name,
+            'price_tier' => 'regular',
+            'unit_price_cents' => 60000,
+            'quantity' => 2,
+            'total_cents' => 120000,
+        ]);
+        app(IssueEventTickets::class)->execute($order);
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.events.tickets.index', [$account, $event]))
+            ->assertOk()
+            ->assertDontSee(MoneyFormatter::format(120000, 'UAH'));
+
+        $this->assertSame(2, substr_count($response->getContent(), MoneyFormatter::format(60000, 'UAH')));
     }
 
     public function test_email_less_manual_order_renders_without_resend_action(): void
