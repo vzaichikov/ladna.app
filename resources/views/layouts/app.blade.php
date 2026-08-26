@@ -803,7 +803,7 @@
                         </div>
 
                         <div class="flex min-w-0 items-center gap-2 sm:gap-3">
-                            @if ($showAccountNav && ! $isEventFestivalStaff && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*', 'dashboard.accounts.integrations.index', 'dashboard.accounts.connections.*', 'dashboard.accounts.mcp-connections.*'))
+                            @if ($showAccountNav && ! $isEventFestivalStaff && isset($workingLocations) && $workingLocations->count() > 1 && ! request()->routeIs('dashboard.accounts.festivals.*', 'dashboard.accounts.integrations.index', 'dashboard.accounts.connections.*', 'dashboard.accounts.mcp-connections.*', 'dashboard.accounts.reports.unreserved-class-bookings'))
                                 <form method="POST" action="{{ route('dashboard.accounts.working-location.update', $activeAccount) }}" class="min-w-0">
                                     @csrf
                                     <input type="hidden" name="redirect_to" value="{{ request()->getRequestUri() }}">

@@ -8,7 +8,8 @@
             <h1 class="crm-page-title">{{ __('app.generated_classes') }}</h1>
             <p class="crm-page-copy">{{ __('app.generated_classes_copy') }}</p>
         </div>
-        <div class="flex flex-col gap-2 sm:items-end">
+        @unless ($focusedScheduledClass)
+            <div class="flex flex-col gap-2 sm:items-end">
             @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass) || $manualClassOptions->isNotEmpty())
                 <div class="flex flex-wrap gap-2" data-schedule-secondary-actions>
                     @if ($account->hasScheduleKindEnabled(\App\Enums\ScheduleKind::GroupClass))
@@ -34,10 +35,22 @@
                     </x-ui.button>
                 @endforeach
             </div>
-        </div>
+            </div>
+        @endunless
     </div>
 
-    <nav class="mt-6 flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.generated_classes') }}">
+    @if ($focusedScheduledClass)
+        <div class="mt-6 flex flex-col gap-4 rounded-xl border border-violet-crm-100 bg-violet-crm-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <div class="text-sm font-semibold text-brand-700">{{ __('app.focused_scheduled_class') }}</div>
+                <p class="mt-1 text-sm text-slate-600">{{ __('app.focused_scheduled_class_copy') }}</p>
+            </div>
+            <x-ui.button :href="route('dashboard.accounts.reports.unreserved-class-bookings', $account)" variant="secondary" size="sm">
+                {{ __('app.back_to_unreserved_class_bookings') }}
+            </x-ui.button>
+        </div>
+    @else
+        <nav class="mt-6 flex gap-2 overflow-x-auto pb-1" aria-label="{{ __('app.generated_classes') }}">
         @foreach ($tabs as $tab => $label)
             <a
                 href="{{ route('dashboard.accounts.scheduled-classes.index', array_merge(['account' => $account, 'tab' => $tab], $activeFilterQuery)) }}"
@@ -170,7 +183,8 @@
             <x-ui.button type="submit" size="sm">{{ __('app.apply_filters') }}</x-ui.button>
             <x-ui.button :href="route('dashboard.accounts.scheduled-classes.index', ['account' => $account, 'tab' => $activeTab])" variant="secondary" size="sm">{{ __('app.reset_filters') }}</x-ui.button>
         </div>
-    </form>
+        </form>
+    @endif
 
     <section class="mt-6 space-y-8" data-scheduled-class-current>
         @foreach ($scheduledClassDays as $date => $classes)

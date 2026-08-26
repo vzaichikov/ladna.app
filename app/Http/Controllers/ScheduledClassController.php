@@ -7,6 +7,7 @@ use App\Enums\ClassBookingStatus;
 use App\Models\Account;
 use App\Models\Trainer;
 use App\Support\QuickBookingOptions;
+use App\Support\ScheduledClassFocus;
 use App\Support\WorkingLocationContext;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -25,16 +26,25 @@ class ScheduledClassController extends Controller
         Account $account,
         QuickBookingOptions $quickBookingOptions,
         WorkingLocationContext $workingLocationContext,
+        ScheduledClassFocus $scheduledClassFocus,
     ): View {
         $this->authorize('view', $account);
 
         $timezone = $account->timezone ?? config('app.timezone');
+        $focusedScheduledClass = $scheduledClassFocus->resolve($request, $account);
         $activeTab = $this->activeTab((string) $request->query('tab', 'today'));
         [$tabStartsAt, $tabEndsAt] = $this->tabRange($activeTab, $timezone);
-        $activeWeekday = $this->activeWeekday($request, $activeTab, $tabStartsAt, $tabEndsAt, $timezone);
-        [$startsAt, $endsAt] = $activeWeekday
-            ? $this->weekdayRange($activeTab, $activeWeekday, $timezone)
-            : [$tabStartsAt, $tabEndsAt];
+        $activeWeekday = $focusedScheduledClass
+            ? null
+            : $this->activeWeekday($request, $activeTab, $tabStartsAt, $tabEndsAt, $timezone);
+        [$startsAt, $endsAt] = $focusedScheduledClass
+            ? [
+                $focusedScheduledClass->starts_at->copy()->timezone($focusedScheduledClass->displayTimezone())->startOfDay(),
+                $focusedScheduledClass->starts_at->copy()->timezone($focusedScheduledClass->displayTimezone())->endOfDay(),
+            ]
+            : ($activeWeekday
+                ? $this->weekdayRange($activeTab, $activeWeekday, $timezone)
+                : [$tabStartsAt, $tabEndsAt]);
         $filterLocations = $account->locations()
             ->active()
             ->orderBy('name')
@@ -55,25 +65,27 @@ class ScheduledClassController extends Controller
             ->get(['id', 'name', 'is_active']);
         $quickBookingData = $quickBookingOptions->forAccount($account);
         $manualClassOptions = $quickBookingData['adminOneOffOptions'];
-        $selectedLocationIds = $this->selectedLocationIds(
-            $request,
-            $filterLocations->pluck('id')->all(),
-            $workingLocationContext->selectedLocationId($account),
-        );
+        $selectedLocationIds = $focusedScheduledClass
+            ? []
+            : $this->selectedLocationIds(
+                $request,
+                $filterLocations->pluck('id')->all(),
+                $workingLocationContext->selectedLocationId($account),
+            );
         $filterRooms = $selectedLocationIds === []
             ? $filterRooms
             : $filterRooms->whereIn('location_id', $selectedLocationIds)->values();
-        $selectedRoomIds = $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
+        $selectedRoomIds = $focusedScheduledClass ? [] : $this->selectedIds($request, 'rooms', $filterRooms->pluck('id')->all());
         $currentTrainer = $this->currentTrainerFor($account, $request, $filterTrainers);
-        $showOnlyMyClasses = $currentTrainer !== null && $request->boolean('only_my_classes');
+        $showOnlyMyClasses = ! $focusedScheduledClass && $currentTrainer !== null && $request->boolean('only_my_classes');
         $selectedTrainerIds = $showOnlyMyClasses
             ? []
-            : $this->selectedIds($request, 'trainers', $filterTrainers->pluck('id')->all());
+            : ($focusedScheduledClass ? [] : $this->selectedIds($request, 'trainers', $filterTrainers->pluck('id')->all()));
         $effectiveTrainerIds = $showOnlyMyClasses ? [$currentTrainer->id] : $selectedTrainerIds;
-        $showPassed = $request->boolean('show_passed');
+        $showPassed = (bool) $focusedScheduledClass || $request->boolean('show_passed');
         $activeFilterQuery = $this->activeFilterQuery($selectedLocationIds, $selectedRoomIds, $selectedTrainerIds, $showOnlyMyClasses, $showPassed);
 
-        $scheduledClasses = $account->scheduledClasses()
+        $scheduledClassesQuery = $account->scheduledClasses()
             ->with([
                 'location',
                 'room',
@@ -86,21 +98,29 @@ class ScheduledClassController extends Controller
                 'classBookings' => fn ($query) => $query
                     ->notCorrectedRemoved()
                     ->with(['activePaymentWaiver', 'customer', 'manualCashPayment', 'classPassReservation.customerClassPass.classPassPlan']),
-            ])
-            ->whereBetween('starts_at', [
-                $startsAt->timezone(config('app.timezone')),
-                $endsAt->timezone(config('app.timezone')),
-            ])
-            ->when(! $showPassed, fn ($query) => $query->where('ends_at', '>=', $this->pastCutoff($timezone)))
-            ->when($selectedLocationIds !== [], fn ($query) => $query->whereIn('location_id', $selectedLocationIds))
-            ->when($selectedRoomIds !== [], fn ($query) => $query->whereIn('room_id', $selectedRoomIds))
-            ->when($effectiveTrainerIds !== [], function ($query) use ($effectiveTrainerIds): void {
-                $query->where(function ($query) use ($effectiveTrainerIds): void {
-                    $query
-                        ->whereIn('trainer_id', $effectiveTrainerIds)
-                        ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($effectiveTrainerIds));
+            ]);
+
+        if ($focusedScheduledClass) {
+            $scheduledClassesQuery->whereKey($focusedScheduledClass->id);
+        } else {
+            $scheduledClassesQuery
+                ->whereBetween('starts_at', [
+                    $startsAt->timezone(config('app.timezone')),
+                    $endsAt->timezone(config('app.timezone')),
+                ])
+                ->when(! $showPassed, fn ($query) => $query->where('ends_at', '>=', $this->pastCutoff($timezone)))
+                ->when($selectedLocationIds !== [], fn ($query) => $query->whereIn('location_id', $selectedLocationIds))
+                ->when($selectedRoomIds !== [], fn ($query) => $query->whereIn('room_id', $selectedRoomIds))
+                ->when($effectiveTrainerIds !== [], function ($query) use ($effectiveTrainerIds): void {
+                    $query->where(function ($query) use ($effectiveTrainerIds): void {
+                        $query
+                            ->whereIn('trainer_id', $effectiveTrainerIds)
+                            ->orWhereHas('additionalTrainers', fn ($query) => $query->whereKey($effectiveTrainerIds));
+                    });
                 });
-            })
+        }
+
+        $scheduledClasses = $scheduledClassesQuery
             ->orderBy('starts_at')
             ->get();
 
@@ -133,6 +153,7 @@ class ScheduledClassController extends Controller
             'groupAvailabilityUrl' => route('dashboard.accounts.quick-bookings.group-availability', $account),
             'manualAvailabilityUrl' => route('dashboard.accounts.quick-bookings.manual-availability', $account),
             'bookingStatuses' => ClassBookingStatus::cases(),
+            'focusedScheduledClass' => $focusedScheduledClass,
         ]);
     }
 

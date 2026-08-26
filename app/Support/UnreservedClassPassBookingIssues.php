@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\ClassBooking;
 use App\Models\ScheduledClass;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 class UnreservedClassPassBookingIssues
@@ -38,12 +39,12 @@ class UnreservedClassPassBookingIssues
             ->whereIn("{$classBookingTable}.status", [
                 ClassBookingStatus::Booked->value,
                 ClassBookingStatus::Attended->value,
-                ClassBookingStatus::NoShow->value,
             ])
             ->where("{$classBookingTable}.skip_class_pass_reservation", false)
             ->where("{$scheduledClassTable}.account_id", $accountId)
             ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)
             ->whereDoesntHave('manualCashPayment')
+            ->whereDoesntHave('activePaymentWaiver')
             ->whereDoesntHave('classPassReservation', fn ($query) => $query->whereIn('status', [
                 CustomerClassPassReservationStatus::Reserved->value,
                 CustomerClassPassReservationStatus::Used->value,
@@ -61,6 +62,29 @@ class UnreservedClassPassBookingIssues
     public function countForAccount(Account $account): int
     {
         return $this->queryForAccount($account)->count();
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, ClassBooking>
+     */
+    public function paginateForAccount(Account $account, ?int $locationId = null, int $perPage = 20): LengthAwarePaginator
+    {
+        $scheduledClassTable = (new ScheduledClass)->getTable();
+
+        return $this->queryForAccount($account)
+            ->when($locationId, fn (Builder $query, int $locationId): Builder => $query
+                ->where("{$scheduledClassTable}.location_id", $locationId))
+            ->with([
+                'customer:id,account_id,name,phone,email',
+                'scheduledClass:id,account_id,location_id,room_id,class_type_id,trainer_id,title,starts_at,ends_at,status',
+                'scheduledClass.classType:id,account_id,name,schedule_kind',
+                'scheduledClass.location:id,account_id,name,is_active,timezone',
+                'scheduledClass.room:id,account_id,location_id,name',
+                'scheduledClass.trainer:id,account_id,name',
+                'scheduledClass.additionalTrainers:id,account_id,name',
+            ])
+            ->paginate($perPage)
+            ->withQueryString();
     }
 
     /**

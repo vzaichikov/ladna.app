@@ -137,7 +137,7 @@ class CustomerClassPassCancellationNormalizationTest extends TestCase
         $normalization = app(ReconcileUnreservedCustomerBookingsForIssuedClassPass::class);
         $preview = $normalization->previewForCustomer($context['customer']);
 
-        $this->assertSame(['reserved' => 1, 'used' => 2, 'released' => 2], $preview['totals']);
+        $this->assertSame(['reserved' => 1, 'used' => 1, 'released' => 2], $preview['totals']);
         $this->assertTrue($preview['has_changes']);
 
         $this->actingAs($context['owner'])
@@ -160,7 +160,7 @@ class CustomerClassPassCancellationNormalizationTest extends TestCase
         $this->assertSame(CustomerClassPassReservationStatus::Released, $legacyUsedReservation->fresh()->status);
         $this->assertSame(CustomerClassPassReservationStatus::Reserved, $booked->classPassReservation()->firstOrFail()->status);
         $this->assertSame(CustomerClassPassReservationStatus::Used, $attended->classPassReservation()->firstOrFail()->status);
-        $this->assertSame(CustomerClassPassReservationStatus::Used, $noShow->classPassReservation()->firstOrFail()->status);
+        $this->assertNull($noShow->classPassReservation()->first());
         $this->assertSame(CustomerClassPassReservationStatus::Used, $skipReservation->fresh()->status);
         $this->assertSame(CustomerClassPassReservationStatus::Used, $correctedReservation->fresh()->status);
         $this->assertSame(CustomerClassPassReservationStatus::Used, $studioCancelledReservation->fresh()->status);
@@ -168,8 +168,8 @@ class CustomerClassPassCancellationNormalizationTest extends TestCase
 
         $customerClassPass = $context['pass']->fresh();
         $this->assertSame(1, $customerClassPass->reserved_sessions_count);
-        $this->assertSame(5, $customerClassPass->used_sessions_count);
-        $this->assertSame(4, $customerClassPass->remainingSessionsCount());
+        $this->assertSame(4, $customerClassPass->used_sessions_count);
+        $this->assertSame(5, $customerClassPass->remainingSessionsCount());
         $this->assertTrue($customerClassPass->opened_at->equalTo(Carbon::parse('2026-07-19 10:00:00')));
         $this->assertTrue($customerClassPass->expires_at->equalTo(Carbon::parse('2026-08-18 10:00:00')));
 

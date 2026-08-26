@@ -33,6 +33,25 @@ class AuthenticatedBreadcrumbsTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_unreserved_class_booking_report_has_reports_breadcrumb(): void
+    {
+        $account = Account::factory()->create(['default_language' => 'en']);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        $response = $this->withSession(['locale' => 'en'])
+            ->actingAs($owner)
+            ->get(route('dashboard.accounts.reports.unreserved-class-bookings', $account));
+
+        $response->assertOk();
+        $this->assertSame([
+            ['label' => 'Workspace', 'href' => route('dashboard.index'), 'current' => false],
+            ['label' => $account->name, 'href' => route('dashboard.accounts.show', $account), 'current' => false],
+            ['label' => 'Reports', 'href' => route('dashboard.accounts.reports.index', $account), 'current' => false],
+            ['label' => 'Bookings without pass reservation', 'href' => null, 'current' => true],
+        ], $this->breadcrumbItems($response));
+    }
+
     public function test_location_edit_has_clickable_ancestors_and_a_plain_current_item(): void
     {
         $account = Account::factory()->create(['default_language' => 'en']);

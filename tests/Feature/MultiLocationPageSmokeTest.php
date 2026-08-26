@@ -74,7 +74,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(200, $classifiedRouteNames);
+        $this->assertCount(201, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -333,7 +333,11 @@ class MultiLocationPageSmokeTest extends TestCase
         $this->assertStringContainsString('text/html', (string) $response->headers->get('Content-Type'), $routeName);
         $this->assertStringContainsString('data-app-breadcrumbs', $response->getContent(), $routeName);
 
-        if ($expectsLocationSelector) {
+        if ($routeName === 'dashboard.accounts.reports.unreserved-class-bookings') {
+            $this->assertStringNotContainsString('name="location_context"', $response->getContent(), $routeName);
+            $this->assertStringContainsString('name="location_id"', $response->getContent(), $routeName);
+            $this->assertStringContainsString(__('app.account_wide'), $response->getContent(), $routeName);
+        } elseif ($expectsLocationSelector) {
             $this->assertStringContainsString('name="location_context"', $response->getContent(), $routeName);
         } else {
             $this->assertStringNotContainsString('name="location_context"', $response->getContent(), $routeName);
@@ -456,6 +460,7 @@ class MultiLocationPageSmokeTest extends TestCase
     {
         return [
             'dashboard.accounts.integrations.index',
+            'dashboard.accounts.reports.unreserved-class-bookings',
             'dashboard.accounts.festivals.create',
             'dashboard.accounts.festivals.index',
             'dashboard.accounts.festivals.series.create',

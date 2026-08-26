@@ -229,7 +229,7 @@ class StudioDashboardTest extends TestCase
                 'state' => 'all',
                 'payment_status' => 'partial',
             ]))
-            ->assertSee(route('dashboard.accounts.trainers.index', $account), false)
+            ->assertSee(route('dashboard.accounts.reports.unreserved-class-bookings', $account), false)
             ->assertSee(route('dashboard.accounts.customer-class-passes.index', [
                 'account' => $account,
                 'state' => 'freezed',

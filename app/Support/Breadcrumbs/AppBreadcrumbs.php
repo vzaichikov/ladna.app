@@ -288,6 +288,7 @@ final class AppBreadcrumbs
             'dashboard.accounts.reports.trainers' => 'app.trainers',
             'dashboard.accounts.reports.unknown-presence' => 'app.unknown_presence',
             'dashboard.accounts.reports.unpaid-class-payments' => 'app.unpaid_class_payments',
+            'dashboard.accounts.reports.unreserved-class-bookings' => 'app.unreserved_class_bookings',
         ];
 
         if (! isset($labels[$routeName])) {

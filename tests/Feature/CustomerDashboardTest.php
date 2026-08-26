@@ -394,6 +394,8 @@ class CustomerDashboardTest extends TestCase
         $this->assertStringContainsString('crm-status-active">'.__('app.attended'), $this->bookingCardHtml($historyResponse, $attendedBooking));
         $this->assertStringContainsString('crm-status-danger">'.__('app.no_show'), $this->bookingCardHtml($historyResponse, $noShowBooking));
 
+        $this->assertStringNotContainsString(__('app.no_matching_class_pass_alert'), $this->bookingCardHtml($historyResponse, $noShowBooking));
+
         Carbon::setTestNow();
     }
 
@@ -504,6 +506,15 @@ class CustomerDashboardTest extends TestCase
             ->for($roomRental, 'scheduledClass')
             ->for($customer)
             ->create(['skip_class_pass_reservation' => true]);
+        $noShowRoomRental = $this->scheduledClass($account, $location, $room, $roomRentalClassType, 'Ignored room rental', '2026-07-09 12:00:00');
+        $noShowRoomRentalBooking = ClassBooking::factory()
+            ->for($account)
+            ->for($noShowRoomRental, 'scheduledClass')
+            ->for($customer)
+            ->create([
+                'status' => ClassBookingStatus::NoShow,
+                'skip_class_pass_reservation' => true,
+            ]);
 
         $response = $this->actingAs($customer, 'customer')
             ->withSession(['locale' => 'uk'])
@@ -518,6 +529,14 @@ class CustomerDashboardTest extends TestCase
         $this->assertStringContainsString(__('app.unpaid_class_booking_payment_alert'), $roomRentalCard);
         $this->assertStringContainsString(__('app.unpaid_class_booking_payment_reason_room_rental'), $roomRentalCard);
         $this->assertStringNotContainsString(__('app.customer_booking_without_class_pass_alert'), $roomRentalCard);
+
+        $historyResponse = $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', ['accountSlug' => $account->slug, 'tab' => 'history']))
+            ->assertOk();
+        $noShowRoomRentalCard = $this->bookingCardHtml($historyResponse, $noShowRoomRentalBooking);
+        $this->assertStringNotContainsString(__('app.unpaid_class_booking_payment_alert'), $noShowRoomRentalCard);
+        $this->assertStringNotContainsString(__('app.customer_booking_without_class_pass_alert'), $noShowRoomRentalCard);
 
         app(RecordManualClassBookingPayment::class)->execute($account, $groupBooking, 25000);
 

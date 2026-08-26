@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.152.0',
+                'date' => '2026-08-26',
+                'title' => 'Exact missing-pass booking report',
+                'items' => ['The dashboard missing-pass indicator now opens one account-wide report with every exact booking, optional location filtering, assigned trainers, and a direct link to the class in the schedule or history.', 'Only booked or attended entries without a pass reservation, direct payment, or active waiver require attention. An explicitly recorded no-show is no longer treated as a payment problem or attached to a later pass, while existing payments, refunds, and used pass sessions remain unchanged.', 'The owner help now explains how to review and correct these bookings and how no-shows without a pass are handled.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.151.0',
                 'date' => '2026-08-26',
                 'title' => 'Reversible missing-payment waivers',
@@ -1339,6 +1346,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.152.0',
+                'date' => '2026-08-26',
+                'title' => 'Точний звіт записів без резерву',
+                'items' => ['Показник записів без резерву на головному екрані тепер відкриває єдиний звіт по всьому акаунту з кожним конкретним записом, фільтром локації, призначеними тренерами та переходом до заняття в розкладі або історії.', 'Уваги потребують лише записи Записано або Відвідано без резерву в абонементі, прямої оплати чи активного списання вимоги оплати. Явна неявка більше не вважається проблемою оплати й не привʼязується до виданого пізніше абонемента, а наявні оплати, повернення та використані заняття залишаються без змін.', 'Довідка для власниці тепер пояснює, як перевіряти й виправляти такі записи та як Ladna обробляє неявки без абонемента.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.151.0',
                 'date' => '2026-08-26',

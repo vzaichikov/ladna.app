@@ -390,6 +390,7 @@
                         : null;
                     $hasAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
                     $manualCashPayment = $booking->manualCashPayment;
+                    $activePaymentWaiver = $booking->activePaymentWaiver;
                     $manualPaymentDueKind = $booking->manualCashPaymentDueKind($scheduledClass);
                     $hasUnpaidRequiredManualPayment = $manualPaymentDueKind !== null;
                 @endphp
@@ -419,11 +420,11 @@
                                         <span>+ {{ \App\Support\MoneyFormatter::format($anyTimeAddonAmountCents, $reservedPass->currency) }} {{ __('app.any_time_addon_summary') }}</span>
                                     @endif
                                 </div>
-                            @elseif (! $isCancelledClass && in_array($booking->status->value, ['booked', 'attended', 'no_show'], true))
-                                @if (! $booking->skip_class_pass_reservation && ! $manualCashPayment)
-                                <div class="mt-2 inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
-                                    {{ __('app.no_matching_class_pass_alert') }}
-                                </div>
+                            @elseif (! $isCancelledClass && in_array($booking->status->value, ['booked', 'attended'], true))
+                                @if (! $booking->skip_class_pass_reservation && ! $manualCashPayment && ! $activePaymentWaiver)
+                                    <div class="mt-2 inline-flex rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
+                                        {{ __('app.no_matching_class_pass_alert') }}
+                                    </div>
                                 @elseif ($booking->skip_class_pass_reservation)
                                     <div class="mt-2 inline-flex rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-800">
                                         {{ __('app.direct_rental_payment') }}

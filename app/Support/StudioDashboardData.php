@@ -154,7 +154,7 @@ class StudioDashboardData
                 'key' => 'unreserved_bookings',
                 'count' => $this->unreservedClassPassBookingIssues->countForAccount($account),
                 'label' => __('app.problem_unreserved_bookings'),
-                'url' => route('dashboard.accounts.trainers.index', $account),
+                'url' => route('dashboard.accounts.reports.unreserved-class-bookings', $account),
                 'accent' => 'warning',
             ],
             [

@@ -197,8 +197,9 @@
                                         $bookingNeedsClassPassAlert = ! $booking->skip_class_pass_reservation
                                             && ! $hasActivePassReservation
                                             && ! $booking->manualCashPayment
+                                            && ! $booking->activePaymentWaiver
                                             && $booking->scheduledClass?->classType?->schedule_kind === \App\Enums\ScheduleKind::GroupClass
-                                            && in_array($booking->status->value, ['booked', 'attended', 'no_show'], true)
+                                            && in_array($booking->status->value, ['booked', 'attended'], true)
                                             && $booking->scheduledClass?->status !== \App\Enums\ScheduledClassStatus::Cancelled;
                                         $canCancelBooking = $booking->status === \App\Enums\ClassBookingStatus::Booked
                                             && $bookingIsFuture

@@ -65,12 +65,15 @@ class WorkingLocationContext
         Account $account,
         string $queryKey = 'location_id',
         bool $includeInactive = false,
+        ?Request $request = null,
     ): ?int {
-        if (! $this->request->query->has($queryKey)) {
+        $request ??= $this->request;
+
+        if (! $request->query->has($queryKey)) {
             return $this->selectedLocationId($account);
         }
 
-        $locationId = filter_var($this->request->query($queryKey), FILTER_VALIDATE_INT);
+        $locationId = filter_var($request->query($queryKey), FILTER_VALIDATE_INT);
 
         $isAllowed = is_int($locationId) && ($includeInactive
             ? $account->locations()->whereKey($locationId)->exists()

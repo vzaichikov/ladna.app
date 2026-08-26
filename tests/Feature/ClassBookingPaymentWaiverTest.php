@@ -22,6 +22,7 @@ use App\Models\ScheduledClass;
 use App\Models\StudioCashEntry;
 use App\Models\Trainer;
 use App\Models\User;
+use App\Support\UnreservedClassPassBookingIssues;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -45,10 +46,12 @@ class ClassBookingPaymentWaiverTest extends TestCase
         $rentalType = $this->classType($account, ScheduleKind::RoomRental, 'Room rental');
         $scheduledClass = $this->scheduledClass($account, $location, $room, $rentalType, 'Legacy direct rent');
         $customer = Customer::factory()->for($account)->create(['name' => 'Legacy Client']);
-        $booking = $this->booking($account, $scheduledClass, $customer, skipClassPassReservation: true);
+        $booking = $this->booking($account, $scheduledClass, $customer);
         $purchasesBefore = CustomerPurchase::query()->count();
         $cashEntriesBefore = StudioCashEntry::query()->count();
         $reportUrl = route('dashboard.accounts.reports.unpaid-class-payments', ['account' => $account, 'page' => 1]);
+
+        $this->assertSame(1, app(UnreservedClassPassBookingIssues::class)->countForAccount($account));
 
         $this->actingAs($owner)
             ->get($reportUrl)
@@ -84,6 +87,20 @@ class ClassBookingPaymentWaiverTest extends TestCase
         $this->assertSame($owner->name, $waiver->waived_by_actor_name);
         $this->assertSame($purchasesBefore, CustomerPurchase::query()->count());
         $this->assertSame($cashEntriesBefore, StudioCashEntry::query()->count());
+        $this->assertSame(0, app(UnreservedClassPassBookingIssues::class)->countForAccount($account));
+
+        $rentalPlan = ClassPassPlan::factory()->for($account)->create([
+            'name' => 'Rental pass',
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'sessions_count' => 1,
+        ]);
+        $rentalPlan->classTypes()->sync([$rentalType->id]);
+        $rentalPlan->rooms()->sync([$room->id]);
+        $issuedPass = app(IssueCustomerClassPass::class)->execute($account, $customer, $rentalPlan);
+
+        $this->assertNull($booking->classPassReservation()->first());
+        $this->assertSame(0, $issuedPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $issuedPass->fresh()->used_sessions_count);
 
         $this->actingAs($owner)
             ->get($reportUrl)
@@ -130,6 +147,7 @@ class ClassBookingPaymentWaiverTest extends TestCase
         $this->assertNotNull($waiver->unwaived_at);
         $this->assertSame('This was waived by mistake.', $waiver->unwaive_reason);
         $this->assertSame($owner->name, $waiver->unwaived_by_actor_name);
+        $this->assertSame(1, app(UnreservedClassPassBookingIssues::class)->countForAccount($account));
 
         $this->actingAs($owner)
             ->patch(route('dashboard.accounts.booking-payment-waivers.unwaive', [$account, $waiver]), [
@@ -151,6 +169,7 @@ class ClassBookingPaymentWaiverTest extends TestCase
 
         $this->assertSame($purchasesBefore + 1, CustomerPurchase::query()->count());
         $this->assertSame($cashEntriesBefore + 1, StudioCashEntry::query()->count());
+        $this->assertSame(0, app(UnreservedClassPassBookingIssues::class)->countForAccount($account));
     }
 
     public function test_any_time_addon_waiver_snapshots_amount_and_preserves_pass_and_reservation(): void

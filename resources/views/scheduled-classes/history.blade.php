@@ -8,13 +8,26 @@
             <h1 class="crm-page-title">{{ __('app.scheduled_classes_history') }}</h1>
             <p class="crm-page-copy">{{ __('app.scheduled_classes_history_copy') }}</p>
         </div>
-        <div class="flex flex-wrap gap-2 sm:justify-end">
-            <x-ui.button :href="route('dashboard.accounts.scheduled-classes.index', $account)" variant="secondary">{{ __('app.generated_classes') }}</x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
-        </div>
+        @unless ($focusedScheduledClass)
+            <div class="flex flex-wrap gap-2 sm:justify-end">
+                <x-ui.button :href="route('dashboard.accounts.scheduled-classes.index', $account)" variant="secondary">{{ __('app.generated_classes') }}</x-ui.button>
+                <x-ui.button :href="route('dashboard.accounts.schedule-series.index', $account)" variant="secondary">{{ __('app.schedule_series') }}</x-ui.button>
+            </div>
+        @endunless
     </div>
 
-    <form method="GET" action="{{ route('dashboard.accounts.scheduled-classes-history.index', $account) }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
+    @if ($focusedScheduledClass)
+        <div class="mt-6 flex flex-col gap-4 rounded-xl border border-violet-crm-100 bg-violet-crm-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <div class="text-sm font-semibold text-brand-700">{{ __('app.focused_scheduled_class') }}</div>
+                <p class="mt-1 text-sm text-slate-600">{{ __('app.focused_scheduled_class_copy') }}</p>
+            </div>
+            <x-ui.button :href="route('dashboard.accounts.reports.unreserved-class-bookings', $account)" variant="secondary" size="sm">
+                {{ __('app.back_to_unreserved_class_bookings') }}
+            </x-ui.button>
+        </div>
+    @else
+        <form method="GET" action="{{ route('dashboard.accounts.scheduled-classes-history.index', $account) }}" class="mt-6 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
         <input type="hidden" name="filters_submitted" value="1">
         <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <label>
@@ -145,7 +158,8 @@
             <x-ui.button type="submit" size="sm">{{ __('app.apply_filters') }}</x-ui.button>
             <x-ui.button :href="route('dashboard.accounts.scheduled-classes-history.index', $account)" variant="secondary" size="sm">{{ __('app.reset_filters') }}</x-ui.button>
         </div>
-    </form>
+        </form>
+    @endif
 
     <section class="mt-6 space-y-8" data-scheduled-class-history-page>
         @foreach ($scheduledClassDays as $date => $classes)

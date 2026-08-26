@@ -20,6 +20,7 @@ use App\Http\Controllers\TrainerSalaryAssignmentController;
 use App\Http\Controllers\TrainerSalaryReportController;
 use App\Http\Controllers\UnknownPresenceReportController;
 use App\Http\Controllers\UnpaidClassPaymentReportController;
+use App\Http\Controllers\UnreservedClassBookingReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('accounts/{account}/cash-entries', [StudioCashEntryController::class, 'store'])
@@ -86,6 +87,8 @@ Route::post('accounts/{account}/salary-model-assignments', [TrainerSalaryAssignm
     ->name('accounts.salary-model-assignments.store');
 Route::get('accounts/{account}/reports/unpaid-class-payments', UnpaidClassPaymentReportController::class)
     ->name('accounts.reports.unpaid-class-payments');
+Route::get('accounts/{account}/reports/unreserved-class-bookings', UnreservedClassBookingReportController::class)
+    ->name('accounts.reports.unreserved-class-bookings');
 Route::get('accounts/{account}/reports/unpaid-class-payments/waived', [ClassBookingPaymentWaiverController::class, 'index'])
     ->name('accounts.reports.unpaid-class-payments.waived');
 Route::get('accounts/{account}/reports/people-counter', PeopleCounterReportController::class)

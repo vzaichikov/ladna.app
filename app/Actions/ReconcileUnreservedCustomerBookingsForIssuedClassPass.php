@@ -293,9 +293,9 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
             ->whereIn("{$classBookingTable}.status", [
                 ClassBookingStatus::Booked->value,
                 ClassBookingStatus::Attended->value,
-                ClassBookingStatus::NoShow->value,
             ])
             ->whereDoesntHave('manualCashPayment')
+            ->whereDoesntHave('activePaymentWaiver')
             ->where(fn (Builder $query): Builder => $this->eligibleReservationMode($query, $classBookingTable, $scheduledClassTable))
             ->where("{$scheduledClassTable}.account_id", $accountId)
             ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)
@@ -379,9 +379,9 @@ class ReconcileUnreservedCustomerBookingsForIssuedClassPass
             ->whereIn("{$classBookingTable}.status", [
                 ClassBookingStatus::Booked->value,
                 ClassBookingStatus::Attended->value,
-                ClassBookingStatus::NoShow->value,
             ])
             ->whereDoesntHave('manualCashPayment')
+            ->whereDoesntHave('activePaymentWaiver')
             ->where(fn (Builder $query): Builder => $this->eligibleReservationMode($query, $classBookingTable, $scheduledClassTable))
             ->where("{$scheduledClassTable}.account_id", $accountId)
             ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)

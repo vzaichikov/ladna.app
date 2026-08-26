@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Actions\IssueCustomerClassPass;
 use App\Actions\NormalizeCustomerClassPasses;
 use App\Actions\ReconcileCustomerClassPassForBooking;
+use App\Actions\ReconcileUnreservedCustomerBookingsForIssuedClassPass;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
 use App\Enums\ScheduledClassStatus;
@@ -198,6 +199,30 @@ class CustomerClassPassBusinessFlowTest extends TestCase
         $this->assertSame(CustomerClassPassReservationStatus::Reserved, $futureReservation->status);
         $this->assertSame(1, $customerClassPass->reserved_sessions_count);
         $this->assertSame(1, $customerClassPass->used_sessions_count);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_new_pass_does_not_retroactively_attach_to_unreserved_no_show(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-07 10:00:00'));
+        $context = $this->context();
+        $noShowClass = $this->scheduledClass($context, '2026-07-06 18:00:00');
+        $noShowBooking = $this->unlinkedBooking($context, $noShowClass, 'no_show');
+        $plan = $this->plan($context, sessions: 1);
+
+        $customerClassPass = app(IssueCustomerClassPass::class)->execute(
+            $context['account'],
+            $context['customer'],
+            $plan,
+            source: 'online_payment',
+            purchasedAt: Carbon::parse('2026-07-07 10:00:00'),
+        );
+
+        $this->assertNull($noShowBooking->classPassReservation()->first());
+        $this->assertSame(0, $customerClassPass->fresh()->reserved_sessions_count);
+        $this->assertSame(0, $customerClassPass->fresh()->used_sessions_count);
+        $this->assertSame(0, app(UnreservedClassPassBookingIssues::class)->countForAccount($context['account']));
 
         Carbon::setTestNow();
     }
@@ -400,6 +425,7 @@ class CustomerClassPassBusinessFlowTest extends TestCase
             ->patch(route('dashboard.accounts.bookings.update', [$context['account'], $noShowBooking]), ['status' => 'no_show'])
             ->assertRedirect();
 
+        app(ReconcileUnreservedCustomerBookingsForIssuedClassPass::class)->execute($customerClassPass);
         app(NormalizeCustomerClassPasses::class)->execute();
         app(NormalizeCustomerClassPasses::class)->execute();
 

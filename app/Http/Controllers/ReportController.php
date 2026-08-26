@@ -49,6 +49,12 @@ class ReportController extends Controller
                     'href' => route('dashboard.accounts.reports.trainers', $account),
                 ],
                 [
+                    'title' => __('app.unreserved_class_bookings_report_title'),
+                    'copy' => __('app.unreserved_class_bookings_report_card_copy'),
+                    'icon' => 'calendar',
+                    'href' => route('dashboard.accounts.reports.unreserved-class-bookings', $account),
+                ],
+                [
                     'title' => __('app.unpaid_class_booking_payments_report_title'),
                     'copy' => __('app.unpaid_class_booking_payments_report_card_copy'),
                     'icon' => 'payments',

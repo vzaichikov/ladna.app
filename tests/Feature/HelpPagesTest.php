@@ -418,7 +418,9 @@ class HelpPagesTest extends TestCase
             ->assertSee('Скасовані абонементи боргами не рахуються', false)
             ->assertSee('записи без резерву в абонементі', false)
             ->assertSee('заморожені абонементи', false)
-            ->assertSee('assets/help/screenshots/studio-problems.png', false);
+            ->assertSee('окремий звіт із конкретними записами по всьому акаунту', false)
+            ->assertSee('assets/help/screenshots/studio-problems.png', false)
+            ->assertSee('assets/help/screenshots/unreserved-class-bookings-report.png', false);
 
         $this->get(route('help.show', 'trainers', false))
             ->assertStatus(200)
@@ -882,6 +884,10 @@ class HelpPagesTest extends TestCase
         $this->get(route('help.show', 'reports-cameras', false))
             ->assertStatus(200)
             ->assertSee('Звіти, камери та People Counter', false)
+            ->assertSee('Як перевірити записи без резерву в абонементі', false)
+            ->assertSee('головний екран -&gt; Проблемні моменти -&gt; Записи без резерву', false)
+            ->assertSee('Якщо тренера немає, видно Не призначено', false)
+            ->assertSee('явні неявки', false)
             ->assertSee('Що показує розділ Звіти', false)
             ->assertSee('Як увімкнути RTSP-камери для студії', false)
             ->assertSee('Підтримка RTSP-камер', false)
@@ -892,6 +898,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('віднімається один тренер', false)
             ->assertSee('assets/help/screenshots/room-camera-settings.png', false)
             ->assertSee('assets/help/screenshots/studio-dashboard.png', false)
+            ->assertSee('assets/help/screenshots/unreserved-class-bookings-report.png', false)
             ->assertDontSee('endpoint', false)
             ->assertDontSee('payload', false)
             ->assertDontSee('database', false);
@@ -1017,8 +1024,15 @@ class HelpPagesTest extends TestCase
         $this->get(route('help.show', 'case-no-show-without-pass', false))
             ->assertStatus(200)
             ->assertSee('не має що списати автоматично', false)
-            ->assertSee('видайте відповідний разовий або пакетний абонемент', false)
-            ->assertSee('Нормалізувати записи', false);
+            ->assertSee('не потребує окремої оплати', false)
+            ->assertSee('не привʼяжеться до цієї неявки', false)
+            ->assertSee('Не видавайте абонемент і не вносьте оплату лише для того, щоб закрити цю неявку', false)
+            ->assertSee('assets/help/screenshots/unreserved-class-bookings-report.png', false)
+            ->assertDontSee('Нормалізувати записи', false);
+
+        $result = app(OwnerHelpIndex::class)->search('клієнт без абонемента не прийшов що ставити', 1);
+
+        $this->assertSame('case-no-show-without-pass', $result[0]['slug'] ?? null);
 
         $this->get(route('help.show', 'case-walk-in-after-training', false))
             ->assertStatus(200)
