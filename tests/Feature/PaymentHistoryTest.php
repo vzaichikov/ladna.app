@@ -154,6 +154,8 @@ class PaymentHistoryTest extends TestCase
 
         $this->assertStringContainsString(__('app.class_booking_payment'), $response->json('card_html'));
         $this->assertStringContainsString(MoneyFormatter::format(35050, 'UAH'), $response->json('card_html'));
+        $this->assertStringContainsString(__('app.direct_rental_payment'), $response->json('card_html'));
+        $this->assertStringNotContainsString(__('app.no_matching_class_pass_alert'), $response->json('card_html'));
 
         $payment = CustomerPurchase::whereBelongsTo($account)->where('class_booking_id', $booking->id)->firstOrFail();
 
